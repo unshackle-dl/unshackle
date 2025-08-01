@@ -1,6 +1,7 @@
 # unshackle
 unshackle.yaml
 unshackle.yml
+update_check.json
 *.mkv
 *.mp4
 *.exe
