@@ -106,76 +106,82 @@ class Episode(Title):
                 number=self.number,
                 name=self.name or "",
             ).strip()
+        if config.scene_naming:
+            # Resolution
+            if primary_video_track:
+                resolution = primary_video_track.height
+                aspect_ratio = [int(float(plane)) for plane in primary_video_track.other_display_aspect_ratio[0].split(":")]
+                if len(aspect_ratio) == 1:
+                    # e.g., aspect ratio of 2 (2.00:1) would end up as `(2.0,)`, add 1
+                    aspect_ratio.append(1)
+                if aspect_ratio[0] / aspect_ratio[1] not in (16 / 9, 4 / 3):
+                    # We want the resolution represented in a 4:3 or 16:9 canvas.
+                    # If it's not 4:3 or 16:9, calculate as if it's inside a 16:9 canvas,
+                    # otherwise the track's height value is fine.
+                    # We are assuming this title is some weird aspect ratio so most
+                    # likely a movie or HD source, so it's most likely widescreen so
+                    # 16:9 canvas makes the most sense.
+                    resolution = int(primary_video_track.width * (9 / 16))
+                name += f" {resolution}p"
 
-        # Resolution
-        if primary_video_track:
-            resolution = primary_video_track.height
-            aspect_ratio = [int(float(plane)) for plane in primary_video_track.other_display_aspect_ratio[0].split(":")]
-            if len(aspect_ratio) == 1:
-                # e.g., aspect ratio of 2 (2.00:1) would end up as `(2.0,)`, add 1
-                aspect_ratio.append(1)
-            if aspect_ratio[0] / aspect_ratio[1] not in (16 / 9, 4 / 3):
-                # We want the resolution represented in a 4:3 or 16:9 canvas.
-                # If it's not 4:3 or 16:9, calculate as if it's inside a 16:9 canvas,
-                # otherwise the track's height value is fine.
-                # We are assuming this title is some weird aspect ratio so most
-                # likely a movie or HD source, so it's most likely widescreen so
-                # 16:9 canvas makes the most sense.
-                resolution = int(primary_video_track.width * (9 / 16))
-            name += f" {resolution}p"
+            # Service
+            if show_service:
+                name += f" {self.service.__name__}"
+                
 
-        # Service
-        if show_service:
-            name += f" {self.service.__name__}"
+            # 'WEB-DL'
+            name += " WEB-DL"
 
-        # 'WEB-DL'
-        name += " WEB-DL"
+            # DUAL
+            if unique_audio_languages == 2:
+                name += " DUAL"
+                
 
-        # DUAL
-        if unique_audio_languages == 2:
-            name += " DUAL"
+            # MULTi
+            if unique_audio_languages > 2:
+                name += " MULTi"
 
-        # MULTi
-        if unique_audio_languages > 2:
-            name += " MULTi"
-
-        # Audio Codec + Channels (+ feature)
-        if primary_audio_track:
-            codec = primary_audio_track.format
-            channel_layout = primary_audio_track.channel_layout or primary_audio_track.channellayout_original
-            if channel_layout:
-                channels = float(sum({"LFE": 0.1}.get(position.upper(), 1) for position in channel_layout.split(" ")))
-            else:
-                channel_count = primary_audio_track.channel_s or primary_audio_track.channels or 0
-                channels = float(channel_count)
-
-            features = primary_audio_track.format_additionalfeatures or ""
-            name += f" {AUDIO_CODEC_MAP.get(codec, codec)}{channels:.1f}"
-            if "JOC" in features or primary_audio_track.joc:
-                name += " Atmos"
-
-        # Video (dynamic range + hfr +) Codec
-        if primary_video_track:
-            codec = primary_video_track.format
-            hdr_format = primary_video_track.hdr_format_commercial
-            trc = primary_video_track.transfer_characteristics or primary_video_track.transfer_characteristics_original
-            frame_rate = float(primary_video_track.frame_rate)
-            if hdr_format:
-                if (primary_video_track.hdr_format or "").startswith("Dolby Vision"):
-                    if (primary_video_track.hdr_format_commercial) != "Dolby Vision":
-                        name += f" DV {DYNAMIC_RANGE_MAP.get(hdr_format)} "
+            # Audio Codec + Channels (+ feature)
+            if primary_audio_track:
+                codec = primary_audio_track.format
+                channel_layout = primary_audio_track.channel_layout or primary_audio_track.channellayout_original
+                if channel_layout:
+                    channels = float(sum({"LFE": 0.1}.get(position.upper(), 1) for position in channel_layout.split(" ")))
                 else:
-                    name += f" {DYNAMIC_RANGE_MAP.get(hdr_format)} "
-            elif trc and "HLG" in trc:
-                name += " HLG"
-            if frame_rate > 30:
-                name += " HFR"
-            name += f" {VIDEO_CODEC_MAP.get(codec, codec)}"
+                    channel_count = primary_audio_track.channel_s or primary_audio_track.channels or 0
+                    channels = float(channel_count)
 
-        if config.tag:
-            name += f"-{config.tag}"
+                features = primary_audio_track.format_additionalfeatures or ""
+                name += f" {AUDIO_CODEC_MAP.get(codec, codec)}{channels:.1f}"
+                if "JOC" in features or primary_audio_track.joc:
+                    name += " Atmos"
 
-        return sanitize_filename(name)
+            # Video (dynamic range + hfr +) Codec
+            if primary_video_track:
+                codec = primary_video_track.format
+                hdr_format = primary_video_track.hdr_format_commercial
+                trc = primary_video_track.transfer_characteristics or primary_video_track.transfer_characteristics_original
+                frame_rate = float(primary_video_track.frame_rate)
+                if hdr_format:
+                    if (primary_video_track.hdr_format or "").startswith("Dolby Vision"):
+                        if (primary_video_track.hdr_format_commercial) != "Dolby Vision":
+                            name += f" DV {DYNAMIC_RANGE_MAP.get(hdr_format)} "
+                    else:
+                        name += f" {DYNAMIC_RANGE_MAP.get(hdr_format)} "
+                elif trc and "HLG" in trc:
+                    #name += " HLG"
+                    pass
+                if frame_rate > 30:
+                    name += " HFR"
+                    pass
+                name += f" {VIDEO_CODEC_MAP.get(codec, codec)}"
+
+            if config.tag:
+                name += f"-{config.tag}"
+
+            return sanitize_filename(name)
+        else:
+            return name
 
 
 class Series(SortedKeyList, ABC):
