@@ -116,6 +116,7 @@ class Video(Track):
             class Transfer(Enum):
                 Unspecified = 0
                 BT_709 = 1
+                Unspecified_Image = 2
                 BT_601 = 6
                 BT_2020 = 14
                 BT_2100 = 15
