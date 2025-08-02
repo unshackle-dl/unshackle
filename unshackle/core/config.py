@@ -80,6 +80,7 @@ class Config:
         self.tmdb_api_key: str = kwargs.get("tmdb_api_key") or ""
         self.update_checks: bool = kwargs.get("update_checks", True)
         self.update_check_interval: int = kwargs.get("update_check_interval", 24)
+        self.scene_naming: bool = kwargs.get("scene_naming", True)
 
     @classmethod
     def from_yaml(cls, path: Path) -> Config:

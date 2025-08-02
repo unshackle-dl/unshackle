@@ -100,22 +100,26 @@ class Song(Title):
             # NN. Song Name
             name = str(self).split(" / ")[1]
 
-        # Service
-        if show_service:
-            name += f" {self.service.__name__}"
+        if config.scene_naming:
+            # Service
+            if show_service:
+                name += f" {self.service.__name__}"
 
-        # 'WEB-DL'
-        name += " WEB-DL"
+            # 'WEB-DL'
+            name += " WEB-DL"
 
-        # Audio Codec + Channels (+ feature)
-        name += f" {AUDIO_CODEC_MAP.get(codec, codec)}{channels:.1f}"
-        if "JOC" in features or audio_track.joc:
-            name += " Atmos"
+            # Audio Codec + Channels (+ feature)
+            name += f" {AUDIO_CODEC_MAP.get(codec, codec)}{channels:.1f}"
+            if "JOC" in features or audio_track.joc:
+                name += " Atmos"
 
-        if config.tag:
-            name += f"-{config.tag}"
+            if config.tag:
+                name += f"-{config.tag}"
 
-        return sanitize_filename(name, " ")
+            return sanitize_filename(name, " ")
+        else:
+            # Simple naming style without technical details
+            return sanitize_filename(name, " ")
 
 
 class Album(SortedKeyList, ABC):

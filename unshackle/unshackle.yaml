@@ -4,6 +4,11 @@ tag: user_tag
 # Set terminal background color (custom option not in CONFIG.md)
 set_terminal_bg: false
 
+# Set file naming convention
+#  true for style - Prime.Suspect.S07E01.The.Final.Act.Part.One.1080p.ITV.WEB-DL.AAC2.0.H.264
+#  false for style - Prime Suspect S07E01 The Final Act - Part One
+scene_naming: true
+
 # Check for updates from GitHub repository on startup (default: true)
 update_checks: true
 
