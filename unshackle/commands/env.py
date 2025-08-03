@@ -45,6 +45,13 @@ def check() -> None:
             "desc": "DRM decryption",
             "cat": "DRM",
         },
+        {
+            "name": "mp4decrypt",
+            "binary": binaries.Mp4decrypt,
+            "required": False,
+            "desc": "DRM decryption",
+            "cat": "DRM",
+        },
         # HDR Processing
         {"name": "dovi_tool", "binary": binaries.DoviTool, "required": False, "desc": "Dolby Vision", "cat": "HDR"},
         {

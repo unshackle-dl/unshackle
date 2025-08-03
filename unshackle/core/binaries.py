@@ -53,6 +53,7 @@ MKVToolNix = find("mkvmerge")
 Mkvpropedit = find("mkvpropedit")
 DoviTool = find("dovi_tool")
 HDR10PlusTool = find("hdr10plus_tool", "HDR10Plus_tool")
+Mp4decrypt = find("mp4decrypt")
 
 
 __all__ = (
@@ -71,5 +72,6 @@ __all__ = (
     "Mkvpropedit",
     "DoviTool",
     "HDR10PlusTool",
+    "Mp4decrypt",
     "find",
 )

@@ -912,6 +912,31 @@ class dl:
                     if font_count:
                         self.log.info(f"Attached {font_count} fonts for the Subtitles")
 
+                # Handle DRM decryption BEFORE repacking (must decrypt first!)
+                service_name = service.__class__.__name__.upper()
+                decryption_method = config.decryption_map.get(service_name, config.decryption)
+                use_mp4decrypt = decryption_method.lower() == "mp4decrypt"
+
+                if use_mp4decrypt:
+                    decrypt_tool = "mp4decrypt"
+                else:
+                    decrypt_tool = "Shaka Packager"
+
+                drm_tracks = [track for track in title.tracks if track.drm]
+                if drm_tracks:
+                    with console.status(f"Decrypting tracks with {decrypt_tool}..."):
+                        has_decrypted = False
+                        for track in drm_tracks:
+                            for drm in track.drm:
+                                if hasattr(drm, "decrypt"):
+                                    drm.decrypt(track.path, use_mp4decrypt=use_mp4decrypt)
+                                    has_decrypted = True
+                                    events.emit(events.Types.TRACK_REPACKED, track=track)
+                                    break
+                        if has_decrypted:
+                            self.log.info(f"Decrypted tracks with {decrypt_tool}")
+
+                # Now repack the decrypted tracks
                 with console.status("Repackaging tracks with FFMPEG..."):
                     has_repacked = False
                     for track in title.tracks:

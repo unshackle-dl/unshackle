@@ -213,6 +213,37 @@ downloader:
 
 The `default` entry is optional. If omitted, `requests` will be used for services not listed.
 
+## decryption (str | dict)
+
+Choose what software to use to decrypt DRM-protected content throughout unshackle where needed.
+You may provide a single decryption method globally or a mapping of service tags to
+decryption methods.
+
+Options:
+
+- `shaka` (default) - Shaka Packager - <https://github.com/shaka-project/shaka-packager>
+- `mp4decrypt` - mp4decrypt from Bento4 - <https://github.com/axiomatic-systems/Bento4>
+
+Note that Shaka Packager is the traditional method and works with most services. mp4decrypt
+is an alternative that may work better with certain services that have specific encryption formats.
+
+Example mapping:
+
+```yaml
+decryption:
+  ATVP: mp4decrypt
+  AMZN: shaka
+  default: shaka
+```
+
+The `default` entry is optional. If omitted, `shaka` will be used for services not listed.
+
+Simple configuration (single method for all services):
+
+```yaml
+decryption: mp4decrypt
+```
+
 ## filenames (dict)
 
 Override the default filenames used across unshackle.  

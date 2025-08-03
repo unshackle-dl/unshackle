@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2025-08-03
+
+### Added
+
+- **mp4decrypt Support**: Alternative DRM decryption method using mp4decrypt from Bento4
+  - Added `mp4decrypt` binary detection and support in binaries module
+  - New `decryption` configuration option in unshackle.yaml for service-specific decryption methods
+  - Enhanced PlayReady and Widevine DRM classes with mp4decrypt decryption support
+  - Service-specific decryption mapping allows choosing between `shaka` and `mp4decrypt` per service
+  - Improved error handling and progress reporting for mp4decrypt operations
+- **Scene Naming Configuration**: New `scene_naming` option for controlling file naming conventions
+  - Added scene naming logic to movie, episode, and song title classes
+  - Configurable through unshackle.yaml to enable/disable scene naming standards
+- **Terminal Cleanup and Signal Handling**: Enhanced console management
+  - Implemented proper terminal cleanup on application exit
+  - Added signal handling for graceful shutdown in ComfyConsole
+- **Configuration Template**: New `unshackle-example.yaml` template file
+  - Replaced main `unshackle.yaml` with example template to prevent git conflicts
+  - Users can now modify their local config without affecting repository updates
+- **Enhanced Credential Management**: Improved CDM and vault configuration
+  - Expanded credential management documentation in configuration
+  - Enhanced CDM configuration examples and guidelines
+- **Video Transfer Standards**: Added `Unspecified_Image` option to Transfer enum
+  - Implements ITU-T H.Sup19 standard value 2 for image characteristics
+  - Supports still image coding systems and unknown transfer characteristics
+- **Update Check Rate Limiting**: Enhanced update checking system
+  - Added configurable update check intervals to prevent excessive API calls
+  - Improved rate limiting for GitHub API requests
+
+### Changed
+
+- **DRM Decryption Architecture**: Enhanced decryption system with dual method support
+  - Updated `dl.py` to handle service-specific decryption method selection
+  - Refactored `Config` class to manage decryption method mapping per service
+  - Enhanced DRM decrypt methods with `use_mp4decrypt` parameter for method selection
+- **Error Handling**: Improved exception handling in Hybrid class
+  - Replaced log.exit calls with ValueError exceptions for better error propagation
+  - Enhanced error handling consistency across hybrid processing
+
+### Fixed
+
+- **Proxy Configuration**: Fixed proxy server mapping in configuration
+  - Renamed 'servers' to 'server_map' in proxy configuration to resolve Nord/Surfshark naming conflicts
+  - Updated configuration structure for better compatibility with proxy providers
+- **HTTP Vault**: Improved URL handling and key retrieval logic
+  - Fixed URL processing issues in HTTP-based key vaults
+  - Enhanced key retrieval reliability and error handling
+
 ## [1.2.0] - 2025-07-30
 
 ### Added
