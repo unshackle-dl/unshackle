@@ -587,7 +587,7 @@ class dl:
                                 self.log.warning(f"Skipping {color_range.name} video tracks as none are available.")
 
                     if vbitrate:
-                        title.tracks.select_video(lambda x: x.bitrate and x.bitrate // 1000 == vbitrate)
+                        title.tracks.select_video(lambda x: x.bitrate and x.bitrate // 1000 <= vbitrate)
                         if not title.tracks.videos:
                             self.log.error(f"There's no {vbitrate}kbps Video Track...")
                             sys.exit(1)

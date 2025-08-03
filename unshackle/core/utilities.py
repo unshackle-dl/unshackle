@@ -84,7 +84,7 @@ def import_module_by_path(path: Path) -> ModuleType:
     return module
 
 
-def sanitize_filename(filename: str, spacer: str = ".") -> str:
+def sanitize_filename(filename: str, spacer: str = ".", remove_spaces: bool = False) -> str:
     """
     Sanitize a string to be filename safe.
 
@@ -97,8 +97,15 @@ def sanitize_filename(filename: str, spacer: str = ".") -> str:
     # remove or replace further characters as needed
     filename = "".join(c for c in filename if unicodedata.category(c) != "Mn")  # hidden characters
     filename = filename.replace("/", " & ").replace(";", " & ")  # e.g. multi-episode filenames
-    filename = re.sub(r"[:; ]", spacer, filename)  # structural chars to (spacer)
-    filename = re.sub(r"[\\*!?¿,'\"" "()<>|$#~]", "", filename)  # not filename safe chars
+    
+    # remove spaces if requested, otherwise replace with spacer
+    if remove_spaces:
+        filename = re.sub(r"[:; ]", spacer, filename)  # structural chars to (spacer)
+        filename = re.sub(r"[\\*!?¿,'\"" "<>|$#~]", "", filename)  # not filename safe chars
+    else:
+        filename = re.sub(r"[:;]", spacer, filename)  # structural chars to (spacer)
+        filename = re.sub(r"[\\*!?¿,'\"""<>|$#~]", "", filename)  # not filename safe chars
+
     filename = re.sub(rf"[{spacer}]{{2,}}", spacer, filename)  # remove extra neighbouring (spacer)s
 
     return filename

@@ -106,6 +106,9 @@ def download(
 
                 with open(save_path, "wb") as f:
                     for chunk in stream.iter_content(chunk_size=CHUNK_SIZE):
+                        # Check for cancellation more frequently
+                        if DOWNLOAD_CANCELLED.is_set():
+                            raise KeyboardInterrupt("Download cancelled by user")
                         download_size = len(chunk)
                         f.write(chunk)
                         written += download_size
@@ -144,6 +147,9 @@ def download(
                 save_path.unlink(missing_ok=True)
                 if DOWNLOAD_CANCELLED.is_set() or attempts == MAX_ATTEMPTS:
                     raise e
+                # Check for cancellation during retry wait
+                if DOWNLOAD_CANCELLED.is_set():
+                    raise KeyboardInterrupt("Download cancelled by user")
                 time.sleep(RETRY_WAIT)
                 attempts += 1
     finally:
