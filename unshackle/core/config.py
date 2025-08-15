@@ -90,8 +90,7 @@ class Config:
         self.tmdb_api_key: str = kwargs.get("tmdb_api_key") or ""
         self.update_checks: bool = kwargs.get("update_checks", True)
         self.update_check_interval: int = kwargs.get("update_check_interval", 24)
-        self.scene_naming: bool = kwargs.get("scene_naming", True)
-        self.series_year: bool = kwargs.get("series_year", True)
+        self.output_template: dict = kwargs.get("output_template") or {}
 
         self.title_cache_time: int = kwargs.get("title_cache_time", 1800)  # 30 minutes default
         self.title_cache_max_retention: int = kwargs.get("title_cache_max_retention", 86400)  # 24 hours default

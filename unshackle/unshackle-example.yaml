@@ -10,15 +10,40 @@ tag_imdb_tmdb: true
 # Set terminal background color (custom option not in CONFIG.md)
 set_terminal_bg: false
 
-# Set file naming convention
-#  true for style - Prime.Suspect.S07E01.The.Final.Act.Part.One.1080p.ITV.WEB-DL.AAC2.0.H.264
-#  false for style - Prime Suspect S07E01 The Final Act - Part One
-scene_naming: true
+# File naming is now controlled via output_template (see below)
+# Default behavior provides scene-style naming similar to the old scene_naming: true
 
-# Whether to include the year in series names for episodes and folders (default: true)
-#  true for style - Show Name (2023) S01E01 Episode Name
-#  false for style - Show Name S01E01 Episode Name
-series_year: true
+# Custom output templates for filenames
+# When not defined, defaults to scene-style naming equivalent to the old scene_naming: true
+# Available variables: {title}, {year}, {season}, {episode}, {season_episode}, {episode_name},
+#                     {quality}, {resolution}, {source}, {audio}, {audio_channels}, {audio_full},
+#                     {video}, {hdr}, {hfr}, {atmos}, {dual}, {multi}, {tag}
+# Conditional variables (included only if present): Add ? suffix like {year?}, {episode_name?}, {hdr?}
+# Uncomment and customize the templates below:
+#
+# output_template:
+#   # Scene-style naming (dot-separated) - Default behavior when no template is defined
+#   movies: '{title}.{year}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}'
+#   series: '{title}.{year?}.{season_episode}.{episode_name?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}'
+#
+#   # Plex-friendly naming (space-separated, clean format)
+#   # movies: '{title} ({year}) {quality}'
+#   # series: '{title} {season_episode} {episode_name?}'
+#
+#   # Minimal naming (basic info only)
+#   # movies: '{title}.{year}.{quality}'
+#   # series: '{title}.{season_episode}.{episode_name?}'
+#
+#   # Custom scene-style with specific elements
+#   # movies: '{title}.{year}.{quality}.{hdr?}.{source}.WEB-DL.{audio_full}.{video}-{tag}'
+#   # series: '{title}.{year?}.{season_episode}.{episode_name?}.{quality}.{hdr?}.{source}.WEB-DL.{audio_full}.{atmos?}.{video}-{tag}'
+#
+# Example outputs:
+# Scene movies: 'The.Matrix.1999.1080p.NF.WEB-DL.DDP5.1.H.264-EXAMPLE'
+# Scene movies (HDR): 'Dune.2021.2160p.HBO.WEB-DL.DDP5.1.HDR10.H.265-EXAMPLE'
+# Scene series: 'Breaking.Bad.2008.S01E01.Pilot.1080p.NF.WEB-DL.DDP5.1.H.264-EXAMPLE'
+# Plex movies: 'The Matrix (1999) 1080p'
+# Plex series: 'Breaking Bad S01E01 Pilot'
 
 # Check for updates from GitHub repository on startup (default: true)
 update_checks: true
@@ -28,9 +53,9 @@ update_check_interval: 24
 
 # Title caching configuration
 # Cache title metadata to reduce redundant API calls
-title_cache_enabled: true  # Enable/disable title caching globally (default: true)
-title_cache_time: 1800  # Cache duration in seconds (default: 1800 = 30 minutes)
-title_cache_max_retention: 86400  # Maximum cache retention for fallback when API fails (default: 86400 = 24 hours)
+title_cache_enabled: true # Enable/disable title caching globally (default: true)
+title_cache_time: 1800 # Cache duration in seconds (default: 1800 = 30 minutes)
+title_cache_max_retention: 86400 # Maximum cache retention for fallback when API fails (default: 86400 = 24 hours)
 
 # Muxing configuration
 muxing:

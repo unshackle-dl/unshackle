@@ -12,6 +12,7 @@ from unshackle.core.config import config
 from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP
 from unshackle.core.titles.title import Title
 from unshackle.core.utilities import sanitize_filename
+from unshackle.core.utils.template_formatter import TemplateFormatter
 
 
 class Episode(Title):
@@ -78,116 +79,122 @@ class Episode(Title):
         self.year = year
         self.description = description
 
+    def _build_template_context(self, media_info: MediaInfo, show_service: bool = True) -> dict:
+        """Build template context dictionary from MediaInfo."""
+        primary_video_track = next(iter(media_info.video_tracks), None)
+        primary_audio_track = next(iter(media_info.audio_tracks), None)
+        unique_audio_languages = len({x.language.split("-")[0] for x in media_info.audio_tracks if x.language})
+
+        context = {
+            "title": self.title.replace("$", "S"),
+            "year": self.year or "",
+            "season": f"S{self.season:02}",
+            "episode": f"E{self.number:02}",
+            "season_episode": f"S{self.season:02}E{self.number:02}",
+            "episode_name": self.name or "",
+            "tag": config.tag or "",
+            "source": self.service.__name__ if show_service else "",
+        }
+
+        # Video information
+        if primary_video_track:
+            resolution = primary_video_track.height
+            aspect_ratio = [int(float(plane)) for plane in primary_video_track.other_display_aspect_ratio[0].split(":")]
+            if len(aspect_ratio) == 1:
+                aspect_ratio.append(1)
+            if aspect_ratio[0] / aspect_ratio[1] not in (16 / 9, 4 / 3):
+                resolution = int(primary_video_track.width * (9 / 16))
+
+            context.update(
+                {
+                    "quality": f"{resolution}p",
+                    "resolution": str(resolution),
+                    "video": VIDEO_CODEC_MAP.get(primary_video_track.format, primary_video_track.format),
+                }
+            )
+
+            # HDR information
+            hdr_format = primary_video_track.hdr_format_commercial
+            trc = primary_video_track.transfer_characteristics or primary_video_track.transfer_characteristics_original
+            if hdr_format:
+                if (primary_video_track.hdr_format or "").startswith("Dolby Vision"):
+                    context["hdr"] = "DV"
+                    base_layer = DYNAMIC_RANGE_MAP.get(hdr_format)
+                    if base_layer and base_layer != "DV":
+                        context["hdr"] += f".{base_layer}"
+                else:
+                    context["hdr"] = DYNAMIC_RANGE_MAP.get(hdr_format, "")
+            elif trc and "HLG" in trc:
+                context["hdr"] = "HLG"
+            else:
+                context["hdr"] = ""
+
+            # High frame rate
+            frame_rate = float(primary_video_track.frame_rate)
+            context["hfr"] = "HFR" if frame_rate > 30 else ""
+
+        # Audio information
+        if primary_audio_track:
+            codec = primary_audio_track.format
+            channel_layout = primary_audio_track.channel_layout or primary_audio_track.channellayout_original
+
+            if channel_layout:
+                channels = float(sum({"LFE": 0.1}.get(position.upper(), 1) for position in channel_layout.split(" ")))
+            else:
+                channel_count = primary_audio_track.channel_s or primary_audio_track.channels or 0
+                channels = float(channel_count)
+
+            features = primary_audio_track.format_additionalfeatures or ""
+
+            context.update(
+                {
+                    "audio": AUDIO_CODEC_MAP.get(codec, codec),
+                    "audio_channels": f"{channels:.1f}",
+                    "audio_full": f"{AUDIO_CODEC_MAP.get(codec, codec)}{channels:.1f}",
+                    "atmos": "Atmos" if ("JOC" in features or primary_audio_track.joc) else "",
+                }
+            )
+
+        # Multi-language audio
+        if unique_audio_languages == 2:
+            context["dual"] = "DUAL"
+            context["multi"] = ""
+        elif unique_audio_languages > 2:
+            context["dual"] = ""
+            context["multi"] = "MULTi"
+        else:
+            context["dual"] = ""
+            context["multi"] = ""
+
+        return context
+
     def __str__(self) -> str:
         return "{title}{year} S{season:02}E{number:02} {name}".format(
             title=self.title,
-            year=f" {self.year}" if self.year and config.series_year else "",
+            year=f" {self.year}" if self.year else "",
             season=self.season,
             number=self.number,
             name=self.name or "",
         ).strip()
 
     def get_filename(self, media_info: MediaInfo, folder: bool = False, show_service: bool = True) -> str:
-        primary_video_track = next(iter(media_info.video_tracks), None)
-        primary_audio_track = next(iter(media_info.audio_tracks), None)
-        unique_audio_languages = len({x.language.split("-")[0] for x in media_info.audio_tracks if x.language})
-
-        # Title [Year] SXXEXX Name (or Title [Year] SXX if folder)
         if folder:
+            # For folders, use simple naming: "Title Year S01"
             name = f"{self.title}"
-            if self.year and config.series_year:
+            if self.year:
                 name += f" {self.year}"
             name += f" S{self.season:02}"
-        else:
-            name = "{title}{year} S{season:02}E{number:02} {name}".format(
-                title=self.title.replace("$", "S"),  # e.g., Arli$$
-                year=f" {self.year}" if self.year and config.series_year else "",
-                season=self.season,
-                number=self.number,
-                name=self.name or "",
-            ).strip()
-
-        if config.scene_naming:
-            # Resolution
-            if primary_video_track:
-                resolution = primary_video_track.height
-                aspect_ratio = [
-                    int(float(plane)) for plane in primary_video_track.other_display_aspect_ratio[0].split(":")
-                ]
-                if len(aspect_ratio) == 1:
-                    # e.g., aspect ratio of 2 (2.00:1) would end up as `(2.0,)`, add 1
-                    aspect_ratio.append(1)
-                if aspect_ratio[0] / aspect_ratio[1] not in (16 / 9, 4 / 3):
-                    # We want the resolution represented in a 4:3 or 16:9 canvas.
-                    # If it's not 4:3 or 16:9, calculate as if it's inside a 16:9 canvas,
-                    # otherwise the track's height value is fine.
-                    # We are assuming this title is some weird aspect ratio so most
-                    # likely a movie or HD source, so it's most likely widescreen so
-                    # 16:9 canvas makes the most sense.
-                    resolution = int(primary_video_track.width * (9 / 16))
-                name += f" {resolution}p"
-
-            # Service
-            if show_service:
-                name += f" {self.service.__name__}"
-
-            # 'WEB-DL'
-            name += " WEB-DL"
-
-            # DUAL
-            if unique_audio_languages == 2:
-                name += " DUAL"
-
-            # MULTi
-            if unique_audio_languages > 2:
-                name += " MULTi"
-
-            # Audio Codec + Channels (+ feature)
-            if primary_audio_track:
-                codec = primary_audio_track.format
-                channel_layout = primary_audio_track.channel_layout or primary_audio_track.channellayout_original
-                if channel_layout:
-                    channels = float(
-                        sum({"LFE": 0.1}.get(position.upper(), 1) for position in channel_layout.split(" "))
-                    )
-                else:
-                    channel_count = primary_audio_track.channel_s or primary_audio_track.channels or 0
-                    channels = float(channel_count)
-
-                features = primary_audio_track.format_additionalfeatures or ""
-                name += f" {AUDIO_CODEC_MAP.get(codec, codec)}{channels:.1f}"
-                if "JOC" in features or primary_audio_track.joc:
-                    name += " Atmos"
-
-            # Video (dynamic range + hfr +) Codec
-            if primary_video_track:
-                codec = primary_video_track.format
-                hdr_format = primary_video_track.hdr_format_commercial
-                trc = (
-                    primary_video_track.transfer_characteristics
-                    or primary_video_track.transfer_characteristics_original
-                )
-                frame_rate = float(primary_video_track.frame_rate)
-                if hdr_format:
-                    if (primary_video_track.hdr_format or "").startswith("Dolby Vision"):
-                        name += " DV"
-                        if DYNAMIC_RANGE_MAP.get(hdr_format) and DYNAMIC_RANGE_MAP.get(hdr_format) != "DV":
-                            name += " HDR"
-                    else:
-                        name += f" {DYNAMIC_RANGE_MAP.get(hdr_format)} "
-                elif trc and "HLG" in trc:
-                    name += " HLG"
-                if frame_rate > 30:
-                    name += " HFR"
-                name += f" {VIDEO_CODEC_MAP.get(codec, codec)}"
-
-            if config.tag:
-                name += f"-{config.tag}"
-
-            return sanitize_filename(name)
-        else:
-            # Simple naming style without technical details - use spaces instead of dots
             return sanitize_filename(name, " ")
+
+        # Use custom template if defined, otherwise use default scene-style template
+        template = (
+            config.output_template.get("series")
+            or "{title}.{year?}.{season_episode}.{episode_name?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}"
+        )
+
+        formatter = TemplateFormatter(template)
+        context = self._build_template_context(media_info, show_service)
+        return formatter.format(context)
 
 
 class Series(SortedKeyList, ABC):
@@ -197,7 +204,7 @@ class Series(SortedKeyList, ABC):
     def __str__(self) -> str:
         if not self:
             return super().__str__()
-        return self[0].title + (f" ({self[0].year})" if self[0].year and config.series_year else "")
+        return self[0].title + (f" ({self[0].year})" if self[0].year else "")
 
     def tree(self, verbose: bool = False) -> Tree:
         seasons = Counter(x.season for x in self)
