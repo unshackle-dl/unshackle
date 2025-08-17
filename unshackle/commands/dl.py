@@ -63,6 +63,7 @@ from unshackle.core.utils.click_types import (LANGUAGE_RANGE, QUALITY_LIST, SEAS
 from unshackle.core.utils.collections import merge_dict
 from unshackle.core.utils.subprocess import ffprobe
 from unshackle.core.vaults import Vaults
+from beaupy import select_multiple, Config
 
 
 class dl:
@@ -224,6 +225,12 @@ class dl:
         is_flag=True,
         default=False,
         help="Skip downloading, only list available titles that would have been downloaded.",
+    )
+    @click.option(
+        "--select-titles",
+        is_flag=True,
+        default=False,
+        help="Interactively select downloads from a list. Only use with Series to select Episodes",
     )
     @click.option(
         "--skip-dl", is_flag=True, default=False, help="Skip downloading while still retrieving the decryption keys."
@@ -434,6 +441,7 @@ class dl:
         slow: bool,
         list_: bool,
         list_titles: bool,
+        select_titles: bool,
         skip_dl: bool,
         export: Optional[Path],
         cdm_only: Optional[bool],
@@ -493,6 +501,42 @@ class dl:
         if list_titles:
             return
 
+        # modification to enable beaupy module to list titles for download for manual selection
+        # use --select-titles after dl in unshackle command
+        
+        Config.transient = True
+        if select_titles and type(titles)==Series:
+            console.print(Padding(Rule(f"[rule.text]\nSelect Titles Option\n")))
+
+            
+            beaupy_titles = [
+                f"{i+1} {t.title}, {t.season}, {t.number}"
+                for i, t in enumerate(titles)
+            ]
+            
+            selected_idx = select_multiple(
+                beaupy_titles,
+                preprocessor=lambda val: f"[rgb(245,194,231)]{val}[/rgb(245,194,231)]",
+                minimal_count=1,
+                page_size=8,
+                pagination=True,
+                return_indices=True,
+                
+            )
+
+            # Keep indices unique & ordered
+            selected_idx = sorted(set(selected_idx))
+            keep = set(selected_idx)
+
+            # In-place filter: delete everything not selected (walk backwards!)
+            # need to delete from original list to keep super classes meta data
+            for i in range(len(titles) - 1, -1, -1):
+                if i not in keep:
+                    del titles[i]
+        #  end modification
+
+
+        
         for i, title in enumerate(titles):
             if isinstance(title, Episode) and wanted and f"{title.season}x{title.number}" not in wanted:
                 continue
@@ -1503,3 +1547,4 @@ class dl:
             raise ValueError(f"{cdm_name}.wvd is an invalid or corrupt Widevine Device file, {e}")
 
         return WidevineCdm.from_device(device)
+    
