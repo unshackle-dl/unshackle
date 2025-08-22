@@ -10,6 +10,7 @@ from unshackle.core.config import config
 from unshackle.core.constants import AUDIO_CODEC_MAP
 from unshackle.core.titles.title import Title
 from unshackle.core.utilities import sanitize_filename
+from unshackle.core.utils.template_formatter import TemplateFormatter
 
 
 class Song(Title):
@@ -81,45 +82,62 @@ class Song(Title):
             artist=self.artist, album=self.album, year=self.year, track=self.track, name=self.name
         ).strip()
 
+    def _build_template_context(self, media_info: MediaInfo, show_service: bool = True) -> dict:
+        """Build template context dictionary from MediaInfo."""
+        primary_audio_track = next(iter(media_info.audio_tracks), None)
+
+        context = {
+            "artist": self.artist.replace("$", "S"),
+            "album": self.album.replace("$", "S"),
+            "title": self.name.replace("$", "S"),
+            "track_number": f"{self.track:02}",
+            "disc": f"{self.disc:02}" if self.disc > 1 else "",
+            "year": self.year or "",
+            "tag": config.tag or "",
+            "source": self.service.__name__ if show_service else "",
+        }
+
+        # Audio information
+        if primary_audio_track:
+            codec = primary_audio_track.format
+            channel_layout = primary_audio_track.channel_layout or primary_audio_track.channellayout_original
+
+            if channel_layout:
+                channels = float(sum({"LFE": 0.1}.get(position.upper(), 1) for position in channel_layout.split(" ")))
+            else:
+                channel_count = primary_audio_track.channel_s or primary_audio_track.channels or 0
+                channels = float(channel_count)
+
+            features = primary_audio_track.format_additionalfeatures or ""
+
+            context.update(
+                {
+                    "audio": AUDIO_CODEC_MAP.get(codec, codec),
+                    "audio_channels": f"{channels:.1f}",
+                    "audio_full": f"{AUDIO_CODEC_MAP.get(codec, codec)}{channels:.1f}",
+                    "atmos": "Atmos" if ("JOC" in features or primary_audio_track.joc) else "",
+                }
+            )
+
+        return context
+
     def get_filename(self, media_info: MediaInfo, folder: bool = False, show_service: bool = True) -> str:
-        audio_track = next(iter(media_info.audio_tracks), None)
-        codec = audio_track.format
-        channel_layout = audio_track.channel_layout or audio_track.channellayout_original
-        if channel_layout:
-            channels = float(sum({"LFE": 0.1}.get(position.upper(), 1) for position in channel_layout.split(" ")))
-        else:
-            channel_count = audio_track.channel_s or audio_track.channels or 0
-            channels = float(channel_count)
-
-        features = audio_track.format_additionalfeatures or ""
-
         if folder:
-            # Artist - Album (Year)
-            name = str(self).split(" / ")[0]
-        else:
-            # NN. Song Name
-            name = str(self).split(" / ")[1]
-
-        if config.scene_naming:
-            # Service
-            if show_service:
-                name += f" {self.service.__name__}"
-
-            # 'WEB-DL'
-            name += " WEB-DL"
-
-            # Audio Codec + Channels (+ feature)
-            name += f" {AUDIO_CODEC_MAP.get(codec, codec)}{channels:.1f}"
-            if "JOC" in features or audio_track.joc:
-                name += " Atmos"
-
-            if config.tag:
-                name += f"-{config.tag}"
-
+            # For folders, use simple naming: "Artist - Album (Year)"
+            name = f"{self.artist} - {self.album}"
+            if self.year:
+                name += f" ({self.year})"
             return sanitize_filename(name, " ")
-        else:
-            # Simple naming style without technical details
-            return sanitize_filename(name, " ")
+
+        # Use custom template if defined, otherwise use default scene-style template
+        template = (
+            config.output_template.get("songs")
+            or "{track_number}.{title}.{source?}.WEB-DL.{audio_full}.{atmos?}-{tag}"
+        )
+
+        formatter = TemplateFormatter(template)
+        context = self._build_template_context(media_info, show_service)
+        return formatter.format(context)
 
 
 class Album(SortedKeyList, ABC):
