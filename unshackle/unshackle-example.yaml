@@ -130,6 +130,50 @@ remote_cdm:
     host: https://domain-2.com/api
     secret: secret_key
 
+  - name: "decrypt_labs_chrome"
+    type: "decrypt_labs"  # Required to identify as DecryptLabs CDM
+    device_name: "ChromeCDM"  # Scheme identifier - must match exactly
+    device_type: CHROME
+    system_id: 4464 # Doesn't matter
+    security_level: 3
+    host: "https://keyxtractor.decryptlabs.com"
+    secret: "your_decrypt_labs_api_key_here"  # Replace with your API key
+  - name: "decrypt_labs_l1"
+    type: "decrypt_labs"
+    device_name: "L1"  # Scheme identifier - must match exactly
+    device_type: ANDROID
+    system_id: 4464 
+    security_level: 1
+    host: "https://keyxtractor.decryptlabs.com"
+    secret: "your_decrypt_labs_api_key_here"
+
+  - name: "decrypt_labs_l2"
+    type: "decrypt_labs"
+    device_name: "L2"  # Scheme identifier - must match exactly
+    device_type: ANDROID
+    system_id: 4464
+    security_level: 2
+    host: "https://keyxtractor.decryptlabs.com"
+    secret: "your_decrypt_labs_api_key_here"
+
+  - name: "decrypt_labs_playready_sl2"
+    type: "decrypt_labs"
+    device_name: "SL2"  # Scheme identifier - must match exactly
+    device_type: PLAYREADY
+    system_id: 0
+    security_level: 2000
+    host: "https://keyxtractor.decryptlabs.com"
+    secret: "your_decrypt_labs_api_key_here"
+
+  - name: "decrypt_labs_playready_sl3"
+    type: "decrypt_labs"
+    device_name: "SL3"  # Scheme identifier - must match exactly
+    device_type: PLAYREADY
+    system_id: 0
+    security_level: 3000
+    host: "https://keyxtractor.decryptlabs.com"
+    secret: "your_decrypt_labs_api_key_here"
+
 # Key Vaults store your obtained Content Encryption Keys (CEKs)
 # Use 'no_push: true' to prevent a vault from receiving pushed keys
 # while still allowing it to provide keys when requested
@@ -181,7 +225,6 @@ curl_impersonate:
 
 # Pre-define default options and switches of the dl command
 dl:
-  best: true
   sub_format: srt
   downloads: 4
   workers: 16
@@ -197,7 +240,7 @@ chapter_fallback_name: "Chapter {j:02}"
 # Case-Insensitive dictionary of headers for all Services
 headers:
   Accept-Language: "en-US,en;q=0.8"
-  User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.75 Safari/537.36"
+  User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
 
 # Override default filenames used across unshackle
 filenames:
@@ -239,6 +282,13 @@ services:
     # Global service config
     api_key: "service_api_key"
 
+    # Service certificate for Widevine L1/L2 (base64 encoded)
+    # This certificate is automatically used when L1/L2 schemes are selected
+    # Services obtain this from their DRM provider or license server
+    certificate: |
+      CAUSwwUKvQIIAxIQ5US6QAvBDzfTtjb4tU/7QxiH8c+TBSKOAjCCAQoCggEBAObzvlu2hZRsapAPx4Aa4GUZj4/GjxgXUtBH4THSkM40x63wQeyVxlEEo
+      # ... (full base64 certificate here)
+
     # Profile-specific device configurations
     profiles:
       john_sd:
@@ -266,14 +316,14 @@ proxy_providers:
     username: username_from_service_credentials
     password: password_from_service_credentials
     server_map:
-      - us: 12 # force US server #12 for US proxies
+      us: 12 # force US server #12 for US proxies
   surfsharkvpn:
     username: your_surfshark_service_username # Service credentials from https://my.surfshark.com/vpn/manual-setup/main/openvpn
     password: your_surfshark_service_password # Service credentials (not your login password)
     server_map:
-      - us: 3844 # force US server #3844 for US proxies
-      - gb: 2697 # force GB server #2697 for GB proxies
-      - au: 4621 # force AU server #4621 for AU proxies
+      us: 3844 # force US server #3844 for US proxies
+      gb: 2697 # force GB server #2697 for GB proxies
+      au: 4621 # force AU server #4621 for AU proxies
   basic:
     GB:
       - "socks5://username:password@bhx.socks.ipvanish.com:1080" # 1 (Birmingham)

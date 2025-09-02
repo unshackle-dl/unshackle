@@ -420,6 +420,15 @@ class Track:
             for drm in self.drm:
                 if isinstance(drm, PlayReady):
                     return drm
+        elif hasattr(cdm, 'is_playready'):
+            if cdm.is_playready:
+                for drm in self.drm:
+                    if isinstance(drm, PlayReady):
+                        return drm
+            else:
+                for drm in self.drm:
+                    if isinstance(drm, Widevine):
+                        return drm
 
         return self.drm[0]
 

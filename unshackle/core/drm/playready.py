@@ -224,41 +224,79 @@ class PlayReady:
     def kids(self) -> list[UUID]:
         return self._kids
 
-    def get_content_keys(self, cdm: PlayReadyCdm, certificate: Callable, licence: Callable) -> None:
-        for kid in self.kids:
-            if kid in self.content_keys:
+    def _extract_keys_from_cdm(self, cdm: PlayReadyCdm, session_id: bytes) -> dict:
+        """Extract keys from CDM session with cross-library compatibility.
+
+        Args:
+            cdm: CDM instance
+            session_id: Session identifier
+
+        Returns:
+            Dictionary mapping KID UUIDs to hex keys
+        """
+        keys = {}
+        for key in cdm.get_keys(session_id):
+            if hasattr(key, "key_id"):
+                kid = key.key_id
+            elif hasattr(key, "kid"):
+                kid = key.kid
+            else:
                 continue
-            session_id = cdm.open()
-            try:
-                challenge = cdm.get_license_challenge(session_id, self.pssh.wrm_headers[0])
-                license_res = licence(challenge=challenge)
 
-                if isinstance(license_res, bytes):
-                    license_str = license_res.decode(errors="ignore")
-                else:
-                    license_str = str(license_res)
+            if hasattr(key, "key") and hasattr(key.key, "hex"):
+                key_hex = key.key.hex()
+            elif hasattr(key, "key") and isinstance(key.key, bytes):
+                key_hex = key.key.hex()
+            elif hasattr(key, "key") and isinstance(key.key, str):
+                key_hex = key.key
+            else:
+                continue
 
-                if "<License>" not in license_str:
-                    try:
-                        license_str = base64.b64decode(license_str + "===").decode()
-                    except Exception:
-                        pass
+            keys[kid] = key_hex
+        return keys
 
-                cdm.parse_license(session_id, license_str)
-                keys = {key.key_id: key.key.hex() for key in cdm.get_keys(session_id)}
-                self.content_keys.update(keys)
-            finally:
-                cdm.close(session_id)
+    def get_content_keys(self, cdm: PlayReadyCdm, certificate: Callable, licence: Callable) -> None:
+        session_id = cdm.open()
+        try:
+            if hasattr(cdm, "set_pssh_b64") and self.pssh_b64:
+                cdm.set_pssh_b64(self.pssh_b64)
+
+            if hasattr(cdm, "set_required_kids"):
+                cdm.set_required_kids(self.kids)
+
+            challenge = cdm.get_license_challenge(session_id, self.pssh.wrm_headers[0])
+
+            if challenge:
+                try:
+                    license_res = licence(challenge=challenge)
+                    if isinstance(license_res, bytes):
+                        license_str = license_res.decode(errors="ignore")
+                    else:
+                        license_str = str(license_res)
+
+                    if "<License>" not in license_str:
+                        try:
+                            license_str = base64.b64decode(license_str + "===").decode()
+                        except Exception:
+                            pass
+
+                    cdm.parse_license(session_id, license_str)
+                except Exception:
+                    raise
+
+            keys = self._extract_keys_from_cdm(cdm, session_id)
+            self.content_keys.update(keys)
+        finally:
+            cdm.close(session_id)
 
         if not self.content_keys:
             raise PlayReady.Exceptions.EmptyLicense("No Content Keys were within the License")
 
-    def decrypt(self, path: Path, use_mp4decrypt: bool = False) -> None:
+    def decrypt(self, path: Path) -> None:
         """
         Decrypt a Track with PlayReady DRM.
         Args:
             path: Path to the encrypted file to decrypt
-            use_mp4decrypt: If True, use mp4decrypt instead of Shaka Packager
         Raises:
             EnvironmentError if the required decryption executable could not be found.
             ValueError if the track has not yet been downloaded.
@@ -270,7 +308,9 @@ class PlayReady:
         if not path or not path.exists():
             raise ValueError("Tried to decrypt a file that does not exist.")
 
-        if use_mp4decrypt:
+        decrypter = str(getattr(config, "decryption", "")).lower()
+
+        if decrypter == "mp4decrypt":
             return self._decrypt_with_mp4decrypt(path)
         else:
             return self._decrypt_with_shaka_packager(path)

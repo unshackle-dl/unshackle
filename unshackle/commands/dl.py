@@ -248,7 +248,9 @@ class dl:
     )
     @click.option("--downloads", type=int, default=1, help="Amount of tracks to download concurrently.")
     @click.option("--no-cache", "no_cache", is_flag=True, default=False, help="Bypass title cache for this download.")
-    @click.option("--reset-cache", "reset_cache", is_flag=True, default=False, help="Clear title cache before fetching.")
+    @click.option(
+        "--reset-cache", "reset_cache", is_flag=True, default=False, help="Clear title cache before fetching."
+    )
     @click.pass_context
     def cli(ctx: click.Context, **kwargs: Any) -> dl:
         return dl(ctx, **kwargs)
@@ -294,20 +296,8 @@ class dl:
         if getattr(config, "downloader_map", None):
             config.downloader = config.downloader_map.get(self.service, config.downloader)
 
-        with console.status("Loading DRM CDM...", spinner="dots"):
-            try:
-                self.cdm = self.get_cdm(self.service, self.profile)
-            except ValueError as e:
-                self.log.error(f"Failed to load CDM, {e}")
-                sys.exit(1)
-
-            if self.cdm:
-                if hasattr(self.cdm, "device_type") and self.cdm.device_type.name in ["ANDROID", "CHROME"]:
-                    self.log.info(f"Loaded Widevine CDM: {self.cdm.system_id} (L{self.cdm.security_level})")
-                else:
-                    self.log.info(
-                        f"Loaded PlayReady CDM: {self.cdm.certificate_chain.get_name()} (L{self.cdm.security_level})"
-                    )
+        if getattr(config, "decryption_map", None):
+            config.decryption = config.decryption_map.get(self.service, config.decryption)
 
         with console.status("Loading Key Vaults...", spinner="dots"):
             self.vaults = Vaults(self.service)
@@ -346,6 +336,24 @@ class dl:
                 self.log.debug(f"Active vaults: {', '.join(vault_names)}")
             else:
                 self.log.debug("No vaults are currently active")
+
+        with console.status("Loading DRM CDM...", spinner="dots"):
+            try:
+                self.cdm = self.get_cdm(self.service, self.profile)
+            except ValueError as e:
+                self.log.error(f"Failed to load CDM, {e}")
+                sys.exit(1)
+
+            if self.cdm:
+                if isinstance(self.cdm, DecryptLabsRemoteCDM):
+                    drm_type = "PlayReady" if self.cdm.is_playready else "Widevine"
+                    self.log.info(f"Loaded {drm_type} Remote CDM: DecryptLabs (L{self.cdm.security_level})")
+                elif hasattr(self.cdm, "device_type") and self.cdm.device_type.name in ["ANDROID", "CHROME"]:
+                    self.log.info(f"Loaded Widevine CDM: {self.cdm.system_id} (L{self.cdm.security_level})")
+                else:
+                    self.log.info(
+                        f"Loaded PlayReady CDM: {self.cdm.certificate_chain.get_name()} (L{self.cdm.security_level})"
+                    )
 
         self.proxy_providers = []
         if no_proxy:
@@ -531,7 +539,7 @@ class dl:
                 else:
                     console.print(Padding("Search -> [bright_black]No match found[/]", (0, 5)))
 
-            if self.tmdb_id and getattr(self, 'search_source', None) != 'simkl':
+            if self.tmdb_id and getattr(self, "search_source", None) != "simkl":
                 kind = "tv" if isinstance(title, Episode) else "movie"
                 tags.external_ids(self.tmdb_id, kind)
                 if self.tmdb_year:
@@ -869,7 +877,12 @@ class dl:
                                         ),
                                         licence=partial(
                                             service.get_playready_license
-                                            if isinstance(self.cdm, PlayReadyCdm)
+                                            if (
+                                                isinstance(self.cdm, PlayReadyCdm)
+                                                or (
+                                                    isinstance(self.cdm, DecryptLabsRemoteCDM) and self.cdm.is_playready
+                                                )
+                                            )
                                             and hasattr(service, "get_playready_license")
                                             else service.get_widevine_license,
                                             title=title,
@@ -1001,12 +1014,7 @@ class dl:
                 # Handle DRM decryption BEFORE repacking (must decrypt first!)
                 service_name = service.__class__.__name__.upper()
                 decryption_method = config.decryption_map.get(service_name, config.decryption)
-                use_mp4decrypt = decryption_method.lower() == "mp4decrypt"
-
-                if use_mp4decrypt:
-                    decrypt_tool = "mp4decrypt"
-                else:
-                    decrypt_tool = "Shaka Packager"
+                decrypt_tool = "mp4decrypt" if decryption_method.lower() == "mp4decrypt" else "Shaka Packager"
 
                 drm_tracks = [track for track in title.tracks if track.drm]
                 if drm_tracks:
@@ -1015,7 +1023,7 @@ class dl:
                         for track in drm_tracks:
                             drm = track.get_drm_for_cdm(self.cdm)
                             if drm and hasattr(drm, "decrypt"):
-                                drm.decrypt(track.path, use_mp4decrypt=use_mp4decrypt)
+                                drm.decrypt(track.path)
                                 has_decrypted = True
                                 events.emit(events.Types.TRACK_REPACKED, track=track)
                             else:
@@ -1201,10 +1209,22 @@ class dl:
         if not drm:
             return
 
-        if isinstance(drm, Widevine) and not isinstance(self.cdm, WidevineCdm):
-            self.cdm = self.get_cdm(self.service, self.profile, drm="widevine")
-        elif isinstance(drm, PlayReady) and not isinstance(self.cdm, PlayReadyCdm):
-            self.cdm = self.get_cdm(self.service, self.profile, drm="playready")
+        if isinstance(drm, Widevine):
+            if not isinstance(self.cdm, (WidevineCdm, DecryptLabsRemoteCDM)) or (
+                isinstance(self.cdm, DecryptLabsRemoteCDM) and self.cdm.is_playready
+            ):
+                widevine_cdm = self.get_cdm(self.service, self.profile, drm="widevine")
+                if widevine_cdm:
+                    self.log.info("Switching to Widevine CDM for Widevine content")
+                    self.cdm = widevine_cdm
+        elif isinstance(drm, PlayReady):
+            if not isinstance(self.cdm, (PlayReadyCdm, DecryptLabsRemoteCDM)) or (
+                isinstance(self.cdm, DecryptLabsRemoteCDM) and not self.cdm.is_playready
+            ):
+                playready_cdm = self.get_cdm(self.service, self.profile, drm="playready")
+                if playready_cdm:
+                    self.log.info("Switching to PlayReady CDM for PlayReady content")
+                    self.cdm = playready_cdm
 
         if isinstance(drm, Widevine):
             with self.DRM_TABLE_LOCK:
@@ -1442,8 +1462,8 @@ class dl:
                     return Credential(*credentials)
                 return Credential.loads(credentials)  # type: ignore
 
-    @staticmethod
     def get_cdm(
+        self,
         service: str,
         profile: Optional[str] = None,
         drm: Optional[str] = None,
@@ -1477,10 +1497,18 @@ class dl:
 
         cdm_api = next(iter(x for x in config.remote_cdm if x["name"] == cdm_name), None)
         if cdm_api:
-            is_decrypt_lab = True if cdm_api["type"] == "decrypt_labs" else False
-            del cdm_api["name"]
-            del cdm_api["type"]
-            return DecryptLabsRemoteCDM(service_name=service, **cdm_api) if is_decrypt_lab else RemoteCdm(**cdm_api)
+            is_decrypt_lab = True if cdm_api.get("type") == "decrypt_labs" else False
+            if is_decrypt_lab:
+                del cdm_api["name"]
+                del cdm_api["type"]
+
+                # All DecryptLabs CDMs use DecryptLabsRemoteCDM
+                return DecryptLabsRemoteCDM(service_name=service, vaults=self.vaults, **cdm_api)
+            else:
+                del cdm_api["name"]
+                if "type" in cdm_api:
+                    del cdm_api["type"]
+                return RemoteCdm(**cdm_api)
 
         prd_path = config.directories.prds / f"{cdm_name}.prd"
         if not prd_path.is_file():

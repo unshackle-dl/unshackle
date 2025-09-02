@@ -141,6 +141,11 @@ The following directories are available and may be overridden,
 - `logs` - Logs.
 - `wvds` - Widevine Devices.
 - `prds` - PlayReady Devices.
+- `dcsl` - Device Certificate Status List.
+
+Notes:
+
+- `services` accepts either a single directory or a list of directories to search for service modules.
 
 For example,
 
@@ -163,6 +168,14 @@ For example to set the default primary language to download to German,
 
 ```yaml
 lang: de
+```
+
+You can also set multiple preferred languages using a list, e.g.,
+
+```yaml
+lang:
+  - en
+  - fr
 ```
 
 to set how many tracks to download concurrently to 4 and download threads to 16,
@@ -302,6 +315,11 @@ Note: SQLite and MySQL vaults have to connect directly to the Host/IP. It cannot
 Beware that some Hosting Providers do not let you access the MySQL server outside their intranet and may not be
 accessible outside their hosting platform.
 
+Additional behavior:
+
+- `no_push` (bool): Optional per-vault flag. When `true`, the vault will not receive pushed keys (writes) but
+  will still be queried and can provide keys for lookups. Useful for read-only/backup vaults.
+
 ### Using an API Vault
 
 API vaults use a specific HTTP request format, therefore API or HTTP Key Vault APIs from other projects or services may
@@ -314,6 +332,7 @@ not work in unshackle. The API format can be seen in the [API Vault Code](unshac
   # uri: "127.0.0.1:80/key-vault"
   # uri: "https://api.example.com/key-vault"
   token: "random secret key" # authorization token
+  # no_push: true            # optional; make this API vault read-only (lookups only)
 ```
 
 ### Using a MySQL Vault
@@ -329,6 +348,7 @@ A MySQL Vault can be on a local or remote network, but I recommend SQLite for lo
   database: vault # database used for unshackle
   username: jane11
   password: Doe123
+  # no_push: false           # optional; defaults to false
 ```
 
 I recommend giving only a trustable user (or yourself) CREATE permission and then use unshackle to cache at least one CEK
@@ -352,6 +372,7 @@ case something happens to your MySQL Vault.
 - type: SQLite
   name: "My Local Vault" # arbitrary vault name
   path: "C:/Users/Jane11/Documents/unshackle/data/key_vault.db"
+  # no_push: true           # optional; commonly true for local backup vaults
 ```
 
 **Note**: You do not need to create the file at the specified path.  
@@ -394,7 +415,7 @@ n_m3u8dl_re:
 Set your NordVPN Service credentials with `username` and `password` keys to automate the use of NordVPN as a Proxy
 system where required.
 
-You can also specify specific servers to use per-region with the `servers` key.  
+You can also specify specific servers to use per-region with the `server_map` key.  
 Sometimes a specific server works best for a service than others, so hard-coding one for a day or two helps.
 
 For example,
@@ -403,8 +424,8 @@ For example,
 nordvpn:
   username: zxqsR7C5CyGwmGb6KSvk8qsZ # example of the login format
   password: wXVHmht22hhRKUEQ32PQVjCZ
-  servers:
-    - us: 12 # force US server #12 for US proxies
+  server_map:
+    us: 12 # force US server #12 for US proxies
 ```
 
 The username and password should NOT be your normal NordVPN Account Credentials.  
@@ -443,7 +464,7 @@ second proxy of the US list.
 Set your NordVPN Service credentials with `username` and `password` keys to automate the use of NordVPN as a Proxy
 system where required.
 
-You can also specify specific servers to use per-region with the `servers` key.  
+You can also specify specific servers to use per-region with the `server_map` key.  
 Sometimes a specific server works best for a service than others, so hard-coding one for a day or two helps.
 
 For example,
@@ -451,8 +472,8 @@ For example,
 ```yaml
 username: zxqsR7C5CyGwmGb6KSvk8qsZ # example of the login format
 password: wXVHmht22hhRKUEQ32PQVjCZ
-servers:
-  - us: 12 # force US server #12 for US proxies
+server_map:
+  us: 12 # force US server #12 for US proxies
 ```
 
 The username and password should NOT be your normal NordVPN Account Credentials.  
@@ -462,6 +483,20 @@ Once set, you can also specifically opt in to use a NordVPN proxy by specifying 
 You can even set a specific server number this way, e.g., `--proxy=gb2366`.
 
 Note that `gb` is used instead of `uk` to be more consistent across regional systems.
+
+### surfsharkvpn (dict)
+
+Enable Surfshark VPN proxy service using Surfshark Service credentials (not your login password).  
+You may pin specific server IDs per region using `server_map`.
+
+```yaml
+username: your_surfshark_service_username # https://my.surfshark.com/vpn/manual-setup/main/openvpn
+password: your_surfshark_service_password # service credentials, not account password
+server_map:
+  us: 3844 # force US server #3844
+  gb: 2697 # force GB server #2697
+  au: 4621 # force AU server #4621
+```
 
 ### hola (dict)
 
@@ -496,6 +531,15 @@ For example,
 ```
 
 [pywidevine]: https://github.com/rlaphoenix/pywidevine
+
+## scene_naming (bool)
+
+Set scene-style naming for titles. When `true` uses scene naming patterns (e.g., `Prime.Suspect.S07E01...`), when
+`false` uses a more human-readable style (e.g., `Prime Suspect S07E01 ...`). Default: `true`.
+
+## series_year (bool)
+
+Whether to include the series year in series names for episodes and folders. Default: `true`.
 
 ## serve (dict)
 
@@ -561,6 +605,27 @@ set_terminal_bg: true
 Group or Username to postfix to the end of all download filenames following a dash.  
 For example, `tag: "J0HN"` will have `-J0HN` at the end of all download filenames.
 
+## tag_group_name (bool)
+
+Enable/disable tagging downloads with your group name when `tag` is set. Default: `true`.
+
+## tag_imdb_tmdb (bool)
+
+Enable/disable tagging downloaded files with IMDB/TMDB/TVDB identifiers (when available). Default: `true`.
+
+## title_cache_enabled (bool)
+
+Enable/disable caching of title metadata to reduce redundant API calls. Default: `true`.
+
+## title_cache_time (int)
+
+Cache duration in seconds for title metadata. Default: `1800` (30 minutes).
+
+## title_cache_max_retention (int)
+
+Maximum retention time in seconds for serving slightly stale cached title metadata when API calls fail.  
+Default: `86400` (24 hours). Effective retention is `min(title_cache_time + grace, title_cache_max_retention)`.
+
 ## tmdb_api_key (str)
 
 API key for The Movie Database (TMDB). This is used for tagging downloaded files with TMDB,
@@ -580,3 +645,36 @@ tmdb_api_key: cf66bf18956kca5311ada3bebb84eb9a # Not a real key
 ```
 
 **Note**: Keep your API key secure and do not share it publicly. This key is used by the core/utils/tags.py module to fetch metadata from TMDB for proper file tagging.
+
+## subtitle (dict)
+
+Control subtitle conversion and SDH (hearing-impaired) stripping behavior.
+
+- `conversion_method`: How to convert subtitles between formats. Default: `auto`.
+
+  - `auto`: Use subby for WebVTT/SAMI, standard for others.
+  - `subby`: Always use subby with CommonIssuesFixer.
+  - `subtitleedit`: Prefer SubtitleEdit when available; otherwise fallback to standard conversion.
+  - `pycaption`: Use only the pycaption library (no SubtitleEdit, no subby).
+
+- `sdh_method`: How to strip SDH cues. Default: `auto`.
+  - `auto`: Try subby for SRT first, then SubtitleEdit, then filter-subs.
+  - `subby`: Use subby’s SDHStripper (SRT only).
+  - `subtitleedit`: Use SubtitleEdit’s RemoveTextForHI when available.
+  - `filter-subs`: Use the subtitle-filter library.
+
+Example:
+
+```yaml
+subtitle:
+  conversion_method: auto
+  sdh_method: auto
+```
+
+## update_checks (bool)
+
+Check for updates from the GitHub repository on startup. Default: `true`.
+
+## update_check_interval (int)
+
+How often to check for updates, in hours. Default: `24`.

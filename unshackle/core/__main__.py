@@ -69,7 +69,7 @@ def main(version: bool, debug: bool, log_path: Path) -> None:
                     r" ▀▀▀ ▀▀ █▪ ▀▀▀▀ ▀▀▀ · ▀  ▀ ·▀▀▀ ·▀  ▀.▀▀▀  ▀▀▀ ",
                     style="ascii.art",
                 ),
-                "v 3.3.3 Copyright © 2019-2025 rlaphoenix" + f"\nv [repr.number]{__version__}[/] - unshackle",
+                f"v [repr.number]{__version__}[/] - © 2025 - github.com/unshackle-dl/unshackle",
             ),
             (1, 11, 1, 10),
             expand=True,

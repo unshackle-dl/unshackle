@@ -185,7 +185,15 @@ class Widevine:
                 if cert and hasattr(cdm, "set_service_certificate"):
                     cdm.set_service_certificate(session_id, cert)
 
-                cdm.parse_license(session_id, licence(challenge=cdm.get_license_challenge(session_id, self.pssh)))
+                if hasattr(cdm, "set_required_kids"):
+                    cdm.set_required_kids(self.kids)
+
+                challenge = cdm.get_license_challenge(session_id, self.pssh)
+
+                if hasattr(cdm, "has_cached_keys") and cdm.has_cached_keys(session_id):
+                    pass
+                else:
+                    cdm.parse_license(session_id, licence(challenge=challenge))
 
                 self.content_keys = {key.kid: key.key.hex() for key in cdm.get_keys(session_id, "CONTENT")}
                 if not self.content_keys:
@@ -213,10 +221,18 @@ class Widevine:
                 if cert and hasattr(cdm, "set_service_certificate"):
                     cdm.set_service_certificate(session_id, cert)
 
-                cdm.parse_license(
-                    session_id,
-                    licence(session_id=session_id, challenge=cdm.get_license_challenge(session_id, self.pssh)),
-                )
+                if hasattr(cdm, "set_required_kids"):
+                    cdm.set_required_kids(self.kids)
+
+                challenge = cdm.get_license_challenge(session_id, self.pssh)
+
+                if hasattr(cdm, "has_cached_keys") and cdm.has_cached_keys(session_id):
+                    pass
+                else:
+                    cdm.parse_license(
+                        session_id,
+                        licence(session_id=session_id, challenge=challenge),
+                    )
 
                 self.content_keys = {key.kid: key.key.hex() for key in cdm.get_keys(session_id, "CONTENT")}
                 if not self.content_keys:
@@ -227,12 +243,11 @@ class Widevine:
             finally:
                 cdm.close(session_id)
 
-    def decrypt(self, path: Path, use_mp4decrypt: bool = False) -> None:
+    def decrypt(self, path: Path) -> None:
         """
         Decrypt a Track with Widevine DRM.
         Args:
             path: Path to the encrypted file to decrypt
-            use_mp4decrypt: If True, use mp4decrypt instead of Shaka Packager
         Raises:
             EnvironmentError if the required decryption executable could not be found.
             ValueError if the track has not yet been downloaded.
@@ -244,7 +259,9 @@ class Widevine:
         if not path or not path.exists():
             raise ValueError("Tried to decrypt a file that does not exist.")
 
-        if use_mp4decrypt:
+        decrypter = str(getattr(config, "decryption", "")).lower()
+
+        if decrypter == "mp4decrypt":
             return self._decrypt_with_mp4decrypt(path)
         else:
             return self._decrypt_with_shaka_packager(path)
