@@ -179,17 +179,49 @@ class Episode(Title):
 
     def get_filename(self, media_info: MediaInfo, folder: bool = False, show_service: bool = True) -> str:
         if folder:
-            # For folders, use simple naming: "Title Year S01"
-            name = f"{self.title}"
-            if self.year:
-                name += f" {self.year}"
-            name += f" S{self.season:02}"
-            return sanitize_filename(name, " ")
+            # For folders, use the series template but exclude episode-specific variables
+            series_template = config.output_template.get("series")
+            if series_template:
+                # Create a folder-friendly version by removing episode-specific variables
+                folder_template = series_template
+                # Remove episode number and episode name from template for folders
+                folder_template = re.sub(r'\{episode\}', '', folder_template)
+                folder_template = re.sub(r'\{episode_name\?\}', '', folder_template)
+                folder_template = re.sub(r'\{episode_name\}', '', folder_template)
+                folder_template = re.sub(r'\{season_episode\}', '{season}', folder_template)
 
-        # Use custom template if defined, otherwise use default scene-style template
+                # Clean up any double separators that might result
+                folder_template = re.sub(r'\.{2,}', '.', folder_template)
+                folder_template = re.sub(r'\s{2,}', ' ', folder_template)
+                folder_template = re.sub(r'^[\.\s]+|[\.\s]+$', '', folder_template)
+
+                formatter = TemplateFormatter(folder_template)
+                context = self._build_template_context(media_info, show_service)
+                # Override season_episode with just season for folders
+                context['season'] = f"S{self.season:02}"
+
+                folder_name = formatter.format(context)
+
+                # Keep the same separator style as the series template
+                if '.' in series_template and ' ' not in series_template:
+                    # Dot-based template - use dot separator for folders too
+                    return sanitize_filename(folder_name, ".")
+                else:
+                    # Space-based template - use space separator
+                    return sanitize_filename(folder_name, " ")
+            else:
+                # Fallback to simple naming if no template defined
+                name = f"{self.title}"
+                if self.year:
+                    name += f" {self.year}"
+                name += f" S{self.season:02}"
+                return sanitize_filename(name, " ")
+
+        # Use template from output_template (which includes scene_naming compatibility)
+        # or fallback to default scene-style template
         template = (
             config.output_template.get("series")
-            or "{title}.{year?}.{season_episode}.{episode_name?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}"
+            or "{title}.{year?}.{season_episode}.{episode_name?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hfr?}.{video}-{tag}"
         )
 
         formatter = TemplateFormatter(template)

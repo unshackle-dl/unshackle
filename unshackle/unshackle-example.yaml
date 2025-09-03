@@ -12,6 +12,11 @@ set_terminal_bg: false
 
 # File naming is now controlled via output_template (see below)
 # Default behavior provides scene-style naming similar to the old scene_naming: true
+#
+# BACKWARD COMPATIBILITY: The old scene_naming option is still supported:
+# scene_naming: true  -> Equivalent to scene-style templates (dot-separated)
+# scene_naming: false -> Equivalent to Plex-friendly templates (space-separated)
+# Note: output_template takes precedence over scene_naming if both are defined
 
 # Custom output templates for filenames
 # When not defined, defaults to scene-style naming equivalent to the old scene_naming: true
@@ -131,25 +136,25 @@ remote_cdm:
     secret: secret_key
 
   - name: "decrypt_labs_chrome"
-    type: "decrypt_labs"  # Required to identify as DecryptLabs CDM
-    device_name: "ChromeCDM"  # Scheme identifier - must match exactly
+    type: "decrypt_labs" # Required to identify as DecryptLabs CDM
+    device_name: "ChromeCDM" # Scheme identifier - must match exactly
     device_type: CHROME
     system_id: 4464 # Doesn't matter
     security_level: 3
     host: "https://keyxtractor.decryptlabs.com"
-    secret: "your_decrypt_labs_api_key_here"  # Replace with your API key
+    secret: "your_decrypt_labs_api_key_here" # Replace with your API key
   - name: "decrypt_labs_l1"
     type: "decrypt_labs"
-    device_name: "L1"  # Scheme identifier - must match exactly
+    device_name: "L1" # Scheme identifier - must match exactly
     device_type: ANDROID
-    system_id: 4464 
+    system_id: 4464
     security_level: 1
     host: "https://keyxtractor.decryptlabs.com"
     secret: "your_decrypt_labs_api_key_here"
 
   - name: "decrypt_labs_l2"
     type: "decrypt_labs"
-    device_name: "L2"  # Scheme identifier - must match exactly
+    device_name: "L2" # Scheme identifier - must match exactly
     device_type: ANDROID
     system_id: 4464
     security_level: 2
@@ -158,7 +163,7 @@ remote_cdm:
 
   - name: "decrypt_labs_playready_sl2"
     type: "decrypt_labs"
-    device_name: "SL2"  # Scheme identifier - must match exactly
+    device_name: "SL2" # Scheme identifier - must match exactly
     device_type: PLAYREADY
     system_id: 0
     security_level: 2000
@@ -167,7 +172,7 @@ remote_cdm:
 
   - name: "decrypt_labs_playready_sl3"
     type: "decrypt_labs"
-    device_name: "SL3"  # Scheme identifier - must match exactly
+    device_name: "SL3" # Scheme identifier - must match exactly
     device_type: PLAYREADY
     system_id: 0
     security_level: 3000

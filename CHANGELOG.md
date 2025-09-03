@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Custom Output Templates**: Flexible filename customization system
+  - New `output_template` configuration in unshackle.yaml for movies, series, and songs
+  - Support for conditional variables using `?` suffix (e.g., `{year?}`, `{hdr?}`)
+  - Comprehensive template variables for title, quality, audio, video, and metadata
+  - Multiple naming styles: Scene-style (dot-separated), Plex-friendly (space-separated), minimal, custom
+  - Automatic template validation and enhanced error handling
+  - **Full backward compatibility**: Old `scene_naming` option still works and automatically converts to equivalent templates
+  - Folder naming now follows series template patterns (excluding episode-specific variables)
+  - Deprecation warnings guide users to migrate from `scene_naming` to `output_template`
+
+### Changed
+
+- **Filename Generation**: Updated all title classes (Movie, Episode, Song) to use new template system
+  - Enhanced context building for template variable substitution
+  - Improved separator handling based on template style detection
+  - Better handling of conditional content like HDR, Atmos, and multi-language audio
+
 ## [1.4.4] - 2025-09-02
 
 ### Added
@@ -26,7 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Matroska Tag Compliance**: Enhanced media container compatibility  
+- **Matroska Tag Compliance**: Enhanced media container compatibility
   - Fixed Matroska tag compliance with official specification
 - **Application Branding**: Cleaned up version display
   - Removed old devine version reference from banner to avoid developer confusion

@@ -129,10 +129,10 @@ class Song(Title):
                 name += f" ({self.year})"
             return sanitize_filename(name, " ")
 
-        # Use custom template if defined, otherwise use default scene-style template
+        # Use template from output_template (which includes scene_naming compatibility)
+        # or fallback to default scene-style template
         template = (
-            config.output_template.get("songs")
-            or "{track_number}.{title}.{source?}.WEB-DL.{audio_full}.{atmos?}-{tag}"
+            config.output_template.get("songs") or "{track_number}.{title}.{source?}.WEB-DL.{audio_full}.{atmos?}-{tag}"
         )
 
         formatter = TemplateFormatter(template)

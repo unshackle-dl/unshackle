@@ -136,7 +136,8 @@ class Movie(Title):
         return self.name
 
     def get_filename(self, media_info: MediaInfo, folder: bool = False, show_service: bool = True) -> str:
-        # Use custom template if defined, otherwise use default scene-style template
+        # Use template from output_template (which includes scene_naming compatibility)
+        # or fallback to default scene-style template
         template = (
             config.output_template.get("movies")
             or "{title}.{year}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}"

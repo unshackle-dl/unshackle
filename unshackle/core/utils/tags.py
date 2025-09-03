@@ -359,7 +359,7 @@ def tag_file(path: Path, title: Title, tmdb_id: Optional[int] | None = None) -> 
                         standard_tags["TVDB2"] = f"series/{show_ids['tvdb']}"
                     if show_ids.get("tmdbtv"):
                         standard_tags["TMDB"] = f"tv/{show_ids['tmdbtv']}"
-                
+
                 # Handle movie data from Simkl
                 elif simkl_data.get("type") == "movie" and "movie" in simkl_data:
                     movie_ids = simkl_data.get("movie", {}).get("ids", {})

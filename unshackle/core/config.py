@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+import warnings
 from pathlib import Path
 from typing import Any, Optional
 
@@ -90,11 +92,115 @@ class Config:
         self.tmdb_api_key: str = kwargs.get("tmdb_api_key") or ""
         self.update_checks: bool = kwargs.get("update_checks", True)
         self.update_check_interval: int = kwargs.get("update_check_interval", 24)
+
+        # Handle backward compatibility for scene_naming option
+        self.scene_naming: Optional[bool] = kwargs.get("scene_naming")
         self.output_template: dict = kwargs.get("output_template") or {}
+
+        # Apply scene_naming compatibility if no output_template is defined
+        self._apply_scene_naming_compatibility()
+
+        # Validate output templates
+        self._validate_output_templates()
 
         self.title_cache_time: int = kwargs.get("title_cache_time", 1800)  # 30 minutes default
         self.title_cache_max_retention: int = kwargs.get("title_cache_max_retention", 86400)  # 24 hours default
         self.title_cache_enabled: bool = kwargs.get("title_cache_enabled", True)
+
+    def _apply_scene_naming_compatibility(self) -> None:
+        """Apply backward compatibility for the old scene_naming option."""
+        if self.scene_naming is not None:
+            # Only apply if no output_template is already defined
+            if not self.output_template.get("movies") and not self.output_template.get("series"):
+                if self.scene_naming:
+                    # scene_naming: true = scene-style templates
+                    self.output_template.update(
+                        {
+                            "movies": "{title}.{year}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}",
+                            "series": "{title}.{year?}.{season_episode}.{episode_name?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}",
+                            "songs": "{track_number}.{title}.{source?}.WEB-DL.{audio_full}.{atmos?}-{tag}",
+                        }
+                    )
+                else:
+                    # scene_naming: false = Plex-friendly templates
+                    self.output_template.update(
+                        {
+                            "movies": "{title} ({year}) {quality}",
+                            "series": "{title} {season_episode} {episode_name?}",
+                            "songs": "{track_number}. {title}",
+                        }
+                    )
+
+                # Warn about deprecated option
+                warnings.warn(
+                    "The 'scene_naming' option is deprecated. Please use 'output_template' instead. "
+                    "Your current setting has been converted to equivalent templates.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+
+    def _validate_output_templates(self) -> None:
+        """Validate output template configurations and warn about potential issues."""
+        if not self.output_template:
+            return
+
+        # Known template variables for validation
+        valid_variables = {
+            # Basic variables
+            "title",
+            "year",
+            "season",
+            "episode",
+            "season_episode",
+            "episode_name",
+            "quality",
+            "resolution",
+            "source",
+            "tag",
+            "track_number",
+            "artist",
+            "album",
+            "disc",
+            # Audio variables
+            "audio",
+            "audio_channels",
+            "audio_full",
+            "atmos",
+            "dual",
+            "multi",
+            # Video variables
+            "video",
+            "hdr",
+            "hfr",
+        }
+
+        # Filesystem-unsafe characters that could cause issues
+        unsafe_chars = r'[<>:"/\\|?*]'
+
+        for template_type, template_str in self.output_template.items():
+            if not isinstance(template_str, str):
+                warnings.warn(f"Template '{template_type}' must be a string, got {type(template_str).__name__}")
+                continue
+
+            # Extract variables from template
+            variables = re.findall(r"\{([^}]+)\}", template_str)
+
+            # Check for unknown variables
+            for var in variables:
+                # Remove conditional suffix if present
+                var_clean = var.rstrip("?")
+                if var_clean not in valid_variables:
+                    warnings.warn(f"Unknown template variable '{var}' in {template_type} template")
+
+            # Check for filesystem-unsafe characters outside of variables
+            # Replace variables with safe placeholders for testing
+            test_template = re.sub(r"\{[^}]+\}", "TEST", template_str)
+            if re.search(unsafe_chars, test_template):
+                warnings.warn(f"Template '{template_type}' may contain filesystem-unsafe characters")
+
+            # Check for empty template
+            if not template_str.strip():
+                warnings.warn(f"Template '{template_type}' is empty")
 
     @classmethod
     def from_yaml(cls, path: Path) -> Config:
