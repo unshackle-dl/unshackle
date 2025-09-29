@@ -259,6 +259,7 @@ subtitle:
 
 # Configuration for pywidevine's serve functionality
 serve:
+  api_secret: "your-secret-key-here"
   users:
     secret_key_for_user:
       devices:

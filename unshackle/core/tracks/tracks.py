@@ -202,17 +202,16 @@ class Tracks:
         """Sort audio tracks by bitrate, descriptive, and optionally language."""
         if not self.audio:
             return
-        # bitrate
-        self.audio.sort(key=lambda x: float(x.bitrate or 0.0), reverse=True)
         # descriptive
-        self.audio.sort(key=lambda x: str(x.language) if x.descriptive else "")
+        self.audio.sort(key=lambda x: x.descriptive)
+        # bitrate (within each descriptive group)
+        self.audio.sort(key=lambda x: float(x.bitrate or 0.0), reverse=True)
         # language
         for language in reversed(by_language or []):
             if str(language) in ("all", "best"):
                 language = next((x.language for x in self.audio if x.is_original_lang), "")
             if not language:
                 continue
-            self.audio.sort(key=lambda x: str(x.language))
             self.audio.sort(key=lambda x: not is_close_match(language, [x.language]))
 
     def sort_subtitles(self, by_language: Optional[Sequence[Union[str, Language]]] = None) -> None:
