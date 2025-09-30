@@ -254,7 +254,7 @@ class DASH:
         if not session:
             session = Session()
         elif not isinstance(session, (Session, CurlSession)):
-            raise TypeError(f"Expected session to be a {Session}, not {session!r}")
+            raise TypeError(f"Expected session to be a {Session} or {CurlSession}, not {session!r}")
 
         if proxy:
             session.proxies.update({"all": proxy})
