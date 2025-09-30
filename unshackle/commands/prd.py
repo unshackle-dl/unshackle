@@ -8,7 +8,7 @@ from Crypto.Random import get_random_bytes
 from pyplayready.cdm import Cdm
 from pyplayready.crypto.ecc_key import ECCKey
 from pyplayready.device import Device
-from pyplayready.exceptions import InvalidCertificateChain, OutdatedDevice
+from pyplayready.misc.exceptions import InvalidCertificateChain, OutdatedDevice
 from pyplayready.system.bcert import Certificate, CertificateChain
 from pyplayready.system.pssh import PSSH
 
