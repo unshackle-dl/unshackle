@@ -52,7 +52,17 @@ class Movie(Title):
 
     def get_filename(self, media_info: MediaInfo, folder: bool = False, show_service: bool = True) -> str:
         primary_video_track = next(iter(media_info.video_tracks), None)
-        primary_audio_track = next(iter(media_info.audio_tracks), None)
+        primary_audio_track = None
+        if media_info.audio_tracks:
+            sorted_audio = sorted(
+                media_info.audio_tracks,
+                key=lambda x: (
+                    float(x.bit_rate) if x.bit_rate else 0,
+                    bool(x.format_additionalfeatures and "JOC" in x.format_additionalfeatures)
+                ),
+                reverse=True
+            )
+            primary_audio_track = sorted_audio[0]
         unique_audio_languages = len({x.language.split("-")[0] for x in media_info.audio_tracks if x.language})
 
         # Name (Year)

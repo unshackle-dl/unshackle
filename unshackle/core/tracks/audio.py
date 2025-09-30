@@ -12,6 +12,7 @@ class Audio(Track):
         AAC = "AAC"  # https://wikipedia.org/wiki/Advanced_Audio_Coding
         AC3 = "DD"  # https://wikipedia.org/wiki/Dolby_Digital
         EC3 = "DD+"  # https://wikipedia.org/wiki/Dolby_Digital_Plus
+        AC4 = "AC-4"  # https://wikipedia.org/wiki/Dolby_AC-4
         OPUS = "OPUS"  # https://wikipedia.org/wiki/Opus_(audio_format)
         OGG = "VORB"  # https://wikipedia.org/wiki/Vorbis
         DTS = "DTS"  # https://en.wikipedia.org/wiki/DTS_(company)#DTS_Digital_Surround
@@ -31,6 +32,8 @@ class Audio(Track):
                 return Audio.Codec.AC3
             if mime == "ec-3":
                 return Audio.Codec.EC3
+            if mime == "ac-4":
+                return Audio.Codec.AC4
             if mime == "opus":
                 return Audio.Codec.OPUS
             if mime == "dtsc":
@@ -60,6 +63,8 @@ class Audio(Track):
                 return Audio.Codec.AC3
             if profile.startswith("ddplus"):
                 return Audio.Codec.EC3
+            if profile.startswith("ac4"):
+                return Audio.Codec.AC4
             if profile.startswith("playready-oggvorbis"):
                 return Audio.Codec.OGG
             raise ValueError(f"The Content Profile '{profile}' is not a supported Audio Codec")
