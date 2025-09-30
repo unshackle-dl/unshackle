@@ -213,7 +213,7 @@ class dl:
     @click.option(
         "--sub-format",
         type=SubtitleCodecChoice(Subtitle.Codec),
-        default="srt",
+        default=None,
         help="Set Output Subtitle Format, only converting if necessary.",
     )
     @click.option("-V", "--video-only", is_flag=True, default=False, help="Only download video tracks.")
