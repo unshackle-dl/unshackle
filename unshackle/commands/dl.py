@@ -1701,10 +1701,14 @@ class dl:
                 # All DecryptLabs CDMs use DecryptLabsRemoteCDM
                 return DecryptLabsRemoteCDM(service_name=service, vaults=self.vaults, **cdm_api)
             else:
-                del cdm_api["name"]
-                if "type" in cdm_api:
-                    del cdm_api["type"]
-                return RemoteCdm(**cdm_api)
+                return RemoteCdm(
+                    device_type=cdm_api['Device Type'],
+                    system_id=cdm_api['System ID'],
+                    security_level=cdm_api['Security Level'],
+                    host=cdm_api['Host'],
+                    secret=cdm_api['Secret'],
+                    device_name=cdm_api['Device Name'],
+                )
 
         prd_path = config.directories.prds / f"{cdm_name}.prd"
         if not prd_path.is_file():
