@@ -5,7 +5,7 @@ import click
 from aiohttp import web
 
 from unshackle.core import binaries
-from unshackle.core.api import setup_routes, setup_swagger
+from unshackle.core.api import cors_middleware, setup_routes, setup_swagger
 from unshackle.core.config import config
 from unshackle.core.constants import context_settings
 
@@ -68,10 +68,10 @@ def serve(host: str, port: int, caddy: bool, api_only: bool, no_key: bool) -> No
             # API-only mode: serve just the REST API
             log.info("Starting REST API server (pywidevine CDM disabled)")
             if no_key:
-                app = web.Application()
+                app = web.Application(middlewares=[cors_middleware])
                 app["config"] = {"users": []}
             else:
-                app = web.Application(middlewares=[pywidevine_serve.authentication])
+                app = web.Application(middlewares=[cors_middleware, pywidevine_serve.authentication])
                 app["config"] = {"users": [api_secret]}
             setup_routes(app)
             setup_swagger(app)
@@ -85,11 +85,11 @@ def serve(host: str, port: int, caddy: bool, api_only: bool, no_key: bool) -> No
 
             # Create integrated app with both pywidevine and API routes
             if no_key:
-                app = web.Application()
+                app = web.Application(middlewares=[cors_middleware])
                 app["config"] = dict(config.serve)
                 app["config"]["users"] = []
             else:
-                app = web.Application(middlewares=[pywidevine_serve.authentication])
+                app = web.Application(middlewares=[cors_middleware, pywidevine_serve.authentication])
                 # Setup config - add API secret to users for authentication
                 serve_config = dict(config.serve)
                 if not serve_config.get("users"):

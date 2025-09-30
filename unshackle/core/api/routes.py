@@ -4,16 +4,29 @@ from aiohttp import web
 from aiohttp_swagger3 import SwaggerDocs, SwaggerInfo, SwaggerUiSettings
 
 from unshackle.core import __version__
-from unshackle.core.api.handlers import (
-    download_handler,
-    list_titles_handler,
-    list_tracks_handler,
-    list_download_jobs_handler,
-    get_download_job_handler,
-    cancel_download_job_handler,
-)
+from unshackle.core.api.handlers import (cancel_download_job_handler, download_handler, get_download_job_handler,
+                                         list_download_jobs_handler, list_titles_handler, list_tracks_handler)
 from unshackle.core.services import Services
 from unshackle.core.update_checker import UpdateChecker
+
+
+@web.middleware
+async def cors_middleware(request: web.Request, handler):
+    """Add CORS headers to all responses."""
+    # Handle preflight requests
+    if request.method == "OPTIONS":
+        response = web.Response()
+    else:
+        response = await handler(request)
+
+    # Add CORS headers
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-API-Key, Authorization"
+    response.headers["Access-Control-Max-Age"] = "3600"
+
+    return response
+
 
 log = logging.getLogger("api")
 
