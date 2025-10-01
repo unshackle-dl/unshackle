@@ -1610,7 +1610,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1,<0.29" },
     { name = "jsonpickle", specifier = ">=3.0.4,<4" },
     { name = "langcodes", specifier = ">=3.4.0,<4" },
-    { name = "lxml", specifier = ">=5.2.1,<6" },
+    { name = "lxml", specifier = ">=5.2.1,<7" },
     { name = "pproxy", specifier = ">=2.7.9,<3" },
     { name = "protobuf", specifier = ">=4.25.3,<5" },
     { name = "pycaption", specifier = ">=2.2.6,<3" },

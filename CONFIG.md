@@ -659,11 +659,12 @@ Control subtitle conversion and SDH (hearing-impaired) stripping behavior.
   - `subby`: Always use subby with CommonIssuesFixer.
   - `subtitleedit`: Prefer SubtitleEdit when available; otherwise fallback to standard conversion.
   - `pycaption`: Use only the pycaption library (no SubtitleEdit, no subby).
+  - `pysubs2`: Use pysubs2 library (supports SRT, SSA, ASS, WebVTT, TTML, SAMI, MicroDVD, MPL2, TMP formats).
 
 - `sdh_method`: How to strip SDH cues. Default: `auto`.
   - `auto`: Try subby for SRT first, then SubtitleEdit, then filter-subs.
-  - `subby`: Use subby’s SDHStripper (SRT only).
-  - `subtitleedit`: Use SubtitleEdit’s RemoveTextForHI when available.
+  - `subby`: Use subby's SDHStripper (SRT only).
+  - `subtitleedit`: Use SubtitleEdit's RemoveTextForHI when available.
   - `filter-subs`: Use the subtitle-filter library.
 
 Example:

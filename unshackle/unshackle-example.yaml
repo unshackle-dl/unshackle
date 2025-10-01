@@ -253,6 +253,7 @@ tmdb_api_key: ""
 # - subby: Always use subby with advanced processing
 # - pycaption: Use only pycaption library (no SubtitleEdit, no subby)
 # - subtitleedit: Prefer SubtitleEdit when available, fall back to pycaption
+# - pysubs2: Use pysubs2 library (supports SRT/SSA/ASS/WebVTT/TTML/SAMI/MicroDVD/MPL2/TMP)
 subtitle:
   conversion_method: auto
   sdh_method: auto
