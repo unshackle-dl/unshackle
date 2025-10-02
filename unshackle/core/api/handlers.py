@@ -559,8 +559,58 @@ async def list_tracks_handler(data: Dict[str, Any]) -> web.Response:
         return web.json_response({"status": "error", "message": str(e)}, status=500)
 
 
+async def keys_handler(data: Dict[str, Any]) -> web.Response:
+    """Handle keys request - retrieve decryption keys without downloading.
+
+    Similar to list-tracks but performs license acquisition and returns keys.
+    """
+    service_tag = data.get("service")
+    title_id = data.get("title_id")
+    data.get("profile")
+
+    if not service_tag:
+        return web.json_response({"status": "error", "message": "Missing required parameter: service"}, status=400)
+
+    if not title_id:
+        return web.json_response({"status": "error", "message": "Missing required parameter: title_id"}, status=400)
+
+    normalized_service = validate_service(service_tag)
+    if not normalized_service:
+        return web.json_response(
+            {"status": "error", "message": f"Invalid or unavailable service: {service_tag}"}, status=400
+        )
+
+    try:
+        from unshackle.core.api.download_manager import _perform_download
+        import uuid
+
+        temp_job_id = str(uuid.uuid4())
+
+        params = {k: v for k, v in data.items() if k not in ["service", "title_id"]}
+        params["skip_dl"] = True
+
+        output_files, decryption_keys = _perform_download(
+            temp_job_id, normalized_service, title_id, params, cancel_event=None, progress_callback=None
+        )
+
+        if decryption_keys:
+            return web.json_response({"keys": decryption_keys})
+        else:
+            return web.json_response(
+                {"status": "error", "message": "No decryption keys found for this title"}, status=404
+            )
+
+    except Exception as e:
+        log.exception("Error retrieving keys")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
 async def download_handler(data: Dict[str, Any]) -> web.Response:
-    """Handle download request - create and queue a download job."""
+    """Handle download request - create and queue a download job.
+
+    Supports skip_dl parameter to retrieve decryption keys without downloading tracks.
+    When skip_dl=True, the job will obtain licenses and keys but skip actual track downloads.
+    """
     from unshackle.core.api.download_manager import get_download_manager
 
     service_tag = data.get("service")

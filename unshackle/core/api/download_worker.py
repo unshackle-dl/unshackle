@@ -59,11 +59,13 @@ def main(argv: list[str]) -> int:
                 except Exception as e:
                     log.error(f"Failed to write progress update: {e}")
 
-        output_files = _perform_download(
+        output_files, decryption_keys = _perform_download(
             job_id, service, title_id, params, cancel_event=None, progress_callback=progress_callback
         )
 
         result = {"status": "success", "output_files": output_files}
+        if decryption_keys:
+            result["decryption_keys"] = decryption_keys
 
     except Exception as exc:  # noqa: BLE001 - capture for parent process
         exit_code = 1

@@ -43,6 +43,7 @@ class DownloadJob:
     output_files: List[str] = field(default_factory=list)
     error_message: Optional[str] = None
     error_details: Optional[str] = None
+    decryption_keys: Optional[Dict[str, Any]] = None
 
     # Cancellation support
     cancel_event: threading.Event = field(default_factory=threading.Event)
@@ -67,6 +68,7 @@ class DownloadJob:
                     "output_files": self.output_files,
                     "error_message": self.error_message,
                     "error_details": self.error_details,
+                    "decryption_keys": self.decryption_keys,
                 }
             )
 
@@ -80,8 +82,14 @@ def _perform_download(
     params: Dict[str, Any],
     cancel_event: Optional[threading.Event] = None,
     progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
-) -> List[str]:
-    """Execute the synchronous download logic for a job."""
+) -> tuple[List[str], Optional[Dict[str, Any]]]:
+    """Execute the synchronous download logic for a job.
+
+    Returns:
+        Tuple of (output_files, decryption_keys)
+        - output_files: List of downloaded file paths
+        - decryption_keys: Dict of keys when skip_dl=True, None otherwise
+    """
 
     def _check_cancel(stage: str):
         if cancel_event and cancel_event.is_set():
@@ -97,11 +105,19 @@ def _perform_download(
     import yaml
     from unshackle.commands.dl import dl
     from unshackle.core.config import config
+    from unshackle.core.constants import DOWNLOAD_LICENCE_ONLY
     from unshackle.core.services import Services
     from unshackle.core.utils.click_types import ContextData
     from unshackle.core.utils.collections import merge_dict
 
     log.info(f"Starting sync download for job {job_id}")
+
+    skip_dl = params.get("skip_dl", False)
+    collected_keys = None
+
+    if skip_dl:
+        DOWNLOAD_LICENCE_ONLY.set()
+        log.info(f"Skip download mode enabled for job {job_id}, keys will be collected from DRM objects")
 
     # Load service configuration
     service_config_path = Services.get_path(service) / config.filenames.config
@@ -179,6 +195,13 @@ def _perform_download(
     original_download_dir = config.directories.downloads
 
     _check_cancel("before download execution")
+    wanted_param = params.get("wanted", [])
+    if wanted_param and isinstance(wanted_param, str):
+        from unshackle.core.utils.click_types import SEASON_RANGE
+
+        wanted_param = SEASON_RANGE.parse_tokens(wanted_param)
+    elif not wanted_param:
+        wanted_param = []
 
     stdout_capture = StringIO()
     stderr_capture = StringIO()
@@ -208,6 +231,28 @@ def _perform_download(
 
         dl_instance.result = result_with_progress
 
+    processed_titles = []
+    collected_keys = {}
+    download_error = None
+    original_track_download = None
+
+    if skip_dl:
+        from unshackle.core.tracks.track import Track
+
+        original_track_download = Track.download
+
+        def capturing_track_download(self, *args, **kwargs):
+            prepare_drm = kwargs.get("prepare_drm")
+
+            if prepare_drm and hasattr(prepare_drm, "keywords"):
+                title = prepare_drm.keywords.get("title")
+                if title and title not in processed_titles:
+                    processed_titles.append(title)
+
+            return original_track_download(self, *args, **kwargs)
+
+        Track.download = capturing_track_download
+
     try:
         with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
             dl_instance.result(
@@ -220,7 +265,7 @@ def _perform_download(
                 range_=params.get("range", []),
                 channels=params.get("channels"),
                 no_atmos=params.get("no_atmos", False),
-                wanted=params.get("wanted", []),
+                wanted=wanted_param,
                 lang=params.get("lang", ["orig"]),
                 v_lang=params.get("v_lang", []),
                 a_lang=params.get("a_lang", []),
@@ -256,7 +301,9 @@ def _perform_download(
             log.error(f"Download exited with code {exc.code}")
             log.error(f"Stdout: {stdout_str}")
             log.error(f"Stderr: {stderr_str}")
-            raise Exception(f"Download failed with exit code {exc.code}")
+            download_error = Exception(f"Download failed with exit code {exc.code}")
+            if not skip_dl:
+                raise download_error
 
     except Exception as exc:  # noqa: BLE001 - propagate to caller
         stdout_str = stdout_capture.getvalue()
@@ -264,11 +311,85 @@ def _perform_download(
         log.error(f"Download execution failed: {exc}")
         log.error(f"Stdout: {stdout_str}")
         log.error(f"Stderr: {stderr_str}")
-        raise
+        download_error = exc
+        if not skip_dl:
+            raise
 
-    log.info(f"Download completed for job {job_id}, files in {original_download_dir}")
+    finally:
+        # Clear the DOWNLOAD_LICENCE_ONLY event after download completes
+        if skip_dl:
+            # Restore original Track.download method
+            if original_track_download is not None:
+                from unshackle.core.tracks.track import Track
 
-    return []
+                Track.download = original_track_download
+
+            DOWNLOAD_LICENCE_ONLY.clear()
+            log.info(f"Cleared skip download mode for job {job_id}")
+
+            # Extract keys directly from processed titles' tracks
+            log.debug(f"Processing {len(processed_titles)} captured titles for key extraction")
+
+            if processed_titles:
+                try:
+                    for title in processed_titles:
+                        title_name = str(title)
+                        collected_keys[title_name] = {}
+
+                        # Extract keys from all tracks that have DRM
+                        for track in title.tracks:
+                            if not hasattr(track, "drm") or not track.drm:
+                                continue
+
+                            # track.drm can be a single DRM object or a list of DRM objects
+                            drm_objects = track.drm if isinstance(track.drm, list) else [track.drm]
+                            track_name = str(track)
+                            track_keys = {}
+
+                            # Extract keys from each DRM object
+                            for drm in drm_objects:
+                                if not drm or not hasattr(drm, "content_keys"):
+                                    continue
+
+                                if drm.content_keys:
+                                    # Convert UUID keys to hex strings for JSON serialization
+                                    for kid, key in drm.content_keys.items():
+                                        kid_hex = kid.hex if hasattr(kid, "hex") else str(kid)
+                                        track_keys[kid_hex] = key
+
+                            if track_keys:
+                                collected_keys[title_name][track_name] = track_keys
+                                log.debug(f"Extracted {len(track_keys)} key(s) from {track_name}")
+
+                        # Remove title if no keys were collected
+                        if not collected_keys[title_name]:
+                            del collected_keys[title_name]
+
+                    if collected_keys:
+                        log.debug(f"Collected keys for {len(collected_keys)} title(s) from DRM objects")
+                    else:
+                        log.warning("No keys found in processed titles' DRM objects")
+
+                except Exception as e:
+                    log.error(f"Failed to extract keys from processed titles: {e}")
+                    import traceback
+
+                    log.error(traceback.format_exc())
+            else:
+                log.warning("No titles were captured during processing")
+
+    if skip_dl:
+        if collected_keys:
+            log.info(f"Key extraction completed for job {job_id} - {len(collected_keys)} title(s)")
+        else:
+            log.warning(f"Key extraction completed for job {job_id} but no keys were found")
+
+        if download_error and not collected_keys:
+            raise download_error
+    else:
+        log.info(f"Download completed for job {job_id}, files in {original_download_dir}")
+
+    return [], collected_keys
 
 
 class DownloadQueueManager:
@@ -472,11 +593,15 @@ class DownloadQueueManager:
         log.info(f"Executing download for job {job.job_id}")
 
         try:
-            output_files = await self._run_download_async(job)
+            output_files, decryption_keys = await self._run_download_async(job)
             job.status = JobStatus.COMPLETED
             job.output_files = output_files
+            job.decryption_keys = decryption_keys
             job.progress = 100.0
-            log.info(f"Download completed for job {job.job_id}: {len(output_files)} files")
+            if decryption_keys:
+                log.info(f"Download completed for job {job.job_id}: retrieved keys for {len(decryption_keys)} title(s)")
+            else:
+                log.info(f"Download completed for job {job.job_id}: {len(output_files)} files")
         except Exception as e:
             job.status = JobStatus.FAILED
             job.error_message = str(e)
@@ -484,8 +609,12 @@ class DownloadQueueManager:
             log.error(f"Download failed for job {job.job_id}: {e}")
             raise
 
-    async def _run_download_async(self, job: DownloadJob) -> List[str]:
-        """Invoke a worker subprocess to execute the download."""
+    async def _run_download_async(self, job: DownloadJob) -> tuple[List[str], Optional[Dict[str, Any]]]:
+        """Invoke a worker subprocess to execute the download.
+
+        Returns:
+            Tuple of (output_files, decryption_keys)
+        """
 
         payload = {
             "job_id": job.job_id,
@@ -580,7 +709,9 @@ class DownloadQueueManager:
                 message = result_data.get("message") if result_data else "worker did not report success"
                 raise Exception(f"Worker failure: {message}")
 
-            return result_data.get("output_files", [])
+            output_files = result_data.get("output_files", [])
+            decryption_keys = result_data.get("decryption_keys")
+            return output_files, decryption_keys
 
         finally:
             if not communicate_task.done():
@@ -597,7 +728,7 @@ class DownloadQueueManager:
                 except OSError:
                     pass
 
-    def _execute_download_sync(self, job: DownloadJob) -> List[str]:
+    def _execute_download_sync(self, job: DownloadJob) -> tuple[List[str], Optional[Dict[str, Any]]]:
         """Execute download synchronously using existing dl.py logic."""
         return _perform_download(job.job_id, job.service, job.title_id, job.parameters.copy(), job.cancel_event)
 

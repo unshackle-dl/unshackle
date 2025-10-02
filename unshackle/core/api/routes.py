@@ -4,8 +4,15 @@ from aiohttp import web
 from aiohttp_swagger3 import SwaggerDocs, SwaggerInfo, SwaggerUiSettings
 
 from unshackle.core import __version__
-from unshackle.core.api.handlers import (cancel_download_job_handler, download_handler, get_download_job_handler,
-                                         list_download_jobs_handler, list_titles_handler, list_tracks_handler)
+from unshackle.core.api.handlers import (
+    cancel_download_job_handler,
+    download_handler,
+    get_download_job_handler,
+    keys_handler,
+    list_download_jobs_handler,
+    list_titles_handler,
+    list_tracks_handler,
+)
 from unshackle.core.services import Services
 from unshackle.core.update_checker import UpdateChecker
 
@@ -226,6 +233,73 @@ async def list_tracks(request: web.Request) -> web.Response:
     return await list_tracks_handler(data)
 
 
+async def keys(request: web.Request) -> web.Response:
+    """
+    Retrieve decryption keys for a title without downloading.
+    ---
+    summary: Get decryption keys
+    description: Retrieve decryption keys for a title without downloading content
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - service
+              - title_id
+            properties:
+              service:
+                type: string
+                description: Service tag
+              title_id:
+                type: string
+                description: Title identifier
+              wanted:
+                type: string
+                description: Specific episode/season (optional)
+              proxy:
+                type: string
+                description: Proxy configuration (optional)
+              quality:
+                type: array
+                items:
+                  type: integer
+                description: Quality levels (optional)
+              lang:
+                type: array
+                items:
+                  type: string
+                description: Audio languages (optional)
+              s_lang:
+                type: array
+                items:
+                  type: string
+                description: Subtitle languages (optional)
+    responses:
+      '200':
+        description: Decryption keys
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                keys:
+                  type: object
+                  description: Map of KID to decryption key (hex format)
+      '400':
+        description: Invalid request
+      '500':
+        description: Server error
+    """
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"status": "error", "message": "Invalid JSON request body"}, status=400)
+
+    return await keys_handler(data)
+
+
 async def download(request: web.Request) -> web.Response:
     """
     Download content based on provided parameters.
@@ -355,6 +429,7 @@ def setup_routes(app: web.Application) -> None:
     app.router.add_get("/api/services", services)
     app.router.add_post("/api/list-titles", list_titles)
     app.router.add_post("/api/list-tracks", list_tracks)
+    app.router.add_post("/api/keys", keys)
     app.router.add_post("/api/download", download)
     app.router.add_get("/api/download/jobs", download_jobs)
     app.router.add_get("/api/download/jobs/{job_id}", download_job_detail)
@@ -380,6 +455,7 @@ def setup_swagger(app: web.Application) -> None:
             web.get("/api/services", services),
             web.post("/api/list-titles", list_titles),
             web.post("/api/list-tracks", list_tracks),
+            web.post("/api/keys", keys),
             web.post("/api/download", download),
             web.get("/api/download/jobs", download_jobs),
             web.get("/api/download/jobs/{job_id}", download_job_detail),
