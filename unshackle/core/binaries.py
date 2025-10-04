@@ -3,6 +3,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from mypy.types import names
+
 __shaka_platform = {"win32": "win", "darwin": "osx"}.get(sys.platform, sys.platform)
 
 
@@ -15,15 +17,16 @@ def find(*names: str) -> Optional[Path]:
     for name in names:
         # First check local binaries folder
         if local_binaries_dir.exists():
-            local_path = local_binaries_dir / name
-            if local_path.is_file() and local_path.stat().st_mode & 0o111:  # Check if executable
-                return local_path
-
-            # Also check with .exe extension on Windows
+            # On Windows, check for .exe extension first
             if sys.platform == "win32":
-                local_path_exe = local_binaries_dir / f"{name}.exe"
+                local_path_exe = local_binaries_dir / f"{name}" / f"{name}.exe"
                 if local_path_exe.is_file():
                     return local_path_exe
+
+            # Check for exact name match with executable bit on Unix-like systems
+            local_path = local_binaries_dir / f"{name}" / f"{name}"
+            if local_path.is_file() and local_path.stat().st_mode & 0o111:  # Check if executable
+                return local_path
 
         # Fall back to system PATH
         path = shutil.which(name)
