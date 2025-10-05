@@ -294,7 +294,7 @@ def _apply_tags(path: Path, tags: dict[str, str]) -> None:
     for name, value in tags.items():
         xml_lines.append(f"    <Simple><Name>{escape(name)}</Name><String>{escape(value)}</String></Simple>")
     xml_lines.extend(["  </Tag>", "</Tags>"])
-    with tempfile.NamedTemporaryFile("w", suffix=".xml", delete=False) as f:
+    with tempfile.NamedTemporaryFile("w", suffix=".xml", delete=False, encoding="utf-8") as f:
         f.write("\n".join(xml_lines))
         tmp_path = Path(f.name)
     try:
