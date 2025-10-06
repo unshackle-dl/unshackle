@@ -33,7 +33,7 @@ dependencies = [
     "crccheck>=1.3.0,<2",
     "jsonpickle>=3.0.4,<4",
     "langcodes>=3.4.0,<4",
-    "lxml>=5.2.1,<6",
+    "lxml>=5.2.1,<7",
     "pproxy>=2.7.9,<3",
     "protobuf>=4.25.3,<5",
     "pycaption>=2.2.6,<3",
@@ -54,10 +54,11 @@ dependencies = [
     "urllib3>=2.2.1,<3",
     "chardet>=5.2.0,<6",
     "curl-cffi>=0.7.0b4,<0.8",
-    "pyplayready>=0.6.0,<0.7",
+    "pyplayready>=0.6.3,<0.7",
     "httpx>=0.28.1,<0.29",
     "cryptography>=45.0.0",
     "subby",
+    "pysubs2>=1.7.0,<2",
 ]
 
 [project.urls]
@@ -113,4 +114,4 @@ no_implicit_optional = true
 
 [tool.uv.sources]
 unshackle = { workspace = true }
-subby = { git = "https://github.com/vevv/subby.git" }
+subby = { git = "https://github.com/vevv/subby.git", rev = "5a925c367ffb3f5e53fd114ae222d3be1fdff35d" }

@@ -258,6 +258,7 @@ class dl:
     @click.option(
         "--no-source", is_flag=True, default=False, help="Disable the source tag from the output file name and path."
     )
+    @click.option("--no-mux", is_flag=True, default=False, help="Do not mux tracks into a container file.")
     @click.option(
         "--workers",
         type=int,
@@ -484,6 +485,7 @@ class dl:
         no_proxy: bool,
         no_folder: bool,
         no_source: bool,
+        no_mux: bool,
         workers: Optional[int],
         downloads: int,
         best_available: bool,
@@ -1139,7 +1141,12 @@ class dl:
 
                 muxed_paths = []
 
-                if isinstance(title, (Movie, Episode)):
+                if no_mux:
+                    # Skip muxing, handle individual track files
+                    for track in title.tracks:
+                        if track.path and track.path.exists():
+                            muxed_paths.append(track.path)
+                elif isinstance(title, (Movie, Episode)):
                     progress = Progress(
                         TextColumn("[progress.description]{task.description}"),
                         SpinnerColumn(finished_text=""),
@@ -1258,19 +1265,65 @@ class dl:
                     # dont mux
                     muxed_paths.append(title.tracks.audio[0].path)
 
-                for muxed_path in muxed_paths:
-                    media_info = MediaInfo.parse(muxed_path)
+                if no_mux:
+                    # Handle individual track files without muxing
                     final_dir = config.directories.downloads
-                    final_filename = title.get_filename(media_info, show_service=not no_source)
-
                     if not no_folder and isinstance(title, (Episode, Song)):
-                        final_dir /= title.get_filename(media_info, show_service=not no_source, folder=True)
+                        # Create folder based on title
+                        # Use first available track for filename generation
+                        sample_track = title.tracks.videos[0] if title.tracks.videos else (
+                            title.tracks.audio[0] if title.tracks.audio else (
+                                title.tracks.subtitles[0] if title.tracks.subtitles else None
+                            )
+                        )
+                        if sample_track and sample_track.path:
+                            media_info = MediaInfo.parse(sample_track.path)
+                            final_dir /= title.get_filename(media_info, show_service=not no_source, folder=True)
 
                     final_dir.mkdir(parents=True, exist_ok=True)
-                    final_path = final_dir / f"{final_filename}{muxed_path.suffix}"
 
-                    shutil.move(muxed_path, final_path)
-                    tags.tag_file(final_path, title, self.tmdb_id)
+                    for track_path in muxed_paths:
+                        # Generate appropriate filename for each track
+                        media_info = MediaInfo.parse(track_path)
+                        base_filename = title.get_filename(media_info, show_service=not no_source)
+
+                        # Add track type suffix to filename
+                        track = next((t for t in title.tracks if t.path == track_path), None)
+                        if track:
+                            if isinstance(track, Video):
+                                track_suffix = f".{track.codec.name if hasattr(track.codec, 'name') else 'video'}"
+                            elif isinstance(track, Audio):
+                                lang_suffix = f".{track.language}" if track.language else ""
+                                track_suffix = f"{lang_suffix}.{track.codec.name if hasattr(track.codec, 'name') else 'audio'}"
+                            elif isinstance(track, Subtitle):
+                                lang_suffix = f".{track.language}" if track.language else ""
+                                forced_suffix = ".forced" if track.forced else ""
+                                sdh_suffix = ".sdh" if track.sdh else ""
+                                track_suffix = f"{lang_suffix}{forced_suffix}{sdh_suffix}"
+                            else:
+                                track_suffix = ""
+
+                            final_path = final_dir / f"{base_filename}{track_suffix}{track_path.suffix}"
+                        else:
+                            final_path = final_dir / f"{base_filename}{track_path.suffix}"
+
+                        shutil.move(track_path, final_path)
+                        self.log.debug(f"Saved: {final_path.name}")
+                else:
+                    # Handle muxed files
+                    for muxed_path in muxed_paths:
+                        media_info = MediaInfo.parse(muxed_path)
+                        final_dir = config.directories.downloads
+                        final_filename = title.get_filename(media_info, show_service=not no_source)
+
+                        if not no_folder and isinstance(title, (Episode, Song)):
+                            final_dir /= title.get_filename(media_info, show_service=not no_source, folder=True)
+
+                        final_dir.mkdir(parents=True, exist_ok=True)
+                        final_path = final_dir / f"{final_filename}{muxed_path.suffix}"
+
+                        shutil.move(muxed_path, final_path)
+                        tags.tag_file(final_path, title, self.tmdb_id)
 
                 title_dl_time = time_elapsed_since(dl_start_time)
                 console.print(

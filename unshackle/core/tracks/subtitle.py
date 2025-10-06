@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Union
 
 import pycaption
+import pysubs2
 import requests
 from construct import Container
 from pycaption import Caption, CaptionList, CaptionNode, WebVTTReader
@@ -33,6 +34,9 @@ class Subtitle(Track):
         TimedTextMarkupLang = "TTML"  # https://wikipedia.org/wiki/Timed_Text_Markup_Language
         WebVTT = "VTT"  # https://wikipedia.org/wiki/WebVTT
         SAMI = "SMI"  # https://wikipedia.org/wiki/SAMI
+        MicroDVD = "SUB"  # https://wikipedia.org/wiki/MicroDVD
+        MPL2 = "MPL2"  # MPL2 subtitle format
+        TMP = "TMP"  # TMP subtitle format
         # MPEG-DASH box-encapsulated subtitle formats
         fTTML = "STPP"  # https://www.w3.org/TR/2018/REC-ttml-imsc1.0.1-20180424
         fVTT = "WVTT"  # https://www.w3.org/TR/webvtt1
@@ -56,6 +60,12 @@ class Subtitle(Track):
                 return Subtitle.Codec.WebVTT
             elif mime in ("smi", "sami"):
                 return Subtitle.Codec.SAMI
+            elif mime in ("sub", "microdvd"):
+                return Subtitle.Codec.MicroDVD
+            elif mime == "mpl2":
+                return Subtitle.Codec.MPL2
+            elif mime == "tmp":
+                return Subtitle.Codec.TMP
             elif mime == "stpp":
                 return Subtitle.Codec.fTTML
             elif mime == "wvtt":
@@ -391,6 +401,57 @@ class Subtitle(Track):
             # Fall back to existing conversion method on any error
             return self._convert_standard(codec)
 
+    def convert_with_pysubs2(self, codec: Subtitle.Codec) -> Path:
+        """
+        Convert subtitle using pysubs2 library for broad format support.
+
+        pysubs2 is a pure-Python library supporting SubRip (SRT), SubStation Alpha
+        (SSA/ASS), WebVTT, TTML, SAMI, MicroDVD, MPL2, and TMP formats.
+        """
+        if not self.path or not self.path.exists():
+            raise ValueError("You must download the subtitle track first.")
+
+        if self.codec == codec:
+            return self.path
+
+        output_path = self.path.with_suffix(f".{codec.value.lower()}")
+        original_path = self.path
+
+        codec_to_pysubs2_format = {
+            Subtitle.Codec.SubRip: "srt",
+            Subtitle.Codec.SubStationAlpha: "ssa",
+            Subtitle.Codec.SubStationAlphav4: "ass",
+            Subtitle.Codec.WebVTT: "vtt",
+            Subtitle.Codec.TimedTextMarkupLang: "ttml",
+            Subtitle.Codec.SAMI: "sami",
+            Subtitle.Codec.MicroDVD: "microdvd",
+            Subtitle.Codec.MPL2: "mpl2",
+            Subtitle.Codec.TMP: "tmp",
+        }
+
+        pysubs2_output_format = codec_to_pysubs2_format.get(codec)
+        if pysubs2_output_format is None:
+            return self._convert_standard(codec)
+
+        try:
+            subs = pysubs2.load(str(self.path), encoding="utf-8")
+
+            subs.save(str(output_path), format_=pysubs2_output_format, encoding="utf-8")
+
+            if original_path.exists() and original_path != output_path:
+                original_path.unlink()
+
+            self.path = output_path
+            self.codec = codec
+
+            if callable(self.OnConverted):
+                self.OnConverted(codec)
+
+            return output_path
+
+        except Exception:
+            return self._convert_standard(codec)
+
     def convert(self, codec: Subtitle.Codec) -> Path:
         """
         Convert this Subtitle to another Format.
@@ -400,6 +461,7 @@ class Subtitle(Track):
         - 'subby': Always uses subby with CommonIssuesFixer
         - 'subtitleedit': Uses SubtitleEdit when available, falls back to pycaption
         - 'pycaption': Uses only pycaption library
+        - 'pysubs2': Uses pysubs2 library
         """
         # Check configuration for conversion method
         conversion_method = config.subtitle.get("conversion_method", "auto")
@@ -407,11 +469,12 @@ class Subtitle(Track):
         if conversion_method == "subby":
             return self.convert_with_subby(codec)
         elif conversion_method == "subtitleedit":
-            return self._convert_standard(codec)  # SubtitleEdit is used in standard conversion
+            return self._convert_standard(codec)
         elif conversion_method == "pycaption":
             return self._convert_pycaption_only(codec)
+        elif conversion_method == "pysubs2":
+            return self.convert_with_pysubs2(codec)
         elif conversion_method == "auto":
-            # Use subby for formats it handles better
             if self.codec in (Subtitle.Codec.WebVTT, Subtitle.Codec.SAMI):
                 return self.convert_with_subby(codec)
             else:

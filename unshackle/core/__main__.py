@@ -1,3 +1,9 @@
+import warnings
+
+# Suppress SyntaxWarning from unmaintained tinycss package (dependency of subby)
+# Must be set before any imports that might trigger tinycss loading
+warnings.filterwarnings("ignore", category=SyntaxWarning, module="tinycss")
+
 import atexit
 import logging
 from pathlib import Path
