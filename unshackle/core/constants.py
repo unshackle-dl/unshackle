@@ -6,6 +6,7 @@ DOWNLOAD_LICENCE_ONLY = Event()
 
 DRM_SORT_MAP = ["ClearKey", "Widevine"]
 LANGUAGE_MAX_DISTANCE = 5  # this is max to be considered "same", e.g., en, en-US, en-AU
+LANGUAGE_EXACT_DISTANCE = 0  # exact match only, no variants
 VIDEO_CODEC_MAP = {"AVC": "H.264", "HEVC": "H.265"}
 DYNAMIC_RANGE_MAP = {"HDR10": "HDR", "HDR10+": "HDR10P", "Dolby Vision": "DV", "HDR10 / HDR10+": "HDR10P", "HDR10 / HDR10": "HDR"}
 AUDIO_CODEC_MAP = {"E-AC-3": "DDP", "AC-3": "DD"}

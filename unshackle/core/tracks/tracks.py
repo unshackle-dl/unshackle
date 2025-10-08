@@ -14,7 +14,7 @@ from rich.tree import Tree
 from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.console import console
-from unshackle.core.constants import LANGUAGE_MAX_DISTANCE, AnyTrack, TrackT
+from unshackle.core.constants import LANGUAGE_EXACT_DISTANCE, LANGUAGE_MAX_DISTANCE, AnyTrack, TrackT
 from unshackle.core.events import events
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.audio import Audio
@@ -294,11 +294,14 @@ class Tracks:
         self.videos = selected
 
     @staticmethod
-    def by_language(tracks: list[TrackT], languages: list[str], per_language: int = 0) -> list[TrackT]:
+    def by_language(
+        tracks: list[TrackT], languages: list[str], per_language: int = 0, exact_match: bool = False
+    ) -> list[TrackT]:
+        distance = LANGUAGE_EXACT_DISTANCE if exact_match else LANGUAGE_MAX_DISTANCE
         selected = []
         for language in languages:
             selected.extend(
-                [x for x in tracks if closest_supported_match(x.language, [language], LANGUAGE_MAX_DISTANCE)][
+                [x for x in tracks if closest_supported_match(str(x.language), [language], distance)][
                     : per_language or None
                 ]
             )

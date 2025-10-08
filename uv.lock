@@ -1545,7 +1545,7 @@ wheels = [
 
 [[package]]
 name = "unshackle"
-version = "1.4.6"
+version = "1.4.8"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp-swagger3" },
