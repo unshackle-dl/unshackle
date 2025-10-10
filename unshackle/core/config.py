@@ -17,7 +17,7 @@ class Config:
         services = [namespace_dir / "services"]
         vaults = namespace_dir / "vaults"
         fonts = namespace_dir / "fonts"
-        user_configs = core_dir.parent
+        user_configs = Path(app_dirs.user_config_dir)
         data = core_dir.parent
         downloads = core_dir.parent.parent / "downloads"
         temp = core_dir.parent.parent / "temp"
