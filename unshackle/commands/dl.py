@@ -1106,11 +1106,11 @@ class dl:
                         if family_dir.exists():
                             fonts = family_dir.glob("*.*tf")
                             for font in fonts:
-                                title.tracks.add(Attachment(font, f"{font_name} ({font.stem})"))
+                                title.tracks.add(Attachment(path=font, name=f"{font_name} ({font.stem})"))
                                 font_count += 1
                         elif fonts_from_system:
                             for font in fonts_from_system:
-                                title.tracks.add(Attachment(font, f"{font_name} ({font.stem})"))
+                                title.tracks.add(Attachment(path=font, name=f"{font_name} ({font.stem})"))
                                 font_count += 1
                         else:
                             self.log.warning(f"Subtitle uses font [text2]{font_name}[/] but it could not be found...")
