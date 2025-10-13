@@ -32,6 +32,24 @@ title_cache_enabled: true # Enable/disable title caching globally (default: true
 title_cache_time: 1800 # Cache duration in seconds (default: 1800 = 30 minutes)
 title_cache_max_retention: 86400 # Maximum cache retention for fallback when API fails (default: 86400 = 24 hours)
 
+# Debug logging configuration
+# Comprehensive JSON-based debug logging for troubleshooting and service development
+debug: false # Enable structured JSON debug logging (default: false)
+             # When enabled with --debug flag or set to true:
+             # - Creates JSON Lines (.jsonl) log files with complete debugging context
+             # - Logs: session info, CLI params, service config, CDM details, authentication,
+             #   titles, tracks metadata, DRM operations, vault queries, errors with stack traces
+             # - File location: logs/unshackle_debug_{service}_{timestamp}.jsonl
+             # - Also creates text log: logs/unshackle_root_{timestamp}.log
+
+debug_keys: false # Log decryption keys in debug logs (default: false)
+                  # Set to true to include actual decryption keys in logs
+                  # Useful for debugging key retrieval and decryption issues
+                  # SECURITY NOTE: Passwords, tokens, cookies, and session tokens
+                  # are ALWAYS redacted regardless of this setting
+                  # Only affects: content_key, key fields (the actual CEKs)
+                  # Never affects: kid, keys_count, key_id (metadata is always logged)
+
 # Muxing configuration
 muxing:
   set_title: false
@@ -239,7 +257,7 @@ headers:
 
 # Override default filenames used across unshackle
 filenames:
-  log: "unshackle_{name}_{time}.log"
+  debug_log: "unshackle_debug_{service}_{time}.jsonl" # JSON Lines debug log file
   config: "config.yaml"
   root_config: "unshackle.yaml"
   chapters: "Chapters_{title}_{random}.txt"
