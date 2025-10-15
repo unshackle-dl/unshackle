@@ -820,7 +820,7 @@ class dl:
                             sys.exit(1)
 
                     if not forced_subs:
-                        title.tracks.select_subtitles(lambda x: not x.forced or is_close_match(x.language, lang))
+                        title.tracks.select_subtitles(lambda x: not x.forced)
 
                 # filter audio tracks
                 # might have no audio tracks if part of the video, e.g. transport stream hls
