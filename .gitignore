@@ -25,6 +25,7 @@ unshackle/certs/
 unshackle/WVDs/
 unshackle/PRDs/
 temp/
+logs/
 services/
 
 # Byte-compiled / optimized / DLL files
