@@ -127,6 +127,74 @@ cdm:
     default: netflix_standard_l3
 
 # Use pywidevine Serve-compliant Remote CDMs
+
+  # Example: Custom CDM API Configuration
+  # This demonstrates the highly configurable custom_api type that can adapt to any CDM API format
+  # - name: "chrome"
+  #   type: "custom_api"
+  #   host: "http://remotecdm.test/"
+  #   timeout: 30
+  #   device:
+  #     name: "ChromeCDM"
+  #     type: "CHROME"
+  #     system_id: 34312
+  #     security_level: 3
+  #   auth:
+  #     type: "header"
+  #     header_name: "x-api-key"
+  #     key: "YOUR_API_KEY_HERE"
+  #     custom_headers:
+  #       User-Agent: "Unshackle/2.0.0"
+  #   endpoints:
+  #     get_request:
+  #       path: "/get-challenge"
+  #       method: "POST"
+  #       timeout: 30
+  #     decrypt_response:
+  #       path: "/get-keys"
+  #       method: "POST"
+  #       timeout: 30
+  #   request_mapping:
+  #     get_request:
+  #       param_names:
+  #         scheme: "device"
+  #         init_data: "init_data"
+  #       static_params:
+  #         scheme: "Widevine"
+  #     decrypt_response:
+  #       param_names:
+  #         scheme: "device"
+  #         license_request: "license_request"
+  #         license_response: "license_response"
+  #       static_params:
+  #         scheme: "Widevine"
+  #   response_mapping:
+  #     get_request:
+  #       fields:
+  #         challenge: "challenge"
+  #         session_id: "session_id"
+  #         message: "message"
+  #         message_type: "message_type"
+  #       response_types:
+  #         - condition: "message_type == 'license-request'"
+  #           type: "license_request"
+  #       success_conditions:
+  #         - "message == 'success'"
+  #     decrypt_response:
+  #       fields:
+  #         keys: "keys"
+  #         message: "message"
+  #       key_fields:
+  #         kid: "kid"
+  #         key: "key"
+  #         type: "type"
+  #       success_conditions:
+  #         - "message == 'success'"
+  #   caching:
+  #     enabled: true
+  #     use_vaults: true
+  #     check_cached_first: true
+
 remote_cdm:
   - name: "chrome"
     device_name: chrome

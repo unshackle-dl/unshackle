@@ -41,7 +41,7 @@ from rich.text import Text
 from rich.tree import Tree
 
 from unshackle.core import binaries
-from unshackle.core.cdm import DecryptLabsRemoteCDM
+from unshackle.core.cdm import CustomRemoteCDM, DecryptLabsRemoteCDM
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import DOWNLOAD_LICENCE_ONLY, AnyTrack, context_settings
@@ -988,7 +988,7 @@ class dl:
                             sys.exit(1)
 
                     if not forced_subs:
-                        title.tracks.select_subtitles(lambda x: not x.forced or is_close_match(x.language, lang))
+                        title.tracks.select_subtitles(lambda x: not x.forced)
 
                 # filter audio tracks
                 # might have no audio tracks if part of the video, e.g. transport stream hls
@@ -2055,8 +2055,9 @@ class dl:
 
         cdm_api = next(iter(x.copy() for x in config.remote_cdm if x["name"] == cdm_name), None)
         if cdm_api:
-            is_decrypt_lab = True if cdm_api.get("type") == "decrypt_labs" else False
-            if is_decrypt_lab:
+            cdm_type = cdm_api.get("type")
+
+            if cdm_type == "decrypt_labs":
                 del cdm_api["name"]
                 del cdm_api["type"]
 
@@ -2071,6 +2072,14 @@ class dl:
 
                 # All DecryptLabs CDMs use DecryptLabsRemoteCDM
                 return DecryptLabsRemoteCDM(service_name=service, vaults=self.vaults, **cdm_api)
+
+            elif cdm_type == "custom_api":
+                del cdm_api["name"]
+                del cdm_api["type"]
+
+                # All Custom API CDMs use CustomRemoteCDM
+                return CustomRemoteCDM(service_name=service, vaults=self.vaults, **cdm_api)
+
             else:
                 return RemoteCdm(
                     device_type=cdm_api['Device Type'],
