@@ -407,6 +407,12 @@ proxy_providers:
       us: 3844 # force US server #3844 for US proxies
       gb: 2697 # force GB server #2697 for GB proxies
       au: 4621 # force AU server #4621 for AU proxies
+  windscribevpn:
+    username: your_windscribe_username # Service credentials from https://windscribe.com/getconfig/openvpn
+    password: your_windscribe_password # Service credentials (not your login password)
+    server_map:
+      us: "us-central-096.totallyacdn.com" # force US server
+      gb: "uk-london-055.totallyacdn.com" # force GB server
   basic:
     GB:
       - "socks5://username:password@bhx.socks.ipvanish.com:1080" # 1 (Birmingham)

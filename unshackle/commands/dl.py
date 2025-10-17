@@ -48,7 +48,7 @@ from unshackle.core.constants import DOWNLOAD_LICENCE_ONLY, AnyTrack, context_se
 from unshackle.core.credential import Credential
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
 from unshackle.core.events import events
-from unshackle.core.proxies import Basic, Hola, NordVPN, SurfsharkVPN
+from unshackle.core.proxies import Basic, Hola, NordVPN, SurfsharkVPN, WindscribeVPN
 from unshackle.core.service import Service
 from unshackle.core.services import Services
 from unshackle.core.titles import Movie, Movies, Series, Song, Title_T
@@ -464,6 +464,8 @@ class dl:
                     self.proxy_providers.append(NordVPN(**config.proxy_providers["nordvpn"]))
                 if config.proxy_providers.get("surfsharkvpn"):
                     self.proxy_providers.append(SurfsharkVPN(**config.proxy_providers["surfsharkvpn"]))
+                if config.proxy_providers.get("windscribevpn"):
+                    self.proxy_providers.append(WindscribeVPN(**config.proxy_providers["windscribevpn"]))
                 if binaries.HolaProxy:
                     self.proxy_providers.append(Hola())
                 for proxy_provider in self.proxy_providers:
