@@ -153,6 +153,13 @@ class dl:
         help="Wanted episodes, e.g. `S01-S05,S07`, `S01E01-S02E03`, `S02-S02E03`, e.t.c, defaults to all.",
     )
     @click.option(
+        "-le",
+        "--latest-episode",
+        is_flag=True,
+        default=False,
+        help="Download only the single most recent episode available.",
+    )
+    @click.option(
         "-l",
         "--lang",
         type=LANGUAGE_RANGE,
@@ -322,11 +329,7 @@ class dl:
             debug_log_path = config.directories.logs / config.filenames.debug_log.format_map(
                 defaultdict(str, service=self.service, time=datetime.now().strftime("%Y%m%d-%H%M%S"))
             )
-            init_debug_logger(
-                log_path=debug_log_path,
-                enabled=True,
-                log_keys=config.debug_keys
-            )
+            init_debug_logger(log_path=debug_log_path, enabled=True, log_keys=config.debug_keys)
             self.debug_logger = get_debug_logger()
 
             if self.debug_logger:
@@ -342,8 +345,12 @@ class dl:
                         "tmdb_id": tmdb_id,
                         "tmdb_name": tmdb_name,
                         "tmdb_year": tmdb_year,
-                        "cli_params": {k: v for k, v in ctx.params.items() if k not in ['profile', 'proxy', 'tag', 'tmdb_id', 'tmdb_name', 'tmdb_year']}
-                    }
+                        "cli_params": {
+                            k: v
+                            for k, v in ctx.params.items()
+                            if k not in ["profile", "proxy", "tag", "tmdb_id", "tmdb_name", "tmdb_year"]
+                        },
+                    },
                 )
         else:
             self.debug_logger = None
@@ -361,7 +368,7 @@ class dl:
                         level="DEBUG",
                         operation="load_service_config",
                         service=self.service,
-                        context={"config_path": str(service_config_path), "config": self.service_config}
+                        context={"config_path": str(service_config_path), "config": self.service_config},
                     )
             else:
                 self.service_config = {}
@@ -438,19 +445,25 @@ class dl:
                     cdm_info = {"type": "DecryptLabs", "drm_type": drm_type, "security_level": self.cdm.security_level}
                 elif hasattr(self.cdm, "device_type") and self.cdm.device_type.name in ["ANDROID", "CHROME"]:
                     self.log.info(f"Loaded Widevine CDM: {self.cdm.system_id} (L{self.cdm.security_level})")
-                    cdm_info = {"type": "Widevine", "system_id": self.cdm.system_id, "security_level": self.cdm.security_level, "device_type": self.cdm.device_type.name}
+                    cdm_info = {
+                        "type": "Widevine",
+                        "system_id": self.cdm.system_id,
+                        "security_level": self.cdm.security_level,
+                        "device_type": self.cdm.device_type.name,
+                    }
                 else:
                     self.log.info(
                         f"Loaded PlayReady CDM: {self.cdm.certificate_chain.get_name()} (L{self.cdm.security_level})"
                     )
-                    cdm_info = {"type": "PlayReady", "certificate": self.cdm.certificate_chain.get_name(), "security_level": self.cdm.security_level}
+                    cdm_info = {
+                        "type": "PlayReady",
+                        "certificate": self.cdm.certificate_chain.get_name(),
+                        "security_level": self.cdm.security_level,
+                    }
 
                 if self.debug_logger and cdm_info:
                     self.debug_logger.log(
-                        level="INFO",
-                        operation="load_cdm",
-                        service=self.service,
-                        context={"cdm": cdm_info}
+                        level="INFO", operation="load_cdm", service=self.service, context={"cdm": cdm_info}
                     )
 
         self.proxy_providers = []
@@ -526,6 +539,7 @@ class dl:
         channels: float,
         no_atmos: bool,
         wanted: list[str],
+        latest_episode: bool,
         lang: list[str],
         v_lang: list[str],
         a_lang: list[str],
@@ -587,8 +601,8 @@ class dl:
                 context={
                     "cdm_only": cdm_only,
                     "vaults_only": vaults_only,
-                    "mode": "CDM only" if cdm_only else ("Vaults only" if vaults_only else "Both CDM and Vaults")
-                }
+                    "mode": "CDM only" if cdm_only else ("Vaults only" if vaults_only else "Both CDM and Vaults"),
+                },
             )
 
         with console.status("Authenticating with Service...", spinner="dots"):
@@ -606,16 +620,13 @@ class dl:
                             context={
                                 "has_cookies": bool(cookies),
                                 "has_credentials": bool(credential),
-                                "profile": self.profile
-                            }
+                                "profile": self.profile,
+                            },
                         )
             except Exception as e:
                 if self.debug_logger:
                     self.debug_logger.log_error(
-                        "authenticate",
-                        e,
-                        service=self.service,
-                        context={"profile": self.profile}
+                        "authenticate", e, service=self.service, context={"profile": self.profile}
                     )
                 raise
 
@@ -630,31 +641,24 @@ class dl:
                             operation="get_titles",
                             service=self.service,
                             message="No titles returned from service",
-                            success=False
+                            success=False,
                         )
                     sys.exit(1)
             except Exception as e:
                 if self.debug_logger:
-                    self.debug_logger.log_error(
-                        "get_titles",
-                        e,
-                        service=self.service
-                    )
+                    self.debug_logger.log_error("get_titles", e, service=self.service)
                 raise
 
             if self.debug_logger:
                 titles_info = {
                     "type": titles.__class__.__name__,
                     "count": len(titles) if hasattr(titles, "__len__") else 1,
-                    "title": str(titles)
+                    "title": str(titles),
                 }
                 if hasattr(titles, "seasons"):
                     titles_info["seasons"] = len(titles.seasons) if hasattr(titles, "seasons") else 0
                 self.debug_logger.log(
-                    level="INFO",
-                    operation="get_titles",
-                    service=self.service,
-                    context={"titles": titles_info}
+                    level="INFO", operation="get_titles", service=self.service, context={"titles": titles_info}
                 )
 
         if self.tmdb_year and self.tmdb_id:
@@ -674,8 +678,21 @@ class dl:
         if list_titles:
             return
 
+        # Determine the latest episode if --latest-episode is set
+        latest_episode_id = None
+        if latest_episode and isinstance(titles, Series) and len(titles) > 0:
+            # Series is already sorted by (season, number, year)
+            # The last episode in the sorted list is the latest
+            latest_ep = titles[-1]
+            latest_episode_id = f"{latest_ep.season}x{latest_ep.number}"
+            self.log.info(f"Latest episode mode: Selecting S{latest_ep.season:02}E{latest_ep.number:02}")
+
         for i, title in enumerate(titles):
-            if isinstance(title, Episode) and wanted and f"{title.season}x{title.number}" not in wanted:
+            if isinstance(title, Episode) and latest_episode and latest_episode_id:
+                # If --latest-episode is set, only process the latest episode
+                if f"{title.season}x{title.number}" != latest_episode_id:
+                    continue
+            elif isinstance(title, Episode) and wanted and f"{title.season}x{title.number}" not in wanted:
                 continue
 
             console.print(Padding(Rule(f"[rule.text]{title}"), (1, 2)))
@@ -750,10 +767,7 @@ class dl:
                 except Exception as e:
                     if self.debug_logger:
                         self.debug_logger.log_error(
-                            "get_tracks",
-                            e,
-                            service=self.service,
-                            context={"title": str(title)}
+                            "get_tracks", e, service=self.service, context={"title": str(title)}
                         )
                     raise
 
@@ -764,34 +778,40 @@ class dl:
                         "audio_tracks": len(title.tracks.audio),
                         "subtitle_tracks": len(title.tracks.subtitles),
                         "has_chapters": bool(title.tracks.chapters),
-                        "videos": [{
-                            "codec": str(v.codec),
-                            "resolution": f"{v.width}x{v.height}" if v.width and v.height else "unknown",
-                            "bitrate": v.bitrate,
-                            "range": str(v.range),
-                            "language": str(v.language) if v.language else None,
-                            "drm": [str(type(d).__name__) for d in v.drm] if v.drm else []
-                        } for v in title.tracks.videos],
-                        "audio": [{
-                            "codec": str(a.codec),
-                            "bitrate": a.bitrate,
-                            "channels": a.channels,
-                            "language": str(a.language) if a.language else None,
-                            "descriptive": a.descriptive,
-                            "drm": [str(type(d).__name__) for d in a.drm] if a.drm else []
-                        } for a in title.tracks.audio],
-                        "subtitles": [{
-                            "codec": str(s.codec),
-                            "language": str(s.language) if s.language else None,
-                            "forced": s.forced,
-                            "sdh": s.sdh
-                        } for s in title.tracks.subtitles]
+                        "videos": [
+                            {
+                                "codec": str(v.codec),
+                                "resolution": f"{v.width}x{v.height}" if v.width and v.height else "unknown",
+                                "bitrate": v.bitrate,
+                                "range": str(v.range),
+                                "language": str(v.language) if v.language else None,
+                                "drm": [str(type(d).__name__) for d in v.drm] if v.drm else [],
+                            }
+                            for v in title.tracks.videos
+                        ],
+                        "audio": [
+                            {
+                                "codec": str(a.codec),
+                                "bitrate": a.bitrate,
+                                "channels": a.channels,
+                                "language": str(a.language) if a.language else None,
+                                "descriptive": a.descriptive,
+                                "drm": [str(type(d).__name__) for d in a.drm] if a.drm else [],
+                            }
+                            for a in title.tracks.audio
+                        ],
+                        "subtitles": [
+                            {
+                                "codec": str(s.codec),
+                                "language": str(s.language) if s.language else None,
+                                "forced": s.forced,
+                                "sdh": s.sdh,
+                            }
+                            for s in title.tracks.subtitles
+                        ],
                     }
                     self.debug_logger.log(
-                        level="INFO",
-                        operation="get_tracks",
-                        service=self.service,
-                        context=tracks_info
+                        level="INFO", operation="get_tracks", service=self.service, context=tracks_info
                     )
 
             # strip SDH subs to non-SDH if no equivalent same-lang non-SDH is available
@@ -1185,7 +1205,7 @@ class dl:
                         operation="download_tracks",
                         service=self.service,
                         message="Download cancelled by user",
-                        context={"title": str(title)}
+                        context={"title": str(title)},
                     )
                 return
             except Exception as e:  # noqa
@@ -1219,8 +1239,8 @@ class dl:
                             "title": str(title),
                             "error_type": type(e).__name__,
                             "tracks_count": len(title.tracks),
-                            "returncode": getattr(e, "returncode", None)
-                        }
+                            "returncode": getattr(e, "returncode", None),
+                        },
                     )
                 return
 
@@ -1475,9 +1495,13 @@ class dl:
                     if not no_folder and isinstance(title, (Episode, Song)):
                         # Create folder based on title
                         # Use first available track for filename generation
-                        sample_track = title.tracks.videos[0] if title.tracks.videos else (
-                            title.tracks.audio[0] if title.tracks.audio else (
-                                title.tracks.subtitles[0] if title.tracks.subtitles else None
+                        sample_track = (
+                            title.tracks.videos[0]
+                            if title.tracks.videos
+                            else (
+                                title.tracks.audio[0]
+                                if title.tracks.audio
+                                else (title.tracks.subtitles[0] if title.tracks.subtitles else None)
                             )
                         )
                         if sample_track and sample_track.path:
@@ -1498,7 +1522,9 @@ class dl:
                                 track_suffix = f".{track.codec.name if hasattr(track.codec, 'name') else 'video'}"
                             elif isinstance(track, Audio):
                                 lang_suffix = f".{track.language}" if track.language else ""
-                                track_suffix = f"{lang_suffix}.{track.codec.name if hasattr(track.codec, 'name') else 'audio'}"
+                                track_suffix = (
+                                    f"{lang_suffix}.{track.codec.name if hasattr(track.codec, 'name') else 'audio'}"
+                                )
                             elif isinstance(track, Subtitle):
                                 lang_suffix = f".{track.language}" if track.language else ""
                                 forced_suffix = ".forced" if track.forced else ""
@@ -1595,8 +1621,8 @@ class dl:
                         "title": str(title),
                         "pssh": drm.pssh.dumps() if drm.pssh else None,
                         "kids": [k.hex for k in drm.kids],
-                        "track_kid": track_kid.hex if track_kid else None
-                    }
+                        "track_kid": track_kid.hex if track_kid else None,
+                    },
                 )
 
             with self.DRM_TABLE_LOCK:
@@ -1637,8 +1663,8 @@ class dl:
                                         "kid": kid.hex,
                                         "content_key": content_key,
                                         "track": str(track),
-                                        "from_cache": True
-                                    }
+                                        "from_cache": True,
+                                    },
                                 )
                         elif vaults_only:
                             msg = f"No Vault has a Key for {kid.hex} and --vaults-only was used"
@@ -1651,7 +1677,7 @@ class dl:
                                     operation="vault_key_not_found",
                                     service=self.service,
                                     message=msg,
-                                    context={"kid": kid.hex, "track": str(track)}
+                                    context={"kid": kid.hex, "track": str(track)},
                                 )
                             raise Widevine.Exceptions.CEKNotFound(msg)
                         else:
@@ -1671,8 +1697,8 @@ class dl:
                             message="Requesting Widevine license from service",
                             context={
                                 "track": str(track),
-                                "kids_needed": [k.hex for k in all_kids if k not in drm.content_keys]
-                            }
+                                "kids_needed": [k.hex for k in all_kids if k not in drm.content_keys],
+                            },
                         )
 
                     try:
@@ -1693,10 +1719,7 @@ class dl:
                                 "get_license",
                                 e,
                                 service=self.service,
-                                context={
-                                    "track": str(track),
-                                    "exception_type": type(e).__name__
-                                }
+                                context={"track": str(track), "exception_type": type(e).__name__},
                             )
                         raise e
 
@@ -1708,8 +1731,8 @@ class dl:
                             context={
                                 "track": str(track),
                                 "keys_count": len(drm.content_keys),
-                                "kids": [k.hex for k in drm.content_keys.keys()]
-                            }
+                                "kids": [k.hex for k in drm.content_keys.keys()],
+                            },
                         )
 
                     for kid_, key in drm.content_keys.items():
@@ -1767,8 +1790,8 @@ class dl:
                         "title": str(title),
                         "pssh": drm.pssh_b64 or "",
                         "kids": [k.hex for k in drm.kids],
-                        "track_kid": track_kid.hex if track_kid else None
-                    }
+                        "track_kid": track_kid.hex if track_kid else None,
+                    },
                 )
 
             with self.DRM_TABLE_LOCK:
@@ -1816,8 +1839,8 @@ class dl:
                                         "content_key": content_key,
                                         "track": str(track),
                                         "from_cache": True,
-                                        "drm_type": "PlayReady"
-                                    }
+                                        "drm_type": "PlayReady",
+                                    },
                                 )
                         elif vaults_only:
                             msg = f"No Vault has a Key for {kid.hex} and --vaults-only was used"
@@ -1830,7 +1853,7 @@ class dl:
                                     operation="vault_key_not_found",
                                     service=self.service,
                                     message=msg,
-                                    context={"kid": kid.hex, "track": str(track), "drm_type": "PlayReady"}
+                                    context={"kid": kid.hex, "track": str(track), "drm_type": "PlayReady"},
                                 )
                             raise PlayReady.Exceptions.CEKNotFound(msg)
                         else:
@@ -1860,8 +1883,8 @@ class dl:
                                 context={
                                     "track": str(track),
                                     "exception_type": type(e).__name__,
-                                    "drm_type": "PlayReady"
-                                }
+                                    "drm_type": "PlayReady",
+                                },
                             )
                         raise e
 
@@ -1937,7 +1960,7 @@ class dl:
 
     @staticmethod
     def save_cookies(path: Path, cookies: CookieJar):
-        if hasattr(cookies, 'jar'):
+        if hasattr(cookies, "jar"):
             cookies = cookies.jar
 
         cookie_jar = MozillaCookieJar(path)
@@ -2084,12 +2107,12 @@ class dl:
 
             else:
                 return RemoteCdm(
-                    device_type=cdm_api['Device Type'],
-                    system_id=cdm_api['System ID'],
-                    security_level=cdm_api['Security Level'],
-                    host=cdm_api['Host'],
-                    secret=cdm_api['Secret'],
-                    device_name=cdm_api['Device Name'],
+                    device_type=cdm_api["Device Type"],
+                    system_id=cdm_api["System ID"],
+                    security_level=cdm_api["Security Level"],
+                    host=cdm_api["Host"],
+                    secret=cdm_api["Secret"],
+                    device_name=cdm_api["Device Name"],
                 )
 
         prd_path = config.directories.prds / f"{cdm_name}.prd"
