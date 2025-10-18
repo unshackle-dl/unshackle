@@ -6,11 +6,11 @@ import sys
 import tempfile
 import threading
 import uuid
+from contextlib import suppress
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
-from datetime import datetime, timedelta
-from contextlib import suppress
 
 log = logging.getLogger("download_manager")
 
@@ -87,14 +87,15 @@ def _perform_download(
         if cancel_event and cancel_event.is_set():
             raise Exception(f"Job was cancelled {stage}")
 
+    from contextlib import redirect_stderr, redirect_stdout
     from io import StringIO
-    from contextlib import redirect_stdout, redirect_stderr
 
     _check_cancel("before execution started")
 
     # Import dl.py components lazily to avoid circular deps during module import
     import click
     import yaml
+
     from unshackle.commands.dl import dl
     from unshackle.core.config import config
     from unshackle.core.services import Services

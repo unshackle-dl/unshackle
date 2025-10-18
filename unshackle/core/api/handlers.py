@@ -20,7 +20,6 @@ def initialize_proxy_providers() -> List[Any]:
     proxy_providers = []
     try:
         from unshackle.core import binaries
-
         # Load the main unshackle config to get proxy provider settings
         from unshackle.core.config import config as main_config
 
