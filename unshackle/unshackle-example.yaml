@@ -34,21 +34,23 @@ title_cache_max_retention: 86400 # Maximum cache retention for fallback when API
 
 # Debug logging configuration
 # Comprehensive JSON-based debug logging for troubleshooting and service development
-debug: false # Enable structured JSON debug logging (default: false)
-             # When enabled with --debug flag or set to true:
-             # - Creates JSON Lines (.jsonl) log files with complete debugging context
-             # - Logs: session info, CLI params, service config, CDM details, authentication,
-             #   titles, tracks metadata, DRM operations, vault queries, errors with stack traces
-             # - File location: logs/unshackle_debug_{service}_{timestamp}.jsonl
-             # - Also creates text log: logs/unshackle_root_{timestamp}.log
+debug:
+  false # Enable structured JSON debug logging (default: false)
+  # When enabled with --debug flag or set to true:
+  # - Creates JSON Lines (.jsonl) log files with complete debugging context
+  # - Logs: session info, CLI params, service config, CDM details, authentication,
+  #   titles, tracks metadata, DRM operations, vault queries, errors with stack traces
+  # - File location: logs/unshackle_debug_{service}_{timestamp}.jsonl
+  # - Also creates text log: logs/unshackle_root_{timestamp}.log
 
-debug_keys: false # Log decryption keys in debug logs (default: false)
-                  # Set to true to include actual decryption keys in logs
-                  # Useful for debugging key retrieval and decryption issues
-                  # SECURITY NOTE: Passwords, tokens, cookies, and session tokens
-                  # are ALWAYS redacted regardless of this setting
-                  # Only affects: content_key, key fields (the actual CEKs)
-                  # Never affects: kid, keys_count, key_id (metadata is always logged)
+debug_keys:
+  false # Log decryption keys in debug logs (default: false)
+  # Set to true to include actual decryption keys in logs
+  # Useful for debugging key retrieval and decryption issues
+  # SECURITY NOTE: Passwords, tokens, cookies, and session tokens
+  # are ALWAYS redacted regardless of this setting
+  # Only affects: content_key, key fields (the actual CEKs)
+  # Never affects: kid, keys_count, key_id (metadata is always logged)
 
 # Muxing configuration
 muxing:
@@ -128,72 +130,72 @@ cdm:
 
 # Use pywidevine Serve-compliant Remote CDMs
 
-  # Example: Custom CDM API Configuration
-  # This demonstrates the highly configurable custom_api type that can adapt to any CDM API format
-  # - name: "chrome"
-  #   type: "custom_api"
-  #   host: "http://remotecdm.test/"
-  #   timeout: 30
-  #   device:
-  #     name: "ChromeCDM"
-  #     type: "CHROME"
-  #     system_id: 34312
-  #     security_level: 3
-  #   auth:
-  #     type: "header"
-  #     header_name: "x-api-key"
-  #     key: "YOUR_API_KEY_HERE"
-  #     custom_headers:
-  #       User-Agent: "Unshackle/2.0.0"
-  #   endpoints:
-  #     get_request:
-  #       path: "/get-challenge"
-  #       method: "POST"
-  #       timeout: 30
-  #     decrypt_response:
-  #       path: "/get-keys"
-  #       method: "POST"
-  #       timeout: 30
-  #   request_mapping:
-  #     get_request:
-  #       param_names:
-  #         scheme: "device"
-  #         init_data: "init_data"
-  #       static_params:
-  #         scheme: "Widevine"
-  #     decrypt_response:
-  #       param_names:
-  #         scheme: "device"
-  #         license_request: "license_request"
-  #         license_response: "license_response"
-  #       static_params:
-  #         scheme: "Widevine"
-  #   response_mapping:
-  #     get_request:
-  #       fields:
-  #         challenge: "challenge"
-  #         session_id: "session_id"
-  #         message: "message"
-  #         message_type: "message_type"
-  #       response_types:
-  #         - condition: "message_type == 'license-request'"
-  #           type: "license_request"
-  #       success_conditions:
-  #         - "message == 'success'"
-  #     decrypt_response:
-  #       fields:
-  #         keys: "keys"
-  #         message: "message"
-  #       key_fields:
-  #         kid: "kid"
-  #         key: "key"
-  #         type: "type"
-  #       success_conditions:
-  #         - "message == 'success'"
-  #   caching:
-  #     enabled: true
-  #     use_vaults: true
-  #     check_cached_first: true
+# Example: Custom CDM API Configuration
+# This demonstrates the highly configurable custom_api type that can adapt to any CDM API format
+# - name: "chrome"
+#   type: "custom_api"
+#   host: "http://remotecdm.test/"
+#   timeout: 30
+#   device:
+#     name: "ChromeCDM"
+#     type: "CHROME"
+#     system_id: 34312
+#     security_level: 3
+#   auth:
+#     type: "header"
+#     header_name: "x-api-key"
+#     key: "YOUR_API_KEY_HERE"
+#     custom_headers:
+#       User-Agent: "Unshackle/2.0.0"
+#   endpoints:
+#     get_request:
+#       path: "/get-challenge"
+#       method: "POST"
+#       timeout: 30
+#     decrypt_response:
+#       path: "/get-keys"
+#       method: "POST"
+#       timeout: 30
+#   request_mapping:
+#     get_request:
+#       param_names:
+#         scheme: "device"
+#         init_data: "init_data"
+#       static_params:
+#         scheme: "Widevine"
+#     decrypt_response:
+#       param_names:
+#         scheme: "device"
+#         license_request: "license_request"
+#         license_response: "license_response"
+#       static_params:
+#         scheme: "Widevine"
+#   response_mapping:
+#     get_request:
+#       fields:
+#         challenge: "challenge"
+#         session_id: "session_id"
+#         message: "message"
+#         message_type: "message_type"
+#       response_types:
+#         - condition: "message_type == 'license-request'"
+#           type: "license_request"
+#       success_conditions:
+#         - "message == 'success'"
+#     decrypt_response:
+#       fields:
+#         keys: "keys"
+#         message: "message"
+#       key_fields:
+#         kid: "kid"
+#         key: "key"
+#         type: "type"
+#       success_conditions:
+#         - "message == 'success'"
+#   caching:
+#     enabled: true
+#     use_vaults: true
+#     check_cached_first: true
 
 remote_cdm:
   - name: "chrome"
@@ -360,9 +362,13 @@ services:
   # Service-specific configuration goes here
   # Profile-specific configurations can be nested under service names
 
-  # Example: with profile-specific device configs
+  # You can override ANY global configuration option on a per-service basis
+  # This allows fine-tuned control for services with special requirements
+  # Supported overrides: dl, aria2c, n_m3u8dl_re, curl_impersonate, subtitle, muxing, headers, etc.
+
+  # Example: Comprehensive service configuration showing all features
   EXAMPLE:
-    # Global service config
+    # Standard service config
     api_key: "service_api_key"
 
     # Service certificate for Widevine L1/L2 (base64 encoded)
@@ -383,6 +389,42 @@ services:
           app_name: "AIV"
           device_model: "Fire TV Stick 4K"
 
+    # NEW: Configuration overrides (can be combined with profiles and certificates)
+    # Override dl command defaults for this service
+    dl:
+      downloads: 4 # Limit concurrent track downloads (global default: 6)
+      workers: 8 # Reduce workers per track (global default: 16)
+      lang: ["en", "es-419"] # Different language priority for this service
+      sub_format: srt # Force SRT subtitle format
+
+    # Override n_m3u8dl_re downloader settings
+    n_m3u8dl_re:
+      thread_count: 8 # Lower thread count for rate-limited service (global default: 16)
+      use_proxy: true # Force proxy usage for this service
+      retry_count: 10 # More retries for unstable connections
+      ad_keyword: "advertisement" # Service-specific ad filtering
+
+    # Override aria2c downloader settings
+    aria2c:
+      max_concurrent_downloads: 2 # Limit concurrent downloads (global default: 4)
+      max_connection_per_server: 1 # Single connection per server
+      split: 3 # Fewer splits (global default: 5)
+      file_allocation: none # Faster allocation for this service
+
+    # Override subtitle processing for this service
+    subtitle:
+      conversion_method: pycaption # Use specific subtitle converter
+      sdh_method: auto
+
+    # Service-specific headers
+    headers:
+      User-Agent: "Service-specific user agent string"
+      Accept-Language: "en-US,en;q=0.9"
+
+    # Override muxing options
+    muxing:
+      set_title: true
+
   # Example: Service with different regions per profile
   SERVICE_NAME:
     profiles:
@@ -392,6 +434,13 @@ services:
       uk_account:
         region: "GB"
         api_endpoint: "https://api.uk.service.com"
+
+  # Notes on service-specific overrides:
+  # - Overrides are merged with global config, not replaced
+  # - Only specified keys are overridden, others use global defaults
+  # - Reserved keys (profiles, api_key, certificate, etc.) are NOT treated as overrides
+  # - Any dict-type config option can be overridden (dl, aria2c, n_m3u8dl_re, etc.)
+  # - Use --debug flag to see which overrides are applied during downloads
 
 # External proxy provider services
 proxy_providers:

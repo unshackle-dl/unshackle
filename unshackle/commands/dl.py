@@ -380,6 +380,33 @@ class dl:
         if getattr(config, "decryption_map", None):
             config.decryption = config.decryption_map.get(self.service, config.decryption)
 
+        service_config = config.services.get(self.service, {})
+
+        reserved_keys = {
+            "profiles",
+            "api_key",
+            "certificate",
+            "api_endpoint",
+            "region",
+            "device",
+            "endpoints",
+            "client",
+        }
+
+        for config_key, override_value in service_config.items():
+            if config_key in reserved_keys:
+                continue
+
+            if isinstance(override_value, dict) and hasattr(config, config_key):
+                current_config = getattr(config, config_key, {})
+                if isinstance(current_config, dict):
+                    merged_config = {**current_config, **override_value}
+                    setattr(config, config_key, merged_config)
+
+                    self.log.debug(
+                        f"Applied service-specific '{config_key}' overrides for {self.service}: {override_value}"
+                    )
+
         with console.status("Loading Key Vaults...", spinner="dots"):
             self.vaults = Vaults(self.service)
             total_vaults = len(config.key_vaults)
