@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.8] - 2025-10-08
+
+### Added
+
+- **Exact Language Matching**: New `--exact-lang` flag for precise language matching
+  - Enables strict language code matching without fallbacks
+- **No-Mux Flag**: New `--no-mux` flag to skip muxing tracks into container files
+  - Useful for keeping individual track files separate
+- **DecryptLabs API Integration for HTTP Vault**: Enhanced vault support
+  - Added DecryptLabs API support to HTTP vault for improved key retrieval
+- **AC4 Audio Codec Support**: Enhanced audio format handling
+  - Added AC4 codec support in Audio class with updated mime/profile handling
+- **pysubs2 Subtitle Conversion**: Extended subtitle format support
+  - Added pysubs2 subtitle conversion with extended format support
+  - Configurable conversion method in configuration
+
+### Changed
+
+- **Audio Track Sorting**: Optimized audio track selection logic
+  - Improved audio track sorting by grouping descriptive tracks and sorting by bitrate
+  - Better identification of ATMOS and DD+ as highest quality for filenaming
+- **pyplayready Update**: Upgraded to version 0.6.3
+  - Updated import paths to resolve compatibility issues
+  - Fixed lxml constraints for better dependency management
+- **pysubs2 Conversion Method**: Moved from auto to manual configuration
+  - pysubs2 no longer auto-selected during testing phase
+
+### Fixed
+
+- **Remote CDM**: Fixed curl_cffi compatibility
+  - Added curl_cffi to instance checks in RemoteCDM
+- **Temporary File Handling**: Improved encoding handling
+  - Specified UTF-8 encoding when opening temporary files
+
+### Reverted
+
+- **tinycss SyntaxWarning Suppression**: Removed ineffective warning filter
+  - Reverted warnings filter that didn't work as expected for suppressing tinycss warnings
+
 ## [1.4.7] - 2025-09-25
 
 ### Added

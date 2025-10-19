@@ -24,7 +24,7 @@ from unidecode import unidecode
 
 from unshackle.core.cacher import Cacher
 from unshackle.core.config import config
-from unshackle.core.constants import LANGUAGE_MAX_DISTANCE
+from unshackle.core.constants import LANGUAGE_EXACT_DISTANCE, LANGUAGE_MAX_DISTANCE
 
 
 def rotate_log_file(log_path: Path, keep: int = 20) -> Path:
@@ -112,6 +112,14 @@ def is_close_match(language: Union[str, Language], languages: Sequence[Union[str
     if not languages:
         return False
     return closest_match(language, list(map(str, languages)))[1] <= LANGUAGE_MAX_DISTANCE
+
+
+def is_exact_match(language: Union[str, Language], languages: Sequence[Union[str, Language, None]]) -> bool:
+    """Check if a language is an exact match to any of the provided languages."""
+    languages = [x for x in languages if x]
+    if not languages:
+        return False
+    return closest_match(language, list(map(str, languages)))[1] <= LANGUAGE_EXACT_DISTANCE
 
 
 def get_boxes(data: bytes, box_type: bytes, as_bytes: bool = False) -> Box:

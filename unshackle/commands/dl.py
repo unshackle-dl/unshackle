@@ -181,6 +181,12 @@ class dl:
     )
     @click.option("-fs", "--forced-subs", is_flag=True, default=False, help="Include forced subtitle tracks.")
     @click.option(
+        "--exact-lang",
+        is_flag=True,
+        default=False,
+        help="Use exact language matching (no variants). With this flag, -l es-419 matches ONLY es-419, not es-ES or other variants.",
+    )
+    @click.option(
         "--proxy",
         type=str,
         default=None,
@@ -468,6 +474,7 @@ class dl:
         s_lang: list[str],
         require_subs: list[str],
         forced_subs: bool,
+        exact_lang: bool,
         sub_format: Optional[Subtitle.Codec],
         video_only: bool,
         audio_only: bool,
@@ -709,7 +716,9 @@ class dl:
                             else:
                                 if language not in processed_video_lang:
                                     processed_video_lang.append(language)
-                        title.tracks.videos = title.tracks.by_language(title.tracks.videos, processed_video_lang)
+                        title.tracks.videos = title.tracks.by_language(
+                            title.tracks.videos, processed_video_lang, exact_match=exact_lang
+                        )
                         if not title.tracks.videos:
                             self.log.error(f"There's no {processed_video_lang} Video Track...")
                             sys.exit(1)
@@ -792,22 +801,26 @@ class dl:
                             f"Required languages found ({', '.join(require_subs)}), downloading all available subtitles"
                         )
                     elif s_lang and "all" not in s_lang:
+                        from unshackle.core.utilities import is_exact_match
+
+                        match_func = is_exact_match if exact_lang else is_close_match
+
                         missing_langs = [
                             lang_
                             for lang_ in s_lang
-                            if not any(is_close_match(lang_, [sub.language]) for sub in title.tracks.subtitles)
+                            if not any(match_func(lang_, [sub.language]) for sub in title.tracks.subtitles)
                         ]
                         if missing_langs:
                             self.log.error(", ".join(missing_langs) + " not found in tracks")
                             sys.exit(1)
 
-                        title.tracks.select_subtitles(lambda x: is_close_match(x.language, s_lang))
+                        title.tracks.select_subtitles(lambda x: match_func(x.language, s_lang))
                         if not title.tracks.subtitles:
                             self.log.error(f"There's no {s_lang} Subtitle Track...")
                             sys.exit(1)
 
                     if not forced_subs:
-                        title.tracks.select_subtitles(lambda x: not x.forced or is_close_match(x.language, lang))
+                        title.tracks.select_subtitles(lambda x: not x.forced)
 
                 # filter audio tracks
                 # might have no audio tracks if part of the video, e.g. transport stream hls
@@ -865,7 +878,7 @@ class dl:
                         elif "all" not in processed_lang:
                             per_language = 1
                             title.tracks.audio = title.tracks.by_language(
-                                title.tracks.audio, processed_lang, per_language=per_language
+                                title.tracks.audio, processed_lang, per_language=per_language, exact_match=exact_lang
                             )
                             if not title.tracks.audio:
                                 self.log.error(f"There's no {processed_lang} Audio Track, cannot continue...")
@@ -1093,11 +1106,11 @@ class dl:
                         if family_dir.exists():
                             fonts = family_dir.glob("*.*tf")
                             for font in fonts:
-                                title.tracks.add(Attachment(font, f"{font_name} ({font.stem})"))
+                                title.tracks.add(Attachment(path=font, name=f"{font_name} ({font.stem})"))
                                 font_count += 1
                         elif fonts_from_system:
                             for font in fonts_from_system:
-                                title.tracks.add(Attachment(font, f"{font_name} ({font.stem})"))
+                                title.tracks.add(Attachment(path=font, name=f"{font_name} ({font.stem})"))
                                 font_count += 1
                         else:
                             self.log.warning(f"Subtitle uses font [text2]{font_name}[/] but it could not be found...")
