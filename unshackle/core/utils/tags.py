@@ -47,6 +47,10 @@ def _api_key() -> Optional[str]:
     return config.tmdb_api_key or os.getenv("TMDB_API_KEY")
 
 
+def _simkl_client_id() -> Optional[str]:
+    return config.simkl_client_id or os.getenv("SIMKL_CLIENT_ID")
+
+
 def _clean(s: str) -> str:
     return STRIP_RE.sub("", s).lower()
 
@@ -63,8 +67,13 @@ def fuzzy_match(a: str, b: str, threshold: float = 0.8) -> bool:
 
 
 def search_simkl(title: str, year: Optional[int], kind: str) -> Tuple[Optional[dict], Optional[str], Optional[int]]:
-    """Search Simkl API for show information by filename (no auth required)."""
+    """Search Simkl API for show information by filename."""
     log.debug("Searching Simkl for %r (%s, %s)", title, kind, year)
+
+    client_id = _simkl_client_id()
+    if not client_id:
+        log.debug("No SIMKL client ID configured; skipping SIMKL search")
+        return None, None, None
 
     # Construct appropriate filename based on type
     filename = f"{title}"
@@ -78,7 +87,8 @@ def search_simkl(title: str, year: Optional[int], kind: str) -> Tuple[Optional[d
 
     try:
         session = _get_session()
-        resp = session.post("https://api.simkl.com/search/file", json={"file": filename}, timeout=30)
+        headers = {"simkl-api-key": client_id}
+        resp = session.post("https://api.simkl.com/search/file", json={"file": filename}, headers=headers, timeout=30)
         resp.raise_for_status()
         data = resp.json()
         log.debug("Simkl API response received")
@@ -338,73 +348,97 @@ def tag_file(path: Path, title: Title, tmdb_id: Optional[int] | None = None) -> 
         return
 
     if config.tag_imdb_tmdb:
-        # If tmdb_id is provided (via --tmdb), skip Simkl and use TMDB directly
-        if tmdb_id is not None:
-            log.debug("Using provided TMDB ID %s for tags", tmdb_id)
-        else:
-            # Try Simkl first for automatic lookup
-            simkl_data, simkl_title, simkl_tmdb_id = search_simkl(name, year, kind)
-
-            if simkl_data and simkl_title and fuzzy_match(simkl_title, name):
-                log.debug("Using Simkl data for tags")
-                if simkl_tmdb_id:
-                    tmdb_id = simkl_tmdb_id
-
-                # Handle TV show data from Simkl
-                if simkl_data.get("type") == "episode" and "show" in simkl_data:
-                    show_ids = simkl_data.get("show", {}).get("ids", {})
-                    if show_ids.get("imdb"):
-                        standard_tags["IMDB"] = show_ids["imdb"]
-                    if show_ids.get("tvdb"):
-                        standard_tags["TVDB2"] = f"series/{show_ids['tvdb']}"
-                    if show_ids.get("tmdbtv"):
-                        standard_tags["TMDB"] = f"tv/{show_ids['tmdbtv']}"
-
-                # Handle movie data from Simkl
-                elif simkl_data.get("type") == "movie" and "movie" in simkl_data:
-                    movie_ids = simkl_data.get("movie", {}).get("ids", {})
-                    if movie_ids.get("imdb"):
-                        standard_tags["IMDB"] = movie_ids["imdb"]
-                    if movie_ids.get("tvdb"):
-                        standard_tags["TVDB2"] = f"movies/{movie_ids['tvdb']}"
-                    if movie_ids.get("tmdb"):
-                        standard_tags["TMDB"] = f"movie/{movie_ids['tmdb']}"
-
-        # Use TMDB API for additional metadata (either from provided ID or Simkl lookup)
+        # Check if we have any API keys available for metadata lookup
         api_key = _api_key()
-        if not api_key:
-            log.debug("No TMDB API key set; applying basic tags only")
-            _apply_tags(path, custom_tags)
-            return
+        simkl_client = _simkl_client_id()
 
-        tmdb_title: Optional[str] = None
-        if tmdb_id is None:
-            tmdb_id, tmdb_title = search_tmdb(name, year, kind)
-            log.debug("TMDB search result: %r (ID %s)", tmdb_title, tmdb_id)
-            if not tmdb_id or not tmdb_title or not fuzzy_match(tmdb_title, name):
-                log.debug("TMDB search did not match; skipping external ID lookup")
-                _apply_tags(path, custom_tags)
-                return
-
-        prefix = "movie" if kind == "movie" else "tv"
-        standard_tags["TMDB"] = f"{prefix}/{tmdb_id}"
-        try:
-            ids = external_ids(tmdb_id, kind)
-        except requests.RequestException as exc:
-            log.debug("Failed to fetch external IDs: %s", exc)
-            ids = {}
+        if not api_key and not simkl_client:
+            log.debug("No TMDB API key or Simkl client ID configured; skipping IMDB/TMDB tag lookup")
         else:
-            log.debug("External IDs found: %s", ids)
-
-        imdb_id = ids.get("imdb_id")
-        if imdb_id:
-            standard_tags["IMDB"] = imdb_id
-        tvdb_id = ids.get("tvdb_id")
-        if tvdb_id:
-            if kind == "movie":
-                standard_tags["TVDB2"] = f"movies/{tvdb_id}"
+            # If tmdb_id is provided (via --tmdb), skip Simkl and use TMDB directly
+            if tmdb_id is not None:
+                log.debug("Using provided TMDB ID %s for tags", tmdb_id)
             else:
-                standard_tags["TVDB2"] = f"series/{tvdb_id}"
+                # Try Simkl first for automatic lookup (only if client ID is available)
+                if simkl_client:
+                    simkl_data, simkl_title, simkl_tmdb_id = search_simkl(name, year, kind)
+
+                    if simkl_data and simkl_title and fuzzy_match(simkl_title, name):
+                        log.debug("Using Simkl data for tags")
+                        if simkl_tmdb_id:
+                            tmdb_id = simkl_tmdb_id
+
+                        # Handle TV show data from Simkl
+                        if simkl_data.get("type") == "episode" and "show" in simkl_data:
+                            show_ids = simkl_data.get("show", {}).get("ids", {})
+                            if show_ids.get("imdb"):
+                                standard_tags["IMDB"] = show_ids["imdb"]
+                            if show_ids.get("tvdb"):
+                                standard_tags["TVDB2"] = f"series/{show_ids['tvdb']}"
+                            if show_ids.get("tmdbtv"):
+                                standard_tags["TMDB"] = f"tv/{show_ids['tmdbtv']}"
+
+                        # Handle movie data from Simkl
+                        elif simkl_data.get("type") == "movie" and "movie" in simkl_data:
+                            movie_ids = simkl_data.get("movie", {}).get("ids", {})
+                            if movie_ids.get("imdb"):
+                                standard_tags["IMDB"] = movie_ids["imdb"]
+                            if movie_ids.get("tvdb"):
+                                standard_tags["TVDB2"] = f"movies/{movie_ids['tvdb']}"
+                            if movie_ids.get("tmdb"):
+                                standard_tags["TMDB"] = f"movie/{movie_ids['tmdb']}"
+
+            # Use TMDB API for additional metadata (either from provided ID or Simkl lookup)
+            if api_key:
+                tmdb_title: Optional[str] = None
+                if tmdb_id is None:
+                    tmdb_id, tmdb_title = search_tmdb(name, year, kind)
+                    log.debug("TMDB search result: %r (ID %s)", tmdb_title, tmdb_id)
+                    if not tmdb_id or not tmdb_title or not fuzzy_match(tmdb_title, name):
+                        log.debug("TMDB search did not match; skipping external ID lookup")
+                    else:
+                        prefix = "movie" if kind == "movie" else "tv"
+                        standard_tags["TMDB"] = f"{prefix}/{tmdb_id}"
+                        try:
+                            ids = external_ids(tmdb_id, kind)
+                        except requests.RequestException as exc:
+                            log.debug("Failed to fetch external IDs: %s", exc)
+                            ids = {}
+                        else:
+                            log.debug("External IDs found: %s", ids)
+
+                        imdb_id = ids.get("imdb_id")
+                        if imdb_id:
+                            standard_tags["IMDB"] = imdb_id
+                        tvdb_id = ids.get("tvdb_id")
+                        if tvdb_id:
+                            if kind == "movie":
+                                standard_tags["TVDB2"] = f"movies/{tvdb_id}"
+                            else:
+                                standard_tags["TVDB2"] = f"series/{tvdb_id}"
+                elif tmdb_id is not None:
+                    # tmdb_id was provided or found via Simkl
+                    prefix = "movie" if kind == "movie" else "tv"
+                    standard_tags["TMDB"] = f"{prefix}/{tmdb_id}"
+                    try:
+                        ids = external_ids(tmdb_id, kind)
+                    except requests.RequestException as exc:
+                        log.debug("Failed to fetch external IDs: %s", exc)
+                        ids = {}
+                    else:
+                        log.debug("External IDs found: %s", ids)
+
+                    imdb_id = ids.get("imdb_id")
+                    if imdb_id:
+                        standard_tags["IMDB"] = imdb_id
+                    tvdb_id = ids.get("tvdb_id")
+                    if tvdb_id:
+                        if kind == "movie":
+                            standard_tags["TVDB2"] = f"movies/{tvdb_id}"
+                        else:
+                            standard_tags["TVDB2"] = f"series/{tvdb_id}"
+            else:
+                log.debug("No TMDB API key configured; skipping TMDB external ID lookup")
 
     merged_tags = {
         **custom_tags,

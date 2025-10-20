@@ -336,6 +336,10 @@ filenames:
 # API key for The Movie Database (TMDB)
 tmdb_api_key: ""
 
+# Client ID for SIMKL API (optional, improves metadata matching)
+# Get your free client ID at: https://simkl.com/settings/developer/
+simkl_client_id: ""
+
 # conversion_method:
 # - auto (default): Smart routing - subby for WebVTT/SAMI, standard for others
 # - subby: Always use subby with advanced processing
