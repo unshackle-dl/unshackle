@@ -8,10 +8,10 @@ import time
 import warnings
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from typing import Any, List, Optional, Set, Tuple
+from typing import Any
 from urllib.parse import urlparse
 
-from curl_cffi import Response, Session, exceptions
+from curl_cffi.requests import Response, Session, exceptions
 
 from unshackle.core.config import config
 
@@ -27,15 +27,16 @@ class MaxRetriesError(exceptions.RequestException):
         super().__init__(message)
         self.__cause__ = cause
 
+
 class CurlSession(Session):
     def __init__(
         self,
         max_retries: int = 10,
         backoff_factor: float = 0.2,
         max_backoff: float = 60.0,
-        status_forcelist: Optional[List[int]] = None,
-        allowed_methods: Optional[Set[str]] = None,
-        catch_exceptions: Optional[Tuple[type[Exception], ...]] = None,
+        status_forcelist: list[int] | None = None,
+        allowed_methods: set[str] | None = None,
+        catch_exceptions: tuple[type[Exception], ...] | None = None,
         **session_kwargs: Any,
     ):
         super().__init__(**session_kwargs)
@@ -92,8 +93,7 @@ class CurlSession(Session):
                 last_exception = e
                 response = None
                 self.log.warning(
-                    f"{e.__class__.__name__}({urlparse(url).path}). Retrying... "
-                    f"({attempt + 1}/{self.max_retries})"
+                    f"{e.__class__.__name__}({urlparse(url).path}). Retrying... ({attempt + 1}/{self.max_retries})"
                 )
 
             if attempt < self.max_retries:
