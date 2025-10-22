@@ -118,8 +118,8 @@ POSSIBLE_CONFIG_PATHS = (
     Config._Directories.namespace_dir / Config._Filenames.root_config,
     # The Parent Folder to the unshackle Namespace Folder (e.g., %appdata%/Python/Python311/site-packages)
     Config._Directories.namespace_dir.parent / Config._Filenames.root_config,
-    # The AppDirs User Config Folder (e.g., %localappdata%/unshackle)
-    Config._Directories.user_configs / Config._Filenames.root_config,
+    # The AppDirs User Config Folder (e.g., ~/.config/unshackle on Linux, %LOCALAPPDATA%\unshackle on Windows)
+    Path(Config._Directories.app_dirs.user_config_dir) / Config._Filenames.root_config,
 )
 
 
