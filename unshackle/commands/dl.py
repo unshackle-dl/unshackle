@@ -1002,6 +1002,29 @@ class dl:
                                 selected_videos.append(match)
                         title.tracks.videos = selected_videos
 
+                    # validate hybrid mode requirements
+                    if any(r == Video.Range.HYBRID for r in range_):
+                        hdr10_tracks = [v for v in title.tracks.videos if v.range == Video.Range.HDR10]
+                        dv_tracks = [v for v in title.tracks.videos if v.range == Video.Range.DV]
+
+                        if not hdr10_tracks and not dv_tracks:
+                            available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
+                            self.log.error("HYBRID mode requires both HDR10 and DV tracks, but neither is available")
+                            self.log.error(
+                                f"Available ranges: {', '.join(available_ranges) if available_ranges else 'none'}"
+                            )
+                            sys.exit(1)
+                        elif not hdr10_tracks:
+                            available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
+                            self.log.error("HYBRID mode requires both HDR10 and DV tracks, but only DV is available")
+                            self.log.error(f"Available ranges: {', '.join(available_ranges)}")
+                            sys.exit(1)
+                        elif not dv_tracks:
+                            available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
+                            self.log.error("HYBRID mode requires both HDR10 and DV tracks, but only HDR10 is available")
+                            self.log.error(f"Available ranges: {', '.join(available_ranges)}")
+                            sys.exit(1)
+
                     # filter subtitle tracks
                     if require_subs:
                         missing_langs = [
