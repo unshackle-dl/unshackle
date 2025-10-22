@@ -3,8 +3,6 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from mypy.types import names
-
 __shaka_platform = {"win32": "win", "darwin": "osx"}.get(sys.platform, sys.platform)
 
 
