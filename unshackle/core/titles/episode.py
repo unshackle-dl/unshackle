@@ -95,9 +95,9 @@ class Episode(Title):
                 media_info.audio_tracks,
                 key=lambda x: (
                     float(x.bit_rate) if x.bit_rate else 0,
-                    bool(x.format_additionalfeatures and "JOC" in x.format_additionalfeatures)
+                    bool(x.format_additionalfeatures and "JOC" in x.format_additionalfeatures),
                 ),
-                reverse=True
+                reverse=True,
             )
             primary_audio_track = sorted_audio[0]
         unique_audio_languages = len({x.language.split("-")[0] for x in media_info.audio_tracks if x.language})

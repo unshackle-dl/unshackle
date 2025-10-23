@@ -125,7 +125,7 @@ def is_exact_match(language: Union[str, Language], languages: Sequence[Union[str
     return closest_match(language, list(map(str, languages)))[1] <= LANGUAGE_EXACT_DISTANCE
 
 
-def get_boxes(data: bytes, box_type: bytes, as_bytes: bool = False) -> Box: # type: ignore
+def get_boxes(data: bytes, box_type: bytes, as_bytes: bool = False) -> Box:  # type: ignore
     """
     Scan a byte array for a wanted MP4/ISOBMFF box, then parse and yield each find.
 

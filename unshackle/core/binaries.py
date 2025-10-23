@@ -15,10 +15,7 @@ def find(*names: str) -> Optional[Path]:
 
     for name in names:
         if local_binaries_dir.exists():
-            candidate_paths = [
-                local_binaries_dir / f"{name}{ext}",
-                local_binaries_dir / name / f"{name}{ext}"
-            ]
+            candidate_paths = [local_binaries_dir / f"{name}{ext}", local_binaries_dir / name / f"{name}{ext}"]
 
             for path in candidate_paths:
                 if path.is_file():

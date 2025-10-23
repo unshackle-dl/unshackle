@@ -48,6 +48,7 @@ class CurlSession(Session):
         self.allowed_methods = allowed_methods or {"GET", "POST", "HEAD", "OPTIONS", "PUT", "DELETE", "TRACE"}
         self.catch_exceptions = catch_exceptions or (
             exceptions.ConnectionError,
+            exceptions.ProxyError,
             exceptions.SSLError,
             exceptions.Timeout,
         )
@@ -137,7 +138,7 @@ def session(browser: str | None = None, **kwargs) -> CurlSession:
                   - max_backoff: Maximum backoff time (float, default 60.0)
                   - status_forcelist: List of status codes to force retry (list, default [429, 500, 502, 503, 504])
                   - allowed_methods: List of allowed HTTP methods (set, default {"GET", "POST", "HEAD", "OPTIONS", "PUT", "DELETE", "TRACE"})
-                  - catch_exceptions: List of exceptions to catch (tuple, default (exceptions.ConnectionError, exceptions.SSLError, exceptions.Timeout))
+                  - catch_exceptions: List of exceptions to catch (tuple, default (exceptions.ConnectionError, exceptions.ProxyError, exceptions.SSLError, exceptions.Timeout))
 
     Returns:
         curl_cffi.requests.Session configured with browser impersonation, common headers,
