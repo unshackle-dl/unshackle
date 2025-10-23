@@ -34,6 +34,27 @@ def serve(host: str, port: int, caddy: bool, api_only: bool, no_key: bool) -> No
     \b
     The REST API provides programmatic access to unshackle functionality.
     Configure authentication in your config under serve.users and serve.api_secret.
+
+    \b
+    REMOTE SERVICES:
+    The server exposes endpoints that allow remote unshackle clients to use
+    your configured services without needing the service implementations.
+    Remote clients can authenticate, get titles/tracks, and receive session data
+    for downloading. Configure remote clients in unshackle.yaml:
+
+    \b
+    remote_services:
+      - url: "http://your-server:8786"
+        api_key: "your-api-key"
+        name: "my-server"
+
+    \b
+    Available remote endpoints:
+    - GET  /api/remote/services - List available services
+    - POST /api/remote/{service}/search - Search for content
+    - POST /api/remote/{service}/titles - Get titles
+    - POST /api/remote/{service}/tracks - Get tracks
+    - POST /api/remote/{service}/chapters - Get chapters
     """
     from pywidevine import serve as pywidevine_serve
 
