@@ -69,6 +69,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Audio Description Track Support**: Added option to download audio description tracks
+  - Added `--audio-description/-ad` flag to optionally include descriptive audio tracks
+  - Previously, audio description tracks were always filtered out
+  - Users can now choose to download AD tracks when needed
+  - Fixes GitHub issue #33
 - **Config Directory Support**: Cross-platform user config directory support
   - Fixed config loading to properly support user config directories across all platforms
   - Fixes GitHub issue #23
