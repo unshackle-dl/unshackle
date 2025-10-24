@@ -439,7 +439,7 @@ class HLS:
                     elif len(files) != range_len:
                         raise ValueError(f"Missing {range_len - len(files)} segment files for {segment_range}...")
 
-                    if isinstance(drm, Widevine):
+                    if isinstance(drm, (Widevine, PlayReady)):
                         # with widevine we can merge all segments and decrypt once
                         merge(to=merged_path, via=files, delete=True, include_map_data=True)
                         drm.decrypt(merged_path)
