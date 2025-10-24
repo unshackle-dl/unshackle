@@ -237,6 +237,7 @@ class dl:
     @click.option("-ns", "--no-subs", is_flag=True, default=False, help="Do not download subtitle tracks.")
     @click.option("-na", "--no-audio", is_flag=True, default=False, help="Do not download audio tracks.")
     @click.option("-nc", "--no-chapters", is_flag=True, default=False, help="Do not download chapters tracks.")
+    @click.option("-ad", "--audio-description", is_flag=True, default=False, help="Download audio description tracks.")
     @click.option(
         "--slow",
         is_flag=True,
@@ -582,6 +583,7 @@ class dl:
         no_subs: bool,
         no_audio: bool,
         no_chapters: bool,
+        audio_description: bool,
         slow: bool,
         list_: bool,
         list_titles: bool,
@@ -1065,7 +1067,8 @@ class dl:
                 # filter audio tracks
                 # might have no audio tracks if part of the video, e.g. transport stream hls
                 if len(title.tracks.audio) > 0:
-                    title.tracks.select_audio(lambda x: not x.descriptive)  # exclude descriptive audio
+                    if not audio_description:
+                        title.tracks.select_audio(lambda x: not x.descriptive)  # exclude descriptive audio
                     if acodec:
                         title.tracks.select_audio(lambda x: x.codec == acodec)
                         if not title.tracks.audio:
