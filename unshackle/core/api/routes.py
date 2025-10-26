@@ -109,9 +109,14 @@ async def services(request: web.Request) -> web.Response:
                       title_regex:
                         type: string
                         nullable: true
+                      url:
+                        type: string
+                        nullable: true
+                        description: Service URL from short_help
                       help:
                         type: string
                         nullable: true
+                        description: Full service documentation
       '500':
         description: Server error
     """
@@ -120,7 +125,7 @@ async def services(request: web.Request) -> web.Response:
         services_info = []
 
         for tag in service_tags:
-            service_data = {"tag": tag, "aliases": [], "geofence": [], "title_regex": None, "help": None}
+            service_data = {"tag": tag, "aliases": [], "geofence": [], "title_regex": None, "url": None, "help": None}
 
             try:
                 service_module = Services.load(tag)
@@ -133,6 +138,9 @@ async def services(request: web.Request) -> web.Response:
 
                 if hasattr(service_module, "TITLE_RE"):
                     service_data["title_regex"] = service_module.TITLE_RE
+
+                if hasattr(service_module, "cli") and hasattr(service_module.cli, "short_help"):
+                    service_data["url"] = service_module.cli.short_help
 
                 if service_module.__doc__:
                     service_data["help"] = service_module.__doc__.strip()
