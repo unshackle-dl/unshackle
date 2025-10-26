@@ -558,6 +558,81 @@ async def list_tracks_handler(data: Dict[str, Any]) -> web.Response:
         return web.json_response({"status": "error", "message": str(e)}, status=500)
 
 
+def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
+    """
+    Validate download parameters and return error message if invalid.
+
+    Returns:
+        None if valid, error message string if invalid
+    """
+    if "vcodec" in data and data["vcodec"]:
+        valid_vcodecs = ["H264", "H265", "VP9", "AV1"]
+        if data["vcodec"].upper() not in valid_vcodecs:
+            return f"Invalid vcodec: {data['vcodec']}. Must be one of: {', '.join(valid_vcodecs)}"
+
+    if "acodec" in data and data["acodec"]:
+        valid_acodecs = ["AAC", "AC3", "EAC3", "OPUS", "FLAC", "ALAC", "VORBIS", "DTS"]
+        if data["acodec"].upper() not in valid_acodecs:
+            return f"Invalid acodec: {data['acodec']}. Must be one of: {', '.join(valid_acodecs)}"
+
+    if "sub_format" in data and data["sub_format"]:
+        valid_sub_formats = ["SRT", "VTT", "ASS", "SSA"]
+        if data["sub_format"].upper() not in valid_sub_formats:
+            return f"Invalid sub_format: {data['sub_format']}. Must be one of: {', '.join(valid_sub_formats)}"
+
+    if "vbitrate" in data and data["vbitrate"] is not None:
+        if not isinstance(data["vbitrate"], int) or data["vbitrate"] <= 0:
+            return "vbitrate must be a positive integer"
+
+    if "abitrate" in data and data["abitrate"] is not None:
+        if not isinstance(data["abitrate"], int) or data["abitrate"] <= 0:
+            return "abitrate must be a positive integer"
+
+    if "channels" in data and data["channels"] is not None:
+        if not isinstance(data["channels"], (int, float)) or data["channels"] <= 0:
+            return "channels must be a positive number"
+
+    if "workers" in data and data["workers"] is not None:
+        if not isinstance(data["workers"], int) or data["workers"] <= 0:
+            return "workers must be a positive integer"
+
+    if "downloads" in data and data["downloads"] is not None:
+        if not isinstance(data["downloads"], int) or data["downloads"] <= 0:
+            return "downloads must be a positive integer"
+
+    exclusive_flags = []
+    if data.get("video_only"):
+        exclusive_flags.append("video_only")
+    if data.get("audio_only"):
+        exclusive_flags.append("audio_only")
+    if data.get("subs_only"):
+        exclusive_flags.append("subs_only")
+    if data.get("chapters_only"):
+        exclusive_flags.append("chapters_only")
+
+    if len(exclusive_flags) > 1:
+        return f"Cannot use multiple exclusive flags: {', '.join(exclusive_flags)}"
+
+    if data.get("no_subs") and data.get("subs_only"):
+        return "Cannot use both no_subs and subs_only"
+    if data.get("no_audio") and data.get("audio_only"):
+        return "Cannot use both no_audio and audio_only"
+
+    if data.get("s_lang") and data.get("require_subs"):
+        return "Cannot use both s_lang and require_subs"
+
+    if "range" in data and data["range"]:
+        valid_ranges = ["SDR", "HDR10", "HDR10+", "DV", "HLG"]
+        if isinstance(data["range"], list):
+            for r in data["range"]:
+                if r.upper() not in valid_ranges:
+                    return f"Invalid range value: {r}. Must be one of: {', '.join(valid_ranges)}"
+        elif data["range"].upper() not in valid_ranges:
+            return f"Invalid range value: {data['range']}. Must be one of: {', '.join(valid_ranges)}"
+
+    return None
+
+
 async def download_handler(data: Dict[str, Any]) -> web.Response:
     """Handle download request - create and queue a download job."""
     from unshackle.core.api.download_manager import get_download_manager
@@ -576,6 +651,10 @@ async def download_handler(data: Dict[str, Any]) -> web.Response:
         return web.json_response(
             {"status": "error", "message": f"Invalid or unavailable service: {service_tag}"}, status=400
         )
+
+    validation_error = validate_download_parameters(data)
+    if validation_error:
+        return web.json_response({"status": "error", "message": validation_error}, status=400)
 
     try:
         # Get download manager and start workers if needed
@@ -596,12 +675,56 @@ async def download_handler(data: Dict[str, Any]) -> web.Response:
 
 
 async def list_download_jobs_handler(data: Dict[str, Any]) -> web.Response:
-    """Handle list download jobs request."""
+    """Handle list download jobs request with optional filtering and sorting."""
     from unshackle.core.api.download_manager import get_download_manager
 
     try:
         manager = get_download_manager()
         jobs = manager.list_jobs()
+
+        status_filter = data.get("status")
+        if status_filter:
+            jobs = [job for job in jobs if job.status.value == status_filter]
+
+        service_filter = data.get("service")
+        if service_filter:
+            jobs = [job for job in jobs if job.service == service_filter]
+
+        sort_by = data.get("sort_by", "created_time")
+        sort_order = data.get("sort_order", "desc")
+
+        valid_sort_fields = ["created_time", "started_time", "completed_time", "progress", "status", "service"]
+        if sort_by not in valid_sort_fields:
+            return web.json_response(
+                {
+                    "status": "error",
+                    "message": f"Invalid sort_by: {sort_by}. Must be one of: {', '.join(valid_sort_fields)}",
+                },
+                status=400,
+            )
+
+        if sort_order not in ["asc", "desc"]:
+            return web.json_response(
+                {"status": "error", "message": "Invalid sort_order: must be 'asc' or 'desc'"}, status=400
+            )
+
+        reverse = sort_order == "desc"
+
+        def get_sort_key(job):
+            """Get the sorting key value, handling None values."""
+            value = getattr(job, sort_by, None)
+            if value is None:
+                if sort_by in ["created_time", "started_time", "completed_time"]:
+                    from datetime import datetime
+
+                    return datetime.min if not reverse else datetime.max
+                elif sort_by == "progress":
+                    return 0
+                elif sort_by in ["status", "service"]:
+                    return ""
+            return value
+
+        jobs = sorted(jobs, key=get_sort_key, reverse=reverse)
 
         job_list = [job.to_dict(include_full_details=False) for job in jobs]
 

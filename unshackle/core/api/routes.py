@@ -256,9 +256,165 @@ async def download(request: web.Request) -> web.Response:
               title_id:
                 type: string
                 description: Title identifier
+              profile:
+                type: string
+                description: Profile to use for credentials and cookies
+              quality:
+                type: array
+                items:
+                  type: integer
+                description: Download resolution(s), defaults to best available
+              vcodec:
+                type: string
+                description: Video codec to download (e.g., H264, H265, VP9, AV1)
+              acodec:
+                type: string
+                description: Audio codec to download (e.g., AAC, AC3, EAC3)
+              vbitrate:
+                type: integer
+                description: Video bitrate in kbps
+              abitrate:
+                type: integer
+                description: Audio bitrate in kbps
+              range:
+                type: array
+                items:
+                  type: string
+                description: Video color range (SDR, HDR10, DV)
+              channels:
+                type: number
+                description: Audio channels (e.g., 2.0, 5.1, 7.1)
+              no_atmos:
+                type: boolean
+                description: Exclude Dolby Atmos audio tracks
+              wanted:
+                type: array
+                items:
+                  type: string
+                description: Wanted episodes (e.g., ["S01E01", "S01E02"])
+              latest_episode:
+                type: boolean
+                description: Download only the single most recent episode
+              lang:
+                type: array
+                items:
+                  type: string
+                description: Language for video and audio (use 'orig' for original)
+              v_lang:
+                type: array
+                items:
+                  type: string
+                description: Language for video tracks only
+              a_lang:
+                type: array
+                items:
+                  type: string
+                description: Language for audio tracks only
+              s_lang:
+                type: array
+                items:
+                  type: string
+                description: Language for subtitle tracks (default is 'all')
+              require_subs:
+                type: array
+                items:
+                  type: string
+                description: Required subtitle languages
+              forced_subs:
+                type: boolean
+                description: Include forced subtitle tracks
+              exact_lang:
+                type: boolean
+                description: Use exact language matching (no variants)
+              sub_format:
+                type: string
+                description: Output subtitle format (SRT, VTT, etc.)
+              video_only:
+                type: boolean
+                description: Only download video tracks
+              audio_only:
+                type: boolean
+                description: Only download audio tracks
+              subs_only:
+                type: boolean
+                description: Only download subtitle tracks
+              chapters_only:
+                type: boolean
+                description: Only download chapters
+              no_subs:
+                type: boolean
+                description: Do not download subtitle tracks
+              no_audio:
+                type: boolean
+                description: Do not download audio tracks
+              no_chapters:
+                type: boolean
+                description: Do not download chapters
+              audio_description:
+                type: boolean
+                description: Download audio description tracks
+              slow:
+                type: boolean
+                description: Add 60-120s delay between downloads
+              skip_dl:
+                type: boolean
+                description: Skip downloading, only retrieve decryption keys
+              export:
+                type: string
+                description: Path to export decryption keys as JSON
+              cdm_only:
+                type: boolean
+                description: Only use CDM for key retrieval (true) or only vaults (false)
+              proxy:
+                type: string
+                description: Proxy URI or country code
+              no_proxy:
+                type: boolean
+                description: Force disable all proxy use
+              tag:
+                type: string
+                description: Set the group tag to be used
+              tmdb_id:
+                type: integer
+                description: Use this TMDB ID for tagging
+              tmdb_name:
+                type: boolean
+                description: Rename titles using TMDB name
+              tmdb_year:
+                type: boolean
+                description: Use release year from TMDB
+              no_folder:
+                type: boolean
+                description: Disable folder creation for TV shows
+              no_source:
+                type: boolean
+                description: Disable source tag from output file name
+              no_mux:
+                type: boolean
+                description: Do not mux tracks into a container file
+              workers:
+                type: integer
+                description: Max workers/threads per track download
+              downloads:
+                type: integer
+                description: Amount of tracks to download concurrently
+              best_available:
+                type: boolean
+                description: Continue with best available if requested quality unavailable
     responses:
-      '200':
-        description: Download started
+      '202':
+        description: Download job created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                job_id:
+                  type: string
+                status:
+                  type: string
+                created_time:
+                  type: string
       '400':
         description: Invalid request
     """
@@ -272,10 +428,40 @@ async def download(request: web.Request) -> web.Response:
 
 async def download_jobs(request: web.Request) -> web.Response:
     """
-    List all download jobs.
+    List all download jobs with optional filtering and sorting.
     ---
     summary: List download jobs
-    description: Get list of all download jobs with their status
+    description: Get list of all download jobs with their status, with optional filtering by status/service and sorting
+    parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [queued, downloading, completed, failed, cancelled]
+        description: Filter jobs by status
+      - name: service
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Filter jobs by service tag
+      - name: sort_by
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [created_time, started_time, completed_time, progress, status, service]
+          default: created_time
+        description: Field to sort by
+      - name: sort_order
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [asc, desc]
+          default: desc
+        description: Sort order (ascending or descending)
     responses:
       '200':
         description: List of download jobs
@@ -301,10 +487,19 @@ async def download_jobs(request: web.Request) -> web.Response:
                         type: string
                       progress:
                         type: number
+      '400':
+        description: Invalid query parameters
       '500':
         description: Server error
     """
-    return await list_download_jobs_handler({})
+    # Extract query parameters
+    query_params = {
+        "status": request.query.get("status"),
+        "service": request.query.get("service"),
+        "sort_by": request.query.get("sort_by", "created_time"),
+        "sort_order": request.query.get("sort_order", "desc"),
+    }
+    return await list_download_jobs_handler(query_params)
 
 
 async def download_job_detail(request: web.Request) -> web.Response:
