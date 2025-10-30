@@ -66,10 +66,28 @@ def main(argv: list[str]) -> int:
         result = {"status": "success", "output_files": output_files}
 
     except Exception as exc:  # noqa: BLE001 - capture for parent process
+        from unshackle.core.api.errors import categorize_exception
+
         exit_code = 1
         tb = traceback.format_exc()
         log.error(f"Worker failed with error: {exc}")
-        result = {"status": "error", "message": str(exc), "traceback": tb}
+
+        api_error = categorize_exception(
+            exc,
+            context={
+                "service": payload.get("service") if "payload" in locals() else None,
+                "title_id": payload.get("title_id") if "payload" in locals() else None,
+                "job_id": payload.get("job_id") if "payload" in locals() else None,
+            },
+        )
+
+        result = {
+            "status": "error",
+            "message": str(exc),
+            "error_details": api_error.message,
+            "error_code": api_error.error_code.value,
+            "traceback": tb,
+        }
 
     finally:
         try:

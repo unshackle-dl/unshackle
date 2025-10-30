@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional
 
 from aiohttp import web
 
+from unshackle.core.api.errors import APIError, APIErrorCode, handle_api_exception
 from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP
 from unshackle.core.proxies.basic import Basic
 from unshackle.core.proxies.hola import Hola
@@ -13,6 +14,47 @@ from unshackle.core.titles import Episode, Movie, Title_T
 from unshackle.core.tracks import Audio, Subtitle, Video
 
 log = logging.getLogger("api")
+
+DEFAULT_DOWNLOAD_PARAMS = {
+    "profile": None,
+    "quality": [],
+    "vcodec": None,
+    "acodec": None,
+    "vbitrate": None,
+    "abitrate": None,
+    "range": ["SDR"],
+    "channels": None,
+    "no_atmos": False,
+    "wanted": [],
+    "latest_episode": False,
+    "lang": ["orig"],
+    "v_lang": [],
+    "a_lang": [],
+    "s_lang": ["all"],
+    "require_subs": [],
+    "forced_subs": False,
+    "exact_lang": False,
+    "sub_format": None,
+    "video_only": False,
+    "audio_only": False,
+    "subs_only": False,
+    "chapters_only": False,
+    "no_subs": False,
+    "no_audio": False,
+    "no_chapters": False,
+    "audio_description": False,
+    "slow": False,
+    "skip_dl": False,
+    "export": None,
+    "cdm_only": None,
+    "no_proxy": False,
+    "no_folder": False,
+    "no_source": False,
+    "no_mux": False,
+    "workers": None,
+    "downloads": 1,
+    "best_available": False,
+}
 
 
 def initialize_proxy_providers() -> List[Any]:
@@ -199,22 +241,32 @@ def serialize_subtitle_track(track: Subtitle) -> Dict[str, Any]:
     }
 
 
-async def list_titles_handler(data: Dict[str, Any]) -> web.Response:
+async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
     """Handle list-titles request."""
     service_tag = data.get("service")
     title_id = data.get("title_id")
     profile = data.get("profile")
 
     if not service_tag:
-        return web.json_response({"status": "error", "message": "Missing required parameter: service"}, status=400)
+        raise APIError(
+            APIErrorCode.INVALID_INPUT,
+            "Missing required parameter: service",
+            details={"missing_parameter": "service"},
+        )
 
     if not title_id:
-        return web.json_response({"status": "error", "message": "Missing required parameter: title_id"}, status=400)
+        raise APIError(
+            APIErrorCode.INVALID_INPUT,
+            "Missing required parameter: title_id",
+            details={"missing_parameter": "title_id"},
+        )
 
     normalized_service = validate_service(service_tag)
     if not normalized_service:
-        return web.json_response(
-            {"status": "error", "message": f"Invalid or unavailable service: {service_tag}"}, status=400
+        raise APIError(
+            APIErrorCode.INVALID_SERVICE,
+            f"Invalid or unavailable service: {service_tag}",
+            details={"service": service_tag},
         )
 
     try:
@@ -253,7 +305,11 @@ async def list_titles_handler(data: Dict[str, Any]) -> web.Response:
                 resolved_proxy = resolve_proxy(proxy_param, proxy_providers)
                 proxy_param = resolved_proxy
             except ValueError as e:
-                return web.json_response({"status": "error", "message": f"Proxy error: {e}"}, status=400)
+                raise APIError(
+                    APIErrorCode.INVALID_PROXY,
+                    f"Proxy error: {e}",
+                    details={"proxy": proxy_param, "service": normalized_service},
+                )
 
         ctx = click.Context(dummy_service)
         ctx.obj = ContextData(config=service_config, cdm=None, proxy_providers=proxy_providers, profile=profile)
@@ -321,27 +377,44 @@ async def list_titles_handler(data: Dict[str, Any]) -> web.Response:
 
         return web.json_response({"titles": title_list})
 
+    except APIError:
+        raise
     except Exception as e:
         log.exception("Error listing titles")
-        return web.json_response({"status": "error", "message": str(e)}, status=500)
+        debug_mode = request.app.get("debug_api", False) if request else False
+        return handle_api_exception(
+            e,
+            context={"operation": "list_titles", "service": normalized_service, "title_id": title_id},
+            debug_mode=debug_mode,
+        )
 
 
-async def list_tracks_handler(data: Dict[str, Any]) -> web.Response:
+async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
     """Handle list-tracks request."""
     service_tag = data.get("service")
     title_id = data.get("title_id")
     profile = data.get("profile")
 
     if not service_tag:
-        return web.json_response({"status": "error", "message": "Missing required parameter: service"}, status=400)
+        raise APIError(
+            APIErrorCode.INVALID_INPUT,
+            "Missing required parameter: service",
+            details={"missing_parameter": "service"},
+        )
 
     if not title_id:
-        return web.json_response({"status": "error", "message": "Missing required parameter: title_id"}, status=400)
+        raise APIError(
+            APIErrorCode.INVALID_INPUT,
+            "Missing required parameter: title_id",
+            details={"missing_parameter": "title_id"},
+        )
 
     normalized_service = validate_service(service_tag)
     if not normalized_service:
-        return web.json_response(
-            {"status": "error", "message": f"Invalid or unavailable service: {service_tag}"}, status=400
+        raise APIError(
+            APIErrorCode.INVALID_SERVICE,
+            f"Invalid or unavailable service: {service_tag}",
+            details={"service": service_tag},
         )
 
     try:
@@ -380,7 +453,11 @@ async def list_tracks_handler(data: Dict[str, Any]) -> web.Response:
                 resolved_proxy = resolve_proxy(proxy_param, proxy_providers)
                 proxy_param = resolved_proxy
             except ValueError as e:
-                return web.json_response({"status": "error", "message": f"Proxy error: {e}"}, status=400)
+                raise APIError(
+                    APIErrorCode.INVALID_PROXY,
+                    f"Proxy error: {e}",
+                    details={"proxy": proxy_param, "service": normalized_service},
+                )
 
         ctx = click.Context(dummy_service)
         ctx.obj = ContextData(config=service_config, cdm=None, proxy_providers=proxy_providers, profile=profile)
@@ -457,8 +534,10 @@ async def list_tracks_handler(data: Dict[str, Any]) -> web.Response:
                     wanted = season_range.parse_tokens(wanted_param)
                     log.debug(f"Parsed wanted '{wanted_param}' into {len(wanted)} episodes: {wanted[:10]}...")
                 except Exception as e:
-                    return web.json_response(
-                        {"status": "error", "message": f"Invalid wanted parameter: {e}"}, status=400
+                    raise APIError(
+                        APIErrorCode.INVALID_PARAMETERS,
+                        f"Invalid wanted parameter: {e}",
+                        details={"wanted": wanted_param, "service": normalized_service},
                     )
             elif season is not None and episode is not None:
                 wanted = [f"{season}x{episode}"]
@@ -481,8 +560,14 @@ async def list_tracks_handler(data: Dict[str, Any]) -> web.Response:
                 log.debug(f"Found {len(matching_titles)} matching titles")
 
                 if not matching_titles:
-                    return web.json_response(
-                        {"status": "error", "message": "No episodes found matching wanted criteria"}, status=404
+                    raise APIError(
+                        APIErrorCode.NO_CONTENT,
+                        "No episodes found matching wanted criteria",
+                        details={
+                            "service": normalized_service,
+                            "title_id": title_id,
+                            "wanted": wanted_param or f"{season}x{episode}",
+                        },
                     )
 
                 # If multiple episodes match, return tracks for all episodes
@@ -524,12 +609,14 @@ async def list_tracks_handler(data: Dict[str, Any]) -> web.Response:
                             response["unavailable_episodes"] = failed_episodes
                         return web.json_response(response)
                     else:
-                        return web.json_response(
-                            {
-                                "status": "error",
-                                "message": f"No available episodes found. Unavailable: {', '.join(failed_episodes)}",
+                        raise APIError(
+                            APIErrorCode.NO_CONTENT,
+                            f"No available episodes found. Unavailable: {', '.join(failed_episodes)}",
+                            details={
+                                "service": normalized_service,
+                                "title_id": title_id,
+                                "unavailable_episodes": failed_episodes,
                             },
-                            status=404,
                         )
                 else:
                     # Single episode or movie
@@ -553,9 +640,16 @@ async def list_tracks_handler(data: Dict[str, Any]) -> web.Response:
 
         return web.json_response(response)
 
+    except APIError:
+        raise
     except Exception as e:
         log.exception("Error listing tracks")
-        return web.json_response({"status": "error", "message": str(e)}, status=500)
+        debug_mode = request.app.get("debug_api", False) if request else False
+        return handle_api_exception(
+            e,
+            context={"operation": "list_tracks", "service": normalized_service, "title_id": title_id},
+            debug_mode=debug_mode,
+        )
 
 
 def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
@@ -633,7 +727,7 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-async def download_handler(data: Dict[str, Any]) -> web.Response:
+async def download_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
     """Handle download request - create and queue a download job."""
     from unshackle.core.api.download_manager import get_download_manager
 
@@ -641,40 +735,74 @@ async def download_handler(data: Dict[str, Any]) -> web.Response:
     title_id = data.get("title_id")
 
     if not service_tag:
-        return web.json_response({"status": "error", "message": "Missing required parameter: service"}, status=400)
+        raise APIError(
+            APIErrorCode.INVALID_INPUT,
+            "Missing required parameter: service",
+            details={"missing_parameter": "service"},
+        )
 
     if not title_id:
-        return web.json_response({"status": "error", "message": "Missing required parameter: title_id"}, status=400)
+        raise APIError(
+            APIErrorCode.INVALID_INPUT,
+            "Missing required parameter: title_id",
+            details={"missing_parameter": "title_id"},
+        )
 
     normalized_service = validate_service(service_tag)
     if not normalized_service:
-        return web.json_response(
-            {"status": "error", "message": f"Invalid or unavailable service: {service_tag}"}, status=400
+        raise APIError(
+            APIErrorCode.INVALID_SERVICE,
+            f"Invalid or unavailable service: {service_tag}",
+            details={"service": service_tag},
         )
 
     validation_error = validate_download_parameters(data)
     if validation_error:
-        return web.json_response({"status": "error", "message": validation_error}, status=400)
+        raise APIError(
+            APIErrorCode.INVALID_PARAMETERS,
+            validation_error,
+            details={"service": normalized_service, "title_id": title_id},
+        )
 
     try:
+        # Load service module to extract service-specific parameter defaults
+        service_module = Services.load(normalized_service)
+        service_specific_defaults = {}
+
+        # Extract default values from the service's click command
+        if hasattr(service_module, "cli") and hasattr(service_module.cli, "params"):
+            for param in service_module.cli.params:
+                if hasattr(param, "name") and hasattr(param, "default") and param.default is not None:
+                    # Store service-specific defaults (e.g., drm_system, hydrate_track, profile for NF)
+                    service_specific_defaults[param.name] = param.default
+
         # Get download manager and start workers if needed
         manager = get_download_manager()
         await manager.start_workers()
 
         # Create download job with filtered parameters (exclude service and title_id as they're already passed)
         filtered_params = {k: v for k, v in data.items() if k not in ["service", "title_id"]}
-        job = manager.create_job(normalized_service, title_id, **filtered_params)
+        # Merge defaults with provided parameters (user params override service defaults, which override global defaults)
+        params_with_defaults = {**DEFAULT_DOWNLOAD_PARAMS, **service_specific_defaults, **filtered_params}
+        job = manager.create_job(normalized_service, title_id, **params_with_defaults)
 
         return web.json_response(
             {"job_id": job.job_id, "status": job.status.value, "created_time": job.created_time.isoformat()}, status=202
         )
 
+    except APIError:
+        raise
     except Exception as e:
         log.exception("Error creating download job")
-        return web.json_response({"status": "error", "message": str(e)}, status=500)
+        debug_mode = request.app.get("debug_api", False) if request else False
+        return handle_api_exception(
+            e,
+            context={"operation": "create_download_job", "service": normalized_service, "title_id": title_id},
+            debug_mode=debug_mode,
+        )
 
 
-async def list_download_jobs_handler(data: Dict[str, Any]) -> web.Response:
+async def list_download_jobs_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
     """Handle list download jobs request with optional filtering and sorting."""
     from unshackle.core.api.download_manager import get_download_manager
 
@@ -695,17 +823,17 @@ async def list_download_jobs_handler(data: Dict[str, Any]) -> web.Response:
 
         valid_sort_fields = ["created_time", "started_time", "completed_time", "progress", "status", "service"]
         if sort_by not in valid_sort_fields:
-            return web.json_response(
-                {
-                    "status": "error",
-                    "message": f"Invalid sort_by: {sort_by}. Must be one of: {', '.join(valid_sort_fields)}",
-                },
-                status=400,
+            raise APIError(
+                APIErrorCode.INVALID_PARAMETERS,
+                f"Invalid sort_by: {sort_by}. Must be one of: {', '.join(valid_sort_fields)}",
+                details={"sort_by": sort_by, "valid_values": valid_sort_fields},
             )
 
         if sort_order not in ["asc", "desc"]:
-            return web.json_response(
-                {"status": "error", "message": "Invalid sort_order: must be 'asc' or 'desc'"}, status=400
+            raise APIError(
+                APIErrorCode.INVALID_PARAMETERS,
+                "Invalid sort_order: must be 'asc' or 'desc'",
+                details={"sort_order": sort_order, "valid_values": ["asc", "desc"]},
             )
 
         reverse = sort_order == "desc"
@@ -730,12 +858,19 @@ async def list_download_jobs_handler(data: Dict[str, Any]) -> web.Response:
 
         return web.json_response({"jobs": job_list})
 
+    except APIError:
+        raise
     except Exception as e:
         log.exception("Error listing download jobs")
-        return web.json_response({"status": "error", "message": str(e)}, status=500)
+        debug_mode = request.app.get("debug_api", False) if request else False
+        return handle_api_exception(
+            e,
+            context={"operation": "list_download_jobs"},
+            debug_mode=debug_mode,
+        )
 
 
-async def get_download_job_handler(job_id: str) -> web.Response:
+async def get_download_job_handler(job_id: str, request: Optional[web.Request] = None) -> web.Response:
     """Handle get specific download job request."""
     from unshackle.core.api.download_manager import get_download_manager
 
@@ -744,16 +879,27 @@ async def get_download_job_handler(job_id: str) -> web.Response:
         job = manager.get_job(job_id)
 
         if not job:
-            return web.json_response({"status": "error", "message": "Job not found"}, status=404)
+            raise APIError(
+                APIErrorCode.JOB_NOT_FOUND,
+                "Job not found",
+                details={"job_id": job_id},
+            )
 
         return web.json_response(job.to_dict(include_full_details=True))
 
+    except APIError:
+        raise
     except Exception as e:
         log.exception(f"Error getting download job {job_id}")
-        return web.json_response({"status": "error", "message": str(e)}, status=500)
+        debug_mode = request.app.get("debug_api", False) if request else False
+        return handle_api_exception(
+            e,
+            context={"operation": "get_download_job", "job_id": job_id},
+            debug_mode=debug_mode,
+        )
 
 
-async def cancel_download_job_handler(job_id: str) -> web.Response:
+async def cancel_download_job_handler(job_id: str, request: Optional[web.Request] = None) -> web.Response:
     """Handle cancel download job request."""
     from unshackle.core.api.download_manager import get_download_manager
 
@@ -761,15 +907,30 @@ async def cancel_download_job_handler(job_id: str) -> web.Response:
         manager = get_download_manager()
 
         if not manager.get_job(job_id):
-            return web.json_response({"status": "error", "message": "Job not found"}, status=404)
+            raise APIError(
+                APIErrorCode.JOB_NOT_FOUND,
+                "Job not found",
+                details={"job_id": job_id},
+            )
 
         success = manager.cancel_job(job_id)
 
         if success:
             return web.json_response({"status": "success", "message": "Job cancelled"})
         else:
-            return web.json_response({"status": "error", "message": "Job cannot be cancelled"}, status=400)
+            raise APIError(
+                APIErrorCode.INVALID_PARAMETERS,
+                "Job cannot be cancelled (already completed or failed)",
+                details={"job_id": job_id},
+            )
 
+    except APIError:
+        raise
     except Exception as e:
         log.exception(f"Error cancelling download job {job_id}")
-        return web.json_response({"status": "error", "message": str(e)}, status=500)
+        debug_mode = request.app.get("debug_api", False) if request else False
+        return handle_api_exception(
+            e,
+            context={"operation": "cancel_download_job", "job_id": job_id},
+            debug_mode=debug_mode,
+        )

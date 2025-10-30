@@ -18,7 +18,13 @@ from unshackle.core.constants import context_settings
 @click.option("--caddy", is_flag=True, default=False, help="Also serve with Caddy.")
 @click.option("--api-only", is_flag=True, default=False, help="Serve only the REST API, not pywidevine CDM.")
 @click.option("--no-key", is_flag=True, default=False, help="Disable API key authentication (allows all requests).")
-def serve(host: str, port: int, caddy: bool, api_only: bool, no_key: bool) -> None:
+@click.option(
+    "--debug-api",
+    is_flag=True,
+    default=False,
+    help="Include technical debug information (tracebacks, stderr) in API error responses.",
+)
+def serve(host: str, port: int, caddy: bool, api_only: bool, no_key: bool, debug_api: bool) -> None:
     """
     Serve your Local Widevine Devices and REST API for Remote Access.
 
@@ -50,6 +56,9 @@ def serve(host: str, port: int, caddy: bool, api_only: bool, no_key: bool) -> No
         api_secret = None
         log.warning("Running with --no-key: Authentication is DISABLED for all API endpoints!")
 
+    if debug_api:
+        log.warning("Running with --debug-api: Error responses will include technical debug information!")
+
     if caddy:
         if not binaries.Caddy:
             raise click.ClickException('Caddy executable "caddy" not found but is required for --caddy.')
@@ -73,6 +82,7 @@ def serve(host: str, port: int, caddy: bool, api_only: bool, no_key: bool) -> No
             else:
                 app = web.Application(middlewares=[cors_middleware, pywidevine_serve.authentication])
                 app["config"] = {"users": [api_secret]}
+            app["debug_api"] = debug_api
             setup_routes(app)
             setup_swagger(app)
             log.info(f"REST API endpoints available at http://{host}:{port}/api/")
@@ -101,6 +111,7 @@ def serve(host: str, port: int, caddy: bool, api_only: bool, no_key: bool) -> No
             app.on_startup.append(pywidevine_serve._startup)
             app.on_cleanup.append(pywidevine_serve._cleanup)
             app.add_routes(pywidevine_serve.routes)
+            app["debug_api"] = debug_api
             setup_routes(app)
             setup_swagger(app)
 

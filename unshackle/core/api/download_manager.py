@@ -43,6 +43,9 @@ class DownloadJob:
     output_files: List[str] = field(default_factory=list)
     error_message: Optional[str] = None
     error_details: Optional[str] = None
+    error_code: Optional[str] = None
+    error_traceback: Optional[str] = None
+    worker_stderr: Optional[str] = None
 
     # Cancellation support
     cancel_event: threading.Event = field(default_factory=threading.Event)
@@ -67,6 +70,9 @@ class DownloadJob:
                     "output_files": self.output_files,
                     "error_message": self.error_message,
                     "error_details": self.error_details,
+                    "error_code": self.error_code,
+                    "error_traceback": self.error_traceback,
+                    "worker_stderr": self.worker_stderr,
                 }
             )
 
@@ -218,7 +224,7 @@ def _perform_download(
                 acodec=params.get("acodec"),
                 vbitrate=params.get("vbitrate"),
                 abitrate=params.get("abitrate"),
-                range_=params.get("range", []),
+                range_=params.get("range", ["SDR"]),
                 channels=params.get("channels"),
                 no_atmos=params.get("no_atmos", False),
                 wanted=params.get("wanted", []),
@@ -483,9 +489,21 @@ class DownloadQueueManager:
             job.progress = 100.0
             log.info(f"Download completed for job {job.job_id}: {len(output_files)} files")
         except Exception as e:
+            import traceback
+
+            from unshackle.core.api.errors import categorize_exception
+
             job.status = JobStatus.FAILED
             job.error_message = str(e)
             job.error_details = str(e)
+
+            api_error = categorize_exception(
+                e, context={"service": job.service, "title_id": job.title_id, "job_id": job.job_id}
+            )
+            job.error_code = api_error.error_code.value
+
+            job.error_traceback = traceback.format_exc()
+
             log.error(f"Download failed for job {job.job_id}: {e}")
             raise
 
@@ -567,6 +585,7 @@ class DownloadQueueManager:
                 log.debug(f"Worker stdout for job {job.job_id}: {stdout.strip()}")
             if stderr.strip():
                 log.warning(f"Worker stderr for job {job.job_id}: {stderr.strip()}")
+                job.worker_stderr = stderr.strip()
 
             result_data: Optional[Dict[str, Any]] = None
             try:
@@ -579,10 +598,16 @@ class DownloadQueueManager:
 
             if returncode != 0:
                 message = result_data.get("message") if result_data else "unknown error"
+                if result_data:
+                    job.error_details = result_data.get("error_details", message)
+                    job.error_code = result_data.get("error_code")
                 raise Exception(f"Worker exited with code {returncode}: {message}")
 
             if not result_data or result_data.get("status") != "success":
                 message = result_data.get("message") if result_data else "worker did not report success"
+                if result_data:
+                    job.error_details = result_data.get("error_details", message)
+                    job.error_code = result_data.get("error_code")
                 raise Exception(f"Worker failure: {message}")
 
             return result_data.get("output_files", [])
