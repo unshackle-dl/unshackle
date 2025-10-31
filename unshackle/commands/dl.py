@@ -845,20 +845,22 @@ class dl:
 
             # strip SDH subs to non-SDH if no equivalent same-lang non-SDH is available
             # uses a loose check, e.g, wont strip en-US SDH sub if a non-SDH en-GB is available
-            for subtitle in title.tracks.subtitles:
-                if subtitle.sdh and not any(
-                    is_close_match(subtitle.language, [x.language])
-                    for x in title.tracks.subtitles
-                    if not x.sdh and not x.forced
-                ):
-                    non_sdh_sub = deepcopy(subtitle)
-                    non_sdh_sub.id += "_stripped"
-                    non_sdh_sub.sdh = False
-                    title.tracks.add(non_sdh_sub)
-                    events.subscribe(
-                        events.Types.TRACK_MULTIPLEX,
-                        lambda track: (track.strip_hearing_impaired()) if track.id == non_sdh_sub.id else None,
-                    )
+            # Check if automatic SDH stripping is enabled in config
+            if config.subtitle.get("strip_sdh", True):
+                for subtitle in title.tracks.subtitles:
+                    if subtitle.sdh and not any(
+                        is_close_match(subtitle.language, [x.language])
+                        for x in title.tracks.subtitles
+                        if not x.sdh and not x.forced
+                    ):
+                        non_sdh_sub = deepcopy(subtitle)
+                        non_sdh_sub.id += "_stripped"
+                        non_sdh_sub.sdh = False
+                        title.tracks.add(non_sdh_sub)
+                        events.subscribe(
+                            events.Types.TRACK_MULTIPLEX,
+                            lambda track: (track.strip_hearing_impaired()) if track.id == non_sdh_sub.id else None,
+                        )
 
             with console.status("Sorting tracks by language and bitrate...", spinner="dots"):
                 video_sort_lang = v_lang or lang

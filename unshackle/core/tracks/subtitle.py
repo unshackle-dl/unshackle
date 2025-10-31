@@ -979,20 +979,33 @@ class Subtitle(Track):
                 stdout=subprocess.DEVNULL,
             )
         else:
-            sub = Subtitles(self.path)
+            if config.subtitle.get("convert_before_strip", True) and self.codec != Subtitle.Codec.SubRip:
+                self.path = self.convert(Subtitle.Codec.SubRip)
+                self.codec = Subtitle.Codec.SubRip
+
             try:
-                sub.filter(rm_fonts=True, rm_ast=True, rm_music=True, rm_effects=True, rm_names=True, rm_author=True)
-            except ValueError as e:
-                if "too many values to unpack" in str(e):
-                    # Retry without name removal if the error is due to multiple colons in time references
-                    # This can happen with lines like "at 10:00 and 2:00"
-                    sub = Subtitles(self.path)
+                sub = Subtitles(self.path)
+                try:
                     sub.filter(
-                        rm_fonts=True, rm_ast=True, rm_music=True, rm_effects=True, rm_names=False, rm_author=True
+                        rm_fonts=True, rm_ast=True, rm_music=True, rm_effects=True, rm_names=True, rm_author=True
                     )
+                except ValueError as e:
+                    if "too many values to unpack" in str(e):
+                        # Retry without name removal if the error is due to multiple colons in time references
+                        # This can happen with lines like "at 10:00 and 2:00"
+                        sub = Subtitles(self.path)
+                        sub.filter(
+                            rm_fonts=True, rm_ast=True, rm_music=True, rm_effects=True, rm_names=False, rm_author=True
+                        )
+                    else:
+                        raise
+                sub.save()
+            except (IOError, OSError) as e:
+                if "is not valid subtitle file" in str(e):
+                    self.log.warning(f"Failed to strip SDH from {self.path.name}: {e}")
+                    self.log.warning("Continuing without SDH stripping for this subtitle")
                 else:
                     raise
-            sub.save()
 
     def reverse_rtl(self) -> None:
         """

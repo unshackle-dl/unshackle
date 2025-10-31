@@ -1,3 +1,10 @@
+# API key for The Movie Database (TMDB)
+tmdb_api_key: ""
+
+# Client ID for SIMKL API (optional, improves metadata matching)
+# Get your free client ID at: https://simkl.com/settings/developer/
+simkl_client_id: ""
+
 # Group or Username to postfix to the end of all download filenames following a dash
 tag: user_tag
 
@@ -333,22 +340,26 @@ filenames:
   chapters: "Chapters_{title}_{random}.txt"
   subtitle: "Subtitle_{id}_{language}.srt"
 
-# API key for The Movie Database (TMDB)
-tmdb_api_key: ""
-
-# Client ID for SIMKL API (optional, improves metadata matching)
-# Get your free client ID at: https://simkl.com/settings/developer/
-simkl_client_id: ""
-
 # conversion_method:
-# - auto (default): Smart routing - subby for WebVTT/SAMI, standard for others
+# - auto (default): Smart routing - subby for WebVTT/SAMI, pycaption for others
 # - subby: Always use subby with advanced processing
 # - pycaption: Use only pycaption library (no SubtitleEdit, no subby)
 # - subtitleedit: Prefer SubtitleEdit when available, fall back to pycaption
 # - pysubs2: Use pysubs2 library (supports SRT/SSA/ASS/WebVTT/TTML/SAMI/MicroDVD/MPL2/TMP)
 subtitle:
   conversion_method: auto
+  # sdh_method: Method to use for SDH (hearing impaired) stripping
+  # - auto (default): Try subby (SRT only), then SubtitleEdit (if available), then subtitle-filter
+  # - subby: Use subby library (SRT only)
+  # - subtitleedit: Use SubtitleEdit tool (Windows only, falls back to subtitle-filter)
+  # - filter-subs: Use subtitle-filter library directly
   sdh_method: auto
+  # strip_sdh: Automatically create stripped (non-SDH) versions of SDH subtitles
+  # Set to false to disable automatic SDH stripping entirely (default: true)
+  strip_sdh: true
+  # convert_before_strip: Auto-convert VTT/other formats to SRT before using subtitle-filter
+  # This ensures compatibility when subtitle-filter is used as fallback (default: true)
+  convert_before_strip: true
 
 # Configuration for pywidevine's serve functionality
 serve:
