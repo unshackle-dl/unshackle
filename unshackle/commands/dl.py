@@ -51,6 +51,7 @@ from unshackle.core.events import events
 from unshackle.core.proxies import Basic, Hola, NordVPN, SurfsharkVPN, WindscribeVPN
 from unshackle.core.service import Service
 from unshackle.core.services import Services
+from unshackle.core.title_cacher import get_account_hash
 from unshackle.core.titles import Movie, Movies, Series, Song, Title_T
 from unshackle.core.titles.episode import Episode
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
@@ -690,16 +691,49 @@ class dl:
                     level="INFO", operation="get_titles", service=self.service, context={"titles": titles_info}
                 )
 
-        if self.tmdb_year and self.tmdb_id:
+        title_cacher = service.title_cache if hasattr(service, "title_cache") else None
+        cache_title_id = None
+        if hasattr(service, "title"):
+            cache_title_id = service.title
+        elif hasattr(service, "title_id"):
+            cache_title_id = service.title_id
+        cache_region = service.current_region if hasattr(service, "current_region") else None
+        cache_account_hash = get_account_hash(service.credential) if hasattr(service, "credential") else None
+
+        if (self.tmdb_year or self.tmdb_name) and self.tmdb_id:
             sample_title = titles[0] if hasattr(titles, "__getitem__") else titles
             kind = "tv" if isinstance(sample_title, Episode) else "movie"
-            tmdb_year_val = tags.get_year(self.tmdb_id, kind)
-            if tmdb_year_val:
-                if isinstance(titles, (Series, Movies)):
-                    for t in titles:
+
+            tmdb_year_val = None
+            tmdb_name_val = None
+
+            if self.tmdb_year:
+                tmdb_year_val = tags.get_year(
+                    self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
+                )
+
+            if self.tmdb_name:
+                tmdb_name_val = tags.get_title(
+                    self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
+                )
+
+            if isinstance(titles, (Series, Movies)):
+                for t in titles:
+                    if tmdb_year_val:
                         t.year = tmdb_year_val
-                else:
+                    if tmdb_name_val:
+                        if isinstance(t, Episode):
+                            t.title = tmdb_name_val
+                        else:
+                            t.name = tmdb_name_val
+            else:
+                if tmdb_year_val:
                     titles.year = tmdb_year_val
+                if tmdb_name_val:
+                    if isinstance(titles, Episode):
+                        titles.title = tmdb_name_val
+                    else:
+                        titles.name = tmdb_name_val
 
         console.print(Padding(Rule(f"[rule.text]{titles.__class__.__name__}: {titles}"), (1, 2)))
 
@@ -729,9 +763,13 @@ class dl:
             if isinstance(title, Episode) and not self.tmdb_searched:
                 kind = "tv"
                 if self.tmdb_id:
-                    tmdb_title = tags.get_title(self.tmdb_id, kind)
+                    tmdb_title = tags.get_title(
+                        self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
+                    )
                 else:
-                    self.tmdb_id, tmdb_title, self.search_source = tags.search_show_info(title.title, title.year, kind)
+                    self.tmdb_id, tmdb_title, self.search_source = tags.search_show_info(
+                        title.title, title.year, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
+                    )
                     if not (self.tmdb_id and tmdb_title and tags.fuzzy_match(tmdb_title, title.title)):
                         self.tmdb_id = None
                 if list_ or list_titles:
@@ -747,7 +785,9 @@ class dl:
                 self.tmdb_searched = True
 
             if isinstance(title, Movie) and (list_ or list_titles) and not self.tmdb_id:
-                movie_id, movie_title, _ = tags.search_show_info(title.name, title.year, "movie")
+                movie_id, movie_title, _ = tags.search_show_info(
+                    title.name, title.year, "movie", title_cacher, cache_title_id, cache_region, cache_account_hash
+                )
                 if movie_id:
                     console.print(
                         Padding(
@@ -760,11 +800,7 @@ class dl:
 
             if self.tmdb_id and getattr(self, "search_source", None) != "simkl":
                 kind = "tv" if isinstance(title, Episode) else "movie"
-                tags.external_ids(self.tmdb_id, kind)
-                if self.tmdb_year:
-                    tmdb_year_val = tags.get_year(self.tmdb_id, kind)
-                    if tmdb_year_val:
-                        title.year = tmdb_year_val
+                tags.external_ids(self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash)
 
             if slow and i != 0:
                 delay = random.randint(60, 120)

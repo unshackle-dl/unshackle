@@ -66,8 +66,37 @@ def fuzzy_match(a: str, b: str, threshold: float = 0.8) -> bool:
     return ratio >= threshold
 
 
-def search_simkl(title: str, year: Optional[int], kind: str) -> Tuple[Optional[dict], Optional[str], Optional[int]]:
+def search_simkl(
+    title: str,
+    year: Optional[int],
+    kind: str,
+    title_cacher=None,
+    cache_title_id: Optional[str] = None,
+    cache_region: Optional[str] = None,
+    cache_account_hash: Optional[str] = None,
+) -> Tuple[Optional[dict], Optional[str], Optional[int]]:
     """Search Simkl API for show information by filename."""
+
+    if title_cacher and cache_title_id:
+        cached_simkl = title_cacher.get_cached_simkl(cache_title_id, cache_region, cache_account_hash)
+        if cached_simkl:
+            log.debug("Using cached Simkl data")
+            if cached_simkl.get("type") == "episode" and "show" in cached_simkl:
+                show_info = cached_simkl["show"]
+                show_title = show_info.get("title")
+                tmdb_id = show_info.get("ids", {}).get("tmdbtv")
+                if tmdb_id:
+                    tmdb_id = int(tmdb_id)
+                return cached_simkl, show_title, tmdb_id
+            elif cached_simkl.get("type") == "movie" and "movie" in cached_simkl:
+                movie_info = cached_simkl["movie"]
+                movie_title = movie_info.get("title")
+                ids = movie_info.get("ids", {})
+                tmdb_id = ids.get("tmdb") or ids.get("moviedb")
+                if tmdb_id:
+                    tmdb_id = int(tmdb_id)
+                return cached_simkl, movie_title, tmdb_id
+
     log.debug("Searching Simkl for %r (%s, %s)", title, kind, year)
 
     client_id = _simkl_client_id()
@@ -112,25 +141,35 @@ def search_simkl(title: str, year: Optional[int], kind: str) -> Tuple[Optional[d
                 log.debug("Simkl year mismatch: searched %d, got %d", year, show_year)
                 return None, None, None
 
+            if title_cacher and cache_title_id:
+                try:
+                    title_cacher.cache_simkl(cache_title_id, data, cache_region, cache_account_hash)
+                except Exception as exc:
+                    log.debug("Failed to cache Simkl data: %s", exc)
+
             tmdb_id = show_info.get("ids", {}).get("tmdbtv")
             if tmdb_id:
                 tmdb_id = int(tmdb_id)
             log.debug("Simkl -> %s (TMDB ID %s)", show_title, tmdb_id)
             return data, show_title, tmdb_id
 
-        # Handle movie responses
         elif data.get("type") == "movie" and "movie" in data:
             movie_info = data["movie"]
             movie_title = movie_info.get("title")
             movie_year = movie_info.get("year")
 
-            # Verify title matches and year if provided
             if not fuzzy_match(movie_title, title):
                 log.debug("Simkl title mismatch: searched %r, got %r", title, movie_title)
                 return None, None, None
             if year and movie_year and abs(year - movie_year) > 1:  # Allow 1 year difference
                 log.debug("Simkl year mismatch: searched %d, got %d", year, movie_year)
                 return None, None, None
+
+            if title_cacher and cache_title_id:
+                try:
+                    title_cacher.cache_simkl(cache_title_id, data, cache_region, cache_account_hash)
+                except Exception as exc:
+                    log.debug("Failed to cache Simkl data: %s", exc)
 
             ids = movie_info.get("ids", {})
             tmdb_id = ids.get("tmdb") or ids.get("moviedb")
@@ -145,18 +184,85 @@ def search_simkl(title: str, year: Optional[int], kind: str) -> Tuple[Optional[d
     return None, None, None
 
 
-def search_show_info(title: str, year: Optional[int], kind: str) -> Tuple[Optional[int], Optional[str], Optional[str]]:
+def search_show_info(
+    title: str,
+    year: Optional[int],
+    kind: str,
+    title_cacher=None,
+    cache_title_id: Optional[str] = None,
+    cache_region: Optional[str] = None,
+    cache_account_hash: Optional[str] = None,
+) -> Tuple[Optional[int], Optional[str], Optional[str]]:
     """Search for show information, trying Simkl first, then TMDB fallback. Returns (tmdb_id, title, source)."""
-    simkl_data, simkl_title, simkl_tmdb_id = search_simkl(title, year, kind)
+    simkl_data, simkl_title, simkl_tmdb_id = search_simkl(
+        title, year, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
+    )
 
     if simkl_data and simkl_title and fuzzy_match(simkl_title, title):
         return simkl_tmdb_id, simkl_title, "simkl"
 
-    tmdb_id, tmdb_title = search_tmdb(title, year, kind)
+    tmdb_id, tmdb_title = search_tmdb(title, year, kind, title_cacher, cache_title_id, cache_region, cache_account_hash)
     return tmdb_id, tmdb_title, "tmdb"
 
 
-def search_tmdb(title: str, year: Optional[int], kind: str) -> Tuple[Optional[int], Optional[str]]:
+def _fetch_tmdb_detail(tmdb_id: int, kind: str) -> Optional[dict]:
+    """Fetch full TMDB detail response for caching."""
+    api_key = _api_key()
+    if not api_key:
+        return None
+
+    try:
+        session = _get_session()
+        r = session.get(
+            f"https://api.themoviedb.org/3/{kind}/{tmdb_id}",
+            params={"api_key": api_key},
+            timeout=30,
+        )
+        r.raise_for_status()
+        return r.json()
+    except requests.RequestException as exc:
+        log.debug("Failed to fetch TMDB detail: %s", exc)
+        return None
+
+
+def _fetch_tmdb_external_ids(tmdb_id: int, kind: str) -> Optional[dict]:
+    """Fetch full TMDB external_ids response for caching."""
+    api_key = _api_key()
+    if not api_key:
+        return None
+
+    try:
+        session = _get_session()
+        r = session.get(
+            f"https://api.themoviedb.org/3/{kind}/{tmdb_id}/external_ids",
+            params={"api_key": api_key},
+            timeout=30,
+        )
+        r.raise_for_status()
+        return r.json()
+    except requests.RequestException as exc:
+        log.debug("Failed to fetch TMDB external IDs: %s", exc)
+        return None
+
+
+def search_tmdb(
+    title: str,
+    year: Optional[int],
+    kind: str,
+    title_cacher=None,
+    cache_title_id: Optional[str] = None,
+    cache_region: Optional[str] = None,
+    cache_account_hash: Optional[str] = None,
+) -> Tuple[Optional[int], Optional[str]]:
+    if title_cacher and cache_title_id:
+        cached_tmdb = title_cacher.get_cached_tmdb(cache_title_id, kind, cache_region, cache_account_hash)
+        if cached_tmdb and cached_tmdb.get("detail"):
+            detail = cached_tmdb["detail"]
+            tmdb_id = detail.get("id")
+            tmdb_title = detail.get("title") or detail.get("name")
+            log.debug("Using cached TMDB data: %r (ID %s)", tmdb_title, tmdb_id)
+            return tmdb_id, tmdb_title
+
     api_key = _api_key()
     if not api_key:
         return None, None
@@ -215,14 +321,40 @@ def search_tmdb(title: str, year: Optional[int], kind: str) -> Tuple[Optional[in
     )
 
     if best_id is not None:
+        if title_cacher and cache_title_id:
+            try:
+                detail_response = _fetch_tmdb_detail(best_id, kind)
+                external_ids_response = _fetch_tmdb_external_ids(best_id, kind)
+                if detail_response and external_ids_response:
+                    title_cacher.cache_tmdb(
+                        cache_title_id, detail_response, external_ids_response, kind, cache_region, cache_account_hash
+                    )
+            except Exception as exc:
+                log.debug("Failed to cache TMDB data: %s", exc)
+
         return best_id, best_title
 
     first = results[0]
     return first.get("id"), first.get("title") or first.get("name")
 
 
-def get_title(tmdb_id: int, kind: str) -> Optional[str]:
+def get_title(
+    tmdb_id: int,
+    kind: str,
+    title_cacher=None,
+    cache_title_id: Optional[str] = None,
+    cache_region: Optional[str] = None,
+    cache_account_hash: Optional[str] = None,
+) -> Optional[str]:
     """Fetch the name/title of a TMDB entry by ID."""
+
+    if title_cacher and cache_title_id:
+        cached_tmdb = title_cacher.get_cached_tmdb(cache_title_id, kind, cache_region, cache_account_hash)
+        if cached_tmdb and cached_tmdb.get("detail"):
+            detail = cached_tmdb["detail"]
+            tmdb_title = detail.get("title") or detail.get("name")
+            log.debug("Using cached TMDB title: %r", tmdb_title)
+            return tmdb_title
 
     api_key = _api_key()
     if not api_key:
@@ -236,16 +368,43 @@ def get_title(tmdb_id: int, kind: str) -> Optional[str]:
             timeout=30,
         )
         r.raise_for_status()
+        js = r.json()
+
+        if title_cacher and cache_title_id:
+            try:
+                external_ids_response = _fetch_tmdb_external_ids(tmdb_id, kind)
+                if external_ids_response:
+                    title_cacher.cache_tmdb(
+                        cache_title_id, js, external_ids_response, kind, cache_region, cache_account_hash
+                    )
+            except Exception as exc:
+                log.debug("Failed to cache TMDB data: %s", exc)
+
+        return js.get("title") or js.get("name")
     except requests.RequestException as exc:
         log.debug("Failed to fetch TMDB title: %s", exc)
         return None
 
-    js = r.json()
-    return js.get("title") or js.get("name")
 
-
-def get_year(tmdb_id: int, kind: str) -> Optional[int]:
+def get_year(
+    tmdb_id: int,
+    kind: str,
+    title_cacher=None,
+    cache_title_id: Optional[str] = None,
+    cache_region: Optional[str] = None,
+    cache_account_hash: Optional[str] = None,
+) -> Optional[int]:
     """Fetch the release year of a TMDB entry by ID."""
+
+    if title_cacher and cache_title_id:
+        cached_tmdb = title_cacher.get_cached_tmdb(cache_title_id, kind, cache_region, cache_account_hash)
+        if cached_tmdb and cached_tmdb.get("detail"):
+            detail = cached_tmdb["detail"]
+            date = detail.get("release_date") or detail.get("first_air_date")
+            if date and len(date) >= 4 and date[:4].isdigit():
+                year = int(date[:4])
+                log.debug("Using cached TMDB year: %d", year)
+                return year
 
     api_key = _api_key()
     if not api_key:
@@ -259,18 +418,41 @@ def get_year(tmdb_id: int, kind: str) -> Optional[int]:
             timeout=30,
         )
         r.raise_for_status()
+        js = r.json()
+
+        if title_cacher and cache_title_id:
+            try:
+                external_ids_response = _fetch_tmdb_external_ids(tmdb_id, kind)
+                if external_ids_response:
+                    title_cacher.cache_tmdb(
+                        cache_title_id, js, external_ids_response, kind, cache_region, cache_account_hash
+                    )
+            except Exception as exc:
+                log.debug("Failed to cache TMDB data: %s", exc)
+
+        date = js.get("release_date") or js.get("first_air_date")
+        if date and len(date) >= 4 and date[:4].isdigit():
+            return int(date[:4])
+        return None
     except requests.RequestException as exc:
         log.debug("Failed to fetch TMDB year: %s", exc)
         return None
 
-    js = r.json()
-    date = js.get("release_date") or js.get("first_air_date")
-    if date and len(date) >= 4 and date[:4].isdigit():
-        return int(date[:4])
-    return None
 
+def external_ids(
+    tmdb_id: int,
+    kind: str,
+    title_cacher=None,
+    cache_title_id: Optional[str] = None,
+    cache_region: Optional[str] = None,
+    cache_account_hash: Optional[str] = None,
+) -> dict:
+    if title_cacher and cache_title_id:
+        cached_tmdb = title_cacher.get_cached_tmdb(cache_title_id, kind, cache_region, cache_account_hash)
+        if cached_tmdb and cached_tmdb.get("external_ids"):
+            log.debug("Using cached TMDB external IDs")
+            return cached_tmdb["external_ids"]
 
-def external_ids(tmdb_id: int, kind: str) -> dict:
     api_key = _api_key()
     if not api_key:
         return {}
@@ -287,6 +469,17 @@ def external_ids(tmdb_id: int, kind: str) -> dict:
         r.raise_for_status()
         js = r.json()
         log.debug("External IDs response: %s", js)
+
+        if title_cacher and cache_title_id:
+            try:
+                detail_response = _fetch_tmdb_detail(tmdb_id, kind)
+                if detail_response:
+                    title_cacher.cache_tmdb(
+                        cache_title_id, detail_response, js, kind, cache_region, cache_account_hash
+                    )
+            except Exception as exc:
+                log.debug("Failed to cache TMDB data: %s", exc)
+
         return js
     except requests.RequestException as exc:
         log.warning("Failed to fetch external IDs for %s %s: %s", kind, tmdb_id, exc)
