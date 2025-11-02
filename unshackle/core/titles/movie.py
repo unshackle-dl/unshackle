@@ -124,20 +124,26 @@ class Movie(Title):
             if primary_video_track:
                 codec = primary_video_track.format
                 hdr_format = primary_video_track.hdr_format_commercial
+                hdr_format_full = primary_video_track.hdr_format or ""
                 trc = (
                     primary_video_track.transfer_characteristics
                     or primary_video_track.transfer_characteristics_original
+                    or ""
                 )
                 frame_rate = float(primary_video_track.frame_rate)
+
+                # Primary HDR format detection
                 if hdr_format:
-                    if (primary_video_track.hdr_format or "").startswith("Dolby Vision"):
+                    if hdr_format_full.startswith("Dolby Vision"):
                         name += " DV"
-                        if DYNAMIC_RANGE_MAP.get(hdr_format) and DYNAMIC_RANGE_MAP.get(hdr_format) != "DV":
+                        if any(indicator in hdr_format_full for indicator in ["HDR10", "SMPTE ST 2086"]):
                             name += " HDR"
                     else:
                         name += f" {DYNAMIC_RANGE_MAP.get(hdr_format)} "
-                elif trc and "HLG" in trc:
+                elif "HLG" in trc or "Hybrid Log-Gamma" in trc or "ARIB STD-B67" in trc or "arib-std-b67" in trc.lower():
                     name += " HLG"
+                elif any(indicator in trc for indicator in ["PQ", "SMPTE ST 2084", "BT.2100"]) or "smpte2084" in trc.lower() or "bt.2020-10" in trc.lower():
+                    name += " HDR"
                 if frame_rate > 30:
                     name += " HFR"
                 name += f" {VIDEO_CODEC_MAP.get(codec, codec)}"
