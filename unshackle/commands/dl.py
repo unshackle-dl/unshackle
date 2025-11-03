@@ -318,6 +318,38 @@ class dl:
         self.log = logging.getLogger("download")
 
         self.service = Services.get_tag(ctx.invoked_subcommand)
+        service_dl_config = config.services.get(self.service, {}).get("dl", {})
+        if service_dl_config:
+            param_types = {param.name: param.type for param in ctx.command.params if param.name}
+
+            for param_name, service_value in service_dl_config.items():
+                if param_name not in ctx.params:
+                    continue
+
+                current_value = ctx.params[param_name]
+                global_default = config.dl.get(param_name)
+                param_type = param_types.get(param_name)
+
+                try:
+                    if param_type and global_default is not None:
+                        global_default = param_type.convert(global_default, None, ctx)
+                except Exception as e:
+                    self.log.debug(f"Failed to convert global default for '{param_name}': {e}")
+
+                if current_value == global_default or (current_value is None and global_default is None):
+                    try:
+                        converted_value = service_value
+                        if param_type and service_value is not None:
+                            converted_value = param_type.convert(service_value, None, ctx)
+
+                        ctx.params[param_name] = converted_value
+                        self.log.debug(f"Applied service-specific '{param_name}' override: {converted_value}")
+                    except Exception as e:
+                        self.log.warning(
+                            f"Failed to apply service-specific '{param_name}' override: {e}. "
+                            f"Check that the value '{service_value}' is valid for this parameter."
+                        )
+
         self.profile = profile
         self.tmdb_id = tmdb_id
         self.tmdb_name = tmdb_name
@@ -383,31 +415,34 @@ class dl:
             config.decryption = config.decryption_map.get(self.service, config.decryption)
 
         service_config = config.services.get(self.service, {})
+        if service_config:
+            reserved_keys = {
+                "profiles",
+                "api_key",
+                "certificate",
+                "api_endpoint",
+                "region",
+                "device",
+                "endpoints",
+                "client",
+                "dl",
+            }
 
-        reserved_keys = {
-            "profiles",
-            "api_key",
-            "certificate",
-            "api_endpoint",
-            "region",
-            "device",
-            "endpoints",
-            "client",
-        }
+            for config_key, override_value in service_config.items():
+                if config_key in reserved_keys or not isinstance(override_value, dict):
+                    continue
 
-        for config_key, override_value in service_config.items():
-            if config_key in reserved_keys:
-                continue
+                if hasattr(config, config_key):
+                    current_config = getattr(config, config_key, {})
 
-            if isinstance(override_value, dict) and hasattr(config, config_key):
-                current_config = getattr(config, config_key, {})
-                if isinstance(current_config, dict):
-                    merged_config = {**current_config, **override_value}
-                    setattr(config, config_key, merged_config)
+                    if isinstance(current_config, dict):
+                        merged_config = deepcopy(current_config)
+                        merge_dict(override_value, merged_config)
+                        setattr(config, config_key, merged_config)
 
-                    self.log.debug(
-                        f"Applied service-specific '{config_key}' overrides for {self.service}: {override_value}"
-                    )
+                        self.log.debug(
+                            f"Applied service-specific '{config_key}' overrides for {self.service}: {override_value}"
+                        )
 
         with console.status("Loading Key Vaults...", spinner="dots"):
             self.vaults = Vaults(self.service)

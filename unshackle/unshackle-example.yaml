@@ -450,12 +450,24 @@ services:
         region: "GB"
         api_endpoint: "https://api.uk.service.com"
 
+  # Example: Rate-limited service
+  RATE_LIMITED_SERVICE:
+    dl:
+      downloads: 2 # Limit concurrent downloads
+      workers: 4 # Reduce workers to avoid rate limits
+    n_m3u8dl_re:
+      thread_count: 4 # Very low thread count
+      retry_count: 20 # More retries for flaky service
+    aria2c:
+      max_concurrent_downloads: 1 # Download tracks one at a time
+      max_connection_per_server: 1 # Single connection only
+
   # Notes on service-specific overrides:
   # - Overrides are merged with global config, not replaced
   # - Only specified keys are overridden, others use global defaults
   # - Reserved keys (profiles, api_key, certificate, etc.) are NOT treated as overrides
-  # - Any dict-type config option can be overridden (dl, aria2c, n_m3u8dl_re, etc.)
-  # - Use --debug flag to see which overrides are applied during downloads
+  # - Any dict-type config option can be overridden (dl, aria2c, n_m3u8dl_re, subtitle, etc.)
+  # - CLI arguments always take priority over service-specific config
 
 # External proxy provider services
 proxy_providers:
