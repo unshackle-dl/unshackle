@@ -21,6 +21,20 @@ warnings.filterwarnings(
     "ignore", message="Make sure you are using https over https proxy.*", category=RuntimeWarning, module="curl_cffi.*"
 )
 
+FINGERPRINT_PRESETS = {
+    "okhttp4": {
+        "ja3": (
+            "771,"  # TLS 1.2
+            "4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"  # Ciphers
+            "0-23-65281-10-11-35-16-5-13-18-51-45-43-27-21,"  # Extensions
+            "29-23-24,"  # Named groups (x25519, secp256r1, secp384r1)
+            "0"  # EC point formats
+        ),
+        "akamai": "1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p",
+        "description": "OkHttp 4.x on Android (BoringSSL TLS stack)",
+    },
+}
+
 
 class MaxRetriesError(exceptions.RequestException):
     def __init__(self, message, cause=None):
@@ -107,18 +121,34 @@ class CurlSession(Session):
         raise MaxRetriesError(f"Max retries exceeded for {method} {url}", cause=last_exception)
 
 
-def session(browser: str | None = None, **kwargs) -> CurlSession:
+def session(
+    browser: str | None = None,
+    ja3: str | None = None,
+    akamai: str | None = None,
+    extra_fp: dict | None = None,
+    **kwargs,
+) -> CurlSession:
     """
-    Create a curl_cffi session that impersonates a browser.
+    Create a curl_cffi session that impersonates a browser or custom TLS/HTTP fingerprint.
 
     This is a full replacement for requests.Session with browser impersonation
     and anti-bot capabilities. The session uses curl-impersonate under the hood
     to mimic real browser behavior.
 
     Args:
-        browser: Browser to impersonate (e.g. "chrome124", "firefox", "safari").
+        browser: Browser to impersonate (e.g. "chrome124", "firefox", "safari") OR
+                 fingerprint preset name (e.g. "okhttp4").
                  Uses the configured default from curl_impersonate.browser if not specified.
-                 See https://github.com/lexiforest/curl_cffi#sessions for available options.
+                 Available presets: okhttp4
+                 See https://github.com/lexiforest/curl_cffi#sessions for browser options.
+        ja3: Custom JA3 TLS fingerprint string (format: "SSLVersion,Ciphers,Extensions,Curves,PointFormats").
+             When provided, curl_cffi will use this exact TLS fingerprint instead of the browser's default.
+             See https://curl-cffi.readthedocs.io/en/latest/impersonate/customize.html
+        akamai: Custom Akamai HTTP/2 fingerprint string (format: "SETTINGS|WINDOW_UPDATE|PRIORITY|PSEUDO_HEADERS").
+                When provided, curl_cffi will use this exact HTTP/2 fingerprint instead of the browser's default.
+                See https://curl-cffi.readthedocs.io/en/latest/impersonate/customize.html
+        extra_fp: Additional fingerprint parameters dict for advanced customization.
+                  See https://curl-cffi.readthedocs.io/en/latest/impersonate/customize.html
         **kwargs: Additional arguments passed to CurlSession constructor:
                   - headers: Additional headers (dict)
                   - cookies: Cookie jar or dict
@@ -129,8 +159,6 @@ def session(browser: str | None = None, **kwargs) -> CurlSession:
                   - allow_redirects: Follow redirects (bool, default True)
                   - max_redirects: Maximum redirect count (int)
                   - cert: Client certificate (str or tuple)
-                  - ja3: JA3 fingerprint (str)
-                  - akamai: Akamai fingerprint (str)
 
                   Extra arguments for retry handler:
                   - max_retries: Maximum number of retries (int, default 10)
@@ -141,30 +169,70 @@ def session(browser: str | None = None, **kwargs) -> CurlSession:
                   - catch_exceptions: List of exceptions to catch (tuple, default (exceptions.ConnectionError, exceptions.ProxyError, exceptions.SSLError, exceptions.Timeout))
 
     Returns:
-        curl_cffi.requests.Session configured with browser impersonation, common headers,
-        and equivalent retry behavior to requests.Session.
+        curl_cffi.requests.Session configured with browser impersonation or custom fingerprints,
+        common headers, and equivalent retry behavior to requests.Session.
 
-    Example:
-        from unshackle.core.session import session as CurlSession
+    Examples:
+        # Standard browser impersonation
+        from unshackle.core.session import session
 
         class MyService(Service):
             @staticmethod
-            def get_session() -> CurlSession:
-                session = CurlSession(
-                    impersonate="chrome",
-                    ja3="...",
-                    akamai="...",
+            def get_session():
+                return session()  # Uses config default browser
+
+        # Use OkHttp 4.x preset for Android TV
+        class AndroidService(Service):
+            @staticmethod
+            def get_session():
+                return session("okhttp4")
+
+        # Custom fingerprint (manual)
+        class CustomService(Service):
+            @staticmethod
+            def get_session():
+                return session(
+                    ja3="771,4865-4866-4867-49195...",
+                    akamai="1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p",
+                )
+
+        # With retry configuration
+        class MyService(Service):
+            @staticmethod
+            def get_session():
+                return session(
+                    "okhttp4",
                     max_retries=5,
                     status_forcelist=[429, 500],
                     allowed_methods={"GET", "HEAD", "OPTIONS"},
                 )
-                return session  # Uses config default browser
     """
 
-    session_config = {
-        "impersonate": browser or config.curl_impersonate.get("browser", "chrome"),
-        **kwargs,
-    }
+    if browser and browser in FINGERPRINT_PRESETS:
+        preset = FINGERPRINT_PRESETS[browser]
+        if ja3 is None:
+            ja3 = preset.get("ja3")
+        if akamai is None:
+            akamai = preset.get("akamai")
+        if extra_fp is None:
+            extra_fp = preset.get("extra_fp")
+        browser = None
+
+    if browser is None and ja3 is None and akamai is None:
+        browser = config.curl_impersonate.get("browser", "chrome")
+
+    session_config = {}
+    if browser:
+        session_config["impersonate"] = browser
+
+    if ja3:
+        session_config["ja3"] = ja3
+    if akamai:
+        session_config["akamai"] = akamai
+    if extra_fp:
+        session_config["extra_fp"] = extra_fp
+
+    session_config.update(kwargs)
 
     session_obj = CurlSession(**session_config)
     session_obj.headers.update(config.headers)
