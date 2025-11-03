@@ -239,25 +239,29 @@ class Subtitle(Track):
 
             # Sanitize WebVTT timestamps before parsing
             text = Subtitle.sanitize_webvtt_timestamps(text)
+            preserve_formatting = config.subtitle.get("preserve_formatting", True)
 
-            try:
-                caption_set = pycaption.WebVTTReader().read(text)
-                Subtitle.merge_same_cues(caption_set)
-                Subtitle.filter_unwanted_cues(caption_set)
-                subtitle_text = pycaption.WebVTTWriter().write(caption_set)
-                self.path.write_text(subtitle_text, encoding="utf8")
-            except pycaption.exceptions.CaptionReadSyntaxError:
-                # If first attempt fails, try more aggressive sanitization
-                text = Subtitle.sanitize_webvtt(text)
+            if preserve_formatting:
+                self.path.write_text(text, encoding="utf8")
+            else:
                 try:
                     caption_set = pycaption.WebVTTReader().read(text)
                     Subtitle.merge_same_cues(caption_set)
                     Subtitle.filter_unwanted_cues(caption_set)
                     subtitle_text = pycaption.WebVTTWriter().write(caption_set)
                     self.path.write_text(subtitle_text, encoding="utf8")
-                except Exception:
-                    # Keep the sanitized version even if parsing failed
-                    self.path.write_text(text, encoding="utf8")
+                except pycaption.exceptions.CaptionReadSyntaxError:
+                    # If first attempt fails, try more aggressive sanitization
+                    text = Subtitle.sanitize_webvtt(text)
+                    try:
+                        caption_set = pycaption.WebVTTReader().read(text)
+                        Subtitle.merge_same_cues(caption_set)
+                        Subtitle.filter_unwanted_cues(caption_set)
+                        subtitle_text = pycaption.WebVTTWriter().write(caption_set)
+                        self.path.write_text(subtitle_text, encoding="utf8")
+                    except Exception:
+                        # Keep the sanitized version even if parsing failed
+                        self.path.write_text(text, encoding="utf8")
 
     @staticmethod
     def sanitize_webvtt_timestamps(text: str) -> str:

@@ -360,6 +360,10 @@ subtitle:
   # convert_before_strip: Auto-convert VTT/other formats to SRT before using subtitle-filter
   # This ensures compatibility when subtitle-filter is used as fallback (default: true)
   convert_before_strip: true
+  # preserve_formatting: Preserve original subtitle formatting (tags, positioning, styling)
+  # When true, skips pycaption processing for WebVTT files to keep tags like <i>, <b>, positioning intact
+  # Combined with no sub_format setting, ensures subtitles remain in their original format (default: true)
+  preserve_formatting: true
 
 # Configuration for pywidevine's serve functionality
 serve:
