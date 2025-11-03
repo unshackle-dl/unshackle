@@ -25,13 +25,24 @@ FINGERPRINT_PRESETS = {
     "okhttp4": {
         "ja3": (
             "771,"  # TLS 1.2
-            "4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"  # Ciphers
-            "0-23-65281-10-11-35-16-5-13-18-51-45-43-27-21,"  # Extensions
+            "4865-4866-4867-49195-49196-52393-49199-49200-52392-49171-49172-156-157-47-53,"  # Ciphers
+            "0-23-65281-10-11-35-16-5-13-51-45-43-21,"  # Extensions
             "29-23-24,"  # Named groups (x25519, secp256r1, secp384r1)
             "0"  # EC point formats
         ),
-        "akamai": "1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p",
-        "description": "OkHttp 4.x on Android (BoringSSL TLS stack)",
+        "akamai": "4:16777216|16711681|0|m,p,a,s",
+        "description": "OkHttp 3.x/4.x (BoringSSL TLS stack)",
+    },
+    "okhttp5": {
+        "ja3": (
+            "771,"  # TLS 1.2
+            "4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"  # Ciphers
+            "0-23-65281-10-11-35-16-5-13-51-45-43-21,"  # Extensions
+            "29-23-24,"  # Named groups (x25519, secp256r1, secp384r1)
+            "0"  # EC point formats
+        ),
+        "akamai": "4:16777216|16711681|0|m,p,a,s",
+        "description": "OkHttp 5.x (BoringSSL TLS stack)",
     },
 }
 
