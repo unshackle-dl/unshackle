@@ -57,8 +57,8 @@ from unshackle.core.titles.episode import Episode
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.hybrid import Hybrid
-from unshackle.core.utilities import (get_debug_logger, get_system_fonts, init_debug_logger, is_close_match,
-                                      time_elapsed_since)
+from unshackle.core.utilities import (find_font_with_fallbacks, get_debug_logger, get_system_fonts, init_debug_logger,
+                                      is_close_match, suggest_font_packages, time_elapsed_since)
 from unshackle.core.utils import tags
 from unshackle.core.utils.click_types import (LANGUAGE_RANGE, QUALITY_LIST, SEASON_RANGE, ContextData, MultipleChoice,
                                               SubtitleCodecChoice, VideoCodecChoice)
@@ -69,7 +69,7 @@ from unshackle.core.vaults import Vaults
 
 class dl:
     @staticmethod
-    def _truncate_pssh_for_display(pssh_string: str, drm_type: str) -> str:
+    def truncate_pssh_for_display(pssh_string: str, drm_type: str) -> str:
         """Truncate PSSH string for display when not in debug mode."""
         if logging.root.level == logging.DEBUG or not pssh_string:
             return pssh_string
@@ -79,6 +79,115 @@ class dl:
             return pssh_string
 
         return pssh_string[: max_width - 3] + "..."
+
+    def find_custom_font(self, font_name: str) -> Optional[Path]:
+        """
+        Find font in custom fonts directory.
+
+        Args:
+            font_name: Font family name to find
+
+        Returns:
+            Path to font file, or None if not found
+        """
+        family_dir = Path(config.directories.fonts, font_name)
+        if family_dir.exists():
+            fonts = list(family_dir.glob("*.*tf"))
+            return fonts[0] if fonts else None
+        return None
+
+    def prepare_temp_font(
+        self,
+        font_name: str,
+        matched_font: Path,
+        system_fonts: dict[str, Path],
+        temp_font_files: list[Path]
+    ) -> Path:
+        """
+        Copy system font to temp and log if using fallback.
+
+        Args:
+            font_name: Requested font name
+            matched_font: Path to matched system font
+            system_fonts: Dictionary of available system fonts
+            temp_font_files: List to track temp files for cleanup
+
+        Returns:
+            Path to temp font file
+        """
+        # Find the matched name for logging
+        matched_name = next(
+            (name for name, path in system_fonts.items() if path == matched_font),
+            None
+        )
+
+        if matched_name and matched_name.lower() != font_name.lower():
+            self.log.info(f"Using '{matched_name}' as fallback for '{font_name}'")
+
+        # Create unique temp file path
+        safe_name = font_name.replace(" ", "_").replace("/", "_")
+        temp_path = config.directories.temp / f"font_{safe_name}{matched_font.suffix}"
+
+        # Copy if not already exists
+        if not temp_path.exists():
+            shutil.copy2(matched_font, temp_path)
+            temp_font_files.append(temp_path)
+
+        return temp_path
+
+    def _attach_subtitle_fonts(
+        self,
+        font_names: list[str],
+        title: Title_T,
+        temp_font_files: list[Path]
+    ) -> tuple[int, list[str]]:
+        """
+        Attach fonts for subtitle rendering.
+
+        Args:
+            font_names: List of font names requested by subtitles
+            title: Title object to attach fonts to
+            temp_font_files: List to track temp files for cleanup
+
+        Returns:
+            Tuple of (fonts_attached_count, missing_fonts_list)
+        """
+        system_fonts = get_system_fonts()
+        self.log.info(f"Discovered {len(system_fonts)} system font families")
+
+        font_count = 0
+        missing_fonts = []
+
+        for font_name in set(font_names):
+            # Try custom fonts first
+            if custom_font := self.find_custom_font(font_name):
+                title.tracks.add(Attachment(path=custom_font, name=f"{font_name} ({custom_font.stem})"))
+                font_count += 1
+                continue
+
+            # Try system fonts with fallback
+            if system_font := find_font_with_fallbacks(font_name, system_fonts):
+                temp_path = self.prepare_temp_font(font_name, system_font, system_fonts, temp_font_files)
+                title.tracks.add(Attachment(path=temp_path, name=f"{font_name} ({system_font.stem})"))
+                font_count += 1
+            else:
+                self.log.warning(f"Subtitle uses font '{font_name}' but it could not be found")
+                missing_fonts.append(font_name)
+
+        return font_count, missing_fonts
+
+    def _suggest_missing_fonts(self, missing_fonts: list[str]) -> None:
+        """
+        Show package installation suggestions for missing fonts.
+
+        Args:
+            missing_fonts: List of font names that couldn't be found
+        """
+        if suggestions := suggest_font_packages(missing_fonts):
+            self.log.info("Install font packages to improve subtitle rendering:")
+            for package_cmd, fonts in suggestions.items():
+                self.log.info(f"  $ sudo apt install {package_cmd}")
+                self.log.info(f"    → Provides: {', '.join(fonts)}")
 
     @click.command(
         short_help="Download, Decrypt, and Mux tracks for titles from a Service.",
@@ -794,6 +903,7 @@ class dl:
                 continue
 
             console.print(Padding(Rule(f"[rule.text]{title}"), (1, 2)))
+            temp_font_files = []
 
             if isinstance(title, Episode) and not self.tmdb_searched:
                 kind = "tv"
@@ -1435,25 +1545,15 @@ class dl:
                                 if line.startswith("Style: "):
                                     font_names.append(line.removesuffix("Style: ").split(",")[1])
 
-                    font_count = 0
-                    system_fonts = get_system_fonts()
-                    for font_name in set(font_names):
-                        family_dir = Path(config.directories.fonts, font_name)
-                        fonts_from_system = [file for name, file in system_fonts.items() if name.startswith(font_name)]
-                        if family_dir.exists():
-                            fonts = family_dir.glob("*.*tf")
-                            for font in fonts:
-                                title.tracks.add(Attachment(path=font, name=f"{font_name} ({font.stem})"))
-                                font_count += 1
-                        elif fonts_from_system:
-                            for font in fonts_from_system:
-                                title.tracks.add(Attachment(path=font, name=f"{font_name} ({font.stem})"))
-                                font_count += 1
-                        else:
-                            self.log.warning(f"Subtitle uses font [text2]{font_name}[/] but it could not be found...")
+                    font_count, missing_fonts = self._attach_subtitle_fonts(
+                        font_names, title, temp_font_files
+                    )
 
                     if font_count:
                         self.log.info(f"Attached {font_count} fonts for the Subtitles")
+
+                    if missing_fonts and sys.platform != "win32":
+                        self._suggest_missing_fonts(missing_fonts)
 
                 # Handle DRM decryption BEFORE repacking (must decrypt first!)
                 service_name = service.__class__.__name__.upper()
@@ -1608,8 +1708,17 @@ class dl:
                                 video_track.delete()
                         for track in title.tracks:
                             track.delete()
+
+                        # Clear temp font attachment paths and delete other attachments
                         for attachment in title.tracks.attachments:
-                            attachment.delete()
+                            if attachment.path and attachment.path in temp_font_files:
+                                attachment.path = None
+                            else:
+                                attachment.delete()
+
+                        # Clean up temp fonts
+                        for temp_path in temp_font_files:
+                            temp_path.unlink(missing_ok=True)
 
                 else:
                     # dont mux
@@ -1752,7 +1861,7 @@ class dl:
                 )
 
             with self.DRM_TABLE_LOCK:
-                pssh_display = self._truncate_pssh_for_display(drm.pssh.dumps(), "Widevine")
+                pssh_display = self.truncate_pssh_for_display(drm.pssh.dumps(), "Widevine")
                 cek_tree = Tree(Text.assemble(("Widevine", "cyan"), (f"({pssh_display})", "text"), overflow="fold"))
                 pre_existing_tree = next(
                     (x for x in table.columns[0].cells if isinstance(x, Tree) and x.label == cek_tree.label), None
@@ -1921,7 +2030,7 @@ class dl:
                 )
 
             with self.DRM_TABLE_LOCK:
-                pssh_display = self._truncate_pssh_for_display(drm.pssh_b64 or "", "PlayReady")
+                pssh_display = self.truncate_pssh_for_display(drm.pssh_b64 or "", "PlayReady")
                 cek_tree = Tree(
                     Text.assemble(
                         ("PlayReady", "cyan"),

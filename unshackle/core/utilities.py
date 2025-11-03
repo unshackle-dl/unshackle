@@ -21,6 +21,7 @@ from uuid import uuid4
 import chardet
 import requests
 from construct import ValidationError
+from fontTools import ttLib
 from langcodes import Language, closest_match
 from pymp4.parser import Box
 from unidecode import unidecode
@@ -28,6 +29,30 @@ from unidecode import unidecode
 from unshackle.core.cacher import Cacher
 from unshackle.core.config import config
 from unshackle.core.constants import LANGUAGE_EXACT_DISTANCE, LANGUAGE_MAX_DISTANCE
+
+"""
+Utility functions for the unshackle media archival tool.
+
+This module provides various utility functions including:
+- Font discovery and fallback system for subtitle rendering
+- Cross-platform system font scanning with Windows → Linux font family mapping
+- Log file management and rotation
+- IP geolocation with caching and provider rotation
+- Language matching utilities
+- MP4/ISOBMFF box parsing
+- File sanitization and path handling
+- Structured JSON debug logging
+
+Font System:
+    The font subsystem enables cross-platform font discovery for ASS/SSA subtitles.
+    On Linux, it scans standard font directories and maps Windows font names (Arial,
+    Times New Roman) to their Linux equivalents (Liberation Sans, Liberation Serif).
+
+Main Font Functions:
+    - get_system_fonts(): Discover installed fonts across platforms
+    - find_font_with_fallbacks(): Match fonts with intelligent fallback strategies
+    - suggest_font_packages(): Recommend packages to install for missing fonts
+"""
 
 
 def rotate_log_file(log_path: Path, keep: int = 20) -> Path:
@@ -428,21 +453,254 @@ def get_extension(value: Union[str, Path, ParseResult]) -> Optional[str]:
             return ext
 
 
-def get_system_fonts() -> dict[str, Path]:
-    if sys.platform == "win32":
-        import winreg
+def extract_font_family(font_path: Path) -> Optional[str]:
+    """
+    Extract font family name from TTF/OTF file using fontTools.
 
-        with winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE) as reg:
-            key = winreg.OpenKey(reg, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts", 0, winreg.KEY_READ)
-            total_fonts = winreg.QueryInfoKey(key)[1]
-            return {
-                name.replace(" (TrueType)", ""): Path(r"C:\Windows\Fonts", filename)
-                for n in range(0, total_fonts)
-                for name, filename, _ in [winreg.EnumValue(key, n)]
-            }
-    else:
-        # TODO: Get System Fonts for Linux and mac OS
-        return {}
+    Args:
+        font_path: Path to the font file
+
+    Returns:
+        Font family name if successfully extracted, None otherwise
+    """
+    try:
+        font = ttLib.TTFont(font_path)
+        name_table = font["name"]
+
+        # Try to get family name (nameID 1) for Windows platform (platformID 3)
+        # This matches the naming convention used in Windows registry
+        for record in name_table.names:
+            if record.nameID == 1 and record.platformID == 3:
+                return record.toUnicode()
+
+        # Fallback to other platforms if Windows name not found
+        for record in name_table.names:
+            if record.nameID == 1:
+                return record.toUnicode()
+
+    except Exception:
+        # Silently ignore font parsing errors (corrupted fonts, etc.)
+        pass
+
+    return None
+
+
+def _get_windows_fonts() -> dict[str, Path]:
+    """
+    Get fonts from Windows registry.
+
+    Returns:
+        Dictionary mapping font family names to their file paths
+    """
+    import winreg
+
+    with winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE) as reg:
+        key = winreg.OpenKey(reg, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts", 0, winreg.KEY_READ)
+        total_fonts = winreg.QueryInfoKey(key)[1]
+        return {
+            name.replace(" (TrueType)", ""): Path(r"C:\Windows\Fonts", filename)
+            for n in range(0, total_fonts)
+            for name, filename, _ in [winreg.EnumValue(key, n)]
+        }
+
+
+def _scan_font_directory(font_dir: Path, fonts: dict[str, Path], log: logging.Logger) -> None:
+    """
+    Scan a single directory for fonts.
+
+    Args:
+        font_dir: Directory to scan
+        fonts: Dictionary to populate with found fonts
+        log: Logger instance for error reporting
+    """
+    font_files = list(font_dir.rglob("*.ttf")) + list(font_dir.rglob("*.otf"))
+
+    for font_file in font_files:
+        try:
+            if family_name := extract_font_family(font_file):
+                if family_name not in fonts:
+                    fonts[family_name] = font_file
+        except Exception as e:
+            log.debug(f"Failed to process {font_file}: {e}")
+
+
+def _get_unix_fonts() -> dict[str, Path]:
+    """
+    Get fonts from Linux/macOS standard directories.
+
+    Returns:
+        Dictionary mapping font family names to their file paths
+    """
+    log = logging.getLogger("get_system_fonts")
+    fonts = {}
+
+    font_dirs = [
+        Path("/usr/share/fonts"),
+        Path("/usr/local/share/fonts"),
+        Path.home() / ".fonts",
+        Path.home() / ".local/share/fonts",
+    ]
+
+    for font_dir in font_dirs:
+        if not font_dir.exists():
+            continue
+
+        try:
+            _scan_font_directory(font_dir, fonts, log)
+        except Exception as e:
+            log.warning(f"Failed to scan {font_dir}: {e}")
+
+    log.debug(f"Discovered {len(fonts)} system font families")
+    return fonts
+
+
+def get_system_fonts() -> dict[str, Path]:
+    """
+    Get system fonts as a mapping of font family names to font file paths.
+
+    On Windows: Uses registry to get font display names
+    On Linux/macOS: Scans standard font directories and extracts family names using fontTools
+
+    Returns:
+        Dictionary mapping font family names to their file paths
+    """
+    if sys.platform == "win32":
+        return _get_windows_fonts()
+    return _get_unix_fonts()
+
+
+# Common Windows font names mapped to their Linux equivalents
+# Ordered by preference (first match is used)
+FONT_ALIASES = {
+    "Arial": ["Liberation Sans", "DejaVu Sans", "Nimbus Sans", "FreeSans"],
+    "Arial Black": ["Liberation Sans", "DejaVu Sans", "Nimbus Sans"],
+    "Arial Bold": ["Liberation Sans", "DejaVu Sans"],
+    "Arial Unicode MS": ["DejaVu Sans", "Noto Sans", "FreeSans"],
+    "Times New Roman": ["Liberation Serif", "DejaVu Serif", "Nimbus Roman", "FreeSerif"],
+    "Courier New": ["Liberation Mono", "DejaVu Sans Mono", "Nimbus Mono PS", "FreeMono"],
+    "Comic Sans MS": ["Comic Neue", "Comic Relief", "DejaVu Sans"],
+    "Georgia": ["Gelasio", "DejaVu Serif", "Liberation Serif"],
+    "Impact": ["Impact", "Anton", "Liberation Sans"],
+    "Trebuchet MS": ["Ubuntu", "DejaVu Sans", "Liberation Sans"],
+    "Verdana": ["DejaVu Sans", "Bitstream Vera Sans", "Liberation Sans"],
+    "Tahoma": ["DejaVu Sans", "Liberation Sans"],
+    "Adobe Arabic": ["Noto Sans Arabic", "DejaVu Sans"],
+    "Noto Sans Thai": ["Noto Sans Thai", "Noto Sans"],
+}
+
+
+def find_case_insensitive(font_name: str, fonts: dict[str, Path]) -> Optional[Path]:
+    """
+    Find font by case-insensitive name match.
+
+    Args:
+        font_name: Font family name to find
+        fonts: Dictionary of available fonts
+
+    Returns:
+        Path to matched font, or None if not found
+    """
+    font_lower = font_name.lower()
+    for name, path in fonts.items():
+        if name.lower() == font_lower:
+            return path
+    return None
+
+
+def find_font_with_fallbacks(font_name: str, system_fonts: dict[str, Path]) -> Optional[Path]:
+    """
+    Find a font by name with intelligent fallback matching.
+
+    Tries multiple strategies in order:
+    1. Exact match (case-sensitive)
+    2. Case-insensitive match
+    3. Alias lookup (Windows → Linux font equivalents)
+    4. Partial/prefix match
+
+    Args:
+        font_name: The requested font family name (e.g., "Arial", "Times New Roman")
+        system_fonts: Dictionary of available fonts (family name → path)
+
+    Returns:
+        Path to the matched font file, or None if no match found
+    """
+    if not system_fonts:
+        return None
+
+    # Strategy 1: Exact match (case-sensitive)
+    if font_name in system_fonts:
+        return system_fonts[font_name]
+
+    # Strategy 2: Case-insensitive match
+    if result := find_case_insensitive(font_name, system_fonts):
+        return result
+
+    # Strategy 3: Alias lookup
+    if font_name in FONT_ALIASES:
+        for alias in FONT_ALIASES[font_name]:
+            # Try exact match for alias
+            if alias in system_fonts:
+                return system_fonts[alias]
+            # Try case-insensitive match for alias
+            if result := find_case_insensitive(alias, system_fonts):
+                return result
+
+    # Strategy 4: Partial/prefix match as last resort
+    font_name_lower = font_name.lower()
+    for name, path in system_fonts.items():
+        if name.lower().startswith(font_name_lower):
+            return path
+
+    return None
+
+
+# Mapping of font families to system packages that provide them
+FONT_PACKAGES = {
+    "liberation": {
+        "debian": "fonts-liberation fonts-liberation2",
+        "fonts": ["Liberation Sans", "Liberation Serif", "Liberation Mono"],
+    },
+    "dejavu": {
+        "debian": "fonts-dejavu fonts-dejavu-core fonts-dejavu-extra",
+        "fonts": ["DejaVu Sans", "DejaVu Serif", "DejaVu Sans Mono"],
+    },
+    "noto": {
+        "debian": "fonts-noto fonts-noto-core",
+        "fonts": ["Noto Sans", "Noto Serif", "Noto Sans Mono", "Noto Sans Arabic", "Noto Sans Thai"],
+    },
+    "ubuntu": {
+        "debian": "fonts-ubuntu",
+        "fonts": ["Ubuntu", "Ubuntu Mono"],
+    },
+}
+
+
+def suggest_font_packages(missing_fonts: list[str]) -> dict[str, list[str]]:
+    """
+    Suggest system packages to install for missing fonts.
+
+    Args:
+        missing_fonts: List of font family names that couldn't be found
+
+    Returns:
+        Dictionary mapping package names to lists of fonts they would provide
+    """
+    suggestions = {}
+
+    # Check which fonts from aliases would help
+    needed_aliases = set()
+    for font in missing_fonts:
+        if font in FONT_ALIASES:
+            needed_aliases.update(FONT_ALIASES[font])
+
+    # Map needed aliases to packages
+    for package_name, package_info in FONT_PACKAGES.items():
+        provided_fonts = package_info["fonts"]
+        matching_fonts = [f for f in provided_fonts if f in needed_aliases]
+        if matching_fonts:
+            suggestions[package_info["debian"]] = matching_fonts
+
+    return suggestions
 
 
 class FPS(ast.NodeVisitor):
