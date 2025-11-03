@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - 2025-10-25
+## [2.0.0] - Unreleased
 
 ### Breaking Changes
 
@@ -57,6 +57,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Simkl API Configuration**: New API key support
   - Added `simkl_client_id` configuration option
   - Simkl now requires client_id from https://simkl.com/settings/developer/
+- **Custom Session Fingerprints**: Enhanced browser impersonation capabilities
+  - Added custom fingerprint and preset support for better service compatibility
+  - Configurable fingerprint presets for different device types
+  - Improved success rate with services using advanced bot detection
+- **TMDB and Simkl Metadata Caching**: Enhanced title cache system
+  - Added metadata caching to title cache to reduce API calls
+  - Caches movie/show metadata alongside title information
+  - Improves performance for repeated title lookups and reduces API rate limiting
+- **API Enhancements**: Improved REST API functionality
+  - Added default parameter handling for better request processing
+  - Added URL field to services endpoint response for easier service identification
+  - Complete API enhancements for production readiness
+  - Improved error responses with better detail and debugging information
 
 ### Changed
 
@@ -96,6 +109,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **HLS Manifest Processing**: Minor HLS parser fix (by @TPD94, PR #19)
 - **lxml and pyplayready**: Updated dependencies (by @Sp5rky)
   - Updated lxml constraint and pyplayready import path for compatibility
+- **DASH Segment Calculation**: Corrected segment handling
+  - Fixed segment count calculation for DASH manifests with startNumber=0
+  - Ensures accurate segment processing for all DASH manifest configurations
+  - Prevents off-by-one errors in segment downloads
+- **HDR Detection and Naming**: Comprehensive HDR format support
+  - Improved HDR detection with comprehensive transfer characteristics checks
+  - Added hybrid DV+HDR10 support for accurate file naming
+  - Better identification of HDR formats across different streaming services
+  - More accurate HDR/DV detection in filename generation
+- **Subtitle Processing**: VTT subtitle handling improvements
+  - Resolved SDH (Subtitles for Deaf and Hard of hearing) stripping crash when processing VTT files
+  - More robust subtitle processing pipeline with better error handling
+  - Fixes crashes when filtering specific VTT subtitle formats
+- **DRM Processing**: Enhanced encoding handling
+  - Added explicit UTF-8 encoding to mp4decrypt subprocess calls
+  - Prevents encoding issues on systems with non-UTF-8 default encodings
+  - Improves cross-platform compatibility for Windows and some Linux configurations
+- **Session Fingerprints**: Updated OkHttp presets
+  - Updated OkHttp fingerprint presets for better Android TV compatibility
+  - Improved success rate with services using fingerprint-based detection
+
+### Documentation
+
+- **GitHub Issue Templates**: Enhanced issue reporting
+  - Improved bug report template with better structure and required fields
+  - Enhanced feature request template for clearer specifications
+  - Added helpful guidance for contributors to provide complete information
 
 ### Refactored
 
