@@ -553,53 +553,66 @@ class dl:
                             f"Applied service-specific '{config_key}' overrides for {self.service}: {override_value}"
                         )
 
-        with console.status("Loading Key Vaults...", spinner="dots"):
+        cdm_only = ctx.params.get("cdm_only")
+
+        if cdm_only:
             self.vaults = Vaults(self.service)
-            total_vaults = len(config.key_vaults)
-            failed_vaults = []
+            self.log.info("CDM-only mode: Skipping vault loading")
+            if self.debug_logger:
+                self.debug_logger.log(
+                    level="INFO",
+                    operation="vault_loading_skipped",
+                    service=self.service,
+                    context={"reason": "cdm_only flag set"},
+                )
+        else:
+            with console.status("Loading Key Vaults...", spinner="dots"):
+                self.vaults = Vaults(self.service)
+                total_vaults = len(config.key_vaults)
+                failed_vaults = []
 
-            for vault in config.key_vaults:
-                vault_type = vault["type"]
-                vault_name = vault.get("name", vault_type)
-                vault_copy = vault.copy()
-                del vault_copy["type"]
+                for vault in config.key_vaults:
+                    vault_type = vault["type"]
+                    vault_name = vault.get("name", vault_type)
+                    vault_copy = vault.copy()
+                    del vault_copy["type"]
 
-                if vault_type.lower() == "api" and "decrypt_labs" in vault_name.lower():
-                    if "token" not in vault_copy or not vault_copy["token"]:
-                        if config.decrypt_labs_api_key:
-                            vault_copy["token"] = config.decrypt_labs_api_key
-                        else:
-                            self.log.warning(
-                                f"No token provided for DecryptLabs vault '{vault_name}' and no global "
-                                "decrypt_labs_api_key configured"
-                            )
+                    if vault_type.lower() == "api" and "decrypt_labs" in vault_name.lower():
+                        if "token" not in vault_copy or not vault_copy["token"]:
+                            if config.decrypt_labs_api_key:
+                                vault_copy["token"] = config.decrypt_labs_api_key
+                            else:
+                                self.log.warning(
+                                    f"No token provided for DecryptLabs vault '{vault_name}' and no global "
+                                    "decrypt_labs_api_key configured"
+                                )
 
-                if vault_type.lower() == "sqlite":
-                    try:
-                        self.vaults.load_critical(vault_type, **vault_copy)
-                        self.log.debug(f"Successfully loaded vault: {vault_name} ({vault_type})")
-                    except Exception as e:
-                        self.log.error(f"vault failure: {vault_name} ({vault_type}) - {e}")
-                        raise
-                else:
-                    # Other vaults (MySQL, HTTP, API) - soft fail
-                    if not self.vaults.load(vault_type, **vault_copy):
-                        failed_vaults.append(vault_name)
-                        self.log.debug(f"Failed to load vault: {vault_name} ({vault_type})")
+                    if vault_type.lower() == "sqlite":
+                        try:
+                            self.vaults.load_critical(vault_type, **vault_copy)
+                            self.log.debug(f"Successfully loaded vault: {vault_name} ({vault_type})")
+                        except Exception as e:
+                            self.log.error(f"vault failure: {vault_name} ({vault_type}) - {e}")
+                            raise
                     else:
-                        self.log.debug(f"Successfully loaded vault: {vault_name} ({vault_type})")
+                        # Other vaults (MySQL, HTTP, API) - soft fail
+                        if not self.vaults.load(vault_type, **vault_copy):
+                            failed_vaults.append(vault_name)
+                            self.log.debug(f"Failed to load vault: {vault_name} ({vault_type})")
+                        else:
+                            self.log.debug(f"Successfully loaded vault: {vault_name} ({vault_type})")
 
-            loaded_count = len(self.vaults)
-            if failed_vaults:
-                self.log.warning(f"Failed to load {len(failed_vaults)} vault(s): {', '.join(failed_vaults)}")
-            self.log.info(f"Loaded {loaded_count}/{total_vaults} Vaults")
+                loaded_count = len(self.vaults)
+                if failed_vaults:
+                    self.log.warning(f"Failed to load {len(failed_vaults)} vault(s): {', '.join(failed_vaults)}")
+                self.log.info(f"Loaded {loaded_count}/{total_vaults} Vaults")
 
-            # Debug: Show detailed vault status
-            if loaded_count > 0:
-                vault_names = [vault.name for vault in self.vaults]
-                self.log.debug(f"Active vaults: {', '.join(vault_names)}")
-            else:
-                self.log.debug("No vaults are currently active")
+                # Debug: Show detailed vault status
+                if loaded_count > 0:
+                    vault_names = [vault.name for vault in self.vaults]
+                    self.log.debug(f"Active vaults: {', '.join(vault_names)}")
+                else:
+                    self.log.debug("No vaults are currently active")
 
         with console.status("Loading DRM CDM...", spinner="dots"):
             try:
