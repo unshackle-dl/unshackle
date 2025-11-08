@@ -474,7 +474,6 @@ class DecryptLabsRemoteCDM:
             if "vault_keys" in session:
                 all_available_keys.extend(session["vault_keys"])
 
-            session["keys"] = all_available_keys
             session["tried_cache"] = True
 
             if self._required_kids:
@@ -505,10 +504,7 @@ class DecryptLabsRemoteCDM:
                         license_request_data = request_data.copy()
                         license_request_data["get_cached_keys_if_exists"] = False
 
-                    session["decrypt_labs_session_id"] = None
-                    session["challenge"] = None
-                    session["tried_cache"] = False
-
+                    # Make license request for missing keys
                     response = self._http_session.post(
                         f"{self.host}/get-request", json=license_request_data, timeout=30
                     )
@@ -522,8 +518,12 @@ class DecryptLabsRemoteCDM:
 
                     return b""
                 else:
+                    # All required keys are available from cache
+                    session["keys"] = all_available_keys
                     return b""
             else:
+                # No required KIDs specified - return cached keys
+                session["keys"] = all_available_keys
                 return b""
 
         if message_type == "license-request" or "challenge" in data:
@@ -572,7 +572,9 @@ class DecryptLabsRemoteCDM:
 
         session = self._sessions[session_id]
 
-        if session["keys"] and not (self.is_playready and "cached_keys" in session):
+        # Skip parsing if we already have final keys (no cached keys to combine)
+        # If cached_keys exist (Widevine or PlayReady), we need to combine them with license keys
+        if session["keys"] and "cached_keys" not in session:
             return
 
         if not session.get("challenge") or not session.get("decrypt_labs_session_id"):
