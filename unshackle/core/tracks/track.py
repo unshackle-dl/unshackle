@@ -25,7 +25,7 @@ from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY
 from unshackle.core.downloaders import aria2c, curl_impersonate, n_m3u8dl_re, requests
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
 from unshackle.core.events import events
-from unshackle.core.utilities import get_boxes, try_ensure_utf8, get_extension
+from unshackle.core.utilities import get_boxes, get_extension, try_ensure_utf8
 from unshackle.core.utils.subprocess import ffprobe
 
 

@@ -3,7 +3,10 @@ import sys
 import typing
 from typing import Optional
 
+import pysubs2
 from pycaption import Caption, CaptionList, CaptionNode, CaptionReadError, WebVTTReader, WebVTTWriter
+
+from unshackle.core.config import config
 
 
 class CaptionListExt(CaptionList):
@@ -142,7 +145,24 @@ def merge_segmented_webvtt(vtt_raw: str, segment_durations: Optional[list[int]] 
     """
     MPEG_TIMESCALE = 90_000
 
-    vtt = WebVTTReaderExt().read(vtt_raw)
+    # Check config for conversion method preference
+    conversion_method = config.subtitle.get("conversion_method", "auto")
+    use_pysubs2 = conversion_method in ("pysubs2", "auto")
+
+    if use_pysubs2:
+        # Try using pysubs2 first for more lenient parsing
+        try:
+            # Use pysubs2 to parse and normalize the VTT
+            subs = pysubs2.SSAFile.from_string(vtt_raw)
+            # Convert back to WebVTT string for pycaption processing
+            normalized_vtt = subs.to_string("vtt")
+            vtt = WebVTTReaderExt().read(normalized_vtt)
+        except Exception:
+            # Fall back to direct pycaption parsing
+            vtt = WebVTTReaderExt().read(vtt_raw)
+    else:
+        # Use pycaption directly
+        vtt = WebVTTReaderExt().read(vtt_raw)
     for lang in vtt.get_languages():
         prev_caption = None
         duplicate_index: list[int] = []

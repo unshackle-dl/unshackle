@@ -12,7 +12,7 @@ from unshackle.core.vault import Vault
 from unshackle.core.vaults import Vaults
 
 
-def _load_vaults(vault_names: list[str]) -> Vaults:
+def load_vaults(vault_names: list[str]) -> Vaults:
     """Load and validate vaults by name."""
     vaults = Vaults()
     for vault_name in vault_names:
@@ -30,7 +30,7 @@ def _load_vaults(vault_names: list[str]) -> Vaults:
     return vaults
 
 
-def _process_service_keys(from_vault: Vault, service: str, log: logging.Logger) -> dict[str, str]:
+def process_service_keys(from_vault: Vault, service: str, log: logging.Logger) -> dict[str, str]:
     """Get and validate keys from a vault for a specific service."""
     content_keys = list(from_vault.get_keys(service))
 
@@ -41,9 +41,9 @@ def _process_service_keys(from_vault: Vault, service: str, log: logging.Logger) 
     return {kid: key for kid, key in content_keys if kid not in bad_keys}
 
 
-def _copy_service_data(to_vault: Vault, from_vault: Vault, service: str, log: logging.Logger) -> int:
+def copy_service_data(to_vault: Vault, from_vault: Vault, service: str, log: logging.Logger) -> int:
     """Copy data for a single service between vaults."""
-    content_keys = _process_service_keys(from_vault, service, log)
+    content_keys = process_service_keys(from_vault, service, log)
     total_count = len(content_keys)
 
     if total_count == 0:
@@ -95,7 +95,7 @@ def copy(to_vault_name: str, from_vault_names: list[str], service: Optional[str]
     log = logging.getLogger("kv")
 
     all_vault_names = [to_vault_name] + list(from_vault_names)
-    vaults = _load_vaults(all_vault_names)
+    vaults = load_vaults(all_vault_names)
 
     to_vault = vaults.vaults[0]
     from_vaults = vaults.vaults[1:]
@@ -112,7 +112,7 @@ def copy(to_vault_name: str, from_vault_names: list[str], service: Optional[str]
         services_to_copy = [service] if service else from_vault.get_services()
 
         for service_tag in services_to_copy:
-            added = _copy_service_data(to_vault, from_vault, service_tag, log)
+            added = copy_service_data(to_vault, from_vault, service_tag, log)
             total_added += added
 
     if total_added > 0:
@@ -164,7 +164,7 @@ def add(file: Path, service: str, vaults: list[str]) -> None:
     log = logging.getLogger("kv")
     service = Services.get_tag(service)
 
-    vaults_ = _load_vaults(list(vaults))
+    vaults_ = load_vaults(list(vaults))
 
     data = file.read_text(encoding="utf8")
     kid_keys: dict[str, str] = {}
@@ -194,7 +194,7 @@ def prepare(vaults: list[str]) -> None:
     """Create Service Tables on Vaults if not yet created."""
     log = logging.getLogger("kv")
 
-    vaults_ = _load_vaults(vaults)
+    vaults_ = load_vaults(vaults)
 
     for vault in vaults_:
         if hasattr(vault, "has_table") and hasattr(vault, "create_table"):

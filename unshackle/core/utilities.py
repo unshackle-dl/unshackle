@@ -485,7 +485,7 @@ def extract_font_family(font_path: Path) -> Optional[str]:
     return None
 
 
-def _get_windows_fonts() -> dict[str, Path]:
+def get_windows_fonts() -> dict[str, Path]:
     """
     Get fonts from Windows registry.
 
@@ -504,7 +504,7 @@ def _get_windows_fonts() -> dict[str, Path]:
         }
 
 
-def _scan_font_directory(font_dir: Path, fonts: dict[str, Path], log: logging.Logger) -> None:
+def scan_font_directory(font_dir: Path, fonts: dict[str, Path], log: logging.Logger) -> None:
     """
     Scan a single directory for fonts.
 
@@ -524,7 +524,7 @@ def _scan_font_directory(font_dir: Path, fonts: dict[str, Path], log: logging.Lo
             log.debug(f"Failed to process {font_file}: {e}")
 
 
-def _get_unix_fonts() -> dict[str, Path]:
+def get_unix_fonts() -> dict[str, Path]:
     """
     Get fonts from Linux/macOS standard directories.
 
@@ -546,11 +546,9 @@ def _get_unix_fonts() -> dict[str, Path]:
             continue
 
         try:
-            _scan_font_directory(font_dir, fonts, log)
+            scan_font_directory(font_dir, fonts, log)
         except Exception as e:
             log.warning(f"Failed to scan {font_dir}: {e}")
-
-    log.debug(f"Discovered {len(fonts)} system font families")
     return fonts
 
 
@@ -565,8 +563,8 @@ def get_system_fonts() -> dict[str, Path]:
         Dictionary mapping font family names to their file paths
     """
     if sys.platform == "win32":
-        return _get_windows_fonts()
-    return _get_unix_fonts()
+        return get_windows_fonts()
+    return get_unix_fonts()
 
 
 # Common Windows font names mapped to their Linux equivalents
@@ -754,9 +752,9 @@ class DebugLogger:
         if self.enabled:
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
             self.file_handle = open(self.log_path, "a", encoding="utf-8")
-            self._log_session_start()
+            self.log_session_start()
 
-    def _log_session_start(self):
+    def log_session_start(self):
         """Log the start of a new session with environment information."""
         import platform
 
@@ -821,11 +819,11 @@ class DebugLogger:
         if service:
             entry["service"] = service
         if context:
-            entry["context"] = self._sanitize_data(context)
+            entry["context"] = self.sanitize_data(context)
         if request:
-            entry["request"] = self._sanitize_data(request)
+            entry["request"] = self.sanitize_data(request)
         if response:
-            entry["response"] = self._sanitize_data(response)
+            entry["response"] = self.sanitize_data(response)
         if duration_ms is not None:
             entry["duration_ms"] = duration_ms
         if success is not None:
@@ -840,7 +838,7 @@ class DebugLogger:
 
         for key, value in kwargs.items():
             if key not in entry:
-                entry[key] = self._sanitize_data(value)
+                entry[key] = self.sanitize_data(value)
 
         try:
             self.file_handle.write(json.dumps(entry, default=str) + "\n")
@@ -848,7 +846,7 @@ class DebugLogger:
         except Exception as e:
             print(f"Failed to write debug log: {e}", file=sys.stderr)
 
-    def _sanitize_data(self, data: Any) -> Any:
+    def sanitize_data(self, data: Any) -> Any:
         """
         Sanitize data for JSON serialization.
         Handles complex objects and removes sensitive information.
@@ -860,7 +858,7 @@ class DebugLogger:
             return data
 
         if isinstance(data, (list, tuple)):
-            return [self._sanitize_data(item) for item in data]
+            return [self.sanitize_data(item) for item in data]
 
         if isinstance(data, dict):
             sanitized = {}
@@ -883,7 +881,7 @@ class DebugLogger:
                 if should_redact:
                     sanitized[key] = "[REDACTED]"
                 else:
-                    sanitized[key] = self._sanitize_data(value)
+                    sanitized[key] = self.sanitize_data(value)
             return sanitized
 
         if isinstance(data, bytes):

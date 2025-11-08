@@ -79,7 +79,7 @@ class CurlSession(Session):
         )
         self.log = logging.getLogger(self.__class__.__name__)
 
-    def _get_sleep_time(self, response: Response | None, attempt: int) -> float | None:
+    def get_sleep_time(self, response: Response | None, attempt: int) -> float | None:
         if response:
             retry_after = response.headers.get("Retry-After")
             if retry_after:
@@ -123,7 +123,7 @@ class CurlSession(Session):
                 )
 
             if attempt < self.max_retries:
-                if sleep_duration := self._get_sleep_time(response, attempt + 1):
+                if sleep_duration := self.get_sleep_time(response, attempt + 1):
                     if sleep_duration > 0:
                         time.sleep(sleep_duration)
             else:
