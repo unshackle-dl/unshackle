@@ -891,7 +891,6 @@ class CustomRemoteCDM:
             if "vault_keys" in session:
                 all_available_keys.extend(session["vault_keys"])
 
-            session["keys"] = all_available_keys
             session["tried_cache"] = True
 
             # Check if we have all required keys
@@ -904,11 +903,18 @@ class CustomRemoteCDM:
                 required_kids = set(self._required_kids)
                 missing_kids = required_kids - available_kids
 
-                if not missing_kids:
+                if missing_kids:
+                    # Store cached keys separately - don't populate session["keys"] yet
+                    # This allows parse_license() to properly combine cached + license keys
+                    session["cached_keys"] = cached_keys
+                else:
+                    # All required keys are available from cache
+                    session["keys"] = all_available_keys
                     return b""
-
-                # Store cached keys for later combination
-                session["cached_keys"] = cached_keys
+            else:
+                # No required KIDs specified - return cached keys
+                session["keys"] = all_available_keys
+                return b""
 
         # Handle license request response or fetch license if keys missing
         challenge = parsed_response.get("challenge")
@@ -952,8 +958,9 @@ class CustomRemoteCDM:
 
         session = self._sessions[session_id]
 
-        # If we already have keys and no cached keys to combine, skip
-        if session["keys"] and not session.get("cached_keys"):
+        # Skip parsing if we already have final keys (no cached keys to combine)
+        # If cached_keys exist (Widevine or PlayReady), we need to combine them with license keys
+        if session["keys"] and "cached_keys" not in session:
             return
 
         # Ensure we have a challenge and session ID
