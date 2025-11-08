@@ -57,7 +57,11 @@ def track_selection(track: object) -> list[str]:
 
     if track_type == "Audio":
         codecs = AUDIO_CODEC_MAP.get(codec)
-        langs = adaptation_set.findall("lang") + representation.findall("lang")
+        langs = []
+        if adaptation_set.get("lang"):
+            langs.append(adaptation_set.get("lang"))
+        if representation is not None and representation.get("lang"):
+            langs.append(representation.get("lang"))
         track_ids = list(
             set(
                 v
