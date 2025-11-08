@@ -135,7 +135,7 @@ class dl:
 
         return temp_path
 
-    def _attach_subtitle_fonts(
+    def attach_subtitle_fonts(
         self,
         font_names: list[str],
         title: Title_T,
@@ -153,7 +153,6 @@ class dl:
             Tuple of (fonts_attached_count, missing_fonts_list)
         """
         system_fonts = get_system_fonts()
-        self.log.info(f"Discovered {len(system_fonts)} system font families")
 
         font_count = 0
         missing_fonts = []
@@ -176,7 +175,7 @@ class dl:
 
         return font_count, missing_fonts
 
-    def _suggest_missing_fonts(self, missing_fonts: list[str]) -> None:
+    def suggest_missing_fonts(self, missing_fonts: list[str]) -> None:
         """
         Show package installation suggestions for missing fonts.
 
@@ -1053,7 +1052,7 @@ class dl:
                         title.tracks.add(non_sdh_sub)
                         events.subscribe(
                             events.Types.TRACK_MULTIPLEX,
-                            lambda track: (track.strip_hearing_impaired()) if track.id == non_sdh_sub.id else None,
+                            lambda track, sub_id=non_sdh_sub.id: (track.strip_hearing_impaired()) if track.id == sub_id else None,
                         )
 
             with console.status("Sorting tracks by language and bitrate...", spinner="dots"):
@@ -1558,7 +1557,7 @@ class dl:
                                 if line.startswith("Style: "):
                                     font_names.append(line.removesuffix("Style: ").split(",")[1])
 
-                    font_count, missing_fonts = self._attach_subtitle_fonts(
+                    font_count, missing_fonts = self.attach_subtitle_fonts(
                         font_names, title, temp_font_files
                     )
 
@@ -1566,7 +1565,7 @@ class dl:
                         self.log.info(f"Attached {font_count} fonts for the Subtitles")
 
                     if missing_fonts and sys.platform != "win32":
-                        self._suggest_missing_fonts(missing_fonts)
+                        self.suggest_missing_fonts(missing_fonts)
 
                 # Handle DRM decryption BEFORE repacking (must decrypt first!)
                 service_name = service.__class__.__name__.upper()
