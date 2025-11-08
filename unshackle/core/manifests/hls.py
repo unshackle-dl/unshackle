@@ -249,17 +249,20 @@ class HLS:
 
         log = logging.getLogger("HLS")
 
-        # Get the playlist text and handle both session types
-        response = session.get(track.url)
-        if isinstance(response, requests.Response):
-            if not response.ok:
-                log.error(f"Failed to request the invariant M3U8 playlist: {response.status_code}")
-                sys.exit(1)
-            playlist_text = response.text
+        if track.from_file:
+            master = m3u8.load(str(track.from_file))
         else:
-            raise TypeError(f"Expected response to be a requests.Response or curl_cffi.Response, not {type(response)}")
+            # Get the playlist text and handle both session types
+            response = session.get(track.url)
+            if isinstance(response, requests.Response):
+                if not response.ok:
+                    log.error(f"Failed to request the invariant M3U8 playlist: {response.status_code}")
+                    sys.exit(1)
+                playlist_text = response.text
+            else:
+                raise TypeError(f"Expected response to be a requests.Response or curl_cffi.Response, not {type(response)}")
 
-        master = m3u8.loads(playlist_text, uri=track.url)
+            master = m3u8.loads(playlist_text, uri=track.url)
 
         if not master.segments:
             log.error("Track's HLS playlist has no segments, expecting an invariant M3U8 playlist.")
