@@ -486,7 +486,7 @@ def external_ids(
         return {}
 
 
-def _apply_tags(path: Path, tags: dict[str, str]) -> None:
+def apply_tags(path: Path, tags: dict[str, str]) -> None:
     if not tags:
         return
     if not binaries.Mkvpropedit:
@@ -537,7 +537,7 @@ def tag_file(path: Path, title: Title, tmdb_id: Optional[int] | None = None) -> 
         name = title.title
         year = title.year
     else:
-        _apply_tags(path, custom_tags)
+        apply_tags(path, custom_tags)
         return
 
     if config.tag_imdb_tmdb:
@@ -547,6 +547,8 @@ def tag_file(path: Path, title: Title, tmdb_id: Optional[int] | None = None) -> 
 
         if not api_key and not simkl_client:
             log.debug("No TMDB API key or Simkl client ID configured; skipping IMDB/TMDB tag lookup")
+            apply_tags(path, custom_tags)
+            return
         else:
             # If tmdb_id is provided (via --tmdb), skip Simkl and use TMDB directly
             if tmdb_id is not None:
@@ -637,7 +639,7 @@ def tag_file(path: Path, title: Title, tmdb_id: Optional[int] | None = None) -> 
         **custom_tags,
         **standard_tags,
     }
-    _apply_tags(path, merged_tags)
+    apply_tags(path, merged_tags)
 
 
 __all__ = [
