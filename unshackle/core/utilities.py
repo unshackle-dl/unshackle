@@ -463,8 +463,18 @@ def extract_font_family(font_path: Path) -> Optional[str]:
     Returns:
         Font family name if successfully extracted, None otherwise
     """
+    # Suppress verbose fontTools logging during font table parsing
+    import io
+
+    logging.getLogger("fontTools").setLevel(logging.ERROR)
+    logging.getLogger("fontTools.ttLib").setLevel(logging.ERROR)
+    logging.getLogger("fontTools.ttLib.tables").setLevel(logging.ERROR)
+    logging.getLogger("fontTools.ttLib.tables._n_a_m_e").setLevel(logging.ERROR)
+    stderr_backup = sys.stderr
+    sys.stderr = io.StringIO()
+
     try:
-        font = ttLib.TTFont(font_path)
+        font = ttLib.TTFont(font_path, lazy=True)
         name_table = font["name"]
 
         # Try to get family name (nameID 1) for Windows platform (platformID 3)
@@ -479,8 +489,9 @@ def extract_font_family(font_path: Path) -> Optional[str]:
                 return record.toUnicode()
 
     except Exception:
-        # Silently ignore font parsing errors (corrupted fonts, etc.)
         pass
+    finally:
+        sys.stderr = stderr_backup
 
     return None
 
