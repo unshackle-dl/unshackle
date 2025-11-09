@@ -211,17 +211,21 @@ class Track:
         save_path = config.directories.temp / f"{track_type}_{self.id}.mp4"
         if track_type == "Subtitle":
             save_path = save_path.with_suffix(f".{self.codec.extension}")
-            # n_m3u8dl_re doesn't support directly downloading subtitles
-            if self.downloader.__name__ == "n_m3u8dl_re" and get_extension(self.url) in {
-                ".srt",
-                ".vtt",
-                ".ttml",
-                ".ssa",
-                ".ass",
-                ".stpp",
-                ".wvtt",
-                ".xml",
-            }:
+            # n_m3u8dl_re doesn't support directly downloading subtitles from URLs
+            # or when the subtitle has a direct file extension
+            if self.downloader.__name__ == "n_m3u8dl_re" and (
+                self.descriptor == self.Descriptor.URL
+                or get_extension(self.url) in {
+                    ".srt",
+                    ".vtt",
+                    ".ttml",
+                    ".ssa",
+                    ".ass",
+                    ".stpp",
+                    ".wvtt",
+                    ".xml",
+                }
+            ):
                 self.downloader = requests
 
         if self.descriptor != self.Descriptor.URL:

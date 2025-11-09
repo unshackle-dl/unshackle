@@ -142,6 +142,12 @@ def get_track_selection_args(track: Any) -> list[str]:
                         parts.append(f"lang={lang}")
                 return _create_args("-ss", parts, "subtitle", extra_args=["--auto-subtitle-fix", "false"])
 
+        case "URL":
+            raise ValueError(
+                f"[N_m3u8DL-RE]: Direct URL downloads are not supported for {track_type} tracks. "
+                f"The track should use a different downloader (e.g., 'requests', 'aria2c')."
+            )
+
     raise ValueError(f"[N_m3u8DL-RE]: Unsupported manifest type: {descriptor}")
 
 
