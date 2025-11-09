@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import re
 import subprocess
 import tempfile
@@ -44,11 +43,11 @@ def _get_session() -> requests.Session:
 
 
 def _api_key() -> Optional[str]:
-    return config.tmdb_api_key or os.getenv("TMDB_API_KEY")
+    return config.tmdb_api_key
 
 
 def _simkl_client_id() -> Optional[str]:
-    return config.simkl_client_id or os.getenv("SIMKL_CLIENT_ID")
+    return config.simkl_client_id
 
 
 def _clean(s: str) -> str:
@@ -474,9 +473,7 @@ def external_ids(
             try:
                 detail_response = _fetch_tmdb_detail(tmdb_id, kind)
                 if detail_response:
-                    title_cacher.cache_tmdb(
-                        cache_title_id, detail_response, js, kind, cache_region, cache_account_hash
-                    )
+                    title_cacher.cache_tmdb(cache_title_id, detail_response, js, kind, cache_region, cache_account_hash)
             except Exception as exc:
                 log.debug("Failed to cache TMDB data: %s", exc)
 
