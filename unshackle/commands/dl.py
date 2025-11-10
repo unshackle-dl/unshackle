@@ -346,6 +346,7 @@ class dl:
     @click.option("-ns", "--no-subs", is_flag=True, default=False, help="Do not download subtitle tracks.")
     @click.option("-na", "--no-audio", is_flag=True, default=False, help="Do not download audio tracks.")
     @click.option("-nc", "--no-chapters", is_flag=True, default=False, help="Do not download chapters tracks.")
+    @click.option("-nv", "--no-video", is_flag=True, default=False, help="Do not download video tracks.")
     @click.option("-ad", "--audio-description", is_flag=True, default=False, help="Download audio description tracks.")
     @click.option(
         "--slow",
@@ -740,6 +741,7 @@ class dl:
         no_subs: bool,
         no_audio: bool,
         no_chapters: bool,
+        no_video: bool,
         audio_description: bool,
         slow: bool,
         list_: bool,
@@ -981,6 +983,11 @@ class dl:
                 console.log("Skipped subtitles as --no-subs was used...")
                 s_lang = None
                 title.tracks.subtitles = []
+
+            if no_video:
+                console.log("Skipped video as --no-video was used...")
+                v_lang = None
+                title.tracks.videos = []
 
             with console.status("Getting tracks...", spinner="dots"):
                 try:
@@ -1322,7 +1329,7 @@ class dl:
                                 self.log.error(f"There's no {processed_lang} Audio Track, cannot continue...")
                                 sys.exit(1)
 
-                if video_only or audio_only or subs_only or chapters_only or no_subs or no_audio or no_chapters:
+                if video_only or audio_only or subs_only or chapters_only or no_subs or no_audio or no_chapters or no_video:
                     keep_videos = False
                     keep_audio = False
                     keep_subtitles = False
@@ -1349,6 +1356,8 @@ class dl:
                         keep_audio = False
                     if no_chapters:
                         keep_chapters = False
+                    if no_video:
+                        keep_videos = False
 
                     kept_tracks = []
                     if keep_videos:
@@ -1505,6 +1514,7 @@ class dl:
                     and not no_subs
                     and not (hasattr(service, "NO_SUBTITLES") and service.NO_SUBTITLES)
                     and not video_only
+                    and not no_video
                     and len(title.tracks.videos) > video_track_n
                     and any(
                         x.get("codec_name", "").startswith("eia_")
