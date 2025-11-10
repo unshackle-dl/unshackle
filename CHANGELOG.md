@@ -40,6 +40,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `-le, --latest-episode` flag to download only the most recent episode
   - Automatically selects the single most recent episode regardless of season
   - Fixes GitHub issue #28
+- **Video Track Exclusion**: New `--no-video` CLI option
+  - `-nv, --no-video` flag to skip downloading video tracks
+  - Allows downloading only audio, subtitles, attachments, and chapters
+  - Useful for audio-only or subtitle extraction workflows
+  - Fixes GitHub issue #39
 - **Service-Specific Configuration Overrides**: Per-service fine-tuned control
   - Support for per-service configuration overrides in YAML
   - Fine-tuned control of downloader and command options per service
@@ -149,6 +154,7 @@ This release includes contributions from:
 
 - @Sp5rky - REST API server implementation, dependency updates
 - @stabbedbybrick - curl_cffi retry handler (PR #31)
+- @stabbedbybrick - n_m3u8dl-re refactor (PR #38)
 - @TPD94 - Binary search enhancements, manifest parser fixes (PR #19)
 - @scene (Andy) - Core features, configuration system, bug fixes
 
