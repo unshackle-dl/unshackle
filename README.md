@@ -8,9 +8,6 @@
     </a>
 </p>
 
-> [!WARNING]
-> **Development Branch**: This is the `dev` branch containing bleeding-edge features and experimental changes. Use for testing only. For stable releases, use the [`main`](https://github.com/unshackle-dl/unshackle/tree/main) branch.
-
 ## What is unshackle?
 
 unshackle is a fork of [Devine](https://github.com/devine-dl/devine/), a powerful archival tool for downloading movies, TV shows, and music from streaming services. Built with a focus on modularity and extensibility, it provides a robust framework for content acquisition with support for DRM-protected content.
