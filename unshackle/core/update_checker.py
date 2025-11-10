@@ -28,21 +28,21 @@ class UpdateChecker:
     DEFAULT_CHECK_INTERVAL = 24 * 60 * 60
 
     @classmethod
-    def _get_cache_file(cls) -> Path:
+    def get_cache_file(cls) -> Path:
         """Get the path to the update check cache file."""
         from unshackle.core.config import config
 
         return config.directories.cache / "update_check.json"
 
     @classmethod
-    def _load_cache_data(cls) -> dict:
+    def load_cache_data(cls) -> dict:
         """
         Load cache data from file.
 
         Returns:
             Cache data dictionary or empty dict if loading fails
         """
-        cache_file = cls._get_cache_file()
+        cache_file = cls.get_cache_file()
 
         if not cache_file.exists():
             return {}
@@ -54,7 +54,7 @@ class UpdateChecker:
             return {}
 
     @staticmethod
-    def _parse_version(version_string: str) -> str:
+    def parse_version(version_string: str) -> str:
         """
         Parse and normalize version string by removing 'v' prefix.
 
@@ -107,7 +107,7 @@ class UpdateChecker:
                 return None
 
             data = response.json()
-            latest_version = cls._parse_version(data.get("tag_name", ""))
+            latest_version = cls.parse_version(data.get("tag_name", ""))
 
             return latest_version if cls._is_valid_version(latest_version) else None
 
@@ -125,7 +125,7 @@ class UpdateChecker:
         Returns:
             True if we should check for updates, False otherwise
         """
-        cache_data = cls._load_cache_data()
+        cache_data = cls.load_cache_data()
 
         if not cache_data:
             return True
@@ -144,7 +144,7 @@ class UpdateChecker:
             latest_version: The latest version found, if any
             current_version: The current version being used
         """
-        cache_file = cls._get_cache_file()
+        cache_file = cls.get_cache_file()
 
         try:
             cache_file.parent.mkdir(parents=True, exist_ok=True)
@@ -231,7 +231,7 @@ class UpdateChecker:
         Returns:
             The latest version string if an update is available from cache, None otherwise
         """
-        cache_data = cls._load_cache_data()
+        cache_data = cls.load_cache_data()
 
         if not cache_data:
             return None

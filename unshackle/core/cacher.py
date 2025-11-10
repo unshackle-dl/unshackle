@@ -91,7 +91,7 @@ class Cacher:
             except jwt.DecodeError:
                 pass
 
-        self.expiration = self._resolve_datetime(expiration) if expiration else None
+        self.expiration = self.resolve_datetime(expiration) if expiration else None
 
         payload = {"data": self.data, "expiration": self.expiration, "version": self.version}
         payload["crc32"] = zlib.crc32(jsonpickle.dumps(payload).encode("utf8"))
@@ -109,7 +109,7 @@ class Cacher:
         return self.path.stat()
 
     @staticmethod
-    def _resolve_datetime(timestamp: EXP_T) -> datetime:
+    def resolve_datetime(timestamp: EXP_T) -> datetime:
         """
         Resolve multiple formats of a Datetime or Timestamp to an absolute Datetime.
 
@@ -118,15 +118,15 @@ class Cacher:
             datetime.datetime(2022, 6, 27, 9, 49, 13, 657208)
             >>> iso8601 = now.isoformat()
             '2022-06-27T09:49:13.657208'
-            >>> Cacher._resolve_datetime(iso8601)
+            >>> Cacher.resolve_datetime(iso8601)
             datetime.datetime(2022, 6, 27, 9, 49, 13, 657208)
-            >>> Cacher._resolve_datetime(iso8601 + "Z")
+            >>> Cacher.resolve_datetime(iso8601 + "Z")
             datetime.datetime(2022, 6, 27, 9, 49, 13, 657208)
-            >>> Cacher._resolve_datetime(3600)
+            >>> Cacher.resolve_datetime(3600)
             datetime.datetime(2022, 6, 27, 10, 52, 50, 657208)
-            >>> Cacher._resolve_datetime('3600')
+            >>> Cacher.resolve_datetime('3600')
             datetime.datetime(2022, 6, 27, 10, 52, 51, 657208)
-            >>> Cacher._resolve_datetime(7800.113)
+            >>> Cacher.resolve_datetime(7800.113)
             datetime.datetime(2022, 6, 27, 11, 59, 13, 770208)
 
         In the int/float examples you may notice that it did not return now + 3600 seconds

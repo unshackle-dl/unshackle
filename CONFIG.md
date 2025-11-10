@@ -547,9 +547,12 @@ Configuration data for pywidevine's serve functionality run through unshackle.
 This effectively allows you to run `unshackle serve` to start serving pywidevine Serve-compliant CDMs right from your
 local widevine device files.
 
+- `api_secret` - Secret key for REST API authentication. When set, enables the REST API server alongside the CDM serve functionality. This key is required for authenticating API requests.
+
 For example,
 
 ```yaml
+api_secret: "your-secret-key-here"
 users:
   secret_key_for_jane: # 32bit hex recommended, case-sensitive
     devices: # list of allowed devices for this user

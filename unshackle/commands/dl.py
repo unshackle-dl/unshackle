@@ -41,22 +41,24 @@ from rich.text import Text
 from rich.tree import Tree
 
 from unshackle.core import binaries
-from unshackle.core.cdm import DecryptLabsRemoteCDM
+from unshackle.core.cdm import CustomRemoteCDM, DecryptLabsRemoteCDM
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import DOWNLOAD_LICENCE_ONLY, AnyTrack, context_settings
 from unshackle.core.credential import Credential
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
 from unshackle.core.events import events
-from unshackle.core.proxies import Basic, Hola, NordVPN, SurfsharkVPN
+from unshackle.core.proxies import Basic, Hola, NordVPN, SurfsharkVPN, WindscribeVPN
 from unshackle.core.service import Service
 from unshackle.core.services import Services
+from unshackle.core.title_cacher import get_account_hash
 from unshackle.core.titles import Movie, Movies, Series, Song, Title_T
 from unshackle.core.titles.episode import Episode
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.hybrid import Hybrid
-from unshackle.core.utilities import get_system_fonts, is_close_match, time_elapsed_since
+from unshackle.core.utilities import (find_font_with_fallbacks, get_debug_logger, get_system_fonts, init_debug_logger,
+                                      is_close_match, suggest_font_packages, time_elapsed_since)
 from unshackle.core.utils import tags
 from unshackle.core.utils.click_types import (LANGUAGE_RANGE, QUALITY_LIST, SEASON_RANGE, ContextData, MultipleChoice,
                                               SubtitleCodecChoice, VideoCodecChoice)
@@ -67,7 +69,7 @@ from unshackle.core.vaults import Vaults
 
 class dl:
     @staticmethod
-    def _truncate_pssh_for_display(pssh_string: str, drm_type: str) -> str:
+    def truncate_pssh_for_display(pssh_string: str, drm_type: str) -> str:
         """Truncate PSSH string for display when not in debug mode."""
         if logging.root.level == logging.DEBUG or not pssh_string:
             return pssh_string
@@ -77,6 +79,114 @@ class dl:
             return pssh_string
 
         return pssh_string[: max_width - 3] + "..."
+
+    def find_custom_font(self, font_name: str) -> Optional[Path]:
+        """
+        Find font in custom fonts directory.
+
+        Args:
+            font_name: Font family name to find
+
+        Returns:
+            Path to font file, or None if not found
+        """
+        family_dir = Path(config.directories.fonts, font_name)
+        if family_dir.exists():
+            fonts = list(family_dir.glob("*.*tf"))
+            return fonts[0] if fonts else None
+        return None
+
+    def prepare_temp_font(
+        self,
+        font_name: str,
+        matched_font: Path,
+        system_fonts: dict[str, Path],
+        temp_font_files: list[Path]
+    ) -> Path:
+        """
+        Copy system font to temp and log if using fallback.
+
+        Args:
+            font_name: Requested font name
+            matched_font: Path to matched system font
+            system_fonts: Dictionary of available system fonts
+            temp_font_files: List to track temp files for cleanup
+
+        Returns:
+            Path to temp font file
+        """
+        # Find the matched name for logging
+        matched_name = next(
+            (name for name, path in system_fonts.items() if path == matched_font),
+            None
+        )
+
+        if matched_name and matched_name.lower() != font_name.lower():
+            self.log.info(f"Using '{matched_name}' as fallback for '{font_name}'")
+
+        # Create unique temp file path
+        safe_name = font_name.replace(" ", "_").replace("/", "_")
+        temp_path = config.directories.temp / f"font_{safe_name}{matched_font.suffix}"
+
+        # Copy if not already exists
+        if not temp_path.exists():
+            shutil.copy2(matched_font, temp_path)
+            temp_font_files.append(temp_path)
+
+        return temp_path
+
+    def attach_subtitle_fonts(
+        self,
+        font_names: list[str],
+        title: Title_T,
+        temp_font_files: list[Path]
+    ) -> tuple[int, list[str]]:
+        """
+        Attach fonts for subtitle rendering.
+
+        Args:
+            font_names: List of font names requested by subtitles
+            title: Title object to attach fonts to
+            temp_font_files: List to track temp files for cleanup
+
+        Returns:
+            Tuple of (fonts_attached_count, missing_fonts_list)
+        """
+        system_fonts = get_system_fonts()
+
+        font_count = 0
+        missing_fonts = []
+
+        for font_name in set(font_names):
+            # Try custom fonts first
+            if custom_font := self.find_custom_font(font_name):
+                title.tracks.add(Attachment(path=custom_font, name=f"{font_name} ({custom_font.stem})"))
+                font_count += 1
+                continue
+
+            # Try system fonts with fallback
+            if system_font := find_font_with_fallbacks(font_name, system_fonts):
+                temp_path = self.prepare_temp_font(font_name, system_font, system_fonts, temp_font_files)
+                title.tracks.add(Attachment(path=temp_path, name=f"{font_name} ({system_font.stem})"))
+                font_count += 1
+            else:
+                self.log.warning(f"Subtitle uses font '{font_name}' but it could not be found")
+                missing_fonts.append(font_name)
+
+        return font_count, missing_fonts
+
+    def suggest_missing_fonts(self, missing_fonts: list[str]) -> None:
+        """
+        Show package installation suggestions for missing fonts.
+
+        Args:
+            missing_fonts: List of font names that couldn't be found
+        """
+        if suggestions := suggest_font_packages(missing_fonts):
+            self.log.info("Install font packages to improve subtitle rendering:")
+            for package_cmd, fonts in suggestions.items():
+                self.log.info(f"  $ sudo apt install {package_cmd}")
+                self.log.info(f"    → Provides: {', '.join(fonts)}")
 
     @click.command(
         short_help="Download, Decrypt, and Mux tracks for titles from a Service.",
@@ -150,6 +260,13 @@ class dl:
         type=SEASON_RANGE,
         default=None,
         help="Wanted episodes, e.g. `S01-S05,S07`, `S01E01-S02E03`, `S02-S02E03`, e.t.c, defaults to all.",
+    )
+    @click.option(
+        "-le",
+        "--latest-episode",
+        is_flag=True,
+        default=False,
+        help="Download only the single most recent episode available.",
     )
     @click.option(
         "-l",
@@ -229,6 +346,8 @@ class dl:
     @click.option("-ns", "--no-subs", is_flag=True, default=False, help="Do not download subtitle tracks.")
     @click.option("-na", "--no-audio", is_flag=True, default=False, help="Do not download audio tracks.")
     @click.option("-nc", "--no-chapters", is_flag=True, default=False, help="Do not download chapters tracks.")
+    @click.option("-nv", "--no-video", is_flag=True, default=False, help="Do not download video tracks.")
+    @click.option("-ad", "--audio-description", is_flag=True, default=False, help="Download audio description tracks.")
     @click.option(
         "--slow",
         is_flag=True,
@@ -308,10 +427,76 @@ class dl:
         self.log = logging.getLogger("download")
 
         self.service = Services.get_tag(ctx.invoked_subcommand)
+        service_dl_config = config.services.get(self.service, {}).get("dl", {})
+        if service_dl_config:
+            param_types = {param.name: param.type for param in ctx.command.params if param.name}
+
+            for param_name, service_value in service_dl_config.items():
+                if param_name not in ctx.params:
+                    continue
+
+                current_value = ctx.params[param_name]
+                global_default = config.dl.get(param_name)
+                param_type = param_types.get(param_name)
+
+                try:
+                    if param_type and global_default is not None:
+                        global_default = param_type.convert(global_default, None, ctx)
+                except Exception as e:
+                    self.log.debug(f"Failed to convert global default for '{param_name}': {e}")
+
+                if current_value == global_default or (current_value is None and global_default is None):
+                    try:
+                        converted_value = service_value
+                        if param_type and service_value is not None:
+                            converted_value = param_type.convert(service_value, None, ctx)
+
+                        ctx.params[param_name] = converted_value
+                        self.log.debug(f"Applied service-specific '{param_name}' override: {converted_value}")
+                    except Exception as e:
+                        self.log.warning(
+                            f"Failed to apply service-specific '{param_name}' override: {e}. "
+                            f"Check that the value '{service_value}' is valid for this parameter."
+                        )
+
         self.profile = profile
         self.tmdb_id = tmdb_id
         self.tmdb_name = tmdb_name
         self.tmdb_year = tmdb_year
+
+        # Initialize debug logger with service name if debug logging is enabled
+        if config.debug or logging.root.level == logging.DEBUG:
+            from collections import defaultdict
+            from datetime import datetime
+
+            debug_log_path = config.directories.logs / config.filenames.debug_log.format_map(
+                defaultdict(str, service=self.service, time=datetime.now().strftime("%Y%m%d-%H%M%S"))
+            )
+            init_debug_logger(log_path=debug_log_path, enabled=True, log_keys=config.debug_keys)
+            self.debug_logger = get_debug_logger()
+
+            if self.debug_logger:
+                self.debug_logger.log(
+                    level="INFO",
+                    operation="download_init",
+                    message=f"Download command initialized for service {self.service}",
+                    service=self.service,
+                    context={
+                        "profile": profile,
+                        "proxy": proxy,
+                        "tag": tag,
+                        "tmdb_id": tmdb_id,
+                        "tmdb_name": tmdb_name,
+                        "tmdb_year": tmdb_year,
+                        "cli_params": {
+                            k: v
+                            for k, v in ctx.params.items()
+                            if k not in ["profile", "proxy", "tag", "tmdb_id", "tmdb_name", "tmdb_year"]
+                        },
+                    },
+                )
+        else:
+            self.debug_logger = None
 
         if self.profile:
             self.log.info(f"Using profile: '{self.profile}'")
@@ -321,6 +506,13 @@ class dl:
             if service_config_path.exists():
                 self.service_config = yaml.safe_load(service_config_path.read_text(encoding="utf8"))
                 self.log.info("Service Config loaded")
+                if self.debug_logger:
+                    self.debug_logger.log(
+                        level="DEBUG",
+                        operation="load_service_config",
+                        service=self.service,
+                        context={"config_path": str(service_config_path), "config": self.service_config},
+                    )
             else:
                 self.service_config = {}
             merge_dict(config.services.get(self.service), self.service_config)
@@ -331,70 +523,133 @@ class dl:
         if getattr(config, "decryption_map", None):
             config.decryption = config.decryption_map.get(self.service, config.decryption)
 
-        with console.status("Loading Key Vaults...", spinner="dots"):
+        service_config = config.services.get(self.service, {})
+        if service_config:
+            reserved_keys = {
+                "profiles",
+                "api_key",
+                "certificate",
+                "api_endpoint",
+                "region",
+                "device",
+                "endpoints",
+                "client",
+                "dl",
+            }
+
+            for config_key, override_value in service_config.items():
+                if config_key in reserved_keys or not isinstance(override_value, dict):
+                    continue
+
+                if hasattr(config, config_key):
+                    current_config = getattr(config, config_key, {})
+
+                    if isinstance(current_config, dict):
+                        merged_config = deepcopy(current_config)
+                        merge_dict(override_value, merged_config)
+                        setattr(config, config_key, merged_config)
+
+                        self.log.debug(
+                            f"Applied service-specific '{config_key}' overrides for {self.service}: {override_value}"
+                        )
+
+        cdm_only = ctx.params.get("cdm_only")
+
+        if cdm_only:
             self.vaults = Vaults(self.service)
-            total_vaults = len(config.key_vaults)
-            failed_vaults = []
+            self.log.info("CDM-only mode: Skipping vault loading")
+            if self.debug_logger:
+                self.debug_logger.log(
+                    level="INFO",
+                    operation="vault_loading_skipped",
+                    service=self.service,
+                    context={"reason": "cdm_only flag set"},
+                )
+        else:
+            with console.status("Loading Key Vaults...", spinner="dots"):
+                self.vaults = Vaults(self.service)
+                total_vaults = len(config.key_vaults)
+                failed_vaults = []
 
-            for vault in config.key_vaults:
-                vault_type = vault["type"]
-                vault_name = vault.get("name", vault_type)
-                vault_copy = vault.copy()
-                del vault_copy["type"]
+                for vault in config.key_vaults:
+                    vault_type = vault["type"]
+                    vault_name = vault.get("name", vault_type)
+                    vault_copy = vault.copy()
+                    del vault_copy["type"]
 
-                if vault_type.lower() == "api" and "decrypt_labs" in vault_name.lower():
-                    if "token" not in vault_copy or not vault_copy["token"]:
-                        if config.decrypt_labs_api_key:
-                            vault_copy["token"] = config.decrypt_labs_api_key
-                        else:
-                            self.log.warning(
-                                f"No token provided for DecryptLabs vault '{vault_name}' and no global "
-                                "decrypt_labs_api_key configured"
-                            )
+                    if vault_type.lower() == "api" and "decrypt_labs" in vault_name.lower():
+                        if "token" not in vault_copy or not vault_copy["token"]:
+                            if config.decrypt_labs_api_key:
+                                vault_copy["token"] = config.decrypt_labs_api_key
+                            else:
+                                self.log.warning(
+                                    f"No token provided for DecryptLabs vault '{vault_name}' and no global "
+                                    "decrypt_labs_api_key configured"
+                                )
 
-                if vault_type.lower() == "sqlite":
-                    try:
-                        self.vaults.load_critical(vault_type, **vault_copy)
-                        self.log.debug(f"Successfully loaded vault: {vault_name} ({vault_type})")
-                    except Exception as e:
-                        self.log.error(f"vault failure: {vault_name} ({vault_type}) - {e}")
-                        raise
-                else:
-                    # Other vaults (MySQL, HTTP, API) - soft fail
-                    if not self.vaults.load(vault_type, **vault_copy):
-                        failed_vaults.append(vault_name)
-                        self.log.debug(f"Failed to load vault: {vault_name} ({vault_type})")
+                    if vault_type.lower() == "sqlite":
+                        try:
+                            self.vaults.load_critical(vault_type, **vault_copy)
+                            self.log.debug(f"Successfully loaded vault: {vault_name} ({vault_type})")
+                        except Exception as e:
+                            self.log.error(f"vault failure: {vault_name} ({vault_type}) - {e}")
+                            raise
                     else:
-                        self.log.debug(f"Successfully loaded vault: {vault_name} ({vault_type})")
+                        # Other vaults (MySQL, HTTP, API) - soft fail
+                        if not self.vaults.load(vault_type, **vault_copy):
+                            failed_vaults.append(vault_name)
+                            self.log.debug(f"Failed to load vault: {vault_name} ({vault_type})")
+                        else:
+                            self.log.debug(f"Successfully loaded vault: {vault_name} ({vault_type})")
 
-            loaded_count = len(self.vaults)
-            if failed_vaults:
-                self.log.warning(f"Failed to load {len(failed_vaults)} vault(s): {', '.join(failed_vaults)}")
-            self.log.info(f"Loaded {loaded_count}/{total_vaults} Vaults")
+                loaded_count = len(self.vaults)
+                if failed_vaults:
+                    self.log.warning(f"Failed to load {len(failed_vaults)} vault(s): {', '.join(failed_vaults)}")
+                self.log.info(f"Loaded {loaded_count}/{total_vaults} Vaults")
 
-            # Debug: Show detailed vault status
-            if loaded_count > 0:
-                vault_names = [vault.name for vault in self.vaults]
-                self.log.debug(f"Active vaults: {', '.join(vault_names)}")
-            else:
-                self.log.debug("No vaults are currently active")
+                # Debug: Show detailed vault status
+                if loaded_count > 0:
+                    vault_names = [vault.name for vault in self.vaults]
+                    self.log.debug(f"Active vaults: {', '.join(vault_names)}")
+                else:
+                    self.log.debug("No vaults are currently active")
 
         with console.status("Loading DRM CDM...", spinner="dots"):
             try:
                 self.cdm = self.get_cdm(self.service, self.profile)
             except ValueError as e:
                 self.log.error(f"Failed to load CDM, {e}")
+                if self.debug_logger:
+                    self.debug_logger.log_error("load_cdm", e, service=self.service)
                 sys.exit(1)
 
             if self.cdm:
+                cdm_info = {}
                 if isinstance(self.cdm, DecryptLabsRemoteCDM):
                     drm_type = "PlayReady" if self.cdm.is_playready else "Widevine"
                     self.log.info(f"Loaded {drm_type} Remote CDM: DecryptLabs (L{self.cdm.security_level})")
+                    cdm_info = {"type": "DecryptLabs", "drm_type": drm_type, "security_level": self.cdm.security_level}
                 elif hasattr(self.cdm, "device_type") and self.cdm.device_type.name in ["ANDROID", "CHROME"]:
                     self.log.info(f"Loaded Widevine CDM: {self.cdm.system_id} (L{self.cdm.security_level})")
+                    cdm_info = {
+                        "type": "Widevine",
+                        "system_id": self.cdm.system_id,
+                        "security_level": self.cdm.security_level,
+                        "device_type": self.cdm.device_type.name,
+                    }
                 else:
                     self.log.info(
                         f"Loaded PlayReady CDM: {self.cdm.certificate_chain.get_name()} (L{self.cdm.security_level})"
+                    )
+                    cdm_info = {
+                        "type": "PlayReady",
+                        "certificate": self.cdm.certificate_chain.get_name(),
+                        "security_level": self.cdm.security_level,
+                    }
+
+                if self.debug_logger and cdm_info:
+                    self.debug_logger.log(
+                        level="INFO", operation="load_cdm", service=self.service, context={"cdm": cdm_info}
                     )
 
         self.proxy_providers = []
@@ -408,6 +663,8 @@ class dl:
                     self.proxy_providers.append(NordVPN(**config.proxy_providers["nordvpn"]))
                 if config.proxy_providers.get("surfsharkvpn"):
                     self.proxy_providers.append(SurfsharkVPN(**config.proxy_providers["surfsharkvpn"]))
+                if config.proxy_providers.get("windscribevpn"):
+                    self.proxy_providers.append(WindscribeVPN(**config.proxy_providers["windscribevpn"]))
                 if binaries.HolaProxy:
                     self.proxy_providers.append(Hola())
                 for proxy_provider in self.proxy_providers:
@@ -468,6 +725,7 @@ class dl:
         channels: float,
         no_atmos: bool,
         wanted: list[str],
+        latest_episode: bool,
         lang: list[str],
         v_lang: list[str],
         a_lang: list[str],
@@ -483,6 +741,8 @@ class dl:
         no_subs: bool,
         no_audio: bool,
         no_chapters: bool,
+        no_video: bool,
+        audio_description: bool,
         slow: bool,
         list_: bool,
         list_titles: bool,
@@ -521,29 +781,117 @@ class dl:
         else:
             vaults_only = not cdm_only
 
+        if self.debug_logger:
+            self.debug_logger.log(
+                level="DEBUG",
+                operation="drm_mode_config",
+                service=self.service,
+                context={
+                    "cdm_only": cdm_only,
+                    "vaults_only": vaults_only,
+                    "mode": "CDM only" if cdm_only else ("Vaults only" if vaults_only else "Both CDM and Vaults"),
+                },
+            )
+
         with console.status("Authenticating with Service...", spinner="dots"):
-            cookies = self.get_cookie_jar(self.service, self.profile)
-            credential = self.get_credentials(self.service, self.profile)
-            service.authenticate(cookies, credential)
-            if cookies or credential:
-                self.log.info("Authenticated with Service")
+            try:
+                cookies = self.get_cookie_jar(self.service, self.profile)
+                credential = self.get_credentials(self.service, self.profile)
+                service.authenticate(cookies, credential)
+                if cookies or credential:
+                    self.log.info("Authenticated with Service")
+                    if self.debug_logger:
+                        self.debug_logger.log(
+                            level="INFO",
+                            operation="authenticate",
+                            service=self.service,
+                            context={
+                                "has_cookies": bool(cookies),
+                                "has_credentials": bool(credential),
+                                "profile": self.profile,
+                            },
+                        )
+            except Exception as e:
+                if self.debug_logger:
+                    self.debug_logger.log_error(
+                        "authenticate", e, service=self.service, context={"profile": self.profile}
+                    )
+                raise
 
         with console.status("Fetching Title Metadata...", spinner="dots"):
-            titles = service.get_titles_cached()
-            if not titles:
-                self.log.error("No titles returned, nothing to download...")
-                sys.exit(1)
+            try:
+                titles = service.get_titles_cached()
+                if not titles:
+                    self.log.error("No titles returned, nothing to download...")
+                    if self.debug_logger:
+                        self.debug_logger.log(
+                            level="ERROR",
+                            operation="get_titles",
+                            service=self.service,
+                            message="No titles returned from service",
+                            success=False,
+                        )
+                    sys.exit(1)
+            except Exception as e:
+                if self.debug_logger:
+                    self.debug_logger.log_error("get_titles", e, service=self.service)
+                raise
 
-        if self.tmdb_year and self.tmdb_id:
+            if self.debug_logger:
+                titles_info = {
+                    "type": titles.__class__.__name__,
+                    "count": len(titles) if hasattr(titles, "__len__") else 1,
+                    "title": str(titles),
+                }
+                if hasattr(titles, "seasons"):
+                    titles_info["seasons"] = len(titles.seasons) if hasattr(titles, "seasons") else 0
+                self.debug_logger.log(
+                    level="INFO", operation="get_titles", service=self.service, context={"titles": titles_info}
+                )
+
+        title_cacher = service.title_cache if hasattr(service, "title_cache") else None
+        cache_title_id = None
+        if hasattr(service, "title"):
+            cache_title_id = service.title
+        elif hasattr(service, "title_id"):
+            cache_title_id = service.title_id
+        cache_region = service.current_region if hasattr(service, "current_region") else None
+        cache_account_hash = get_account_hash(service.credential) if hasattr(service, "credential") else None
+
+        if (self.tmdb_year or self.tmdb_name) and self.tmdb_id:
             sample_title = titles[0] if hasattr(titles, "__getitem__") else titles
             kind = "tv" if isinstance(sample_title, Episode) else "movie"
-            tmdb_year_val = tags.get_year(self.tmdb_id, kind)
-            if tmdb_year_val:
-                if isinstance(titles, (Series, Movies)):
-                    for t in titles:
+
+            tmdb_year_val = None
+            tmdb_name_val = None
+
+            if self.tmdb_year:
+                tmdb_year_val = tags.get_year(
+                    self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
+                )
+
+            if self.tmdb_name:
+                tmdb_name_val = tags.get_title(
+                    self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
+                )
+
+            if isinstance(titles, (Series, Movies)):
+                for t in titles:
+                    if tmdb_year_val:
                         t.year = tmdb_year_val
-                else:
+                    if tmdb_name_val:
+                        if isinstance(t, Episode):
+                            t.title = tmdb_name_val
+                        else:
+                            t.name = tmdb_name_val
+            else:
+                if tmdb_year_val:
                     titles.year = tmdb_year_val
+                if tmdb_name_val:
+                    if isinstance(titles, Episode):
+                        titles.title = tmdb_name_val
+                    else:
+                        titles.name = tmdb_name_val
 
         console.print(Padding(Rule(f"[rule.text]{titles.__class__.__name__}: {titles}"), (1, 2)))
 
@@ -551,18 +899,36 @@ class dl:
         if list_titles:
             return
 
+        # Determine the latest episode if --latest-episode is set
+        latest_episode_id = None
+        if latest_episode and isinstance(titles, Series) and len(titles) > 0:
+            # Series is already sorted by (season, number, year)
+            # The last episode in the sorted list is the latest
+            latest_ep = titles[-1]
+            latest_episode_id = f"{latest_ep.season}x{latest_ep.number}"
+            self.log.info(f"Latest episode mode: Selecting S{latest_ep.season:02}E{latest_ep.number:02}")
+
         for i, title in enumerate(titles):
-            if isinstance(title, Episode) and wanted and f"{title.season}x{title.number}" not in wanted:
+            if isinstance(title, Episode) and latest_episode and latest_episode_id:
+                # If --latest-episode is set, only process the latest episode
+                if f"{title.season}x{title.number}" != latest_episode_id:
+                    continue
+            elif isinstance(title, Episode) and wanted and f"{title.season}x{title.number}" not in wanted:
                 continue
 
             console.print(Padding(Rule(f"[rule.text]{title}"), (1, 2)))
+            temp_font_files = []
 
             if isinstance(title, Episode) and not self.tmdb_searched:
                 kind = "tv"
                 if self.tmdb_id:
-                    tmdb_title = tags.get_title(self.tmdb_id, kind)
+                    tmdb_title = tags.get_title(
+                        self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
+                    )
                 else:
-                    self.tmdb_id, tmdb_title, self.search_source = tags.search_show_info(title.title, title.year, kind)
+                    self.tmdb_id, tmdb_title, self.search_source = tags.search_show_info(
+                        title.title, title.year, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
+                    )
                     if not (self.tmdb_id and tmdb_title and tags.fuzzy_match(tmdb_title, title.title)):
                         self.tmdb_id = None
                 if list_ or list_titles:
@@ -578,7 +944,9 @@ class dl:
                 self.tmdb_searched = True
 
             if isinstance(title, Movie) and (list_ or list_titles) and not self.tmdb_id:
-                movie_id, movie_title, _ = tags.search_show_info(title.name, title.year, "movie")
+                movie_id, movie_title, _ = tags.search_show_info(
+                    title.name, title.year, "movie", title_cacher, cache_title_id, cache_region, cache_account_hash
+                )
                 if movie_id:
                     console.print(
                         Padding(
@@ -591,11 +959,7 @@ class dl:
 
             if self.tmdb_id and getattr(self, "search_source", None) != "simkl":
                 kind = "tv" if isinstance(title, Episode) else "movie"
-                tags.external_ids(self.tmdb_id, kind)
-                if self.tmdb_year:
-                    tmdb_year_val = tags.get_year(self.tmdb_id, kind)
-                    if tmdb_year_val:
-                        title.year = tmdb_year_val
+                tags.external_ids(self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash)
 
             if slow and i != 0:
                 delay = random.randint(60, 120)
@@ -620,26 +984,83 @@ class dl:
                 s_lang = None
                 title.tracks.subtitles = []
 
+            if no_video:
+                console.log("Skipped video as --no-video was used...")
+                v_lang = None
+                title.tracks.videos = []
+
             with console.status("Getting tracks...", spinner="dots"):
-                title.tracks.add(service.get_tracks(title), warn_only=True)
-                title.tracks.chapters = service.get_chapters(title)
+                try:
+                    title.tracks.add(service.get_tracks(title), warn_only=True)
+                    title.tracks.chapters = service.get_chapters(title)
+                except Exception as e:
+                    if self.debug_logger:
+                        self.debug_logger.log_error(
+                            "get_tracks", e, service=self.service, context={"title": str(title)}
+                        )
+                    raise
+
+                if self.debug_logger:
+                    tracks_info = {
+                        "title": str(title),
+                        "video_tracks": len(title.tracks.videos),
+                        "audio_tracks": len(title.tracks.audio),
+                        "subtitle_tracks": len(title.tracks.subtitles),
+                        "has_chapters": bool(title.tracks.chapters),
+                        "videos": [
+                            {
+                                "codec": str(v.codec),
+                                "resolution": f"{v.width}x{v.height}" if v.width and v.height else "unknown",
+                                "bitrate": v.bitrate,
+                                "range": str(v.range),
+                                "language": str(v.language) if v.language else None,
+                                "drm": [str(type(d).__name__) for d in v.drm] if v.drm else [],
+                            }
+                            for v in title.tracks.videos
+                        ],
+                        "audio": [
+                            {
+                                "codec": str(a.codec),
+                                "bitrate": a.bitrate,
+                                "channels": a.channels,
+                                "language": str(a.language) if a.language else None,
+                                "descriptive": a.descriptive,
+                                "drm": [str(type(d).__name__) for d in a.drm] if a.drm else [],
+                            }
+                            for a in title.tracks.audio
+                        ],
+                        "subtitles": [
+                            {
+                                "codec": str(s.codec),
+                                "language": str(s.language) if s.language else None,
+                                "forced": s.forced,
+                                "sdh": s.sdh,
+                            }
+                            for s in title.tracks.subtitles
+                        ],
+                    }
+                    self.debug_logger.log(
+                        level="INFO", operation="get_tracks", service=self.service, context=tracks_info
+                    )
 
             # strip SDH subs to non-SDH if no equivalent same-lang non-SDH is available
             # uses a loose check, e.g, wont strip en-US SDH sub if a non-SDH en-GB is available
-            for subtitle in title.tracks.subtitles:
-                if subtitle.sdh and not any(
-                    is_close_match(subtitle.language, [x.language])
-                    for x in title.tracks.subtitles
-                    if not x.sdh and not x.forced
-                ):
-                    non_sdh_sub = deepcopy(subtitle)
-                    non_sdh_sub.id += "_stripped"
-                    non_sdh_sub.sdh = False
-                    title.tracks.add(non_sdh_sub)
-                    events.subscribe(
-                        events.Types.TRACK_MULTIPLEX,
-                        lambda track: (track.strip_hearing_impaired()) if track.id == non_sdh_sub.id else None,
-                    )
+            # Check if automatic SDH stripping is enabled in config
+            if config.subtitle.get("strip_sdh", True):
+                for subtitle in title.tracks.subtitles:
+                    if subtitle.sdh and not any(
+                        is_close_match(subtitle.language, [x.language])
+                        for x in title.tracks.subtitles
+                        if not x.sdh and not x.forced
+                    ):
+                        non_sdh_sub = deepcopy(subtitle)
+                        non_sdh_sub.id += "_stripped"
+                        non_sdh_sub.sdh = False
+                        title.tracks.add(non_sdh_sub)
+                        events.subscribe(
+                            events.Types.TRACK_MULTIPLEX,
+                            lambda track, sub_id=non_sdh_sub.id: (track.strip_hearing_impaired()) if track.id == sub_id else None,
+                        )
 
             with console.status("Sorting tracks by language and bitrate...", spinner="dots"):
                 video_sort_lang = v_lang or lang
@@ -785,6 +1206,29 @@ class dl:
                                 selected_videos.append(match)
                         title.tracks.videos = selected_videos
 
+                    # validate hybrid mode requirements
+                    if any(r == Video.Range.HYBRID for r in range_):
+                        hdr10_tracks = [v for v in title.tracks.videos if v.range == Video.Range.HDR10]
+                        dv_tracks = [v for v in title.tracks.videos if v.range == Video.Range.DV]
+
+                        if not hdr10_tracks and not dv_tracks:
+                            available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
+                            self.log.error("HYBRID mode requires both HDR10 and DV tracks, but neither is available")
+                            self.log.error(
+                                f"Available ranges: {', '.join(available_ranges) if available_ranges else 'none'}"
+                            )
+                            sys.exit(1)
+                        elif not hdr10_tracks:
+                            available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
+                            self.log.error("HYBRID mode requires both HDR10 and DV tracks, but only DV is available")
+                            self.log.error(f"Available ranges: {', '.join(available_ranges)}")
+                            sys.exit(1)
+                        elif not dv_tracks:
+                            available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
+                            self.log.error("HYBRID mode requires both HDR10 and DV tracks, but only HDR10 is available")
+                            self.log.error(f"Available ranges: {', '.join(available_ranges)}")
+                            sys.exit(1)
+
                     # filter subtitle tracks
                     if require_subs:
                         missing_langs = [
@@ -825,7 +1269,8 @@ class dl:
                 # filter audio tracks
                 # might have no audio tracks if part of the video, e.g. transport stream hls
                 if len(title.tracks.audio) > 0:
-                    title.tracks.select_audio(lambda x: not x.descriptive)  # exclude descriptive audio
+                    if not audio_description:
+                        title.tracks.select_audio(lambda x: not x.descriptive)  # exclude descriptive audio
                     if acodec:
                         title.tracks.select_audio(lambda x: x.codec == acodec)
                         if not title.tracks.audio:
@@ -884,7 +1329,7 @@ class dl:
                                 self.log.error(f"There's no {processed_lang} Audio Track, cannot continue...")
                                 sys.exit(1)
 
-                if video_only or audio_only or subs_only or chapters_only or no_subs or no_audio or no_chapters:
+                if video_only or audio_only or subs_only or chapters_only or no_subs or no_audio or no_chapters or no_video:
                     keep_videos = False
                     keep_audio = False
                     keep_subtitles = False
@@ -911,6 +1356,8 @@ class dl:
                         keep_audio = False
                     if no_chapters:
                         keep_chapters = False
+                    if no_video:
+                        keep_videos = False
 
                     kept_tracks = []
                     if keep_videos:
@@ -1009,6 +1456,14 @@ class dl:
                             download.result()
             except KeyboardInterrupt:
                 console.print(Padding(":x: Download Cancelled...", (0, 5, 1, 5)))
+                if self.debug_logger:
+                    self.debug_logger.log(
+                        level="WARNING",
+                        operation="download_tracks",
+                        service=self.service,
+                        message="Download cancelled by user",
+                        context={"title": str(title)},
+                    )
                 return
             except Exception as e:  # noqa
                 error_messages = [
@@ -1031,6 +1486,19 @@ class dl:
                         # CalledProcessError already lists the exception trace
                         console.print_exception()
                 console.print(Padding(Group(*error_messages), (1, 5)))
+
+                if self.debug_logger:
+                    self.debug_logger.log_error(
+                        "download_tracks",
+                        e,
+                        service=self.service,
+                        context={
+                            "title": str(title),
+                            "error_type": type(e).__name__,
+                            "tracks_count": len(title.tracks),
+                            "returncode": getattr(e, "returncode", None),
+                        },
+                    )
                 return
 
             if skip_dl:
@@ -1046,6 +1514,7 @@ class dl:
                     and not no_subs
                     and not (hasattr(service, "NO_SUBTITLES") and service.NO_SUBTITLES)
                     and not video_only
+                    and not no_video
                     and len(title.tracks.videos) > video_track_n
                     and any(
                         x.get("codec_name", "").startswith("eia_")
@@ -1098,25 +1567,15 @@ class dl:
                                 if line.startswith("Style: "):
                                     font_names.append(line.removesuffix("Style: ").split(",")[1])
 
-                    font_count = 0
-                    system_fonts = get_system_fonts()
-                    for font_name in set(font_names):
-                        family_dir = Path(config.directories.fonts, font_name)
-                        fonts_from_system = [file for name, file in system_fonts.items() if name.startswith(font_name)]
-                        if family_dir.exists():
-                            fonts = family_dir.glob("*.*tf")
-                            for font in fonts:
-                                title.tracks.add(Attachment(path=font, name=f"{font_name} ({font.stem})"))
-                                font_count += 1
-                        elif fonts_from_system:
-                            for font in fonts_from_system:
-                                title.tracks.add(Attachment(path=font, name=f"{font_name} ({font.stem})"))
-                                font_count += 1
-                        else:
-                            self.log.warning(f"Subtitle uses font [text2]{font_name}[/] but it could not be found...")
+                    font_count, missing_fonts = self.attach_subtitle_fonts(
+                        font_names, title, temp_font_files
+                    )
 
                     if font_count:
                         self.log.info(f"Attached {font_count} fonts for the Subtitles")
+
+                    if missing_fonts and sys.platform != "win32":
+                        self.suggest_missing_fonts(missing_fonts)
 
                 # Handle DRM decryption BEFORE repacking (must decrypt first!)
                 service_name = service.__class__.__name__.upper()
@@ -1271,8 +1730,17 @@ class dl:
                                 video_track.delete()
                         for track in title.tracks:
                             track.delete()
+
+                        # Clear temp font attachment paths and delete other attachments
                         for attachment in title.tracks.attachments:
-                            attachment.delete()
+                            if attachment.path and attachment.path in temp_font_files:
+                                attachment.path = None
+                            else:
+                                attachment.delete()
+
+                        # Clean up temp fonts
+                        for temp_path in temp_font_files:
+                            temp_path.unlink(missing_ok=True)
 
                 else:
                     # dont mux
@@ -1284,9 +1752,13 @@ class dl:
                     if not no_folder and isinstance(title, (Episode, Song)):
                         # Create folder based on title
                         # Use first available track for filename generation
-                        sample_track = title.tracks.videos[0] if title.tracks.videos else (
-                            title.tracks.audio[0] if title.tracks.audio else (
-                                title.tracks.subtitles[0] if title.tracks.subtitles else None
+                        sample_track = (
+                            title.tracks.videos[0]
+                            if title.tracks.videos
+                            else (
+                                title.tracks.audio[0]
+                                if title.tracks.audio
+                                else (title.tracks.subtitles[0] if title.tracks.subtitles else None)
                             )
                         )
                         if sample_track and sample_track.path:
@@ -1307,7 +1779,9 @@ class dl:
                                 track_suffix = f".{track.codec.name if hasattr(track.codec, 'name') else 'video'}"
                             elif isinstance(track, Audio):
                                 lang_suffix = f".{track.language}" if track.language else ""
-                                track_suffix = f"{lang_suffix}.{track.codec.name if hasattr(track.codec, 'name') else 'audio'}"
+                                track_suffix = (
+                                    f"{lang_suffix}.{track.codec.name if hasattr(track.codec, 'name') else 'audio'}"
+                                )
                             elif isinstance(track, Subtitle):
                                 lang_suffix = f".{track.language}" if track.language else ""
                                 forced_suffix = ".forced" if track.forced else ""
@@ -1394,8 +1868,22 @@ class dl:
                     self.cdm = playready_cdm
 
         if isinstance(drm, Widevine):
+            if self.debug_logger:
+                self.debug_logger.log_drm_operation(
+                    drm_type="Widevine",
+                    operation="prepare_drm",
+                    service=self.service,
+                    context={
+                        "track": str(track),
+                        "title": str(title),
+                        "pssh": drm.pssh.dumps() if drm.pssh else None,
+                        "kids": [k.hex for k in drm.kids],
+                        "track_kid": track_kid.hex if track_kid else None,
+                    },
+                )
+
             with self.DRM_TABLE_LOCK:
-                pssh_display = self._truncate_pssh_for_display(drm.pssh.dumps(), "Widevine")
+                pssh_display = self.truncate_pssh_for_display(drm.pssh.dumps(), "Widevine")
                 cek_tree = Tree(Text.assemble(("Widevine", "cyan"), (f"({pssh_display})", "text"), overflow="fold"))
                 pre_existing_tree = next(
                     (x for x in table.columns[0].cells if isinstance(x, Tree) and x.label == cek_tree.label), None
@@ -1422,11 +1910,32 @@ class dl:
                             if not any(f"{kid.hex}:{content_key}" in x.label for x in cek_tree.children):
                                 cek_tree.add(label)
                             self.vaults.add_key(kid, content_key, excluding=vault_used)
+
+                            if self.debug_logger:
+                                self.debug_logger.log_vault_query(
+                                    vault_name=vault_used,
+                                    operation="get_key_success",
+                                    service=self.service,
+                                    context={
+                                        "kid": kid.hex,
+                                        "content_key": content_key,
+                                        "track": str(track),
+                                        "from_cache": True,
+                                    },
+                                )
                         elif vaults_only:
                             msg = f"No Vault has a Key for {kid.hex} and --vaults-only was used"
                             cek_tree.add(f"[logging.level.error]{msg}")
                             if not pre_existing_tree:
                                 table.add_row(cek_tree)
+                            if self.debug_logger:
+                                self.debug_logger.log(
+                                    level="ERROR",
+                                    operation="vault_key_not_found",
+                                    service=self.service,
+                                    message=msg,
+                                    context={"kid": kid.hex, "track": str(track)},
+                                )
                             raise Widevine.Exceptions.CEKNotFound(msg)
                         else:
                             need_license = True
@@ -1436,6 +1945,18 @@ class dl:
 
                 if need_license and not vaults_only:
                     from_vaults = drm.content_keys.copy()
+
+                    if self.debug_logger:
+                        self.debug_logger.log(
+                            level="INFO",
+                            operation="get_license",
+                            service=self.service,
+                            message="Requesting Widevine license from service",
+                            context={
+                                "track": str(track),
+                                "kids_needed": [k.hex for k in all_kids if k not in drm.content_keys],
+                            },
+                        )
 
                     try:
                         if self.service == "NF":
@@ -1450,7 +1971,26 @@ class dl:
                         cek_tree.add(f"[logging.level.error]{msg}")
                         if not pre_existing_tree:
                             table.add_row(cek_tree)
+                        if self.debug_logger:
+                            self.debug_logger.log_error(
+                                "get_license",
+                                e,
+                                service=self.service,
+                                context={"track": str(track), "exception_type": type(e).__name__},
+                            )
                         raise e
+
+                    if self.debug_logger:
+                        self.debug_logger.log(
+                            level="INFO",
+                            operation="license_keys_retrieved",
+                            service=self.service,
+                            context={
+                                "track": str(track),
+                                "keys_count": len(drm.content_keys),
+                                "kids": [k.hex for k in drm.content_keys.keys()],
+                            },
+                        )
 
                     for kid_, key in drm.content_keys.items():
                         if key == "0" * 32:
@@ -1497,8 +2037,22 @@ class dl:
                     export.write_text(jsonpickle.dumps(keys, indent=4), encoding="utf8")
 
         elif isinstance(drm, PlayReady):
+            if self.debug_logger:
+                self.debug_logger.log_drm_operation(
+                    drm_type="PlayReady",
+                    operation="prepare_drm",
+                    service=self.service,
+                    context={
+                        "track": str(track),
+                        "title": str(title),
+                        "pssh": drm.pssh_b64 or "",
+                        "kids": [k.hex for k in drm.kids],
+                        "track_kid": track_kid.hex if track_kid else None,
+                    },
+                )
+
             with self.DRM_TABLE_LOCK:
-                pssh_display = self._truncate_pssh_for_display(drm.pssh_b64 or "", "PlayReady")
+                pssh_display = self.truncate_pssh_for_display(drm.pssh_b64 or "", "PlayReady")
                 cek_tree = Tree(
                     Text.assemble(
                         ("PlayReady", "cyan"),
@@ -1531,11 +2085,33 @@ class dl:
                             if not any(f"{kid.hex}:{content_key}" in x.label for x in cek_tree.children):
                                 cek_tree.add(label)
                             self.vaults.add_key(kid, content_key, excluding=vault_used)
+
+                            if self.debug_logger:
+                                self.debug_logger.log_vault_query(
+                                    vault_name=vault_used,
+                                    operation="get_key_success",
+                                    service=self.service,
+                                    context={
+                                        "kid": kid.hex,
+                                        "content_key": content_key,
+                                        "track": str(track),
+                                        "from_cache": True,
+                                        "drm_type": "PlayReady",
+                                    },
+                                )
                         elif vaults_only:
                             msg = f"No Vault has a Key for {kid.hex} and --vaults-only was used"
                             cek_tree.add(f"[logging.level.error]{msg}")
                             if not pre_existing_tree:
                                 table.add_row(cek_tree)
+                            if self.debug_logger:
+                                self.debug_logger.log(
+                                    level="ERROR",
+                                    operation="vault_key_not_found",
+                                    service=self.service,
+                                    message=msg,
+                                    context={"kid": kid.hex, "track": str(track), "drm_type": "PlayReady"},
+                                )
                             raise PlayReady.Exceptions.CEKNotFound(msg)
                         else:
                             need_license = True
@@ -1556,6 +2132,17 @@ class dl:
                         cek_tree.add(f"[logging.level.error]{msg}")
                         if not pre_existing_tree:
                             table.add_row(cek_tree)
+                        if self.debug_logger:
+                            self.debug_logger.log_error(
+                                "get_license_playready",
+                                e,
+                                service=self.service,
+                                context={
+                                    "track": str(track),
+                                    "exception_type": type(e).__name__,
+                                    "drm_type": "PlayReady",
+                                },
+                            )
                         raise e
 
                     for kid_, key in drm.content_keys.items():
@@ -1630,7 +2217,7 @@ class dl:
 
     @staticmethod
     def save_cookies(path: Path, cookies: CookieJar):
-        if hasattr(cookies, 'jar'):
+        if hasattr(cookies, "jar"):
             cookies = cookies.jar
 
         cookie_jar = MozillaCookieJar(path)
@@ -1750,8 +2337,9 @@ class dl:
 
         cdm_api = next(iter(x.copy() for x in config.remote_cdm if x["name"] == cdm_name), None)
         if cdm_api:
-            is_decrypt_lab = True if cdm_api.get("type") == "decrypt_labs" else False
-            if is_decrypt_lab:
+            cdm_type = cdm_api.get("type")
+
+            if cdm_type == "decrypt_labs":
                 del cdm_api["name"]
                 del cdm_api["type"]
 
@@ -1766,14 +2354,22 @@ class dl:
 
                 # All DecryptLabs CDMs use DecryptLabsRemoteCDM
                 return DecryptLabsRemoteCDM(service_name=service, vaults=self.vaults, **cdm_api)
+
+            elif cdm_type == "custom_api":
+                del cdm_api["name"]
+                del cdm_api["type"]
+
+                # All Custom API CDMs use CustomRemoteCDM
+                return CustomRemoteCDM(service_name=service, vaults=self.vaults, **cdm_api)
+
             else:
                 return RemoteCdm(
-                    device_type=cdm_api['Device Type'],
-                    system_id=cdm_api['System ID'],
-                    security_level=cdm_api['Security Level'],
-                    host=cdm_api['Host'],
-                    secret=cdm_api['Secret'],
-                    device_name=cdm_api['Device Name'],
+                    device_type=cdm_api["Device Type"],
+                    system_id=cdm_api["System ID"],
+                    security_level=cdm_api["Security Level"],
+                    host=cdm_api["Host"],
+                    secret=cdm_api["Secret"],
+                    device_name=cdm_api["Device Name"],
                 )
 
         prd_path = config.directories.prds / f"{cdm_name}.prd"

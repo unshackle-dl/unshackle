@@ -25,7 +25,7 @@ from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY
 from unshackle.core.downloaders import aria2c, curl_impersonate, n_m3u8dl_re, requests
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
 from unshackle.core.events import events
-from unshackle.core.utilities import get_boxes, try_ensure_utf8
+from unshackle.core.utilities import get_boxes, get_extension, try_ensure_utf8
 from unshackle.core.utils.subprocess import ffprobe
 
 
@@ -47,6 +47,8 @@ class Track:
         drm: Optional[Iterable[DRM_T]] = None,
         edition: Optional[str] = None,
         downloader: Optional[Callable] = None,
+        downloader_args: Optional[dict] = None,
+        from_file: Optional[Path] = None,
         data: Optional[Union[dict, defaultdict]] = None,
         id_: Optional[str] = None,
         extra: Optional[Any] = None,
@@ -69,6 +71,10 @@ class Track:
             raise TypeError(f"Expected edition to be a {str}, not {type(edition)}")
         if not isinstance(downloader, (Callable, type(None))):
             raise TypeError(f"Expected downloader to be a {Callable}, not {type(downloader)}")
+        if not isinstance(downloader_args, (dict, type(None))):
+            raise TypeError(f"Expected downloader_args to be a {dict}, not {type(downloader_args)}")
+        if not isinstance(from_file, (Path, type(None))):
+            raise TypeError(f"Expected from_file to be a {Path}, not {type(from_file)}")
         if not isinstance(data, (dict, defaultdict, type(None))):
             raise TypeError(f"Expected data to be a {dict} or {defaultdict}, not {type(data)}")
 
@@ -100,6 +106,8 @@ class Track:
         self.drm = drm
         self.edition: str = edition
         self.downloader = downloader
+        self.downloader_args = downloader_args
+        self.from_file = from_file
         self._data: defaultdict[Any, Any] = defaultdict(dict)
         self.data = data or {}
         self.extra: Any = extra or {}  # allow anything for extra, but default to a dict
@@ -203,7 +211,21 @@ class Track:
         save_path = config.directories.temp / f"{track_type}_{self.id}.mp4"
         if track_type == "Subtitle":
             save_path = save_path.with_suffix(f".{self.codec.extension}")
-            if self.downloader.__name__ == "n_m3u8dl_re":
+            # n_m3u8dl_re doesn't support directly downloading subtitles from URLs
+            # or when the subtitle has a direct file extension
+            if self.downloader.__name__ == "n_m3u8dl_re" and (
+                self.descriptor == self.Descriptor.URL
+                or get_extension(self.url) in {
+                    ".srt",
+                    ".vtt",
+                    ".ttml",
+                    ".ssa",
+                    ".ass",
+                    ".stpp",
+                    ".wvtt",
+                    ".xml",
+                }
+            ):
                 self.downloader = requests
 
         if self.descriptor != self.Descriptor.URL:

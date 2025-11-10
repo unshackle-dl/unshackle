@@ -180,6 +180,167 @@ class TitleCacher:
             "hit_rate": f"{hit_rate:.1f}%",
         }
 
+    def get_cached_tmdb(
+        self, title_id: str, kind: str, region: Optional[str] = None, account_hash: Optional[str] = None
+    ) -> Optional[dict]:
+        """
+        Get cached TMDB data for a title.
+
+        Args:
+            title_id: The title identifier
+            kind: "movie" or "tv"
+            region: The region/proxy identifier
+            account_hash: Hash of account credentials
+
+        Returns:
+            Dict with 'detail' and 'external_ids' if cached and valid, None otherwise
+        """
+        if not config.title_cache_enabled:
+            return None
+
+        cache_key = self._generate_cache_key(title_id, region, account_hash)
+        cache = self.cacher.get(cache_key, version=1)
+
+        if not cache or not cache.data:
+            return None
+
+        tmdb_data = getattr(cache.data, "tmdb_data", None)
+        if not tmdb_data:
+            return None
+
+        tmdb_expiration = tmdb_data.get("expires_at")
+        if not tmdb_expiration or datetime.now() >= tmdb_expiration:
+            self.log.debug(f"TMDB cache expired for {title_id}")
+            return None
+
+        if tmdb_data.get("kind") != kind:
+            self.log.debug(f"TMDB cache kind mismatch for {title_id}: cached {tmdb_data.get('kind')}, requested {kind}")
+            return None
+
+        self.log.debug(f"TMDB cache hit for {title_id}")
+        return {
+            "detail": tmdb_data.get("detail"),
+            "external_ids": tmdb_data.get("external_ids"),
+            "fetched_at": tmdb_data.get("fetched_at"),
+        }
+
+    def cache_tmdb(
+        self,
+        title_id: str,
+        detail_response: dict,
+        external_ids_response: dict,
+        kind: str,
+        region: Optional[str] = None,
+        account_hash: Optional[str] = None,
+    ) -> None:
+        """
+        Cache TMDB data for a title.
+
+        Args:
+            title_id: The title identifier
+            detail_response: Full TMDB detail API response
+            external_ids_response: Full TMDB external_ids API response
+            kind: "movie" or "tv"
+            region: The region/proxy identifier
+            account_hash: Hash of account credentials
+        """
+        if not config.title_cache_enabled:
+            return
+
+        cache_key = self._generate_cache_key(title_id, region, account_hash)
+        cache = self.cacher.get(cache_key, version=1)
+
+        if not cache or not cache.data:
+            self.log.debug(f"Cannot cache TMDB data: no title cache exists for {title_id}")
+            return
+
+        now = datetime.now()
+        tmdb_data = {
+            "detail": detail_response,
+            "external_ids": external_ids_response,
+            "kind": kind,
+            "fetched_at": now,
+            "expires_at": now + timedelta(days=7),  # 7-day expiration
+        }
+
+        cache.data.tmdb_data = tmdb_data
+
+        cache.set(cache.data, expiration=cache.expiration)
+        self.log.debug(f"Cached TMDB data for {title_id} (kind={kind})")
+
+    def get_cached_simkl(
+        self, title_id: str, region: Optional[str] = None, account_hash: Optional[str] = None
+    ) -> Optional[dict]:
+        """
+        Get cached Simkl data for a title.
+
+        Args:
+            title_id: The title identifier
+            region: The region/proxy identifier
+            account_hash: Hash of account credentials
+
+        Returns:
+            Simkl response dict if cached and valid, None otherwise
+        """
+        if not config.title_cache_enabled:
+            return None
+
+        cache_key = self._generate_cache_key(title_id, region, account_hash)
+        cache = self.cacher.get(cache_key, version=1)
+
+        if not cache or not cache.data:
+            return None
+
+        simkl_data = getattr(cache.data, "simkl_data", None)
+        if not simkl_data:
+            return None
+
+        simkl_expiration = simkl_data.get("expires_at")
+        if not simkl_expiration or datetime.now() >= simkl_expiration:
+            self.log.debug(f"Simkl cache expired for {title_id}")
+            return None
+
+        self.log.debug(f"Simkl cache hit for {title_id}")
+        return simkl_data.get("response")
+
+    def cache_simkl(
+        self,
+        title_id: str,
+        simkl_response: dict,
+        region: Optional[str] = None,
+        account_hash: Optional[str] = None,
+    ) -> None:
+        """
+        Cache Simkl data for a title.
+
+        Args:
+            title_id: The title identifier
+            simkl_response: Full Simkl API response
+            region: The region/proxy identifier
+            account_hash: Hash of account credentials
+        """
+        if not config.title_cache_enabled:
+            return
+
+        cache_key = self._generate_cache_key(title_id, region, account_hash)
+        cache = self.cacher.get(cache_key, version=1)
+
+        if not cache or not cache.data:
+            self.log.debug(f"Cannot cache Simkl data: no title cache exists for {title_id}")
+            return
+
+        now = datetime.now()
+        simkl_data = {
+            "response": simkl_response,
+            "fetched_at": now,
+            "expires_at": now + timedelta(days=7),
+        }
+
+        cache.data.simkl_data = simkl_data
+
+        cache.set(cache.data, expiration=cache.expiration)
+        self.log.debug(f"Cached Simkl data for {title_id}")
+
 
 def get_region_from_proxy(proxy_url: Optional[str]) -> Optional[str]:
     """
