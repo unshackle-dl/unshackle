@@ -1190,22 +1190,22 @@ wheels = [
 
 [[package]]
 name = "pyplayready"
-version = "0.8.1"
+version = "0.6.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "aiohttp" },
     { name = "click" },
     { name = "construct" },
     { name = "cryptography" },
     { name = "ecpy" },
-    { name = "platformdirs" },
+    { name = "lxml" },
     { name = "pycryptodome" },
     { name = "pyyaml" },
     { name = "requests" },
+    { name = "xmltodict" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/35/26/6ab071901813e3db59d1788ca9ee48de64fe8f02ff4d12b7ffc3cbe90398/pyplayready-0.8.1.tar.gz", hash = "sha256:eb5e3f8327e7f490793ce77e237adfa4f25a3b0b013943d9b21d78dc3903d3f2", size = 67320, upload-time = "2025-10-05T15:00:02.863Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/53/f2/6d75b6d10a8361b53a2acbe959d51aa586418e9af497381a9f5c436ca488/pyplayready-0.6.3.tar.gz", hash = "sha256:b9b82a32c2cced9c43f910eb1fb891545f1491dc063c1eb9c20634e2417eda76", size = 58019, upload-time = "2025-08-20T19:32:43.642Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/19/8e/1ede8ae7bbe333073b6f5c3bc5023b1be48d8a7b403274c3649b404641f7/pyplayready-0.8.1-py3-none-any.whl", hash = "sha256:5cd0b2dd4f6b0df8cd51d22c6256ff00c61ab2b9b233dac19f08447555b35c69", size = 77828, upload-time = "2025-10-05T15:00:01.391Z" },
+    { url = "https://files.pythonhosted.org/packages/5b/7f/64d5ff5d765f9f2138ee7cc196fd9401f9eae0fb514c66660ad4e56584fa/pyplayready-0.6.3-py3-none-any.whl", hash = "sha256:82f35434e790a7da21df57ec053a2924ceb63622c5a6c5ff9f0fa03db0531c57", size = 66162, upload-time = "2025-08-20T19:32:42.62Z" },
 ]
 
 [[package]]
@@ -1644,7 +1644,7 @@ requires-dist = [
     { name = "pymediainfo", specifier = ">=6.1.0,<8" },
     { name = "pymp4", specifier = ">=1.4.0,<2" },
     { name = "pymysql", specifier = ">=1.1.0,<2" },
-    { name = "pyplayready", specifier = ">=0.6.3,<0.9" },
+    { name = "pyplayready", specifier = ">=0.6.3,<0.7" },
     { name = "pysubs2", specifier = ">=1.7.0,<2" },
     { name = "pywidevine", extras = ["serve"], specifier = ">=1.8.0,<2" },
     { name = "pyyaml", specifier = ">=6.0.1,<7" },
@@ -1694,6 +1694,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/1c/14/37fcdba2808a6c615681cd216fecae00413c9dab44fb2e57805ecf3eaee3/virtualenv-20.34.0.tar.gz", hash = "sha256:44815b2c9dee7ed86e387b842a84f20b93f7f417f95886ca1996a72a4138eb1a", size = 6003808, upload-time = "2025-08-13T14:24:07.464Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/76/06/04c8e804f813cf972e3262f3f8584c232de64f0cde9f703b46cf53a45090/virtualenv-20.34.0-py3-none-any.whl", hash = "sha256:341f5afa7eee943e4984a9207c025feedd768baff6753cd660c857ceb3e36026", size = 5983279, upload-time = "2025-08-13T14:24:05.111Z" },
+]
+
+[[package]]
+name = "xmltodict"
+version = "0.14.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/50/05/51dcca9a9bf5e1bce52582683ce50980bcadbc4fa5143b9f2b19ab99958f/xmltodict-0.14.2.tar.gz", hash = "sha256:201e7c28bb210e374999d1dde6382923ab0ed1a8a5faeece48ab525b7810a553", size = 51942, upload-time = "2024-10-16T06:10:29.683Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d6/45/fc303eb433e8a2a271739c98e953728422fa61a3c1f36077a49e395c972e/xmltodict-0.14.2-py2.py3-none-any.whl", hash = "sha256:20cc7d723ed729276e808f26fb6b3599f786cbc37e06c65e192ba77c40f20aac", size = 9981, upload-time = "2024-10-16T06:10:27.649Z" },
 ]
 
 [[package]]
