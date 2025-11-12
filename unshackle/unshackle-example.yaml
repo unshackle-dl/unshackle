@@ -20,7 +20,9 @@ set_terminal_bg: false
 # Set file naming convention
 #  true for style - Prime.Suspect.S07E01.The.Final.Act.Part.One.1080p.ITV.WEB-DL.AAC2.0.H.264
 #  false for style - Prime Suspect S07E01 The Final Act - Part One
+#  true for dash separator style - Prime Suspect - S07E01 - The Final Act - Part One
 scene_naming: true
+dash_naming: false
 
 # Whether to include the year in series names for episodes and folders (default: true)
 #  true for style - Show Name (2023) S01E01 Episode Name
