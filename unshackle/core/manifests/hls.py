@@ -313,7 +313,7 @@ class HLS:
 
             if segment.byterange:
                 byte_range = HLS.calculate_byte_range(segment.byterange, range_offset)
-                range_offset = byte_range.split("-")[0]
+                range_offset = int(byte_range.split("-")[0])
             else:
                 byte_range = None
 
