@@ -1454,6 +1454,7 @@ class dl:
                             )
                         ):
                             download.result()
+
             except KeyboardInterrupt:
                 console.print(Padding(":x: Download Cancelled...", (0, 5, 1, 5)))
                 if self.debug_logger:
@@ -2028,12 +2029,21 @@ class dl:
                 if export:
                     keys = {}
                     if export.is_file():
-                        keys = jsonpickle.loads(export.read_text(encoding="utf8"))
+                        keys = jsonpickle.loads(export.read_text(encoding="utf8")) or {}
                     if str(title) not in keys:
                         keys[str(title)] = {}
                     if str(track) not in keys[str(title)]:
                         keys[str(title)][str(track)] = {}
-                    keys[str(title)][str(track)].update(drm.content_keys)
+
+                    track_data = keys[str(title)][str(track)]
+                    track_data["url"] = track.url
+                    track_data["descriptor"] = track.descriptor.name
+
+                    if "keys" not in track_data:
+                        track_data["keys"] = {}
+                    for kid, key in drm.content_keys.items():
+                        track_data["keys"][kid.hex] = key
+
                     export.write_text(jsonpickle.dumps(keys, indent=4), encoding="utf8")
 
         elif isinstance(drm, PlayReady):
@@ -2173,12 +2183,21 @@ class dl:
                 if export:
                     keys = {}
                     if export.is_file():
-                        keys = jsonpickle.loads(export.read_text(encoding="utf8"))
+                        keys = jsonpickle.loads(export.read_text(encoding="utf8")) or {}
                     if str(title) not in keys:
                         keys[str(title)] = {}
                     if str(track) not in keys[str(title)]:
                         keys[str(title)][str(track)] = {}
-                    keys[str(title)][str(track)].update(drm.content_keys)
+
+                    track_data = keys[str(title)][str(track)]
+                    track_data["url"] = track.url
+                    track_data["descriptor"] = track.descriptor.name
+
+                    if "keys" not in track_data:
+                        track_data["keys"] = {}
+                    for kid, key in drm.content_keys.items():
+                        track_data["keys"][kid.hex] = key
+
                     export.write_text(jsonpickle.dumps(keys, indent=4), encoding="utf8")
 
     @staticmethod
