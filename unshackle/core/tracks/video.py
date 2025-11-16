@@ -99,24 +99,42 @@ class Video(Track):
         @staticmethod
         def from_cicp(primaries: int, transfer: int, matrix: int) -> Video.Range:
             """
-            ISO/IEC 23001-8 Coding-independent code points to Video Range.
+            Convert CICP (Coding-Independent Code Points) values to Video Range.
+
+            CICP is defined in ITU-T H.273 and ISO/IEC 23091-2 for signaling video
+            color properties independently of the compression codec. These values are
+            used across AVC (H.264), HEVC (H.265), VVC, AV1, and other modern codecs.
+
+            The enum values (Primaries, Transfer, Matrix) match the official specifications:
+            - ITU-T H.273: Coding-independent code points for video signal type identification
+            - ISO/IEC 23091-2: Information technology — Coding-independent code points — Part 2: Video
+            - H.264 Table E-3 (Colour Primaries) and Table E-4 (Transfer Characteristics)
+            - H.265 Table E.3 and E.4 (identical to H.264)
+
+            Note: Value 0 = "Reserved" and Value 2 = "Unspecified" per specification.
+            While both effectively mean "unknown" in practice, the distinction matters for
+            spec compliance. Value 2 was added based on user feedback (GitHub issue) and
+            verified against FFmpeg's AVColorPrimaries/AVColorTransferCharacteristic enums.
 
             Sources:
-            https://www.itu.int/rec/T-REC-H.Sup19-202104-I
+            - https://www.itu.int/rec/T-REC-H.273
+            - https://www.itu.int/rec/T-REC-H.Sup19-202104-I
+            - https://github.com/FFmpeg/FFmpeg/blob/master/libavutil/pixfmt.h
             """
 
             class Primaries(Enum):
-                Unspecified = 0
+                Reserved = 0
                 BT_709 = 1
+                Unspecified = 2
                 BT_601_625 = 5
                 BT_601_525 = 6
                 BT_2020_and_2100 = 9
                 SMPTE_ST_2113_and_EG_4321 = 12  # P3D65
 
             class Transfer(Enum):
-                Unspecified = 0
+                Reserved = 0
                 BT_709 = 1
-                Unspecified_Image = 2
+                Unspecified = 2
                 BT_601 = 6
                 BT_2020 = 14
                 BT_2100 = 15
@@ -143,7 +161,7 @@ class Video(Track):
 
             # primaries and matrix does not strictly correlate to a range
 
-            if (primaries, transfer, matrix) == (0, 0, 0):
+            if (primaries, transfer, matrix) == (Primaries.Reserved, Transfer.Reserved, Matrix.RGB):
                 return Video.Range.SDR
             elif primaries in (Primaries.BT_601_625, Primaries.BT_601_525):
                 return Video.Range.SDR
