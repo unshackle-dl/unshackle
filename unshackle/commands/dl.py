@@ -1847,25 +1847,32 @@ class dl:
         if not drm:
             return
 
+        track_quality = None
         if isinstance(track, Video) and track.height:
-            pass
+            track_quality = track.height
 
         if isinstance(drm, Widevine):
             if not isinstance(self.cdm, (WidevineCdm, DecryptLabsRemoteCDM)) or (
                 isinstance(self.cdm, DecryptLabsRemoteCDM) and self.cdm.is_playready
             ):
-                widevine_cdm = self.get_cdm(self.service, self.profile, drm="widevine")
+                widevine_cdm = self.get_cdm(self.service, self.profile, drm="widevine", quality=track_quality)
                 if widevine_cdm:
-                    self.log.info("Switching to Widevine CDM for Widevine content")
+                    if track_quality:
+                        self.log.info(f"Switching to Widevine CDM for Widevine {track_quality}p content")
+                    else:
+                        self.log.info("Switching to Widevine CDM for Widevine content")
                     self.cdm = widevine_cdm
 
         elif isinstance(drm, PlayReady):
             if not isinstance(self.cdm, (PlayReadyCdm, DecryptLabsRemoteCDM)) or (
                 isinstance(self.cdm, DecryptLabsRemoteCDM) and not self.cdm.is_playready
             ):
-                playready_cdm = self.get_cdm(self.service, self.profile, drm="playready")
+                playready_cdm = self.get_cdm(self.service, self.profile, drm="playready", quality=track_quality)
                 if playready_cdm:
-                    self.log.info("Switching to PlayReady CDM for PlayReady content")
+                    if track_quality:
+                        self.log.info(f"Switching to PlayReady CDM for PlayReady {track_quality}p content")
+                    else:
+                        self.log.info("Switching to PlayReady CDM for PlayReady content")
                     self.cdm = playready_cdm
 
         if isinstance(drm, Widevine):
