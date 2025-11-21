@@ -130,6 +130,7 @@ def sanitize_filename(filename: str, spacer: str = ".") -> str:
     filename = re.sub(r"[:; ]", spacer, filename)  # structural chars to (spacer)
     filename = re.sub(r"[\\*!?¿,'\"" "()<>|$#~]", "", filename)  # not filename safe chars
     filename = re.sub(rf"[{spacer}]{{2,}}", spacer, filename)  # remove extra neighbouring (spacer)s
+    filename = filename.replace(".-.", ".")  # e.g. .-. no R. R no good. R not scene.
 
     return filename
 
