@@ -44,8 +44,16 @@ class WindscribeVPN(Proxy):
     def get_proxy(self, query: str) -> Optional[str]:
         """
         Get an HTTPS proxy URI for a WindscribeVPN server.
+
+        Note: Windscribe's static OpenVPN credentials only work on US servers.
         """
         query = query.lower()
+
+        if query != "us" and query not in self.server_map:
+            raise ValueError(
+                f"Windscribe proxy does not currently support the '{query.upper()}' region. "
+                "Only US servers are supported with static OpenVPN credentials. "
+            )
 
         if query in self.server_map:
             hostname = self.server_map[query]
