@@ -24,7 +24,13 @@ from unshackle.core.constants import context_settings
     default=False,
     help="Include technical debug information (tracebacks, stderr) in API error responses.",
 )
-def serve(host: str, port: int, caddy: bool, api_only: bool, no_key: bool, debug_api: bool) -> None:
+@click.option(
+    "--debug",
+    is_flag=True,
+    default=False,
+    help="Enable debug logging for API operations.",
+)
+def serve(host: str, port: int, caddy: bool, api_only: bool, no_key: bool, debug_api: bool, debug: bool) -> None:
     """
     Serve your Local Widevine Devices and REST API for Remote Access.
 
@@ -39,11 +45,59 @@ def serve(host: str, port: int, caddy: bool, api_only: bool, no_key: bool, debug
 
     \b
     The REST API provides programmatic access to unshackle functionality.
-    Configure authentication in your config under serve.users and serve.api_secret.
+    Configure authentication in your config under serve.api_secret and serve.api_keys.
+
+    \b
+    API KEY TIERS:
+    Premium API keys can use server-side CDM for decryption. Configure in unshackle.yaml:
+
+    \b
+    serve:
+      api_secret: "your-api-secret"
+      api_keys:
+        - key: "basic-user-key"
+          tier: "basic"
+          allowed_cdms: []
+        - key: "premium-user-key"
+          tier: "premium"
+          default_cdm: "chromecdm_2101"
+          allowed_cdms: ["*"]  # or list specific CDMs: ["chromecdm_2101", "chromecdm_2202"]
+
+    \b
+    REMOTE SERVICES:
+    The server exposes endpoints that allow remote unshackle clients to use
+    your configured services without needing the service implementations.
+    Remote clients can authenticate, get titles/tracks, and receive session data
+    for downloading. Configure remote clients in unshackle.yaml:
+
+    \b
+    remote_services:
+      - url: "http://your-server:8786"
+        api_key: "your-api-key"
+        name: "my-server"
+
+    \b
+    Available remote endpoints:
+    - GET  /api/remote/services - List available services
+    - POST /api/remote/{service}/search - Search for content
+    - POST /api/remote/{service}/titles - Get titles
+    - POST /api/remote/{service}/tracks - Get tracks
+    - POST /api/remote/{service}/chapters - Get chapters
+    - POST /api/remote/{service}/license - Get DRM license (uses client CDM)
+    - POST /api/remote/{service}/decrypt - Decrypt using server CDM (premium only)
     """
     from pywidevine import serve as pywidevine_serve
 
     log = logging.getLogger("serve")
+
+    # Configure logging level based on --debug flag
+    if debug:
+        logging.basicConfig(level=logging.DEBUG, format="%(name)s - %(levelname)s - %(message)s")
+        log.info("Debug logging enabled for API operations")
+    else:
+        # Set API loggers to WARNING to reduce noise unless --debug is used
+        logging.getLogger("api").setLevel(logging.WARNING)
+        logging.getLogger("api.remote").setLevel(logging.WARNING)
 
     # Validate API secret for REST API routes (unless --no-key is used)
     if not no_key:

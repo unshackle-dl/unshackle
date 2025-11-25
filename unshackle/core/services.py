@@ -25,6 +25,17 @@ class Services(click.MultiCommand):
 
     # Click-specific methods
 
+    @staticmethod
+    def _get_remote_services():
+        """Get remote services from the manager (lazy import to avoid circular dependency)."""
+        try:
+            from unshackle.core.remote_services import get_remote_service_manager
+
+            manager = get_remote_service_manager()
+            return manager.get_all_services()
+        except Exception:
+            return {}
+
     def list_commands(self, ctx: click.Context) -> list[str]:
         """Returns a list of all available Services as command names for Click."""
         return Services.get_tags()
@@ -51,13 +62,25 @@ class Services(click.MultiCommand):
 
     @staticmethod
     def get_tags() -> list[str]:
-        """Returns a list of service tags from all available Services."""
-        return [x.parent.stem for x in _SERVICES]
+        """Returns a list of service tags from all available Services (local + remote)."""
+        local_tags = [x.parent.stem for x in _SERVICES]
+        remote_services = Services._get_remote_services()
+        remote_tags = list(remote_services.keys())
+        return local_tags + remote_tags
 
     @staticmethod
     def get_path(name: str) -> Path:
         """Get the directory path of a command."""
         tag = Services.get_tag(name)
+
+        # Check if it's a remote service
+        remote_services = Services._get_remote_services()
+        if tag in remote_services:
+            # Remote services don't have local paths
+            # Return a dummy path or raise an appropriate error
+            # For now, we'll raise KeyError to indicate no path exists
+            raise KeyError(f"Remote service '{tag}' has no local path")
+
         for service in _SERVICES:
             if service.parent.stem == tag:
                 return service.parent
@@ -72,19 +95,38 @@ class Services(click.MultiCommand):
         """
         original_value = value
         value = value.lower()
+
+        # Check local services
         for path in _SERVICES:
             tag = path.parent.stem
             if value in (tag.lower(), *_ALIASES.get(tag, [])):
                 return tag
+
+        # Check remote services
+        remote_services = Services._get_remote_services()
+        for tag, service_class in remote_services.items():
+            if value == tag.lower():
+                return tag
+            if hasattr(service_class, "ALIASES"):
+                if value in (alias.lower() for alias in service_class.ALIASES):
+                    return tag
+
         return original_value
 
     @staticmethod
     def load(tag: str) -> Service:
-        """Load a Service module by Service tag."""
+        """Load a Service module by Service tag (local or remote)."""
+        # Check local services first
         module = _MODULES.get(tag)
-        if not module:
-            raise KeyError(f"There is no Service added by the Tag '{tag}'")
-        return module
+        if module:
+            return module
+
+        # Check remote services
+        remote_services = Services._get_remote_services()
+        if tag in remote_services:
+            return remote_services[tag]
+
+        raise KeyError(f"There is no Service added by the Tag '{tag}'")
 
 
 __all__ = ("Services",)

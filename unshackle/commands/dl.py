@@ -48,7 +48,7 @@ from unshackle.core.constants import DOWNLOAD_LICENCE_ONLY, AnyTrack, context_se
 from unshackle.core.credential import Credential
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
 from unshackle.core.events import events
-from unshackle.core.proxies import Basic, Hola, NordVPN, SurfsharkVPN, WindscribeVPN
+from unshackle.core.proxies import Basic, Gluetun, Hola, NordVPN, SurfsharkVPN, WindscribeVPN
 from unshackle.core.service import Service
 from unshackle.core.services import Services
 from unshackle.core.title_cacher import get_account_hash
@@ -262,18 +262,17 @@ class dl:
         help="Wanted episodes, e.g. `S01-S05,S07`, `S01E01-S02E03`, `S02-S02E03`, e.t.c, defaults to all.",
     )
     @click.option(
-        "-le",
-        "--latest-episode",
-        is_flag=True,
-        default=False,
-        help="Download only the single most recent episode available.",
-    )
-    @click.option(
         "-l",
         "--lang",
         type=LANGUAGE_RANGE,
         default="orig",
         help="Language wanted for Video and Audio. Use 'orig' to select the original language, e.g. 'orig,en' for both original and English.",
+    )
+    @click.option(
+        "--latest-episode",
+        is_flag=True,
+        default=False,
+        help="Download only the single most recent episode available.",
     )
     @click.option(
         "-vl",
@@ -665,6 +664,8 @@ class dl:
                     self.proxy_providers.append(SurfsharkVPN(**config.proxy_providers["surfsharkvpn"]))
                 if config.proxy_providers.get("windscribevpn"):
                     self.proxy_providers.append(WindscribeVPN(**config.proxy_providers["windscribevpn"]))
+                if config.proxy_providers.get("gluetun"):
+                    self.proxy_providers.append(Gluetun(**config.proxy_providers["gluetun"]))
                 if binaries.HolaProxy:
                     self.proxy_providers.append(Hola())
                 for proxy_provider in self.proxy_providers:
@@ -675,7 +676,8 @@ class dl:
                 if re.match(r"^[a-z]+:.+$", proxy, re.IGNORECASE):
                     # requesting proxy from a specific proxy provider
                     requested_provider, proxy = proxy.split(":", maxsplit=1)
-                if re.match(r"^[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE):
+                # Match simple region codes (us, ca, uk1) or provider:region format (nordvpn:ca, windscribe:us)
+                if re.match(r"^[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE) or re.match(r"^[a-z]+:[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE):
                     proxy = proxy.lower()
                     with console.status(f"Getting a Proxy to {proxy}...", spinner="dots"):
                         if requested_provider:
@@ -699,8 +701,14 @@ class dl:
                                     proxy = ctx.params["proxy"] = proxy_uri
                                     self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
                                     break
+                    # Store proxy query info for service-specific overrides
+                    ctx.params["proxy_query"] = proxy
+                    ctx.params["proxy_provider"] = requested_provider
                 else:
                     self.log.info(f"Using explicit Proxy: {proxy}")
+                    # For explicit proxies, store None for query/provider
+                    ctx.params["proxy_query"] = None
+                    ctx.params["proxy_provider"] = None
 
         ctx.obj = ContextData(
             config=self.service_config, cdm=self.cdm, proxy_providers=self.proxy_providers, profile=self.profile

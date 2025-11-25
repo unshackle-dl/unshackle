@@ -1071,6 +1071,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pycountry"
+version = "24.6.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/76/57/c389fa68c50590881a75b7883eeb3dc15e9e73a0fdc001cdd45c13290c92/pycountry-24.6.1.tar.gz", hash = "sha256:b61b3faccea67f87d10c1f2b0fc0be714409e8fcdcc1315613174f6466c10221", size = 6043910, upload-time = "2024-06-01T04:12:15.05Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b1/ec/1fb891d8a2660716aadb2143235481d15ed1cbfe3ad669194690b0604492/pycountry-24.6.1-py3-none-any.whl", hash = "sha256:f1a4fb391cd7214f8eefd39556d740adcc233c778a27f8942c8dca351d6ce06f", size = 6335189, upload-time = "2024-06-01T04:11:49.711Z" },
+]
+
+[[package]]
 name = "pycparser"
 version = "2.22"
 source = { registry = "https://pypi.org/simple" }
@@ -1585,6 +1594,7 @@ dependencies = [
     { name = "pproxy" },
     { name = "protobuf" },
     { name = "pycaption" },
+    { name = "pycountry" },
     { name = "pycryptodomex" },
     { name = "pyexecjs" },
     { name = "pyjwt" },
@@ -1638,6 +1648,7 @@ requires-dist = [
     { name = "pproxy", specifier = ">=2.7.9,<3" },
     { name = "protobuf", specifier = ">=4.25.3,<7" },
     { name = "pycaption", specifier = ">=2.2.6,<3" },
+    { name = "pycountry", specifier = ">=24.6.1" },
     { name = "pycryptodomex", specifier = ">=3.20.0,<4" },
     { name = "pyexecjs", specifier = ">=1.5.1,<2" },
     { name = "pyjwt", specifier = ">=2.8.0,<3" },

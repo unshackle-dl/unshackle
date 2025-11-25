@@ -53,8 +53,55 @@ class Service(metaclass=ABCMeta):
         if not ctx.parent or not ctx.parent.params.get("no_proxy"):
             if ctx.parent:
                 proxy = ctx.parent.params["proxy"]
+                proxy_query = ctx.parent.params.get("proxy_query")
+                proxy_provider_name = ctx.parent.params.get("proxy_provider")
             else:
                 proxy = None
+                proxy_query = None
+                proxy_provider_name = None
+
+            # Check for service-specific proxy mapping
+            service_name = self.__class__.__name__
+            service_config_dict = config.services.get(service_name, {})
+            proxy_map = service_config_dict.get("proxy_map", {})
+
+            if proxy_map and proxy_query:
+                # Build the full proxy query key (e.g., "nordvpn:ca" or "us")
+                if proxy_provider_name:
+                    full_proxy_key = f"{proxy_provider_name}:{proxy_query}"
+                else:
+                    full_proxy_key = proxy_query
+
+                # Check if there's a mapping for this query
+                mapped_value = proxy_map.get(full_proxy_key)
+                if mapped_value:
+                    self.log.info(f"Found service-specific proxy mapping: {full_proxy_key} -> {mapped_value}")
+                    # Query the proxy provider with the mapped value
+                    if proxy_provider_name:
+                        # Specific provider requested
+                        proxy_provider = next(
+                            (x for x in ctx.obj.proxy_providers if x.__class__.__name__.lower() == proxy_provider_name),
+                            None,
+                        )
+                        if proxy_provider:
+                            mapped_proxy_uri = proxy_provider.get_proxy(mapped_value)
+                            if mapped_proxy_uri:
+                                proxy = mapped_proxy_uri
+                                self.log.info(f"Using mapped proxy from {proxy_provider.__class__.__name__}: {proxy}")
+                            else:
+                                self.log.warning(f"Failed to get proxy for mapped value '{mapped_value}', using default")
+                        else:
+                            self.log.warning(f"Proxy provider '{proxy_provider_name}' not found, using default proxy")
+                    else:
+                        # No specific provider, try all providers
+                        for proxy_provider in ctx.obj.proxy_providers:
+                            mapped_proxy_uri = proxy_provider.get_proxy(mapped_value)
+                            if mapped_proxy_uri:
+                                proxy = mapped_proxy_uri
+                                self.log.info(f"Using mapped proxy from {proxy_provider.__class__.__name__}: {proxy}")
+                                break
+                        else:
+                            self.log.warning(f"No provider could resolve mapped value '{mapped_value}', using default")
 
             if not proxy:
                 # don't override the explicit proxy set by the user, even if they may be geoblocked

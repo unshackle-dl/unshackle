@@ -19,6 +19,7 @@ from urllib.parse import ParseResult, urlparse
 from uuid import uuid4
 
 import chardet
+import pycountry
 import requests
 from construct import ValidationError
 from fontTools import ttLib
@@ -270,6 +271,80 @@ def ap_case(text: str, keep_spaces: bool = False, stop_words: tuple[str] = None)
             for i, word in enumerate(words)
         ]
     )
+
+
+# Common country code aliases that differ from ISO 3166-1 alpha-2
+COUNTRY_CODE_ALIASES = {
+    "uk": "gb",  # United Kingdom -> Great Britain
+}
+
+
+def get_country_name(code: str) -> Optional[str]:
+    """
+    Convert a 2-letter country code to full country name.
+
+    Args:
+        code: ISO 3166-1 alpha-2 country code (e.g., 'ca', 'us', 'gb', 'uk')
+
+    Returns:
+        Full country name (e.g., 'Canada', 'United States', 'United Kingdom') or None if not found
+
+    Examples:
+        >>> get_country_name('ca')
+        'Canada'
+        >>> get_country_name('US')
+        'United States'
+        >>> get_country_name('uk')
+        'United Kingdom'
+    """
+    # Handle common aliases
+    code = COUNTRY_CODE_ALIASES.get(code.lower(), code.lower())
+
+    try:
+        country = pycountry.countries.get(alpha_2=code.upper())
+        if country:
+            return country.name
+    except (KeyError, LookupError):
+        pass
+    return None
+
+
+def get_country_code(name: str) -> Optional[str]:
+    """
+    Convert a country name to its 2-letter ISO 3166-1 alpha-2 code.
+
+    Args:
+        name: Full country name (e.g., 'Canada', 'United States', 'United Kingdom')
+
+    Returns:
+        2-letter country code in uppercase (e.g., 'CA', 'US', 'GB') or None if not found
+
+    Examples:
+        >>> get_country_code('Canada')
+        'CA'
+        >>> get_country_code('united states')
+        'US'
+        >>> get_country_code('United Kingdom')
+        'GB'
+    """
+    try:
+        # Try exact name match first
+        country = pycountry.countries.get(name=name.title())
+        if country:
+            return country.alpha_2.upper()
+
+        # Try common name (e.g., "Bolivia" vs "Bolivia, Plurinational State of")
+        country = pycountry.countries.get(common_name=name.title())
+        if country:
+            return country.alpha_2.upper()
+
+        # Try fuzzy search as fallback
+        results = pycountry.countries.search_fuzzy(name)
+        if results:
+            return results[0].alpha_2.upper()
+    except (KeyError, LookupError):
+        pass
+    return None
 
 
 def get_ip_info(session: Optional[requests.Session] = None) -> dict:
