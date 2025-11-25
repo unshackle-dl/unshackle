@@ -297,8 +297,9 @@ class DASH:
             manifest_base_url = track.url
         elif not re.match("^https?://", manifest_base_url, re.IGNORECASE):
             manifest_base_url = urljoin(track.url, f"./{manifest_base_url}")
-        period_base_url = urljoin(manifest_base_url, period.findtext("BaseURL"))
-        rep_base_url = urljoin(period_base_url, representation.findtext("BaseURL"))
+        period_base_url = urljoin(manifest_base_url, period.findtext("BaseURL") or "")
+        adaptation_set_base_url = urljoin(period_base_url, adaptation_set.findtext("BaseURL") or "")
+        rep_base_url = urljoin(adaptation_set_base_url, representation.findtext("BaseURL") or "")
 
         period_duration = period.get("duration") or manifest.get("mediaPresentationDuration")
         init_data: Optional[bytes] = None
