@@ -21,6 +21,8 @@ from unshackle.core.console import console
 from unshackle.core.constants import DOWNLOAD_CANCELLED
 from unshackle.core.utilities import get_extension, get_free_port
 
+#will add support for aria2c download size codeblock
+
 
 def rpc(caller: Callable, secret: str, method: str, params: Optional[list[Any]] = None) -> Any:
     """Make a call to Aria2's JSON-RPC API."""
