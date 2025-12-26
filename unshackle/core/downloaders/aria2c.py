@@ -21,8 +21,6 @@ from unshackle.core.console import console
 from unshackle.core.constants import DOWNLOAD_CANCELLED
 from unshackle.core.utilities import get_extension, get_free_port
 
-#adding aria2c download size is bit messy now. Aborting for now.
-
 
 def rpc(caller: Callable, secret: str, method: str, params: Optional[list[Any]] = None) -> Any:
     """Make a call to Aria2's JSON-RPC API."""
@@ -208,7 +206,38 @@ def download(
             # enabled we query aria2 for active downloads and sum completed/total
             # bytes; otherwise we only report speed.
             if download_speed != -1:
-                yield dict(downloaded=f"{filesize.decimal(download_speed)}/s")
+                #old one line code commented for advanced size display.
+
+                # yield dict(downloaded=f"{filesize.decimal(download_speed)}/s")
+                speed_str = f"{filesize.decimal(download_speed)}/s"
+
+                show_size = bool(config.aria2c.get("size_display", True))
+                if show_size:
+                    # Query active downloads to compute combined sizes.
+                    active_downloads = (
+                        rpc(caller=partial(rpc_session.post, url=rpc_uri), secret=rpc_secret, method="aria2.tellActive")
+                        or []
+                    )
+
+                    total_completed = 0
+                    total_length = 0
+                    for d in active_downloads:
+                        try:
+                            total_completed += int(d.get("completedLength", 0) or 0)
+                            total_length += int(d.get("totalLength", 0) or 0)
+                        except (TypeError, ValueError):
+                            continue
+
+                    if total_length:
+                        size_str = f"{filesize.decimal(total_completed)}/{filesize.decimal(total_length)}"
+                        yield dict(downloaded=f"{speed_str} {size_str}")
+                    elif total_completed:
+                        yield dict(downloaded=f"{speed_str} {filesize.decimal(total_completed)}")
+                    else:
+                        yield dict(downloaded=f"{speed_str}")
+                else:
+                    # Size display disabled by configuration; only yield speed.
+                    yield dict(downloaded=f"{speed_str}")
 
             stopped_downloads: list[dict[str, Any]] = (
                 rpc(
