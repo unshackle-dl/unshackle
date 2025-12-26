@@ -201,6 +201,12 @@ def download(
 
             if number_stopped:
                 yield dict(completed=number_stopped)
+
+            # When a download speed is available, format a speed string and
+            # optionally append size information depending on the user's
+            # configuration (`aria2c.size_display`). If `size_display` is
+            # enabled we query aria2 for active downloads and sum completed/total
+            # bytes; otherwise we only report speed.
             if download_speed != -1:
                 yield dict(downloaded=f"{filesize.decimal(download_speed)}/s")
 
