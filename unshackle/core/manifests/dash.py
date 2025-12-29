@@ -108,6 +108,16 @@ class DASH:
                 x.get("schemeIdUri") for x in period.findall("SupplementalProperty")
             ]:
                 continue
+            if "urn:tving:yellowstone:content:type" in [
+                x.get("schemeIdUri") for x in period.findall("SupplementalProperty")
+                if x.get("value") in ("PRE_ROLL", "POST_ROLL")
+            ]:
+                continue
+            period_duration_str = period.get("duration")
+            if period_duration_str:
+                duration_sec = self.pt_to_sec(period_duration_str)
+                if duration_sec < 30:
+                    continue
 
             for adaptation_set in period.findall("AdaptationSet"):
                 if self.is_trick_mode(adaptation_set):
