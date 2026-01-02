@@ -302,6 +302,7 @@ aria2c:
   max_connection_per_server: 3
   split: 5
   file_allocation: falloc # none | prealloc | falloc | trunc
+  size_display: True
 
 # N_m3u8DL-RE downloader configuration
 n_m3u8dl_re:

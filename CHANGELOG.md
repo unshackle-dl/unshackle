@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2025-11-27
+
+### Added
+
+- **Per-Track Quality-Based CDM Selection**: Dynamic CDM switching during runtime DRM operations
+  - Enables quality-based CDM selection during runtime DRM switching
+  - Different CDMs can be used for different video quality levels within the same download session
+  - Example: Use Widevine L3 for SD/HD and PlayReady SL3 for 4K content
+- **Enhanced Track Export**: Improved export functionality with additional metadata
+  - Added URL field to track export for easier identification
+  - Added descriptor information in export output
+  - Keys now exported in hex-formatted strings
+
+### Changed
+
+- **Dependencies**: Upgraded to latest compatible versions
+  - Updated various dependencies to their latest versions
+
+### Fixed
+
+- **Attachment Preservation**: Fixed attachments being dropped during track filtering
+  - Attachments (screenshots, fonts) were being lost when track list was rebuilt
+  - Fixes image files remaining in temp directory after muxing
+- **DASH BaseURL Resolution**: Added AdaptationSet-level BaseURL support per DASH spec
+  - URL resolution chain now properly follows: MPD → Period → AdaptationSet → Representation
+- **WindscribeVPN Region Support**: Restricted to supported regions with proper error handling
+  - Added error handling for unsupported regions in get_proxy method
+  - Prevents cryptic errors when using unsupported region codes
+- **Filename Sanitization**: Fixed space-hyphen-space handling in filenames
+  - Pre-process space-hyphen-space patterns (e.g., "Title - Episode") before other replacements
+  - Made space-hyphen-space handling conditional on scene_naming setting
+  - Addresses PR #44 by fixing the root cause
+- **CICP Enum Values**: Corrected values to match ITU-T H.273 specification
+  - Added Primaries.Unspecified (value 2) per H.273 spec
+  - Renamed Primaries/Transfer value 0 from Unspecified to Reserved for spec accuracy
+  - Simplified Transfer value 2 from Unspecified_Image to Unspecified
+  - Verified against ITU-T H.273, ISO/IEC 23091-2, H.264/H.265 specs, and FFmpeg enums
+- **HLS Byte Range Parsing**: Fixed TypeError in range_offset conversion
+  - Converted range_offset to int to prevent TypeError in calculate_byte_range
+- **pyplayready Compatibility**: Pinned to <0.7 to avoid KID extraction bug
+
 ## [2.0.0] - 2025-11-10
 
 ### Breaking Changes

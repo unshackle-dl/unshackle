@@ -1376,6 +1376,7 @@ class dl:
                         kept_tracks.extend(title.tracks.subtitles)
                     if keep_chapters:
                         kept_tracks.extend(title.tracks.chapters)
+                    kept_tracks.extend(title.tracks.attachments)
 
                     title.tracks = Tracks(kept_tracks)
 
