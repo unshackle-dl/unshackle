@@ -28,7 +28,7 @@ from unshackle.core.downloaders import requests as requests_downloader
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
-from unshackle.core.utilities import is_close_match, try_ensure_utf8
+from unshackle.core.utilities import get_debug_logger, is_close_match, try_ensure_utf8
 from unshackle.core.utils.xml import load_xml
 
 
@@ -517,6 +517,24 @@ class DASH:
 
         if downloader.__name__ == "n_m3u8dl_re":
             downloader_args.update({"filename": track.id, "track": track})
+
+        debug_logger = get_debug_logger()
+        if debug_logger:
+            debug_logger.log(
+                level="DEBUG",
+                operation="manifest_dash_download_start",
+                message="Starting DASH manifest download",
+                context={
+                    "track_id": getattr(track, "id", None),
+                    "track_type": track.__class__.__name__,
+                    "total_segments": len(segments),
+                    "downloader": downloader.__name__,
+                    "has_drm": bool(track.drm),
+                    "drm_types": [drm.__class__.__name__ for drm in (track.drm or [])],
+                    "save_path": str(save_path),
+                    "has_init_data": bool(init_data),
+                },
+            )
 
         for status_update in downloader(**downloader_args):
             file_downloaded = status_update.get("file_downloaded")
