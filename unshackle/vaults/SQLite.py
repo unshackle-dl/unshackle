@@ -119,9 +119,25 @@ class SQLite(Vault):
         cursor = conn.cursor()
 
         try:
-            placeholders = ",".join(["?"] * len(kid_keys))
-            cursor.execute(f"SELECT kid FROM `{service}` WHERE kid IN ({placeholders})", list(kid_keys.keys()))
-            existing_kids = {row[0] for row in cursor.fetchall()}
+            # Query existing KIDs in batches to avoid SQLite variable limit
+            # Try larger batch first (newer SQLite supports 32766), fall back to 500 if needed
+            existing_kids: set[str] = set()
+            kid_list = list(kid_keys.keys())
+            batch_size = 32000
+
+            i = 0
+            while i < len(kid_list):
+                batch = kid_list[i : i + batch_size]
+                placeholders = ",".join(["?"] * len(batch))
+                try:
+                    cursor.execute(f"SELECT kid FROM `{service}` WHERE kid IN ({placeholders})", batch)
+                    existing_kids.update(row[0] for row in cursor.fetchall())
+                    i += batch_size
+                except sqlite3.OperationalError as e:
+                    if "too many SQL variables" in str(e) and batch_size > 500:
+                        batch_size = 500
+                        continue
+                    raise
 
             new_keys = {kid: key for kid, key in kid_keys.items() if kid not in existing_kids}
 
