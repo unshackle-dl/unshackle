@@ -114,49 +114,32 @@ class API(Vault):
         return added or updated
 
     def add_keys(self, service: str, kid_keys: dict[Union[UUID, str], str]) -> int:
-        # Normalize keys
-        normalized_keys = {str(kid).replace("-", ""): key for kid, key in kid_keys.items()}
-        kid_list = list(normalized_keys.keys())
+        data = self.session.post(
+            url=f"{self.uri}/{service.lower()}",
+            json={"content_keys": {str(kid).replace("-", ""): key for kid, key in kid_keys.items()}},
+            headers={"Accept": "application/json"},
+        ).json()
 
-        if not kid_list:
-            return 0
+        code = int(data.get("code", 0))
+        message = data.get("message")
+        error = {
+            0: None,
+            1: Exceptions.AuthRejected,
+            2: Exceptions.TooManyRequests,
+            3: Exceptions.ServiceTagInvalid,
+            4: Exceptions.KeyIdInvalid,
+            5: Exceptions.ContentKeyInvalid,
+        }.get(code, ValueError)
 
-        # Batch requests to avoid server limits
-        batch_size = 500
-        total_added = 0
+        if error:
+            raise error(f"{message} ({code})")
 
-        for i in range(0, len(kid_list), batch_size):
-            batch_kids = kid_list[i : i + batch_size]
-            batch_keys = {kid: normalized_keys[kid] for kid in batch_kids}
+        # each kid:key that was new to the vault (optional)
+        added = int(data.get("added"))
+        # each key for a kid that was changed/updated (optional)
+        updated = int(data.get("updated"))
 
-            data = self.session.post(
-                url=f"{self.uri}/{service.lower()}",
-                json={"content_keys": batch_keys},
-                headers={"Accept": "application/json"},
-            ).json()
-
-            code = int(data.get("code", 0))
-            message = data.get("message")
-            error = {
-                0: None,
-                1: Exceptions.AuthRejected,
-                2: Exceptions.TooManyRequests,
-                3: Exceptions.ServiceTagInvalid,
-                4: Exceptions.KeyIdInvalid,
-                5: Exceptions.ContentKeyInvalid,
-            }.get(code, ValueError)
-
-            if error:
-                raise error(f"{message} ({code})")
-
-            # each kid:key that was new to the vault (optional)
-            added = int(data.get("added", 0))
-            # each key for a kid that was changed/updated (optional)
-            updated = int(data.get("updated", 0))
-
-            total_added += added + updated
-
-        return total_added
+        return added + updated
 
     def get_services(self) -> Iterator[str]:
         data = self.session.post(url=self.uri, headers={"Accept": "application/json"}).json()
