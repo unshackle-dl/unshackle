@@ -466,7 +466,7 @@ class DASH:
         track.data["dash"]["timescale"] = int(segment_timescale)
         track.data["dash"]["segment_durations"] = segment_durations
 
-        if not track.drm and isinstance(track, (Video, Audio)):
+        if init_data and isinstance(track, (Video, Audio)):
             if isinstance(cdm, PlayReadyCdm):
                 try:
                     track.drm = [PlayReady.from_init_data(init_data)]
@@ -766,6 +766,11 @@ class DASH:
     @staticmethod
     def get_drm(protections: list[Element]) -> list[DRM_T]:
         drm: list[DRM_T] = []
+        PLACEHOLDER_KIDS = {
+            UUID("00000000-0000-0000-0000-000000000000"),  # All zeros (key rotation default)
+            UUID("00010203-0405-0607-0809-0a0b0c0d0e0f"),  # Sequential 0x00-0x0f
+            UUID("00010203-0405-0607-0809-101112131415"),  # Shaka Packager test pattern
+        }
 
         for protection in protections:
             urn = (protection.get("schemeIdUri") or "").lower()
@@ -775,17 +780,27 @@ class DASH:
                 if not pssh_text:
                     continue
                 pssh = PSSH(pssh_text)
+                kid_attr = protection.get("kid") or protection.get("{urn:mpeg:cenc:2013}kid")
+                kid = UUID(bytes=base64.b64decode(kid_attr)) if kid_attr else None
 
-                kid = protection.get("kid")
-                if kid:
-                    kid = UUID(bytes=base64.b64decode(kid))
+                if not kid:
+                    default_kid_attr = protection.get("default_KID") or protection.get(
+                        "{urn:mpeg:cenc:2013}default_KID"
+                    )
+                    kid = UUID(default_kid_attr) if default_kid_attr else None
 
-                default_kid = protection.get("default_KID")
-                if default_kid:
-                    kid = UUID(default_kid)
+                if not kid:
+                    kid = next(
+                        (
+                            UUID(p.get("default_KID") or p.get("{urn:mpeg:cenc:2013}default_KID"))
+                            for p in protections
+                            if p.get("default_KID") or p.get("{urn:mpeg:cenc:2013}default_KID")
+                        ),
+                        None,
+                    )
 
-                if not pssh.key_ids and not kid:
-                    kid = next((UUID(p.get("default_KID")) for p in protections if p.get("default_KID")), None)
+                if kid and (not pssh.key_ids or all(k.int == 0 or k in PLACEHOLDER_KIDS for k in pssh.key_ids)):
+                    pssh.set_key_ids([kid])
 
                 drm.append(Widevine(pssh=pssh, kid=kid))
 
