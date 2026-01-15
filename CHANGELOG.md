@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-01-15
+
+### Added
+
+- **CDM-Aware PlayReady Fallback Detection**: Intelligent DRM fallback based on selected CDM
+  - Adds PlayReady PSSH/KID extraction from track and init data with CDM-aware ordering
+  - When PlayReady CDM is selected, tries PlayReady first then falls back to Widevine
+  - When Widevine CDM is selected (default), tries Widevine first then falls back to PlayReady
+- **Comprehensive Debug Logging**: Enhanced debug logging for downloaders and muxing
+  - Added detailed debug logging to aria2c, curl_impersonate, n_m3u8dl_re, and requests downloaders
+  - Enhanced manifest parsers (DASH, HLS, ISM) with debug logging
+  - Added debug logging to track muxing operations
+
+### Fixed
+
+- **Hybrid DV+HDR10 Filename Detection**: Fixed HDR10 detection in hybrid Dolby Vision filenames
+  - Hybrid DV+HDR10 files were incorrectly named "DV.H.265" instead of "DV.HDR.H.265"
+  - Now checks both `hdr_format_full` and `hdr_format_commercial` fields for HDR10 indicators
+- **Vault Adaptive Batch Sizing**: Improved bulk key operations with adaptive batch sizing
+  - Prevents query limit issues when retrieving large numbers of keys from vaults
+  - Dynamically adjusts batch sizes based on vault response characteristics
+- **Test Command Improvements**: Enhanced test command error detection and sorting
+  - Improved error detection in test command output
+  - Added natural sorting for test results
+
 ## [2.1.0] - 2025-11-27
 
 ### Added
