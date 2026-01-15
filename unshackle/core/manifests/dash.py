@@ -18,6 +18,7 @@ import requests
 from curl_cffi.requests import Session as CurlSession
 from langcodes import Language, tag_is_valid
 from lxml.etree import Element, ElementTree
+from pyplayready.cdm import Cdm as PlayReadyCdm
 from pyplayready.system.pssh import PSSH as PR_PSSH
 from pywidevine.cdm import Cdm as WidevineCdm
 from pywidevine.pssh import PSSH
@@ -466,11 +467,22 @@ class DASH:
         track.data["dash"]["segment_durations"] = segment_durations
 
         if not track.drm and isinstance(track, (Video, Audio)):
-            try:
-                track.drm = [Widevine.from_init_data(init_data)]
-            except Widevine.Exceptions.PSSHNotFound:
-                # it might not have Widevine DRM, or might not have found the PSSH
-                log.warning("No Widevine PSSH was found for this track, is it DRM free?")
+            if isinstance(cdm, PlayReadyCdm):
+                try:
+                    track.drm = [PlayReady.from_init_data(init_data)]
+                except PlayReady.Exceptions.PSSHNotFound:
+                    try:
+                        track.drm = [Widevine.from_init_data(init_data)]
+                    except Widevine.Exceptions.PSSHNotFound:
+                        log.warning("No PlayReady or Widevine PSSH was found for this track, is it DRM free?")
+            else:
+                try:
+                    track.drm = [Widevine.from_init_data(init_data)]
+                except Widevine.Exceptions.PSSHNotFound:
+                    try:
+                        track.drm = [PlayReady.from_init_data(init_data)]
+                    except PlayReady.Exceptions.PSSHNotFound:
+                        log.warning("No Widevine or PlayReady PSSH was found for this track, is it DRM free?")
 
         if track.drm:
             track_kid = track_kid or track.get_key_id(url=segments[0][0], session=session)

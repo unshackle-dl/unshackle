@@ -295,12 +295,23 @@ class Track:
                 try:
                     if not self.drm and track_type in ("Video", "Audio"):
                         # the service might not have explicitly defined the `drm` property
-                        # try find widevine DRM information from the init data of URL
-                        try:
-                            self.drm = [Widevine.from_track(self, session)]
-                        except Widevine.Exceptions.PSSHNotFound:
-                            # it might not have Widevine DRM, or might not have found the PSSH
-                            log.warning("No Widevine PSSH was found for this track, is it DRM free?")
+                        # try find DRM information from the init data of URL based on CDM type
+                        if isinstance(cdm, PlayReadyCdm):
+                            try:
+                                self.drm = [PlayReady.from_track(self, session)]
+                            except PlayReady.Exceptions.PSSHNotFound:
+                                try:
+                                    self.drm = [Widevine.from_track(self, session)]
+                                except Widevine.Exceptions.PSSHNotFound:
+                                    log.warning("No PlayReady or Widevine PSSH was found for this track, is it DRM free?")
+                        else:
+                            try:
+                                self.drm = [Widevine.from_track(self, session)]
+                            except Widevine.Exceptions.PSSHNotFound:
+                                try:
+                                    self.drm = [PlayReady.from_track(self, session)]
+                                except PlayReady.Exceptions.PSSHNotFound:
+                                    log.warning("No Widevine or PlayReady PSSH was found for this track, is it DRM free?")
 
                     if self.drm:
                         track_kid = self.get_key_id(session=session)
