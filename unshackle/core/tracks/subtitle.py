@@ -631,7 +631,7 @@ class Subtitle(Track):
                 text = try_ensure_utf8(data).decode("utf8")
                 text = text.replace("tt:", "")
                 # negative size values aren't allowed in TTML/DFXP spec, replace with 0
-                text = re.sub(r'"(-\d+(\.\d+)?(px|em|%|c|pt))"', '"0"', text)
+                text = re.sub(r'-(\d+(?:\.\d+)?)(px|em|%|c|pt)', r'0\2', text)
                 caption_set = pycaption.DFXPReader().read(text)
             elif codec == Subtitle.Codec.fVTT:
                 caption_lists: dict[str, pycaption.CaptionList] = defaultdict(pycaption.CaptionList)
