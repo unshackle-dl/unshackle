@@ -120,9 +120,14 @@ def sanitize_filename(filename: str, spacer: str = ".") -> str:
 
     The spacer is safer to be a '.' for older DDL and p2p sharing spaces.
     This includes web-served content via direct links and such.
+
+    Set `unicode_filenames: true` in config to preserve native language
+    characters (Korean, Japanese, Chinese, etc.) instead of transliterating
+    them to ASCII equivalents.
     """
-    # replace all non-ASCII characters with ASCII equivalents
-    filename = unidecode(filename)
+    # optionally replace non-ASCII characters with ASCII equivalents
+    if not config.unicode_filenames:
+        filename = unidecode(filename)
 
     # remove or replace further characters as needed
     filename = "".join(c for c in filename if unicodedata.category(c) != "Mn")  # hidden characters
