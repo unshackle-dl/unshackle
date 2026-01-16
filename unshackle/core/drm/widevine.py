@@ -371,7 +371,7 @@ class Widevine:
             p.wait()
 
             if p.returncode != 0 or had_error:
-                raise subprocess.CalledProcessError(p.returncode, arguments)
+                raise subprocess.CalledProcessError(p.returncode, [binaries.ShakaPackager, *arguments])
 
             path.unlink()
             if not stream_skipped:
