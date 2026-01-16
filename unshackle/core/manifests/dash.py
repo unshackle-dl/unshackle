@@ -5,6 +5,7 @@ import html
 import logging
 import math
 import re
+import shutil
 import sys
 from copy import copy
 from functools import partial
@@ -527,8 +528,16 @@ class DASH:
             max_workers=max_workers,
         )
 
+        skip_merge = False
         if downloader.__name__ == "n_m3u8dl_re":
-            downloader_args.update({"filename": track.id, "track": track})
+            skip_merge = True
+            downloader_args.update(
+                {
+                    "filename": track.id,
+                    "track": track,
+                    "content_keys": drm.content_keys if drm else None,
+                }
+            )
 
         debug_logger = get_debug_logger()
         if debug_logger:
@@ -543,6 +552,7 @@ class DASH:
                     "downloader": downloader.__name__,
                     "has_drm": bool(track.drm),
                     "drm_types": [drm.__class__.__name__ for drm in (track.drm or [])],
+                    "skip_merge": skip_merge,
                     "save_path": str(save_path),
                     "has_init_data": bool(init_data),
                 },
@@ -563,42 +573,56 @@ class DASH:
             control_file.unlink()
 
         segments_to_merge = [x for x in sorted(save_dir.iterdir()) if x.is_file()]
-        with open(save_path, "wb") as f:
-            if init_data:
-                f.write(init_data)
-            if len(segments_to_merge) > 1:
-                progress(downloaded="Merging", completed=0, total=len(segments_to_merge))
-            for segment_file in segments_to_merge:
-                segment_data = segment_file.read_bytes()
-                # TODO: fix encoding after decryption?
-                if (
-                    not drm
-                    and isinstance(track, Subtitle)
-                    and track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML)
-                ):
-                    segment_data = try_ensure_utf8(segment_data)
-                    segment_data = (
-                        segment_data.decode("utf8")
-                        .replace("&lrm;", html.unescape("&lrm;"))
-                        .replace("&rlm;", html.unescape("&rlm;"))
-                        .encode("utf8")
-                    )
-                f.write(segment_data)
-                f.flush()
-                segment_file.unlink()
-                progress(advance=1)
+
+        if skip_merge:
+            # N_m3u8DL-RE handles merging and decryption internally
+            shutil.move(segments_to_merge[0], save_path)
+            if drm:
+                track.drm = None
+                events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=drm, segment=None)
+        else:
+            with open(save_path, "wb") as f:
+                if init_data:
+                    f.write(init_data)
+                if len(segments_to_merge) > 1:
+                    progress(downloaded="Merging", completed=0, total=len(segments_to_merge))
+                for segment_file in segments_to_merge:
+                    segment_data = segment_file.read_bytes()
+                    # TODO: fix encoding after decryption?
+                    if (
+                        not drm
+                        and isinstance(track, Subtitle)
+                        and track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML)
+                    ):
+                        segment_data = try_ensure_utf8(segment_data)
+                        segment_data = (
+                            segment_data.decode("utf8")
+                            .replace("&lrm;", html.unescape("&lrm;"))
+                            .replace("&rlm;", html.unescape("&rlm;"))
+                            .encode("utf8")
+                        )
+                    f.write(segment_data)
+                    f.flush()
+                    segment_file.unlink()
+                    progress(advance=1)
 
         track.path = save_path
         events.emit(events.Types.TRACK_DOWNLOADED, track=track)
 
-        if drm:
+        if not skip_merge and drm:
             progress(downloaded="Decrypting", completed=0, total=100)
             drm.decrypt(save_path)
             track.drm = None
             events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=drm, segment=None)
             progress(downloaded="Decrypting", advance=100)
 
-        save_dir.rmdir()
+        # Clean up empty segment directory
+        if save_dir.exists() and save_dir.name.endswith("_segments"):
+            try:
+                save_dir.rmdir()
+            except OSError:
+                # Directory might not be empty, try removing recursively
+                shutil.rmtree(save_dir, ignore_errors=True)
 
         progress(downloaded="Downloaded")
 
