@@ -100,9 +100,7 @@ class Widevine:
             pssh_boxes.extend(list(get_boxes(init_data, b"pssh")))
             tenc_boxes.extend(list(get_boxes(init_data, b"tenc")))
 
-        pssh_boxes.sort(key=lambda b: {PSSH.SystemId.Widevine: 0, PSSH.SystemId.PlayReady: 1}[b.system_ID])
-
-        pssh = next(iter(pssh_boxes), None)
+        pssh = next((b for b in pssh_boxes if b.system_ID == PSSH.SystemId.Widevine), None)
         if not pssh:
             raise Widevine.Exceptions.PSSHNotFound("PSSH was not found in track data.")
 
@@ -141,9 +139,7 @@ class Widevine:
                 if enc_key_id:
                     kid = UUID(bytes=base64.b64decode(enc_key_id))
 
-        pssh_boxes.sort(key=lambda b: {PSSH.SystemId.Widevine: 0, PSSH.SystemId.PlayReady: 1}[b.system_ID])
-
-        pssh = next(iter(pssh_boxes), None)
+        pssh = next((b for b in pssh_boxes if b.system_ID == PSSH.SystemId.Widevine), None)
         if not pssh:
             raise Widevine.Exceptions.PSSHNotFound("PSSH was not found in track data.")
 
