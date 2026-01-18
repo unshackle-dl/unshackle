@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-01-18
+
+### Added
+
+- **Unicode Filenames Option**: New `unicode_filenames` config option to preserve native characters
+  - Allows disabling ASCII transliteration in filenames
+  - Preserves Korean, Japanese, Chinese, and other native language characters
+  - Closes #49
+
+### Fixed
+
+- **WebVTT Cue Handling**: Handle WebVTT cue identifiers and overlapping multi-line cues
+  - Added detection and sanitization for cue identifiers (Q0, Q1, etc.) before timing lines
+  - Added merging of overlapping cues with different line positions into multi-line subtitles
+  - Fixes parsing issues with pysubs2/pycaption on certain WebVTT files
+- **Widevine PSSH Filtering**: Filter Widevine PSSH by system ID instead of sorting
+  - Fixes KeyError crash when unsupported DRM systems are present in init segments
+- **TTML Negative Values**: Handle negative values in multi-value TTML attributes
+  - Fixes pycaption parse errors for attributes like `tts:extent="-5% 7.5%"`
+  - Closes #47
+- **ASS Font Names**: Strip whitespace from ASS font names
+  - Handles ASS subtitle files with spaces after commas in Style definitions
+  - Fixes #57
+- **Shaka-Packager Error Messages**: Include shaka-packager binary path in error messages
+- **N_m3u8DL-RE Merge and Decryption**: Handle merge and decryption properly
+  - Prevents audio corruption ("Box 'OG 2' size is too large") with DASH manifests
+  - Fixes duplicate init segment writing when using N_m3u8DL-RE
+- **DASH Placeholder KIDs**: Handle placeholder KIDs and improve DRM init from segments
+  - Detects and replaces placeholder/test KIDs in Widevine PSSH
+  - Adds CENC namespace support for kid/default_KID attributes
+- **PlayReady PSSH Comparison**: Correct PSSH system ID comparison in PlayReady
+  - Removes erroneous `.bytes` accessor from PSSH.SYSTEM_ID comparisons
+
 ## [2.2.0] - 2026-01-15
 
 ### Added
