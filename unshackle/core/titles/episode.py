@@ -109,13 +109,31 @@ class Episode(Title):
                 name += f" {self.year}"
             name += f" S{self.season:02}"
         else:
-            name = "{title}{year} S{season:02}E{number:02} {name}".format(
-                title=self.title.replace("$", "S"),  # e.g., Arli$$
-                year=f" {self.year}" if self.year and config.series_year else "",
-                season=self.season,
-                number=self.number,
-                name=self.name or "",
-            ).strip()
+            if config.dash_naming:
+                # Format: Title - SXXEXX - Episode Name
+                name = self.title.replace("$", "S")  # e.g., Arli$$
+                
+                # Add year if configured
+                if self.year and config.series_year:
+                    name += f" {self.year}"
+                
+                # Add season and episode
+                name += f" - S{self.season:02}E{self.number:02}"
+                
+                # Add episode name with dash separator
+                if self.name:
+                    name += f" - {self.name}"
+                
+                name = name.strip()
+            else:
+                # Standard format without extra dashes
+                name = "{title}{year} S{season:02}E{number:02} {name}".format(
+                    title=self.title.replace("$", "S"),  # e.g., Arli$$
+                    year=f" {self.year}" if self.year and config.series_year else "",
+                    season=self.season,
+                    number=self.number,
+                    name=self.name or "",
+                ).strip()
 
         if config.scene_naming:
             # Resolution
