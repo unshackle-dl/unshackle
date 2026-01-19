@@ -67,12 +67,17 @@ def get_track_selection_args(track: Any) -> list[str]:
             parts = []
 
             if track_type == "Audio":
-                if track_id := representation.get("id") or adaptation_set.get("audioTrackId"):
+                track_id = representation.get("id") or adaptation_set.get("audioTrackId")
+                lang = representation.get("lang") or adaptation_set.get("lang")
+
+                if track_id:
                     parts.append(rf'"id=\b{track_id}\b"')
+                    if lang:
+                        parts.append(f"lang={lang}")
                 else:
                     if codecs := representation.get("codecs"):
                         parts.append(f"codecs={codecs}")
-                    if lang := representation.get("lang") or adaptation_set.get("lang"):
+                    if lang:
                         parts.append(f"lang={lang}")
                     if bw := representation.get("bandwidth"):
                         bitrate = int(bw) // 1000
