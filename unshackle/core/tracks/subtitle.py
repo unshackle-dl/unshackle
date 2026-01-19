@@ -810,13 +810,18 @@ class Subtitle(Track):
 
         if binaries.SubtitleEdit and self.codec not in (Subtitle.Codec.fTTML, Subtitle.Codec.fVTT):
             sub_edit_format = {
-                Subtitle.Codec.SubStationAlphav4: "AdvancedSubStationAlpha",
-                Subtitle.Codec.TimedTextMarkupLang: "TimedText1.0",
-            }.get(codec, codec.name)
+                Subtitle.Codec.SubRip: "subrip",
+                Subtitle.Codec.SubStationAlpha: "substationalpha",
+                Subtitle.Codec.SubStationAlphav4: "advancedsubstationalpha",
+                Subtitle.Codec.TimedTextMarkupLang: "timedtext1.0",
+                Subtitle.Codec.WebVTT: "webvtt",
+                Subtitle.Codec.SAMI: "sami",
+                Subtitle.Codec.MicroDVD: "microdvd",
+            }.get(codec, codec.name.lower())
             sub_edit_args = [
-                binaries.SubtitleEdit,
-                "/Convert",
-                self.path,
+                str(binaries.SubtitleEdit),
+                "/convert",
+                str(self.path),
                 sub_edit_format,
                 f"/outputfilename:{output_path.name}",
                 "/encoding:utf8",
@@ -1207,18 +1212,26 @@ class Subtitle(Track):
                 except Exception:
                     pass  # Fall through to other methods
 
-        if binaries.SubtitleEdit:
-            if self.codec == Subtitle.Codec.SubStationAlphav4:
-                output_format = "AdvancedSubStationAlpha"
-            elif self.codec == Subtitle.Codec.TimedTextMarkupLang:
-                output_format = "TimedText1.0"
-            else:
-                output_format = self.codec.name
+        conversion_method = config.subtitle.get("conversion_method", "auto")
+        use_subtitleedit = sdh_method == "subtitleedit" or (
+            sdh_method == "auto" and conversion_method in ("auto", "subtitleedit")
+        )
+
+        if binaries.SubtitleEdit and use_subtitleedit:
+            output_format = {
+                Subtitle.Codec.SubRip: "subrip",
+                Subtitle.Codec.SubStationAlpha: "substationalpha",
+                Subtitle.Codec.SubStationAlphav4: "advancedsubstationalpha",
+                Subtitle.Codec.TimedTextMarkupLang: "timedtext1.0",
+                Subtitle.Codec.WebVTT: "webvtt",
+                Subtitle.Codec.SAMI: "sami",
+                Subtitle.Codec.MicroDVD: "microdvd",
+            }.get(self.codec, self.codec.name.lower())
             subprocess.run(
                 [
-                    binaries.SubtitleEdit,
-                    "/Convert",
-                    self.path,
+                    str(binaries.SubtitleEdit),
+                    "/convert",
+                    str(self.path),
                     output_format,
                     "/encoding:utf8",
                     "/overwrite",
@@ -1226,6 +1239,7 @@ class Subtitle(Track):
                 ],
                 check=True,
                 stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
         else:
             if config.subtitle.get("convert_before_strip", True) and self.codec != Subtitle.Codec.SubRip:
@@ -1267,18 +1281,21 @@ class Subtitle(Track):
         if not binaries.SubtitleEdit:
             raise EnvironmentError("SubtitleEdit executable not found...")
 
-        if self.codec == Subtitle.Codec.SubStationAlphav4:
-            output_format = "AdvancedSubStationAlpha"
-        elif self.codec == Subtitle.Codec.TimedTextMarkupLang:
-            output_format = "TimedText1.0"
-        else:
-            output_format = self.codec.name
+        output_format = {
+            Subtitle.Codec.SubRip: "subrip",
+            Subtitle.Codec.SubStationAlpha: "substationalpha",
+            Subtitle.Codec.SubStationAlphav4: "advancedsubstationalpha",
+            Subtitle.Codec.TimedTextMarkupLang: "timedtext1.0",
+            Subtitle.Codec.WebVTT: "webvtt",
+            Subtitle.Codec.SAMI: "sami",
+            Subtitle.Codec.MicroDVD: "microdvd",
+        }.get(self.codec, self.codec.name.lower())
 
         subprocess.run(
             [
-                binaries.SubtitleEdit,
-                "/Convert",
-                self.path,
+                str(binaries.SubtitleEdit),
+                "/convert",
+                str(self.path),
                 output_format,
                 "/ReverseRtlStartEnd",
                 "/encoding:utf8",
@@ -1286,6 +1303,7 @@ class Subtitle(Track):
             ],
             check=True,
             stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
 
 
