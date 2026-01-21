@@ -12,7 +12,7 @@ from requests.adapters import HTTPAdapter
 from rich import filesize
 
 from unshackle.core.constants import DOWNLOAD_CANCELLED
-from unshackle.core.utilities import get_extension
+from unshackle.core.utilities import get_debug_logger, get_extension
 
 MAX_ATTEMPTS = 5
 RETRY_WAIT = 2
@@ -215,6 +215,8 @@ def requests(
     if not isinstance(max_workers, (int, type(None))):
         raise TypeError(f"Expected max_workers to be {int}, not {type(max_workers)}")
 
+    debug_logger = get_debug_logger()
+
     if not isinstance(urls, list):
         urls = [urls]
 
@@ -241,6 +243,23 @@ def requests(
     if proxy:
         session.proxies.update({"all": proxy})
 
+    if debug_logger:
+        first_url = urls[0].get("url", "") if urls else ""
+        url_display = first_url[:200] + "..." if len(first_url) > 200 else first_url
+        debug_logger.log(
+            level="DEBUG",
+            operation="downloader_requests_start",
+            message="Starting requests download",
+            context={
+                "url_count": len(urls),
+                "first_url": url_display,
+                "output_dir": str(output_dir),
+                "filename": filename,
+                "max_workers": max_workers,
+                "has_proxy": bool(proxy),
+            },
+        )
+
     yield dict(total=len(urls))
 
     try:
@@ -256,14 +275,37 @@ def requests(
                     # tell dl that it was cancelled
                     # the pool is already shut down, so exiting loop is fine
                     raise
-                except Exception:
+                except Exception as e:
                     DOWNLOAD_CANCELLED.set()  # skip pending track downloads
                     yield dict(downloaded="[red]FAILING")
                     pool.shutdown(wait=True, cancel_futures=True)
                     yield dict(downloaded="[red]FAILED")
+                    if debug_logger:
+                        debug_logger.log(
+                            level="ERROR",
+                            operation="downloader_requests_failed",
+                            message=f"Requests download failed: {e}",
+                            error=e,
+                            context={
+                                "url_count": len(urls),
+                                "output_dir": str(output_dir),
+                            },
+                        )
                     # tell dl that it failed
                     # the pool is already shut down, so exiting loop is fine
                     raise
+
+        if debug_logger:
+            debug_logger.log(
+                level="DEBUG",
+                operation="downloader_requests_complete",
+                message="Requests download completed successfully",
+                context={
+                    "url_count": len(urls),
+                    "output_dir": str(output_dir),
+                    "filename": filename,
+                },
+            )
     finally:
         DOWNLOAD_SIZES.clear()
 

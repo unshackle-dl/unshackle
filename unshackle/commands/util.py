@@ -1,3 +1,4 @@
+import re
 import subprocess
 from pathlib import Path
 
@@ -6,6 +7,11 @@ from pymediainfo import MediaInfo
 
 from unshackle.core import binaries
 from unshackle.core.constants import context_settings
+
+
+def _natural_sort_key(path: Path) -> list:
+    """Sort key for natural sorting (S01E01 before S01E10)."""
+    return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", path.name)]
 
 
 @click.group(short_help="Various helper scripts and programs.", context_settings=context_settings)
@@ -49,7 +55,7 @@ def crop(path: Path, aspect: str, letter: bool, offset: int, preview: bool) -> N
         raise click.ClickException('FFmpeg executable "ffmpeg" not found but is required.')
 
     if path.is_dir():
-        paths = list(path.glob("*.mkv")) + list(path.glob("*.mp4"))
+        paths = sorted(list(path.glob("*.mkv")) + list(path.glob("*.mp4")), key=_natural_sort_key)
     else:
         paths = [path]
     for video_path in paths:
@@ -140,7 +146,7 @@ def range_(path: Path, full: bool, preview: bool) -> None:
         raise click.ClickException('FFmpeg executable "ffmpeg" not found but is required.')
 
     if path.is_dir():
-        paths = list(path.glob("*.mkv")) + list(path.glob("*.mp4"))
+        paths = sorted(list(path.glob("*.mkv")) + list(path.glob("*.mp4")), key=_natural_sort_key)
     else:
         paths = [path]
     for video_path in paths:
@@ -225,16 +231,18 @@ def test(path: Path, map_: str) -> None:
         raise click.ClickException('FFmpeg executable "ffmpeg" not found but is required.')
 
     if path.is_dir():
-        paths = list(path.glob("*.mkv")) + list(path.glob("*.mp4"))
+        paths = sorted(list(path.glob("*.mkv")) + list(path.glob("*.mp4")), key=_natural_sort_key)
     else:
         paths = [path]
     for video_path in paths:
-        print("Starting...")
+        print(f"Testing: {video_path.name}")
         p = subprocess.Popen(
             [
                 binaries.FFMPEG,
                 "-hide_banner",
                 "-benchmark",
+                "-err_detect",
+                "+crccheck+bitstream+buffer+careful+compliant+aggressive",
                 "-i",
                 str(video_path),
                 "-map",
@@ -255,13 +263,13 @@ def test(path: Path, map_: str) -> None:
                 reached_output = True
             if not reached_output:
                 continue
-            if line.startswith("["):  # error of some kind
+            if line.startswith("[") and not line.startswith("[out#"):
                 errors += 1
                 stream, error = line.split("] ", maxsplit=1)
                 stream = stream.split(" @ ")[0]
                 line = f"{stream} ERROR: {error}"
             print(line)
         p.stderr.close()
-        print(f"Finished with {errors} Errors, Cleaning up...")
+        print(f"Finished with {errors} error(s)")
         p.terminate()
         p.wait()
