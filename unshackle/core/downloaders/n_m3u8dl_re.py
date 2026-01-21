@@ -183,7 +183,6 @@ def build_download_args(
         "--thread-count": thread_count,
         "--download-retry-count": retry_count,
         "--write-meta-json": False,
-        "--no-log": True,
     }
     if FFMPEG:
         args["--ffmpeg-binary-path"] = str(FFMPEG)
