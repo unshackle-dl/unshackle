@@ -154,7 +154,9 @@ class PlayReady:
             pssh_boxes.extend(
                 Box.parse(base64.b64decode(x.uri.split(",")[-1]))
                 for x in (master.session_keys or master.keys)
-                if x and x.keyformat and "playready" in x.keyformat.lower()
+                if x and x.keyformat and x.keyformat.lower() in {
+                    f"urn:uuid:{PSSH.SYSTEM_ID}", "com.microsoft.playready"
+                }
             )
 
         init_data = track.get_init_segment(session=session)

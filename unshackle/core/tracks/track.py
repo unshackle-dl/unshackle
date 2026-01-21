@@ -215,7 +215,8 @@ class Track:
             # or when the subtitle has a direct file extension
             if self.downloader.__name__ == "n_m3u8dl_re" and (
                 self.descriptor == self.Descriptor.URL
-                or get_extension(self.url) in {
+                or get_extension(self.url)
+                in {
                     ".srt",
                     ".vtt",
                     ".ttml",
@@ -303,7 +304,9 @@ class Track:
                                 try:
                                     self.drm = [Widevine.from_track(self, session)]
                                 except Widevine.Exceptions.PSSHNotFound:
-                                    log.warning("No PlayReady or Widevine PSSH was found for this track, is it DRM free?")
+                                    log.warning(
+                                        "No PlayReady or Widevine PSSH was found for this track, is it DRM free?"
+                                    )
                         else:
                             try:
                                 self.drm = [Widevine.from_track(self, session)]
@@ -311,7 +314,9 @@ class Track:
                                 try:
                                     self.drm = [PlayReady.from_track(self, session)]
                                 except PlayReady.Exceptions.PSSHNotFound:
-                                    log.warning("No Widevine or PlayReady PSSH was found for this track, is it DRM free?")
+                                    log.warning(
+                                        "No Widevine or PlayReady PSSH was found for this track, is it DRM free?"
+                                    )
 
                     if self.drm:
                         track_kid = self.get_key_id(session=session)
@@ -548,7 +553,6 @@ class Track:
 
         try:
             import m3u8
-            from pyplayready.cdm import Cdm as PlayReadyCdm
             from pyplayready.system.pssh import PSSH as PR_PSSH
             from pywidevine.cdm import Cdm as WidevineCdm
             from pywidevine.pssh import PSSH as WV_PSSH
@@ -569,7 +573,7 @@ class Track:
                     pssh_b64 = key.uri.split(",")[-1]
                     drm = Widevine(pssh=WV_PSSH(pssh_b64))
                     drm_list.append(drm)
-                elif fmt == PlayReadyCdm or "com.microsoft.playready" in fmt:
+                elif fmt in {f"urn:uuid:{PR_PSSH.SYSTEM_ID}", "com.microsoft.playready"}:
                     pssh_b64 = key.uri.split(",")[-1]
                     drm = PlayReady(pssh=PR_PSSH(pssh_b64), pssh_b64=pssh_b64)
                     drm_list.append(drm)
