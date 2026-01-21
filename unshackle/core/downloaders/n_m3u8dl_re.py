@@ -90,7 +90,7 @@ def get_track_selection_args(track: Any) -> list[str]:
 
             if track_type == "Video":
                 if track_id := representation.get("id"):
-                    parts.append(rf"id={track_id}")
+                    parts.append(rf'"id=\b{track_id}\b"')
                 else:
                     if width := representation.get("width"):
                         parts.append(f"res={width}*")
@@ -103,7 +103,7 @@ def get_track_selection_args(track: Any) -> list[str]:
 
             if track_type == "Subtitle":
                 if track_id := representation.get("id"):
-                    parts.append(rf"id={track_id}")
+                    parts.append(rf'"id=\b{track_id}\b"')
                 else:
                     if lang := representation.get("lang"):
                         parts.append(f"lang={lang}")
@@ -116,7 +116,7 @@ def get_track_selection_args(track: Any) -> list[str]:
 
             if track_type == "Audio":
                 if name := stream_index.get("Name") or quality_level.get("Index"):
-                    parts.append(rf"id={name}")
+                    parts.append(rf'"id=\b{name}\b"')
                 else:
                     if codecs := quality_level.get("FourCC"):
                         parts.append(f"codecs={codecs}")
@@ -129,7 +129,7 @@ def get_track_selection_args(track: Any) -> list[str]:
 
             if track_type == "Video":
                 if name := stream_index.get("Name") or quality_level.get("Index"):
-                    parts.append(rf"id={name}")
+                    parts.append(rf'"id=\b{name}\b"')
                 else:
                     if width := quality_level.get("MaxWidth"):
                         parts.append(f"res={width}*")
@@ -143,7 +143,7 @@ def get_track_selection_args(track: Any) -> list[str]:
             # I've yet to encounter a subtitle track in ISM manifests, so this is mostly theoretical.
             if track_type == "Subtitle":
                 if name := stream_index.get("Name") or quality_level.get("Index"):
-                    parts.append(rf"id={name}")
+                    parts.append(rf'"id=\b{name}\b"')
                 else:
                     if lang := stream_index.get("Language"):
                         parts.append(f"lang={lang}")
@@ -374,16 +374,12 @@ def download(
                     continue
                 last_line = output
 
-                if ERROR_RE.search(output):
-                    console.log(f"[N_m3u8DL-RE]: {output}")
-
                 if warn_match := WARN_RE.search(output):
                     console.log(f"{track_type} {warn_match.group(1)}")
                     continue
 
                 if speed_match := SPEED_RE.search(output):
-                    size_match = SIZE_RE.search(output)
-                    size = size_match.group(1) if size_match else ""
+                    size = size_match.group(1) if (size_match := SIZE_RE.search(output)) else ""
                     yield {"downloaded": f"{speed_match.group(1)} {size}"}
 
                 if percent_match := PERCENT_RE.search(output):
