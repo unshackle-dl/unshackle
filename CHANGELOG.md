@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.1] - 2026-01-22
+
+### Fixed
+
+- **Vulnerable Dependencies**: Upgraded dependencies to address security alerts
+  - urllib3: 2.5.0 → 2.6.3 (CVE-2025-66418, CVE-2025-66471, CVE-2026-21441)
+  - aiohttp: 3.13.2 → 3.13.3 (8 CVEs including CVE-2025-69223, CVE-2025-69227)
+  - fonttools: 4.60.1 → 4.61.1 (CVE-2025-66034)
+  - filelock: 3.19.1 → 3.20.3 (CVE-2025-68146, CVE-2026-22701)
+  - virtualenv: 20.34.0 → 20.36.1 (CVE-2026-22702)
+- **HLS Key Selection**: Prefer media playlist keys over session keys for accurate KID matching
+  - Session keys from master playlists often contain PSSHs with multiple KIDs covering all tracks
+  - Unified DRM licensing logic for all downloaders
+  - Added `filter_keys_for_cdm()` to select keys matching configured CDM type
+  - Added `get_track_kid_from_init()` to extract KID from init segment with fallback
+  - Fixed PlayReady keyformat matching using strict `PR_PSSH.SYSTEM_ID` URN
+  - Fixes download failures where track KID was null or mismatched
+- **DASH Audio Track Selection**: Include language in N_m3u8DL-RE track selection
+  - Fixes duplicate audio downloads when DASH manifests have multiple adaptation sets with same representation IDs
+- **SubtitleEdit Compatibility**: Update CLI syntax for SubtitleEdit 4.x
+  - Use lowercase format names (subrip, webvtt, advancedsubstationalpha)
+  - Respect `conversion_method` config setting when stripping SDH
+
 ## [2.3.0] - 2026-01-18
 
 ### Added
