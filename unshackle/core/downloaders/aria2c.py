@@ -19,7 +19,7 @@ from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import DOWNLOAD_CANCELLED
-from unshackle.core.utilities import get_extension, get_free_port
+from unshackle.core.utilities import get_debug_logger, get_extension, get_free_port
 
 
 def rpc(caller: Callable, secret: str, method: str, params: Optional[list[Any]] = None) -> Any:
@@ -58,6 +58,8 @@ def download(
     proxy: Optional[str] = None,
     max_workers: Optional[int] = None,
 ) -> Generator[dict[str, Any], None, None]:
+    debug_logger = get_debug_logger()
+
     if not urls:
         raise ValueError("urls must be provided and not empty")
     elif not isinstance(urls, (str, dict, list)):
@@ -91,6 +93,13 @@ def download(
         urls = [urls]
 
     if not binaries.Aria2:
+        if debug_logger:
+            debug_logger.log(
+                level="ERROR",
+                operation="downloader_aria2c_binary_missing",
+                message="Aria2c executable not found in PATH or local binaries directory",
+                context={"searched_names": ["aria2c", "aria2"]},
+            )
         raise EnvironmentError("Aria2c executable not found...")
 
     if proxy and not proxy.lower().startswith("http://"):
@@ -180,6 +189,28 @@ def download(
             continue
         arguments.extend(["--header", f"{header}: {value}"])
 
+    if debug_logger:
+        first_url = urls[0] if isinstance(urls[0], str) else urls[0].get("url", "")
+        url_display = first_url[:200] + "..." if len(first_url) > 200 else first_url
+        debug_logger.log(
+            level="DEBUG",
+            operation="downloader_aria2c_start",
+            message="Starting Aria2c download",
+            context={
+                "binary_path": str(binaries.Aria2),
+                "url_count": len(urls),
+                "first_url": url_display,
+                "output_dir": str(output_dir),
+                "filename": filename,
+                "max_concurrent_downloads": max_concurrent_downloads,
+                "max_connection_per_server": max_connection_per_server,
+                "split": split,
+                "file_allocation": file_allocation,
+                "has_proxy": bool(proxy),
+                "rpc_port": rpc_port,
+            },
+        )
+
     yield dict(total=len(urls))
 
     try:
@@ -226,6 +257,20 @@ def download(
                         textwrap.wrap(error, width=console.width - 20, initial_indent="")
                     )
                     console.log(Text.from_ansi("\n[Aria2c]: " + error_pretty))
+                    if debug_logger:
+                        debug_logger.log(
+                            level="ERROR",
+                            operation="downloader_aria2c_download_error",
+                            message=f"Aria2c download failed: {dl['errorMessage']}",
+                            context={
+                                "gid": dl["gid"],
+                                "error_code": dl["errorCode"],
+                                "error_message": dl["errorMessage"],
+                                "used_uri": used_uri[:200] + "..." if len(used_uri) > 200 else used_uri,
+                                "completed_length": dl.get("completedLength"),
+                                "total_length": dl.get("totalLength"),
+                            },
+                        )
                     raise ValueError(error)
 
             if number_stopped == len(urls):
@@ -237,7 +282,31 @@ def download(
         p.wait()
 
         if p.returncode != 0:
+            if debug_logger:
+                debug_logger.log(
+                    level="ERROR",
+                    operation="downloader_aria2c_failed",
+                    message=f"Aria2c exited with code {p.returncode}",
+                    context={
+                        "returncode": p.returncode,
+                        "url_count": len(urls),
+                        "output_dir": str(output_dir),
+                    },
+                )
             raise subprocess.CalledProcessError(p.returncode, arguments)
+
+        if debug_logger:
+            debug_logger.log(
+                level="DEBUG",
+                operation="downloader_aria2c_complete",
+                message="Aria2c download completed successfully",
+                context={
+                    "url_count": len(urls),
+                    "output_dir": str(output_dir),
+                    "filename": filename,
+                },
+            )
+
     except ConnectionResetError:
         # interrupted while passing URI to download
         raise KeyboardInterrupt()
@@ -251,9 +320,20 @@ def download(
         DOWNLOAD_CANCELLED.set()  # skip pending track downloads
         yield dict(downloaded="[yellow]CANCELLED")
         raise
-    except Exception:
+    except Exception as e:
         DOWNLOAD_CANCELLED.set()  # skip pending track downloads
         yield dict(downloaded="[red]FAILED")
+        if debug_logger and not isinstance(e, (subprocess.CalledProcessError, ValueError)):
+            debug_logger.log(
+                level="ERROR",
+                operation="downloader_aria2c_exception",
+                message=f"Unexpected error during Aria2c download: {e}",
+                error=e,
+                context={
+                    "url_count": len(urls),
+                    "output_dir": str(output_dir),
+                },
+            )
         raise
     finally:
         rpc(caller=partial(rpc_session.post, url=rpc_uri), secret=rpc_secret, method="aria2.shutdown")

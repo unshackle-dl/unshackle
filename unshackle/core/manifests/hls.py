@@ -32,7 +32,7 @@ from unshackle.core.downloaders import requests as requests_downloader
 from unshackle.core.drm import DRM_T, ClearKey, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
-from unshackle.core.utilities import get_extension, is_close_match, try_ensure_utf8
+from unshackle.core.utilities import get_debug_logger, get_extension, is_close_match, try_ensure_utf8
 
 
 class HLS:
@@ -348,6 +348,24 @@ class HLS:
                     "track": track,
                     "content_keys": session_drm.content_keys if session_drm else None,
                 }
+            )
+
+        debug_logger = get_debug_logger()
+        if debug_logger:
+            debug_logger.log(
+                level="DEBUG",
+                operation="manifest_hls_download_start",
+                message="Starting HLS manifest download",
+                context={
+                    "track_id": getattr(track, "id", None),
+                    "track_type": track.__class__.__name__,
+                    "total_segments": total_segments,
+                    "downloader": downloader.__name__,
+                    "has_drm": bool(session_drm),
+                    "drm_type": session_drm.__class__.__name__ if session_drm else None,
+                    "skip_merge": skip_merge,
+                    "save_path": str(save_path),
+                },
             )
 
         for status_update in downloader(**downloader_args):

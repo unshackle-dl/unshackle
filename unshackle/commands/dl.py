@@ -1376,6 +1376,7 @@ class dl:
                         kept_tracks.extend(title.tracks.subtitles)
                     if keep_chapters:
                         kept_tracks.extend(title.tracks.chapters)
+                    kept_tracks.extend(title.tracks.attachments)
 
                     title.tracks = Tracks(kept_tracks)
 
@@ -1574,7 +1575,7 @@ class dl:
                         if subtitle.codec == Subtitle.Codec.SubStationAlphav4:
                             for line in subtitle.path.read_text("utf8").splitlines():
                                 if line.startswith("Style: "):
-                                    font_names.append(line.removesuffix("Style: ").split(",")[1])
+                                    font_names.append(line.removeprefix("Style: ").split(",")[1].strip())
 
                     font_count, missing_fonts = self.attach_subtitle_fonts(
                         font_names, title, temp_font_files

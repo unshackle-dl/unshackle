@@ -21,7 +21,7 @@ from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, 
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.tracks import Audio, Subtitle, Track, Tracks, Video
-from unshackle.core.utilities import try_ensure_utf8
+from unshackle.core.utilities import get_debug_logger, try_ensure_utf8
 from unshackle.core.utils.xml import load_xml
 
 
@@ -281,6 +281,24 @@ class ISM:
                     "track": track,
                     "content_keys": session_drm.content_keys if session_drm else None,
                 }
+            )
+
+        debug_logger = get_debug_logger()
+        if debug_logger:
+            debug_logger.log(
+                level="DEBUG",
+                operation="manifest_ism_download_start",
+                message="Starting ISM manifest download",
+                context={
+                    "track_id": getattr(track, "id", None),
+                    "track_type": track.__class__.__name__,
+                    "total_segments": len(segments),
+                    "downloader": downloader.__name__,
+                    "has_drm": bool(session_drm),
+                    "drm_type": session_drm.__class__.__name__ if session_drm else None,
+                    "skip_merge": skip_merge,
+                    "save_path": str(save_path),
+                },
             )
 
         for status_update in downloader(**downloader_args):

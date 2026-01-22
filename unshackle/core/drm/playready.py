@@ -168,7 +168,7 @@ class PlayReady:
             pssh_boxes.extend(list(get_boxes(init_data, b"pssh")))
             tenc_boxes.extend(list(get_boxes(init_data, b"tenc")))
 
-        pssh = next((b for b in pssh_boxes if b.system_ID == PSSH.SYSTEM_ID.bytes), None)
+        pssh = next((b for b in pssh_boxes if b.system_ID == PSSH.SYSTEM_ID), None)
         if not pssh:
             raise PlayReady.Exceptions.PSSHNotFound("PSSH was not found in track data.")
 
@@ -197,7 +197,7 @@ class PlayReady:
                 if enc_key_id:
                     kid = UUID(bytes=base64.b64decode(enc_key_id))
 
-        pssh = next((b for b in pssh_boxes if b.system_ID == PSSH.SYSTEM_ID.bytes), None)
+        pssh = next((b for b in pssh_boxes if b.system_ID == PSSH.SYSTEM_ID), None)
         if not pssh:
             raise PlayReady.Exceptions.PSSHNotFound("PSSH was not found in track data.")
 
@@ -415,7 +415,7 @@ class PlayReady:
             p.wait()
 
             if p.returncode != 0 or had_error:
-                raise subprocess.CalledProcessError(p.returncode, arguments)
+                raise subprocess.CalledProcessError(p.returncode, [binaries.ShakaPackager, *arguments])
 
             path.unlink()
             if not stream_skipped:

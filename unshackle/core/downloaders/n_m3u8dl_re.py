@@ -10,15 +10,17 @@ import requests
 from requests.cookies import cookiejar_from_dict, get_cookie_header
 
 from unshackle.core import binaries
+from unshackle.core.binaries import FFMPEG, ShakaPackager, Mp4decrypt
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import DOWNLOAD_CANCELLED
+from unshackle.core.utilities import get_debug_logger
 
 PERCENT_RE = re.compile(r"(\d+\.\d+%)")
 SPEED_RE = re.compile(r"(\d+\.\d+(?:MB|KB)ps)")
 SIZE_RE = re.compile(r"(\d+\.\d+(?:MB|GB|KB)/\d+\.\d+(?:MB|GB|KB))")
 WARN_RE = re.compile(r"(WARN : Response.*|WARN : One or more errors occurred.*)")
-ERROR_RE = re.compile(r"(ERROR.*)")
+ERROR_RE = re.compile(r"(\bERROR\b.*|\bFAILED\b.*|\bException\b.*)")
 
 DECRYPTION_ENGINE = {
     "shaka": "SHAKA_PACKAGER",
@@ -66,12 +68,17 @@ def get_track_selection_args(track: Any) -> list[str]:
             parts = []
 
             if track_type == "Audio":
-                if track_id := representation.get("id") or adaptation_set.get("audioTrackId"):
+                track_id = representation.get("id") or adaptation_set.get("audioTrackId")
+                lang = representation.get("lang") or adaptation_set.get("lang")
+
+                if track_id:
                     parts.append(rf'"id=\b{track_id}\b"')
+                    if lang:
+                        parts.append(f"lang={lang}")
                 else:
                     if codecs := representation.get("codecs"):
                         parts.append(f"codecs={codecs}")
-                    if lang := representation.get("lang") or adaptation_set.get("lang"):
+                    if lang:
                         parts.append(f"lang={lang}")
                     if bw := representation.get("bandwidth"):
                         bitrate = int(bw) // 1000
@@ -176,17 +183,33 @@ def build_download_args(
         "--thread-count": thread_count,
         "--download-retry-count": retry_count,
         "--write-meta-json": False,
-        "--no-log": True,
     }
+    if FFMPEG:
+        args["--ffmpeg-binary-path"] = str(FFMPEG)
     if proxy:
         args["--custom-proxy"] = proxy
     if skip_merge:
         args["--skip-merge"] = skip_merge
     if ad_keyword:
         args["--ad-keyword"] = ad_keyword
+
     if content_keys:
         args["--key"] = next((f"{kid.hex}:{key.lower()}" for kid, key in content_keys.items()), None)
-        args["--decryption-engine"] = DECRYPTION_ENGINE.get(config.decryption.lower()) or "SHAKA_PACKAGER"
+
+        decryption_config = config.decryption.lower()
+        engine_name = DECRYPTION_ENGINE.get(decryption_config) or "SHAKA_PACKAGER"
+        args["--decryption-engine"] = engine_name
+
+        binary_path = None
+        if engine_name == "SHAKA_PACKAGER":
+            if ShakaPackager:
+                binary_path = str(ShakaPackager)
+        elif engine_name == "MP4DECRYPT":
+            if Mp4decrypt:
+                binary_path = str(Mp4decrypt)
+        if binary_path:
+            args["--decryption-binary-path"] = binary_path
+
     if custom_args:
         args.update(custom_args)
 
@@ -224,6 +247,8 @@ def download(
     content_keys: dict[str, Any] | None,
     skip_merge: bool | None = False,
 ) -> Generator[dict[str, Any], None, None]:
+    debug_logger = get_debug_logger()
+
     if not urls:
         raise ValueError("urls must be provided and not empty")
     if not isinstance(urls, (str, dict, list)):
@@ -275,7 +300,39 @@ def download(
         skip_merge=skip_merge,
         ad_keyword=ad_keyword,
     )
-    arguments.extend(get_track_selection_args(track))
+    selection_args = get_track_selection_args(track)
+    arguments.extend(selection_args)
+
+    log_file_path: Path | None = None
+    if debug_logger:
+        log_file_path = output_dir / f".n_m3u8dl_re_{filename}.log"
+        arguments.extend(["--log-file-path", str(log_file_path)])
+
+        track_url_display = track.url[:200] + "..." if len(track.url) > 200 else track.url
+        debug_logger.log(
+            level="DEBUG",
+            operation="downloader_n_m3u8dl_re_start",
+            message="Starting N_m3u8DL-RE download",
+            context={
+                "binary_path": str(binaries.N_m3u8DL_RE),
+                "track_id": getattr(track, "id", None),
+                "track_type": track.__class__.__name__,
+                "track_url": track_url_display,
+                "output_dir": str(output_dir),
+                "filename": filename,
+                "thread_count": thread_count,
+                "retry_count": retry_count,
+                "has_content_keys": bool(content_keys),
+                "content_key_count": len(content_keys) if content_keys else 0,
+                "has_proxy": bool(proxy),
+                "skip_merge": skip_merge,
+                "has_custom_args": bool(track.downloader_args),
+                "selection_args": selection_args,
+                "descriptor": track.descriptor.name if hasattr(track, "descriptor") else None,
+            },
+        )
+    else:
+        arguments.extend(["--no-log", "true"])
 
     yield {"total": 100}
     yield {"downloaded": "Parsing streams..."}
@@ -310,10 +367,44 @@ def download(
                     yield {"completed": progress} if progress < 100 else {"downloaded": "Merging"}
 
             process.wait()
+
         if process.returncode != 0:
+            if debug_logger and log_file_path:
+                log_contents = ""
+                if log_file_path.exists():
+                    try:
+                        log_contents = log_file_path.read_text(encoding="utf-8", errors="replace")
+                    except Exception:
+                        log_contents = "<failed to read log file>"
+
+                debug_logger.log(
+                    level="ERROR",
+                    operation="downloader_n_m3u8dl_re_failed",
+                    message=f"N_m3u8DL-RE exited with code {process.returncode}",
+                    context={
+                        "returncode": process.returncode,
+                        "track_id": getattr(track, "id", None),
+                        "track_type": track.__class__.__name__,
+                        "last_line": last_line,
+                        "log_file_contents": log_contents,
+                    },
+                )
             if error_match := ERROR_RE.search(last_line):
                 raise ValueError(f"[N_m3u8DL-RE]: {error_match.group(1)}")
             raise subprocess.CalledProcessError(process.returncode, arguments)
+
+        if debug_logger:
+            debug_logger.log(
+                level="DEBUG",
+                operation="downloader_n_m3u8dl_re_complete",
+                message="N_m3u8DL-RE download completed successfully",
+                context={
+                    "track_id": getattr(track, "id", None),
+                    "track_type": track.__class__.__name__,
+                    "output_dir": str(output_dir),
+                    "filename": filename,
+                },
+            )
 
     except ConnectionResetError:
         # interrupted while passing URI to download
@@ -322,10 +413,35 @@ def download(
         DOWNLOAD_CANCELLED.set()  # skip pending track downloads
         yield {"downloaded": "[yellow]CANCELLED"}
         raise
-    except Exception:
+    except Exception as e:
         DOWNLOAD_CANCELLED.set()  # skip pending track downloads
         yield {"downloaded": "[red]FAILED"}
+        if debug_logger and log_file_path and not isinstance(e, (subprocess.CalledProcessError, ValueError)):
+            log_contents = ""
+            if log_file_path.exists():
+                try:
+                    log_contents = log_file_path.read_text(encoding="utf-8", errors="replace")
+                except Exception:
+                    log_contents = "<failed to read log file>"
+
+            debug_logger.log(
+                level="ERROR",
+                operation="downloader_n_m3u8dl_re_exception",
+                message=f"Unexpected error during N_m3u8DL-RE download: {e}",
+                error=e,
+                context={
+                    "track_id": getattr(track, "id", None),
+                    "track_type": track.__class__.__name__,
+                    "log_file_contents": log_contents,
+                },
+            )
         raise
+    finally:
+        if log_file_path and log_file_path.exists():
+            try:
+                log_file_path.unlink()
+            except Exception:
+                pass
 
 
 def n_m3u8dl_re(

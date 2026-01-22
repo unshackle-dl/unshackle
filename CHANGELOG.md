@@ -5,6 +5,105 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-01-18
+
+### Added
+
+- **Unicode Filenames Option**: New `unicode_filenames` config option to preserve native characters
+  - Allows disabling ASCII transliteration in filenames
+  - Preserves Korean, Japanese, Chinese, and other native language characters
+  - Closes #49
+
+### Fixed
+
+- **WebVTT Cue Handling**: Handle WebVTT cue identifiers and overlapping multi-line cues
+  - Added detection and sanitization for cue identifiers (Q0, Q1, etc.) before timing lines
+  - Added merging of overlapping cues with different line positions into multi-line subtitles
+  - Fixes parsing issues with pysubs2/pycaption on certain WebVTT files
+- **Widevine PSSH Filtering**: Filter Widevine PSSH by system ID instead of sorting
+  - Fixes KeyError crash when unsupported DRM systems are present in init segments
+- **TTML Negative Values**: Handle negative values in multi-value TTML attributes
+  - Fixes pycaption parse errors for attributes like `tts:extent="-5% 7.5%"`
+  - Closes #47
+- **ASS Font Names**: Strip whitespace from ASS font names
+  - Handles ASS subtitle files with spaces after commas in Style definitions
+  - Fixes #57
+- **Shaka-Packager Error Messages**: Include shaka-packager binary path in error messages
+- **N_m3u8DL-RE Merge and Decryption**: Handle merge and decryption properly
+  - Prevents audio corruption ("Box 'OG 2' size is too large") with DASH manifests
+  - Fixes duplicate init segment writing when using N_m3u8DL-RE
+- **DASH Placeholder KIDs**: Handle placeholder KIDs and improve DRM init from segments
+  - Detects and replaces placeholder/test KIDs in Widevine PSSH
+  - Adds CENC namespace support for kid/default_KID attributes
+- **PlayReady PSSH Comparison**: Correct PSSH system ID comparison in PlayReady
+  - Removes erroneous `.bytes` accessor from PSSH.SYSTEM_ID comparisons
+
+## [2.2.0] - 2026-01-15
+
+### Added
+
+- **CDM-Aware PlayReady Fallback Detection**: Intelligent DRM fallback based on selected CDM
+  - Adds PlayReady PSSH/KID extraction from track and init data with CDM-aware ordering
+  - When PlayReady CDM is selected, tries PlayReady first then falls back to Widevine
+  - When Widevine CDM is selected (default), tries Widevine first then falls back to PlayReady
+- **Comprehensive Debug Logging**: Enhanced debug logging for downloaders and muxing
+  - Added detailed debug logging to aria2c, curl_impersonate, n_m3u8dl_re, and requests downloaders
+  - Enhanced manifest parsers (DASH, HLS, ISM) with debug logging
+  - Added debug logging to track muxing operations
+
+### Fixed
+
+- **Hybrid DV+HDR10 Filename Detection**: Fixed HDR10 detection in hybrid Dolby Vision filenames
+  - Hybrid DV+HDR10 files were incorrectly named "DV.H.265" instead of "DV.HDR.H.265"
+  - Now checks both `hdr_format_full` and `hdr_format_commercial` fields for HDR10 indicators
+- **Vault Adaptive Batch Sizing**: Improved bulk key operations with adaptive batch sizing
+  - Prevents query limit issues when retrieving large numbers of keys from vaults
+  - Dynamically adjusts batch sizes based on vault response characteristics
+- **Test Command Improvements**: Enhanced test command error detection and sorting
+  - Improved error detection in test command output
+  - Added natural sorting for test results
+
+## [2.1.0] - 2025-11-27
+
+### Added
+
+- **Per-Track Quality-Based CDM Selection**: Dynamic CDM switching during runtime DRM operations
+  - Enables quality-based CDM selection during runtime DRM switching
+  - Different CDMs can be used for different video quality levels within the same download session
+  - Example: Use Widevine L3 for SD/HD and PlayReady SL3 for 4K content
+- **Enhanced Track Export**: Improved export functionality with additional metadata
+  - Added URL field to track export for easier identification
+  - Added descriptor information in export output
+  - Keys now exported in hex-formatted strings
+
+### Changed
+
+- **Dependencies**: Upgraded to latest compatible versions
+  - Updated various dependencies to their latest versions
+
+### Fixed
+
+- **Attachment Preservation**: Fixed attachments being dropped during track filtering
+  - Attachments (screenshots, fonts) were being lost when track list was rebuilt
+  - Fixes image files remaining in temp directory after muxing
+- **DASH BaseURL Resolution**: Added AdaptationSet-level BaseURL support per DASH spec
+  - URL resolution chain now properly follows: MPD → Period → AdaptationSet → Representation
+- **WindscribeVPN Region Support**: Restricted to supported regions with proper error handling
+  - Added error handling for unsupported regions in get_proxy method
+  - Prevents cryptic errors when using unsupported region codes
+- **Filename Sanitization**: Fixed space-hyphen-space handling in filenames
+  - Pre-process space-hyphen-space patterns (e.g., "Title - Episode") before other replacements
+  - Made space-hyphen-space handling conditional on scene_naming setting
+  - Addresses PR #44 by fixing the root cause
+- **CICP Enum Values**: Corrected values to match ITU-T H.273 specification
+  - Added Primaries.Unspecified (value 2) per H.273 spec
+  - Renamed Primaries/Transfer value 0 from Unspecified to Reserved for spec accuracy
+  - Simplified Transfer value 2 from Unspecified_Image to Unspecified
+  - Verified against ITU-T H.273, ISO/IEC 23091-2, H.264/H.265 specs, and FFmpeg enums
+- **HLS Byte Range Parsing**: Fixed TypeError in range_offset conversion
+  - Converted range_offset to int to prevent TypeError in calculate_byte_range
+- **pyplayready Compatibility**: Pinned to <0.7 to avoid KID extraction bug
+
 ## [2.0.0] - 2025-11-10
 
 ### Breaking Changes

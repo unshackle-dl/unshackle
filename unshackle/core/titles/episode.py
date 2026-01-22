@@ -185,7 +185,10 @@ class Episode(Title):
                 if hdr_format:
                     if hdr_format_full.startswith("Dolby Vision"):
                         name += " DV"
-                        if any(indicator in hdr_format_full for indicator in ["HDR10", "SMPTE ST 2086"]):
+                        if any(
+                            indicator in (hdr_format_full + " " + hdr_format)
+                            for indicator in ["HDR10", "SMPTE ST 2086"]
+                        ):
                             name += " HDR"
                     else:
                         name += f" {DYNAMIC_RANGE_MAP.get(hdr_format)} "
