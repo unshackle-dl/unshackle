@@ -120,4 +120,4 @@ no_implicit_optional = true
 
 [tool.uv.sources]
 unshackle = { workspace = true }
-subby = { git = "https://github.com/vevv/subby.git", rev = "5a925c367ffb3f5e53fd114ae222d3be1fdff35d" }
+subby = { git = "https://github.com/vevv/subby.git", rev = "1ea6a52028c5bea8177c8abc91716d74e4d097e1" }
