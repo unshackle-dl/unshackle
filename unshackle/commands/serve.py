@@ -81,7 +81,7 @@ def serve(host: str, port: int, caddy: bool, api_only: bool, no_key: bool, debug
                 app["config"] = {"users": []}
             else:
                 app = web.Application(middlewares=[cors_middleware, pywidevine_serve.authentication])
-                app["config"] = {"users": [api_secret]}
+                app["config"] = {"users": {api_secret: {"devices": [], "username": "api_user"}}}
             app["debug_api"] = debug_api
             setup_routes(app)
             setup_swagger(app)
@@ -102,10 +102,14 @@ def serve(host: str, port: int, caddy: bool, api_only: bool, no_key: bool, debug
                 app = web.Application(middlewares=[cors_middleware, pywidevine_serve.authentication])
                 # Setup config - add API secret to users for authentication
                 serve_config = dict(config.serve)
-                if not serve_config.get("users"):
-                    serve_config["users"] = []
+                if not serve_config.get("users") or not isinstance(serve_config["users"], dict):
+                    serve_config["users"] = {}
                 if api_secret not in serve_config["users"]:
-                    serve_config["users"].append(api_secret)
+                    device_names = [d.stem if hasattr(d, "stem") else str(d) for d in serve_config.get("devices", [])]
+                    serve_config["users"][api_secret] = {
+                        "devices": device_names,
+                        "username": "api_user"
+                    }
                 app["config"] = serve_config
 
             app.on_startup.append(pywidevine_serve._startup)
