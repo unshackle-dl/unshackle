@@ -12,6 +12,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
 from urllib.parse import urljoin
+from uuid import UUID
 from zlib import crc32
 
 import m3u8
@@ -260,7 +261,9 @@ class HLS:
                     sys.exit(1)
                 playlist_text = response.text
             else:
-                raise TypeError(f"Expected response to be a requests.Response or curl_cffi.Response, not {type(response)}")
+                raise TypeError(
+                    f"Expected response to be a requests.Response or curl_cffi.Response, not {type(response)}"
+                )
 
             master = m3u8.loads(playlist_text, uri=track.url)
 
@@ -268,22 +271,50 @@ class HLS:
             log.error("Track's HLS playlist has no segments, expecting an invariant M3U8 playlist.")
             sys.exit(1)
 
+        # Get session DRM as fallback but prefer media playlist keys for accurate KID matching
         if track.drm:
             session_drm = track.get_drm_for_cdm(cdm)
-            if isinstance(session_drm, (Widevine, PlayReady)):
-                # license and grab content keys
-                try:
-                    if not license_widevine:
-                        raise ValueError("license_widevine func must be supplied to use DRM")
-                    progress(downloaded="LICENSING")
-                    license_widevine(session_drm)
-                    progress(downloaded="[yellow]LICENSED")
-                except Exception:  # noqa
-                    DOWNLOAD_CANCELLED.set()  # skip pending track downloads
-                    progress(downloaded="[red]FAILED")
-                    raise
         else:
             session_drm = None
+
+        initial_drm_licensed = False
+        initial_drm_key = None  # Track the EXT-X-KEY used for initial licensing
+        media_keys = [k for k in (master.keys or []) if k is not None]
+        if media_keys:
+            cdm_media_keys = HLS.filter_keys_for_cdm(media_keys, cdm)
+            media_playlist_key = HLS.get_supported_key(cdm_media_keys) if cdm_media_keys else None
+
+            if media_playlist_key:
+                media_drm = HLS.get_drm(media_playlist_key, session)
+                if isinstance(media_drm, (Widevine, PlayReady)):
+                    track_kid = HLS.get_track_kid_from_init(master, track, session) or media_drm.kid
+                    try:
+                        if not license_widevine:
+                            raise ValueError("license_widevine func must be supplied to use DRM")
+                        progress(downloaded="LICENSING")
+                        license_widevine(media_drm, track_kid=track_kid)
+                        progress(downloaded="[yellow]LICENSED")
+                        initial_drm_licensed = True
+                        initial_drm_key = media_playlist_key
+                        track.drm = [media_drm]
+                        session_drm = media_drm
+                    except Exception:  # noqa
+                        DOWNLOAD_CANCELLED.set()  # skip pending track downloads
+                        progress(downloaded="[red]FAILED")
+                        raise
+
+        # Fall back to session DRM if media playlist has no matching keys
+        if not initial_drm_licensed and session_drm and isinstance(session_drm, (Widevine, PlayReady)):
+            try:
+                if not license_widevine:
+                    raise ValueError("license_widevine func must be supplied to use DRM")
+                progress(downloaded="LICENSING")
+                license_widevine(session_drm)
+                progress(downloaded="[yellow]LICENSED")
+            except Exception:  # noqa
+                DOWNLOAD_CANCELLED.set()  # skip pending track downloads
+                progress(downloaded="[red]FAILED")
+                raise
 
         if DOWNLOAD_LICENCE_ONLY.is_set():
             progress(downloaded="[yellow]SKIPPED")
@@ -341,12 +372,15 @@ class HLS:
 
         if downloader.__name__ == "n_m3u8dl_re":
             skip_merge = True
+            # session_drm already has correct content_keys from initial licensing above
+            n_m3u8dl_content_keys = session_drm.content_keys if session_drm else None
+
             downloader_args.update(
                 {
                     "output_dir": save_dir,
                     "filename": track.id,
                     "track": track,
-                    "content_keys": session_drm.content_keys if session_drm else None,
+                    "content_keys": n_m3u8dl_content_keys,
                 }
             )
 
@@ -390,7 +424,7 @@ class HLS:
             range_offset = 0
             map_data: Optional[tuple[m3u8.model.InitializationSection, bytes]] = None
             if session_drm:
-                encryption_data: Optional[tuple[Optional[m3u8.Key], DRM_T]] = (None, session_drm)
+                encryption_data: Optional[tuple[Optional[m3u8.Key], DRM_T]] = (initial_drm_key, session_drm)
             else:
                 encryption_data: Optional[tuple[Optional[m3u8.Key], DRM_T]] = None
 
@@ -571,6 +605,8 @@ class HLS:
                                     track_kid = track.get_key_id(map_data[1])
                                 else:
                                     track_kid = None
+                                if not track_kid:
+                                    track_kid = drm.kid
                                 progress(downloaded="LICENSING")
                                 license_widevine(drm, track_kid=track_kid)
                                 progress(downloaded="[yellow]LICENSED")
@@ -771,6 +807,60 @@ class HLS:
         return keys
 
     @staticmethod
+    def filter_keys_for_cdm(
+        keys: list[Union[m3u8.model.SessionKey, m3u8.model.Key]],
+        cdm: object,
+    ) -> list[Union[m3u8.model.SessionKey, m3u8.model.Key]]:
+        """
+        Filter EXT-X-KEY entries to only include those matching the CDM type.
+
+        This ensures we select the correct DRM system (Widevine vs PlayReady)
+        based on what CDM is configured, avoiding license request failures.
+        """
+        playready_urn = f"urn:uuid:{PR_PSSH.SYSTEM_ID}"
+        playready_keyformats = {playready_urn, "com.microsoft.playready"}
+        if isinstance(cdm, WidevineCdm):
+            return [k for k in keys if k.keyformat and k.keyformat.lower() == WidevineCdm.urn]
+        elif isinstance(cdm, PlayReadyCdm):
+            return [k for k in keys if k.keyformat and k.keyformat.lower() in playready_keyformats]
+        elif hasattr(cdm, "is_playready"):
+            if cdm.is_playready:
+                return [k for k in keys if k.keyformat and k.keyformat.lower() in playready_keyformats]
+            else:
+                return [k for k in keys if k.keyformat and k.keyformat.lower() == WidevineCdm.urn]
+        return keys
+
+    @staticmethod
+    def get_track_kid_from_init(
+        master: M3U8,
+        track: AnyTrack,
+        session: Union[Session, CurlSession],
+    ) -> Optional[UUID]:
+        """
+        Extract the track's Key ID from its init segment (EXT-X-MAP).
+
+        Returns None if no init segment exists or KID extraction fails.
+        The caller should fall back to drm.kid from the PSSH if this returns None.
+        """
+        map_section = next((seg.init_section for seg in master.segments if seg.init_section), None)
+        if not map_section:
+            return None
+
+        map_uri = urljoin(map_section.base_uri or master.base_uri or "", map_section.uri)
+        try:
+            if map_section.byterange:
+                byte_range = HLS.calculate_byte_range(map_section.byterange, 0)
+                headers = {"Range": f"bytes={byte_range}"}
+            else:
+                headers = {}
+            map_res = session.get(url=map_uri, headers=headers)
+            if map_res.ok:
+                return track.get_key_id(map_res.content)
+        except Exception:
+            pass
+        return None
+
+    @staticmethod
     def get_supported_key(keys: list[Union[m3u8.model.SessionKey, m3u8.model.Key]]) -> Optional[m3u8.Key]:
         """
         Get a support Key System from a list of Key systems.
@@ -798,9 +888,9 @@ class HLS:
                 return key
             elif key.keyformat and key.keyformat.lower() == WidevineCdm.urn:
                 return key
-            elif key.keyformat and (
-                key.keyformat.lower() == PlayReadyCdm or "com.microsoft.playready" in key.keyformat.lower()
-            ):
+            elif key.keyformat and key.keyformat.lower() in {
+                f"urn:uuid:{PR_PSSH.SYSTEM_ID}", "com.microsoft.playready"
+            }:
                 return key
             else:
                 unsupported_systems.append(key.method + (f" ({key.keyformat})" if key.keyformat else ""))
@@ -837,9 +927,9 @@ class HLS:
                 pssh=WV_PSSH(key.uri.split(",")[-1]),
                 **key._extra_params,  # noqa
             )
-        elif key.keyformat and (
-            key.keyformat.lower() == PlayReadyCdm or "com.microsoft.playready" in key.keyformat.lower()
-        ):
+        elif key.keyformat and key.keyformat.lower() in {
+            f"urn:uuid:{PR_PSSH.SYSTEM_ID}", "com.microsoft.playready"
+        }:
             drm = PlayReady(
                 pssh=PR_PSSH(key.uri.split(",")[-1]),
                 pssh_b64=key.uri.split(",")[-1],

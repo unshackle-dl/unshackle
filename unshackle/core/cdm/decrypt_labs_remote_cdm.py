@@ -449,8 +449,8 @@ class DecryptLabsRemoteCDM:
             error_msg = data.get("message", "Unknown error")
             if "details" in data:
                 error_msg += f" - Details: {data['details']}"
-            if "error" in data:
-                error_msg += f" - Error: {data['error']}"
+            if "Error" in data:
+                error_msg += f" - Error: {data['Error']}"
 
             if "service_certificate is required" in str(data) and not session["service_certificate"]:
                 error_msg += " (No service certificate was provided to the CDM session)"
@@ -537,8 +537,8 @@ class DecryptLabsRemoteCDM:
             error_msg = f"API response: {data['message']} - {error_msg}"
         if "details" in data:
             error_msg += f" - Details: {data['details']}"
-        if "error" in data:
-            error_msg += f" - Error: {data['error']}"
+        if "Error" in data:
+            error_msg += f" - Error: {data['Error']}"
 
         if already_tried_cache and data.get("message") == "success":
             return b""
@@ -612,8 +612,8 @@ class DecryptLabsRemoteCDM:
 
         if data.get("message") != "success":
             error_msg = data.get("message", "Unknown error")
-            if "error" in data:
-                error_msg += f" - Error: {data['error']}"
+            if "Error" in data:
+                error_msg += f" - Error: {data['Error']}"
             if "details" in data:
                 error_msg += f" - Details: {data['details']}"
             raise requests.RequestException(f"License decrypt error: {error_msg}")
