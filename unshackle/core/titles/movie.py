@@ -47,6 +47,8 @@ class Movie(Title):
 
     def __str__(self) -> str:
         if self.year:
+            if config.dash_naming:
+                return f"{self.name} - {self.year}"
             return f"{self.name} ({self.year})"
         return self.name
 
