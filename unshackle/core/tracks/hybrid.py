@@ -109,7 +109,7 @@ class Hybrid:
         """Simple ffmpeg execution without progress tracking"""
         p = subprocess.run(
             [
-                str(FFMPEG),
+                str(FFMPEG) if FFMPEG else "ffmpeg",
                 "-nostdin",
                 "-i",
                 str(save_path),
