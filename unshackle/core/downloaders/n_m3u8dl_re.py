@@ -20,7 +20,7 @@ PERCENT_RE = re.compile(r"(\d+\.\d+%)")
 SPEED_RE = re.compile(r"(\d+\.\d+(?:MB|KB)ps)")
 SIZE_RE = re.compile(r"(\d+\.\d+(?:MB|GB|KB)/\d+\.\d+(?:MB|GB|KB))")
 WARN_RE = re.compile(r"(WARN : Response.*|WARN : One or more errors occurred.*)")
-ERROR_RE = re.compile(r"(ERROR.*|error.*|Error.*|FAILED.*|Failed.*|Exception.*)")
+ERROR_RE = re.compile(r"(\bERROR\b.*|\bFAILED\b.*|\bException\b.*)")
 
 DECRYPTION_ENGINE = {
     "shaka": "SHAKA_PACKAGER",
@@ -275,18 +275,6 @@ def download(
 
     if not binaries.N_m3u8DL_RE:
         raise EnvironmentError("N_m3u8DL-RE executable not found...")
-    
-    decryption_engine = config.decryption.lower()
-    binary_path = None
-    
-    if content_keys:
-        if decryption_engine == "shaka":
-            binary_path = binaries.ShakaPackager
-        elif decryption_engine == "mp4decrypt":
-            binary_path = binaries.Mp4decrypt
-            
-        if binary_path:
-            binary_path = Path(binary_path)
 
     effective_max_workers = max_workers or min(32, (os.cpu_count() or 1) + 4)
 
@@ -349,12 +337,6 @@ def download(
     yield {"total": 100}
     yield {"downloaded": "Parsing streams..."}
 
-    env = os.environ.copy()
-    
-    if binary_path and binary_path.exists():
-        binary_dir = str(binary_path.parent)
-        env["PATH"] = binary_dir + os.pathsep + env["PATH"]
-
     try:
         with subprocess.Popen(
             [binaries.N_m3u8DL_RE, *arguments],
@@ -362,7 +344,6 @@ def download(
             stderr=subprocess.STDOUT,
             text=True,
             encoding="utf-8",
-            env=env,  # Assign to virtual environment variables
         ) as process:
             last_line = ""
             track_type = track.__class__.__name__
@@ -386,7 +367,7 @@ def download(
                     yield {"completed": progress} if progress < 100 else {"downloaded": "Merging"}
 
             process.wait()
-        
+
         if process.returncode != 0:
             if debug_logger and log_file_path:
                 log_contents = ""
