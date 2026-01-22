@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 import subprocess
 from collections import defaultdict
@@ -16,7 +17,7 @@ from construct import Container
 from pycaption import Caption, CaptionList, CaptionNode, WebVTTReader
 from pycaption.geometry import Layout
 from pymp4.parser import MP4
-from subby import CommonIssuesFixer, SAMIConverter, SDHStripper, WebVTTConverter
+from subby import CommonIssuesFixer, SAMIConverter, SDHStripper, WebVTTConverter, WVTTConverter
 from subtitle_filter import Subtitles
 
 from unshackle.core import binaries
@@ -24,6 +25,9 @@ from unshackle.core.config import config
 from unshackle.core.tracks.track import Track
 from unshackle.core.utilities import try_ensure_utf8
 from unshackle.core.utils.webvtt import merge_segmented_webvtt
+
+# silence srt library INFO logging
+logging.getLogger("srt").setLevel(logging.ERROR)
 
 
 class Subtitle(Track):
@@ -595,10 +599,13 @@ class Subtitle(Track):
 
             if self.codec == Subtitle.Codec.WebVTT:
                 converter = WebVTTConverter()
-                srt_subtitles = converter.from_file(str(self.path))
+                srt_subtitles = converter.from_file(self.path)
+            if self.codec == Subtitle.Codec.fVTT:
+                converter = WVTTConverter()
+                srt_subtitles = converter.from_file(self.path)
             elif self.codec == Subtitle.Codec.SAMI:
                 converter = SAMIConverter()
-                srt_subtitles = converter.from_file(str(self.path))
+                srt_subtitles = converter.from_file(self.path)
 
             if srt_subtitles is not None:
                 # Apply common fixes
@@ -607,11 +614,11 @@ class Subtitle(Track):
 
                 # If target is SRT, we're done
                 if codec == Subtitle.Codec.SubRip:
-                    output_path.write_text(str(fixed_srt), encoding="utf8")
+                    fixed_srt.save(output_path, encoding="utf8")
                 else:
                     # Convert from SRT to target format using existing pycaption logic
                     temp_srt_path = self.path.with_suffix(".temp.srt")
-                    temp_srt_path.write_text(str(fixed_srt), encoding="utf8")
+                    fixed_srt.save(temp_srt_path, encoding="utf8")
 
                     # Parse the SRT and convert to target format
                     caption_set = self.parse(temp_srt_path.read_bytes(), Subtitle.Codec.SubRip)
@@ -724,7 +731,7 @@ class Subtitle(Track):
         elif conversion_method == "pysubs2":
             return self.convert_with_pysubs2(codec)
         elif conversion_method == "auto":
-            if self.codec in (Subtitle.Codec.WebVTT, Subtitle.Codec.SAMI):
+            if self.codec in (Subtitle.Codec.WebVTT, Subtitle.Codec.fVTT, Subtitle.Codec.SAMI):
                 return self.convert_with_subby(codec)
             else:
                 return self._convert_standard(codec)
@@ -1177,9 +1184,12 @@ class Subtitle(Track):
 
         if sdh_method == "subby" and self.codec == Subtitle.Codec.SubRip:
             # Use subby's SDHStripper directly on the file
+            fixer = CommonIssuesFixer()
             stripper = SDHStripper()
-            stripped_srt, _ = stripper.from_file(str(self.path))
-            self.path.write_text(str(stripped_srt), encoding="utf8")
+            srt, _ = fixer.from_file(self.path)
+            stripped, status = stripper.from_srt(srt)
+            if status is True:
+                stripped.save(self.path)
             return
         elif sdh_method == "subtitleedit" and binaries.SubtitleEdit:
             # Force use of SubtitleEdit
@@ -1205,9 +1215,12 @@ class Subtitle(Track):
             # Try subby first for SRT files, then fall back
             if self.codec == Subtitle.Codec.SubRip:
                 try:
+                    fixer = CommonIssuesFixer()
                     stripper = SDHStripper()
-                    stripped_srt, _ = stripper.from_file(str(self.path))
-                    self.path.write_text(str(stripped_srt), encoding="utf8")
+                    srt, _ = fixer.from_file(self.path)
+                    stripped, status = stripper.from_srt(srt)
+                    if status is True:
+                        stripped.save(self.path)
                     return
                 except Exception:
                     pass  # Fall through to other methods
