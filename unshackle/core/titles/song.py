@@ -101,9 +101,14 @@ class Song(Title):
             name = str(self).split(" / ")[1]
 
         if config.scene_naming:
-            # Service
+            # Service (use track source if available)
             if show_service:
-                name += f" {self.service.__name__}"
+                source_name = None
+                if self.tracks:
+                    first_track = next(iter(self.tracks), None)
+                    if first_track and hasattr(first_track, "source") and first_track.source:
+                        source_name = first_track.source
+                name += f" {source_name or self.service.__name__}"
 
             # 'WEB-DL'
             name += " WEB-DL"
