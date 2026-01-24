@@ -80,7 +80,6 @@ def status_command(remote: Optional[str]) -> None:
 
     from unshackle.core.local_session_cache import get_local_session_cache
 
-
     # Get local session cache
     cache = get_local_session_cache()
 

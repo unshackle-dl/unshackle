@@ -112,18 +112,18 @@ class Episode(Title):
             if config.dash_naming:
                 # Format: Title - SXXEXX - Episode Name
                 name = self.title.replace("$", "S")  # e.g., Arli$$
-                
+
                 # Add year if configured
                 if self.year and config.series_year:
                     name += f" {self.year}"
-                
+
                 # Add season and episode
                 name += f" - S{self.season:02}E{self.number:02}"
-                
+
                 # Add episode name with dash separator
                 if self.name:
                     name += f" - {self.name}"
-                
+
                 name = name.strip()
             else:
                 # Standard format without extra dashes

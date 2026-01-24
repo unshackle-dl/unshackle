@@ -102,6 +102,62 @@ class Gluetun(Proxy):
         "purevpn": "purevpn",
     }
 
+    # Windscribe uses specific region names instead of country codes
+    # See: https://github.com/qdm12/gluetun-wiki/blob/main/setup/providers/windscribe.md
+    WINDSCRIBE_REGION_MAP = {
+        # Country codes to Windscribe region names
+        "us": "US East",
+        "us-east": "US East",
+        "us-west": "US West",
+        "us-central": "US Central",
+        "ca": "Canada East",
+        "ca-east": "Canada East",
+        "ca-west": "Canada West",
+        "uk": "United Kingdom",
+        "gb": "United Kingdom",
+        "de": "Germany",
+        "fr": "France",
+        "nl": "Netherlands",
+        "au": "Australia",
+        "jp": "Japan",
+        "sg": "Singapore",
+        "hk": "Hong Kong",
+        "kr": "South Korea",
+        "in": "India",
+        "it": "Italy",
+        "es": "Spain",
+        "ch": "Switzerland",
+        "se": "Sweden",
+        "no": "Norway",
+        "dk": "Denmark",
+        "fi": "Finland",
+        "at": "Austria",
+        "be": "Belgium",
+        "ie": "Ireland",
+        "pl": "Poland",
+        "pt": "Portugal",
+        "cz": "Czech Republic",
+        "ro": "Romania",
+        "hu": "Hungary",
+        "gr": "Greece",
+        "tr": "Turkey",
+        "ru": "Russia",
+        "ua": "Ukraine",
+        "br": "Brazil",
+        "mx": "Mexico",
+        "ar": "Argentina",
+        "za": "South Africa",
+        "nz": "New Zealand",
+        "th": "Thailand",
+        "ph": "Philippines",
+        "id": "Indonesia",
+        "my": "Malaysia",
+        "vn": "Vietnam",
+        "tw": "Taiwan",
+        "ae": "United Arab Emirates",
+        "il": "Israel",
+    }
+
     def __init__(
         self,
         providers: Optional[dict] = None,
@@ -196,9 +252,7 @@ class Gluetun(Proxy):
         # Parse query
         parts = query.split(":")
         if len(parts) != 2:
-            raise ValueError(
-                f"Invalid query format: '{query}'. Expected 'provider:region' (e.g., 'windscribe:us')"
-            )
+            raise ValueError(f"Invalid query format: '{query}'. Expected 'provider:region' (e.g., 'windscribe:us')")
 
         provider_name = parts[0].lower()
         region = parts[1].lower()
@@ -206,9 +260,7 @@ class Gluetun(Proxy):
         # Check if provider is configured
         if provider_name not in self.providers:
             available = ", ".join(self.providers.keys())
-            raise ValueError(
-                f"VPN provider '{provider_name}' not configured. Available providers: {available}"
-            )
+            raise ValueError(f"VPN provider '{provider_name}' not configured. Available providers: {available}")
 
         # Create query key for tracking
         query_key = f"{provider_name}:{region}"
@@ -333,11 +385,11 @@ class Gluetun(Proxy):
                 # Get container logs for better error message
                 logs = self._get_container_logs(container_name, tail=30)
                 error_msg = f"Gluetun container '{container_name}' failed to start"
-                if hasattr(self, '_last_wait_error') and self._last_wait_error:
+                if hasattr(self, "_last_wait_error") and self._last_wait_error:
                     error_msg += f": {self._last_wait_error}"
                 if logs:
                     # Extract last few relevant lines
-                    log_lines = [line for line in logs.strip().split('\n') if line.strip()][-5:]
+                    log_lines = [line for line in logs.strip().split("\n") if line.strip()][-5:]
                     error_msg += "\nRecent logs:\n" + "\n".join(log_lines)
                 raise RuntimeError(error_msg)
 
@@ -396,22 +448,49 @@ class Gluetun(Proxy):
                 success=True,
             )
 
+    def get_connection_info(self, query: str) -> Optional[dict]:
+        """
+        Get connection info for a proxy query.
+
+        Args:
+            query: Query format "provider:region" (e.g., "windscribe:us")
+
+        Returns:
+            Dict with connection info including public_ip, country, city, or None if not found.
+        """
+        parts = query.split(":")
+        if len(parts) != 2:
+            return None
+
+        provider_name = parts[0].lower()
+        region = parts[1].lower()
+        query_key = f"{provider_name}:{region}"
+
+        container = self.active_containers.get(query_key)
+        if not container:
+            return None
+
+        return {
+            "provider": container.get("provider"),
+            "region": container.get("region"),
+            "public_ip": container.get("public_ip"),
+            "country": container.get("ip_country"),
+            "city": container.get("ip_city"),
+            "org": container.get("ip_org"),
+        }
+
     def _validate_provider_config(self, provider_name: str, config: dict):
         """Validate a provider's configuration."""
         vpn_type = config.get("vpn_type", "wireguard").lower()
         credentials = config.get("credentials", {})
 
         if vpn_type not in ["wireguard", "openvpn"]:
-            raise ValueError(
-                f"Provider '{provider_name}': Invalid vpn_type '{vpn_type}'. Use 'wireguard' or 'openvpn'"
-            )
+            raise ValueError(f"Provider '{provider_name}': Invalid vpn_type '{vpn_type}'. Use 'wireguard' or 'openvpn'")
 
         if vpn_type == "wireguard":
             # private_key is always required for WireGuard
             if "private_key" not in credentials:
-                raise ValueError(
-                    f"Provider '{provider_name}': WireGuard requires 'private_key' in credentials"
-                )
+                raise ValueError(f"Provider '{provider_name}': WireGuard requires 'private_key' in credentials")
 
             # Provider-specific WireGuard requirements based on Gluetun wiki:
             # - NordVPN, ProtonVPN: only private_key required
@@ -435,9 +514,7 @@ class Gluetun(Proxy):
             # Providers that require addresses (but not preshared_key)
             elif provider_lower in ["surfshark", "mullvad", "ivpn"]:
                 if "addresses" not in credentials:
-                    raise ValueError(
-                        f"Provider '{provider_name}': WireGuard requires 'addresses' in credentials"
-                    )
+                    raise ValueError(f"Provider '{provider_name}': WireGuard requires 'addresses' in credentials")
 
         elif vpn_type == "openvpn":
             if "username" not in credentials or "password" not in credentials:
@@ -651,7 +728,12 @@ class Gluetun(Proxy):
             # Use country/city selection
             if country:
                 if uses_regions:
-                    env_vars["SERVER_REGIONS"] = country
+                    # Convert country code to provider-specific region name
+                    if gluetun_provider == "windscribe":
+                        region_name = self.WINDSCRIBE_REGION_MAP.get(country.lower(), country)
+                        env_vars["SERVER_REGIONS"] = region_name
+                    else:
+                        env_vars["SERVER_REGIONS"] = country
                 else:
                     env_vars["SERVER_COUNTRIES"] = country
             if city:
@@ -665,6 +747,16 @@ class Gluetun(Proxy):
 
         # Merge extra environment variables
         env_vars.update(extra_env)
+
+        # Debug log environment variables (redact sensitive values)
+        if debug_logger:
+            safe_env = {k: ("***" if "KEY" in k or "PASSWORD" in k else v) for k, v in env_vars.items()}
+            debug_logger.log(
+                level="DEBUG",
+                operation="gluetun_env_vars",
+                message=f"Environment variables for {container_name}",
+                context={"env_vars": safe_env, "gluetun_provider": gluetun_provider},
+            )
 
         # Build docker run command
         cmd = [
@@ -791,7 +883,7 @@ class Gluetun(Proxy):
                 return None
 
             # Parse port from output like "map[8888/tcp:[{127.0.0.1 8888}]]"
-            port_match = re.search(r'127\.0\.0\.1\s+(\d+)', result.stdout)
+            port_match = re.search(r"127\.0\.0\.1\s+(\d+)", result.stdout)
             if not port_match:
                 return None
 
@@ -854,11 +946,9 @@ class Gluetun(Proxy):
         Returns:
             True if container is ready, False if it failed or timed out
         """
-        log = logging.getLogger("Gluetun")
         debug_logger = get_debug_logger()
         start_time = time.time()
         last_error = None
-        last_status = None
 
         if debug_logger:
             debug_logger.log(
@@ -900,21 +990,6 @@ class Gluetun(Proxy):
                     proxy_ready = "[http proxy] listening" in all_logs
                     vpn_ready = "initialization sequence completed" in all_logs
 
-                    # Log status changes to help debug slow connections
-                    current_status = None
-                    if vpn_ready:
-                        current_status = "VPN connected"
-                    elif "peer connection initiated" in all_logs:
-                        current_status = "VPN connecting..."
-                    elif "[openvpn]" in all_logs or "[wireguard]" in all_logs:
-                        current_status = "Starting VPN..."
-                    elif "[firewall]" in all_logs:
-                        current_status = "Configuring firewall..."
-
-                    if current_status and current_status != last_status:
-                        log.info(current_status)
-                        last_status = current_status
-
                     if proxy_ready and vpn_ready:
                         # Give a brief moment for the proxy to fully initialize
                         time.sleep(1)
@@ -947,7 +1022,7 @@ class Gluetun(Proxy):
                     for error in error_indicators:
                         if error in all_logs:
                             # Extract the error line for better messaging
-                            for line in (stdout + stderr).split('\n'):
+                            for line in (stdout + stderr).split("\n"):
                                 if error in line.lower():
                                     last_error = line.strip()
                                     break
@@ -975,7 +1050,6 @@ class Gluetun(Proxy):
                     "container_name": container_name,
                     "timeout": timeout,
                     "last_error": last_error,
-                    "last_status": last_status,
                 },
                 success=False,
                 duration_ms=duration_ms,
@@ -986,10 +1060,7 @@ class Gluetun(Proxy):
         """Get exit information for a stopped container."""
         try:
             result = subprocess.run(
-                [
-                    "docker", "inspect", container_name,
-                    "--format", "{{.State.ExitCode}}:{{.State.Error}}"
-                ],
+                ["docker", "inspect", container_name, "--format", "{{.State.ExitCode}}:{{.State.Error}}"],
                 capture_output=True,
                 text=True,
                 timeout=5,
@@ -998,7 +1069,7 @@ class Gluetun(Proxy):
                 parts = result.stdout.strip().split(":", 1)
                 return {
                     "exit_code": int(parts[0]) if parts[0].isdigit() else -1,
-                    "error": parts[1] if len(parts) > 1 else ""
+                    "error": parts[1] if len(parts) > 1 else "",
                 }
             return None
         except (subprocess.TimeoutExpired, FileNotFoundError, ValueError):
@@ -1104,7 +1175,13 @@ class Gluetun(Proxy):
                                 f"(IP: {ip_info.get('ip')}, City: {ip_info.get('city')})"
                             )
 
-                    # Verification successful
+                    # Verification successful - store IP info in container record
+                    if query_key in self.active_containers:
+                        self.active_containers[query_key]["public_ip"] = ip_info.get("ip")
+                        self.active_containers[query_key]["ip_country"] = actual_country
+                        self.active_containers[query_key]["ip_city"] = ip_info.get("city")
+                        self.active_containers[query_key]["ip_org"] = ip_info.get("org")
+
                     duration_ms = (time.time() - start_time) * 1000
                     if debug_logger:
                         debug_logger.log(
@@ -1145,7 +1222,7 @@ class Gluetun(Proxy):
 
             # Wait before retry (exponential backoff)
             if attempt < max_retries - 1:
-                wait_time = 2 ** attempt  # 1, 2, 4 seconds
+                wait_time = 2**attempt  # 1, 2, 4 seconds
                 time.sleep(wait_time)
 
         # All retries exhausted
@@ -1253,9 +1330,9 @@ class Gluetun(Proxy):
 
     def __del__(self):
         """Cleanup containers on object destruction."""
-        if hasattr(self, 'auto_cleanup') and self.auto_cleanup:
+        if hasattr(self, "auto_cleanup") and self.auto_cleanup:
             try:
-                if hasattr(self, 'active_containers') and self.active_containers:
+                if hasattr(self, "active_containers") and self.active_containers:
                     self.cleanup()
             except Exception:
                 pass

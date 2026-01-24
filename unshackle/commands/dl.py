@@ -97,11 +97,7 @@ class dl:
         return None
 
     def prepare_temp_font(
-        self,
-        font_name: str,
-        matched_font: Path,
-        system_fonts: dict[str, Path],
-        temp_font_files: list[Path]
+        self, font_name: str, matched_font: Path, system_fonts: dict[str, Path], temp_font_files: list[Path]
     ) -> Path:
         """
         Copy system font to temp and log if using fallback.
@@ -116,10 +112,7 @@ class dl:
             Path to temp font file
         """
         # Find the matched name for logging
-        matched_name = next(
-            (name for name, path in system_fonts.items() if path == matched_font),
-            None
-        )
+        matched_name = next((name for name, path in system_fonts.items() if path == matched_font), None)
 
         if matched_name and matched_name.lower() != font_name.lower():
             self.log.info(f"Using '{matched_name}' as fallback for '{font_name}'")
@@ -136,10 +129,7 @@ class dl:
         return temp_path
 
     def attach_subtitle_fonts(
-        self,
-        font_names: list[str],
-        title: Title_T,
-        temp_font_files: list[Path]
+        self, font_names: list[str], title: Title_T, temp_font_files: list[Path]
     ) -> tuple[int, list[str]]:
         """
         Attach fonts for subtitle rendering.
@@ -672,16 +662,21 @@ class dl:
                     self.log.info(f"Loaded {proxy_provider.__class__.__name__}: {proxy_provider}")
 
             if proxy:
-                # Store original proxy query for service-specific proxy_map
-                original_proxy_query = proxy
                 requested_provider = None
                 if re.match(r"^[a-z]+:.+$", proxy, re.IGNORECASE):
                     # requesting proxy from a specific proxy provider
                     requested_provider, proxy = proxy.split(":", maxsplit=1)
                 # Match simple region codes (us, ca, uk1) or provider:region format (nordvpn:ca, windscribe:us)
-                if re.match(r"^[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE) or re.match(r"^[a-z]+:[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE):
+                if re.match(r"^[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE) or re.match(
+                    r"^[a-z]+:[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE
+                ):
                     proxy = proxy.lower()
-                    with console.status(f"Getting a Proxy to {proxy}...", spinner="dots"):
+                    status_msg = (
+                        f"Connecting to VPN ({proxy})..."
+                        if requested_provider == "gluetun"
+                        else f"Getting a Proxy to {proxy}..."
+                    )
+                    with console.status(status_msg, spinner="dots"):
                         if requested_provider:
                             proxy_provider = next(
                                 (x for x in self.proxy_providers if x.__class__.__name__.lower() == requested_provider),
@@ -690,18 +685,40 @@ class dl:
                             if not proxy_provider:
                                 self.log.error(f"The proxy provider '{requested_provider}' was not recognised.")
                                 sys.exit(1)
+                            proxy_query = proxy  # Save query before overwriting with URI
                             proxy_uri = proxy_provider.get_proxy(proxy)
                             if not proxy_uri:
                                 self.log.error(f"The proxy provider {requested_provider} had no proxy for {proxy}")
                                 sys.exit(1)
                             proxy = ctx.params["proxy"] = proxy_uri
-                            self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+                            # Show connection info for Gluetun (IP, location) instead of proxy URL
+                            if hasattr(proxy_provider, "get_connection_info"):
+                                conn_info = proxy_provider.get_connection_info(proxy_query)
+                                if conn_info and conn_info.get("public_ip"):
+                                    location_parts = [conn_info.get("city"), conn_info.get("country")]
+                                    location = ", ".join(p for p in location_parts if p)
+                                    self.log.info(f"VPN Connected: {conn_info['public_ip']} ({location})")
+                                else:
+                                    self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+                            else:
+                                self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
                         else:
                             for proxy_provider in self.proxy_providers:
+                                proxy_query = proxy  # Save query before overwriting with URI
                                 proxy_uri = proxy_provider.get_proxy(proxy)
                                 if proxy_uri:
                                     proxy = ctx.params["proxy"] = proxy_uri
-                                    self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+                                    # Show connection info for Gluetun (IP, location) instead of proxy URL
+                                    if hasattr(proxy_provider, "get_connection_info"):
+                                        conn_info = proxy_provider.get_connection_info(proxy_query)
+                                        if conn_info and conn_info.get("public_ip"):
+                                            location_parts = [conn_info.get("city"), conn_info.get("country")]
+                                            location = ", ".join(p for p in location_parts if p)
+                                            self.log.info(f"VPN Connected: {conn_info['public_ip']} ({location})")
+                                        else:
+                                            self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+                                    else:
+                                        self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
                                     break
                     # Store proxy query info for service-specific overrides
                     ctx.params["proxy_query"] = proxy
@@ -1069,7 +1086,9 @@ class dl:
                         title.tracks.add(non_sdh_sub)
                         events.subscribe(
                             events.Types.TRACK_MULTIPLEX,
-                            lambda track, sub_id=non_sdh_sub.id: (track.strip_hearing_impaired()) if track.id == sub_id else None,
+                            lambda track, sub_id=non_sdh_sub.id: (track.strip_hearing_impaired())
+                            if track.id == sub_id
+                            else None,
                         )
 
             with console.status("Sorting tracks by language and bitrate...", spinner="dots"):
@@ -1339,7 +1358,16 @@ class dl:
                                 self.log.error(f"There's no {processed_lang} Audio Track, cannot continue...")
                                 sys.exit(1)
 
-                if video_only or audio_only or subs_only or chapters_only or no_subs or no_audio or no_chapters or no_video:
+                if (
+                    video_only
+                    or audio_only
+                    or subs_only
+                    or chapters_only
+                    or no_subs
+                    or no_audio
+                    or no_chapters
+                    or no_video
+                ):
                     keep_videos = False
                     keep_audio = False
                     keep_subtitles = False
@@ -1579,9 +1607,7 @@ class dl:
                                 if line.startswith("Style: "):
                                     font_names.append(line.removeprefix("Style: ").split(",")[1].strip())
 
-                    font_count, missing_fonts = self.attach_subtitle_fonts(
-                        font_names, title, temp_font_files
-                    )
+                    font_count, missing_fonts = self.attach_subtitle_fonts(font_names, title, temp_font_files)
 
                     if font_count:
                         self.log.info(f"Attached {font_count} fonts for the Subtitles")

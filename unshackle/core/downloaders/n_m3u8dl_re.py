@@ -10,7 +10,7 @@ import requests
 from requests.cookies import cookiejar_from_dict, get_cookie_header
 
 from unshackle.core import binaries
-from unshackle.core.binaries import FFMPEG, ShakaPackager, Mp4decrypt
+from unshackle.core.binaries import FFMPEG, Mp4decrypt, ShakaPackager
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import DOWNLOAD_CANCELLED

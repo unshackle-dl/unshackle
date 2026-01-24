@@ -65,6 +65,7 @@ dependencies = [
     "pysubs2>=1.7.0,<2",
     "PyExecJS>=1.5.1,<2",
     "pycountry>=24.6.1",
+    "language-data>=1.4.0",
 ]
 
 [project.urls]

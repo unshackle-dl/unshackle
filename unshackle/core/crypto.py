@@ -1,18 +1,13 @@
 """Cryptographic utilities for secure remote service authentication."""
 
 import base64
-import hashlib
 import json
 import logging
-import secrets
-import time
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 try:
     from nacl.public import Box, PrivateKey, PublicKey
-    from nacl.secret import SecretBox
-    from nacl.utils import random
 
     NACL_AVAILABLE = True
 except ImportError:

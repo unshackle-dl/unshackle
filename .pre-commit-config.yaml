@@ -11,6 +11,7 @@ repos:
     rev: v0.4.0
     hooks:
       - id: poetry-ruff-check
+        args: [--fix]
   - repo: https://github.com/pycqa/isort
     rev: 6.0.1
     hooks:
