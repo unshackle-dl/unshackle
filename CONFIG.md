@@ -1182,32 +1182,6 @@ remote_cdm:
 
 [pywidevine]: https://github.com/rlaphoenix/pywidevine
 
-## remote_services (list\[dict])
-
-Configure connections to remote unshackle REST API servers to access services running on other instances.
-This allows you to use services from remote unshackle installations as if they were local.
-
-Each entry requires:
-
-- `url` (str): The base URL of the remote unshackle REST API server
-- `api_key` (str): API key for authenticating with the remote server
-- `name` (str, optional): Friendly name for the remote service (for logging/display purposes)
-
-For example,
-
-```yaml
-remote_services:
-  - url: "https://remote-unshackle.example.com"
-    api_key: "your_api_key_here"
-    name: "Remote US Server"
-  - url: "https://remote-unshackle-eu.example.com"
-    api_key: "another_api_key"
-    name: "Remote EU Server"
-```
-
-**Note**: The remote unshackle instances must have the REST API enabled and running. Services from all
-configured remote servers will be available alongside your local services.
-
 ## scene_naming (bool)
 
 Set scene-style naming for titles. When `true` uses scene naming patterns (e.g., `Prime.Suspect.S07E01...`), when

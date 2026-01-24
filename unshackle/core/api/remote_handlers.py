@@ -31,6 +31,31 @@ log = logging.getLogger("api.remote")
 SESSION_EXPIRY_TIME = 86400
 
 
+class CDMProxy:
+    """
+    Lightweight CDM proxy that holds CDM properties sent from client.
+
+    This allows services to check CDM properties (like security_level)
+    without needing an actual CDM loaded on the server.
+    """
+
+    def __init__(self, cdm_info: Dict[str, Any]):
+        """
+        Initialize CDM proxy from client-provided info.
+
+        Args:
+            cdm_info: Dictionary with CDM properties (type, security_level, etc.)
+        """
+        self.cdm_type = cdm_info.get("type", "widevine")
+        self.security_level = cdm_info.get("security_level", 3)
+        self.is_playready = self.cdm_type == "playready"
+        self.device_type = cdm_info.get("device_type")
+        self.is_remote = cdm_info.get("is_remote", False)
+
+    def __repr__(self):
+        return f"CDMProxy(type={self.cdm_type}, L{self.security_level})"
+
+
 def load_cookies_from_content(cookies_content: Optional[str]) -> Optional[http.cookiejar.MozillaCookieJar]:
     """
     Load cookies from raw cookie file content.
@@ -754,8 +779,12 @@ async def remote_get_tracks(request: web.Request) -> web.Response:
                                f"Please resolve the proxy on the client side before sending to server."
                 }, status=400)
 
+        # Create CDM proxy from client-provided info (default to L3 Widevine if not provided)
+        cdm_info = data.get("cdm_info") or {"type": "widevine", "security_level": 3}
+        cdm = CDMProxy(cdm_info)
+
         ctx = click.Context(dummy_service)
-        ctx.obj = ContextData(config=service_config, cdm=None, proxy_providers=[], profile=profile)
+        ctx.obj = ContextData(config=service_config, cdm=cdm, proxy_providers=[], profile=profile)
         ctx.params = {"proxy": proxy_param, "no_proxy": no_proxy}
 
         service_module = Services.load(normalized_service)
@@ -771,7 +800,7 @@ async def remote_get_tracks(request: web.Request) -> web.Response:
 
         # Add additional parameters
         for key, value in data.items():
-            if key not in ["title", "title_id", "url", "profile", "wanted", "season", "episode", "proxy", "no_proxy"]:
+            if key not in ["title", "title_id", "url", "profile", "wanted", "season", "episode", "proxy", "no_proxy", "cdm_info"]:
                 service_kwargs[key] = value
 
         # Get service parameters
@@ -942,14 +971,35 @@ async def remote_get_tracks(request: web.Request) -> web.Response:
         if hasattr(service_module, "GEOFENCE"):
             geofence = list(service_module.GEOFENCE)
 
+        # Try to extract license URL from service (for remote licensing)
+        license_url = None
+        title_id = first_title.id if hasattr(first_title, "id") else str(first_title)
+
+        # Check playback_data for license URL
+        if hasattr(service_instance, "playback_data") and title_id in service_instance.playback_data:
+            playback_data = service_instance.playback_data[title_id]
+            # DSNP pattern
+            if "drm" in playback_data and "licenseServerUrl" in playback_data.get("drm", {}):
+                license_url = playback_data["drm"]["licenseServerUrl"]
+            elif "stream" in playback_data and "drm" in playback_data["stream"]:
+                drm_info = playback_data["stream"]["drm"]
+                if isinstance(drm_info, dict) and "licenseServerUrl" in drm_info:
+                    license_url = drm_info["licenseServerUrl"]
+
+        # Check service config for license URL
+        if not license_url and hasattr(service_instance, "config"):
+            if "license_url" in service_instance.config:
+                license_url = service_instance.config["license_url"]
+
         response_data = {
             "status": "success",
             "title": serialize_title(first_title),
-            "video": [serialize_video_track(t) for t in video_tracks],
-            "audio": [serialize_audio_track(t) for t in audio_tracks],
-            "subtitles": [serialize_subtitle_track(t) for t in tracks.subtitles],
+            "video": [serialize_video_track(t, include_url=True) for t in video_tracks],
+            "audio": [serialize_audio_track(t, include_url=True) for t in audio_tracks],
+            "subtitles": [serialize_subtitle_track(t, include_url=True) for t in tracks.subtitles],
             "session": session_data,
-            "geofence": geofence
+            "geofence": geofence,
+            "license_url": license_url,
         }
 
         return web.json_response(response_data)
@@ -957,6 +1007,272 @@ async def remote_get_tracks(request: web.Request) -> web.Response:
     except Exception:
         log.exception("Error getting remote tracks")
         return web.json_response({"status": "error", "message": "Internal server error while getting tracks"}, status=500)
+
+
+async def remote_get_manifest(request: web.Request) -> web.Response:
+    """
+    Get manifest URL and session from a remote service.
+
+    This endpoint returns the manifest URL and authenticated session,
+    allowing the client to fetch and parse the manifest locally.
+    ---
+    summary: Get manifest info from remote service
+    description: Get manifest URL and session for client-side parsing
+    parameters:
+      - name: service
+        in: path
+        required: true
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - title
+            properties:
+              title:
+                type: string
+                description: Title identifier
+              cdm_info:
+                type: object
+                description: Client CDM info (type, security_level)
+    responses:
+      '200':
+        description: Manifest info
+    """
+    service_tag = request.match_info.get("service")
+
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"status": "error", "message": "Invalid JSON request body"}, status=400)
+
+    title = data.get("title") or data.get("title_id") or data.get("url")
+    if not title:
+        return web.json_response(
+            {"status": "error", "message": "Missing required parameter: title"},
+            status=400,
+        )
+
+    normalized_service = validate_service(service_tag)
+    if not normalized_service:
+        return web.json_response(
+            {"status": "error", "message": f"Invalid or unavailable service: {service_tag}"}, status=400
+        )
+
+    try:
+        profile = data.get("profile")
+
+        service_config_path = Services.get_path(normalized_service) / config.filenames.config
+        if service_config_path.exists():
+            service_config = yaml.safe_load(service_config_path.read_text(encoding="utf8"))
+        else:
+            service_config = {}
+        merge_dict(config.services.get(normalized_service), service_config)
+
+        @click.command()
+        @click.pass_context
+        def dummy_service(ctx: click.Context) -> None:
+            pass
+
+        proxy_param = data.get("proxy")
+        no_proxy = data.get("no_proxy", False)
+
+        if proxy_param and not no_proxy:
+            import re
+            if not re.match(r"^https?://", proxy_param):
+                return web.json_response({
+                    "status": "error",
+                    "error_code": "INVALID_PROXY",
+                    "message": "Proxy must be a fully resolved URL"
+                }, status=400)
+
+        # Create CDM proxy from client-provided info
+        cdm_info = data.get("cdm_info") or {"type": "widevine", "security_level": 3}
+        cdm = CDMProxy(cdm_info)
+
+        ctx = click.Context(dummy_service)
+        ctx.obj = ContextData(config=service_config, cdm=cdm, proxy_providers=[], profile=profile)
+        ctx.params = {"proxy": proxy_param, "no_proxy": no_proxy}
+
+        service_module = Services.load(normalized_service)
+
+        dummy_service.name = normalized_service
+        dummy_service.params = [click.Argument([title], type=str)]
+        ctx.invoked_subcommand = normalized_service
+
+        service_ctx = click.Context(dummy_service, parent=ctx)
+        service_ctx.obj = ctx.obj
+
+        service_kwargs = {"title": title}
+
+        for key, value in data.items():
+            if key not in ["title", "title_id", "url", "profile", "proxy", "no_proxy", "cdm_info"]:
+                service_kwargs[key] = value
+
+        service_init_params = inspect.signature(service_module.__init__).parameters
+
+        if hasattr(service_module, "cli") and hasattr(service_module.cli, "params"):
+            for param in service_module.cli.params:
+                if hasattr(param, "name") and param.name not in service_kwargs:
+                    if hasattr(param, "default") and param.default is not None:
+                        service_kwargs[param.name] = param.default
+
+        for param_name, param_info in service_init_params.items():
+            if param_name not in service_kwargs and param_name not in ["self", "ctx"]:
+                if param_info.default is inspect.Parameter.empty:
+                    if param_name == "meta_lang":
+                        service_kwargs[param_name] = None
+                    elif param_name == "movie":
+                        service_kwargs[param_name] = False
+
+        filtered_kwargs = {k: v for k, v in service_kwargs.items() if k in service_init_params}
+
+        service_instance = service_module(service_ctx, **filtered_kwargs)
+
+        # Authenticate
+        cookies, credential, pre_authenticated_session, session_error = get_auth_from_request(data, normalized_service, profile)
+
+        if session_error == "SESSION_EXPIRED":
+            return web.json_response({
+                "status": "error",
+                "error_code": "SESSION_EXPIRED",
+                "message": f"Session expired for {normalized_service}. Please re-authenticate."
+            }, status=401)
+
+        try:
+            if pre_authenticated_session:
+                deserialize_session(pre_authenticated_session, service_instance.session)
+            else:
+                if not cookies and not credential:
+                    return web.json_response({
+                        "status": "error",
+                        "error_code": "AUTH_REQUIRED",
+                        "message": f"Authentication required for {normalized_service}"
+                    }, status=401)
+                service_instance.authenticate(cookies, credential)
+        except Exception as e:
+            log.error(f"Authentication failed: {e}")
+            return web.json_response({
+                "status": "error",
+                "error_code": "AUTH_REQUIRED",
+                "message": f"Authentication failed for {normalized_service}"
+            }, status=401)
+
+        # Get titles
+        titles = service_instance.get_titles()
+
+        if hasattr(titles, "__iter__") and not isinstance(titles, str):
+            titles_list = list(titles)
+        else:
+            titles_list = [titles] if titles else []
+
+        if not titles_list:
+            return web.json_response({"status": "error", "message": "No titles found"}, status=404)
+
+        # Handle episode filtering (wanted parameter)
+        wanted_param = data.get("wanted")
+        season = data.get("season")
+        episode = data.get("episode")
+        target_title = None
+
+        if wanted_param or (season is not None and episode is not None):
+            # Filter to matching episode
+            wanted = None
+            if wanted_param:
+                from unshackle.core.utils.click_types import SeasonRange
+                try:
+                    season_range = SeasonRange()
+                    wanted = season_range.parse_tokens(wanted_param)
+                except Exception:
+                    pass
+            elif season is not None and episode is not None:
+                wanted = [f"{season}x{episode}"]
+
+            if wanted:
+                for t in titles_list:
+                    if isinstance(t, Episode):
+                        episode_key = f"{t.season}x{t.number}"
+                        if episode_key in wanted:
+                            target_title = t
+                            break
+
+        if not target_title:
+            target_title = titles_list[0]
+
+        # Now we need to get the manifest URL
+        # This is service-specific, so we call get_tracks but extract manifest info
+
+        # Call get_tracks to populate playback_data
+        try:
+            _ = service_instance.get_tracks(target_title)
+        except Exception as e:
+            log.warning(f"get_tracks failed, trying to extract manifest anyway: {e}")
+
+        # Extract manifest URL from service's playback_data
+        manifest_url = None
+        manifest_type = "hls"  # Default
+        playback_data = {}
+
+        # Check for playback_data (DSNP, HMAX, etc.)
+        if hasattr(service_instance, "playback_data"):
+            title_id = target_title.id if hasattr(target_title, "id") else str(target_title)
+            if title_id in service_instance.playback_data:
+                playback_data = service_instance.playback_data[title_id]
+
+                # Try to extract manifest URL from common patterns
+                # Pattern 1: DSNP style - stream.sources[0].complete.url
+                if "stream" in playback_data and "sources" in playback_data["stream"]:
+                    sources = playback_data["stream"]["sources"]
+                    if sources and "complete" in sources[0]:
+                        manifest_url = sources[0]["complete"].get("url")
+
+                # Pattern 2: Direct manifest_url field
+                if not manifest_url and "manifest_url" in playback_data:
+                    manifest_url = playback_data["manifest_url"]
+
+                # Pattern 3: url field at top level
+                if not manifest_url and "url" in playback_data:
+                    manifest_url = playback_data["url"]
+
+        # Check for manifest attribute on service
+        if not manifest_url and hasattr(service_instance, "manifest"):
+            manifest_url = service_instance.manifest
+
+        # Check for manifest_url attribute on service
+        if not manifest_url and hasattr(service_instance, "manifest_url"):
+            manifest_url = service_instance.manifest_url
+
+        # Detect manifest type from URL
+        if manifest_url:
+            if manifest_url.endswith(".mpd") or "dash" in manifest_url.lower():
+                manifest_type = "dash"
+            elif manifest_url.endswith(".m3u8") or manifest_url.endswith(".m3u"):
+                manifest_type = "hls"
+
+        # Serialize session
+        session_data = serialize_session(service_instance.session)
+
+        # Serialize title info
+        title_info = serialize_title(target_title)
+
+        response_data = {
+            "status": "success",
+            "title": title_info,
+            "manifest_url": manifest_url,
+            "manifest_type": manifest_type,
+            "playback_data": playback_data,
+            "session": session_data,
+        }
+
+        return web.json_response(response_data)
+
+    except Exception:
+        log.exception("Error getting remote manifest")
+        return web.json_response({"status": "error", "message": "Internal server error while getting manifest"}, status=500)
 
 
 async def remote_get_chapters(request: web.Request) -> web.Response:

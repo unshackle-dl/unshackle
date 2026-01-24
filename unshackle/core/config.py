@@ -105,8 +105,6 @@ class Config:
         self.debug: bool = kwargs.get("debug", False)
         self.debug_keys: bool = kwargs.get("debug_keys", False)
 
-        self.remote_services: list[dict] = kwargs.get("remote_services") or []
-
     @classmethod
     def from_yaml(cls, path: Path) -> Config:
         if not path.exists():

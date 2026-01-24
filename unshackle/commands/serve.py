@@ -62,29 +62,6 @@ def serve(host: str, port: int, caddy: bool, api_only: bool, no_key: bool, debug
           tier: "premium"
           default_cdm: "chromecdm_2101"
           allowed_cdms: ["*"]  # or list specific CDMs: ["chromecdm_2101", "chromecdm_2202"]
-
-    \b
-    REMOTE SERVICES:
-    The server exposes endpoints that allow remote unshackle clients to use
-    your configured services without needing the service implementations.
-    Remote clients can authenticate, get titles/tracks, and receive session data
-    for downloading. Configure remote clients in unshackle.yaml:
-
-    \b
-    remote_services:
-      - url: "http://your-server:8786"
-        api_key: "your-api-key"
-        name: "my-server"
-
-    \b
-    Available remote endpoints:
-    - GET  /api/remote/services - List available services
-    - POST /api/remote/{service}/search - Search for content
-    - POST /api/remote/{service}/titles - Get titles
-    - POST /api/remote/{service}/tracks - Get tracks
-    - POST /api/remote/{service}/chapters - Get chapters
-    - POST /api/remote/{service}/license - Get DRM license (uses client CDM)
-    - POST /api/remote/{service}/decrypt - Decrypt using server CDM (premium only)
     """
     from pywidevine import serve as pywidevine_serve
 
