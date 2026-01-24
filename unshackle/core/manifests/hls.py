@@ -650,6 +650,44 @@ class HLS:
 
         # finally merge all the discontinuity save files together to the final path
         segments_to_merge = find_segments_recursively(save_dir)
+
+        if debug_logger:
+            debug_logger.log(
+                level="DEBUG",
+                operation="manifest_hls_download_complete",
+                message="HLS download complete, preparing to merge",
+                context={
+                    "track_id": getattr(track, "id", None),
+                    "track_type": track.__class__.__name__,
+                    "save_dir": str(save_dir),
+                    "save_dir_exists": save_dir.exists(),
+                    "segments_found": len(segments_to_merge),
+                    "segment_files": [f.name for f in segments_to_merge[:10]],  # Limit to first 10
+                    "downloader": downloader.__name__,
+                    "skip_merge": skip_merge,
+                },
+            )
+
+        if not segments_to_merge:
+            error_msg = f"No segment files found in output directory: {save_dir}"
+            if debug_logger:
+                all_contents = list(save_dir.iterdir()) if save_dir.exists() else []
+                debug_logger.log(
+                    level="ERROR",
+                    operation="manifest_hls_download_no_segments",
+                    message=error_msg,
+                    context={
+                        "track_id": getattr(track, "id", None),
+                        "track_type": track.__class__.__name__,
+                        "save_dir": str(save_dir),
+                        "save_dir_exists": save_dir.exists(),
+                        "directory_contents": [str(p) for p in all_contents],
+                        "downloader": downloader.__name__,
+                        "skip_merge": skip_merge,
+                    },
+                )
+            raise FileNotFoundError(error_msg)
+
         if len(segments_to_merge) == 1:
             shutil.move(segments_to_merge[0], save_path)
         else:
@@ -889,7 +927,8 @@ class HLS:
             elif key.keyformat and key.keyformat.lower() == WidevineCdm.urn:
                 return key
             elif key.keyformat and key.keyformat.lower() in {
-                f"urn:uuid:{PR_PSSH.SYSTEM_ID}", "com.microsoft.playready"
+                f"urn:uuid:{PR_PSSH.SYSTEM_ID}",
+                "com.microsoft.playready",
             }:
                 return key
             else:
@@ -927,9 +966,7 @@ class HLS:
                 pssh=WV_PSSH(key.uri.split(",")[-1]),
                 **key._extra_params,  # noqa
             )
-        elif key.keyformat and key.keyformat.lower() in {
-            f"urn:uuid:{PR_PSSH.SYSTEM_ID}", "com.microsoft.playready"
-        }:
+        elif key.keyformat and key.keyformat.lower() in {f"urn:uuid:{PR_PSSH.SYSTEM_ID}", "com.microsoft.playready"}:
             drm = PlayReady(
                 pssh=PR_PSSH(key.uri.split(",")[-1]),
                 pssh_b64=key.uri.split(",")[-1],

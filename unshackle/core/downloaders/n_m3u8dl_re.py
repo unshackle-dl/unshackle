@@ -304,9 +304,15 @@ def download(
     arguments.extend(selection_args)
 
     log_file_path: Path | None = None
+    meta_json_path: Path | None = None
     if debug_logger:
         log_file_path = output_dir / f".n_m3u8dl_re_{filename}.log"
-        arguments.extend(["--log-file-path", str(log_file_path)])
+        meta_json_path = output_dir / f"{filename}.meta.json"
+        arguments.extend([
+            "--log-file-path", str(log_file_path),
+            "--log-level", "DEBUG",
+            "--write-meta-json", "true",
+        ])
 
         track_url_display = track.url[:200] + "..." if len(track.url) > 200 else track.url
         debug_logger.log(
@@ -394,6 +400,14 @@ def download(
             raise subprocess.CalledProcessError(process.returncode, arguments)
 
         if debug_logger:
+            output_dir_exists = output_dir.exists()
+            output_files = []
+            if output_dir_exists:
+                try:
+                    output_files = [f.name for f in output_dir.iterdir() if f.is_file()][:20]
+                except Exception:
+                    output_files = ["<error listing files>"]
+
             debug_logger.log(
                 level="DEBUG",
                 operation="downloader_n_m3u8dl_re_complete",
@@ -402,9 +416,46 @@ def download(
                     "track_id": getattr(track, "id", None),
                     "track_type": track.__class__.__name__,
                     "output_dir": str(output_dir),
+                    "output_dir_exists": output_dir_exists,
+                    "output_files_count": len(output_files),
+                    "output_files": output_files,
                     "filename": filename,
                 },
             )
+
+            # Warn if no output was produced - include N_m3u8DL-RE's logs for diagnosis
+            if not output_dir_exists or not output_files:
+                # Read N_m3u8DL-RE's log file for debugging
+                n_m3u8dl_log = ""
+                if log_file_path and log_file_path.exists():
+                    try:
+                        n_m3u8dl_log = log_file_path.read_text(encoding="utf-8", errors="replace")
+                    except Exception:
+                        n_m3u8dl_log = "<failed to read log file>"
+
+                # Read meta JSON to see what streams N_m3u8DL-RE parsed
+                meta_json_content = ""
+                if meta_json_path and meta_json_path.exists():
+                    try:
+                        meta_json_content = meta_json_path.read_text(encoding="utf-8", errors="replace")
+                    except Exception:
+                        meta_json_content = "<failed to read meta json>"
+
+                debug_logger.log(
+                    level="WARNING",
+                    operation="downloader_n_m3u8dl_re_no_output",
+                    message="N_m3u8DL-RE exited successfully but produced no output files",
+                    context={
+                        "track_id": getattr(track, "id", None),
+                        "track_type": track.__class__.__name__,
+                        "output_dir": str(output_dir),
+                        "output_dir_exists": output_dir_exists,
+                        "selection_args": selection_args,
+                        "track_url": track.url[:200] + "..." if len(track.url) > 200 else track.url,
+                        "n_m3u8dl_re_log": n_m3u8dl_log,
+                        "n_m3u8dl_re_meta_json": meta_json_content,
+                    },
+                )
 
     except ConnectionResetError:
         # interrupted while passing URI to download
@@ -437,9 +488,15 @@ def download(
             )
         raise
     finally:
+        # Clean up temporary debug files
         if log_file_path and log_file_path.exists():
             try:
                 log_file_path.unlink()
+            except Exception:
+                pass
+        if meta_json_path and meta_json_path.exists():
+            try:
+                meta_json_path.unlink()
             except Exception:
                 pass
 

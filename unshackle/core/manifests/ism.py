@@ -314,7 +314,62 @@ class ISM:
         for control_file in save_dir.glob("*.aria2__temp"):
             control_file.unlink()
 
+        # Verify output directory exists and contains files
+        if not save_dir.exists():
+            error_msg = f"Output directory does not exist: {save_dir}"
+            if debug_logger:
+                debug_logger.log(
+                    level="ERROR",
+                    operation="manifest_ism_download_output_missing",
+                    message=error_msg,
+                    context={
+                        "track_id": getattr(track, "id", None),
+                        "track_type": track.__class__.__name__,
+                        "save_dir": str(save_dir),
+                        "save_path": str(save_path),
+                        "downloader": downloader.__name__,
+                        "skip_merge": skip_merge,
+                    },
+                )
+            raise FileNotFoundError(error_msg)
+
         segments_to_merge = [x for x in sorted(save_dir.iterdir()) if x.is_file()]
+
+        if debug_logger:
+            debug_logger.log(
+                level="DEBUG",
+                operation="manifest_ism_download_complete",
+                message="ISM download complete, preparing to merge",
+                context={
+                    "track_id": getattr(track, "id", None),
+                    "track_type": track.__class__.__name__,
+                    "save_dir": str(save_dir),
+                    "save_dir_exists": save_dir.exists(),
+                    "segments_found": len(segments_to_merge),
+                    "segment_files": [f.name for f in segments_to_merge[:10]],  # Limit to first 10
+                    "downloader": downloader.__name__,
+                    "skip_merge": skip_merge,
+                },
+            )
+
+        if not segments_to_merge:
+            error_msg = f"No segment files found in output directory: {save_dir}"
+            if debug_logger:
+                all_contents = list(save_dir.iterdir()) if save_dir.exists() else []
+                debug_logger.log(
+                    level="ERROR",
+                    operation="manifest_ism_download_no_segments",
+                    message=error_msg,
+                    context={
+                        "track_id": getattr(track, "id", None),
+                        "track_type": track.__class__.__name__,
+                        "save_dir": str(save_dir),
+                        "directory_contents": [str(p) for p in all_contents],
+                        "downloader": downloader.__name__,
+                        "skip_merge": skip_merge,
+                    },
+                )
+            raise FileNotFoundError(error_msg)
 
         if skip_merge:
             shutil.move(segments_to_merge[0], save_path)
