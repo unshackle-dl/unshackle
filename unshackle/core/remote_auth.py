@@ -16,7 +16,6 @@ import logging
 from typing import Any, Dict, Optional
 
 import click
-import requests
 import yaml
 
 from unshackle.core.api.session_serializer import serialize_session
@@ -53,8 +52,6 @@ class RemoteAuthenticator:
         """
         self.remote_url = remote_url.rstrip("/")
         self.api_key = api_key
-        self.session = requests.Session()
-        self.session.headers.update({"X-API-Key": self.api_key, "Content-Type": "application/json"})
 
     def authenticate_service_locally(
         self, service_tag: str, profile: Optional[str] = None, force_reauth: bool = False
