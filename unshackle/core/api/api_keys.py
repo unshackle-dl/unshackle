@@ -18,7 +18,15 @@ def get_api_key_from_request(request: web.Request) -> Optional[str]:
     Returns:
         API key string or None
     """
-    return request.headers.get("X-API-Key") or request.headers.get("Authorization", "").replace("Bearer ", "")
+    api_key = request.headers.get("X-API-Key")
+    if api_key:
+        return api_key
+
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        return auth_header[7:]  # len("Bearer ") == 7
+
+    return None
 
 
 def get_api_key_config(app: web.Application, api_key: str) -> Optional[Dict[str, Any]]:
