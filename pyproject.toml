@@ -88,7 +88,6 @@ dev = [
     "types-requests>=2.31.0.20240406,<3",
     "isort>=5.13.2,<8",
     "ruff>=0.3.7,<0.15",
-    "unshackle",
 ]
 
 [tool.hatch.build.targets.wheel]

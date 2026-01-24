@@ -45,22 +45,27 @@ class WindscribeVPN(Proxy):
         """
         Get an HTTPS proxy URI for a WindscribeVPN server.
 
-        Note: Windscribe's static OpenVPN credentials work reliably on US, AU, and NZ servers.
+        Supports:
+        - Country code: "us", "ca", "gb"
+        - City selection: "us:seattle", "ca:toronto"
         """
         query = query.lower()
-        supported_regions = {"us", "au", "nz"}
+        city = None
 
-        if query not in supported_regions and query not in self.server_map:
-            raise ValueError(
-                f"Windscribe proxy does not currently support the '{query.upper()}' region. "
-                f"Supported regions with reliable credentials: {', '.join(sorted(supported_regions))}. "
-            )
+        # Check if query includes city specification (e.g., "ca:toronto")
+        if ":" in query:
+            query, city = query.split(":", maxsplit=1)
+            city = city.strip()
 
-        if query in self.server_map:
+        # Check server_map for pinned servers (can include city)
+        server_map_key = f"{query}:{city}" if city else query
+        if server_map_key in self.server_map:
+            hostname = self.server_map[server_map_key]
+        elif query in self.server_map and not city:
             hostname = self.server_map[query]
         else:
             if re.match(r"^[a-z]+$", query):
-                hostname = self.get_random_server(query)
+                hostname = self.get_random_server(query, city)
             else:
                 raise ValueError(f"The query provided is unsupported and unrecognized: {query}")
 
@@ -70,22 +75,40 @@ class WindscribeVPN(Proxy):
         hostname = hostname.split(':')[0]
         return f"https://{self.username}:{self.password}@{hostname}:443"
 
-    def get_random_server(self, country_code: str) -> Optional[str]:
+    def get_random_server(self, country_code: str, city: Optional[str] = None) -> Optional[str]:
         """
-        Get a random server hostname for a country.
+        Get a random server hostname for a country, optionally filtered by city.
 
-        Returns None if no servers are available for the country.
+        Args:
+            country_code: The country code (e.g., "us", "ca")
+            city: Optional city name to filter by (case-insensitive)
+
+        Returns:
+            A random hostname from matching servers, or None if none available.
         """
         for location in self.countries:
             if location.get("country_code", "").lower() == country_code.lower():
                 hostnames = []
                 for group in location.get("groups", []):
+                    # Filter by city if specified
+                    if city:
+                        group_city = group.get("city", "")
+                        if group_city.lower() != city.lower():
+                            continue
+
+                    # Collect hostnames from this group
                     for host in group.get("hosts", []):
                         if hostname := host.get("hostname"):
                             hostnames.append(hostname)
 
                 if hostnames:
                     return random.choice(hostnames)
+                elif city:
+                    # No servers found for the specified city
+                    raise ValueError(
+                        f"No servers found in city '{city}' for country code '{country_code}'. "
+                        "Try a different city or check the city name spelling."
+                    )
 
         return None
 

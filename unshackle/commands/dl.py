@@ -672,6 +672,8 @@ class dl:
                     self.log.info(f"Loaded {proxy_provider.__class__.__name__}: {proxy_provider}")
 
             if proxy:
+                # Store original proxy query for service-specific proxy_map
+                original_proxy_query = proxy
                 requested_provider = None
                 if re.match(r"^[a-z]+:.+$", proxy, re.IGNORECASE):
                     # requesting proxy from a specific proxy provider
