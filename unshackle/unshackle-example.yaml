@@ -365,16 +365,20 @@ subtitle:
   # Combined with no sub_format setting, ensures subtitles remain in their original format (default: true)
   preserve_formatting: true
 
-# Configuration for pywidevine's serve functionality
+# Configuration for pywidevine and pyplayready's serve functionality
 serve:
   api_secret: "your-secret-key-here"
   users:
     secret_key_for_user:
-      devices:
+      devices:  # Widevine devices (WVDs) this user can access
         - generic_nexus_4464_l3
+      playready_devices:  # PlayReady devices (PRDs) this user can access
+        - playready_device_sl3000
       username: user
-  # devices:
+  # devices:  # Widevine device paths (auto-populated from directories.wvds)
   #   - '/path/to/device.wvd'
+  # playready_devices:  # PlayReady device paths (auto-populated from directories.prds)
+  #   - '/path/to/device.prd'
 
 # Configuration data for each Service
 services:

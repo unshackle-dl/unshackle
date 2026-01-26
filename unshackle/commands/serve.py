@@ -11,12 +11,17 @@ from unshackle.core.constants import context_settings
 
 
 @click.command(
-    short_help="Serve your Local Widevine Devices and REST API for Remote Access.", context_settings=context_settings
+    short_help="Serve your Local Widevine/PlayReady Devices and REST API for Remote Access.",
+    context_settings=context_settings,
 )
-@click.option("-h", "--host", type=str, default="0.0.0.0", help="Host to serve from.")
+@click.option("-h", "--host", type=str, default="127.0.0.1", help="Host to serve from.")
 @click.option("-p", "--port", type=int, default=8786, help="Port to serve from.")
 @click.option("--caddy", is_flag=True, default=False, help="Also serve with Caddy.")
-@click.option("--api-only", is_flag=True, default=False, help="Serve only the REST API, not pywidevine CDM.")
+@click.option(
+    "--api-only", is_flag=True, default=False, help="Serve only the REST API, not pywidevine/pyplayready CDM."
+)
+@click.option("--no-widevine", is_flag=True, default=False, help="Disable Widevine CDM endpoints.")
+@click.option("--no-playready", is_flag=True, default=False, help="Disable PlayReady CDM endpoints.")
 @click.option("--no-key", is_flag=True, default=False, help="Disable API key authentication (allows all requests).")
 @click.option(
     "--debug-api",
@@ -30,13 +35,24 @@ from unshackle.core.constants import context_settings
     default=False,
     help="Enable debug logging for API operations.",
 )
-def serve(host: str, port: int, caddy: bool, api_only: bool, no_key: bool, debug_api: bool, debug: bool) -> None:
+def serve(
+    host: str,
+    port: int,
+    caddy: bool,
+    api_only: bool,
+    no_widevine: bool,
+    no_playready: bool,
+    no_key: bool,
+    debug_api: bool,
+    debug: bool,
+) -> None:
     """
-    Serve your Local Widevine Devices and REST API for Remote Access.
+    Serve your Local Widevine and PlayReady Devices and REST API for Remote Access.
 
     \b
-    Host as 127.0.0.1 may block remote access even if port-forwarded.
-    Instead, use 0.0.0.0 and ensure the TCP port you choose is forwarded.
+    CDM ENDPOINTS:
+    - Widevine: /{device}/open, /{device}/close/{session_id}, etc.
+    - PlayReady: /playready/{device}/open, /playready/{device}/close/{session_id}, etc.
 
     \b
     You may serve with Caddy at the same time with --caddy. You can use Caddy
@@ -44,39 +60,31 @@ def serve(host: str, port: int, caddy: bool, api_only: bool, no_key: bool, debug
     next to the unshackle config.
 
     \b
-    The REST API provides programmatic access to unshackle functionality.
-    Configure authentication in your config under serve.api_secret and serve.api_keys.
-
-    \b
-    API KEY TIERS:
-    Premium API keys can use server-side CDM for decryption. Configure in unshackle.yaml:
+    DEVICE CONFIGURATION:
+    WVD files are auto-loaded from the WVDs directory, PRD files from the PRDs directory.
+    Configure user access in unshackle.yaml:
 
     \b
     serve:
       api_secret: "your-api-secret"
-      api_keys:
-        - key: "basic-user-key"
-          tier: "basic"
-          allowed_cdms: []
-        - key: "premium-user-key"
-          tier: "premium"
-          default_cdm: "chromecdm_2101"
-          allowed_cdms: ["*"]  # or list specific CDMs: ["chromecdm_2101", "chromecdm_2202"]
+      users:
+        your-secret-key:
+          devices: ["device_name"]  # Widevine devices
+          playready_devices: ["device_name"]  # PlayReady devices
+          username: user
     """
+    from pyplayready.remote import serve as pyplayready_serve
     from pywidevine import serve as pywidevine_serve
 
     log = logging.getLogger("serve")
 
-    # Configure logging level based on --debug flag
     if debug:
         logging.basicConfig(level=logging.DEBUG, format="%(name)s - %(levelname)s - %(message)s")
         log.info("Debug logging enabled for API operations")
     else:
-        # Set API loggers to WARNING to reduce noise unless --debug is used
         logging.getLogger("api").setLevel(logging.WARNING)
         logging.getLogger("api.remote").setLevel(logging.WARNING)
 
-    # Validate API secret for REST API routes (unless --no-key is used)
     if not no_key:
         api_secret = config.serve.get("api_secret")
         if not api_secret:
@@ -89,6 +97,9 @@ def serve(host: str, port: int, caddy: bool, api_only: bool, no_key: bool, debug
 
     if debug_api:
         log.warning("Running with --debug-api: Error responses will include technical debug information!")
+
+    if api_only and (no_widevine or no_playready):
+        raise click.ClickException("Cannot use --api-only with --no-widevine or --no-playready.")
 
     if caddy:
         if not binaries.Caddy:
@@ -104,9 +115,12 @@ def serve(host: str, port: int, caddy: bool, api_only: bool, no_key: bool, debug
             config.serve["devices"] = []
         config.serve["devices"].extend(list(config.directories.wvds.glob("*.wvd")))
 
+        if not config.serve.get("playready_devices"):
+            config.serve["playready_devices"] = []
+        config.serve["playready_devices"].extend(list(config.directories.prds.glob("*.prd")))
+
         if api_only:
-            # API-only mode: serve just the REST API
-            log.info("Starting REST API server (pywidevine CDM disabled)")
+            log.info("Starting REST API server (pywidevine/pyplayready CDM disabled)")
             if no_key:
                 app = web.Application(middlewares=[cors_middleware])
                 app["config"] = {"users": []}
@@ -121,35 +135,84 @@ def serve(host: str, port: int, caddy: bool, api_only: bool, no_key: bool, debug
             log.info("(Press CTRL+C to quit)")
             web.run_app(app, host=host, port=port, print=None)
         else:
-            # Integrated mode: serve both pywidevine + REST API
-            log.info("Starting integrated server (pywidevine CDM + REST API)")
+            serve_widevine = not no_widevine
+            serve_playready = not no_playready
 
-            # Create integrated app with both pywidevine and API routes
+            serve_config = dict(config.serve)
+            wvd_devices = serve_config.get("devices", []) if serve_widevine else []
+            prd_devices = serve_config.get("playready_devices", []) if serve_playready else []
+
+            cdm_parts = []
+            if serve_widevine:
+                cdm_parts.append("pywidevine CDM")
+            if serve_playready:
+                cdm_parts.append("pyplayready CDM")
+            log.info(f"Starting integrated server ({' + '.join(cdm_parts)} + REST API)")
+
+            wvd_device_names = [d.stem if hasattr(d, "stem") else str(d) for d in wvd_devices]
+            prd_device_names = [d.stem if hasattr(d, "stem") else str(d) for d in prd_devices]
+
+            if not serve_config.get("users") or not isinstance(serve_config["users"], dict):
+                serve_config["users"] = {}
+
+            if not no_key and api_secret not in serve_config["users"]:
+                serve_config["users"][api_secret] = {
+                    "devices": wvd_device_names,
+                    "playready_devices": prd_device_names,
+                    "username": "api_user",
+                }
+
+            for user_key, user_config in serve_config["users"].items():
+                if "playready_devices" not in user_config:
+                    user_config["playready_devices"] = prd_device_names
+
             if no_key:
                 app = web.Application(middlewares=[cors_middleware])
-                app["config"] = dict(config.serve)
-                app["config"]["users"] = []
             else:
                 app = web.Application(middlewares=[cors_middleware, pywidevine_serve.authentication])
-                # Setup config - add API secret to users for authentication
-                serve_config = dict(config.serve)
-                if not serve_config.get("users") or not isinstance(serve_config["users"], dict):
-                    serve_config["users"] = {}
-                if api_secret not in serve_config["users"]:
-                    device_names = [d.stem if hasattr(d, "stem") else str(d) for d in serve_config.get("devices", [])]
-                    serve_config["users"][api_secret] = {
-                        "devices": device_names,
-                        "username": "api_user"
-                    }
-                app["config"] = serve_config
 
-            app.on_startup.append(pywidevine_serve._startup)
-            app.on_cleanup.append(pywidevine_serve._cleanup)
-            app.add_routes(pywidevine_serve.routes)
+            app["config"] = serve_config
             app["debug_api"] = debug_api
+
+            if serve_widevine:
+                app.on_startup.append(pywidevine_serve._startup)
+                app.on_cleanup.append(pywidevine_serve._cleanup)
+                app.add_routes(pywidevine_serve.routes)
+
+            if serve_playready and prd_devices:
+                if no_key:
+                    playready_app = web.Application()
+                else:
+                    playready_app = web.Application(middlewares=[pyplayready_serve.authentication])
+
+                # PlayReady subapp config maps playready_devices to "devices" for pyplayready compatibility
+                playready_config = {
+                    "devices": prd_devices,
+                    "users": {
+                        user_key: {
+                            "devices": user_cfg.get("playready_devices", prd_device_names),
+                            "username": user_cfg.get("username", "user"),
+                        }
+                        for user_key, user_cfg in serve_config["users"].items()
+                    }
+                    if not no_key
+                    else [],
+                }
+                playready_app["config"] = playready_config
+                playready_app.on_startup.append(pyplayready_serve._startup)
+                playready_app.on_cleanup.append(pyplayready_serve._cleanup)
+                playready_app.add_routes(pyplayready_serve.routes)
+
+                app.add_subapp("/playready", playready_app)
+                log.info(f"PlayReady CDM endpoints available at http://{host}:{port}/playready/")
+            elif serve_playready:
+                log.info("No PlayReady devices found, skipping PlayReady CDM endpoints")
+
             setup_routes(app)
             setup_swagger(app)
 
+            if serve_widevine:
+                log.info(f"Widevine CDM endpoints available at http://{host}:{port}/{{device}}/open")
             log.info(f"REST API endpoints available at http://{host}:{port}/api/")
             log.info(f"Swagger UI available at http://{host}:{port}/api/docs/")
             log.info("(Press CTRL+C to quit)")
