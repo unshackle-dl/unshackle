@@ -27,6 +27,7 @@ from construct import ConstError
 from pymediainfo import MediaInfo
 from pyplayready.cdm import Cdm as PlayReadyCdm
 from pyplayready.device import Device as PlayReadyDevice
+from pyplayready.remote.remotecdm import RemoteCdm as PlayReadyRemoteCdm
 from pywidevine.cdm import Cdm as WidevineCdm
 from pywidevine.device import Device
 from pywidevine.remotecdm import RemoteCdm
@@ -2426,14 +2427,23 @@ class dl:
                 return CustomRemoteCDM(service_name=service, vaults=self.vaults, **cdm_api)
 
             else:
-                return RemoteCdm(
-                    device_type=cdm_api["Device Type"],
-                    system_id=cdm_api["System ID"],
-                    security_level=cdm_api["Security Level"],
-                    host=cdm_api["Host"],
-                    secret=cdm_api["Secret"],
-                    device_name=cdm_api["Device Name"],
-                )
+                device_type = cdm_api.get("Device Type", cdm_api.get("device_type", ""))
+                if str(device_type).upper() == "PLAYREADY":
+                    return PlayReadyRemoteCdm(
+                        security_level=cdm_api.get("Security Level", cdm_api.get("security_level", 3000)),
+                        host=cdm_api.get("Host", cdm_api.get("host")),
+                        secret=cdm_api.get("Secret", cdm_api.get("secret")),
+                        device_name=cdm_api.get("Device Name", cdm_api.get("device_name")),
+                    )
+                else:
+                    return RemoteCdm(
+                        device_type=cdm_api["Device Type"],
+                        system_id=cdm_api["System ID"],
+                        security_level=cdm_api["Security Level"],
+                        host=cdm_api["Host"],
+                        secret=cdm_api["Secret"],
+                        device_name=cdm_api["Device Name"],
+                    )
 
         prd_path = config.directories.prds / f"{cdm_name}.prd"
         if not prd_path.is_file():
