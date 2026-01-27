@@ -166,10 +166,26 @@ def serve(
                 if "playready_devices" not in user_config:
                     user_config["playready_devices"] = prd_device_names
 
+            def create_serve_authentication(serve_playready_flag: bool):
+                @web.middleware
+                async def serve_authentication(request: web.Request, handler) -> web.Response:
+                    if serve_playready_flag and request.path in ("/playready", "/playready/"):
+                        response = await handler(request)
+                    else:
+                        response = await pywidevine_serve.authentication(request, handler)
+
+                    if serve_playready_flag and request.path.startswith("/playready"):
+                        from pyplayready import __version__ as pyplayready_version
+                        response.headers["Server"] = f"https://git.gay/ready-dl/pyplayready serve v{pyplayready_version}"
+
+                    return response
+                return serve_authentication
+
             if no_key:
                 app = web.Application(middlewares=[cors_middleware])
             else:
-                app = web.Application(middlewares=[cors_middleware, pywidevine_serve.authentication])
+                serve_auth = create_serve_authentication(serve_playready and bool(prd_devices))
+                app = web.Application(middlewares=[cors_middleware, serve_auth])
 
             app["config"] = serve_config
             app["debug_api"] = debug_api
@@ -202,6 +218,14 @@ def serve(
                 playready_app.on_startup.append(pyplayready_serve._startup)
                 playready_app.on_cleanup.append(pyplayready_serve._cleanup)
                 playready_app.add_routes(pyplayready_serve.routes)
+
+                async def playready_ping(_: web.Request) -> web.Response:
+                    from pyplayready import __version__ as pyplayready_version
+                    response = web.json_response({"message": "OK"})
+                    response.headers["Server"] = f"https://git.gay/ready-dl/pyplayready serve v{pyplayready_version}"
+                    return response
+
+                app.router.add_route("*", "/playready", playready_ping)
 
                 app.add_subapp("/playready", playready_app)
                 log.info(f"PlayReady CDM endpoints available at http://{host}:{port}/playready/")

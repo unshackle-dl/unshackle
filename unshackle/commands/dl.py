@@ -628,12 +628,17 @@ class dl:
                         "device_type": self.cdm.device_type.name,
                     }
                 else:
-                    self.log.info(
-                        f"Loaded PlayReady CDM: {self.cdm.certificate_chain.get_name()} (L{self.cdm.security_level})"
-                    )
+                    # Handle both local PlayReady CDM and RemoteCdm (which has certificate_chain=None)
+                    is_remote = self.cdm.certificate_chain is None and hasattr(self.cdm, "device_name")
+                    if is_remote:
+                        cdm_name = self.cdm.device_name
+                        self.log.info(f"Loaded PlayReady Remote CDM: {cdm_name} (L{self.cdm.security_level})")
+                    else:
+                        cdm_name = self.cdm.certificate_chain.get_name() if self.cdm.certificate_chain else "Unknown"
+                        self.log.info(f"Loaded PlayReady CDM: {cdm_name} (L{self.cdm.security_level})")
                     cdm_info = {
                         "type": "PlayReady",
-                        "certificate": self.cdm.certificate_chain.get_name(),
+                        "certificate": cdm_name,
                         "security_level": self.cdm.security_level,
                     }
 
