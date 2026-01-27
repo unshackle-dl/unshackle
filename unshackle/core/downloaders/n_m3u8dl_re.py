@@ -182,7 +182,6 @@ def build_download_args(
         "--tmp-dir": output_dir,
         "--thread-count": thread_count,
         "--download-retry-count": retry_count,
-        "--write-meta-json": False,
     }
     if FFMPEG:
         args["--ffmpeg-binary-path"] = str(FFMPEG)
@@ -304,14 +303,11 @@ def download(
     arguments.extend(selection_args)
 
     log_file_path: Path | None = None
-    meta_json_path: Path | None = None
     if debug_logger:
         log_file_path = output_dir / f".n_m3u8dl_re_{filename}.log"
-        meta_json_path = output_dir / f"{filename}.meta.json"
         arguments.extend([
             "--log-file-path", str(log_file_path),
             "--log-level", "DEBUG",
-            "--write-meta-json", "true",
         ])
 
         track_url_display = track.url[:200] + "..." if len(track.url) > 200 else track.url
@@ -433,14 +429,6 @@ def download(
                     except Exception:
                         n_m3u8dl_log = "<failed to read log file>"
 
-                # Read meta JSON to see what streams N_m3u8DL-RE parsed
-                meta_json_content = ""
-                if meta_json_path and meta_json_path.exists():
-                    try:
-                        meta_json_content = meta_json_path.read_text(encoding="utf-8", errors="replace")
-                    except Exception:
-                        meta_json_content = "<failed to read meta json>"
-
                 debug_logger.log(
                     level="WARNING",
                     operation="downloader_n_m3u8dl_re_no_output",
@@ -453,7 +441,6 @@ def download(
                         "selection_args": selection_args,
                         "track_url": track.url[:200] + "..." if len(track.url) > 200 else track.url,
                         "n_m3u8dl_re_log": n_m3u8dl_log,
-                        "n_m3u8dl_re_meta_json": meta_json_content,
                     },
                 )
 
@@ -492,11 +479,6 @@ def download(
         if log_file_path and log_file_path.exists():
             try:
                 log_file_path.unlink()
-            except Exception:
-                pass
-        if meta_json_path and meta_json_path.exists():
-            try:
-                meta_json_path.unlink()
             except Exception:
                 pass
 
