@@ -96,6 +96,7 @@ class Config:
         self.scene_naming: bool = kwargs.get("scene_naming", True)
         self.series_year: bool = kwargs.get("series_year", True)
         self.unicode_filenames: bool = kwargs.get("unicode_filenames", False)
+        self.insert_episodename_into_filenames: bool = kwargs.get("insert_episodename_into_filenames", True)
 
         self.title_cache_time: int = kwargs.get("title_cache_time", 1800)  # 30 minutes default
         self.title_cache_max_retention: int = kwargs.get("title_cache_max_retention", 86400)  # 24 hours default
