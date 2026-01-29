@@ -241,11 +241,14 @@ class Subtitle(Track):
                     )
             elif self.descriptor == Track.Descriptor.HLS:
                 if len(self.data["hls"]["segment_durations"]) > 1:
-                    text = merge_segmented_webvtt(
-                        text,
-                        segment_durations=self.data["hls"]["segment_durations"],
-                        timescale=1,  # ?
-                    )
+                    try:
+                        text = merge_segmented_webvtt(
+                            text,
+                            segment_durations=self.data["hls"]["segment_durations"],
+                            timescale=1,  # ?
+                        )
+                    except (ValueError, pycaption.exceptions.CaptionReadSyntaxError) as e:
+                        pass
 
             # Sanitize WebVTT timestamps before parsing
             text = Subtitle.sanitize_webvtt_timestamps(text)
