@@ -646,6 +646,12 @@ class HLS:
 
         # finally merge all the discontinuity save files together to the final path
         segments_to_merge = find_segments_recursively(save_dir)
+
+        segments_to_merge = [
+            s for s in segments_to_merge 
+            if not s.name.lower().endswith(".log")
+        ]
+        
         if len(segments_to_merge) == 1:
             shutil.move(segments_to_merge[0], save_path)
         else:
