@@ -534,7 +534,7 @@ class DASH:
             downloader_args.update(
                 {
                     "filename": track.id,
-                    "track": track,
+                    "track": track
                 }
             )
 
