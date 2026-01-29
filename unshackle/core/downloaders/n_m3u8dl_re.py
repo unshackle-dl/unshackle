@@ -10,6 +10,7 @@ import requests
 from requests.cookies import cookiejar_from_dict, get_cookie_header
 
 from unshackle.core import binaries
+from unshackle.core.binaries import FFMPEG, Mp4decrypt, ShakaPackager
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import DOWNLOAD_CANCELLED
@@ -19,7 +20,7 @@ PERCENT_RE = re.compile(r"(\d+\.\d+%)")
 SPEED_RE = re.compile(r"(\d+\.\d+(?:MB|KB)ps)")
 SIZE_RE = re.compile(r"(\d+\.\d+(?:MB|GB|KB)/\d+\.\d+(?:MB|GB|KB))")
 WARN_RE = re.compile(r"(WARN : Response.*|WARN : One or more errors occurred.*)")
-ERROR_RE = re.compile(r"(ERROR.*)")
+ERROR_RE = re.compile(r"(\bERROR\b.*|\bFAILED\b.*|\bException\b.*)")
 
 DECRYPTION_ENGINE = {
     "shaka": "SHAKA_PACKAGER",
@@ -71,7 +72,7 @@ def get_track_selection_args(track: Any) -> list[str]:
                 lang = representation.get("lang") or adaptation_set.get("lang")
 
                 if track_id:
-                    parts.append(rf'"id=\b{track_id}\b"')
+                    parts.append(f"id={track_id}")
                     if lang:
                         parts.append(f"lang={lang}")
                 else:
@@ -89,7 +90,7 @@ def get_track_selection_args(track: Any) -> list[str]:
 
             if track_type == "Video":
                 if track_id := representation.get("id"):
-                    parts.append(rf'"id=\b{track_id}\b"')
+                    parts.append(f"id={track_id}")
                 else:
                     if width := representation.get("width"):
                         parts.append(f"res={width}*")
@@ -102,7 +103,7 @@ def get_track_selection_args(track: Any) -> list[str]:
 
             if track_type == "Subtitle":
                 if track_id := representation.get("id"):
-                    parts.append(rf'"id=\b{track_id}\b"')
+                    parts.append(f"id={track_id}")
                 else:
                     if lang := representation.get("lang"):
                         parts.append(f"lang={lang}")
@@ -115,7 +116,7 @@ def get_track_selection_args(track: Any) -> list[str]:
 
             if track_type == "Audio":
                 if name := stream_index.get("Name") or quality_level.get("Index"):
-                    parts.append(rf'"id=\b{name}\b"')
+                    parts.append(f"id={name}")
                 else:
                     if codecs := quality_level.get("FourCC"):
                         parts.append(f"codecs={codecs}")
@@ -128,7 +129,7 @@ def get_track_selection_args(track: Any) -> list[str]:
 
             if track_type == "Video":
                 if name := stream_index.get("Name") or quality_level.get("Index"):
-                    parts.append(rf'"id=\b{name}\b"')
+                    parts.append(f"id={name}")
                 else:
                     if width := quality_level.get("MaxWidth"):
                         parts.append(f"res={width}*")
@@ -142,7 +143,7 @@ def get_track_selection_args(track: Any) -> list[str]:
             # I've yet to encounter a subtitle track in ISM manifests, so this is mostly theoretical.
             if track_type == "Subtitle":
                 if name := stream_index.get("Name") or quality_level.get("Index"):
-                    parts.append(rf'"id=\b{name}\b"')
+                    parts.append(f"id={name}")
                 else:
                     if lang := stream_index.get("Language"):
                         parts.append(f"lang={lang}")
@@ -168,7 +169,6 @@ def build_download_args(
     headers: dict[str, Any] | None,
     cookies: CookieJar | None,
     proxy: str | None,
-    content_keys: dict[str, str] | None,
     ad_keyword: str | None,
     skip_merge: bool | None = False,
 ) -> list[str]:
@@ -181,17 +181,15 @@ def build_download_args(
         "--tmp-dir": output_dir,
         "--thread-count": thread_count,
         "--download-retry-count": retry_count,
-        "--write-meta-json": False,
     }
+    if FFMPEG:
+        args["--ffmpeg-binary-path"] = str(FFMPEG)
     if proxy:
         args["--custom-proxy"] = proxy
     if skip_merge:
         args["--skip-merge"] = skip_merge
     if ad_keyword:
         args["--ad-keyword"] = ad_keyword
-    if content_keys:
-        args["--key"] = next((f"{kid.hex}:{key.lower()}" for kid, key in content_keys.items()), None)
-        args["--decryption-engine"] = DECRYPTION_ENGINE.get(config.decryption.lower()) or "SHAKA_PACKAGER"
     if custom_args:
         args.update(custom_args)
 
@@ -226,7 +224,6 @@ def download(
     cookies: MutableMapping[str, str] | CookieJar | None,
     proxy: str | None,
     max_workers: int | None,
-    content_keys: dict[str, Any] | None,
     skip_merge: bool | None = False,
 ) -> Generator[dict[str, Any], None, None]:
     debug_logger = get_debug_logger()
@@ -247,8 +244,6 @@ def download(
         raise TypeError(f"Expected proxy to be a str or None, not {type(proxy)}")
     if not isinstance(max_workers, (int, type(None))):
         raise TypeError(f"Expected max_workers to be an int or None, not {type(max_workers)}")
-    if not isinstance(content_keys, (dict, type(None))):
-        raise TypeError(f"Expected content_keys to be a dict or None, not {type(content_keys)}")
     if not isinstance(skip_merge, (bool, type(None))):
         raise TypeError(f"Expected skip_merge to be a bool or None, not {type(skip_merge)}")
 
@@ -278,7 +273,6 @@ def download(
         headers=headers,
         cookies=cookies,
         proxy=proxy,
-        content_keys=content_keys,
         skip_merge=skip_merge,
         ad_keyword=ad_keyword,
     )
@@ -288,7 +282,10 @@ def download(
     log_file_path: Path | None = None
     if debug_logger:
         log_file_path = output_dir / f".n_m3u8dl_re_{filename}.log"
-        arguments.extend(["--log-file-path", str(log_file_path)])
+        arguments.extend([
+            "--log-file-path", str(log_file_path),
+            "--log-level", "DEBUG",
+        ])
 
         track_url_display = track.url[:200] + "..." if len(track.url) > 200 else track.url
         debug_logger.log(
@@ -304,8 +301,6 @@ def download(
                 "filename": filename,
                 "thread_count": thread_count,
                 "retry_count": retry_count,
-                "has_content_keys": bool(content_keys),
-                "content_key_count": len(content_keys) if content_keys else 0,
                 "has_proxy": bool(proxy),
                 "skip_merge": skip_merge,
                 "has_custom_args": bool(track.downloader_args),
@@ -326,6 +321,7 @@ def download(
             stderr=subprocess.STDOUT,
             text=True,
             encoding="utf-8",
+            errors="replace",
         ) as process:
             last_line = ""
             track_type = track.__class__.__name__
@@ -376,6 +372,14 @@ def download(
             raise subprocess.CalledProcessError(process.returncode, arguments)
 
         if debug_logger:
+            output_dir_exists = output_dir.exists()
+            output_files = []
+            if output_dir_exists:
+                try:
+                    output_files = [f.name for f in output_dir.iterdir() if f.is_file()][:20]
+                except Exception:
+                    output_files = ["<error listing files>"]
+
             debug_logger.log(
                 level="DEBUG",
                 operation="downloader_n_m3u8dl_re_complete",
@@ -384,9 +388,37 @@ def download(
                     "track_id": getattr(track, "id", None),
                     "track_type": track.__class__.__name__,
                     "output_dir": str(output_dir),
+                    "output_dir_exists": output_dir_exists,
+                    "output_files_count": len(output_files),
+                    "output_files": output_files,
                     "filename": filename,
                 },
             )
+
+            # Warn if no output was produced - include N_m3u8DL-RE's logs for diagnosis
+            if not output_dir_exists or not output_files:
+                # Read N_m3u8DL-RE's log file for debugging
+                n_m3u8dl_log = ""
+                if log_file_path and log_file_path.exists():
+                    try:
+                        n_m3u8dl_log = log_file_path.read_text(encoding="utf-8", errors="replace")
+                    except Exception:
+                        n_m3u8dl_log = "<failed to read log file>"
+
+                debug_logger.log(
+                    level="WARNING",
+                    operation="downloader_n_m3u8dl_re_no_output",
+                    message="N_m3u8DL-RE exited successfully but produced no output files",
+                    context={
+                        "track_id": getattr(track, "id", None),
+                        "track_type": track.__class__.__name__,
+                        "output_dir": str(output_dir),
+                        "output_dir_exists": output_dir_exists,
+                        "selection_args": selection_args,
+                        "track_url": track.url[:200] + "..." if len(track.url) > 200 else track.url,
+                        "n_m3u8dl_re_log": n_m3u8dl_log,
+                    },
+                )
 
     except ConnectionResetError:
         # interrupted while passing URI to download
@@ -419,6 +451,7 @@ def download(
             )
         raise
     finally:
+        # Clean up temporary debug files
         if log_file_path and log_file_path.exists():
             try:
                 log_file_path.unlink()
@@ -435,7 +468,6 @@ def n_m3u8dl_re(
     cookies: MutableMapping[str, str] | CookieJar | None = None,
     proxy: str | None = None,
     max_workers: int | None = None,
-    content_keys: dict[str, Any] | None = None,
     skip_merge: bool | None = False,
 ) -> Generator[dict[str, Any], None, None]:
     """
@@ -462,7 +494,6 @@ def n_m3u8dl_re(
         proxy: A proxy to use for all downloads.
         max_workers: The maximum amount of threads to use for downloads. Defaults to
             min(32,(cpu_count+4)). Can be set in config with --thread-count option.
-        content_keys: The content keys to use for decryption.
         skip_merge: Whether to skip merging the downloaded chunks.
     """
 
@@ -475,7 +506,6 @@ def n_m3u8dl_re(
         cookies=cookies,
         proxy=proxy,
         max_workers=max_workers,
-        content_keys=content_keys,
         skip_merge=skip_merge,
     )
 

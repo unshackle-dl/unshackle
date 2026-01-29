@@ -372,15 +372,11 @@ class HLS:
 
         if downloader.__name__ == "n_m3u8dl_re":
             skip_merge = True
-            # session_drm already has correct content_keys from initial licensing above
-            n_m3u8dl_content_keys = session_drm.content_keys if session_drm else None
-
             downloader_args.update(
                 {
                     "output_dir": save_dir,
                     "filename": track.id,
                     "track": track,
-                    "content_keys": n_m3u8dl_content_keys,
                 }
             )
 
@@ -650,6 +646,13 @@ class HLS:
 
         # finally merge all the discontinuity save files together to the final path
         segments_to_merge = find_segments_recursively(save_dir)
+
+        segments_to_merge = [
+            s for s in segments_to_merge 
+            if not s.name.lower().endswith(".log")
+        ]
+
+        
         if len(segments_to_merge) == 1:
             shutil.move(segments_to_merge[0], save_path)
         else:
