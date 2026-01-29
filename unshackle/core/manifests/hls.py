@@ -372,15 +372,11 @@ class HLS:
 
         if downloader.__name__ == "n_m3u8dl_re":
             skip_merge = True
-            # session_drm already has correct content_keys from initial licensing above
-            n_m3u8dl_content_keys = session_drm.content_keys if session_drm else None
-
             downloader_args.update(
                 {
                     "output_dir": save_dir,
                     "filename": track.id,
                     "track": track,
-                    "content_keys": n_m3u8dl_content_keys,
                 }
             )
 
