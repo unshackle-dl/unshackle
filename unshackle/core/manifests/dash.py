@@ -535,7 +535,6 @@ class DASH:
                 {
                     "filename": track.id,
                     "track": track,
-                    "content_keys": drm.content_keys if drm else None,
                 }
             )
 
