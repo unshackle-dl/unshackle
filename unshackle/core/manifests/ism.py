@@ -274,12 +274,10 @@ class ISM:
         )
 
         if downloader.__name__ == "n_m3u8dl_re":
-            skip_merge = True
             downloader_args.update(
                 {
                     "filename": track.id,
                     "track": track,
-                    "content_keys": session_drm.content_keys if session_drm else None,
                 }
             )
 
@@ -342,7 +340,7 @@ class ISM:
         track.path = save_path
         events.emit(events.Types.TRACK_DOWNLOADED, track=track)
 
-        if not skip_merge and session_drm:
+        if session_drm:
             progress(downloaded="Decrypting", completed=0, total=100)
             session_drm.decrypt(save_path)
             track.drm = None
