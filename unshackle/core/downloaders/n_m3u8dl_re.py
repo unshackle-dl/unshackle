@@ -190,7 +190,6 @@ def build_download_args(
         args["--skip-merge"] = skip_merge
     if ad_keyword:
         args["--ad-keyword"] = ad_keyword
-
     if custom_args:
         args.update(custom_args)
 
@@ -225,7 +224,6 @@ def download(
     cookies: MutableMapping[str, str] | CookieJar | None,
     proxy: str | None,
     max_workers: int | None,
-    content_keys: dict[str, Any] | None,
     skip_merge: bool | None = False,
 ) -> Generator[dict[str, Any], None, None]:
     debug_logger = get_debug_logger()
@@ -246,8 +244,6 @@ def download(
         raise TypeError(f"Expected proxy to be a str or None, not {type(proxy)}")
     if not isinstance(max_workers, (int, type(None))):
         raise TypeError(f"Expected max_workers to be an int or None, not {type(max_workers)}")
-    if not isinstance(content_keys, (dict, type(None))):
-        raise TypeError(f"Expected content_keys to be a dict or None, not {type(content_keys)}")
     if not isinstance(skip_merge, (bool, type(None))):
         raise TypeError(f"Expected skip_merge to be a bool or None, not {type(skip_merge)}")
 
@@ -277,7 +273,6 @@ def download(
         headers=headers,
         cookies=cookies,
         proxy=proxy,
-        content_keys=content_keys,
         skip_merge=skip_merge,
         ad_keyword=ad_keyword,
     )
@@ -306,8 +301,6 @@ def download(
                 "filename": filename,
                 "thread_count": thread_count,
                 "retry_count": retry_count,
-                "has_content_keys": bool(content_keys),
-                "content_key_count": len(content_keys) if content_keys else 0,
                 "has_proxy": bool(proxy),
                 "skip_merge": skip_merge,
                 "has_custom_args": bool(track.downloader_args),
@@ -475,7 +468,6 @@ def n_m3u8dl_re(
     cookies: MutableMapping[str, str] | CookieJar | None = None,
     proxy: str | None = None,
     max_workers: int | None = None,
-    content_keys: dict[str, Any] | None = None,
     skip_merge: bool | None = False,
 ) -> Generator[dict[str, Any], None, None]:
     """
@@ -502,7 +494,6 @@ def n_m3u8dl_re(
         proxy: A proxy to use for all downloads.
         max_workers: The maximum amount of threads to use for downloads. Defaults to
             min(32,(cpu_count+4)). Can be set in config with --thread-count option.
-        content_keys: The content keys to use for decryption.
         skip_merge: Whether to skip merging the downloaded chunks.
     """
 
@@ -515,7 +506,6 @@ def n_m3u8dl_re(
         cookies=cookies,
         proxy=proxy,
         max_workers=max_workers,
-        content_keys=content_keys,
         skip_merge=skip_merge,
     )
 
