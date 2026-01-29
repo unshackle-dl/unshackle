@@ -468,7 +468,8 @@ class DASH:
         track.data["dash"]["segment_durations"] = segment_durations
 
         if init_data and isinstance(track, (Video, Audio)):
-            if isinstance(cdm, PlayReadyCdm):
+            prefers_playready = isinstance(cdm, PlayReadyCdm) or (hasattr(cdm, "is_playready") and cdm.is_playready)
+            if prefers_playready:
                 try:
                     track.drm = [PlayReady.from_init_data(init_data)]
                 except PlayReady.Exceptions.PSSHNotFound:

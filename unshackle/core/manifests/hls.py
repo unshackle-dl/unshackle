@@ -591,7 +591,11 @@ class HLS:
 
                 segment_keys = getattr(segment, "keys", None)
                 if segment_keys:
-                    key = HLS.get_supported_key(segment_keys)
+                    if cdm:
+                        cdm_segment_keys = HLS.filter_keys_for_cdm(segment_keys, cdm)
+                        key = HLS.get_supported_key(cdm_segment_keys) if cdm_segment_keys else HLS.get_supported_key(segment_keys)
+                    else:
+                        key = HLS.get_supported_key(segment_keys)
                     if encryption_data and encryption_data[0] != key and i != 0 and segment not in unwanted_segments:
                         decrypt(include_this_segment=False)
 
