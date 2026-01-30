@@ -86,9 +86,11 @@ class WindscribeVPN(Proxy):
         Returns:
             A random hostname from matching servers, or None if none available.
         """
+        hostnames = []
+
+        # Collect hostnames from ALL locations matching the country code
         for location in self.countries:
             if location.get("country_code", "").lower() == country_code.lower():
-                hostnames = []
                 for group in location.get("groups", []):
                     # Filter by city if specified
                     if city:
@@ -101,14 +103,14 @@ class WindscribeVPN(Proxy):
                         if hostname := host.get("hostname"):
                             hostnames.append(hostname)
 
-                if hostnames:
-                    return random.choice(hostnames)
-                elif city:
-                    # No servers found for the specified city
-                    raise ValueError(
-                        f"No servers found in city '{city}' for country code '{country_code}'. "
-                        "Try a different city or check the city name spelling."
-                    )
+        if hostnames:
+            return random.choice(hostnames)
+        elif city:
+            # No servers found for the specified city
+            raise ValueError(
+                f"No servers found in city '{city}' for country code '{country_code}'. "
+                "Try a different city or check the city name spelling."
+            )
 
         return None
 
