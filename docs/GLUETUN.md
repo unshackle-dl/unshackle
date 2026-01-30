@@ -25,10 +25,11 @@ Add to `~/.config/unshackle/unshackle.yaml`:
 proxy_providers:
   gluetun:
     providers:
-      nordvpn:
-        vpn_type: wireguard
+      windscribe:
+        vpn_type: openvpn
         credentials:
-          private_key: YOUR_PRIVATE_KEY
+          username: "YOUR_OPENVPN_USERNAME"
+          password: "YOUR_OPENVPN_PASSWORD"
 ```
 
 ### 2. Usage
@@ -36,57 +37,80 @@ proxy_providers:
 Use 2-letter country codes directly:
 
 ```bash
-uv run unshackle dl SERVICE CONTENT --proxy gluetun:nordvpn:us
-uv run unshackle dl SERVICE CONTENT --proxy gluetun:nordvpn:uk
+unshackle dl SERVICE CONTENT --proxy gluetun:windscribe:us
+unshackle dl SERVICE CONTENT --proxy gluetun:windscribe:uk
 ```
 
 Format: `gluetun:provider:region`
 
 ## Provider Credential Requirements
 
-Each provider has different credential requirements. See the [Gluetun Wiki](https://github.com/qdm12/gluetun-wiki/tree/main/setup/providers) for complete details.
+**OpenVPN (Recommended)**: Most providers support OpenVPN with just `username` and `password` - the simplest setup.
 
-| Provider | VPN Type | Required Credentials |
-|----------|----------|---------------------|
-| NordVPN | WireGuard | `private_key` only |
-| ProtonVPN | WireGuard | `private_key` only |
-| Windscribe | WireGuard | `private_key`, `addresses`, `preshared_key` (all required) |
-| Surfshark | WireGuard | `private_key`, `addresses` |
-| Mullvad | WireGuard | `private_key`, `addresses` |
-| IVPN | WireGuard | `private_key`, `addresses` |
-| ExpressVPN | OpenVPN | `username`, `password` (no WireGuard support) |
-| Any | OpenVPN | `username`, `password` |
+**WireGuard**: Requires private keys and varies by provider. See the [Gluetun Wiki](https://github.com/qdm12/gluetun-wiki/tree/main/setup/providers) for provider-specific requirements.
 
-### Configuration Examples
+## Getting Your Credentials
 
-**NordVPN/ProtonVPN** (only private_key needed):
+### Windscribe (OpenVPN)
+
+1. Go to [windscribe.com/getconfig/openvpn](https://windscribe.com/getconfig/openvpn)
+2. Log in with your Windscribe account
+3. Select any location and click "Get Config"
+4. Copy the username and password shown
+
+### NordVPN (OpenVPN)
+
+1. Go to [NordVPN Service Credentials](https://my.nordaccount.com/dashboard/nordvpn/manual-configuration/service-credentials/)
+2. Log in with your NordVPN account
+3. Generate or view your service credentials
+4. Copy the username and password
+
+> **Note**: Use service credentials, NOT your account email/password.
+
+### WireGuard Credentials (Advanced)
+
+WireGuard requires private keys instead of username/password. See the [Gluetun Wiki](https://github.com/qdm12/gluetun-wiki/tree/main/setup/providers) for provider-specific WireGuard setup.
+
+## Configuration Examples
+
+**OpenVPN (Recommended)**
+
+Most providers support OpenVPN with just username and password:
+
 ```yaml
+providers:
+  windscribe:
+    vpn_type: openvpn
+    credentials:
+      username: YOUR_OPENVPN_USERNAME
+      password: YOUR_OPENVPN_PASSWORD
+
+  nordvpn:
+    vpn_type: openvpn
+    credentials:
+      username: YOUR_SERVICE_USERNAME
+      password: YOUR_SERVICE_PASSWORD
+```
+
+**WireGuard (Advanced)**
+
+WireGuard can be faster but requires more complex credential setup:
+
+```yaml
+# NordVPN/ProtonVPN (only private_key needed)
 providers:
   nordvpn:
     vpn_type: wireguard
     credentials:
       private_key: YOUR_PRIVATE_KEY
-```
 
-**Windscribe** (all three credentials required):
-```yaml
-providers:
+# Windscribe (all three credentials required)
   windscribe:
     vpn_type: wireguard
     credentials:
       private_key: YOUR_PRIVATE_KEY
       addresses: 10.x.x.x/32
-      preshared_key: YOUR_PRESHARED_KEY  # Required, can be empty string
-```
-
-**OpenVPN** (any provider):
-```yaml
-providers:
-  expressvpn:
-    vpn_type: openvpn
-    credentials:
-      username: YOUR_USERNAME
-      password: YOUR_PASSWORD
+      preshared_key: YOUR_PRESHARED_KEY
 ```
 
 ## Server Selection
