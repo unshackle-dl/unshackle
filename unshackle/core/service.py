@@ -89,9 +89,7 @@ class Service(metaclass=ABCMeta):
                                 proxy = mapped_proxy_uri
                                 self.log.info(f"Using mapped proxy from {proxy_provider.__class__.__name__}: {proxy}")
                             else:
-                                self.log.warning(
-                                    f"Failed to get proxy for mapped value '{mapped_value}', using default"
-                                )
+                                self.log.warning(f"Failed to get proxy for mapped value '{mapped_value}', using default")
                         else:
                             self.log.warning(f"Proxy provider '{proxy_provider_name}' not found, using default proxy")
                     else:
@@ -142,11 +140,11 @@ class Service(metaclass=ABCMeta):
                         }
                     )
                 # Always verify proxy IP - proxies can change exit nodes
-                proxy_ip_info = get_ip_info(self.session)
-                if proxy_ip_info:
-                    self.current_region = proxy_ip_info.get("country", "").lower()
-                else:
-                    self.log.warning("Failed to verify proxy IP, falling back to proxy config for region")
+                try:
+                    proxy_ip_info = get_ip_info(self.session)
+                    self.current_region = proxy_ip_info.get("country", "").lower() if proxy_ip_info else None
+                except Exception as e:
+                    self.log.warning(f"Failed to verify proxy IP: {e}")
                     # Fallback to extracting region from proxy config
                     self.current_region = get_region_from_proxy(proxy)
             else:

@@ -58,25 +58,11 @@ from unshackle.core.titles.episode import Episode
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.hybrid import Hybrid
-from unshackle.core.utilities import (
-    find_font_with_fallbacks,
-    get_debug_logger,
-    get_system_fonts,
-    init_debug_logger,
-    is_close_match,
-    suggest_font_packages,
-    time_elapsed_since,
-)
+from unshackle.core.utilities import (find_font_with_fallbacks, get_debug_logger, get_system_fonts, init_debug_logger,
+                                      is_close_match, suggest_font_packages, time_elapsed_since)
 from unshackle.core.utils import tags
-from unshackle.core.utils.click_types import (
-    LANGUAGE_RANGE,
-    QUALITY_LIST,
-    SEASON_RANGE,
-    ContextData,
-    MultipleChoice,
-    SubtitleCodecChoice,
-    VideoCodecChoice,
-)
+from unshackle.core.utils.click_types import (LANGUAGE_RANGE, QUALITY_LIST, SEASON_RANGE, ContextData, MultipleChoice,
+                                              SubtitleCodecChoice, VideoCodecChoice)
 from unshackle.core.utils.collections import merge_dict
 from unshackle.core.utils.subprocess import ffprobe
 from unshackle.core.vaults import Vaults
@@ -687,10 +673,8 @@ class dl:
                     # requesting proxy from a specific proxy provider
                     requested_provider, proxy = proxy.split(":", maxsplit=1)
                 # Match simple region codes (us, ca, uk1) or provider:region format (nordvpn:ca, windscribe:us)
-                if (
-                    requested_provider
-                    or re.match(r"^[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE)
-                    or re.match(r"^[a-z]+:[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE)
+                if re.match(r"^[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE) or re.match(
+                    r"^[a-z]+:[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE
                 ):
                     proxy = proxy.lower()
                     status_msg = (
