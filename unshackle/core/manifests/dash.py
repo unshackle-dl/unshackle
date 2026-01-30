@@ -534,8 +534,7 @@ class DASH:
             downloader_args.update(
                 {
                     "filename": track.id,
-                    "track": track,
-                    "content_keys": drm.content_keys if drm else None,
+                    "track": track
                 }
             )
 
@@ -575,11 +574,7 @@ class DASH:
         segments_to_merge = [x for x in sorted(save_dir.iterdir()) if x.is_file()]
 
         if skip_merge:
-            # N_m3u8DL-RE handles merging and decryption internally
             shutil.move(segments_to_merge[0], save_path)
-            if drm:
-                track.drm = None
-                events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=drm, segment=None)
         else:
             with open(save_path, "wb") as f:
                 if init_data:
@@ -609,7 +604,7 @@ class DASH:
         track.path = save_path
         events.emit(events.Types.TRACK_DOWNLOADED, track=track)
 
-        if not skip_merge and drm:
+        if drm:
             progress(downloaded="Decrypting", completed=0, total=100)
             drm.decrypt(save_path)
             track.drm = None
