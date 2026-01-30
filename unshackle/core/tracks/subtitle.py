@@ -713,7 +713,8 @@ class Subtitle(Track):
         Convert this Subtitle to another Format.
 
         The conversion method is determined by the 'conversion_method' setting in config:
-        - 'auto' (default): Uses subby for WebVTT/SAMI, standard for others
+        - 'auto' (default): Uses subby for WebVTT/fVTT/SAMI; for SSA/ASS/MicroDVD/MPL2/TMP
+          uses SubtitleEdit if available, otherwise pysubs2; standard for others
         - 'subby': Always uses subby with CommonIssuesFixer
         - 'subtitleedit': Uses SubtitleEdit when available, falls back to pycaption
         - 'pycaption': Uses only pycaption library
@@ -733,6 +734,17 @@ class Subtitle(Track):
         elif conversion_method == "auto":
             if self.codec in (Subtitle.Codec.WebVTT, Subtitle.Codec.fVTT, Subtitle.Codec.SAMI):
                 return self.convert_with_subby(codec)
+            elif self.codec in (
+                Subtitle.Codec.SubStationAlpha,
+                Subtitle.Codec.SubStationAlphav4,
+                Subtitle.Codec.MicroDVD,
+                Subtitle.Codec.MPL2,
+                Subtitle.Codec.TMP,
+            ):
+                if binaries.SubtitleEdit:
+                    return self._convert_standard(codec)
+                else:
+                    return self.convert_with_pysubs2(codec)
             else:
                 return self._convert_standard(codec)
         else:
