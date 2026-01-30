@@ -42,19 +42,8 @@ class WindscribeVPN(Proxy):
         return f"{countries} Countr{['ies', 'y'][countries == 1]} ({servers} Server{['s', ''][servers == 1]})"
 
     def get_proxy(self, query: str) -> Optional[str]:
-        """
-        Get an HTTPS proxy URI for a WindscribeVPN server.
-
-        Note: Windscribe's static OpenVPN credentials work reliably on US, AU, and NZ servers.
-        """
+        """Get an HTTPS proxy URI for a WindscribeVPN server."""
         query = query.lower()
-        supported_regions = {"us", "au", "nz"}
-
-        if query not in supported_regions and query not in self.server_map:
-            raise ValueError(
-                f"Windscribe proxy does not currently support the '{query.upper()}' region. "
-                f"Supported regions with reliable credentials: {', '.join(sorted(supported_regions))}. "
-            )
 
         if query in self.server_map:
             hostname = self.server_map[query]
