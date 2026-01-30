@@ -359,7 +359,13 @@ def get_ip_info(session: Optional[requests.Session] = None) -> dict:
     If you provide a Requests Session with a Proxy, that proxies IP information
     is what will be returned.
     """
-    return (session or requests.Session()).get("https://ipinfo.io/json").json()
+    try:
+        response = (session or requests.Session()).get("https://ipinfo.io/json", timeout=10)
+        if response.ok:
+            return response.json()
+    except (requests.RequestException, json.JSONDecodeError):
+        pass
+    return None
 
 
 def get_cached_ip_info(session: Optional[requests.Session] = None) -> Optional[dict]:
