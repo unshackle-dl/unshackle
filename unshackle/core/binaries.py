@@ -53,6 +53,7 @@ DoviTool = find("dovi_tool")
 HDR10PlusTool = find("hdr10plus_tool", "HDR10Plus_tool")
 Mp4decrypt = find("mp4decrypt")
 Docker = find("docker")
+ML_Worker = find("ML-Worker")
 
 
 __all__ = (
@@ -73,5 +74,6 @@ __all__ = (
     "HDR10PlusTool",
     "Mp4decrypt",
     "Docker",
+    "ML_Worker",
     "find",
 )
