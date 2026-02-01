@@ -66,6 +66,7 @@ dependencies = [
     "PyExecJS>=1.5.1,<2",
     "pycountry>=24.6.1",
     "language-data>=1.4.0",
+    "wasmtime>=41.0.0",
 ]
 
 [project.urls]

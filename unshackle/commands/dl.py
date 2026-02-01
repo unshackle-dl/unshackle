@@ -47,7 +47,7 @@ from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import DOWNLOAD_LICENCE_ONLY, AnyTrack, context_settings
 from unshackle.core.credential import Credential
-from unshackle.core.drm import DRM_T, PlayReady, Widevine
+from unshackle.core.drm import DRM_T, MonaLisa, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.proxies import Basic, Gluetun, Hola, NordVPN, SurfsharkVPN, WindscribeVPN
 from unshackle.core.service import Service
@@ -2249,6 +2249,26 @@ class dl:
                         track_data["keys"][kid.hex] = key
 
                     export.write_text(jsonpickle.dumps(keys, indent=4), encoding="utf8")
+
+        elif isinstance(drm, MonaLisa):
+            with self.DRM_TABLE_LOCK:
+                display_id = drm.content_id or drm.pssh
+                pssh_display = self.truncate_pssh_for_display(display_id, "MonaLisa")
+                cek_tree = Tree(Text.assemble(("MonaLisa", "cyan"), (f"({pssh_display})", "text"), overflow="fold"))
+                pre_existing_tree = next(
+                    (x for x in table.columns[0].cells if isinstance(x, Tree) and x.label == cek_tree.label), None
+                )
+                if pre_existing_tree:
+                    cek_tree = pre_existing_tree
+
+                for kid_, key in drm.content_keys.items():
+                    label = f"[text2]{kid_.hex}:{key}"
+                    if not any(f"{kid_.hex}:{key}" in x.label for x in cek_tree.children):
+                        cek_tree.add(label)
+
+                if cek_tree.children and not pre_existing_tree:
+                    table.add_row()
+                    table.add_row(cek_tree)
 
     @staticmethod
     def get_cookie_path(service: str, profile: Optional[str]) -> Optional[Path]:
