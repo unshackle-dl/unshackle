@@ -17,6 +17,10 @@ def find(*names: str) -> Optional[Path]:
         if local_binaries_dir.exists():
             candidate_paths = [local_binaries_dir / f"{name}{ext}", local_binaries_dir / name / f"{name}{ext}"]
 
+            for subdir in local_binaries_dir.iterdir():
+                if subdir.is_dir():
+                    candidate_paths.append(subdir / f"{name}{ext}")
+
             for path in candidate_paths:
                 if path.is_file():
                     # On Unix-like systems, check if file is executable
