@@ -88,7 +88,12 @@ class Movie(Title):
                     # likely a movie or HD source, so it's most likely widescreen so
                     # 16:9 canvas makes the most sense.
                     resolution = int(primary_video_track.width * (9 / 16))
-                name += f" {resolution}p"
+                # Determine scan type suffix - default to "p", use "i" only if explicitly interlaced
+                scan_suffix = "p"
+                scan_type = getattr(primary_video_track, 'scan_type', None)
+                if scan_type and str(scan_type).lower() == "interlaced":
+                    scan_suffix = "i"
+                name += f" {resolution}{scan_suffix}"
 
             # Service (use track source if available)
             if show_service:

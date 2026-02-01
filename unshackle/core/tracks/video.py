@@ -186,6 +186,10 @@ class Video(Track):
             # for some reason there's no Dolby Vision info tag
             raise ValueError(f"The M3U Range Tag '{tag}' is not a supported Video Range")
 
+    class ScanType(str, Enum):
+        PROGRESSIVE = "progressive"
+        INTERLACED = "interlaced"
+
     def __init__(
         self,
         *args: Any,
@@ -195,6 +199,7 @@ class Video(Track):
         width: Optional[int] = None,
         height: Optional[int] = None,
         fps: Optional[Union[str, int, float]] = None,
+        scan_type: Optional[Video.ScanType] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -232,6 +237,8 @@ class Video(Track):
             raise TypeError(f"Expected height to be a {int}, not {height!r}")
         if not isinstance(fps, (str, int, float, type(None))):
             raise TypeError(f"Expected fps to be a {str}, {int}, or {float}, not {fps!r}")
+        if not isinstance(scan_type, (Video.ScanType, type(None))):
+            raise TypeError(f"Expected scan_type to be a {Video.ScanType}, not {scan_type!r}")
 
         self.codec = codec
         self.range = range_ or Video.Range.SDR
@@ -256,6 +263,7 @@ class Video(Track):
         except Exception as e:
             raise ValueError("Expected fps to be a number, float, or a string as numerator/denominator form, " + str(e))
 
+        self.scan_type = scan_type
         self.needs_duration_fix = False
 
     def __str__(self) -> str:

@@ -151,6 +151,11 @@ class DASH:
                         if not track_fps and segment_base is not None:
                             track_fps = segment_base.get("timescale")
 
+                        scan_type = None
+                        scan_type_str = get("scanType")
+                        if scan_type_str and scan_type_str.lower() == "interlaced":
+                            scan_type = Video.ScanType.INTERLACED
+
                         track_args = dict(
                             range_=self.get_video_range(
                                 codecs, findall("SupplementalProperty"), findall("EssentialProperty")
@@ -159,6 +164,7 @@ class DASH:
                             width=get("width") or 0,
                             height=get("height") or 0,
                             fps=track_fps or None,
+                            scan_type=scan_type,
                         )
                     elif content_type == "audio":
                         track_type = Audio
