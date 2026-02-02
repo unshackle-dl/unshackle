@@ -1634,7 +1634,8 @@ class dl:
                             drm = track.get_drm_for_cdm(self.cdm)
                             if drm and hasattr(drm, "decrypt"):
                                 drm.decrypt(track.path)
-                                has_decrypted = True
+                                if not isinstance(drm, MonaLisa):
+                                    has_decrypted = True
                                 events.emit(events.Types.TRACK_REPACKED, track=track)
                             else:
                                 self.log.warning(
