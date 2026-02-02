@@ -866,7 +866,7 @@ class DASH:
             urn = (protection.get("schemeIdUri") or "").lower()
 
             if urn == WidevineCdm.urn:
-                pssh_text = protection.findtext("pssh")
+                pssh_text = protection.findtext("pssh") or protection.findtext("{urn:mpeg:cenc:2013}pssh")
                 if not pssh_text:
                     continue
                 pssh = PSSH(pssh_text)
@@ -897,6 +897,7 @@ class DASH:
             elif urn in ("urn:uuid:9a04f079-9840-4286-ab92-e65be0885f95", "urn:microsoft:playready"):
                 pr_pssh_b64 = (
                     protection.findtext("pssh")
+                    or protection.findtext("{urn:mpeg:cenc:2013}pssh")
                     or protection.findtext("pro")
                     or protection.findtext("{urn:microsoft:playready}pro")
                 )
