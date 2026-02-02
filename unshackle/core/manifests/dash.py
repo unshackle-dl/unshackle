@@ -476,7 +476,7 @@ class DASH:
         track.data["dash"]["timescale"] = int(segment_timescale)
         track.data["dash"]["segment_durations"] = segment_durations
 
-        if init_data and isinstance(track, (Video, Audio)):
+        if not track.drm and init_data and isinstance(track, (Video, Audio)):
             prefers_playready = isinstance(cdm, PlayReadyCdm) or (hasattr(cdm, "is_playready") and cdm.is_playready)
             if prefers_playready:
                 try:
