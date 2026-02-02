@@ -30,7 +30,7 @@ from requests import Session
 from unshackle.core import binaries
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.downloaders import requests as requests_downloader
-from unshackle.core.drm import DRM_T, ClearKey, PlayReady, Widevine
+from unshackle.core.drm import DRM_T, ClearKey, MonaLisa, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.utilities import get_debug_logger, get_extension, is_close_match, try_ensure_utf8
@@ -315,6 +315,10 @@ class HLS:
                 DOWNLOAD_CANCELLED.set()  # skip pending track downloads
                 progress(downloaded="[red]FAILED")
                 raise
+
+        if not initial_drm_licensed and session_drm and isinstance(session_drm, MonaLisa):
+            if license_widevine:
+                license_widevine(session_drm)
 
         if DOWNLOAD_LICENCE_ONLY.is_set():
             progress(downloaded="[yellow]SKIPPED")
