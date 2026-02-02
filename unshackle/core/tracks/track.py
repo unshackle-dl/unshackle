@@ -709,10 +709,9 @@ class Track:
             args.extend(
                 [
                     # Following are very important!
-                    "-map_metadata",
-                    "-1",  # don't transfer metadata to output file
-                    "-fflags",
-                    "bitexact",  # only have minimal tag data, reproducible mux
+                    "-map", "0",
+                    "-copy_unknown",
+                    "-strict", "unofficial",
                     "-codec",
                     "copy",
                     str(output_path),
