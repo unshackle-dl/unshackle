@@ -378,6 +378,14 @@ subtitle:
   # When true, skips pycaption processing for WebVTT files to keep tags like <i>, <b>, positioning intact
   # Combined with no sub_format setting, ensures subtitles remain in their original format (default: true)
   preserve_formatting: true
+  # output_mode: Output mode for subtitles
+  # - mux: Embed subtitles in MKV container only (default)
+  # - sidecar: Save subtitles as separate files only
+  # - both: Embed in MKV AND save as sidecar files
+  output_mode: mux
+  # sidecar_format: Format for sidecar subtitle files
+  # Options: srt, vtt, ass, original (keep current format)
+  sidecar_format: srt
 
 # Configuration for pywidevine and pyplayready's serve functionality
 serve:

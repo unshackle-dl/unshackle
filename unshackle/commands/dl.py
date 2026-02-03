@@ -179,6 +179,99 @@ class dl:
                 self.log.info(f"  $ sudo apt install {package_cmd}")
                 self.log.info(f"    → Provides: {', '.join(fonts)}")
 
+    def generate_sidecar_subtitle_path(
+        self,
+        subtitle: Subtitle,
+        base_filename: str,
+        output_dir: Path,
+        target_codec: Optional[Subtitle.Codec] = None,
+        source_path: Optional[Path] = None,
+    ) -> Path:
+        """Generate sidecar path: {base}.{lang}[.forced][.sdh].{ext}"""
+        lang_suffix = str(subtitle.language) if subtitle.language else "und"
+        forced_suffix = ".forced" if subtitle.forced else ""
+        sdh_suffix = ".sdh" if (subtitle.sdh or subtitle.cc) else ""
+
+        extension = (target_codec or subtitle.codec or Subtitle.Codec.SubRip).extension
+        if (
+            not target_codec
+            and not subtitle.codec
+            and source_path
+            and source_path.suffix
+        ):
+            extension = source_path.suffix.lstrip(".")
+
+        filename = f"{base_filename}.{lang_suffix}{forced_suffix}{sdh_suffix}.{extension}"
+        return output_dir / filename
+
+    def output_subtitle_sidecars(
+        self,
+        subtitles: list[Subtitle],
+        base_filename: str,
+        output_dir: Path,
+        sidecar_format: str,
+        original_paths: Optional[dict[str, Path]] = None,
+    ) -> list[Path]:
+        """Output subtitles as sidecar files, converting if needed."""
+        created_paths: list[Path] = []
+        config.directories.temp.mkdir(parents=True, exist_ok=True)
+
+        for subtitle in subtitles:
+            source_path = subtitle.path
+            if sidecar_format == "original" and original_paths and subtitle.id in original_paths:
+                source_path = original_paths[subtitle.id]
+
+            if not source_path or not source_path.exists():
+                continue
+
+            # Determine target codec
+            if sidecar_format == "original":
+                target_codec = None
+                if source_path.suffix:
+                    try:
+                        target_codec = Subtitle.Codec.from_mime(source_path.suffix.lstrip("."))
+                    except ValueError:
+                        target_codec = None
+            else:
+                target_codec = Subtitle.Codec.from_mime(sidecar_format)
+
+            sidecar_path = self.generate_sidecar_subtitle_path(
+                subtitle, base_filename, output_dir, target_codec, source_path=source_path
+            )
+
+            # Copy or convert
+            if not target_codec or subtitle.codec == target_codec:
+                shutil.copy2(source_path, sidecar_path)
+            else:
+                # Create temp copy for conversion to preserve original
+                temp_path = config.directories.temp / f"sidecar_{subtitle.id}{source_path.suffix}"
+                shutil.copy2(source_path, temp_path)
+
+                temp_sub = Subtitle(
+                    subtitle.url,
+                    subtitle.language,
+                    is_original_lang=subtitle.is_original_lang,
+                    descriptor=subtitle.descriptor,
+                    codec=subtitle.codec,
+                    forced=subtitle.forced,
+                    sdh=subtitle.sdh,
+                    cc=subtitle.cc,
+                    id_=f"{subtitle.id}_sc",
+                )
+                temp_sub.path = temp_path
+                try:
+                    temp_sub.convert(target_codec)
+                    if temp_sub.path and temp_sub.path.exists():
+                        shutil.copy2(temp_sub.path, sidecar_path)
+                finally:
+                    if temp_sub.path and temp_sub.path.exists():
+                        temp_sub.path.unlink(missing_ok=True)
+                    temp_path.unlink(missing_ok=True)
+
+            created_paths.append(sidecar_path)
+
+        return created_paths
+
     @click.command(
         short_help="Download, Decrypt, and Mux tracks for titles from a Service.",
         cls=Services,
@@ -1626,6 +1719,25 @@ class dl:
                             break
                     video_track_n += 1
 
+                # Subtitle output mode configuration (for sidecar originals)
+                subtitle_output_mode = config.subtitle.get("output_mode", "mux")
+                sidecar_format = config.subtitle.get("sidecar_format", "srt")
+                skip_subtitle_mux = (
+                    subtitle_output_mode == "sidecar" and (title.tracks.videos or title.tracks.audio)
+                )
+                sidecar_subtitles: list[Subtitle] = []
+                sidecar_original_paths: dict[str, Path] = {}
+                if subtitle_output_mode in ("sidecar", "both") and not no_mux:
+                    sidecar_subtitles = [s for s in title.tracks.subtitles if s.path and s.path.exists()]
+                    if sidecar_format == "original":
+                        config.directories.temp.mkdir(parents=True, exist_ok=True)
+                        for subtitle in sidecar_subtitles:
+                            original_path = (
+                                config.directories.temp / f"sidecar_original_{subtitle.id}{subtitle.path.suffix}"
+                            )
+                            shutil.copy2(subtitle.path, original_path)
+                            sidecar_original_paths[subtitle.id] = original_path
+
                 with console.status("Converting Subtitles..."):
                     for subtitle in title.tracks.subtitles:
                         if sub_format:
@@ -1818,6 +1930,7 @@ class dl:
                                 delete=False,
                                 audio_expected=audio_expected,
                                 title_language=title.language,
+                                skip_subtitles=skip_subtitle_mux,
                             )
                             if muxed_path.exists():
                                 mux_index += 1
@@ -1840,6 +1953,31 @@ class dl:
                                     self.log.warning(line)
                             if return_code >= 2:
                                 sys.exit(1)
+
+                        # Output sidecar subtitles before deleting track files
+                        if sidecar_subtitles and not no_mux:
+                            media_info = MediaInfo.parse(muxed_paths[0]) if muxed_paths else None
+                            if media_info:
+                                base_filename = title.get_filename(media_info, show_service=not no_source)
+                            else:
+                                base_filename = str(title)
+
+                            sidecar_dir = config.directories.downloads
+                            if not no_folder and isinstance(title, (Episode, Song)) and media_info:
+                                sidecar_dir /= title.get_filename(media_info, show_service=not no_source, folder=True)
+                            sidecar_dir.mkdir(parents=True, exist_ok=True)
+
+                            with console.status("Saving subtitle sidecar files..."):
+                                created = self.output_subtitle_sidecars(
+                                    sidecar_subtitles,
+                                    base_filename,
+                                    sidecar_dir,
+                                    sidecar_format,
+                                    original_paths=sidecar_original_paths or None,
+                                )
+                                if created:
+                                    self.log.info(f"Saved {len(created)} sidecar subtitle files")
+
                         for track in title.tracks:
                             track.delete()
 
@@ -1852,6 +1990,8 @@ class dl:
 
                         # Clean up temp fonts
                         for temp_path in temp_font_files:
+                            temp_path.unlink(missing_ok=True)
+                        for temp_path in sidecar_original_paths.values():
                             temp_path.unlink(missing_ok=True)
 
                 else:
