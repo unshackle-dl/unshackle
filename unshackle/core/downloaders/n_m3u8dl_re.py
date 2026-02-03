@@ -10,6 +10,7 @@ import requests
 from requests.cookies import cookiejar_from_dict, get_cookie_header
 
 from unshackle.core import binaries
+from unshackle.core.binaries import FFMPEG, Mp4decrypt, ShakaPackager
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import DOWNLOAD_CANCELLED
@@ -19,7 +20,7 @@ PERCENT_RE = re.compile(r"(\d+\.\d+%)")
 SPEED_RE = re.compile(r"(\d+\.\d+(?:MB|KB)ps)")
 SIZE_RE = re.compile(r"(\d+\.\d+(?:MB|GB|KB)/\d+\.\d+(?:MB|GB|KB))")
 WARN_RE = re.compile(r"(WARN : Response.*|WARN : One or more errors occurred.*)")
-ERROR_RE = re.compile(r"(ERROR.*)")
+ERROR_RE = re.compile(r"(\bERROR\b.*|\bFAILED\b.*|\bException\b.*)")
 
 DECRYPTION_ENGINE = {
     "shaka": "SHAKA_PACKAGER",
@@ -181,17 +182,33 @@ def build_download_args(
         "--tmp-dir": output_dir,
         "--thread-count": thread_count,
         "--download-retry-count": retry_count,
-        "--write-meta-json": False,
     }
+    if FFMPEG:
+        args["--ffmpeg-binary-path"] = str(FFMPEG)
     if proxy:
         args["--custom-proxy"] = proxy
     if skip_merge:
         args["--skip-merge"] = skip_merge
     if ad_keyword:
         args["--ad-keyword"] = ad_keyword
+
     if content_keys:
         args["--key"] = next((f"{kid.hex}:{key.lower()}" for kid, key in content_keys.items()), None)
-        args["--decryption-engine"] = DECRYPTION_ENGINE.get(config.decryption.lower()) or "SHAKA_PACKAGER"
+
+        decryption_config = config.decryption.lower()
+        engine_name = DECRYPTION_ENGINE.get(decryption_config) or "SHAKA_PACKAGER"
+        args["--decryption-engine"] = engine_name
+
+        binary_path = None
+        if engine_name == "SHAKA_PACKAGER":
+            if ShakaPackager:
+                binary_path = str(ShakaPackager)
+        elif engine_name == "MP4DECRYPT":
+            if Mp4decrypt:
+                binary_path = str(Mp4decrypt)
+        if binary_path:
+            args["--decryption-binary-path"] = binary_path
+
     if custom_args:
         args.update(custom_args)
 
@@ -288,7 +305,10 @@ def download(
     log_file_path: Path | None = None
     if debug_logger:
         log_file_path = output_dir / f".n_m3u8dl_re_{filename}.log"
-        arguments.extend(["--log-file-path", str(log_file_path)])
+        arguments.extend([
+            "--log-file-path", str(log_file_path),
+            "--log-level", "DEBUG",
+        ])
 
         track_url_display = track.url[:200] + "..." if len(track.url) > 200 else track.url
         debug_logger.log(
@@ -376,6 +396,14 @@ def download(
             raise subprocess.CalledProcessError(process.returncode, arguments)
 
         if debug_logger:
+            output_dir_exists = output_dir.exists()
+            output_files = []
+            if output_dir_exists:
+                try:
+                    output_files = [f.name for f in output_dir.iterdir() if f.is_file()][:20]
+                except Exception:
+                    output_files = ["<error listing files>"]
+
             debug_logger.log(
                 level="DEBUG",
                 operation="downloader_n_m3u8dl_re_complete",
@@ -384,9 +412,37 @@ def download(
                     "track_id": getattr(track, "id", None),
                     "track_type": track.__class__.__name__,
                     "output_dir": str(output_dir),
+                    "output_dir_exists": output_dir_exists,
+                    "output_files_count": len(output_files),
+                    "output_files": output_files,
                     "filename": filename,
                 },
             )
+
+            # Warn if no output was produced - include N_m3u8DL-RE's logs for diagnosis
+            if not output_dir_exists or not output_files:
+                # Read N_m3u8DL-RE's log file for debugging
+                n_m3u8dl_log = ""
+                if log_file_path and log_file_path.exists():
+                    try:
+                        n_m3u8dl_log = log_file_path.read_text(encoding="utf-8", errors="replace")
+                    except Exception:
+                        n_m3u8dl_log = "<failed to read log file>"
+
+                debug_logger.log(
+                    level="WARNING",
+                    operation="downloader_n_m3u8dl_re_no_output",
+                    message="N_m3u8DL-RE exited successfully but produced no output files",
+                    context={
+                        "track_id": getattr(track, "id", None),
+                        "track_type": track.__class__.__name__,
+                        "output_dir": str(output_dir),
+                        "output_dir_exists": output_dir_exists,
+                        "selection_args": selection_args,
+                        "track_url": track.url[:200] + "..." if len(track.url) > 200 else track.url,
+                        "n_m3u8dl_re_log": n_m3u8dl_log,
+                    },
+                )
 
     except ConnectionResetError:
         # interrupted while passing URI to download
@@ -419,6 +475,7 @@ def download(
             )
         raise
     finally:
+        # Clean up temporary debug files
         if log_file_path and log_file_path.exists():
             try:
                 log_file_path.unlink()

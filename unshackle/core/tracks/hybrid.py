@@ -8,7 +8,7 @@ from pathlib import Path
 from rich.padding import Padding
 from rich.rule import Rule
 
-from unshackle.core.binaries import DoviTool, HDR10PlusTool
+from unshackle.core.binaries import FFMPEG, DoviTool, HDR10PlusTool
 from unshackle.core.config import config
 from unshackle.core.console import console
 
@@ -109,7 +109,7 @@ class Hybrid:
         """Simple ffmpeg execution without progress tracking"""
         p = subprocess.run(
             [
-                "ffmpeg",
+                str(FFMPEG) if FFMPEG else "ffmpeg",
                 "-nostdin",
                 "-i",
                 str(save_path),

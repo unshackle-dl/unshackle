@@ -58,6 +58,7 @@ class Services(click.MultiCommand):
     def get_path(name: str) -> Path:
         """Get the directory path of a command."""
         tag = Services.get_tag(name)
+
         for service in _SERVICES:
             if service.parent.stem == tag:
                 return service.parent
@@ -72,19 +73,22 @@ class Services(click.MultiCommand):
         """
         original_value = value
         value = value.lower()
+
         for path in _SERVICES:
             tag = path.parent.stem
             if value in (tag.lower(), *_ALIASES.get(tag, [])):
                 return tag
+
         return original_value
 
     @staticmethod
     def load(tag: str) -> Service:
         """Load a Service module by Service tag."""
         module = _MODULES.get(tag)
-        if not module:
-            raise KeyError(f"There is no Service added by the Tag '{tag}'")
-        return module
+        if module:
+            return module
+
+        raise KeyError(f"There is no Service added by the Tag '{tag}'")
 
 
 __all__ = ("Services",)

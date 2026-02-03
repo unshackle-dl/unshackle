@@ -109,13 +109,31 @@ class Episode(Title):
                 name += f" {self.year}"
             name += f" S{self.season:02}"
         else:
-            name = "{title}{year} S{season:02}E{number:02} {name}".format(
-                title=self.title.replace("$", "S"),  # e.g., Arli$$
-                year=f" {self.year}" if self.year and config.series_year else "",
-                season=self.season,
-                number=self.number,
-                name=self.name or "",
-            ).strip()
+            if config.dash_naming:
+                # Format: Title - SXXEXX - Episode Name
+                name = self.title.replace("$", "S")  # e.g., Arli$$
+
+                # Add year if configured
+                if self.year and config.series_year:
+                    name += f" {self.year}"
+
+                # Add season and episode
+                name += f" - S{self.season:02}E{self.number:02}"
+
+                # Add episode name with dash separator
+                if self.name:
+                    name += f" - {self.name}"
+
+                name = name.strip()
+            else:
+                # Standard format without extra dashes
+                name = "{title}{year} S{season:02}E{number:02} {name}".format(
+                    title=self.title.replace("$", "S"),  # e.g., Arli$$
+                    year=f" {self.year}" if self.year and config.series_year else "",
+                    season=self.season,
+                    number=self.number,
+                    name=self.name or "",
+                ).strip()
 
         if config.scene_naming:
             # Resolution
@@ -135,11 +153,21 @@ class Episode(Title):
                     # likely a movie or HD source, so it's most likely widescreen so
                     # 16:9 canvas makes the most sense.
                     resolution = int(primary_video_track.width * (9 / 16))
-                name += f" {resolution}p"
+                # Determine scan type suffix - default to "p", use "i" only if explicitly interlaced
+                scan_suffix = "p"
+                scan_type = getattr(primary_video_track, 'scan_type', None)
+                if scan_type and str(scan_type).lower() == "interlaced":
+                    scan_suffix = "i"
+                name += f" {resolution}{scan_suffix}"
 
-            # Service
+            # Service (use track source if available)
             if show_service:
-                name += f" {self.service.__name__}"
+                source_name = None
+                if self.tracks:
+                    first_track = next(iter(self.tracks), None)
+                    if first_track and hasattr(first_track, "source") and first_track.source:
+                        source_name = first_track.source
+                name += f" {source_name or self.service.__name__}"
 
             # 'WEB-DL'
             name += " WEB-DL"

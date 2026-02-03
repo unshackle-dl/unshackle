@@ -52,6 +52,13 @@ def check() -> None:
             "desc": "DRM decryption",
             "cat": "DRM",
         },
+        {
+            "name": "ML-Worker",
+            "binary": binaries.ML_Worker,
+            "required": False,
+            "desc": "DRM licensing",
+            "cat": "DRM",
+        },
         # HDR Processing
         {"name": "dovi_tool", "binary": binaries.DoviTool, "required": False, "desc": "Dolby Vision", "cat": "HDR"},
         {
@@ -97,6 +104,7 @@ def check() -> None:
             "cat": "Network",
         },
         {"name": "Caddy", "binary": binaries.Caddy, "required": False, "desc": "Web server", "cat": "Network"},
+        {"name": "Docker", "binary": binaries.Docker, "required": False, "desc": "Gluetun VPN", "cat": "Network"},
     ]
 
     # Track overall status

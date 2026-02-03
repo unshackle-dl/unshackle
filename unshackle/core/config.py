@@ -94,6 +94,7 @@ class Config:
         self.update_checks: bool = kwargs.get("update_checks", True)
         self.update_check_interval: int = kwargs.get("update_check_interval", 24)
         self.scene_naming: bool = kwargs.get("scene_naming", True)
+        self.dash_naming: bool = kwargs.get("dash_naming", False)
         self.series_year: bool = kwargs.get("series_year", True)
         self.unicode_filenames: bool = kwargs.get("unicode_filenames", False)
 

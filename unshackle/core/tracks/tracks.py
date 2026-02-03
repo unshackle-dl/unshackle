@@ -314,6 +314,7 @@ class Tracks:
         progress: Optional[partial] = None,
         audio_expected: bool = True,
         title_language: Optional[Language] = None,
+        skip_subtitles: bool = False,
     ) -> tuple[Path, int, list[str]]:
         """
         Multiplex all the Tracks into a Matroska Container file.
@@ -328,6 +329,7 @@ class Tracks:
                 if embedded audio metadata should be added.
             title_language: The title's intended language. Used to select the best video track
                 for audio metadata when multiple video tracks exist.
+            skip_subtitles: Skip muxing subtitle tracks into the container.
         """
         if self.videos and not self.audio and audio_expected:
             video_track = None
@@ -439,34 +441,35 @@ class Tracks:
                 ]
             )
 
-        for st in self.subtitles:
-            if not st.path or not st.path.exists():
-                raise ValueError("Text Track must be downloaded before muxing...")
-            events.emit(events.Types.TRACK_MULTIPLEX, track=st)
-            default = bool(self.audio and is_close_match(st.language, [self.audio[0].language]) and st.forced)
-            cl.extend(
-                [
-                    "--track-name",
-                    f"0:{st.get_track_name() or ''}",
-                    "--language",
-                    f"0:{st.language}",
-                    "--sub-charset",
-                    "0:UTF-8",
-                    "--forced-track",
-                    f"0:{st.forced}",
-                    "--default-track",
-                    f"0:{default}",
-                    "--hearing-impaired-flag",
-                    f"0:{st.sdh}",
-                    "--original-flag",
-                    f"0:{st.is_original_lang}",
-                    "--compression",
-                    "0:none",  # disable extra compression (probably zlib)
-                    "(",
-                    str(st.path),
-                    ")",
-                ]
-            )
+        if not skip_subtitles:
+            for st in self.subtitles:
+                if not st.path or not st.path.exists():
+                    raise ValueError("Text Track must be downloaded before muxing...")
+                events.emit(events.Types.TRACK_MULTIPLEX, track=st)
+                default = bool(self.audio and is_close_match(st.language, [self.audio[0].language]) and st.forced)
+                cl.extend(
+                    [
+                        "--track-name",
+                        f"0:{st.get_track_name() or ''}",
+                        "--language",
+                        f"0:{st.language}",
+                        "--sub-charset",
+                        "0:UTF-8",
+                        "--forced-track",
+                        f"0:{st.forced}",
+                        "--default-track",
+                        f"0:{default}",
+                        "--hearing-impaired-flag",
+                        f"0:{st.sdh}",
+                        "--original-flag",
+                        f"0:{st.is_original_lang}",
+                        "--compression",
+                        "0:none",  # disable extra compression (probably zlib)
+                        "(",
+                        str(st.path),
+                        ")",
+                    ]
+                )
 
         if self.chapters:
             chapters_path = config.directories.temp / config.filenames.chapters.format(

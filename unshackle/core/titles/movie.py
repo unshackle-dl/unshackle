@@ -47,6 +47,8 @@ class Movie(Title):
 
     def __str__(self) -> str:
         if self.year:
+            if config.dash_naming:
+                return f"{self.name} - {self.year}"
             return f"{self.name} ({self.year})"
         return self.name
 
@@ -86,11 +88,21 @@ class Movie(Title):
                     # likely a movie or HD source, so it's most likely widescreen so
                     # 16:9 canvas makes the most sense.
                     resolution = int(primary_video_track.width * (9 / 16))
-                name += f" {resolution}p"
+                # Determine scan type suffix - default to "p", use "i" only if explicitly interlaced
+                scan_suffix = "p"
+                scan_type = getattr(primary_video_track, 'scan_type', None)
+                if scan_type and str(scan_type).lower() == "interlaced":
+                    scan_suffix = "i"
+                name += f" {resolution}{scan_suffix}"
 
-            # Service
+            # Service (use track source if available)
             if show_service:
-                name += f" {self.service.__name__}"
+                source_name = None
+                if self.tracks:
+                    first_track = next(iter(self.tracks), None)
+                    if first_track and hasattr(first_track, "source") and first_track.source:
+                        source_name = first_track.source
+                name += f" {source_name or self.service.__name__}"
 
             # 'WEB-DL'
             name += " WEB-DL"
