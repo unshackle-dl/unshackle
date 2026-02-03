@@ -62,6 +62,11 @@ debug_keys:
 # Muxing configuration
 muxing:
   set_title: false
+  # merge_audio: Merge all audio tracks into each output file
+  #   true (default): All selected audio in one MKV per quality
+  #   false: Separate MKV per (quality, audio_codec) combination
+  #     Example: Title.1080p.AAC.mkv, Title.1080p.EC3.mkv
+  merge_audio: true
 
 # Login credentials for each Service
 credentials:
