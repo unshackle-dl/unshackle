@@ -227,6 +227,7 @@ def _perform_download(
                 range_=params.get("range", ["SDR"]),
                 channels=params.get("channels"),
                 no_atmos=params.get("no_atmos", False),
+                split_audio=params.get("split_audio"),
                 wanted=params.get("wanted", []),
                 latest_episode=params.get("latest_episode", False),
                 lang=params.get("lang", ["orig"]),

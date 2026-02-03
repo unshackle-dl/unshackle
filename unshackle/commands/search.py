@@ -16,7 +16,7 @@ from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import context_settings
-from unshackle.core.proxies import Basic, Hola, NordVPN, SurfsharkVPN
+from unshackle.core.proxies import Basic, Gluetun, Hola, NordVPN, SurfsharkVPN, WindscribeVPN
 from unshackle.core.service import Service
 from unshackle.core.services import Services
 from unshackle.core.utils.click_types import ContextData
@@ -71,6 +71,10 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
                 proxy_providers.append(NordVPN(**config.proxy_providers["nordvpn"]))
             if config.proxy_providers.get("surfsharkvpn"):
                 proxy_providers.append(SurfsharkVPN(**config.proxy_providers["surfsharkvpn"]))
+            if config.proxy_providers.get("windscribevpn"):
+                proxy_providers.append(WindscribeVPN(**config.proxy_providers["windscribevpn"]))
+            if config.proxy_providers.get("gluetun"):
+                proxy_providers.append(Gluetun(**config.proxy_providers["gluetun"]))
             if binaries.HolaProxy:
                 proxy_providers.append(Hola())
             for proxy_provider in proxy_providers:
@@ -81,7 +85,8 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
             if re.match(r"^[a-z]+:.+$", proxy, re.IGNORECASE):
                 # requesting proxy from a specific proxy provider
                 requested_provider, proxy = proxy.split(":", maxsplit=1)
-            if re.match(r"^[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE):
+            # Match simple region codes (us, ca, uk1) or provider:region format (nordvpn:ca, windscribe:us)
+            if re.match(r"^[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE) or re.match(r"^[a-z]+:[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE):
                 proxy = proxy.lower()
                 with console.status(f"Getting a Proxy to {proxy}...", spinner="dots"):
                     if requested_provider:

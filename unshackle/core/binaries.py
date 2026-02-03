@@ -17,6 +17,10 @@ def find(*names: str) -> Optional[Path]:
         if local_binaries_dir.exists():
             candidate_paths = [local_binaries_dir / f"{name}{ext}", local_binaries_dir / name / f"{name}{ext}"]
 
+            for subdir in local_binaries_dir.iterdir():
+                if subdir.is_dir():
+                    candidate_paths.append(subdir / f"{name}{ext}")
+
             for path in candidate_paths:
                 if path.is_file():
                     # On Unix-like systems, check if file is executable
@@ -52,6 +56,8 @@ Mkvpropedit = find("mkvpropedit")
 DoviTool = find("dovi_tool")
 HDR10PlusTool = find("hdr10plus_tool", "HDR10Plus_tool")
 Mp4decrypt = find("mp4decrypt")
+Docker = find("docker")
+ML_Worker = find("ML-Worker")
 
 
 __all__ = (
@@ -71,5 +77,7 @@ __all__ = (
     "DoviTool",
     "HDR10PlusTool",
     "Mp4decrypt",
+    "Docker",
+    "ML_Worker",
     "find",
 )

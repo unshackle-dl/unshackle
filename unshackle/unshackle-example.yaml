@@ -66,6 +66,11 @@ debug_keys:
 # Muxing configuration
 muxing:
   set_title: false
+  # merge_audio: Merge all audio tracks into each output file
+  #   true (default): All selected audio in one MKV per quality
+  #   false: Separate MKV per (quality, audio_codec) combination
+  #     Example: Title.1080p.AAC.mkv, Title.1080p.EC3.mkv
+  merge_audio: true
 
 # Login credentials for each Service
 credentials:
@@ -268,6 +273,15 @@ remote_cdm:
     host: "https://keyxtractor.decryptlabs.com"
     secret: "your_decrypt_labs_api_key_here"
 
+  # PyPlayReady RemoteCdm - connects to an unshackle serve instance
+  - name: "playready_remote"
+    Device Type: PLAYREADY
+    System ID: 0
+    Security Level: 3000  # 2000 for SL2000, 3000 for SL3000
+    Host: "http://127.0.0.1:8786/playready"  # Include /playready path
+    Secret: "your-api-secret-key"
+    Device Name: "my_prd_device"  # Device name on the serve instance
+
 # Key Vaults store your obtained Content Encryption Keys (CEKs)
 # Use 'no_push: true' to prevent a vault from receiving pushed keys
 # while still allowing it to provide keys when requested
@@ -368,17 +382,29 @@ subtitle:
   # When true, skips pycaption processing for WebVTT files to keep tags like <i>, <b>, positioning intact
   # Combined with no sub_format setting, ensures subtitles remain in their original format (default: true)
   preserve_formatting: true
+  # output_mode: Output mode for subtitles
+  # - mux: Embed subtitles in MKV container only (default)
+  # - sidecar: Save subtitles as separate files only
+  # - both: Embed in MKV AND save as sidecar files
+  output_mode: mux
+  # sidecar_format: Format for sidecar subtitle files
+  # Options: srt, vtt, ass, original (keep current format)
+  sidecar_format: srt
 
-# Configuration for pywidevine's serve functionality
+# Configuration for pywidevine and pyplayready's serve functionality
 serve:
   api_secret: "your-secret-key-here"
   users:
     secret_key_for_user:
-      devices:
+      devices:  # Widevine devices (WVDs) this user can access
         - generic_nexus_4464_l3
+      playready_devices:  # PlayReady devices (PRDs) this user can access
+        - playready_device_sl3000
       username: user
-  # devices:
+  # devices:  # Widevine device paths (auto-populated from directories.wvds)
   #   - '/path/to/device.wvd'
+  # playready_devices:  # PlayReady device paths (auto-populated from directories.prds)
+  #   - '/path/to/device.prd'
 
 # Configuration data for each Service
 services:
@@ -411,6 +437,19 @@ services:
         device:
           app_name: "AIV"
           device_model: "Fire TV Stick 4K"
+
+    # Service-specific proxy mappings
+    # Override global proxy selection with specific servers for this service
+    # When --proxy matches a key in proxy_map, the mapped server will be used
+    # instead of the default/random server selection
+    proxy_map:
+      nordvpn:ca: ca1577   # Use ca1577 when --proxy nordvpn:ca is specified
+      nordvpn:us: us9842   # Use us9842 when --proxy nordvpn:us is specified
+      us: 123              # Use server 123 (from any provider) when --proxy us is specified
+      gb: 456              # Use server 456 (from any provider) when --proxy gb is specified
+    # Without this service, --proxy nordvpn:ca picks a random CA server
+    # With this config, --proxy nordvpn:ca EXAMPLE uses ca1577 specifically
+    # Other services or no service specified will still use random selection
 
     # NEW: Configuration overrides (can be combined with profiles and certificates)
     # Override dl command defaults for this service
@@ -482,8 +521,15 @@ proxy_providers:
   nordvpn:
     username: username_from_service_credentials
     password: password_from_service_credentials
+    # server_map: global mapping that applies to ALL services
+    # Difference from service-specific proxy_map:
+    # - server_map: applies to ALL services when --proxy nordvpn:us is used
+    # - proxy_map: only applies to the specific service configured (see services: EXAMPLE: proxy_map above)
+    # - proxy_map takes precedence over server_map for that service
     server_map:
       us: 12 # force US server #12 for US proxies
+      ca:calgary: 2534 # force CA server #2534 for Calgary proxies
+      us:seattle: 7890 # force US server #7890 for Seattle proxies
   surfsharkvpn:
     username: your_surfshark_service_username # Service credentials from https://my.surfshark.com/vpn/manual-setup/main/openvpn
     password: your_surfshark_service_password # Service credentials (not your login password)
@@ -491,12 +537,81 @@ proxy_providers:
       us: 3844 # force US server #3844 for US proxies
       gb: 2697 # force GB server #2697 for GB proxies
       au: 4621 # force AU server #4621 for AU proxies
+      us:seattle: 5678 # force US server #5678 for Seattle proxies
+      ca:toronto: 1234 # force CA server #1234 for Toronto proxies
   windscribevpn:
     username: your_windscribe_username # Service credentials from https://windscribe.com/getconfig/openvpn
     password: your_windscribe_password # Service credentials (not your login password)
     server_map:
       us: "us-central-096.totallyacdn.com" # force US server
       gb: "uk-london-055.totallyacdn.com" # force GB server
+      us:seattle: "us-west-011.totallyacdn.com" # force US Seattle server
+      ca:toronto: "ca-toronto-012.totallyacdn.com" # force CA Toronto server
+
+  # Gluetun: Dynamic Docker-based VPN proxy (supports 50+ VPN providers)
+  # Creates Docker containers running Gluetun to bridge VPN connections to HTTP proxies
+  # Requires Docker to be installed and running
+  # Usage: --proxy gluetun:windscribe:us or --proxy gluetun:nordvpn:de
+  gluetun:
+    # Global settings
+    base_port: 8888 # Starting port for HTTP proxies (increments for each container)
+    auto_cleanup: true # Automatically remove containers when done
+    container_prefix: "unshackle-gluetun" # Docker container name prefix
+    verify_ip: true # Verify VPN IP matches expected region
+    # Optional HTTP proxy authentication (for the proxy itself, not VPN)
+    # auth_user: proxy_user
+    # auth_password: proxy_password
+
+    # VPN provider configurations
+    providers:
+      # Windscribe (WireGuard) - Get credentials from https://windscribe.com/getconfig/wireguard
+      windscribe:
+        vpn_type: wireguard
+        credentials:
+          private_key: "YOUR_WIREGUARD_PRIVATE_KEY"
+          addresses: "YOUR_WIREGUARD_ADDRESS" # e.g., "10.x.x.x/32"
+        # Map friendly names to country codes
+        server_countries:
+          us: US
+          uk: GB
+          ca: CA
+          de: DE
+
+      # NordVPN (OpenVPN) - Get service credentials from https://my.nordaccount.com/dashboard/nordvpn/manual-configuration/
+      # Note: Service credentials are NOT your email+password - generate them from the link above
+      # nordvpn:
+      #   vpn_type: openvpn
+      #   credentials:
+      #     username: "YOUR_NORDVPN_SERVICE_USERNAME"
+      #     password: "YOUR_NORDVPN_SERVICE_PASSWORD"
+      #   server_countries:
+      #     us: US
+      #     uk: GB
+
+      # ExpressVPN (OpenVPN) - Get credentials from ExpressVPN setup page
+      # expressvpn:
+      #   vpn_type: openvpn
+      #   credentials:
+      #     username: "YOUR_EXPRESSVPN_USERNAME"
+      #     password: "YOUR_EXPRESSVPN_PASSWORD"
+      #   server_countries:
+      #     us: US
+      #     uk: GB
+
+      # Surfshark (WireGuard) - Get credentials from https://my.surfshark.com/vpn/manual-setup/main/wireguard
+      # surfshark:
+      #   vpn_type: wireguard
+      #   credentials:
+      #     private_key: "YOUR_SURFSHARK_PRIVATE_KEY"
+      #     addresses: "YOUR_SURFSHARK_ADDRESS"
+      #   server_countries:
+      #     us: US
+      #     uk: GB
+
+    # Specific server selection: Use format like "us1239" to select specific servers
+    # Example: --proxy gluetun:nordvpn:us1239 connects to us1239.nordvpn.com
+    # Supported providers: nordvpn, surfshark, expressvpn, cyberghost
+
   basic:
     GB:
       - "socks5://username:password@bhx.socks.ipvanish.com:1080" # 1 (Birmingham)

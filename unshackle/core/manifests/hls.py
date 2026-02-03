@@ -30,7 +30,7 @@ from requests import Session
 from unshackle.core import binaries
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.downloaders import requests as requests_downloader
-from unshackle.core.drm import DRM_T, ClearKey, PlayReady, Widevine
+from unshackle.core.drm import DRM_T, ClearKey, MonaLisa, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.utilities import get_debug_logger, get_extension, is_close_match, try_ensure_utf8
@@ -316,6 +316,10 @@ class HLS:
                 progress(downloaded="[red]FAILED")
                 raise
 
+        if not initial_drm_licensed and session_drm and isinstance(session_drm, MonaLisa):
+            if license_widevine:
+                license_widevine(session_drm)
+
         if DOWNLOAD_LICENCE_ONLY.is_set():
             progress(downloaded="[yellow]SKIPPED")
             return
@@ -591,7 +595,11 @@ class HLS:
 
                 segment_keys = getattr(segment, "keys", None)
                 if segment_keys:
-                    key = HLS.get_supported_key(segment_keys)
+                    if cdm:
+                        cdm_segment_keys = HLS.filter_keys_for_cdm(segment_keys, cdm)
+                        key = HLS.get_supported_key(cdm_segment_keys) if cdm_segment_keys else HLS.get_supported_key(segment_keys)
+                    else:
+                        key = HLS.get_supported_key(segment_keys)
                     if encryption_data and encryption_data[0] != key and i != 0 and segment not in unwanted_segments:
                         decrypt(include_this_segment=False)
 
@@ -650,6 +658,44 @@ class HLS:
 
         # finally merge all the discontinuity save files together to the final path
         segments_to_merge = find_segments_recursively(save_dir)
+
+        if debug_logger:
+            debug_logger.log(
+                level="DEBUG",
+                operation="manifest_hls_download_complete",
+                message="HLS download complete, preparing to merge",
+                context={
+                    "track_id": getattr(track, "id", None),
+                    "track_type": track.__class__.__name__,
+                    "save_dir": str(save_dir),
+                    "save_dir_exists": save_dir.exists(),
+                    "segments_found": len(segments_to_merge),
+                    "segment_files": [f.name for f in segments_to_merge[:10]],  # Limit to first 10
+                    "downloader": downloader.__name__,
+                    "skip_merge": skip_merge,
+                },
+            )
+
+        if not segments_to_merge:
+            error_msg = f"No segment files found in output directory: {save_dir}"
+            if debug_logger:
+                all_contents = list(save_dir.iterdir()) if save_dir.exists() else []
+                debug_logger.log(
+                    level="ERROR",
+                    operation="manifest_hls_download_no_segments",
+                    message=error_msg,
+                    context={
+                        "track_id": getattr(track, "id", None),
+                        "track_type": track.__class__.__name__,
+                        "save_dir": str(save_dir),
+                        "save_dir_exists": save_dir.exists(),
+                        "directory_contents": [str(p) for p in all_contents],
+                        "downloader": downloader.__name__,
+                        "skip_merge": skip_merge,
+                    },
+                )
+            raise FileNotFoundError(error_msg)
+
         if len(segments_to_merge) == 1:
             shutil.move(segments_to_merge[0], save_path)
         else:
@@ -889,7 +935,8 @@ class HLS:
             elif key.keyformat and key.keyformat.lower() == WidevineCdm.urn:
                 return key
             elif key.keyformat and key.keyformat.lower() in {
-                f"urn:uuid:{PR_PSSH.SYSTEM_ID}", "com.microsoft.playready"
+                f"urn:uuid:{PR_PSSH.SYSTEM_ID}",
+                "com.microsoft.playready",
             }:
                 return key
             else:
@@ -927,9 +974,7 @@ class HLS:
                 pssh=WV_PSSH(key.uri.split(",")[-1]),
                 **key._extra_params,  # noqa
             )
-        elif key.keyformat and key.keyformat.lower() in {
-            f"urn:uuid:{PR_PSSH.SYSTEM_ID}", "com.microsoft.playready"
-        }:
+        elif key.keyformat and key.keyformat.lower() in {f"urn:uuid:{PR_PSSH.SYSTEM_ID}", "com.microsoft.playready"}:
             drm = PlayReady(
                 pssh=PR_PSSH(key.uri.split(",")[-1]),
                 pssh_b64=key.uri.split(",")[-1],

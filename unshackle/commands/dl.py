@@ -27,6 +27,7 @@ from construct import ConstError
 from pymediainfo import MediaInfo
 from pyplayready.cdm import Cdm as PlayReadyCdm
 from pyplayready.device import Device as PlayReadyDevice
+from pyplayready.remote.remotecdm import RemoteCdm as PlayReadyRemoteCdm
 from pywidevine.cdm import Cdm as WidevineCdm
 from pywidevine.device import Device
 from pywidevine.remotecdm import RemoteCdm
@@ -46,9 +47,9 @@ from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import DOWNLOAD_LICENCE_ONLY, AnyTrack, context_settings
 from unshackle.core.credential import Credential
-from unshackle.core.drm import DRM_T, PlayReady, Widevine
+from unshackle.core.drm import DRM_T, MonaLisa, PlayReady, Widevine
 from unshackle.core.events import events
-from unshackle.core.proxies import Basic, Hola, NordVPN, SurfsharkVPN, WindscribeVPN
+from unshackle.core.proxies import Basic, Gluetun, Hola, NordVPN, SurfsharkVPN, WindscribeVPN
 from unshackle.core.service import Service
 from unshackle.core.services import Services
 from unshackle.core.title_cacher import get_account_hash
@@ -60,8 +61,8 @@ from unshackle.core.tracks.hybrid import Hybrid
 from unshackle.core.utilities import (find_font_with_fallbacks, get_debug_logger, get_system_fonts, init_debug_logger,
                                       is_close_match, suggest_font_packages, time_elapsed_since)
 from unshackle.core.utils import tags
-from unshackle.core.utils.click_types import (LANGUAGE_RANGE, QUALITY_LIST, SEASON_RANGE, ContextData, MultipleChoice,
-                                              SubtitleCodecChoice, VideoCodecChoice)
+from unshackle.core.utils.click_types import (AUDIO_CODEC_LIST, LANGUAGE_RANGE, QUALITY_LIST, SEASON_RANGE,
+                                              ContextData, MultipleChoice, SubtitleCodecChoice, VideoCodecChoice)
 from unshackle.core.utils.collections import merge_dict
 from unshackle.core.utils.subprocess import ffprobe
 from unshackle.core.vaults import Vaults
@@ -97,11 +98,7 @@ class dl:
         return None
 
     def prepare_temp_font(
-        self,
-        font_name: str,
-        matched_font: Path,
-        system_fonts: dict[str, Path],
-        temp_font_files: list[Path]
+        self, font_name: str, matched_font: Path, system_fonts: dict[str, Path], temp_font_files: list[Path]
     ) -> Path:
         """
         Copy system font to temp and log if using fallback.
@@ -116,10 +113,7 @@ class dl:
             Path to temp font file
         """
         # Find the matched name for logging
-        matched_name = next(
-            (name for name, path in system_fonts.items() if path == matched_font),
-            None
-        )
+        matched_name = next((name for name, path in system_fonts.items() if path == matched_font), None)
 
         if matched_name and matched_name.lower() != font_name.lower():
             self.log.info(f"Using '{matched_name}' as fallback for '{font_name}'")
@@ -136,10 +130,7 @@ class dl:
         return temp_path
 
     def attach_subtitle_fonts(
-        self,
-        font_names: list[str],
-        title: Title_T,
-        temp_font_files: list[Path]
+        self, font_names: list[str], title: Title_T, temp_font_files: list[Path]
     ) -> tuple[int, list[str]]:
         """
         Attach fonts for subtitle rendering.
@@ -188,6 +179,99 @@ class dl:
                 self.log.info(f"  $ sudo apt install {package_cmd}")
                 self.log.info(f"    → Provides: {', '.join(fonts)}")
 
+    def generate_sidecar_subtitle_path(
+        self,
+        subtitle: Subtitle,
+        base_filename: str,
+        output_dir: Path,
+        target_codec: Optional[Subtitle.Codec] = None,
+        source_path: Optional[Path] = None,
+    ) -> Path:
+        """Generate sidecar path: {base}.{lang}[.forced][.sdh].{ext}"""
+        lang_suffix = str(subtitle.language) if subtitle.language else "und"
+        forced_suffix = ".forced" if subtitle.forced else ""
+        sdh_suffix = ".sdh" if (subtitle.sdh or subtitle.cc) else ""
+
+        extension = (target_codec or subtitle.codec or Subtitle.Codec.SubRip).extension
+        if (
+            not target_codec
+            and not subtitle.codec
+            and source_path
+            and source_path.suffix
+        ):
+            extension = source_path.suffix.lstrip(".")
+
+        filename = f"{base_filename}.{lang_suffix}{forced_suffix}{sdh_suffix}.{extension}"
+        return output_dir / filename
+
+    def output_subtitle_sidecars(
+        self,
+        subtitles: list[Subtitle],
+        base_filename: str,
+        output_dir: Path,
+        sidecar_format: str,
+        original_paths: Optional[dict[str, Path]] = None,
+    ) -> list[Path]:
+        """Output subtitles as sidecar files, converting if needed."""
+        created_paths: list[Path] = []
+        config.directories.temp.mkdir(parents=True, exist_ok=True)
+
+        for subtitle in subtitles:
+            source_path = subtitle.path
+            if sidecar_format == "original" and original_paths and subtitle.id in original_paths:
+                source_path = original_paths[subtitle.id]
+
+            if not source_path or not source_path.exists():
+                continue
+
+            # Determine target codec
+            if sidecar_format == "original":
+                target_codec = None
+                if source_path.suffix:
+                    try:
+                        target_codec = Subtitle.Codec.from_mime(source_path.suffix.lstrip("."))
+                    except ValueError:
+                        target_codec = None
+            else:
+                target_codec = Subtitle.Codec.from_mime(sidecar_format)
+
+            sidecar_path = self.generate_sidecar_subtitle_path(
+                subtitle, base_filename, output_dir, target_codec, source_path=source_path
+            )
+
+            # Copy or convert
+            if not target_codec or subtitle.codec == target_codec:
+                shutil.copy2(source_path, sidecar_path)
+            else:
+                # Create temp copy for conversion to preserve original
+                temp_path = config.directories.temp / f"sidecar_{subtitle.id}{source_path.suffix}"
+                shutil.copy2(source_path, temp_path)
+
+                temp_sub = Subtitle(
+                    subtitle.url,
+                    subtitle.language,
+                    is_original_lang=subtitle.is_original_lang,
+                    descriptor=subtitle.descriptor,
+                    codec=subtitle.codec,
+                    forced=subtitle.forced,
+                    sdh=subtitle.sdh,
+                    cc=subtitle.cc,
+                    id_=f"{subtitle.id}_sc",
+                )
+                temp_sub.path = temp_path
+                try:
+                    temp_sub.convert(target_codec)
+                    if temp_sub.path and temp_sub.path.exists():
+                        shutil.copy2(temp_sub.path, sidecar_path)
+                finally:
+                    if temp_sub.path and temp_sub.path.exists():
+                        temp_sub.path.unlink(missing_ok=True)
+                    temp_path.unlink(missing_ok=True)
+
+            created_paths.append(sidecar_path)
+
+        return created_paths
+
     @click.command(
         short_help="Download, Decrypt, and Mux tracks for titles from a Service.",
         cls=Services,
@@ -213,9 +297,9 @@ class dl:
     @click.option(
         "-a",
         "--acodec",
-        type=click.Choice(Audio.Codec, case_sensitive=False),
-        default=None,
-        help="Audio Codec to download, defaults to any codec.",
+        type=AUDIO_CODEC_LIST,
+        default=[],
+        help="Audio Codec(s) to download (comma-separated), e.g., 'AAC,EC3'. Defaults to any.",
     )
     @click.option(
         "-vb",
@@ -255,6 +339,13 @@ class dl:
         help="Exclude Dolby Atmos audio tracks when selecting audio.",
     )
     @click.option(
+        "--split-audio",
+        "split_audio",
+        is_flag=True,
+        default=None,
+        help="Create separate output files per audio codec instead of merging all audio.",
+    )
+    @click.option(
         "-w",
         "--wanted",
         type=SEASON_RANGE,
@@ -262,18 +353,17 @@ class dl:
         help="Wanted episodes, e.g. `S01-S05,S07`, `S01E01-S02E03`, `S02-S02E03`, e.t.c, defaults to all.",
     )
     @click.option(
-        "-le",
-        "--latest-episode",
-        is_flag=True,
-        default=False,
-        help="Download only the single most recent episode available.",
-    )
-    @click.option(
         "-l",
         "--lang",
         type=LANGUAGE_RANGE,
         default="orig",
         help="Language wanted for Video and Audio. Use 'orig' to select the original language, e.g. 'orig,en' for both original and English.",
+    )
+    @click.option(
+        "--latest-episode",
+        is_flag=True,
+        default=False,
+        help="Download only the single most recent episode available.",
     )
     @click.option(
         "-vl",
@@ -638,12 +728,17 @@ class dl:
                         "device_type": self.cdm.device_type.name,
                     }
                 else:
-                    self.log.info(
-                        f"Loaded PlayReady CDM: {self.cdm.certificate_chain.get_name()} (L{self.cdm.security_level})"
-                    )
+                    # Handle both local PlayReady CDM and RemoteCdm (which has certificate_chain=None)
+                    is_remote = self.cdm.certificate_chain is None and hasattr(self.cdm, "device_name")
+                    if is_remote:
+                        cdm_name = self.cdm.device_name
+                        self.log.info(f"Loaded PlayReady Remote CDM: {cdm_name} (L{self.cdm.security_level})")
+                    else:
+                        cdm_name = self.cdm.certificate_chain.get_name() if self.cdm.certificate_chain else "Unknown"
+                        self.log.info(f"Loaded PlayReady CDM: {cdm_name} (L{self.cdm.security_level})")
                     cdm_info = {
                         "type": "PlayReady",
-                        "certificate": self.cdm.certificate_chain.get_name(),
+                        "certificate": cdm_name,
                         "security_level": self.cdm.security_level,
                     }
 
@@ -665,6 +760,8 @@ class dl:
                     self.proxy_providers.append(SurfsharkVPN(**config.proxy_providers["surfsharkvpn"]))
                 if config.proxy_providers.get("windscribevpn"):
                     self.proxy_providers.append(WindscribeVPN(**config.proxy_providers["windscribevpn"]))
+                if config.proxy_providers.get("gluetun"):
+                    self.proxy_providers.append(Gluetun(**config.proxy_providers["gluetun"]))
                 if binaries.HolaProxy:
                     self.proxy_providers.append(Hola())
                 for proxy_provider in self.proxy_providers:
@@ -675,9 +772,17 @@ class dl:
                 if re.match(r"^[a-z]+:.+$", proxy, re.IGNORECASE):
                     # requesting proxy from a specific proxy provider
                     requested_provider, proxy = proxy.split(":", maxsplit=1)
-                if re.match(r"^[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE):
+                # Match simple region codes (us, ca, uk1) or provider:region format (nordvpn:ca, windscribe:us)
+                if re.match(r"^[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE) or re.match(
+                    r"^[a-z]+:[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE
+                ):
                     proxy = proxy.lower()
-                    with console.status(f"Getting a Proxy to {proxy}...", spinner="dots"):
+                    status_msg = (
+                        f"Connecting to VPN ({proxy})..."
+                        if requested_provider == "gluetun"
+                        else f"Getting a Proxy to {proxy}..."
+                    )
+                    with console.status(status_msg, spinner="dots"):
                         if requested_provider:
                             proxy_provider = next(
                                 (x for x in self.proxy_providers if x.__class__.__name__.lower() == requested_provider),
@@ -686,21 +791,49 @@ class dl:
                             if not proxy_provider:
                                 self.log.error(f"The proxy provider '{requested_provider}' was not recognised.")
                                 sys.exit(1)
+                            proxy_query = proxy  # Save query before overwriting with URI
                             proxy_uri = proxy_provider.get_proxy(proxy)
                             if not proxy_uri:
                                 self.log.error(f"The proxy provider {requested_provider} had no proxy for {proxy}")
                                 sys.exit(1)
                             proxy = ctx.params["proxy"] = proxy_uri
-                            self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+                            # Show connection info for Gluetun (IP, location) instead of proxy URL
+                            if hasattr(proxy_provider, "get_connection_info"):
+                                conn_info = proxy_provider.get_connection_info(proxy_query)
+                                if conn_info and conn_info.get("public_ip"):
+                                    location_parts = [conn_info.get("city"), conn_info.get("country")]
+                                    location = ", ".join(p for p in location_parts if p)
+                                    self.log.info(f"VPN Connected: {conn_info['public_ip']} ({location})")
+                                else:
+                                    self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+                            else:
+                                self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
                         else:
                             for proxy_provider in self.proxy_providers:
+                                proxy_query = proxy  # Save query before overwriting with URI
                                 proxy_uri = proxy_provider.get_proxy(proxy)
                                 if proxy_uri:
                                     proxy = ctx.params["proxy"] = proxy_uri
-                                    self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+                                    # Show connection info for Gluetun (IP, location) instead of proxy URL
+                                    if hasattr(proxy_provider, "get_connection_info"):
+                                        conn_info = proxy_provider.get_connection_info(proxy_query)
+                                        if conn_info and conn_info.get("public_ip"):
+                                            location_parts = [conn_info.get("city"), conn_info.get("country")]
+                                            location = ", ".join(p for p in location_parts if p)
+                                            self.log.info(f"VPN Connected: {conn_info['public_ip']} ({location})")
+                                        else:
+                                            self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+                                    else:
+                                        self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
                                     break
+                    # Store proxy query info for service-specific overrides
+                    ctx.params["proxy_query"] = proxy
+                    ctx.params["proxy_provider"] = requested_provider
                 else:
                     self.log.info(f"Using explicit Proxy: {proxy}")
+                    # For explicit proxies, store None for query/provider
+                    ctx.params["proxy_query"] = None
+                    ctx.params["proxy_provider"] = None
 
         ctx.obj = ContextData(
             config=self.service_config, cdm=self.cdm, proxy_providers=self.proxy_providers, profile=self.profile
@@ -718,7 +851,7 @@ class dl:
         service: Service,
         quality: list[int],
         vcodec: Optional[Video.Codec],
-        acodec: Optional[Audio.Codec],
+        acodec: list[Audio.Codec],
         vbitrate: int,
         abitrate: int,
         range_: list[Video.Range],
@@ -756,12 +889,22 @@ class dl:
         workers: Optional[int],
         downloads: int,
         best_available: bool,
+        split_audio: Optional[bool] = None,
         *_: Any,
         **__: Any,
     ) -> None:
         self.tmdb_searched = False
         self.search_source = None
         start_time = time.time()
+
+        if not acodec:
+            acodec = []
+        elif isinstance(acodec, Audio.Codec):
+            acodec = [acodec]
+        elif isinstance(acodec, str) or (
+            isinstance(acodec, list) and not all(isinstance(v, Audio.Codec) for v in acodec)
+        ):
+            acodec = AUDIO_CODEC_LIST.convert(acodec)
 
         if require_subs and s_lang != ["all"]:
             self.log.error("--require-subs and --s-lang cannot be used together")
@@ -1059,7 +1202,9 @@ class dl:
                         title.tracks.add(non_sdh_sub)
                         events.subscribe(
                             events.Types.TRACK_MULTIPLEX,
-                            lambda track, sub_id=non_sdh_sub.id: (track.strip_hearing_impaired()) if track.id == sub_id else None,
+                            lambda track, sub_id=non_sdh_sub.id: (track.strip_hearing_impaired())
+                            if track.id == sub_id
+                            else None,
                         )
 
             with console.status("Sorting tracks by language and bitrate...", spinner="dots"):
@@ -1272,9 +1417,10 @@ class dl:
                     if not audio_description:
                         title.tracks.select_audio(lambda x: not x.descriptive)  # exclude descriptive audio
                     if acodec:
-                        title.tracks.select_audio(lambda x: x.codec == acodec)
+                        title.tracks.select_audio(lambda x: x.codec in acodec)
                         if not title.tracks.audio:
-                            self.log.error(f"There's no {acodec.name} Audio Tracks...")
+                            codec_names = ", ".join(c.name for c in acodec)
+                            self.log.error(f"No audio tracks matching codecs: {codec_names}")
                             sys.exit(1)
                     if channels:
                         title.tracks.select_audio(lambda x: math.ceil(x.channels) == math.ceil(channels))
@@ -1313,15 +1459,27 @@ class dl:
                         if "best" in processed_lang:
                             unique_languages = {track.language for track in title.tracks.audio}
                             selected_audio = []
-                            for language in unique_languages:
-                                highest_quality = max(
-                                    (track for track in title.tracks.audio if track.language == language),
-                                    key=lambda x: x.bitrate or 0,
-                                )
-                                selected_audio.append(highest_quality)
+                            if acodec and len(acodec) > 1:
+                                for language in unique_languages:
+                                    for codec in acodec:
+                                        candidates = [
+                                            track
+                                            for track in title.tracks.audio
+                                            if track.language == language and track.codec == codec
+                                        ]
+                                        if not candidates:
+                                            continue
+                                        selected_audio.append(max(candidates, key=lambda x: x.bitrate or 0))
+                            else:
+                                for language in unique_languages:
+                                    highest_quality = max(
+                                        (track for track in title.tracks.audio if track.language == language),
+                                        key=lambda x: x.bitrate or 0,
+                                    )
+                                    selected_audio.append(highest_quality)
                             title.tracks.audio = selected_audio
                         elif "all" not in processed_lang:
-                            per_language = 1
+                            per_language = 0 if acodec and len(acodec) > 1 else 1
                             title.tracks.audio = title.tracks.by_language(
                                 title.tracks.audio, processed_lang, per_language=per_language, exact_match=exact_lang
                             )
@@ -1329,7 +1487,16 @@ class dl:
                                 self.log.error(f"There's no {processed_lang} Audio Track, cannot continue...")
                                 sys.exit(1)
 
-                if video_only or audio_only or subs_only or chapters_only or no_subs or no_audio or no_chapters or no_video:
+                if (
+                    video_only
+                    or audio_only
+                    or subs_only
+                    or chapters_only
+                    or no_subs
+                    or no_audio
+                    or no_chapters
+                    or no_video
+                ):
                     keep_videos = False
                     keep_audio = False
                     keep_subtitles = False
@@ -1552,6 +1719,25 @@ class dl:
                             break
                     video_track_n += 1
 
+                # Subtitle output mode configuration (for sidecar originals)
+                subtitle_output_mode = config.subtitle.get("output_mode", "mux")
+                sidecar_format = config.subtitle.get("sidecar_format", "srt")
+                skip_subtitle_mux = (
+                    subtitle_output_mode == "sidecar" and (title.tracks.videos or title.tracks.audio)
+                )
+                sidecar_subtitles: list[Subtitle] = []
+                sidecar_original_paths: dict[str, Path] = {}
+                if subtitle_output_mode in ("sidecar", "both") and not no_mux:
+                    sidecar_subtitles = [s for s in title.tracks.subtitles if s.path and s.path.exists()]
+                    if sidecar_format == "original":
+                        config.directories.temp.mkdir(parents=True, exist_ok=True)
+                        for subtitle in sidecar_subtitles:
+                            original_path = (
+                                config.directories.temp / f"sidecar_original_{subtitle.id}{subtitle.path.suffix}"
+                            )
+                            shutil.copy2(subtitle.path, original_path)
+                            sidecar_original_paths[subtitle.id] = original_path
+
                 with console.status("Converting Subtitles..."):
                     for subtitle in title.tracks.subtitles:
                         if sub_format:
@@ -1569,9 +1755,7 @@ class dl:
                                 if line.startswith("Style: "):
                                     font_names.append(line.removeprefix("Style: ").split(",")[1].strip())
 
-                    font_count, missing_fonts = self.attach_subtitle_fonts(
-                        font_names, title, temp_font_files
-                    )
+                    font_count, missing_fonts = self.attach_subtitle_fonts(font_names, title, temp_font_files)
 
                     if font_count:
                         self.log.info(f"Attached {font_count} fonts for the Subtitles")
@@ -1592,7 +1776,8 @@ class dl:
                             drm = track.get_drm_for_cdm(self.cdm)
                             if drm and hasattr(drm, "decrypt"):
                                 drm.decrypt(track.path)
-                                has_decrypted = True
+                                if not isinstance(drm, MonaLisa):
+                                    has_decrypted = True
                                 events.emit(events.Types.TRACK_REPACKED, track=track)
                             else:
                                 self.log.warning(
@@ -1614,6 +1799,7 @@ class dl:
                         self.log.info("Repacked one or more tracks with FFMPEG")
 
                 muxed_paths = []
+                muxed_audio_codecs: dict[Path, Optional[Audio.Codec]] = {}
 
                 if no_mux:
                     # Skip muxing, handle individual track files
@@ -1630,7 +1816,40 @@ class dl:
                         console=console,
                     )
 
-                    multiplex_tasks: list[tuple[TaskID, Tracks]] = []
+                    if split_audio is not None:
+                        merge_audio = not split_audio
+                    else:
+                        merge_audio = config.muxing.get("merge_audio", True)
+
+                    multiplex_tasks: list[tuple[TaskID, Tracks, Optional[Audio.Codec]]] = []
+
+                    def clone_tracks_for_audio(base_tracks: Tracks, audio_tracks: list[Audio]) -> Tracks:
+                        task_tracks = Tracks()
+                        task_tracks.videos = list(base_tracks.videos)
+                        task_tracks.audio = audio_tracks
+                        task_tracks.subtitles = list(base_tracks.subtitles)
+                        task_tracks.chapters = base_tracks.chapters
+                        task_tracks.attachments = list(base_tracks.attachments)
+                        return task_tracks
+
+                    def enqueue_mux_tasks(task_description: str, base_tracks: Tracks) -> None:
+                        if merge_audio or not base_tracks.audio:
+                            task_id = progress.add_task(f"{task_description}...", total=None, start=False)
+                            multiplex_tasks.append((task_id, base_tracks, None))
+                            return
+
+                        audio_by_codec: dict[Optional[Audio.Codec], list[Audio]] = {}
+                        for audio_track in base_tracks.audio:
+                            audio_by_codec.setdefault(audio_track.codec, []).append(audio_track)
+
+                        for audio_codec, codec_audio_tracks in audio_by_codec.items():
+                            description = task_description
+                            if audio_codec:
+                                description = f"{task_description} {audio_codec.name}"
+
+                            task_id = progress.add_task(f"{description}...", total=None, start=False)
+                            task_tracks = clone_tracks_for_audio(base_tracks, codec_audio_tracks)
+                            multiplex_tasks.append((task_id, task_tracks, audio_codec))
 
                     # Check if we're in hybrid mode
                     if any(r == Video.Range.HYBRID for r in range_) and title.tracks.videos:
@@ -1670,11 +1889,8 @@ class dl:
                                 if default_output.exists():
                                     shutil.move(str(default_output), str(hybrid_output_path))
 
-                                # Create a mux task for this resolution
-                                task_description = f"Multiplexing Hybrid HDR10+DV {resolution}p"
-                                task_id = progress.add_task(f"{task_description}...", total=None, start=False)
-
                                 # Create tracks with the hybrid video output for this resolution
+                                task_description = f"Multiplexing Hybrid HDR10+DV {resolution}p"
                                 task_tracks = Tracks(title.tracks) + title.tracks.chapters + title.tracks.attachments
 
                                 # Create a new video track for the hybrid output
@@ -1684,7 +1900,7 @@ class dl:
                                 hybrid_track.needs_duration_fix = True
                                 task_tracks.videos = [hybrid_track]
 
-                                multiplex_tasks.append((task_id, task_tracks))
+                                enqueue_mux_tasks(task_description, task_tracks)
 
                         console.print()
                     else:
@@ -1697,16 +1913,15 @@ class dl:
                                 if len(range_) > 1:
                                     task_description += f" {video_track.range.name}"
 
-                            task_id = progress.add_task(f"{task_description}...", total=None, start=False)
-
                             task_tracks = Tracks(title.tracks) + title.tracks.chapters + title.tracks.attachments
                             if video_track:
                                 task_tracks.videos = [video_track]
 
-                            multiplex_tasks.append((task_id, task_tracks))
+                            enqueue_mux_tasks(task_description, task_tracks)
 
                     with Live(Padding(progress, (0, 5, 1, 5)), console=console):
-                        for task_id, task_tracks in multiplex_tasks:
+                        mux_index = 0
+                        for task_id, task_tracks, audio_codec in multiplex_tasks:
                             progress.start_task(task_id)  # TODO: Needed?
                             audio_expected = not video_only and not no_audio
                             muxed_path, return_code, errors = task_tracks.mux(
@@ -1715,8 +1930,18 @@ class dl:
                                 delete=False,
                                 audio_expected=audio_expected,
                                 title_language=title.language,
+                                skip_subtitles=skip_subtitle_mux,
                             )
+                            if muxed_path.exists():
+                                mux_index += 1
+                                unique_path = muxed_path.with_name(
+                                    f"{muxed_path.stem}.{mux_index}{muxed_path.suffix}"
+                                )
+                                if unique_path != muxed_path:
+                                    shutil.move(muxed_path, unique_path)
+                                    muxed_path = unique_path
                             muxed_paths.append(muxed_path)
+                            muxed_audio_codecs[muxed_path] = audio_codec
                             if return_code >= 2:
                                 self.log.error(f"Failed to Mux video to Matroska file ({return_code}):")
                             elif return_code == 1 or errors:
@@ -1728,8 +1953,31 @@ class dl:
                                     self.log.warning(line)
                             if return_code >= 2:
                                 sys.exit(1)
-                            for video_track in task_tracks.videos:
-                                video_track.delete()
+
+                        # Output sidecar subtitles before deleting track files
+                        if sidecar_subtitles and not no_mux:
+                            media_info = MediaInfo.parse(muxed_paths[0]) if muxed_paths else None
+                            if media_info:
+                                base_filename = title.get_filename(media_info, show_service=not no_source)
+                            else:
+                                base_filename = str(title)
+
+                            sidecar_dir = config.directories.downloads
+                            if not no_folder and isinstance(title, (Episode, Song)) and media_info:
+                                sidecar_dir /= title.get_filename(media_info, show_service=not no_source, folder=True)
+                            sidecar_dir.mkdir(parents=True, exist_ok=True)
+
+                            with console.status("Saving subtitle sidecar files..."):
+                                created = self.output_subtitle_sidecars(
+                                    sidecar_subtitles,
+                                    base_filename,
+                                    sidecar_dir,
+                                    sidecar_format,
+                                    original_paths=sidecar_original_paths or None,
+                                )
+                                if created:
+                                    self.log.info(f"Saved {len(created)} sidecar subtitle files")
+
                         for track in title.tracks:
                             track.delete()
 
@@ -1742,6 +1990,8 @@ class dl:
 
                         # Clean up temp fonts
                         for temp_path in temp_font_files:
+                            temp_path.unlink(missing_ok=True)
+                        for temp_path in sidecar_original_paths.values():
                             temp_path.unlink(missing_ok=True)
 
                 else:
@@ -1804,6 +2054,9 @@ class dl:
                         media_info = MediaInfo.parse(muxed_path)
                         final_dir = config.directories.downloads
                         final_filename = title.get_filename(media_info, show_service=not no_source)
+                        audio_codec_suffix = muxed_audio_codecs.get(muxed_path)
+                        if audio_codec_suffix:
+                            final_filename = f"{final_filename}.{audio_codec_suffix.name}"
 
                         if not no_folder and isinstance(title, (Episode, Song)):
                             final_dir /= title.get_filename(media_info, show_service=not no_source, folder=True)
@@ -2208,6 +2461,26 @@ class dl:
 
                     export.write_text(jsonpickle.dumps(keys, indent=4), encoding="utf8")
 
+        elif isinstance(drm, MonaLisa):
+            with self.DRM_TABLE_LOCK:
+                display_id = drm.content_id or drm.pssh
+                pssh_display = self.truncate_pssh_for_display(display_id, "MonaLisa")
+                cek_tree = Tree(Text.assemble(("MonaLisa", "cyan"), (f"({pssh_display})", "text"), overflow="fold"))
+                pre_existing_tree = next(
+                    (x for x in table.columns[0].cells if isinstance(x, Tree) and x.label == cek_tree.label), None
+                )
+                if pre_existing_tree:
+                    cek_tree = pre_existing_tree
+
+                for kid_, key in drm.content_keys.items():
+                    label = f"[text2]{kid_.hex}:{key}"
+                    if not any(f"{kid_.hex}:{key}" in x.label for x in cek_tree.children):
+                        cek_tree.add(label)
+
+                if cek_tree.children and not pre_existing_tree:
+                    table.add_row()
+                    table.add_row(cek_tree)
+
     @staticmethod
     def get_cookie_path(service: str, profile: Optional[str]) -> Optional[Path]:
         """Get Service Cookie File Path for Profile."""
@@ -2390,14 +2663,23 @@ class dl:
                 return CustomRemoteCDM(service_name=service, vaults=self.vaults, **cdm_api)
 
             else:
-                return RemoteCdm(
-                    device_type=cdm_api["Device Type"],
-                    system_id=cdm_api["System ID"],
-                    security_level=cdm_api["Security Level"],
-                    host=cdm_api["Host"],
-                    secret=cdm_api["Secret"],
-                    device_name=cdm_api["Device Name"],
-                )
+                device_type = cdm_api.get("Device Type", cdm_api.get("device_type", ""))
+                if str(device_type).upper() == "PLAYREADY":
+                    return PlayReadyRemoteCdm(
+                        security_level=cdm_api.get("Security Level", cdm_api.get("security_level", 3000)),
+                        host=cdm_api.get("Host", cdm_api.get("host")),
+                        secret=cdm_api.get("Secret", cdm_api.get("secret")),
+                        device_name=cdm_api.get("Device Name", cdm_api.get("device_name")),
+                    )
+                else:
+                    return RemoteCdm(
+                        device_type=cdm_api["Device Type"],
+                        system_id=cdm_api["System ID"],
+                        security_level=cdm_api["Security Level"],
+                        host=cdm_api["Host"],
+                        secret=cdm_api["Secret"],
+                        device_name=cdm_api["Device Name"],
+                    )
 
         prd_path = config.directories.prds / f"{cdm_name}.prd"
         if not prd_path.is_file():

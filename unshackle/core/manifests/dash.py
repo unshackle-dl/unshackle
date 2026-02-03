@@ -151,6 +151,11 @@ class DASH:
                         if not track_fps and segment_base is not None:
                             track_fps = segment_base.get("timescale")
 
+                        scan_type = None
+                        scan_type_str = get("scanType")
+                        if scan_type_str and scan_type_str.lower() == "interlaced":
+                            scan_type = Video.ScanType.INTERLACED
+
                         track_args = dict(
                             range_=self.get_video_range(
                                 codecs, findall("SupplementalProperty"), findall("EssentialProperty")
@@ -159,6 +164,7 @@ class DASH:
                             width=get("width") or 0,
                             height=get("height") or 0,
                             fps=track_fps or None,
+                            scan_type=scan_type,
                         )
                     elif content_type == "audio":
                         track_type = Audio
@@ -366,6 +372,9 @@ class DASH:
 
                 if not end_number:
                     end_number = len(segment_durations)
+                # Handle high startNumber in DVR/catch-up manifests where startNumber > segment count
+                if start_number > end_number:
+                    end_number = start_number + len(segment_durations) - 1
 
                 for t, n in zip(segment_durations, range(start_number, end_number + 1)):
                     segments.append(
@@ -467,8 +476,9 @@ class DASH:
         track.data["dash"]["timescale"] = int(segment_timescale)
         track.data["dash"]["segment_durations"] = segment_durations
 
-        if init_data and isinstance(track, (Video, Audio)):
-            if isinstance(cdm, PlayReadyCdm):
+        if not track.drm and init_data and isinstance(track, (Video, Audio)):
+            prefers_playready = isinstance(cdm, PlayReadyCdm) or (hasattr(cdm, "is_playready") and cdm.is_playready)
+            if prefers_playready:
                 try:
                     track.drm = [PlayReady.from_init_data(init_data)]
                 except PlayReady.Exceptions.PSSHNotFound:
@@ -572,7 +582,63 @@ class DASH:
         for control_file in save_dir.glob("*.aria2__temp"):
             control_file.unlink()
 
+        # Verify output directory exists and contains files
+        if not save_dir.exists():
+            error_msg = f"Output directory does not exist: {save_dir}"
+            if debug_logger:
+                debug_logger.log(
+                    level="ERROR",
+                    operation="manifest_dash_download_output_missing",
+                    message=error_msg,
+                    context={
+                        "track_id": getattr(track, "id", None),
+                        "track_type": track.__class__.__name__,
+                        "save_dir": str(save_dir),
+                        "save_path": str(save_path),
+                        "downloader": downloader.__name__,
+                        "skip_merge": skip_merge,
+                    },
+                )
+            raise FileNotFoundError(error_msg)
+
         segments_to_merge = [x for x in sorted(save_dir.iterdir()) if x.is_file()]
+
+        if debug_logger:
+            debug_logger.log(
+                level="DEBUG",
+                operation="manifest_dash_download_complete",
+                message="DASH download complete, preparing to merge",
+                context={
+                    "track_id": getattr(track, "id", None),
+                    "track_type": track.__class__.__name__,
+                    "save_dir": str(save_dir),
+                    "save_dir_exists": save_dir.exists(),
+                    "segments_found": len(segments_to_merge),
+                    "segment_files": [f.name for f in segments_to_merge[:10]],  # Limit to first 10
+                    "downloader": downloader.__name__,
+                    "skip_merge": skip_merge,
+                },
+            )
+
+        if not segments_to_merge:
+            error_msg = f"No segment files found in output directory: {save_dir}"
+            if debug_logger:
+                # List all contents of the directory for debugging
+                all_contents = list(save_dir.iterdir()) if save_dir.exists() else []
+                debug_logger.log(
+                    level="ERROR",
+                    operation="manifest_dash_download_no_segments",
+                    message=error_msg,
+                    context={
+                        "track_id": getattr(track, "id", None),
+                        "track_type": track.__class__.__name__,
+                        "save_dir": str(save_dir),
+                        "directory_contents": [str(p) for p in all_contents],
+                        "downloader": downloader.__name__,
+                        "skip_merge": skip_merge,
+                    },
+                )
+            raise FileNotFoundError(error_msg)
 
         if skip_merge:
             # N_m3u8DL-RE handles merging and decryption internally
@@ -800,7 +866,7 @@ class DASH:
             urn = (protection.get("schemeIdUri") or "").lower()
 
             if urn == WidevineCdm.urn:
-                pssh_text = protection.findtext("pssh")
+                pssh_text = protection.findtext("pssh") or protection.findtext("{urn:mpeg:cenc:2013}pssh")
                 if not pssh_text:
                     continue
                 pssh = PSSH(pssh_text)
@@ -831,6 +897,7 @@ class DASH:
             elif urn in ("urn:uuid:9a04f079-9840-4286-ab92-e65be0885f95", "urn:microsoft:playready"):
                 pr_pssh_b64 = (
                     protection.findtext("pssh")
+                    or protection.findtext("{urn:mpeg:cenc:2013}pssh")
                     or protection.findtext("pro")
                     or protection.findtext("{urn:microsoft:playready}pro")
                 )
