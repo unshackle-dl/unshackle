@@ -359,18 +359,18 @@ class dl:
         help="Wanted episodes, e.g. `S01-S05,S07`, `S01E01-S02E03`, `S02-S02E03`, e.t.c, defaults to all.",
     )
     @click.option(
-        "-le",
-        "--latest-episode",
-        is_flag=True,
-        default=False,
-        help="Download only the single most recent episode available.",
-    )
-    @click.option(
         "-l",
         "--lang",
         type=LANGUAGE_RANGE,
         default="orig",
         help="Language wanted for Video and Audio. Use 'orig' to select the original language, e.g. 'orig,en' for both original and English.",
+    )
+    @click.option(
+        "-le",
+        "--latest-episode",
+        is_flag=True,
+        default=False,
+        help="Download only the single most recent episode available.",
     )
     @click.option(
         "-vl",
@@ -1805,6 +1805,25 @@ class dl:
                             break
                     video_track_n += 1
 
+                # Subtitle output mode configuration (for sidecar originals)
+                subtitle_output_mode = config.subtitle.get("output_mode", "mux")
+                sidecar_format = config.subtitle.get("sidecar_format", "srt")
+                skip_subtitle_mux = (
+                    subtitle_output_mode == "sidecar" and (title.tracks.videos or title.tracks.audio)
+                )
+                sidecar_subtitles: list[Subtitle] = []
+                sidecar_original_paths: dict[str, Path] = {}
+                if subtitle_output_mode in ("sidecar", "both") and not no_mux:
+                    sidecar_subtitles = [s for s in title.tracks.subtitles if s.path and s.path.exists()]
+                    if sidecar_format == "original":
+                        config.directories.temp.mkdir(parents=True, exist_ok=True)
+                        for subtitle in sidecar_subtitles:
+                            original_path = (
+                                config.directories.temp / f"sidecar_original_{subtitle.id}{subtitle.path.suffix}"
+                            )
+                            shutil.copy2(subtitle.path, original_path)
+                            sidecar_original_paths[subtitle.id] = original_path
+
                 with console.status("Converting Subtitles..."):
                     for subtitle in title.tracks.subtitles:
                         if sub_format:
@@ -1845,7 +1864,6 @@ class dl:
                                 drm.decrypt(track.path)
                                 if not isinstance(drm, MonaLisa):
                                     has_decrypted = True
-                                has_decrypted = True
                                 events.emit(events.Types.TRACK_REPACKED, track=track)
                             else:
                                 self.log.warning(
@@ -1958,6 +1976,7 @@ class dl:
                                     shutil.move(str(default_output), str(hybrid_output_path))
 
                                 # Create tracks with the hybrid video output for this resolution
+                                task_description = f"Multiplexing Hybrid HDR10+DV {resolution}p"
                                 task_tracks = Tracks(title.tracks) + title.tracks.chapters + title.tracks.attachments
 
                                 # Create a new video track for the hybrid output
@@ -1997,6 +2016,7 @@ class dl:
                                 delete=False,
                                 audio_expected=audio_expected,
                                 title_language=title.language,
+                                skip_subtitles=skip_subtitle_mux,
                             )
                             if muxed_path.exists():
                                 mux_index += 1
@@ -2019,6 +2039,31 @@ class dl:
                                     self.log.warning(line)
                             if return_code >= 2:
                                 sys.exit(1)
+
+                        # Output sidecar subtitles before deleting track files
+                        if sidecar_subtitles and not no_mux:
+                            media_info = MediaInfo.parse(muxed_paths[0]) if muxed_paths else None
+                            if media_info:
+                                base_filename = title.get_filename(media_info, show_service=not no_source)
+                            else:
+                                base_filename = str(title)
+
+                            sidecar_dir = config.directories.downloads
+                            if not no_folder and isinstance(title, (Episode, Song)) and media_info:
+                                sidecar_dir /= title.get_filename(media_info, show_service=not no_source, folder=True)
+                            sidecar_dir.mkdir(parents=True, exist_ok=True)
+
+                            with console.status("Saving subtitle sidecar files..."):
+                                created = self.output_subtitle_sidecars(
+                                    sidecar_subtitles,
+                                    base_filename,
+                                    sidecar_dir,
+                                    sidecar_format,
+                                    original_paths=sidecar_original_paths or None,
+                                )
+                                if created:
+                                    self.log.info(f"Saved {len(created)} sidecar subtitle files")
+
                         for track in title.tracks:
                             track.delete()
 
@@ -2031,6 +2076,8 @@ class dl:
 
                         # Clean up temp fonts
                         for temp_path in temp_font_files:
+                            temp_path.unlink(missing_ok=True)
+                        for temp_path in sidecar_original_paths.values():
                             temp_path.unlink(missing_ok=True)
 
                 else:
