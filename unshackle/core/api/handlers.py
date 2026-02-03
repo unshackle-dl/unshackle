@@ -748,9 +748,17 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
             return f"Invalid vcodec: {data['vcodec']}. Must be one of: {', '.join(valid_vcodecs)}"
 
     if "acodec" in data and data["acodec"]:
-        valid_acodecs = ["AAC", "AC3", "EAC3", "OPUS", "FLAC", "ALAC", "VORBIS", "DTS"]
-        if data["acodec"].upper() not in valid_acodecs:
-            return f"Invalid acodec: {data['acodec']}. Must be one of: {', '.join(valid_acodecs)}"
+        valid_acodecs = ["AAC", "AC3", "EC3", "EAC3", "DD", "DD+", "AC4", "OPUS", "FLAC", "ALAC", "VORBIS", "OGG", "DTS"]
+        if isinstance(data["acodec"], str):
+            acodec_values = [v.strip() for v in data["acodec"].split(",") if v.strip()]
+        elif isinstance(data["acodec"], list):
+            acodec_values = [str(v).strip() for v in data["acodec"] if str(v).strip()]
+        else:
+            return "acodec must be a string or list"
+
+        invalid = [value for value in acodec_values if value.upper() not in valid_acodecs]
+        if invalid:
+            return f"Invalid acodec: {', '.join(invalid)}. Must be one of: {', '.join(valid_acodecs)}"
 
     if "sub_format" in data and data["sub_format"]:
         valid_sub_formats = ["SRT", "VTT", "ASS", "SSA"]

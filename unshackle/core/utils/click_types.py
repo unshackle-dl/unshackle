@@ -5,6 +5,8 @@ import click
 from click.shell_completion import CompletionItem
 from pywidevine.cdm import Cdm as WidevineCdm
 
+from unshackle.core.tracks.audio import Audio
+
 
 class VideoCodecChoice(click.Choice):
     """
@@ -241,6 +243,52 @@ class QualityList(click.ParamType):
         return sorted(resolutions, reverse=True)
 
 
+class AudioCodecList(click.ParamType):
+    """Parses comma-separated audio codecs like 'AAC,EC3'."""
+
+    name = "audio_codec_list"
+
+    def __init__(self, codec_enum):
+        self.codec_enum = codec_enum
+        self._name_to_codec: dict[str, Audio.Codec] = {}
+        for codec in codec_enum:
+            self._name_to_codec[codec.name.lower()] = codec
+            self._name_to_codec[codec.value.lower()] = codec
+
+        aliases = {
+            "eac3": "EC3",
+            "ddp": "EC3",
+            "vorbis": "OGG",
+        }
+        for alias, target in aliases.items():
+            if target in codec_enum.__members__:
+                self._name_to_codec[alias] = codec_enum[target]
+
+    def convert(self, value: Any, param: Optional[click.Parameter] = None, ctx: Optional[click.Context] = None) -> list:
+        if not value:
+            return []
+        if isinstance(value, self.codec_enum):
+            return [value]
+        if isinstance(value, list):
+            if all(isinstance(v, self.codec_enum) for v in value):
+                return value
+            values = [str(v).strip() for v in value]
+        else:
+            values = [v.strip() for v in str(value).split(",")]
+
+        codecs = []
+        for val in values:
+            if not val:
+                continue
+            key = val.lower()
+            if key in self._name_to_codec:
+                codecs.append(self._name_to_codec[key])
+            else:
+                valid = sorted(set(self._name_to_codec.keys()))
+                self.fail(f"'{val}' is not valid. Choices: {', '.join(valid)}", param, ctx)
+        return list(dict.fromkeys(codecs))  # Remove duplicates, preserve order
+
+
 class MultipleChoice(click.Choice):
     """
     The multiple choice type allows multiple values to be checked against
@@ -288,5 +336,6 @@ class MultipleChoice(click.Choice):
 SEASON_RANGE = SeasonRange()
 LANGUAGE_RANGE = LanguageRange()
 QUALITY_LIST = QualityList()
+AUDIO_CODEC_LIST = AudioCodecList(Audio.Codec)
 
 # VIDEO_CODEC_CHOICE will be created dynamically when imported

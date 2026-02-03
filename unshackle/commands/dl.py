@@ -61,8 +61,8 @@ from unshackle.core.tracks.hybrid import Hybrid
 from unshackle.core.utilities import (find_font_with_fallbacks, get_debug_logger, get_system_fonts, init_debug_logger,
                                       is_close_match, suggest_font_packages, time_elapsed_since)
 from unshackle.core.utils import tags
-from unshackle.core.utils.click_types import (LANGUAGE_RANGE, QUALITY_LIST, SEASON_RANGE, ContextData, MultipleChoice,
-                                              SubtitleCodecChoice, VideoCodecChoice)
+from unshackle.core.utils.click_types import (AUDIO_CODEC_LIST, LANGUAGE_RANGE, QUALITY_LIST, SEASON_RANGE,
+                                              ContextData, MultipleChoice, SubtitleCodecChoice, VideoCodecChoice)
 from unshackle.core.utils.collections import merge_dict
 from unshackle.core.utils.subprocess import ffprobe
 from unshackle.core.vaults import Vaults
@@ -204,9 +204,9 @@ class dl:
     @click.option(
         "-a",
         "--acodec",
-        type=click.Choice(Audio.Codec, case_sensitive=False),
-        default=None,
-        help="Audio Codec to download, defaults to any codec.",
+        type=AUDIO_CODEC_LIST,
+        default=[],
+        help="Audio Codec(s) to download (comma-separated), e.g., 'AAC,EC3'. Defaults to any.",
     )
     @click.option(
         "-vb",
@@ -244,6 +244,13 @@ class dl:
         is_flag=True,
         default=False,
         help="Exclude Dolby Atmos audio tracks when selecting audio.",
+    )
+    @click.option(
+        "--split-audio",
+        "split_audio",
+        is_flag=True,
+        default=None,
+        help="Create separate output files per audio codec instead of merging all audio.",
     )
     @click.option(
         "-w",
@@ -751,7 +758,7 @@ class dl:
         service: Service,
         quality: list[int],
         vcodec: Optional[Video.Codec],
-        acodec: Optional[Audio.Codec],
+        acodec: list[Audio.Codec],
         vbitrate: int,
         abitrate: int,
         range_: list[Video.Range],
@@ -789,12 +796,22 @@ class dl:
         workers: Optional[int],
         downloads: int,
         best_available: bool,
+        split_audio: Optional[bool] = None,
         *_: Any,
         **__: Any,
     ) -> None:
         self.tmdb_searched = False
         self.search_source = None
         start_time = time.time()
+
+        if not acodec:
+            acodec = []
+        elif isinstance(acodec, Audio.Codec):
+            acodec = [acodec]
+        elif isinstance(acodec, str) or (
+            isinstance(acodec, list) and not all(isinstance(v, Audio.Codec) for v in acodec)
+        ):
+            acodec = AUDIO_CODEC_LIST.convert(acodec)
 
         if require_subs and s_lang != ["all"]:
             self.log.error("--require-subs and --s-lang cannot be used together")
@@ -1307,9 +1324,10 @@ class dl:
                     if not audio_description:
                         title.tracks.select_audio(lambda x: not x.descriptive)  # exclude descriptive audio
                     if acodec:
-                        title.tracks.select_audio(lambda x: x.codec == acodec)
+                        title.tracks.select_audio(lambda x: x.codec in acodec)
                         if not title.tracks.audio:
-                            self.log.error(f"There's no {acodec.name} Audio Tracks...")
+                            codec_names = ", ".join(c.name for c in acodec)
+                            self.log.error(f"No audio tracks matching codecs: {codec_names}")
                             sys.exit(1)
                     if channels:
                         title.tracks.select_audio(lambda x: math.ceil(x.channels) == math.ceil(channels))
@@ -1348,15 +1366,27 @@ class dl:
                         if "best" in processed_lang:
                             unique_languages = {track.language for track in title.tracks.audio}
                             selected_audio = []
-                            for language in unique_languages:
-                                highest_quality = max(
-                                    (track for track in title.tracks.audio if track.language == language),
-                                    key=lambda x: x.bitrate or 0,
-                                )
-                                selected_audio.append(highest_quality)
+                            if acodec and len(acodec) > 1:
+                                for language in unique_languages:
+                                    for codec in acodec:
+                                        candidates = [
+                                            track
+                                            for track in title.tracks.audio
+                                            if track.language == language and track.codec == codec
+                                        ]
+                                        if not candidates:
+                                            continue
+                                        selected_audio.append(max(candidates, key=lambda x: x.bitrate or 0))
+                            else:
+                                for language in unique_languages:
+                                    highest_quality = max(
+                                        (track for track in title.tracks.audio if track.language == language),
+                                        key=lambda x: x.bitrate or 0,
+                                    )
+                                    selected_audio.append(highest_quality)
                             title.tracks.audio = selected_audio
                         elif "all" not in processed_lang:
-                            per_language = 1
+                            per_language = 0 if acodec and len(acodec) > 1 else 1
                             title.tracks.audio = title.tracks.by_language(
                                 title.tracks.audio, processed_lang, per_language=per_language, exact_match=exact_lang
                             )
@@ -1657,6 +1687,7 @@ class dl:
                         self.log.info("Repacked one or more tracks with FFMPEG")
 
                 muxed_paths = []
+                muxed_audio_codecs: dict[Path, Optional[Audio.Codec]] = {}
 
                 if no_mux:
                     # Skip muxing, handle individual track files
@@ -1673,7 +1704,40 @@ class dl:
                         console=console,
                     )
 
-                    multiplex_tasks: list[tuple[TaskID, Tracks]] = []
+                    if split_audio is not None:
+                        merge_audio = not split_audio
+                    else:
+                        merge_audio = config.muxing.get("merge_audio", True)
+
+                    multiplex_tasks: list[tuple[TaskID, Tracks, Optional[Audio.Codec]]] = []
+
+                    def clone_tracks_for_audio(base_tracks: Tracks, audio_tracks: list[Audio]) -> Tracks:
+                        task_tracks = Tracks()
+                        task_tracks.videos = list(base_tracks.videos)
+                        task_tracks.audio = audio_tracks
+                        task_tracks.subtitles = list(base_tracks.subtitles)
+                        task_tracks.chapters = base_tracks.chapters
+                        task_tracks.attachments = list(base_tracks.attachments)
+                        return task_tracks
+
+                    def enqueue_mux_tasks(task_description: str, base_tracks: Tracks) -> None:
+                        if merge_audio or not base_tracks.audio:
+                            task_id = progress.add_task(f"{task_description}...", total=None, start=False)
+                            multiplex_tasks.append((task_id, base_tracks, None))
+                            return
+
+                        audio_by_codec: dict[Optional[Audio.Codec], list[Audio]] = {}
+                        for audio_track in base_tracks.audio:
+                            audio_by_codec.setdefault(audio_track.codec, []).append(audio_track)
+
+                        for audio_codec, codec_audio_tracks in audio_by_codec.items():
+                            description = task_description
+                            if audio_codec:
+                                description = f"{task_description} {audio_codec.name}"
+
+                            task_id = progress.add_task(f"{description}...", total=None, start=False)
+                            task_tracks = clone_tracks_for_audio(base_tracks, codec_audio_tracks)
+                            multiplex_tasks.append((task_id, task_tracks, audio_codec))
 
                     # Check if we're in hybrid mode
                     if any(r == Video.Range.HYBRID for r in range_) and title.tracks.videos:
@@ -1713,11 +1777,8 @@ class dl:
                                 if default_output.exists():
                                     shutil.move(str(default_output), str(hybrid_output_path))
 
-                                # Create a mux task for this resolution
-                                task_description = f"Multiplexing Hybrid HDR10+DV {resolution}p"
-                                task_id = progress.add_task(f"{task_description}...", total=None, start=False)
-
                                 # Create tracks with the hybrid video output for this resolution
+                                task_description = f"Multiplexing Hybrid HDR10+DV {resolution}p"
                                 task_tracks = Tracks(title.tracks) + title.tracks.chapters + title.tracks.attachments
 
                                 # Create a new video track for the hybrid output
@@ -1727,7 +1788,7 @@ class dl:
                                 hybrid_track.needs_duration_fix = True
                                 task_tracks.videos = [hybrid_track]
 
-                                multiplex_tasks.append((task_id, task_tracks))
+                                enqueue_mux_tasks(task_description, task_tracks)
 
                         console.print()
                     else:
@@ -1740,16 +1801,15 @@ class dl:
                                 if len(range_) > 1:
                                     task_description += f" {video_track.range.name}"
 
-                            task_id = progress.add_task(f"{task_description}...", total=None, start=False)
-
                             task_tracks = Tracks(title.tracks) + title.tracks.chapters + title.tracks.attachments
                             if video_track:
                                 task_tracks.videos = [video_track]
 
-                            multiplex_tasks.append((task_id, task_tracks))
+                            enqueue_mux_tasks(task_description, task_tracks)
 
                     with Live(Padding(progress, (0, 5, 1, 5)), console=console):
-                        for task_id, task_tracks in multiplex_tasks:
+                        mux_index = 0
+                        for task_id, task_tracks, audio_codec in multiplex_tasks:
                             progress.start_task(task_id)  # TODO: Needed?
                             audio_expected = not video_only and not no_audio
                             muxed_path, return_code, errors = task_tracks.mux(
@@ -1759,7 +1819,16 @@ class dl:
                                 audio_expected=audio_expected,
                                 title_language=title.language,
                             )
+                            if muxed_path.exists():
+                                mux_index += 1
+                                unique_path = muxed_path.with_name(
+                                    f"{muxed_path.stem}.{mux_index}{muxed_path.suffix}"
+                                )
+                                if unique_path != muxed_path:
+                                    shutil.move(muxed_path, unique_path)
+                                    muxed_path = unique_path
                             muxed_paths.append(muxed_path)
+                            muxed_audio_codecs[muxed_path] = audio_codec
                             if return_code >= 2:
                                 self.log.error(f"Failed to Mux video to Matroska file ({return_code}):")
                             elif return_code == 1 or errors:
@@ -1771,8 +1840,6 @@ class dl:
                                     self.log.warning(line)
                             if return_code >= 2:
                                 sys.exit(1)
-                            for video_track in task_tracks.videos:
-                                video_track.delete()
                         for track in title.tracks:
                             track.delete()
 
@@ -1847,6 +1914,9 @@ class dl:
                         media_info = MediaInfo.parse(muxed_path)
                         final_dir = config.directories.downloads
                         final_filename = title.get_filename(media_info, show_service=not no_source)
+                        audio_codec_suffix = muxed_audio_codecs.get(muxed_path)
+                        if audio_codec_suffix:
+                            final_filename = f"{final_filename}.{audio_codec_suffix.name}"
 
                         if not no_folder and isinstance(title, (Episode, Song)):
                             final_dir /= title.get_filename(media_info, show_service=not no_source, folder=True)

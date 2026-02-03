@@ -416,7 +416,7 @@ async def download(request: web.Request) -> web.Response:
                 description: Video codec to download (e.g., H264, H265, VP9, AV1) (default - None)
               acodec:
                 type: string
-                description: Audio codec to download (e.g., AAC, AC3, EAC3) (default - None)
+                description: Audio codec(s) to download (e.g., AAC or AAC,EC3) (default - None)
               vbitrate:
                 type: integer
                 description: Video bitrate in kbps (default - None)
