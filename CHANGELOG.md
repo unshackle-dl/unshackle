@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [2.4.0] - 2026-02-03
+
+### Added
+
+- **MonaLisa DRM**: Added MonaLisa DRM support in the core infrastructure
+  - Includes MonaLisa CDM module and decryption path
+  - Suppresses noisy Shaka Packager message specific to MonaLisa decryption
+- **Remote PlayReady CDM**: Added PlayReady CDM support via pyplayready `RemoteCdm`
+  - `serve` now supports PlayReady alongside Widevine
+  - Adds server-side validation improvements for RemoteCDM
+- **DRM Licensing Binary**: Added `ML-Worker` to environment dependency checks for DRM licensing
+- **VPN**: Added Gluetun VPN integration
+  - Improved connection display
+  - Expanded Windscribe support through Gluetun
+- **Audio**: Added codec lists and split muxing
+- **Video**: Detect interlaced scan type from MPD manifests
+- **Documentation**: Expanded configuration docs (CONFIG.md and new docs/* guides)
+
+### Changed
+
+- **Downloader**: Improved `aria2c` performance via singleton manager
+- **Titles**: Use track source attribute for service name in filenames
+- **Remote Auth**: Removed unused `requests.Session`
+
+### Fixed
+
+- **DASH DRM**: Preserve MPD DRM and avoid overwriting from init segments
+  - Added CENC namespace support for PSSH extraction
+- **DASH DVR**: Handle high `startNumber` values in SegmentTimeline
+- **Manifests**: Correct DRM type selection for remote PlayReady CDMs
+- **Downloader**: Correct progress bar tracking for segmented downloads
+- **N_m3u8DL-RE**: Remove duplicate `--write-meta-json` argument causing download failures
+- **Subtitles**: Preserve original sidecar subtitle files
+- **Binaries**: Search subdirectories when locating binaries
+- **Proxies**: Fix WindscribeVPN server authentication and aggregate servers across all locations
+- **Serve**: Correct PlayReady RemoteCDM server validation
+- **API**: Validate `Bearer` prefix before extracting API keys
+
 ## [2.3.1] - 2026-01-22
 
 ### Fixed
