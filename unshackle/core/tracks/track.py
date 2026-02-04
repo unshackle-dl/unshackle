@@ -670,7 +670,7 @@ class Track:
                 raise ValueError(f"Failed to read {content_length} bytes from the track URI.")
 
         return init_data
-
+    
     def repackage(self) -> None:
         if not self.path or not self.path.exists():
             raise ValueError("Cannot repackage a Track that has not been downloaded.")
@@ -678,8 +678,41 @@ class Track:
         if not binaries.FFMPEG:
             raise EnvironmentError('FFmpeg executable "ffmpeg" was not found but is required for this call.')
 
+        dovi_tool = shutil.which("dovi_tool")
         original_path = self.path
         output_path = original_path.with_stem(f"{original_path.stem}_repack")
+        
+        is_dovi = False
+        rpu_path = original_path.with_suffix(".rpu")
+
+        # Detect Dolby Vision (ffprobe)
+        if dovi_tool:
+            probe_data = ffprobe(original_path)
+            if probe_data:
+                for stream in probe_data.get("streams", []):
+                    if stream.get("codec_type") == "video":
+                        side_data_list = stream.get("side_data_list", [])
+                        for side_data in side_data_list:
+                            if "DOVI" in side_data.get("side_data_type", ""):
+                                is_dovi = True
+                                break
+                    if is_dovi:
+                        break
+
+        # Extract RPU
+        if is_dovi:
+            try:
+                subprocess.run(
+                    [binaries.DoviTool, "extract-rpu", "-i", str(original_path), "-o", str(rpu_path)],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+            except subprocess.CalledProcessError:
+                # if fali
+                is_dovi = False
+                if rpu_path.exists():
+                    rpu_path.unlink()
 
         def _ffmpeg(extra_args: list[str] = None):
             args = [
@@ -709,9 +742,10 @@ class Track:
             args.extend(
                 [
                     # Following are very important!
-                    "-map", "0",
-                    "-copy_unknown",
-                    "-strict", "unofficial",
+                    "-map_metadata",
+                    "-1",  # don't transfer metadata to output file
+                    "-fflags",
+                    "bitexact",  # only have minimal tag data, reproducible mux
                     "-codec",
                     "copy",
                     str(output_path),
@@ -732,7 +766,36 @@ class Track:
                 # e.g., TruTV's dodgy encodes
                 _ffmpeg(["-y", "-bsf:a", "aac_adtstoasc"])
             else:
+                if is_dovi and rpu_path.exists():
+                    rpu_path.unlink()
                 raise
+
+        # Inject RPU
+        if is_dovi and rpu_path.exists():
+            injected_output = output_path.with_name(f"{output_path.stem}_injected.mp4")
+            try:
+                subprocess.run(
+                    [
+                        binaries.DoviTool, 
+                        "inject-rpu", 
+                        "-i", str(output_path), 
+                        "--rpu-in", str(rpu_path), 
+                        "-o", str(injected_output)
+                    ],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+                
+                output_path.unlink()
+                injected_output.rename(output_path)
+                
+            except subprocess.CalledProcessError:
+                if injected_output.exists():
+                    injected_output.unlink()
+            finally:
+                # Delete temp RPU
+                rpu_path.unlink(missing_ok=True)
 
         original_path.unlink()
         self.path = output_path
