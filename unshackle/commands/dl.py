@@ -897,6 +897,9 @@ class dl:
         self.search_source = None
         start_time = time.time()
 
+        if skip_dl:
+            DOWNLOAD_LICENCE_ONLY.set()
+
         if not acodec:
             acodec = []
         elif isinstance(acodec, Audio.Codec):
@@ -1576,9 +1579,6 @@ class dl:
                             self.cdm = quality_based_cdm
 
             dl_start_time = time.time()
-
-            if skip_dl:
-                DOWNLOAD_LICENCE_ONLY.set()
 
             try:
                 with Live(Padding(download_table, (1, 5)), console=console, refresh_per_second=5):

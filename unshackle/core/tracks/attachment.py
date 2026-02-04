@@ -10,6 +10,7 @@ from zlib import crc32
 import requests
 
 from unshackle.core.config import config
+from unshackle.core.constants import DOWNLOAD_LICENCE_ONLY
 
 
 class Attachment:
@@ -43,6 +44,8 @@ class Attachment:
         if path is None and url is None:
             raise ValueError("Either path or url must be provided.")
 
+        self.url = url
+
         if url:
             if not isinstance(url, str):
                 raise ValueError("The attachment URL must be a string.")
@@ -57,41 +60,49 @@ class Attachment:
 
             download_path = config.directories.temp / file_name
 
-            # Download the file
-            try:
-                session = session or requests.Session()
-                response = session.get(url, stream=True)
-                response.raise_for_status()
-                config.directories.temp.mkdir(parents=True, exist_ok=True)
-                download_path.parent.mkdir(parents=True, exist_ok=True)
+            # Download the file unless we're in license-only mode
+            if DOWNLOAD_LICENCE_ONLY.is_set():
+                path = None
+            else:
+                try:
+                    session = session or requests.Session()
+                    response = session.get(url, stream=True)
+                    response.raise_for_status()
+                    config.directories.temp.mkdir(parents=True, exist_ok=True)
+                    download_path.parent.mkdir(parents=True, exist_ok=True)
 
-                with open(download_path, "wb") as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        f.write(chunk)
+                    with open(download_path, "wb") as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            f.write(chunk)
 
-                path = download_path
-            except Exception as e:
-                raise ValueError(f"Failed to download attachment from URL: {e}")
+                    path = download_path
+                except Exception as e:
+                    raise ValueError(f"Failed to download attachment from URL: {e}")
 
-        if not isinstance(path, (str, Path)):
+        if path is not None and not isinstance(path, (str, Path)):
             raise ValueError("The attachment path must be provided.")
 
-        path = Path(path)
-        if not path.exists():
-            raise ValueError("The attachment file does not exist.")
+        if path is not None:
+            path = Path(path)
+            if not path.exists():
+                raise ValueError("The attachment file does not exist.")
 
-        name = (name or path.stem).strip()
+        if path is not None:
+            name = (name or path.stem).strip()
+        else:
+            name = (name or Path(file_name).stem).strip()
         mime_type = (mime_type or "").strip() or None
         description = (description or "").strip() or None
 
         if not mime_type:
+            suffix = path.suffix.lower() if path is not None else Path(file_name).suffix.lower()
             mime_type = {
                 ".ttf": "application/x-truetype-font",
                 ".otf": "application/vnd.ms-opentype",
                 ".jpg": "image/jpeg",
                 ".jpeg": "image/jpeg",
                 ".png": "image/png",
-            }.get(path.suffix.lower(), mimetypes.guess_type(path)[0])
+            }.get(suffix, mimetypes.guess_type(file_name if path is None else path)[0])
             if not mime_type:
                 raise ValueError("The attachment mime-type could not be automatically detected.")
 
@@ -111,13 +122,18 @@ class Attachment:
     @property
     def id(self) -> str:
         """Compute an ID from the attachment data."""
-        checksum = crc32(self.path.read_bytes())
+        if self.path and self.path.exists():
+            checksum = crc32(self.path.read_bytes())
+        elif self.url:
+            checksum = crc32(self.url.encode("utf8"))
+        else:
+            checksum = crc32(self.name.encode("utf8"))
         return hex(checksum)
 
     def delete(self) -> None:
-        if self.path:
+        if self.path and self.path.exists():
             self.path.unlink()
-            self.path = None
+        self.path = None
 
     @classmethod
     def from_url(
