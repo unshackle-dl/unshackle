@@ -153,6 +153,8 @@ class Movie(Title):
                             for indicator in ["HDR10", "SMPTE ST 2086"]
                         ):
                             name += " HDR"
+                    elif "HDR Vivid" in hdr_format:
+                        name += " HDR"
                     else:
                         name += f" {DYNAMIC_RANGE_MAP.get(hdr_format)} "
                 elif "HLG" in trc or "Hybrid Log-Gamma" in trc or "ARIB STD-B67" in trc or "arib-std-b67" in trc.lower():
