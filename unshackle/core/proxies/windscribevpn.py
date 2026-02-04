@@ -47,6 +47,7 @@ class WindscribeVPN(Proxy):
 
         Supports:
         - Country code: "us", "ca", "gb"
+        - Specific server: "sg007", "us150"
         - City selection: "us:seattle", "ca:toronto"
         """
         query = query.lower()
@@ -64,7 +65,17 @@ class WindscribeVPN(Proxy):
         elif query in self.server_map and not city:
             hostname = self.server_map[query]
         else:
-            if re.match(r"^[a-z]+$", query):
+            server_match = re.match(r"^([a-z]{2})(\d+)$", query)
+            if server_match:
+                # Specific server selection, e.g., sg007, us150
+                country_code, server_num = server_match.groups()
+                hostname = self.get_specific_server(country_code, server_num)
+                if not hostname:
+                    raise ValueError(
+                        f"No WindscribeVPN server found matching '{query}'. "
+                        f"Check the server number or use just '{country_code}' for a random server."
+                    )
+            elif re.match(r"^[a-z]+$", query):
                 hostname = self.get_random_server(query, city)
             else:
                 raise ValueError(f"The query provided is unsupported and unrecognized: {query}")
@@ -74,6 +85,38 @@ class WindscribeVPN(Proxy):
 
         hostname = hostname.split(':')[0]
         return f"https://{self.username}:{self.password}@{hostname}:443"
+
+    def get_specific_server(self, country_code: str, server_num: str) -> Optional[str]:
+        """
+        Find a specific server by country code and server number.
+
+        Matches against hostnames like "sg-007.totallyacdn.com" for query "sg007".
+        Tries both the raw number and zero-padded variants.
+
+        Args:
+            country_code: Two-letter country code (e.g., "sg", "us")
+            server_num: Server number as string (e.g., "007", "7", "150")
+
+        Returns:
+            The matching hostname, or None if not found.
+        """
+        num_stripped = server_num.lstrip("0") or "0"
+        candidates = {
+            f"{country_code}-{server_num}.",
+            f"{country_code}-{num_stripped}.",
+            f"{country_code}-{server_num.zfill(3)}.",
+        }
+
+        for location in self.countries:
+            if location.get("country_code", "").lower() != country_code:
+                continue
+            for group in location.get("groups", []):
+                for host in group.get("hosts", []):
+                    hostname = host.get("hostname", "")
+                    if any(hostname.startswith(prefix) for prefix in candidates):
+                        return hostname
+
+        return None
 
     def get_random_server(self, country_code: str, city: Optional[str] = None) -> Optional[str]:
         """
