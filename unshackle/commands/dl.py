@@ -1800,6 +1800,7 @@ class dl:
 
                 muxed_paths = []
                 muxed_audio_codecs: dict[Path, Optional[Audio.Codec]] = {}
+                append_audio_codec_suffix = True
 
                 if no_mux:
                     # Skip muxing, handle individual track files
@@ -1820,6 +1821,7 @@ class dl:
                         merge_audio = not split_audio
                     else:
                         merge_audio = config.muxing.get("merge_audio", True)
+                    append_audio_codec_suffix = merge_audio
 
                     multiplex_tasks: list[tuple[TaskID, Tracks, Optional[Audio.Codec]]] = []
 
@@ -2055,7 +2057,7 @@ class dl:
                         final_dir = config.directories.downloads
                         final_filename = title.get_filename(media_info, show_service=not no_source)
                         audio_codec_suffix = muxed_audio_codecs.get(muxed_path)
-                        if audio_codec_suffix:
+                        if audio_codec_suffix and append_audio_codec_suffix:
                             final_filename = f"{final_filename}.{audio_codec_suffix.name}"
 
                         if not no_folder and isinstance(title, (Episode, Song)):
