@@ -132,7 +132,7 @@ class Episode(Title):
                     year=f" {self.year}" if self.year and config.series_year else "",
                     season=self.season,
                     number=self.number,
-                    name=self.name or "",
+                    name=self.name if self.name and config.insert_episodename_into_filenames else "",
                 ).strip()
 
         if config.scene_naming:
@@ -218,6 +218,8 @@ class Episode(Title):
                             for indicator in ["HDR10", "SMPTE ST 2086"]
                         ):
                             name += " HDR"
+                    elif "HDR Vivid" in hdr_format:
+                        name += " HDR"
                     else:
                         name += f" {DYNAMIC_RANGE_MAP.get(hdr_format)} "
                 elif "HLG" in trc or "Hybrid Log-Gamma" in trc or "ARIB STD-B67" in trc or "arib-std-b67" in trc.lower():
