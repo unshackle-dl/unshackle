@@ -132,7 +132,7 @@ class Episode(Title):
                     year=f" {self.year}" if self.year and config.series_year else "",
                     season=self.season,
                     number=self.number,
-                    name=self.name if self.name and config.insert_episodename_into_filenames else "",
+                    name=self.name or "",
                 ).strip()
 
         if config.scene_naming:
