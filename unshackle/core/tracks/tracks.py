@@ -121,24 +121,27 @@ class Tracks:
                         speed_estimate_period=10,
                     )
                     task = progress.add_task("", downloaded="-")
+                    state = {"total": 100.0}
 
-                    current_total = 100.0
-
-                    def update_track_progress(task_id: int = task, **kwargs) -> None:
+                    def update_track_progress(
+                        task_id: int = task,
+                        _state: dict[str, float] = state,
+                        _progress: Progress = progress,
+                        **kwargs,
+                    ) -> None:
                         """
                         Ensure terminal status states render as a fully completed bar.
 
                         Some downloaders can report completed slightly below total
                         before emitting the final "Downloaded" state.
                         """
-                        nonlocal current_total
                         if "total" in kwargs and kwargs["total"] is not None:
-                            current_total = kwargs["total"]
+                            _state["total"] = kwargs["total"]
 
                         downloaded_state = kwargs.get("downloaded")
                         if downloaded_state in {"Downloaded", "Decrypted", "[yellow]SKIPPED"}:
-                            kwargs["completed"] = current_total
-                        progress.update(task_id=task_id, **kwargs)
+                            kwargs["completed"] = _state["total"]
+                        _progress.update(task_id=task_id, **kwargs)
 
                     progress_callables.append(update_track_progress)
                     track_table = Table.grid()
