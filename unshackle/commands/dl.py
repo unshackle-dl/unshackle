@@ -1462,30 +1462,42 @@ class dl:
                         if "best" in processed_lang:
                             unique_languages = {track.language for track in title.tracks.audio}
                             selected_audio = []
-                            if acodec and len(acodec) > 1:
-                                for language in unique_languages:
-                                    for codec in acodec:
-                                        candidates = [
-                                            track
-                                            for track in title.tracks.audio
-                                            if track.language == language and track.codec == codec
-                                        ]
-                                        if not candidates:
-                                            continue
-                                        selected_audio.append(max(candidates, key=lambda x: x.bitrate or 0))
-                            else:
-                                for language in unique_languages:
-                                    highest_quality = max(
-                                        (track for track in title.tracks.audio if track.language == language),
-                                        key=lambda x: x.bitrate or 0,
-                                    )
-                                    selected_audio.append(highest_quality)
+                            for language in unique_languages:
+                                codecs_to_check = acodec if (acodec and len(acodec) > 1) else [None]
+                                for codec in codecs_to_check:
+                                    base_candidates = [
+                                        t for t in title.tracks.audio 
+                                        if t.language == language and (codec is None or t.codec == codec)
+                                    ]
+                                    if not base_candidates:
+                                        continue
+                                    if audio_description:
+                                        standards = [t for t in base_candidates if not t.descriptive]
+                                        if standards:
+                                            selected_audio.append(max(standards, key=lambda x: x.bitrate or 0))
+                                        descs = [t for t in base_candidates if t.descriptive]
+                                        if descs:
+                                            selected_audio.append(max(descs, key=lambda x: x.bitrate or 0))
+                                    else:
+                                        selected_audio.append(max(base_candidates, key=lambda x: x.bitrate or 0))
+                                        
                             title.tracks.audio = selected_audio
                         elif "all" not in processed_lang:
                             per_language = 0 if acodec and len(acodec) > 1 else 1
-                            title.tracks.audio = title.tracks.by_language(
-                                title.tracks.audio, processed_lang, per_language=per_language, exact_match=exact_lang
-                            )
+                            if audio_description:
+                                standard_audio = [a for a in title.tracks.audio if not a.descriptive]
+                                selected_standards = title.tracks.by_language(
+                                    standard_audio, processed_lang, per_language=per_language, exact_match=exact_lang
+                                )
+                                desc_audio = [a for a in title.tracks.audio if a.descriptive]
+                                selected_descs = title.tracks.by_language(
+                                    desc_audio, processed_lang, per_language=per_language, exact_match=exact_lang
+                                )
+                                title.tracks.audio = selected_standards + selected_descs
+                            else:
+                                title.tracks.audio = title.tracks.by_language(
+                                    title.tracks.audio, processed_lang, per_language=per_language, exact_match=exact_lang
+                                )
                             if not title.tracks.audio:
                                 self.log.error(f"There's no {processed_lang} Audio Track, cannot continue...")
                                 sys.exit(1)
