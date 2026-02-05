@@ -255,7 +255,7 @@ class HLS:
         else:
             # Get the playlist text and handle both session types
             response = session.get(track.url)
-            if isinstance(response, requests.Response):
+            if isinstance(response, requests.Response) or isinstance(response, CurlResponse):
                 if not response.ok:
                     log.error(f"Failed to request the invariant M3U8 playlist: {response.status_code}")
                     sys.exit(1)
@@ -583,7 +583,7 @@ class HLS:
                         )
 
                         # Check response based on session type
-                        if isinstance(res, requests.Response):
+                        if isinstance(res, requests.Response) or isinstance(res, CurlResponse):
                             res.raise_for_status()
                             init_content = res.content
                         else:
