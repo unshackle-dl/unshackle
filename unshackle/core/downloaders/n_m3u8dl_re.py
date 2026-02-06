@@ -199,6 +199,7 @@ def build_download_args(
         engine_name = DECRYPTION_ENGINE.get(decryption_config) or "SHAKA_PACKAGER"
         args["--decryption-engine"] = engine_name
 
+        # If the following virtual environment variables are set, it works correctly even without --decryption-binary-path.
         binary_path = None
         if engine_name == "SHAKA_PACKAGER":
             if ShakaPackager:
@@ -339,6 +340,20 @@ def download(
     yield {"total": 100}
     yield {"downloaded": "Parsing streams..."}
 
+    # If Windows cannot find the path for decryption-binary-path, register it as a virtual environment variable.
+    current_env = os.environ.copy()
+    decryption_config = config.decryption.lower()
+    target_binary = None
+    
+    if decryption_config == "shaka" and ShakaPackager:
+        target_binary = ShakaPackager
+    elif decryption_config == "mp4decrypt" and Mp4decrypt:
+        target_binary = Mp4decrypt
+
+    if target_binary:
+        bin_dir = str(Path(target_binary).parent)
+        current_env["PATH"] = bin_dir + os.pathsep + current_env.get("PATH", "")
+
     try:
         with subprocess.Popen(
             [binaries.N_m3u8DL_RE, *arguments],
@@ -346,6 +361,7 @@ def download(
             stderr=subprocess.STDOUT,
             text=True,
             encoding="utf-8",
+            env=current_env,
         ) as process:
             last_line = ""
             track_type = track.__class__.__name__
