@@ -226,6 +226,39 @@ class HLS:
         return tracks
 
     @staticmethod
+    def _finalize_n_m3u8dl_re_output(*, track: AnyTrack, save_dir: Path, save_path: Path) -> Path:
+        """
+        Finalize output from N_m3u8DL-RE.
+
+        We call N_m3u8DL-RE with `--save-name track.id`, so the final file should be `{track.id}.*` under `save_dir`.
+        This moves that output to `save_path` (preserving the real suffix) and, for subtitles, updates `track.codec`
+        to match the produced file extension.
+        """
+        matches = [p for p in save_dir.rglob(f"{track.id}.*") if p.is_file()]
+        if not matches:
+            raise FileNotFoundError(f"No output files produced by N_m3u8DL-RE for save-name={track.id} in: {save_dir}")
+
+        primary = max(matches, key=lambda p: p.stat().st_size)
+
+        final_save_path = save_path.with_suffix(primary.suffix) if primary.suffix else save_path
+
+        final_save_path.parent.mkdir(parents=True, exist_ok=True)
+        if primary.absolute() != final_save_path.absolute():
+            final_save_path.unlink(missing_ok=True)
+            shutil.move(str(primary), str(final_save_path))
+
+        if isinstance(track, Subtitle):
+            ext = final_save_path.suffix.lower().lstrip(".")
+            try:
+                track.codec = Subtitle.Codec.from_mime(ext)
+            except ValueError:
+                pass
+
+        shutil.rmtree(save_dir, ignore_errors=True)
+
+        return final_save_path
+
+    @staticmethod
     def download_track(
         track: AnyTrack,
         save_path: Path,
@@ -420,222 +453,230 @@ class HLS:
         for control_file in segment_save_dir.glob("*.aria2__temp"):
             control_file.unlink()
 
-        if not skip_merge:
-            progress(total=total_segments, completed=0, downloaded="Merging")
+        if skip_merge:
+            final_save_path = HLS._finalize_n_m3u8dl_re_output(track=track, save_dir=save_dir, save_path=save_path)
+            progress(downloaded="Downloaded")
+            track.path = final_save_path
+            events.emit(events.Types.TRACK_DOWNLOADED, track=track)
+            return
 
-            name_len = len(str(total_segments))
-            discon_i = 0
-            range_offset = 0
-            map_data: Optional[tuple[m3u8.model.InitializationSection, bytes]] = None
-            if session_drm:
-                encryption_data: Optional[tuple[Optional[m3u8.Key], DRM_T]] = (initial_drm_key, session_drm)
-            else:
-                encryption_data: Optional[tuple[Optional[m3u8.Key], DRM_T]] = None
+        progress(total=total_segments, completed=0, downloaded="Merging")
 
-            i = -1
-            for real_i, segment in enumerate(master.segments):
-                if segment not in unwanted_segments:
-                    i += 1
+        name_len = len(str(total_segments))
+        discon_i = 0
+        range_offset = 0
+        map_data: Optional[tuple[m3u8.model.InitializationSection, bytes]] = None
+        if session_drm:
+            encryption_data: Optional[tuple[Optional[m3u8.Key], DRM_T]] = (initial_drm_key, session_drm)
+        else:
+            encryption_data: Optional[tuple[Optional[m3u8.Key], DRM_T]] = None
 
-                is_last_segment = (real_i + 1) == len(master.segments)
+        i = -1
+        for real_i, segment in enumerate(master.segments):
+            if segment not in unwanted_segments:
+                i += 1
 
-                def merge(to: Path, via: list[Path], delete: bool = False, include_map_data: bool = False):
-                    """
-                    Merge all files to a given path, optionally including map data.
+            is_last_segment = (real_i + 1) == len(master.segments)
 
-                    Parameters:
-                        to: The output file with all merged data.
-                        via: List of files to merge, in sequence.
-                        delete: Delete the file once it's been merged.
-                        include_map_data: Whether to include the init map data.
-                    """
-                    with open(to, "wb") as x:
-                        if include_map_data and map_data and map_data[1]:
-                            x.write(map_data[1])
-                        for file in via:
-                            x.write(file.read_bytes())
-                            x.flush()
-                            if delete:
-                                file.unlink()
+            def merge(to: Path, via: list[Path], delete: bool = False, include_map_data: bool = False):
+                """
+                Merge all files to a given path, optionally including map data.
 
-                def decrypt(include_this_segment: bool) -> Path:
-                    """
-                    Decrypt all segments that uses the currently set DRM.
+                Parameters:
+                    to: The output file with all merged data.
+                    via: List of files to merge, in sequence.
+                    delete: Delete the file once it's been merged.
+                    include_map_data: Whether to include the init map data.
+                """
+                with open(to, "wb") as x:
+                    if include_map_data and map_data and map_data[1]:
+                        x.write(map_data[1])
+                    for file in via:
+                        x.write(file.read_bytes())
+                        x.flush()
+                        if delete:
+                            file.unlink()
 
-                    All segments that will be decrypted with this DRM will be merged together
-                    in sequence, prefixed with the init data (if any), and then deleted. Once
-                    merged they will be decrypted. The merged and decrypted file names state
-                    the range of segments that were used.
+            def decrypt(include_this_segment: bool) -> Path:
+                """
+                Decrypt all segments that uses the currently set DRM.
 
-                    Parameters:
-                        include_this_segment: Whether to include the current segment in the
-                            list of segments to merge and decrypt. This should be False if
-                            decrypting on EXT-X-KEY changes, or True when decrypting on the
-                            last segment.
+                All segments that will be decrypted with this DRM will be merged together
+                in sequence, prefixed with the init data (if any), and then deleted. Once
+                merged they will be decrypted. The merged and decrypted file names state
+                the range of segments that were used.
 
-                    Returns the decrypted path.
-                    """
-                    drm = encryption_data[1]
-                    first_segment_i = next(
-                        int(file.stem) for file in sorted(segment_save_dir.iterdir()) if file.stem.isdigit()
-                    )
-                    last_segment_i = max(0, i - int(not include_this_segment))
-                    range_len = (last_segment_i - first_segment_i) + 1
+                Parameters:
+                    include_this_segment: Whether to include the current segment in the
+                        list of segments to merge and decrypt. This should be False if
+                        decrypting on EXT-X-KEY changes, or True when decrypting on the
+                        last segment.
 
-                    segment_range = f"{str(first_segment_i).zfill(name_len)}-{str(last_segment_i).zfill(name_len)}"
-                    merged_path = (
-                        segment_save_dir / f"{segment_range}{get_extension(master.segments[last_segment_i].uri)}"
-                    )
-                    decrypted_path = segment_save_dir / f"{merged_path.stem}_decrypted{merged_path.suffix}"
+                Returns the decrypted path.
+                """
+                drm = encryption_data[1]
+                first_segment_i = next(
+                    int(file.stem) for file in sorted(segment_save_dir.iterdir()) if file.stem.isdigit()
+                )
+                last_segment_i = max(0, i - int(not include_this_segment))
+                range_len = (last_segment_i - first_segment_i) + 1
 
-                    files = [
-                        file
-                        for file in sorted(segment_save_dir.iterdir())
-                        if file.stem.isdigit() and first_segment_i <= int(file.stem) <= last_segment_i
-                    ]
-                    if not files:
-                        raise ValueError(f"None of the segment files for {segment_range} exist...")
-                    elif len(files) != range_len:
-                        raise ValueError(f"Missing {range_len - len(files)} segment files for {segment_range}...")
+                segment_range = f"{str(first_segment_i).zfill(name_len)}-{str(last_segment_i).zfill(name_len)}"
+                merged_path = segment_save_dir / f"{segment_range}{get_extension(master.segments[last_segment_i].uri)}"
+                decrypted_path = segment_save_dir / f"{merged_path.stem}_decrypted{merged_path.suffix}"
 
-                    if isinstance(drm, (Widevine, PlayReady)):
-                        # with widevine we can merge all segments and decrypt once
-                        merge(to=merged_path, via=files, delete=True, include_map_data=True)
-                        drm.decrypt(merged_path)
-                        merged_path.rename(decrypted_path)
-                    else:
-                        # with other drm we must decrypt separately and then merge them
-                        # for aes this is because each segment likely has 16-byte padding
-                        for file in files:
-                            drm.decrypt(file)
-                        merge(to=merged_path, via=files, delete=True, include_map_data=True)
+                files = [
+                    file
+                    for file in sorted(segment_save_dir.iterdir())
+                    if file.stem.isdigit() and first_segment_i <= int(file.stem) <= last_segment_i
+                ]
+                if not files:
+                    raise ValueError(f"None of the segment files for {segment_range} exist...")
+                elif len(files) != range_len:
+                    raise ValueError(f"Missing {range_len - len(files)} segment files for {segment_range}...")
 
-                    events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=drm, segment=decrypted_path)
+                if isinstance(drm, (Widevine, PlayReady)):
+                    # with widevine we can merge all segments and decrypt once
+                    merge(to=merged_path, via=files, delete=True, include_map_data=True)
+                    drm.decrypt(merged_path)
+                    merged_path.rename(decrypted_path)
+                else:
+                    # with other drm we must decrypt separately and then merge them
+                    # for aes this is because each segment likely has 16-byte padding
+                    for file in files:
+                        drm.decrypt(file)
+                    merge(to=merged_path, via=files, delete=True, include_map_data=True)
 
-                    return decrypted_path
+                events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=drm, segment=decrypted_path)
 
-                def merge_discontinuity(include_this_segment: bool, include_map_data: bool = True):
-                    """
-                    Merge all segments of the discontinuity.
+                return decrypted_path
 
-                    All segment files for this discontinuity must already be downloaded and
-                    already decrypted (if it needs to be decrypted).
+            def merge_discontinuity(include_this_segment: bool, include_map_data: bool = True):
+                """
+                Merge all segments of the discontinuity.
 
-                    Parameters:
-                        include_this_segment: Whether to include the current segment in the
-                            list of segments to merge and decrypt. This should be False if
-                            decrypting on EXT-X-KEY changes, or True when decrypting on the
-                            last segment.
-                        include_map_data: Whether to prepend the init map data before the
-                            segment files when merging.
-                    """
-                    last_segment_i = max(0, i - int(not include_this_segment))
+                All segment files for this discontinuity must already be downloaded and
+                already decrypted (if it needs to be decrypted).
 
-                    files = [
-                        file
-                        for file in sorted(segment_save_dir.iterdir())
-                        if int(file.stem.replace("_decrypted", "").split("-")[-1]) <= last_segment_i
-                    ]
-                    if files:
-                        to_dir = segment_save_dir.parent
-                        to_path = to_dir / f"{str(discon_i).zfill(name_len)}{files[-1].suffix}"
-                        merge(to=to_path, via=files, delete=True, include_map_data=include_map_data)
+                Parameters:
+                    include_this_segment: Whether to include the current segment in the
+                        list of segments to merge and decrypt. This should be False if
+                        decrypting on EXT-X-KEY changes, or True when decrypting on the
+                        last segment.
+                    include_map_data: Whether to prepend the init map data before the
+                        segment files when merging.
+                """
+                last_segment_i = max(0, i - int(not include_this_segment))
 
-                if segment not in unwanted_segments:
-                    if isinstance(track, Subtitle):
-                        segment_file_ext = get_extension(segment.uri)
-                        segment_file_path = segment_save_dir / f"{str(i).zfill(name_len)}{segment_file_ext}"
-                        segment_data = try_ensure_utf8(segment_file_path.read_bytes())
-                        if track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML):
-                            segment_data = (
-                                segment_data.decode("utf8")
-                                .replace("&lrm;", html.unescape("&lrm;"))
-                                .replace("&rlm;", html.unescape("&rlm;"))
-                                .encode("utf8")
-                            )
-                        segment_file_path.write_bytes(segment_data)
+                files = [
+                    file
+                    for file in sorted(segment_save_dir.iterdir())
+                    if int(file.stem.replace("_decrypted", "").split("-")[-1]) <= last_segment_i
+                ]
+                if files:
+                    to_dir = segment_save_dir.parent
+                    to_path = to_dir / f"{str(discon_i).zfill(name_len)}{files[-1].suffix}"
+                    merge(to=to_path, via=files, delete=True, include_map_data=include_map_data)
 
-                    if segment.discontinuity and i != 0:
-                        if encryption_data:
-                            decrypt(include_this_segment=False)
-                        merge_discontinuity(
-                            include_this_segment=False, include_map_data=not encryption_data or not encryption_data[1]
+            if segment not in unwanted_segments:
+                if isinstance(track, Subtitle):
+                    segment_file_ext = get_extension(segment.uri)
+                    segment_file_path = segment_save_dir / f"{str(i).zfill(name_len)}{segment_file_ext}"
+                    segment_data = try_ensure_utf8(segment_file_path.read_bytes())
+                    if track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML):
+                        segment_data = (
+                            segment_data.decode("utf8")
+                            .replace("&lrm;", html.unescape("&lrm;"))
+                            .replace("&rlm;", html.unescape("&rlm;"))
+                            .encode("utf8")
                         )
+                    segment_file_path.write_bytes(segment_data)
 
-                        discon_i += 1
-                        range_offset = 0  # TODO: Should this be reset or not?
-                        map_data = None
-                        if encryption_data:
-                            encryption_data = (encryption_data[0], encryption_data[1])
-
-                    if segment.init_section and (not map_data or segment.init_section != map_data[0]):
-                        if segment.init_section.byterange:
-                            init_byte_range = HLS.calculate_byte_range(segment.init_section.byterange, range_offset)
-                            range_offset = init_byte_range.split("-")[0]
-                            init_range_header = {"Range": f"bytes={init_byte_range}"}
-                        else:
-                            init_range_header = {}
-
-                        # Handle both session types for init section request
-                        res = session.get(
-                            url=urljoin(segment.init_section.base_uri, segment.init_section.uri),
-                            headers=init_range_header,
-                        )
-
-                        # Check response based on session type
-                        if isinstance(res, requests.Response) or isinstance(res, CurlResponse):
-                            res.raise_for_status()
-                            init_content = res.content
-                        else:
-                            raise TypeError(
-                                f"Expected response to be requests.Response or curl_cffi.Response, not {type(res)}"
-                            )
-
-                        map_data = (segment.init_section, init_content)
-
-                segment_keys = getattr(segment, "keys", None)
-                if segment_keys:
-                    if cdm:
-                        cdm_segment_keys = HLS.filter_keys_for_cdm(segment_keys, cdm)
-                        key = HLS.get_supported_key(cdm_segment_keys) if cdm_segment_keys else HLS.get_supported_key(segment_keys)
-                    else:
-                        key = HLS.get_supported_key(segment_keys)
-                    if encryption_data and encryption_data[0] != key and i != 0 and segment not in unwanted_segments:
-                        decrypt(include_this_segment=False)
-
-                    if key is None:
-                        encryption_data = None
-                    elif not encryption_data or encryption_data[0] != key:
-                        drm = HLS.get_drm(key, session)
-                        if isinstance(drm, (Widevine, PlayReady)):
-                            try:
-                                if map_data:
-                                    track_kid = track.get_key_id(map_data[1])
-                                else:
-                                    track_kid = None
-                                if not track_kid:
-                                    track_kid = drm.kid
-                                progress(downloaded="LICENSING")
-                                license_widevine(drm, track_kid=track_kid)
-                                progress(downloaded="[yellow]LICENSED")
-                            except Exception:  # noqa
-                                DOWNLOAD_CANCELLED.set()  # skip pending track downloads
-                                progress(downloaded="[red]FAILED")
-                                raise
-                        encryption_data = (key, drm)
-
-                if DOWNLOAD_LICENCE_ONLY.is_set():
-                    continue
-
-                if is_last_segment:
-                    # required as it won't end with EXT-X-DISCONTINUITY nor a new key
+                if segment.discontinuity and i != 0:
                     if encryption_data:
-                        decrypt(include_this_segment=True)
+                        decrypt(include_this_segment=False)
                     merge_discontinuity(
-                        include_this_segment=True, include_map_data=not encryption_data or not encryption_data[1]
+                        include_this_segment=False, include_map_data=not encryption_data or not encryption_data[1]
                     )
 
-                progress(advance=1)
+                    discon_i += 1
+                    range_offset = 0  # TODO: Should this be reset or not?
+                    map_data = None
+                    if encryption_data:
+                        encryption_data = (encryption_data[0], encryption_data[1])
+
+                if segment.init_section and (not map_data or segment.init_section != map_data[0]):
+                    if segment.init_section.byterange:
+                        init_byte_range = HLS.calculate_byte_range(segment.init_section.byterange, range_offset)
+                        range_offset = init_byte_range.split("-")[0]
+                        init_range_header = {"Range": f"bytes={init_byte_range}"}
+                    else:
+                        init_range_header = {}
+
+                    # Handle both session types for init section request
+                    res = session.get(
+                        url=urljoin(segment.init_section.base_uri, segment.init_section.uri),
+                        headers=init_range_header,
+                    )
+
+                    # Check response based on session type
+                    if isinstance(res, requests.Response) or isinstance(res, CurlResponse):
+                        res.raise_for_status()
+                        init_content = res.content
+                    else:
+                        raise TypeError(
+                            f"Expected response to be requests.Response or curl_cffi.Response, not {type(res)}"
+                        )
+
+                    map_data = (segment.init_section, init_content)
+
+            segment_keys = getattr(segment, "keys", None)
+            if segment_keys:
+                if cdm:
+                    cdm_segment_keys = HLS.filter_keys_for_cdm(segment_keys, cdm)
+                    key = (
+                        HLS.get_supported_key(cdm_segment_keys)
+                        if cdm_segment_keys
+                        else HLS.get_supported_key(segment_keys)
+                    )
+                else:
+                    key = HLS.get_supported_key(segment_keys)
+                if encryption_data and encryption_data[0] != key and i != 0 and segment not in unwanted_segments:
+                    decrypt(include_this_segment=False)
+
+                if key is None:
+                    encryption_data = None
+                elif not encryption_data or encryption_data[0] != key:
+                    drm = HLS.get_drm(key, session)
+                    if isinstance(drm, (Widevine, PlayReady)):
+                        try:
+                            if map_data:
+                                track_kid = track.get_key_id(map_data[1])
+                            else:
+                                track_kid = None
+                            if not track_kid:
+                                track_kid = drm.kid
+                            progress(downloaded="LICENSING")
+                            license_widevine(drm, track_kid=track_kid)
+                            progress(downloaded="[yellow]LICENSED")
+                        except Exception:  # noqa
+                            DOWNLOAD_CANCELLED.set()  # skip pending track downloads
+                            progress(downloaded="[red]FAILED")
+                            raise
+                    encryption_data = (key, drm)
+
+            if DOWNLOAD_LICENCE_ONLY.is_set():
+                continue
+
+            if is_last_segment:
+                # required as it won't end with EXT-X-DISCONTINUITY nor a new key
+                if encryption_data:
+                    decrypt(include_this_segment=True)
+                merge_discontinuity(
+                    include_this_segment=True, include_map_data=not encryption_data or not encryption_data[1]
+                )
+
+            progress(advance=1)
 
         if DOWNLOAD_LICENCE_ONLY.is_set():
             return

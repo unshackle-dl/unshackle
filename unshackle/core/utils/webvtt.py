@@ -168,6 +168,16 @@ def merge_segmented_webvtt(vtt_raw: str, segment_durations: Optional[list[int]] 
         duplicate_index: list[int] = []
         captions = vtt.get_captions(lang)
 
+        # Some providers can produce "segment_index" values that are
+        # outside the provided segment_durations list after normalization/merge.
+        # This used to crash with IndexError and abort the entire download.
+        if segment_durations and captions:
+            max_idx = max(getattr(c, "segment_index", 0) for c in captions)
+            if max_idx >= len(segment_durations):
+                # Pad with the last known duration (or 0 if empty) so indexing is safe.
+                pad_val = segment_durations[-1] if segment_durations else 0
+                segment_durations = segment_durations + [pad_val] * (max_idx - len(segment_durations) + 1)
+
         if captions[0].segment_index == 0:
             first_segment_mpegts = captions[0].mpegts
         else:
@@ -179,6 +189,9 @@ def merge_segmented_webvtt(vtt_raw: str, segment_durations: Optional[list[int]] 
             # calculate the timestamp from SegmentTemplate/SegmentList duration.
             likely_dash = first_segment_mpegts == 0 and caption.mpegts == 0
             if likely_dash and segment_durations:
+                # Defensive: segment_index can still be out of range if captions are malformed.
+                if caption.segment_index < 0 or caption.segment_index >= len(segment_durations):
+                    continue
                 duration = segment_durations[caption.segment_index]
                 caption.mpegts = MPEG_TIMESCALE * (duration / timescale)
 
