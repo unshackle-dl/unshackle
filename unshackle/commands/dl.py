@@ -1837,6 +1837,9 @@ class dl:
                     append_audio_codec_suffix = merge_audio
 
                     multiplex_tasks: list[tuple[TaskID, Tracks, Optional[Audio.Codec]]] = []
+                    # Track hybrid-processing outputs explicitly so we can always clean them up,
+                    # even if muxing fails early (e.g. SystemExit) before the normal delete loop.
+                    hybrid_temp_paths: list[Path] = []
 
                     def clone_tracks_for_audio(base_tracks: Tracks, audio_tracks: list[Audio]) -> Tracks:
                         task_tracks = Tracks()
@@ -1898,10 +1901,13 @@ class dl:
                                 # Create unique output filename for this resolution
                                 hybrid_filename = f"HDR10-DV-{resolution}p.hevc"
                                 hybrid_output_path = config.directories.temp / hybrid_filename
+                                hybrid_temp_paths.append(hybrid_output_path)
 
                                 # The Hybrid class creates HDR10-DV.hevc, rename it for this resolution
                                 default_output = config.directories.temp / "HDR10-DV.hevc"
                                 if default_output.exists():
+                                    # If a previous run left this behind, replace it to avoid move() failures.
+                                    hybrid_output_path.unlink(missing_ok=True)
                                     shutil.move(str(default_output), str(hybrid_output_path))
 
                                 # Create tracks with the hybrid video output for this resolution
@@ -1936,80 +1942,95 @@ class dl:
 
                             enqueue_mux_tasks(task_description, task_tracks)
 
-                    with Live(Padding(progress, (0, 5, 1, 5)), console=console):
-                        mux_index = 0
-                        for task_id, task_tracks, audio_codec in multiplex_tasks:
-                            progress.start_task(task_id)  # TODO: Needed?
-                            audio_expected = not video_only and not no_audio
-                            muxed_path, return_code, errors = task_tracks.mux(
-                                str(title),
-                                progress=partial(progress.update, task_id=task_id),
-                                delete=False,
-                                audio_expected=audio_expected,
-                                title_language=title.language,
-                                skip_subtitles=skip_subtitle_mux,
-                            )
-                            if muxed_path.exists():
-                                mux_index += 1
-                                unique_path = muxed_path.with_name(
-                                    f"{muxed_path.stem}.{mux_index}{muxed_path.suffix}"
+                    try:
+                        with Live(Padding(progress, (0, 5, 1, 5)), console=console):
+                            mux_index = 0
+                            for task_id, task_tracks, audio_codec in multiplex_tasks:
+                                progress.start_task(task_id)  # TODO: Needed?
+                                audio_expected = not video_only and not no_audio
+                                muxed_path, return_code, errors = task_tracks.mux(
+                                    str(title),
+                                    progress=partial(progress.update, task_id=task_id),
+                                    delete=False,
+                                    audio_expected=audio_expected,
+                                    title_language=title.language,
+                                    skip_subtitles=skip_subtitle_mux,
                                 )
-                                if unique_path != muxed_path:
-                                    shutil.move(muxed_path, unique_path)
-                                    muxed_path = unique_path
-                            muxed_paths.append(muxed_path)
-                            muxed_audio_codecs[muxed_path] = audio_codec
-                            if return_code >= 2:
-                                self.log.error(f"Failed to Mux video to Matroska file ({return_code}):")
-                            elif return_code == 1 or errors:
-                                self.log.warning("mkvmerge had at least one warning or error, continuing anyway...")
-                            for line in errors:
-                                if line.startswith("#GUI#error"):
-                                    self.log.error(line)
+                                if muxed_path.exists():
+                                    mux_index += 1
+                                    unique_path = muxed_path.with_name(
+                                        f"{muxed_path.stem}.{mux_index}{muxed_path.suffix}"
+                                    )
+                                    if unique_path != muxed_path:
+                                        shutil.move(muxed_path, unique_path)
+                                        muxed_path = unique_path
+                                muxed_paths.append(muxed_path)
+                                muxed_audio_codecs[muxed_path] = audio_codec
+                                if return_code >= 2:
+                                    self.log.error(f"Failed to Mux video to Matroska file ({return_code}):")
+                                elif return_code == 1 or errors:
+                                    self.log.warning("mkvmerge had at least one warning or error, continuing anyway...")
+                                for line in errors:
+                                    if line.startswith("#GUI#error"):
+                                        self.log.error(line)
+                                    else:
+                                        self.log.warning(line)
+                                if return_code >= 2:
+                                    sys.exit(1)
+
+                            # Output sidecar subtitles before deleting track files
+                            if sidecar_subtitles and not no_mux:
+                                media_info = MediaInfo.parse(muxed_paths[0]) if muxed_paths else None
+                                if media_info:
+                                    base_filename = title.get_filename(media_info, show_service=not no_source)
                                 else:
-                                    self.log.warning(line)
-                            if return_code >= 2:
-                                sys.exit(1)
+                                    base_filename = str(title)
 
-                        # Output sidecar subtitles before deleting track files
-                        if sidecar_subtitles and not no_mux:
-                            media_info = MediaInfo.parse(muxed_paths[0]) if muxed_paths else None
-                            if media_info:
-                                base_filename = title.get_filename(media_info, show_service=not no_source)
-                            else:
-                                base_filename = str(title)
+                                sidecar_dir = config.directories.downloads
+                                if not no_folder and isinstance(title, (Episode, Song)) and media_info:
+                                    sidecar_dir /= title.get_filename(media_info, show_service=not no_source, folder=True)
+                                sidecar_dir.mkdir(parents=True, exist_ok=True)
 
-                            sidecar_dir = config.directories.downloads
-                            if not no_folder and isinstance(title, (Episode, Song)) and media_info:
-                                sidecar_dir /= title.get_filename(media_info, show_service=not no_source, folder=True)
-                            sidecar_dir.mkdir(parents=True, exist_ok=True)
+                                with console.status("Saving subtitle sidecar files..."):
+                                    created = self.output_subtitle_sidecars(
+                                        sidecar_subtitles,
+                                        base_filename,
+                                        sidecar_dir,
+                                        sidecar_format,
+                                        original_paths=sidecar_original_paths or None,
+                                    )
+                                    if created:
+                                        self.log.info(f"Saved {len(created)} sidecar subtitle files")
 
-                            with console.status("Saving subtitle sidecar files..."):
-                                created = self.output_subtitle_sidecars(
-                                    sidecar_subtitles,
-                                    base_filename,
-                                    sidecar_dir,
-                                    sidecar_format,
-                                    original_paths=sidecar_original_paths or None,
-                                )
-                                if created:
-                                    self.log.info(f"Saved {len(created)} sidecar subtitle files")
+                            for track in title.tracks:
+                                track.delete()
 
-                        for track in title.tracks:
-                            track.delete()
+                            # Clear temp font attachment paths and delete other attachments
+                            for attachment in title.tracks.attachments:
+                                if attachment.path and attachment.path in temp_font_files:
+                                    attachment.path = None
+                                else:
+                                    attachment.delete()
 
-                        # Clear temp font attachment paths and delete other attachments
-                        for attachment in title.tracks.attachments:
-                            if attachment.path and attachment.path in temp_font_files:
-                                attachment.path = None
-                            else:
-                                attachment.delete()
-
-                        # Clean up temp fonts
-                        for temp_path in temp_font_files:
-                            temp_path.unlink(missing_ok=True)
-                        for temp_path in sidecar_original_paths.values():
-                            temp_path.unlink(missing_ok=True)
+                            # Clean up temp fonts
+                            for temp_path in temp_font_files:
+                                temp_path.unlink(missing_ok=True)
+                            for temp_path in sidecar_original_paths.values():
+                                temp_path.unlink(missing_ok=True)
+                    finally:
+                        # Hybrid() produces a temp HEVC output we rename; make sure it's never left behind.
+                        # Also attempt to remove the default hybrid output name if it still exists.
+                        for temp_path in hybrid_temp_paths:
+                            try:
+                                temp_path.unlink(missing_ok=True)
+                            except PermissionError:
+                                self.log.warning(f"Failed to delete temp file (in use?): {temp_path}")
+                        try:
+                            (config.directories.temp / "HDR10-DV.hevc").unlink(missing_ok=True)
+                        except PermissionError:
+                            self.log.warning(
+                                f"Failed to delete temp file (in use?): {config.directories.temp / 'HDR10-DV.hevc'}"
+                            )
 
                 else:
                     # dont mux
