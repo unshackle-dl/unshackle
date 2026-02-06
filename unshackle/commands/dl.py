@@ -1910,9 +1910,11 @@ class dl:
 
                                 # Create a new video track for the hybrid output
                                 hybrid_track = deepcopy(hdr10_track)
+                                hybrid_track.id = f"hybrid_{hdr10_track.id}_{resolution}"
                                 hybrid_track.path = hybrid_output_path
                                 hybrid_track.range = Video.Range.DV  # It's now a DV track
                                 hybrid_track.needs_duration_fix = True
+                                title.tracks.add(hybrid_track)
                                 task_tracks.videos = [hybrid_track]
 
                                 enqueue_mux_tasks(task_description, task_tracks)
