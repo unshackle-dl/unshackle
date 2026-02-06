@@ -8,9 +8,6 @@ from unshackle.core import __version__
 from unshackle.core.api.errors import APIError, APIErrorCode, build_error_response, handle_api_exception
 from unshackle.core.api.handlers import (cancel_download_job_handler, download_handler, get_download_job_handler,
                                          list_download_jobs_handler, list_titles_handler, list_tracks_handler)
-from unshackle.core.api.remote_handlers import (remote_decrypt, remote_get_chapters, remote_get_license,
-                                                remote_get_manifest, remote_get_titles, remote_get_tracks,
-                                                remote_list_services, remote_search)
 from unshackle.core.services import Services
 from unshackle.core.update_checker import UpdateChecker
 
@@ -733,16 +730,6 @@ def setup_routes(app: web.Application) -> None:
     app.router.add_get("/api/download/jobs/{job_id}", download_job_detail)
     app.router.add_delete("/api/download/jobs/{job_id}", cancel_download_job)
 
-    # Remote service endpoints
-    app.router.add_get("/api/remote/services", remote_list_services)
-    app.router.add_post("/api/remote/{service}/search", remote_search)
-    app.router.add_post("/api/remote/{service}/titles", remote_get_titles)
-    app.router.add_post("/api/remote/{service}/tracks", remote_get_tracks)
-    app.router.add_post("/api/remote/{service}/manifest", remote_get_manifest)
-    app.router.add_post("/api/remote/{service}/chapters", remote_get_chapters)
-    app.router.add_post("/api/remote/{service}/license", remote_get_license)
-    app.router.add_post("/api/remote/{service}/decrypt", remote_decrypt)
-
 
 def setup_swagger(app: web.Application) -> None:
     """Setup Swagger UI documentation."""
@@ -767,14 +754,5 @@ def setup_swagger(app: web.Application) -> None:
             web.get("/api/download/jobs", download_jobs),
             web.get("/api/download/jobs/{job_id}", download_job_detail),
             web.delete("/api/download/jobs/{job_id}", cancel_download_job),
-            # Remote service routes
-            web.get("/api/remote/services", remote_list_services),
-            web.post("/api/remote/{service}/search", remote_search),
-            web.post("/api/remote/{service}/titles", remote_get_titles),
-            web.post("/api/remote/{service}/tracks", remote_get_tracks),
-            web.post("/api/remote/{service}/manifest", remote_get_manifest),
-            web.post("/api/remote/{service}/chapters", remote_get_chapters),
-            web.post("/api/remote/{service}/license", remote_get_license),
-            web.post("/api/remote/{service}/decrypt", remote_decrypt),
         ]
     )
