@@ -305,7 +305,7 @@ def download(
 
     log_file_path: Path | None = None
     if debug_logger:
-        log_file_path = output_dir / f".n_m3u8dl_re_{filename}.log"
+        log_file_path = config.directories.temp / f"n_m3u8dl_re_{filename}.log"
         arguments.extend([
             "--log-file-path", str(log_file_path),
             "--log-level", "DEBUG",
