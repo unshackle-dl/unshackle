@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "unshackle"
-version = "2.3.1"
+version = "2.4.0"
 description = "Modular Movie, TV, and Music Archival Software."
 authors = [{ name = "unshackle team" }]
 requires-python = ">=3.10,<3.13"
