@@ -2711,12 +2711,12 @@ class dl:
                     )
                 else:
                     return RemoteCdm(
-                        device_type=cdm_api["Device Type"],
-                        system_id=cdm_api["System ID"],
-                        security_level=cdm_api["Security Level"],
-                        host=cdm_api["Host"],
-                        secret=cdm_api["Secret"],
-                        device_name=cdm_api["Device Name"],
+                        device_type=cdm_api.get("Device Type", cdm_api.get("device_type", "")),
+                        system_id=cdm_api.get("System ID", cdm_api.get("system_id", "")),
+                        security_level=cdm_api.get("Security Level", cdm_api.get("security_level", 3000)),
+                        host=cdm_api.get("Host", cdm_api.get("host")),
+                        secret=cdm_api.get("Secret", cdm_api.get("secret")),
+                        device_name=cdm_api.get("Device Name", cdm_api.get("device_name")),
                     )
 
         prd_path = config.directories.prds / f"{cdm_name}.prd"
