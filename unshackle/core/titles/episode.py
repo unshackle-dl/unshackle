@@ -209,19 +209,29 @@ class Episode(Title):
                 )
                 frame_rate = float(primary_video_track.frame_rate)
 
+                def _append_token(current: str, token: Optional[str]) -> str:
+                    token = (token or "").strip()
+                    current = current.rstrip()
+                    if not token:
+                        return current
+                    if current.endswith(f" {token}"):
+                        return current
+                    return f"{current} {token}"
+
                 # Primary HDR format detection
                 if hdr_format:
                     if hdr_format_full.startswith("Dolby Vision"):
-                        name += " DV"
+                        name = _append_token(name, "DV")
                         if any(
                             indicator in (hdr_format_full + " " + hdr_format)
                             for indicator in ["HDR10", "SMPTE ST 2086"]
                         ):
-                            name += " HDR"
+                            name = _append_token(name, "HDR")
                     elif "HDR Vivid" in hdr_format:
-                        name += " HDR"
+                        name = _append_token(name, "HDR")
                     else:
-                        name += f" {DYNAMIC_RANGE_MAP.get(hdr_format)}"
+                        dynamic_range = DYNAMIC_RANGE_MAP.get(hdr_format) or hdr_format or ""
+                        name = _append_token(name, dynamic_range)
                 elif "HLG" in trc or "Hybrid Log-Gamma" in trc or "ARIB STD-B67" in trc or "arib-std-b67" in trc.lower():
                     name += " HLG"
                 elif any(indicator in trc for indicator in ["PQ", "SMPTE ST 2084", "BT.2100"]) or "smpte2084" in trc.lower() or "bt.2020-10" in trc.lower():
