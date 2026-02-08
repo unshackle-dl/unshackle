@@ -145,6 +145,23 @@ def merge_segmented_webvtt(vtt_raw: str, segment_durations: Optional[list[int]] 
     """
     MPEG_TIMESCALE = 90_000
 
+    # Basic text normalization (remove unnecessary whitespace and unify line breaks)
+    vtt_raw = vtt_raw.replace("\r\n", "\n").strip()
+    
+    # Remove unnecessary metadata tags like <metadata>.
+    vtt_raw = re.sub(r"<metadata>.*?</metadata>\s*", "", vtt_raw)
+    
+    # Convert commas (,) in timestamps to periods (.). (e.g., 00:00:19,645 -> 00:00:19.645)
+    # This step is required for pycaption's WebVTTReader to parse correctly.
+    vtt_raw = re.sub(r"(\d{1,2}:\d{2}:\d{2}),(\d{3})", r"\1.\2", vtt_raw)
+    
+    # Ensure clear spacing between header and body (prevents pycaption line 1 error)
+    if not vtt_raw.startswith("WEBVTT"):
+        vtt_raw = "WEBVTT\n\n" + vtt_raw
+    else:
+        # If there is only one empty line after the WEBVTT string, increase it to two
+        vtt_raw = re.sub(r"^(WEBVTT)\s*\n", r"\1\n\n", vtt_raw)
+
     # Check config for conversion method preference
     conversion_method = config.subtitle.get("conversion_method", "auto")
     use_pysubs2 = conversion_method in ("pysubs2", "auto")
@@ -158,6 +175,8 @@ def merge_segmented_webvtt(vtt_raw: str, segment_durations: Optional[list[int]] 
             normalized_vtt = subs.to_string("vtt")
             vtt = WebVTTReaderExt().read(normalized_vtt)
         except Exception:
+            # Retry with strict time correction on failure
+            vtt_raw = re.sub(r"(\d{1,2}:\d{2})\s*-->", r"00:\1.000 -->", vtt_raw) # Correct if only hour:minute is present
             # Fall back to direct pycaption parsing
             vtt = WebVTTReaderExt().read(vtt_raw)
     else:
