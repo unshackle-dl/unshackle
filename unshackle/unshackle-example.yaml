@@ -271,12 +271,12 @@ remote_cdm:
 
   # PyPlayReady RemoteCdm - connects to an unshackle serve instance
   - name: "playready_remote"
-    Device Type: PLAYREADY
-    System ID: 0
-    Security Level: 3000  # 2000 for SL2000, 3000 for SL3000
-    Host: "http://127.0.0.1:8786/playready"  # Include /playready path
-    Secret: "your-api-secret-key"
-    Device Name: "my_prd_device"  # Device name on the serve instance
+    device_name: "my_prd_device"  # Device name on the serve instance
+    device_type: PLAYREADY
+    system_id: 0
+    security_level: 3000  # 2000 for SL2000, 3000 for SL3000
+    host: "http://127.0.0.1:8786/playready"  # Include /playready path
+    secret: "your-api-secret-key"
 
 # Key Vaults store your obtained Content Encryption Keys (CEKs)
 # Use 'no_push: true' to prevent a vault from receiving pushed keys
