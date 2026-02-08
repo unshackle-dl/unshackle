@@ -221,7 +221,7 @@ class Episode(Title):
                     elif "HDR Vivid" in hdr_format:
                         name += " HDR"
                     else:
-                        name += f" {DYNAMIC_RANGE_MAP.get(hdr_format)} "
+                        name += f" {DYNAMIC_RANGE_MAP.get(hdr_format)}"
                 elif "HLG" in trc or "Hybrid Log-Gamma" in trc or "ARIB STD-B67" in trc or "arib-std-b67" in trc.lower():
                     name += " HLG"
                 elif any(indicator in trc for indicator in ["PQ", "SMPTE ST 2084", "BT.2100"]) or "smpte2084" in trc.lower() or "bt.2020-10" in trc.lower():
