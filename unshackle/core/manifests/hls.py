@@ -350,8 +350,16 @@ class HLS:
                 raise
 
         if not initial_drm_licensed and session_drm and isinstance(session_drm, MonaLisa):
-            if license_widevine:
+            try:
+                if not license_widevine:
+                    raise ValueError("license_widevine func must be supplied to use DRM")
+                progress(downloaded="LICENSING")
                 license_widevine(session_drm)
+                progress(downloaded="[yellow]LICENSED")
+            except Exception:  # noqa
+                DOWNLOAD_CANCELLED.set()  # skip pending track downloads
+                progress(downloaded="[red]FAILED")
+                raise
 
         if DOWNLOAD_LICENCE_ONLY.is_set():
             progress(downloaded="[yellow]SKIPPED")
@@ -608,7 +616,7 @@ class HLS:
                 if segment.init_section and (not map_data or segment.init_section != map_data[0]):
                     if segment.init_section.byterange:
                         init_byte_range = HLS.calculate_byte_range(segment.init_section.byterange, range_offset)
-                        range_offset = init_byte_range.split("-")[0]
+                        range_offset = int(init_byte_range.split("-")[0])
                         init_range_header = {"Range": f"bytes={init_byte_range}"}
                     else:
                         init_range_header = {}
