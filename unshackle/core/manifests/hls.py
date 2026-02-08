@@ -28,6 +28,7 @@ from pywidevine.pssh import PSSH as WV_PSSH
 from requests import Session
 
 from unshackle.core import binaries
+from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.downloaders import requests as requests_downloader
 from unshackle.core.drm import DRM_T, ClearKey, MonaLisa, PlayReady, Widevine
@@ -914,15 +915,10 @@ class HLS:
         """
         playready_urn = f"urn:uuid:{PR_PSSH.SYSTEM_ID}"
         playready_keyformats = {playready_urn, "com.microsoft.playready"}
-        if isinstance(cdm, WidevineCdm):
+        if is_widevine_cdm(cdm):
             return [k for k in keys if k.keyformat and k.keyformat.lower() == WidevineCdm.urn]
-        elif isinstance(cdm, PlayReadyCdm):
+        elif is_playready_cdm(cdm):
             return [k for k in keys if k.keyformat and k.keyformat.lower() in playready_keyformats]
-        elif hasattr(cdm, "is_playready"):
-            if cdm.is_playready:
-                return [k for k in keys if k.keyformat and k.keyformat.lower() in playready_keyformats]
-            else:
-                return [k for k in keys if k.keyformat and k.keyformat.lower() == WidevineCdm.urn]
         return keys
 
     @staticmethod

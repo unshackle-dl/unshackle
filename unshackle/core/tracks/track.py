@@ -15,11 +15,10 @@ from zlib import crc32
 
 from curl_cffi.requests import Session as CurlSession
 from langcodes import Language
-from pyplayready.cdm import Cdm as PlayReadyCdm
-from pywidevine.cdm import Cdm as WidevineCdm
 from requests import Session
 
 from unshackle.core import binaries
+from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY
 from unshackle.core.downloaders import aria2c, curl_impersonate, n_m3u8dl_re, requests
@@ -297,7 +296,7 @@ class Track:
                     if not self.drm and track_type in ("Video", "Audio"):
                         # the service might not have explicitly defined the `drm` property
                         # try find DRM information from the init data of URL based on CDM type
-                        if isinstance(cdm, PlayReadyCdm):
+                        if is_playready_cdm(cdm):
                             try:
                                 self.drm = [PlayReady.from_track(self, session)]
                             except PlayReady.Exceptions.PSSHNotFound:
@@ -451,23 +450,14 @@ class Track:
         if not self.drm:
             return None
 
-        if isinstance(cdm, WidevineCdm):
+        if is_widevine_cdm(cdm):
             for drm in self.drm:
                 if isinstance(drm, Widevine):
                     return drm
-        elif isinstance(cdm, PlayReadyCdm):
+        elif is_playready_cdm(cdm):
             for drm in self.drm:
                 if isinstance(drm, PlayReady):
                     return drm
-        elif hasattr(cdm, "is_playready"):
-            if cdm.is_playready:
-                for drm in self.drm:
-                    if isinstance(drm, PlayReady):
-                        return drm
-            else:
-                for drm in self.drm:
-                    if isinstance(drm, Widevine):
-                        return drm
 
         return self.drm[0]
 

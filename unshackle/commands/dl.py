@@ -43,6 +43,7 @@ from rich.tree import Tree
 
 from unshackle.core import binaries
 from unshackle.core.cdm import CustomRemoteCDM, DecryptLabsRemoteCDM
+from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import DOWNLOAD_LICENCE_ONLY, AnyTrack, context_settings
@@ -1601,9 +1602,7 @@ class dl:
             if video_tracks:
                 highest_quality = max((track.height for track in video_tracks if track.height), default=0)
                 if highest_quality > 0:
-                    if isinstance(self.cdm, (WidevineCdm, DecryptLabsRemoteCDM)) and not (
-                        isinstance(self.cdm, DecryptLabsRemoteCDM) and self.cdm.is_playready
-                    ):
+                    if is_widevine_cdm(self.cdm):
                         quality_based_cdm = self.get_cdm(
                             self.service, self.profile, drm="widevine", quality=highest_quality
                         )
@@ -1612,9 +1611,7 @@ class dl:
                                 f"Pre-selecting Widevine CDM based on highest quality {highest_quality}p across all video tracks"
                             )
                             self.cdm = quality_based_cdm
-                    elif isinstance(self.cdm, (PlayReadyCdm, DecryptLabsRemoteCDM)) and (
-                        isinstance(self.cdm, DecryptLabsRemoteCDM) and self.cdm.is_playready
-                    ):
+                    elif is_playready_cdm(self.cdm):
                         quality_based_cdm = self.get_cdm(
                             self.service, self.profile, drm="playready", quality=highest_quality
                         )
@@ -1646,10 +1643,7 @@ class dl:
                                         licence=partial(
                                             service.get_playready_license
                                             if (
-                                                isinstance(self.cdm, PlayReadyCdm)
-                                                or (
-                                                    isinstance(self.cdm, DecryptLabsRemoteCDM) and self.cdm.is_playready
-                                                )
+                                                is_playready_cdm(self.cdm)
                                             )
                                             and hasattr(service, "get_playready_license")
                                             else service.get_widevine_license,
@@ -2186,9 +2180,7 @@ class dl:
             track_quality = track.height
 
         if isinstance(drm, Widevine):
-            if not isinstance(self.cdm, (WidevineCdm, DecryptLabsRemoteCDM)) or (
-                isinstance(self.cdm, DecryptLabsRemoteCDM) and self.cdm.is_playready
-            ):
+            if not is_widevine_cdm(self.cdm):
                 widevine_cdm = self.get_cdm(self.service, self.profile, drm="widevine", quality=track_quality)
                 if widevine_cdm:
                     if track_quality:
@@ -2198,9 +2190,7 @@ class dl:
                     self.cdm = widevine_cdm
 
         elif isinstance(drm, PlayReady):
-            if not isinstance(self.cdm, (PlayReadyCdm, DecryptLabsRemoteCDM)) or (
-                isinstance(self.cdm, DecryptLabsRemoteCDM) and not self.cdm.is_playready
-            ):
+            if not is_playready_cdm(self.cdm):
                 playready_cdm = self.get_cdm(self.service, self.profile, drm="playready", quality=track_quality)
                 if playready_cdm:
                     if track_quality:
