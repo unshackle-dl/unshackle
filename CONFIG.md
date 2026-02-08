@@ -1433,20 +1433,21 @@ Control subtitle conversion, SDH (hearing-impaired) stripping behavior, and form
 
 - `sdh_method`: How to strip SDH cues. Default: `auto`.
 
-  - `auto`: Try subby for SRT first, then SubtitleEdit, then subtitle-filter.
+  - `auto`: Try subby for SRT first, then SubtitleEdit, then `filter-subs` (the `subtitle-filter` library).
   - `subby`: Use subby's SDHStripper (SRT only).
   - `subtitleedit`: Use SubtitleEdit's RemoveTextForHI when available.
-  - `filter-subs`: Use the subtitle-filter library directly.
+  - `filter-subs`: Use the `subtitle-filter` library directly.
+    Note: `filter-subs` is the canonical `sdh_method` config value; it maps to the `subtitle-filter` library.
 
 - `strip_sdh`: Automatically create stripped (non-SDH) versions of SDH subtitles. Default: `true`.
 
   Set to `false` to disable automatic SDH stripping entirely. When `true`, unshackle will automatically
   detect SDH subtitles and create clean versions alongside the originals.
 
-- `convert_before_strip`: Auto-convert VTT/other formats to SRT before using subtitle-filter. Default: `true`.
+- `convert_before_strip`: Auto-convert VTT/other formats to SRT before using `subtitle-filter`
+  (via `sdh_method: filter-subs`, including as the final fallback in `sdh_method: auto`). Default: `true`.
 
-  This ensures compatibility when subtitle-filter is used as the fallback SDH stripping method, as
-  subtitle-filter works best with SRT format.
+  This ensures compatibility when `subtitle-filter` is used, as it works best with SRT format.
 
 - `preserve_formatting`: Preserve original subtitle formatting (tags, positioning, styling). Default: `true`.
 
