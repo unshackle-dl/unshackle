@@ -7,6 +7,7 @@ segment decryption (ML-Worker binary + AES-ECB).
 
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 import sys
@@ -16,6 +17,8 @@ from uuid import UUID
 
 from Cryptodome.Cipher import AES
 from Cryptodome.Util.Padding import unpad
+
+log = logging.getLogger(__name__)
 
 
 class MonaLisa:
@@ -142,7 +145,16 @@ class MonaLisa:
             The raw PSSH value as a base64 string.
         """
         if isinstance(self._ticket, bytes):
-            return self._ticket.decode("utf-8")
+            try:
+                return self._ticket.decode("utf-8")
+            except UnicodeDecodeError:
+                # Tickets are typically base64, so ASCII is a reasonable fallback.
+                try:
+                    return self._ticket.decode("ascii")
+                except UnicodeDecodeError as e:
+                    raise ValueError(
+                        f"Ticket bytes must be UTF-8 text or ASCII base64; got undecodable bytes (len={len(self._ticket)})"
+                    ) from e
         return self._ticket
 
     @property
@@ -222,19 +234,27 @@ class MonaLisa:
                 raise MonaLisa.Exceptions.DecryptionFailed(f"Segment file does not exist: {segment_path}")
 
             # Stage 1: ML-Worker decryption
-            cmd = [str(worker_path), self._key, str(bbts_path), str(ents_path)]
+            # Do not pass secrets via argv (visible in process listings/logs).
+            # ML-Worker supports receiving the key out-of-band; we provide it via env + stdin.
+            cmd = [str(worker_path), "-", str(bbts_path), str(ents_path)]
+            worker_env = os.environ.copy()
+            worker_env["WORKER_KEY"] = self._key
 
             startupinfo = None
             if sys.platform == "win32":
                 startupinfo = subprocess.STARTUPINFO()
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
+            worker_timeout_s = 60
             process = subprocess.run(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                input=self._key,
+                env=worker_env,
                 startupinfo=startupinfo,
+                timeout=worker_timeout_s,
             )
 
             if process.returncode != 0:
@@ -260,6 +280,11 @@ class MonaLisa:
 
         except MonaLisa.Exceptions.DecryptionFailed:
             raise
+        except subprocess.TimeoutExpired as e:
+            log.error("ML-Worker timed out after %ss for %s", worker_timeout_s, segment_path.name)
+            raise MonaLisa.Exceptions.DecryptionFailed(
+                f"ML-Worker timed out after {worker_timeout_s}s for {segment_path.name}"
+            ) from e
         except Exception as e:
             raise MonaLisa.Exceptions.DecryptionFailed(f"Failed to decrypt segment {segment_path.name}: {e}")
         finally:
