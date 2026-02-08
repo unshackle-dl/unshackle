@@ -21,15 +21,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **VPN**: Added Gluetun VPN integration
   - Improved connection display
   - Expanded Windscribe support through Gluetun
+- **WindscribeVPN**: Added specific server selection support
 - **Audio**: Added codec lists and split muxing
 - **Video**: Detect interlaced scan type from MPD manifests
 - **Documentation**: Expanded configuration docs (CONFIG.md and new docs/* guides)
+- **Debug Logging**: Added download output verification logging
 
 ### Changed
 
 - **Downloader**: Improved `aria2c` performance via singleton manager
 - **Titles**: Use track source attribute for service name in filenames
 - **Remote Auth**: Removed unused `requests.Session`
+
+### Removed
+
+- **API**: Removed remote services
 
 ### Fixed
 
@@ -38,7 +44,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **DASH DVR**: Handle high `startNumber` values in SegmentTimeline
 - **Manifests**: Correct DRM type selection for remote PlayReady CDMs
 - **Downloader**: Correct progress bar tracking for segmented downloads
+- **Downloader**: Restore `requests` progress reporting for single-url downloads
+- **Progress**: Bind per-track bars and force terminal completion
 - **N_m3u8DL-RE**: Remove duplicate `--write-meta-json` argument causing download failures
+- **N_m3u8DL-RE**: Fix missing HLS curl session processing and finalize output handling
+- **Mux**: Avoid audio codec suffix on split-audio outputs
+- **Downloads**: Prevent attachment downloads during `--skip-dl`
+- **Hybrid**: Always clean up temporary hybrid outputs
+- **Audio**: Keep both descriptive and standard audio tracks for requested languages
 - **Subtitles**: Preserve original sidecar subtitle files
 - **Binaries**: Search subdirectories when locating binaries
 - **Proxies**: Fix WindscribeVPN server authentication and aggregate servers across all locations
