@@ -777,6 +777,9 @@ class dl:
                     r"^[a-z]+:[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE
                 ):
                     proxy = proxy.lower()
+                    # Preserve the original user query (region code) for service-specific proxy_map overrides.
+                    # NOTE: `proxy` may be overwritten with the resolved proxy URI later.
+                    proxy_query = proxy
                     status_msg = (
                         f"Connecting to VPN ({proxy})..."
                         if requested_provider == "gluetun"
@@ -791,7 +794,6 @@ class dl:
                             if not proxy_provider:
                                 self.log.error(f"The proxy provider '{requested_provider}' was not recognised.")
                                 sys.exit(1)
-                            proxy_query = proxy  # Save query before overwriting with URI
                             proxy_uri = proxy_provider.get_proxy(proxy)
                             if not proxy_uri:
                                 self.log.error(f"The proxy provider {requested_provider} had no proxy for {proxy}")
@@ -810,7 +812,6 @@ class dl:
                                 self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
                         else:
                             for proxy_provider in self.proxy_providers:
-                                proxy_query = proxy  # Save query before overwriting with URI
                                 proxy_uri = proxy_provider.get_proxy(proxy)
                                 if proxy_uri:
                                     proxy = ctx.params["proxy"] = proxy_uri
@@ -827,7 +828,7 @@ class dl:
                                         self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
                                     break
                     # Store proxy query info for service-specific overrides
-                    ctx.params["proxy_query"] = proxy
+                    ctx.params["proxy_query"] = proxy_query
                     ctx.params["proxy_provider"] = requested_provider
                 else:
                     self.log.info(f"Using explicit Proxy: {proxy}")
