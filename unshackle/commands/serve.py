@@ -123,7 +123,7 @@ def serve(
             log.info("Starting REST API server (pywidevine/pyplayready CDM disabled)")
             if no_key:
                 app = web.Application(middlewares=[cors_middleware])
-                app["config"] = {"users": []}
+                app["config"] = {"users": {}}
             else:
                 app = web.Application(middlewares=[cors_middleware, pywidevine_serve.authentication])
                 app["config"] = {"users": {api_secret: {"devices": [], "username": "api_user"}}}
@@ -164,7 +164,12 @@ def serve(
 
             for user_key, user_config in serve_config["users"].items():
                 if "playready_devices" not in user_config:
-                    user_config["playready_devices"] = prd_device_names
+                    # Require explicit PlayReady device access per user (default: no access).
+                    user_config["playready_devices"] = []
+                    log.warning(
+                        f'User "{user_key}" has no "playready_devices" configured; PlayReady access disabled for this user. '
+                        f"Available PlayReady devices: {prd_device_names}"
+                    )
 
             def create_serve_authentication(serve_playready_flag: bool):
                 @web.middleware
@@ -212,7 +217,7 @@ def serve(
                         for user_key, user_cfg in serve_config["users"].items()
                     }
                     if not no_key
-                    else [],
+                    else {},
                 }
                 playready_app["config"] = playready_config
                 playready_app.on_startup.append(pyplayready_serve._startup)
