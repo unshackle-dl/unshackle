@@ -65,6 +65,7 @@ from unshackle.core.utils import tags
 from unshackle.core.utils.click_types import (AUDIO_CODEC_LIST, LANGUAGE_RANGE, QUALITY_LIST, SEASON_RANGE,
                                               ContextData, MultipleChoice, SubtitleCodecChoice, VideoCodecChoice)
 from unshackle.core.utils.collections import merge_dict
+from unshackle.core.utils.selector import select_multiple
 from unshackle.core.utils.subprocess import ffprobe
 from unshackle.core.vaults import Vaults
 
@@ -345,6 +346,12 @@ class dl:
         is_flag=True,
         default=None,
         help="Create separate output files per audio codec instead of merging all audio.",
+    )
+    @click.option(
+        "--select-titles",
+        is_flag=True,
+        default=False,
+        help="Interactively select downloads from a list. Only use with Series to select Episodes",
     )
     @click.option(
         "-w",
@@ -859,6 +866,7 @@ class dl:
         range_: list[Video.Range],
         channels: float,
         no_atmos: bool,
+        select_titles: bool,
         wanted: list[str],
         latest_episode: bool,
         lang: list[str],
@@ -1046,6 +1054,84 @@ class dl:
         console.print(Padding(titles.tree(verbose=list_titles), (0, 5)))
         if list_titles:
             return
+
+        # Enables manual selection for Series when --select-titles is set
+        if select_titles and type(titles) == Series:
+            console.print(Padding(Rule(f"[rule.text]Select Titles"), (1, 2)))
+            
+            selection_titles = []
+            dependencies = {}
+            original_indices = {}
+            
+            current_season = None
+            current_season_header_idx = -1
+
+            unique_seasons = {t.season for t in titles}
+            multiple_seasons = len(unique_seasons) > 1
+
+            # Build selection options
+            for i, t in enumerate(titles):
+                # Insert season header only if multiple seasons exist
+                if multiple_seasons and t.season != current_season:
+                    current_season = t.season
+                    header_text = f"Season {t.season}"
+                    selection_titles.append(header_text)
+                    current_season_header_idx = len(selection_titles) - 1
+                    dependencies[current_season_header_idx] = []
+                    # Note: Headers are not mapped to actual title indices
+
+                # Format display name
+                display_name = ((t.name[:35].rstrip() + "…") if len(t.name) > 35 else t.name) if t.name else None
+                
+                # Apply indentation only for multiple seasons
+                prefix = " " if multiple_seasons else ""
+                option_text = (
+                    f"{prefix}{t.number}" + (f". {display_name}" if t.name else "")
+                )
+                
+                selection_titles.append(option_text)
+                current_ui_idx = len(selection_titles) - 1
+                
+                # Map UI index to actual title index
+                original_indices[current_ui_idx] = i
+                
+                # Link episode to season header for group selection
+                if current_season_header_idx != -1:
+                    dependencies[current_season_header_idx].append(current_ui_idx)
+
+            selection_start = time.time()
+            
+            # Execute selector with dependencies (headers select all children)
+            selected_ui_idx = select_multiple(
+                selection_titles,
+                minimal_count=1,
+                page_size=8,
+                return_indices=True,
+                dependencies=dependencies
+            )
+
+            selection_end = time.time()
+            start_time += (selection_end - selection_start)
+
+            # Map UI indices back to title indices (excluding headers)
+            selected_idx = []
+            for idx in selected_ui_idx:
+                if idx in original_indices:
+                    selected_idx.append(original_indices[idx])
+
+            # Ensure indices are unique and ordered
+            selected_idx = sorted(set(selected_idx))
+            keep = set(selected_idx)
+
+            # In-place filter: remove unselected items (iterate backwards)
+            for i in range(len(titles) - 1, -1, -1):
+                if i not in keep:
+                    del titles[i]
+
+            # Show selected count
+            if titles:
+                count = len(titles)
+                console.print(Padding(f"[text]Total selected: {count}[/]", (0, 5)))
 
         # Determine the latest episode if --latest-episode is set
         latest_episode_id = None
