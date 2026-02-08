@@ -142,12 +142,17 @@ class SurfsharkVPN(Proxy):
                 )
 
         # Get connection names from filtered servers
-        connection_names = [x["connectionName"] for x in servers]
+        if not servers:
+            raise ValueError(f"Could not get random server for country '{country_id}': no servers found.")
 
-        try:
-            return random.choice(connection_names)
-        except (IndexError, KeyError):
-            raise ValueError(f"Could not get random server for country '{country_id}'.")
+        # Only include servers that actually have a connection name to avoid KeyError.
+        connection_names = [x["connectionName"] for x in servers if "connectionName" in x]
+        if not connection_names:
+            raise ValueError(
+                f"Could not get random server for country '{country_id}': no servers with connectionName found."
+            )
+
+        return random.choice(connection_names)
 
     @staticmethod
     def get_countries() -> list[dict]:

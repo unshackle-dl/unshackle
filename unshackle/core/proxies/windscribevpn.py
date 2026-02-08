@@ -62,7 +62,7 @@ class WindscribeVPN(Proxy):
         server_map_key = f"{query}:{city}" if city else query
         if server_map_key in self.server_map:
             hostname = self.server_map[server_map_key]
-        elif query in self.server_map and not city:
+        elif query in self.server_map:
             hostname = self.server_map[query]
         else:
             server_match = re.match(r"^([a-z]{2})(\d+)$", query)
