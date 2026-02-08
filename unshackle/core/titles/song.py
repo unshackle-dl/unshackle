@@ -100,31 +100,27 @@ class Song(Title):
             # NN. Song Name
             name = str(self).split(" / ")[1]
 
-        if config.scene_naming:
-            # Service (use track source if available)
-            if show_service:
-                source_name = None
-                if self.tracks:
-                    first_track = next(iter(self.tracks), None)
-                    if first_track and hasattr(first_track, "source") and first_track.source:
-                        source_name = first_track.source
-                name += f" {source_name or self.service.__name__}"
+        # Service (use track source if available)
+        if show_service:
+            source_name = None
+            if self.tracks:
+                first_track = next(iter(self.tracks), None)
+                if first_track and hasattr(first_track, "source") and first_track.source:
+                    source_name = first_track.source
+            name += f" {source_name or self.service.__name__}"
 
-            # 'WEB-DL'
-            name += " WEB-DL"
+        # 'WEB-DL'
+        name += " WEB-DL"
 
-            # Audio Codec + Channels (+ feature)
-            name += f" {AUDIO_CODEC_MAP.get(codec, codec)}{channels:.1f}"
-            if "JOC" in features or audio_track.joc:
-                name += " Atmos"
+        # Audio Codec + Channels (+ feature)
+        name += f" {AUDIO_CODEC_MAP.get(codec, codec)}{channels:.1f}"
+        if "JOC" in features or audio_track.joc:
+            name += " Atmos"
 
-            if config.tag:
-                name += f"-{config.tag}"
+        if config.tag:
+            name += f"-{config.tag}"
 
-            return sanitize_filename(name, " ")
-        else:
-            # Simple naming style without technical details
-            return sanitize_filename(name, " ")
+        return sanitize_filename(name, " ")
 
 
 class Album(SortedKeyList, ABC):

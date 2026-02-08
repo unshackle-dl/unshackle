@@ -102,6 +102,27 @@ class Episode(Title):
             primary_audio_track = sorted_audio[0]
         unique_audio_languages = len({x.language.split("-")[0] for x in media_info.audio_tracks if x.language})
 
+        def _get_resolution_token(track: Any) -> str:
+            if not track or not getattr(track, "height", None):
+                return ""
+            resolution = track.height
+            try:
+                dar = getattr(track, "other_display_aspect_ratio", None) or []
+                if dar and dar[0]:
+                    aspect_ratio = [int(float(plane)) for plane in str(dar[0]).split(":")]
+                    if len(aspect_ratio) == 1:
+                        aspect_ratio.append(1)
+                    if aspect_ratio[0] / aspect_ratio[1] not in (16 / 9, 4 / 3):
+                        resolution = int(track.width * (9 / 16))
+            except Exception:
+                pass
+
+            scan_suffix = "p"
+            scan_type = getattr(track, "scan_type", None)
+            if scan_type and str(scan_type).lower() == "interlaced":
+                scan_suffix = "i"
+            return f"{resolution}{scan_suffix}"
+
         # Title [Year] SXXEXX Name (or Title [Year] SXX if folder)
         if folder:
             name = f"{self.title}"
@@ -135,118 +156,95 @@ class Episode(Title):
                     name=self.name or "",
                 ).strip()
 
-        if config.scene_naming:
-            # Resolution
-            if primary_video_track:
-                resolution = primary_video_track.height
-                aspect_ratio = [
-                    int(float(plane)) for plane in primary_video_track.other_display_aspect_ratio[0].split(":")
-                ]
-                if len(aspect_ratio) == 1:
-                    # e.g., aspect ratio of 2 (2.00:1) would end up as `(2.0,)`, add 1
-                    aspect_ratio.append(1)
-                if aspect_ratio[0] / aspect_ratio[1] not in (16 / 9, 4 / 3):
-                    # We want the resolution represented in a 4:3 or 16:9 canvas.
-                    # If it's not 4:3 or 16:9, calculate as if it's inside a 16:9 canvas,
-                    # otherwise the track's height value is fine.
-                    # We are assuming this title is some weird aspect ratio so most
-                    # likely a movie or HD source, so it's most likely widescreen so
-                    # 16:9 canvas makes the most sense.
-                    resolution = int(primary_video_track.width * (9 / 16))
-                # Determine scan type suffix - default to "p", use "i" only if explicitly interlaced
-                scan_suffix = "p"
-                scan_type = getattr(primary_video_track, 'scan_type', None)
-                if scan_type and str(scan_type).lower() == "interlaced":
-                    scan_suffix = "i"
-                name += f" {resolution}{scan_suffix}"
+        if primary_video_track:
+            resolution_token = _get_resolution_token(primary_video_track)
+            if resolution_token:
+                name += f" {resolution_token}"
 
-            # Service (use track source if available)
-            if show_service:
-                source_name = None
-                if self.tracks:
-                    first_track = next(iter(self.tracks), None)
-                    if first_track and hasattr(first_track, "source") and first_track.source:
-                        source_name = first_track.source
-                name += f" {source_name or self.service.__name__}"
+        # Service (use track source if available)
+        if show_service:
+            source_name = None
+            if self.tracks:
+                first_track = next(iter(self.tracks), None)
+                if first_track and hasattr(first_track, "source") and first_track.source:
+                    source_name = first_track.source
+            name += f" {source_name or self.service.__name__}"
 
-            # 'WEB-DL'
-            name += " WEB-DL"
+        # 'WEB-DL'
+        name += " WEB-DL"
 
-            # DUAL
-            if unique_audio_languages == 2:
-                name += " DUAL"
+        # DUAL
+        if unique_audio_languages == 2:
+            name += " DUAL"
 
-            # MULTi
-            if unique_audio_languages > 2:
-                name += " MULTi"
+        # MULTi
+        if unique_audio_languages > 2:
+            name += " MULTi"
 
-            # Audio Codec + Channels (+ feature)
-            if primary_audio_track:
-                codec = primary_audio_track.format
-                channel_layout = primary_audio_track.channel_layout or primary_audio_track.channellayout_original
-                if channel_layout:
-                    channels = float(
-                        sum({"LFE": 0.1}.get(position.upper(), 1) for position in channel_layout.split(" "))
-                    )
-                else:
-                    channel_count = primary_audio_track.channel_s or primary_audio_track.channels or 0
-                    channels = float(channel_count)
-
-                features = primary_audio_track.format_additionalfeatures or ""
-                name += f" {AUDIO_CODEC_MAP.get(codec, codec)}{channels:.1f}"
-                if "JOC" in features or primary_audio_track.joc:
-                    name += " Atmos"
-
-            # Video (dynamic range + hfr +) Codec
-            if primary_video_track:
-                codec = primary_video_track.format
-                hdr_format = primary_video_track.hdr_format_commercial
-                hdr_format_full = primary_video_track.hdr_format or ""
-                trc = (
-                    primary_video_track.transfer_characteristics
-                    or primary_video_track.transfer_characteristics_original
-                    or ""
+        # Audio Codec + Channels (+ feature)
+        if primary_audio_track:
+            codec = primary_audio_track.format
+            channel_layout = primary_audio_track.channel_layout or primary_audio_track.channellayout_original
+            if channel_layout:
+                channels = float(
+                    sum({"LFE": 0.1}.get(position.upper(), 1) for position in channel_layout.split(" "))
                 )
-                frame_rate = float(primary_video_track.frame_rate)
+            else:
+                channel_count = primary_audio_track.channel_s or primary_audio_track.channels or 0
+                channels = float(channel_count)
 
-                def _append_token(current: str, token: Optional[str]) -> str:
-                    token = (token or "").strip()
-                    current = current.rstrip()
-                    if not token:
-                        return current
-                    if current.endswith(f" {token}"):
-                        return current
-                    return f"{current} {token}"
+            features = primary_audio_track.format_additionalfeatures or ""
+            name += f" {AUDIO_CODEC_MAP.get(codec, codec)}{channels:.1f}"
+            if "JOC" in features or primary_audio_track.joc:
+                name += " Atmos"
 
-                # Primary HDR format detection
-                if hdr_format:
-                    if hdr_format_full.startswith("Dolby Vision"):
-                        name = _append_token(name, "DV")
-                        if any(
-                            indicator in (hdr_format_full + " " + hdr_format)
-                            for indicator in ["HDR10", "SMPTE ST 2086"]
-                        ):
-                            name = _append_token(name, "HDR")
-                    elif "HDR Vivid" in hdr_format:
+        # Video (dynamic range + hfr +) Codec
+        if primary_video_track:
+            codec = primary_video_track.format
+            hdr_format = primary_video_track.hdr_format_commercial
+            hdr_format_full = primary_video_track.hdr_format or ""
+            trc = (
+                primary_video_track.transfer_characteristics
+                or primary_video_track.transfer_characteristics_original
+                or ""
+            )
+            frame_rate = float(primary_video_track.frame_rate)
+
+            def _append_token(current: str, token: Optional[str]) -> str:
+                token = (token or "").strip()
+                current = current.rstrip()
+                if not token:
+                    return current
+                if current.endswith(f" {token}"):
+                    return current
+                return f"{current} {token}"
+
+            # Primary HDR format detection
+            if hdr_format:
+                if hdr_format_full.startswith("Dolby Vision"):
+                    name = _append_token(name, "DV")
+                    if any(
+                        indicator in (hdr_format_full + " " + hdr_format)
+                        for indicator in ["HDR10", "SMPTE ST 2086"]
+                    ):
                         name = _append_token(name, "HDR")
-                    else:
-                        dynamic_range = DYNAMIC_RANGE_MAP.get(hdr_format) or hdr_format or ""
-                        name = _append_token(name, dynamic_range)
-                elif "HLG" in trc or "Hybrid Log-Gamma" in trc or "ARIB STD-B67" in trc or "arib-std-b67" in trc.lower():
-                    name += " HLG"
-                elif any(indicator in trc for indicator in ["PQ", "SMPTE ST 2084", "BT.2100"]) or "smpte2084" in trc.lower() or "bt.2020-10" in trc.lower():
-                    name += " HDR"
-                if frame_rate > 30:
-                    name += " HFR"
-                name += f" {VIDEO_CODEC_MAP.get(codec, codec)}"
+                elif "HDR Vivid" in hdr_format:
+                    name = _append_token(name, "HDR")
+                else:
+                    dynamic_range = DYNAMIC_RANGE_MAP.get(hdr_format) or hdr_format or ""
+                    name = _append_token(name, dynamic_range)
+            elif "HLG" in trc or "Hybrid Log-Gamma" in trc or "ARIB STD-B67" in trc or "arib-std-b67" in trc.lower():
+                name += " HLG"
+            elif any(indicator in trc for indicator in ["PQ", "SMPTE ST 2084", "BT.2100"]) or "smpte2084" in trc.lower() or "bt.2020-10" in trc.lower():
+                name += " HDR"
+            if frame_rate > 30:
+                name += " HFR"
+            name += f" {VIDEO_CODEC_MAP.get(codec, codec)}"
 
-            if config.tag:
-                name += f"-{config.tag}"
+        if config.tag:
+            name += f"-{config.tag}"
 
-            return sanitize_filename(name)
-        else:
-            # Simple naming style without technical details - use spaces instead of dots
-            return sanitize_filename(name, " ")
+        return sanitize_filename(name, "." if config.scene_naming else " ")
 
 
 class Series(SortedKeyList, ABC):

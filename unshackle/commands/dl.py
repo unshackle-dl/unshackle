@@ -2126,14 +2126,23 @@ class dl:
                         final_dir = config.directories.downloads
                         final_filename = title.get_filename(media_info, show_service=not no_source)
                         audio_codec_suffix = muxed_audio_codecs.get(muxed_path)
-                        if audio_codec_suffix and append_audio_codec_suffix:
-                            final_filename = f"{final_filename}.{audio_codec_suffix.name}"
 
                         if not no_folder and isinstance(title, (Episode, Song)):
                             final_dir /= title.get_filename(media_info, show_service=not no_source, folder=True)
 
                         final_dir.mkdir(parents=True, exist_ok=True)
                         final_path = final_dir / f"{final_filename}{muxed_path.suffix}"
+                        if final_path.exists() and audio_codec_suffix and append_audio_codec_suffix:
+                            sep = "." if config.scene_naming else " "
+                            final_filename = f"{final_filename.rstrip()}{sep}{audio_codec_suffix.name}"
+                            final_path = final_dir / f"{final_filename}{muxed_path.suffix}"
+
+                        if final_path.exists():
+                            sep = "." if config.scene_naming else " "
+                            i = 2
+                            while final_path.exists():
+                                final_path = final_dir / f"{final_filename.rstrip()}{sep}{i}{muxed_path.suffix}"
+                                i += 1
 
                         shutil.move(muxed_path, final_path)
                         tags.tag_file(final_path, title, self.tmdb_id)
