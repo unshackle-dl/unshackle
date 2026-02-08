@@ -2,7 +2,9 @@ import atexit
 import logging
 import os
 import re
+import stat
 import subprocess
+import tempfile
 import threading
 import time
 from typing import Optional
@@ -750,7 +752,8 @@ class Gluetun(Proxy):
 
         # Debug log environment variables (redact sensitive values)
         if debug_logger:
-            safe_env = {k: ("***" if "KEY" in k or "PASSWORD" in k else v) for k, v in env_vars.items()}
+            redact_markers = ("KEY", "PASSWORD", "PASS", "TOKEN", "SECRET", "USER")
+            safe_env = {k: ("***" if any(m in k for m in redact_markers) else v) for k, v in env_vars.items()}
             debug_logger.log(
                 level="DEBUG",
                 operation="gluetun_env_vars",
@@ -771,23 +774,62 @@ class Gluetun(Proxy):
             f"127.0.0.1:{port}:8888/tcp",
         ]
 
-        # Add environment variables
-        for key, value in env_vars.items():
-            cmd.extend(["-e", f"{key}={value}"])
-
-        # Add Gluetun image
-        cmd.append("qmcgaw/gluetun:latest")
-
-        # Execute docker run
+        # Avoid exposing credentials in process listings by using --env-file instead of many "-e KEY=VALUE".
+        env_file_path: str | None = None
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30,
-                encoding="utf-8",
-                errors="replace",
-            )
+            fd, env_file_path = tempfile.mkstemp(prefix=f"unshackle-{container_name}-", suffix=".env")
+            try:
+                # Best-effort restrictive permissions.
+                if os.name != "nt":
+                    if hasattr(os, "fchmod"):
+                        os.fchmod(fd, 0o600)
+                    else:
+                        os.chmod(env_file_path, 0o600)
+                else:
+                    os.chmod(env_file_path, stat.S_IREAD | stat.S_IWRITE)
+
+                with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
+                    for key, value in env_vars.items():
+                        if "=" in key:
+                            raise ValueError(f"Invalid env var name for docker env-file: {key!r}")
+                        v = "" if value is None else str(value)
+                        if "\n" in v or "\r" in v:
+                            raise ValueError(f"Invalid env var value (contains newline) for {key!r}")
+                        f.write(f"{key}={v}\n")
+            except Exception:
+                # If we fail before fdopen closes the descriptor, make sure it's not leaked.
+                try:
+                    os.close(fd)
+                except Exception:
+                    pass
+                raise
+
+            cmd.extend(["--env-file", env_file_path])
+
+            # Add Gluetun image
+            cmd.append(gluetun_image)
+
+            # Execute docker run
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    encoding="utf-8",
+                    errors="replace",
+                )
+            except subprocess.TimeoutExpired:
+                if debug_logger:
+                    debug_logger.log(
+                        level="ERROR",
+                        operation="gluetun_container_create_timeout",
+                        message=f"Docker run timed out for {container_name}",
+                        context={"container_name": container_name},
+                        success=False,
+                        duration_ms=(time.time() - start_time) * 1000,
+                    )
+                raise RuntimeError("Docker run command timed out")
 
             if result.returncode != 0:
                 error_msg = result.stderr or "unknown error"
@@ -826,29 +868,51 @@ class Gluetun(Proxy):
                     success=True,
                     duration_ms=duration_ms,
                 )
-
-        except subprocess.TimeoutExpired:
-            if debug_logger:
-                debug_logger.log(
-                    level="ERROR",
-                    operation="gluetun_container_create_timeout",
-                    message=f"Docker run timed out for {container_name}",
-                    context={"container_name": container_name},
-                    success=False,
-                    duration_ms=(time.time() - start_time) * 1000,
-                )
-            raise RuntimeError("Docker run command timed out")
+        finally:
+            if env_file_path:
+                # Best-effort "secure delete": overwrite then unlink (not guaranteed on all filesystems).
+                try:
+                    with open(env_file_path, "r+b") as f:
+                        try:
+                            f.seek(0, os.SEEK_END)
+                            length = f.tell()
+                            f.seek(0)
+                            if length > 0:
+                                f.write(b"\x00" * length)
+                                f.flush()
+                                os.fsync(f.fileno())
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+                try:
+                    os.remove(env_file_path)
+                except FileNotFoundError:
+                    pass
+                except Exception:
+                    pass
 
     def _is_container_running(self, container_name: str) -> bool:
         """Check if a Docker container is running."""
         try:
             result = subprocess.run(
-                ["docker", "ps", "--filter", f"name={container_name}", "--format", "{{.Names}}"],
+                [
+                    "docker",
+                    "ps",
+                    "--filter",
+                    f"name=^{re.escape(container_name)}$",
+                    "--format",
+                    "{{.Names}}",
+                ],
                 capture_output=True,
                 text=True,
                 timeout=5,
             )
-            return result.returncode == 0 and container_name in result.stdout
+            if result.returncode != 0:
+                return False
+
+            names = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+            return any(name == container_name for name in names)
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
 
@@ -1132,98 +1196,104 @@ class Gluetun(Proxy):
 
         # Create a session with the proxy configured
         session = requests.Session()
-        session.proxies = {"http": proxy_url, "https": proxy_url}
+        try:
+            session.proxies = {"http": proxy_url, "https": proxy_url}
 
-        # Retry with exponential backoff
-        for attempt in range(max_retries):
-            try:
-                # Get external IP through the proxy using shared utility
-                ip_info = get_ip_info(session)
+            # Retry with exponential backoff
+            for attempt in range(max_retries):
+                try:
+                    # Get external IP through the proxy using shared utility
+                    ip_info = get_ip_info(session)
 
-                if ip_info:
-                    actual_country = ip_info.get("country", "").upper()
+                    if ip_info:
+                        actual_country = ip_info.get("country", "").upper()
 
-                    # Check if country matches (if we have an expected country)
-                    # ipinfo.io returns country codes (CA), but we may have full names (Canada)
-                    # Normalize both to country codes for comparison using shared utility
-                    if expected_country:
-                        # Convert expected country name to code if it's a full name
-                        expected_code = get_country_code(expected_country) or expected_country
-                        expected_code = expected_code.upper()
+                        # Check if country matches (if we have an expected country)
+                        # ipinfo.io returns country codes (CA), but we may have full names (Canada)
+                        # Normalize both to country codes for comparison using shared utility
+                        if expected_country:
+                            # Convert expected country name to code if it's a full name
+                            expected_code = get_country_code(expected_country) or expected_country
+                            expected_code = expected_code.upper()
 
-                        if actual_country != expected_code:
-                            duration_ms = (time.time() - start_time) * 1000
-                            if debug_logger:
-                                debug_logger.log(
-                                    level="ERROR",
-                                    operation="gluetun_verify_mismatch",
-                                    message=f"Region mismatch for {query_key}",
-                                    context={
-                                        "query_key": query_key,
-                                        "expected_country": expected_code,
-                                        "actual_country": actual_country,
-                                        "ip": ip_info.get("ip"),
-                                        "city": ip_info.get("city"),
-                                        "org": ip_info.get("org"),
-                                    },
-                                    success=False,
-                                    duration_ms=duration_ms,
-                                )
-                            raise RuntimeError(
+                            if actual_country != expected_code:
+                                duration_ms = (time.time() - start_time) * 1000
+                                if debug_logger:
+                                    debug_logger.log(
+                                        level="ERROR",
+                                        operation="gluetun_verify_mismatch",
+                                        message=f"Region mismatch for {query_key}",
+                                        context={
+                                            "query_key": query_key,
+                                            "expected_country": expected_code,
+                                            "actual_country": actual_country,
+                                            "ip": ip_info.get("ip"),
+                                            "city": ip_info.get("city"),
+                                            "org": ip_info.get("org"),
+                                        },
+                                        success=False,
+                                        duration_ms=duration_ms,
+                                    )
+                                raise RuntimeError(
                                 f"Region mismatch for {container['provider']}:{container['region']}: "
                                 f"Expected '{expected_code}' but got '{actual_country}' "
                                 f"(IP: {ip_info.get('ip')}, City: {ip_info.get('city')})"
                             )
 
-                    # Verification successful - store IP info in container record
-                    if query_key in self.active_containers:
-                        self.active_containers[query_key]["public_ip"] = ip_info.get("ip")
-                        self.active_containers[query_key]["ip_country"] = actual_country
-                        self.active_containers[query_key]["ip_city"] = ip_info.get("city")
-                        self.active_containers[query_key]["ip_org"] = ip_info.get("org")
+                        # Verification successful - store IP info in container record
+                        if query_key in self.active_containers:
+                            self.active_containers[query_key]["public_ip"] = ip_info.get("ip")
+                            self.active_containers[query_key]["ip_country"] = actual_country
+                            self.active_containers[query_key]["ip_city"] = ip_info.get("city")
+                            self.active_containers[query_key]["ip_org"] = ip_info.get("org")
 
-                    duration_ms = (time.time() - start_time) * 1000
+                        duration_ms = (time.time() - start_time) * 1000
+                        if debug_logger:
+                            debug_logger.log(
+                                level="INFO",
+                                operation="gluetun_verify_success",
+                                message=f"VPN IP verified for: {query_key}",
+                                context={
+                                    "query_key": query_key,
+                                    "ip": ip_info.get("ip"),
+                                    "country": actual_country,
+                                    "city": ip_info.get("city"),
+                                    "org": ip_info.get("org"),
+                                    "attempts": attempt + 1,
+                                },
+                                success=True,
+                                duration_ms=duration_ms,
+                            )
+                        return
+
+                    # ip_info was None, retry
+                    last_error = "Failed to get IP info from ipinfo.io"
+
+                except RuntimeError:
+                    raise  # Re-raise region mismatch errors immediately
+                except Exception as e:
+                    last_error = str(e)
                     if debug_logger:
                         debug_logger.log(
-                            level="INFO",
-                            operation="gluetun_verify_success",
-                            message=f"VPN IP verified for: {query_key}",
+                            level="DEBUG",
+                            operation="gluetun_verify_retry",
+                            message=f"Verification attempt {attempt + 1} failed, retrying",
                             context={
                                 "query_key": query_key,
-                                "ip": ip_info.get("ip"),
-                                "country": actual_country,
-                                "city": ip_info.get("city"),
-                                "org": ip_info.get("org"),
-                                "attempts": attempt + 1,
+                                "attempt": attempt + 1,
+                                "error": last_error,
                             },
-                            success=True,
-                            duration_ms=duration_ms,
                         )
-                    return
 
-                # ip_info was None, retry
-                last_error = "Failed to get IP info from ipinfo.io"
-
-            except RuntimeError:
-                raise  # Re-raise region mismatch errors immediately
-            except Exception as e:
-                last_error = str(e)
-                if debug_logger:
-                    debug_logger.log(
-                        level="DEBUG",
-                        operation="gluetun_verify_retry",
-                        message=f"Verification attempt {attempt + 1} failed, retrying",
-                        context={
-                            "query_key": query_key,
-                            "attempt": attempt + 1,
-                            "error": last_error,
-                        },
-                    )
-
-            # Wait before retry (exponential backoff)
-            if attempt < max_retries - 1:
-                wait_time = 2**attempt  # 1, 2, 4 seconds
-                time.sleep(wait_time)
+                # Wait before retry (exponential backoff)
+                if attempt < max_retries - 1:
+                    wait_time = 2**attempt  # 1, 2, 4 seconds
+                    time.sleep(wait_time)
+        finally:
+            try:
+                session.close()
+            except Exception:
+                pass
 
         # All retries exhausted
         duration_ms = (time.time() - start_time) * 1000
