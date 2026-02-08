@@ -1830,11 +1830,11 @@ class dl:
                         console=console,
                     )
 
-                    if split_audio is not None:
-                        merge_audio = not split_audio
-                    else:
-                        merge_audio = config.muxing.get("merge_audio", True)
-                    append_audio_codec_suffix = merge_audio
+                    merge_audio = (
+                        (not split_audio) if split_audio is not None else config.muxing.get("merge_audio", True)
+                    )
+                    # When we split audio (merge_audio=False), multiple outputs may exist per title, so suffix codec.
+                    append_audio_codec_suffix = not merge_audio
 
                     multiplex_tasks: list[tuple[TaskID, Tracks, Optional[Audio.Codec]]] = []
                     # Track hybrid-processing outputs explicitly so we can always clean them up,
