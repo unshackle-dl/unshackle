@@ -5,7 +5,7 @@ from collections.abc import Generator
 from http.cookiejar import CookieJar
 from pathlib import Path
 from typing import Optional, Union
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 import click
 import m3u8
@@ -25,6 +25,45 @@ from unshackle.core.title_cacher import TitleCacher, get_account_hash, get_regio
 from unshackle.core.titles import Title_T, Titles_T
 from unshackle.core.tracks import Chapters, Tracks
 from unshackle.core.utilities import get_cached_ip_info, get_ip_info
+
+
+def sanitize_proxy_for_log(uri: Optional[str]) -> Optional[str]:
+    """
+    Sanitize a proxy URI for logs by redacting any embedded userinfo (username/password).
+
+    Examples:
+      - http://user:pass@host:8080 -> http://REDACTED@host:8080
+      - socks5h://user@host:1080   -> socks5h://REDACTED@host:1080
+    """
+    if uri is None:
+        return None
+    if not isinstance(uri, str):
+        return str(uri)
+    if not uri:
+        return uri
+
+    try:
+        parsed = urlparse(uri)
+
+        # Handle schemeless proxies like "user:pass@host:port"
+        if not parsed.scheme and not parsed.netloc and "@" in uri and "://" not in uri:
+            # Parse as netloc using a dummy scheme, then strip scheme back out.
+            dummy = urlparse(f"http://{uri}")
+            netloc = dummy.netloc
+            if "@" in netloc:
+                netloc = f"REDACTED@{netloc.split('@', 1)[1]}"
+            # urlparse("http://...") sets path to "" for typical netloc-only strings; keep it just in case.
+            return f"{netloc}{dummy.path}"
+
+        netloc = parsed.netloc
+        if "@" in netloc:
+            netloc = f"REDACTED@{netloc.split('@', 1)[1]}"
+
+        return urlunparse(parsed._replace(netloc=netloc))
+    except Exception:
+        if "@" in uri:
+            return f"REDACTED@{uri.split('@', 1)[1]}"
+        return uri
 
 
 class Service(metaclass=ABCMeta):
@@ -75,7 +114,9 @@ class Service(metaclass=ABCMeta):
                 # Check if there's a mapping for this query
                 mapped_value = proxy_map.get(full_proxy_key)
                 if mapped_value:
-                    self.log.info(f"Found service-specific proxy mapping: {full_proxy_key} -> {mapped_value}")
+                    self.log.info(
+                        f"Found service-specific proxy mapping: {full_proxy_key} -> {sanitize_proxy_for_log(mapped_value)}"
+                    )
                     # Query the proxy provider with the mapped value
                     if proxy_provider_name:
                         # Specific provider requested
@@ -87,9 +128,13 @@ class Service(metaclass=ABCMeta):
                             mapped_proxy_uri = proxy_provider.get_proxy(mapped_value)
                             if mapped_proxy_uri:
                                 proxy = mapped_proxy_uri
-                                self.log.info(f"Using mapped proxy from {proxy_provider.__class__.__name__}: {proxy}")
+                                self.log.info(
+                                    f"Using mapped proxy from {proxy_provider.__class__.__name__}: {sanitize_proxy_for_log(proxy)}"
+                                )
                             else:
-                                self.log.warning(f"Failed to get proxy for mapped value '{mapped_value}', using default")
+                                self.log.warning(
+                                    f"Failed to get proxy for mapped value '{sanitize_proxy_for_log(mapped_value)}', using default"
+                                )
                         else:
                             self.log.warning(f"Proxy provider '{proxy_provider_name}' not found, using default proxy")
                     else:
@@ -98,10 +143,14 @@ class Service(metaclass=ABCMeta):
                             mapped_proxy_uri = proxy_provider.get_proxy(mapped_value)
                             if mapped_proxy_uri:
                                 proxy = mapped_proxy_uri
-                                self.log.info(f"Using mapped proxy from {proxy_provider.__class__.__name__}: {proxy}")
+                                self.log.info(
+                                    f"Using mapped proxy from {proxy_provider.__class__.__name__}: {sanitize_proxy_for_log(proxy)}"
+                                )
                                 break
                         else:
-                            self.log.warning(f"No provider could resolve mapped value '{mapped_value}', using default")
+                            self.log.warning(
+                                f"No provider could resolve mapped value '{sanitize_proxy_for_log(mapped_value)}', using default"
+                            )
 
             if not proxy:
                 # don't override the explicit proxy set by the user, even if they may be geoblocked
