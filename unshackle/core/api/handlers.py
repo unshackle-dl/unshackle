@@ -207,6 +207,7 @@ def serialize_drm(drm_list) -> Optional[List[Dict[str, Any]]]:
 
         # Get PSSH - handle both Widevine and PlayReady
         if hasattr(drm, "_pssh") and drm._pssh:
+            pssh_obj = None
             try:
                 pssh_obj = drm._pssh
                 # Try to get base64 representation
@@ -225,8 +226,24 @@ def serialize_drm(drm_list) -> Optional[List[Dict[str, Any]]]:
                     # Check if it's already base64-like or an object repr
                     if not pssh_str.startswith("<"):
                         drm_info["pssh"] = pssh_str
+            except (ValueError, TypeError, KeyError):
+                # Some PSSH implementations can fail to parse/serialize; log and continue.
+                pssh_type = type(pssh_obj).__name__ if pssh_obj is not None else None
+                log.warning(
+                    "Failed to extract/serialize PSSH for DRM type=%s pssh_type=%s",
+                    drm_class,
+                    pssh_type,
+                    exc_info=True,
+                )
             except Exception:
-                pass
+                # Don't silently swallow unexpected failures; make them visible and propagate.
+                pssh_type = type(pssh_obj).__name__ if pssh_obj is not None else None
+                log.exception(
+                    "Unexpected error while extracting/serializing PSSH for DRM type=%s pssh_type=%s",
+                    drm_class,
+                    pssh_type,
+                )
+                raise
 
         # Get KIDs
         if hasattr(drm, "kids") and drm.kids:
