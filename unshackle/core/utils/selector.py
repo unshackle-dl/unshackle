@@ -23,7 +23,8 @@ class Selector:
         text_style: str = "text",
         page_size: int = 8,
         minimal_count: int = 0,
-        dependencies: dict[int, list[int]] = None
+        dependencies: dict[int, list[int]] = None,
+        prefixes: list[str] = None
     ):
         """
         Initialize the Selector.
@@ -89,11 +90,9 @@ class Selector:
         Moves the cursor up or down by the specified delta.
         Updates the scroll offset if the cursor moves out of the current view.
         """
-        new_index = self.cursor_index + delta
-        if 0 <= new_index < len(self.options):
-            self.cursor_index = new_index
-            new_page_idx = self.cursor_index // self.page_size
-            self.scroll_offset = new_page_idx * self.page_size
+        self.cursor_index = (self.cursor_index + delta) % len(self.options)
+        new_page_idx = self.cursor_index // self.page_size
+        self.scroll_offset = new_page_idx * self.page_size
 
     def change_page(self, delta: int):
         """
@@ -145,7 +144,8 @@ class Selector:
         Returns command strings like 'UP', 'DOWN', 'ENTER', etc.
         """
         key = msvcrt.getch()
-        if key == b'\x03': return 'CANCEL'
+        if key == b'\x03' or key == b'\x1b':
+            return 'CANCEL'
         if key == b'\xe0' or key == b'\x00':
             try:
                 key = msvcrt.getch()
@@ -174,7 +174,10 @@ class Selector:
         Returns command strings like 'UP', 'DOWN', 'ENTER', etc.
         """
         char = click.getchar()
-        if char == '\x03': return 'CANCEL'
+        if char == '\x03' or char == '\x1b':
+            if char == '\x1b':
+                return 'CANCEL'
+            return 'CANCEL'
         if char in ('\r', '\n'): return 'ENTER'
         if char == ' ': return 'SPACE'
         if char in ('q', 'Q'): return 'QUIT'
