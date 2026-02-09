@@ -65,9 +65,13 @@ class Attachment:
                 path = None
             else:
                 try:
-                    session = session or requests.Session()
-                    response = session.get(url, stream=True)
-                    response.raise_for_status()
+                    if session is None:
+                        with requests.Session() as session:
+                            response = session.get(url, stream=True)
+                            response.raise_for_status()
+                    else:
+                        response = session.get(url, stream=True)
+                        response.raise_for_status()
                     config.directories.temp.mkdir(parents=True, exist_ok=True)
                     download_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -80,7 +84,9 @@ class Attachment:
                     raise ValueError(f"Failed to download attachment from URL: {e}")
 
         if path is not None and not isinstance(path, (str, Path)):
-            raise ValueError("The attachment path must be provided.")
+            raise ValueError(
+                f"Invalid attachment path type: expected str or Path, got {type(path).__name__}."
+            )
 
         if path is not None:
             path = Path(path)
