@@ -234,11 +234,7 @@ class MonaLisa:
                 raise MonaLisa.Exceptions.DecryptionFailed(f"Segment file does not exist: {segment_path}")
 
             # Stage 1: ML-Worker decryption
-            # Do not pass secrets via argv (visible in process listings/logs).
-            # ML-Worker supports receiving the key out-of-band; we provide it via env + stdin.
-            cmd = [str(worker_path), "-", str(bbts_path), str(ents_path)]
-            worker_env = os.environ.copy()
-            worker_env["WORKER_KEY"] = self._key
+            cmd = [str(worker_path), str(self._key), str(bbts_path), str(ents_path)]
 
             startupinfo = None
             if sys.platform == "win32":
@@ -251,8 +247,6 @@ class MonaLisa:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                input=self._key,
-                env=worker_env,
                 startupinfo=startupinfo,
                 timeout=worker_timeout_s,
             )
