@@ -15,6 +15,7 @@ from urllib.parse import urljoin, urlparse
 from uuid import UUID
 from zlib import crc32
 
+import httpx
 import requests
 from curl_cffi.requests import Session as CurlSession
 from langcodes import Language, tag_is_valid
@@ -50,7 +51,7 @@ class DASH:
         self.url = url
 
     @classmethod
-    def from_url(cls, url: str, session: Optional[Union[Session, CurlSession]] = None, **args: Any) -> DASH:
+    def from_url(cls, url: str, session: Optional[Union[Session, CurlSession, httpx.Client]] = None, **args: Any) -> DASH:
         if not url:
             raise requests.URLRequired("DASH manifest URL must be provided for relative path computations.")
         if not isinstance(url, str):
@@ -58,16 +59,15 @@ class DASH:
 
         if not session:
             session = Session()
-        elif not isinstance(session, (Session, CurlSession)):
-            raise TypeError(f"Expected session to be a {Session} or {CurlSession}, not {session!r}")
-
-        res = session.get(url, **args)
+        elif not isinstance(session, (Session, CurlSession, httpx.Client)):
+            raise TypeError(f"Expected session to be a {Session} or {CurlSession} or {httpx.Client}, not {session!r}")
+        try:
+            res = session.get(url, **args)
+            res.raise_for_status()
+        except Exception as e:
+            raise RuntimeError("Failed to request the MPD document.") from e
         if res.url != url:
             url = res.url
-
-        if not res.ok:
-            raise requests.ConnectionError("Failed to request the MPD document.", response=res)
-
         return DASH.from_text(res.text, url)
 
     @classmethod
@@ -261,8 +261,8 @@ class DASH:
     ):
         if not session:
             session = Session()
-        elif not isinstance(session, (Session, CurlSession)):
-            raise TypeError(f"Expected session to be a {Session} or {CurlSession}, not {session!r}")
+        elif not isinstance(session, (Session, CurlSession, httpx.Client)):
+            raise TypeError(f"Expected session to be a {Session} or {CurlSession} or {httpx.Client}, not {session!r}")
 
         if proxy:
             session.proxies.update({"all": proxy})

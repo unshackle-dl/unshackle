@@ -57,7 +57,7 @@ dependencies = [
     "chardet>=5.2.0,<6",
     "curl-cffi>=0.7.0b4,<0.14",
     "pyplayready>=0.6.3,<0.7",
-    "httpx>=0.28.1,<0.29",
+    "httpx[http2]>=0.28.1,<0.29",
     "cryptography>=45.0.0,<47",
     "subby",
     "aiohttp>=3.13.3,<4",

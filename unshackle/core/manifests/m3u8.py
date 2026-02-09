@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Optional, Union
 
+import httpx
 import m3u8
 from curl_cffi.requests import Session as CurlSession
 from requests import Session
@@ -16,7 +17,7 @@ def parse(
     master: m3u8.M3U8,
     language: str,
     *,
-    session: Optional[Union[Session, CurlSession]] = None,
+    session: Optional[Union[Session, CurlSession, httpx.Client]] = None,
 ) -> Tracks:
     """Parse a variant playlist to ``Tracks`` with basic information, defer DRM loading."""
     tracks = HLS(master, session=session).to_tracks(language)
