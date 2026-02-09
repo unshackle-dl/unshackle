@@ -15,6 +15,7 @@ from urllib.parse import urljoin
 from uuid import UUID
 from zlib import crc32
 
+import httpx
 import m3u8
 import requests
 from curl_cffi.requests import Response as CurlResponse
@@ -38,7 +39,7 @@ from unshackle.core.utilities import get_debug_logger, get_extension, is_close_m
 
 
 class HLS:
-    def __init__(self, manifest: M3U8, session: Optional[Union[Session, CurlSession]] = None):
+    def __init__(self, manifest: M3U8, session: Optional[Union[Session, CurlSession, httpx.Client]] = None):
         if not manifest:
             raise ValueError("HLS manifest must be provided.")
         if not isinstance(manifest, M3U8):
@@ -50,7 +51,7 @@ class HLS:
         self.session = session or Session()
 
     @classmethod
-    def from_url(cls, url: str, session: Optional[Union[Session, CurlSession]] = None, **args: Any) -> HLS:
+    def from_url(cls, url: str, session: Optional[Union[Session, CurlSession, httpx.Client]] = None, **args: Any) -> HLS:
         if not url:
             raise requests.URLRequired("HLS manifest URL must be provided.")
         if not isinstance(url, str):
@@ -58,23 +59,15 @@ class HLS:
 
         if not session:
             session = Session()
-        elif not isinstance(session, (Session, CurlSession)):
-            raise TypeError(f"Expected session to be a {Session} or {CurlSession}, not {session!r}")
+        elif not isinstance(session, (Session, CurlSession, httpx.Client)):
+            raise TypeError(f"Expected session to be a {Session} or {CurlSession} or {httpx.Client}, not {session!r}")
 
-        res = session.get(url, **args)
-
-        # Handle requests and curl_cffi response objects
-        if isinstance(res, requests.Response):
-            if not res.ok:
-                raise requests.ConnectionError("Failed to request the M3U(8) document.", response=res)
-            content = res.text
-        elif isinstance(res, CurlResponse):
-            if not res.ok:
-                raise requests.ConnectionError("Failed to request the M3U(8) document.", response=res)
-            content = res.text
-        else:
-            raise TypeError(f"Expected response to be a requests.Response or curl_cffi.Response, not {type(res)}")
-
+        try:
+            res = session.get(url, **args)
+            res.raise_for_status()
+        except Exception as e:
+            raise RuntimeError("Failed to request the M3U(8) document.") from e
+        content = res.text
         master = m3u8.loads(content, uri=url)
 
         return cls(master, session)
@@ -265,7 +258,7 @@ class HLS:
         save_path: Path,
         save_dir: Path,
         progress: partial,
-        session: Optional[Union[Session, CurlSession]] = None,
+        session: Optional[Union[Session, CurlSession, httpx.Client]] = None,
         proxy: Optional[str] = None,
         max_workers: Optional[int] = None,
         license_widevine: Optional[Callable] = None,
@@ -274,8 +267,8 @@ class HLS:
     ) -> None:
         if not session:
             session = Session()
-        elif not isinstance(session, (Session, CurlSession)):
-            raise TypeError(f"Expected session to be a {Session} or {CurlSession}, not {session!r}")
+        elif not isinstance(session, (Session, CurlSession, httpx.Client)):
+            raise TypeError(f"Expected session to be a {Session} or {CurlSession} or {httpx.Client}, not {session!r}")
 
         if proxy:
             # Handle proxies differently based on session type
@@ -848,7 +841,7 @@ class HLS:
 
     @staticmethod
     def parse_session_data_keys(
-        manifest: M3U8, session: Optional[Union[Session, CurlSession]] = None
+        manifest: M3U8, session: Optional[Union[Session, CurlSession, httpx.Client]] = None
     ) -> list[m3u8.model.Key]:
         """Parse `com.apple.hls.keys` session data and return Key objects."""
         keys: list[m3u8.model.Key] = []
@@ -923,7 +916,7 @@ class HLS:
     def get_track_kid_from_init(
         master: M3U8,
         track: AnyTrack,
-        session: Union[Session, CurlSession],
+        session: Union[Session, CurlSession, httpx.Client],
     ) -> Optional[UUID]:
         """
         Extract the track's Key ID from its init segment (EXT-X-MAP).
@@ -990,7 +983,7 @@ class HLS:
     @staticmethod
     def get_drm(
         key: Union[m3u8.model.SessionKey, m3u8.model.Key],
-        session: Optional[Union[Session, CurlSession]] = None,
+        session: Optional[Union[Session, CurlSession, httpx.Client]] = None,
     ) -> DRM_T:
         """
         Convert HLS EXT-X-KEY data to an initialized DRM object.
@@ -1002,8 +995,8 @@ class HLS:
 
         Raises a NotImplementedError if the key system is not supported.
         """
-        if not isinstance(session, (Session, CurlSession, type(None))):
-            raise TypeError(f"Expected session to be a {Session} or {CurlSession}, not {type(session)}")
+        if not isinstance(session, (Session, CurlSession, httpx.Client, type(None))):
+            raise TypeError(f"Expected session to be a {Session} or {CurlSession} or {httpx.Client}, not {type(session)}")
         if not session:
             session = Session()
 
