@@ -211,7 +211,7 @@ def serve(
                     "devices": prd_devices,
                     "users": {
                         user_key: {
-                            "devices": user_cfg.get("playready_devices", prd_device_names),
+                            "devices": user_cfg.get("playready_devices", []),
                             "username": user_cfg.get("username", "user"),
                         }
                         for user_key, user_cfg in serve_config["users"].items()
