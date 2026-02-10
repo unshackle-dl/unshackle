@@ -116,9 +116,14 @@ class HLS:
 
         for playlist in self.manifest.playlists:
             audio_group = playlist.stream_info.audio
-            if audio_group:
-                audio_codec = Audio.Codec.from_codecs(playlist.stream_info.codecs)
-                audio_codecs_by_group_id[audio_group] = audio_codec
+            audio_codec: Optional[Audio.Codec] = None
+            if audio_group and playlist.stream_info.codecs:
+                try:
+                    audio_codec = Audio.Codec.from_codecs(playlist.stream_info.codecs)
+                except ValueError:
+                    audio_codec = None
+                if audio_codec:
+                    audio_codecs_by_group_id[audio_group] = audio_codec
 
             try:
                 # TODO: Any better way to figure out the primary track type?
