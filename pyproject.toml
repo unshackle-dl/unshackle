@@ -67,6 +67,8 @@ dependencies = [
     "pycountry>=24.6.1",
     "language-data>=1.4.0",
     "wasmtime>=41.0.0",
+    "dacite>=1.9.2",
+    "tenacity>=9.1.4",
 ]
 
 [project.urls]
