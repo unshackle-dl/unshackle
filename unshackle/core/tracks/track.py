@@ -13,13 +13,12 @@ from typing import Any, Callable, Iterable, Optional, Union
 from uuid import UUID
 from zlib import crc32
 
-import httpx
-from curl_cffi.requests import Session as CurlSession
 from langcodes import Language
-from requests import Session
 
 from unshackle.core import binaries
 from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
+from unshackle.core.clients.base import BaseHttpClient
+from unshackle.core.clients.factory import http_unshackle
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY
 from unshackle.core.downloaders import aria2c, curl_impersonate, n_m3u8dl_re, requests
@@ -186,7 +185,7 @@ class Track:
 
     def download(
         self,
-        session: Session,
+        session: BaseHttpClient,
         prepare_drm: partial,
         max_workers: Optional[int] = None,
         progress: Optional[partial] = None,
@@ -205,7 +204,7 @@ class Track:
 
         log = logging.getLogger("track")
 
-        proxy = next(iter(session.proxies.values()), None)
+        proxy = session.get_proxy()
 
         track_type = self.__class__.__name__
         save_path = config.directories.temp / f"{track_type}_{self.id}.mp4"
@@ -548,7 +547,7 @@ class Track:
             from pywidevine.cdm import Cdm as WidevineCdm
             from pywidevine.pssh import PSSH as WV_PSSH
 
-            session = getattr(self, "session", None) or Session()
+            session = getattr(self, "session", None) or http_unshackle.get('track')
 
             response = session.get(self.url)
             playlist = m3u8.loads(response.text, self.url)
@@ -584,7 +583,7 @@ class Track:
         maximum_size: int = 20000,
         url: Optional[str] = None,
         byte_range: Optional[str] = None,
-        session: Optional[Session] = None,
+        session: Optional[BaseHttpClient] = None,
     ) -> bytes:
         """
         Get the Track's Initial Segment Data Stream.
@@ -614,8 +613,11 @@ class Track:
             raise TypeError(f"Expected url to be a {str}, not {type(url)}")
         if not isinstance(byte_range, (str, type(None))):
             raise TypeError(f"Expected byte_range to be a {str}, not {type(byte_range)}")
-        if not isinstance(session, (Session, CurlSession, httpx.Client, type(None))):
-            raise TypeError(f"Expected session to be a {Session} or {CurlSession} or {httpx.Client}, not {type(session)}")
+        if not session:
+            session = http_unshackle.get('track')
+        else:
+            if not isinstance(session, BaseHttpClient):
+                raise TypeError(f"Expected session to be a {BaseHttpClient}, not {type(session)}")
 
         if not url:
             if self.descriptor != self.Descriptor.URL:
@@ -624,8 +626,6 @@ class Track:
                 raise ValueError("An explicit URL must be provided as the track has no URL")
             url = self.url
 
-        if not session:
-            session = Session()
 
         content_length = maximum_size
 
@@ -649,7 +649,6 @@ class Track:
 
         if byte_range:
             res = session.get(url=url, headers={"Range": f"bytes={byte_range}"})
-            res.raise_for_status()
             init_data = res.content
         else:
             init_data = None

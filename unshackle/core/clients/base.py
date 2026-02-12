@@ -4,22 +4,6 @@ from .retry import build_retry
 from .exceptions import NetworkError, NetworkHTTPError
 
 
-_REGISTRY: Dict[str, Type["BaseHttpClient"]] = {}
-
-
-def register(name: str):
-    def decorator(cls: Type["BaseHttpClient"]):
-        _REGISTRY[name] = cls
-        return cls
-    return decorator
-
-
-def get_session(config_dict: dict | None = None) -> "BaseHttpClient":
-    config = load_config(config_dict)
-    cls = _REGISTRY[config.type]
-    return cls(config)
-
-
 class BaseHttpClient:
     def __init__(self, config: HttpClientConfig):
         self._config = config
@@ -52,19 +36,19 @@ class BaseHttpClient:
                 response = self._client.request(method, url, **kwargs)
             except Exception as exc:
                 raise NetworkError(str(exc)) from exc
-
             if (
                 method in self._retry_methods
                 and response.status_code in self._retry_statuses
             ):
                 raise NetworkHTTPError(response.status_code)
-
             return response
 
         if method in self._retry_methods:
-            return self._retry(raw_call)()
-
-        return raw_call()
+            response = self._retry(raw_call)()
+        else:
+            response = raw_call()
+        response.raise_for_status()
+        return response
 
     # --------------------
     # Public API
@@ -82,6 +66,19 @@ class BaseHttpClient:
     def close(self):
         self._client.close()
 
+    def get_proxy(self):
+        return next(iter(self.proxies.values()), None)
+
     # Forward everything else
     def __getattr__(self, item):
         return getattr(self._client, item)
+
+
+_REGISTRY: Dict[str, Type[BaseHttpClient]] = {}
+
+
+def register(name: str):
+    def decorator(cls: Type[BaseHttpClient]):
+        _REGISTRY[name] = cls
+        return cls
+    return decorator

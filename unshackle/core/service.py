@@ -9,12 +9,11 @@ from urllib.parse import urlparse, urlunparse
 
 import click
 import m3u8
-import requests
-from requests.adapters import HTTPAdapter, Retry
 from rich.padding import Padding
 from rich.rule import Rule
 
 from unshackle.core.cacher import Cacher
+from unshackle.core.clients.factory import http_unshackle
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import AnyTrack
@@ -80,7 +79,8 @@ class Service(metaclass=ABCMeta):
 
         self.log = logging.getLogger(self.__class__.__name__)
 
-        self.session = self.get_session()
+        # TODO: http_unshackle -> http_service
+        self.session = http_unshackle.get('service')
         self.cache = Cacher(self.__class__.__name__)
         self.title_cache = TitleCacher(self.__class__.__name__)
 

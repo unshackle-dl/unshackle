@@ -15,11 +15,7 @@ from urllib.parse import urljoin
 from uuid import UUID
 from zlib import crc32
 
-import httpx
 import m3u8
-import requests
-from curl_cffi.requests import Response as CurlResponse
-from curl_cffi.requests import Session as CurlSession
 from langcodes import Language, tag_is_valid
 from m3u8 import M3U8
 from pyplayready.cdm import Cdm as PlayReadyCdm
@@ -30,6 +26,9 @@ from requests import Session
 
 from unshackle.core import binaries
 from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
+from unshackle.core.clients.base import BaseHttpClient
+from unshackle.core.clients.exceptions import NetworkURLRequired
+from unshackle.core.clients.factory import http_unshackle
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.downloaders import requests as requests_downloader
 from unshackle.core.drm import DRM_T, ClearKey, MonaLisa, PlayReady, Widevine
@@ -39,7 +38,7 @@ from unshackle.core.utilities import get_debug_logger, get_extension, is_close_m
 
 
 class HLS:
-    def __init__(self, manifest: M3U8, session: Optional[Union[Session, CurlSession, httpx.Client]] = None):
+    def __init__(self, manifest: M3U8, session: Optional[BaseHttpClient] = None):
         if not manifest:
             raise ValueError("HLS manifest must be provided.")
         if not isinstance(manifest, M3U8):
@@ -51,20 +50,19 @@ class HLS:
         self.session = session or Session()
 
     @classmethod
-    def from_url(cls, url: str, session: Optional[Union[Session, CurlSession, httpx.Client]] = None, **args: Any) -> HLS:
+    def from_url(cls, url: str, session: Optional[BaseHttpClient] = None, **args: Any) -> HLS:
         if not url:
-            raise requests.URLRequired("HLS manifest URL must be provided.")
+            raise NetworkURLRequired("HLS manifest URL must be provided.")
         if not isinstance(url, str):
             raise TypeError(f"Expected url to be a {str}, not {url!r}")
 
         if not session:
-            session = Session()
-        elif not isinstance(session, (Session, CurlSession, httpx.Client)):
-            raise TypeError(f"Expected session to be a {Session} or {CurlSession} or {httpx.Client}, not {session!r}")
+            session = http_unshackle.get('hls')
+        elif not isinstance(session, BaseHttpClient):
+            raise TypeError(f"Expected session to be a {BaseHttpClient}, not {session!r}")
 
         try:
             res = session.get(url, **args)
-            res.raise_for_status()
         except Exception as e:
             raise RuntimeError("Failed to request the M3U(8) document.") from e
         content = res.text
@@ -80,7 +78,7 @@ class HLS:
             raise TypeError(f"Expected text to be a {str}, not {text!r}")
 
         if not url:
-            raise requests.URLRequired("HLS manifest URL must be provided for relative path computations.")
+            raise NetworkURLRequired("HLS manifest URL must be provided for relative path computations.")
         if not isinstance(url, str):
             raise TypeError(f"Expected url to be a {str}, not {url!r}")
 
@@ -263,7 +261,7 @@ class HLS:
         save_path: Path,
         save_dir: Path,
         progress: partial,
-        session: Optional[Union[Session, CurlSession, httpx.Client]] = None,
+        session: Optional[BaseHttpClient] = None,
         proxy: Optional[str] = None,
         max_workers: Optional[int] = None,
         license_widevine: Optional[Callable] = None,
@@ -271,9 +269,9 @@ class HLS:
         cdm: Optional[object] = None,
     ) -> None:
         if not session:
-            session = Session()
-        elif not isinstance(session, (Session, CurlSession, httpx.Client)):
-            raise TypeError(f"Expected session to be a {Session} or {CurlSession} or {httpx.Client}, not {session!r}")
+            session = http_unshackle.get('hls')
+        elif not isinstance(session, BaseHttpClient):
+            raise TypeError(f"Expected session to be a {BaseHttpClient}, not {session!r}")
 
         if proxy:
             # Handle proxies differently based on session type
@@ -286,17 +284,11 @@ class HLS:
             master = m3u8.load(str(track.from_file))
         else:
             # Get the playlist text and handle both session types
-            response = session.get(track.url)
-            if isinstance(response, requests.Response) or isinstance(response, CurlResponse):
-                if not response.ok:
-                    log.error(f"Failed to request the invariant M3U8 playlist: {response.status_code}")
-                    sys.exit(1)
-                playlist_text = response.text
-            else:
-                raise TypeError(
-                    f"Expected response to be a requests.Response or curl_cffi.Response, not {type(response)}"
-                )
-
+            try:
+                response = session.get(track.url)
+            except Exception as e:
+                raise RuntimeError(f"Failed to request the invariant M3U8 playlist") from e
+            playlist_text = response.text
             master = m3u8.loads(playlist_text, uri=track.url)
 
         if not master.segments:
@@ -623,16 +615,7 @@ class HLS:
                         url=urljoin(segment.init_section.base_uri, segment.init_section.uri),
                         headers=init_range_header,
                     )
-
-                    # Check response based on session type
-                    if isinstance(res, requests.Response) or isinstance(res, CurlResponse):
-                        res.raise_for_status()
-                        init_content = res.content
-                    else:
-                        raise TypeError(
-                            f"Expected response to be requests.Response or curl_cffi.Response, not {type(res)}"
-                        )
-
+                    init_content = res.content
                     map_data = (segment.init_section, init_content)
 
             segment_keys = getattr(segment, "keys", None)
@@ -846,7 +829,7 @@ class HLS:
 
     @staticmethod
     def parse_session_data_keys(
-        manifest: M3U8, session: Optional[Union[Session, CurlSession, httpx.Client]] = None
+        manifest: M3U8, session: Optional[BaseHttpClient] = None
     ) -> list[m3u8.model.Key]:
         """Parse `com.apple.hls.keys` session data and return Key objects."""
         keys: list[m3u8.model.Key] = []
@@ -858,7 +841,7 @@ class HLS:
             value = getattr(data, "value", None)
             if not value and data.uri:
                 if not session:
-                    session = Session()
+                    session = http_unshackle.get('hls')
                 res = session.get(urljoin(manifest.base_uri or "", data.uri))
                 value = res.text
 
@@ -921,7 +904,7 @@ class HLS:
     def get_track_kid_from_init(
         master: M3U8,
         track: AnyTrack,
-        session: Union[Session, CurlSession, httpx.Client],
+        session: BaseHttpClient,
     ) -> Optional[UUID]:
         """
         Extract the track's Key ID from its init segment (EXT-X-MAP).
@@ -988,7 +971,7 @@ class HLS:
     @staticmethod
     def get_drm(
         key: Union[m3u8.model.SessionKey, m3u8.model.Key],
-        session: Optional[Union[Session, CurlSession, httpx.Client]] = None,
+        session: Optional[BaseHttpClient] = None,
     ) -> DRM_T:
         """
         Convert HLS EXT-X-KEY data to an initialized DRM object.
@@ -1000,10 +983,10 @@ class HLS:
 
         Raises a NotImplementedError if the key system is not supported.
         """
-        if not isinstance(session, (Session, CurlSession, httpx.Client, type(None))):
-            raise TypeError(f"Expected session to be a {Session} or {CurlSession} or {httpx.Client}, not {type(session)}")
         if not session:
-            session = Session()
+            session = http_unshackle.get('hls')
+        elif not isinstance(session, BaseHttpClient):
+            raise TypeError(f"Expected session to be a {BaseHttpClient}, not {type(session)}")
 
         # TODO: Add support for 'SAMPLE-AES', 'AES-CTR', 'AES-CBC', 'ClearKey'
         if key.method == "AES-128":

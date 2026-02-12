@@ -13,10 +13,11 @@ from construct import Container
 from pymp4.parser import Box
 from pywidevine.cdm import Cdm as WidevineCdm
 from pywidevine.pssh import PSSH
-from requests import Session
 from rich.text import Text
 
 from unshackle.core import binaries
+from unshackle.core.clients.base import BaseHttpClient
+from unshackle.core.clients.factory import http_unshackle
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import AnyTrack
@@ -54,7 +55,7 @@ class Widevine:
         self.data: dict = kwargs or {}
 
     @classmethod
-    def from_track(cls, track: AnyTrack, session: Optional[Session] = None) -> Widevine:
+    def from_track(cls, track: AnyTrack, session: Optional[BaseHttpClient] = None) -> Widevine:
         """
         Get PSSH and KID from within the Initiation Segment of the Track Data.
         It also tries to get PSSH and KID from other track data like M3U8 data
@@ -72,8 +73,7 @@ class Widevine:
             KIDNotFound - If the KID was not found within the data or PSSH.
         """
         if not session:
-            session = Session()
-            session.headers.update(config.headers)
+            session = http_unshackle.get('widevine')
 
         kid: Optional[UUID] = None
         pssh_boxes: list[Container] = []

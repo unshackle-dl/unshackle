@@ -9,6 +9,8 @@ from zlib import crc32
 
 import requests
 
+from unshackle.core.clients.base import BaseHttpClient
+from unshackle.core.clients.factory import http_unshackle
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_LICENCE_ONLY
 
@@ -21,7 +23,7 @@ class Attachment:
         name: Optional[str] = None,
         mime_type: Optional[str] = None,
         description: Optional[str] = None,
-        session: Optional[requests.Session] = None,
+        session: Optional[BaseHttpClient] = None,
     ):
         """
         Create a new Attachment.
@@ -66,12 +68,8 @@ class Attachment:
             else:
                 try:
                     if session is None:
-                        with requests.Session() as session:
-                            response = session.get(url, stream=True)
-                            response.raise_for_status()
-                    else:
-                        response = session.get(url, stream=True)
-                        response.raise_for_status()
+                        session = http_unshackle.get('attachment')
+                    response = session.get(url, stream=True)
                     config.directories.temp.mkdir(parents=True, exist_ok=True)
                     download_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -81,7 +79,7 @@ class Attachment:
 
                     path = download_path
                 except Exception as e:
-                    raise ValueError(f"Failed to download attachment from URL: {e}")
+                    raise ValueError(f"Failed to download attachment from URL") from e
 
         if path is not None and not isinstance(path, (str, Path)):
             raise ValueError(

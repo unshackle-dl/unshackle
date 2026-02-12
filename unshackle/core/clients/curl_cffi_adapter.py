@@ -11,7 +11,6 @@ from curl_cffi.requests import Session
 
 from .base import BaseHttpClient, register
 
-
 # Suppress noisy HTTPS proxy warning from curl_cffi
 warnings.filterwarnings(
     "ignore",

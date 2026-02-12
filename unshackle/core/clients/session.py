@@ -189,19 +189,19 @@ def session(
 
         class MyService(Service):
             @staticmethod
-            def get_session():
+            def http_clients.get():
                 return session()  # Uses config default browser
 
         # Use OkHttp 4.x preset for Android TV
         class AndroidService(Service):
             @staticmethod
-            def get_session():
+            def http_clients.get():
                 return session("okhttp4")
 
         # Custom fingerprint (manual)
         class CustomService(Service):
             @staticmethod
-            def get_session():
+            def http_clients.get():
                 return session(
                     ja3="771,4865-4866-4867-49195...",
                     akamai="1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p",
@@ -210,7 +210,7 @@ def session(
         # With retry configuration
         class MyService(Service):
             @staticmethod
-            def get_session():
+            def http_clients.get():
                 return session(
                     "okhttp4",
                     max_retries=5,

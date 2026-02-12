@@ -1,6 +1,8 @@
 class NetworkError(Exception):
-    """Base unified network error."""
+    pass
 
+class NetworkURLRequired(Exception):
+    pass
 
 class NetworkHTTPError(NetworkError):
     def __init__(self, status_code: int):

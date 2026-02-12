@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import Optional
 
-import httpx
 import m3u8
-from curl_cffi.requests import Session as CurlSession
 from requests import Session
 
+from unshackle.core.clients.base import BaseHttpClient
 from unshackle.core.manifests.hls import HLS
 from unshackle.core.tracks import Tracks
 
@@ -17,7 +16,7 @@ def parse(
     master: m3u8.M3U8,
     language: str,
     *,
-    session: Optional[Union[Session, CurlSession, httpx.Client]] = None,
+    session: Optional[BaseHttpClient] = None,
 ) -> Tracks:
     """Parse a variant playlist to ``Tracks`` with basic information, defer DRM loading."""
     tracks = HLS(master, session=session).to_tracks(language)

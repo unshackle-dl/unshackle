@@ -30,7 +30,7 @@ class HttpClientConfig:
     adapter_options: Dict[str, Any] = field(default_factory=dict)
 
 
-def build_config(data: dict | None) -> HttpClientConfig:
+def load_config(data: dict | None) -> HttpClientConfig:
     if data is None:
         return HttpClientConfig()
 
