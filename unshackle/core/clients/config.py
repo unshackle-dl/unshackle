@@ -1,6 +1,6 @@
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from dacite import from_dict, Config as DaciteConfig
 
 
@@ -24,10 +24,10 @@ class RetryConfig:
 class HttpClientConfig:
     type: str = "requests"
     headers: Dict[str, str] = field(default_factory=dict)
+    proxy: Optional[Any] = None
     retry: RetryConfig = field(default_factory=RetryConfig)
-
     # Adapter-specific extra parameters
-    adapter_options: Dict[str, Any] = field(default_factory=dict)
+    args: Dict[str, Any] = field(default_factory=dict)
 
 
 def load_config(data: dict | None) -> HttpClientConfig:

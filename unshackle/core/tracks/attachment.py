@@ -68,7 +68,7 @@ class Attachment:
             else:
                 try:
                     if session is None:
-                        session = http_unshackle.get('attachment')
+                        session = http_unshackle.new('attachment')
                     response = session.get(url, stream=True)
                     config.directories.temp.mkdir(parents=True, exist_ok=True)
                     download_path.parent.mkdir(parents=True, exist_ok=True)

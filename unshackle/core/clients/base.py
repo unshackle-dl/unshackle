@@ -1,11 +1,26 @@
+import base64
 from typing import Dict, Type, Any
+from urllib.parse import urlparse
+
 from .config import HttpClientConfig, load_config
 from .retry import build_retry
 from .exceptions import NetworkError, NetworkHTTPError
+from ..utils.collections import merge_dict_case_insensitive
 
 
 class BaseHttpClient:
     def __init__(self, config: HttpClientConfig):
+        if config.proxy:
+            proxy_parse = urlparse(config.proxy)
+            if proxy_parse.username and proxy_parse.password:
+                merge_dict_case_insensitive(
+                    {
+                        "Proxy-Authorization": base64.b64encode(
+                            f"{proxy_parse.username}:{proxy_parse.password}".encode("utf8")
+                        ).decode()
+                    },
+                    config.headers
+                )
         self._config = config
         self._retry_config = config.retry
         self._retry = build_retry(self._retry_config)
@@ -68,6 +83,12 @@ class BaseHttpClient:
 
     def get_proxy(self):
         return next(iter(self.proxies.values()), None)
+
+    def set_client_proxy(self, proxy):
+        raise NotImplementedError()
+
+    def get_config(self):
+        return self._config
 
     # Forward everything else
     def __getattr__(self, item):

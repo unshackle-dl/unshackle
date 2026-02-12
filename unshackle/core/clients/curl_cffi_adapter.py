@@ -65,7 +65,7 @@ class CurlCffiAdapter(BaseHttpClient):
     """
 
     def _build_client(self, config):
-        options = dict(config.adapter_options)  # copy
+        options = dict(config.args)  # copy
 
         # Handle fingerprint preset
         browser = options.pop("browser", None)

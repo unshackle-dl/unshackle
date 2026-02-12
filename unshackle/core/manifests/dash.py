@@ -58,7 +58,7 @@ class DASH:
             raise TypeError(f"Expected url to be a {str}, not {url!r}")
 
         if not session:
-            session = http_unshackle.get('dash')
+            session = http_unshackle.new('dash')
         try:
             res = session.get(url, **args)
         except Exception as e:
@@ -257,7 +257,7 @@ class DASH:
         cdm: Optional[object] = None,
     ):
         if not session:
-            session = http_unshackle.get('dash')
+            session = http_unshackle.new('dash')
         elif not isinstance(session, BaseHttpClient):
             raise TypeError(f"Expected session to be a {BaseHttpClient}, not {session!r}")
 

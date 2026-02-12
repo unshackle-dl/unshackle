@@ -80,7 +80,6 @@ class Service(metaclass=ABCMeta):
         self.log = logging.getLogger(self.__class__.__name__)
 
         # TODO: http_unshackle -> http_service
-        self.session = http_unshackle.get('service')
         self.cache = Cacher(self.__class__.__name__)
         self.title_cache = TitleCacher(self.__class__.__name__)
 
@@ -158,7 +157,7 @@ class Service(metaclass=ABCMeta):
                     if self.GEOFENCE:
                         # Service has geofence - need fresh IP check to determine if proxy needed
                         try:
-                            current_region = get_ip_info(self.session)["country"].lower()
+                            current_region = get_ip_info(http_unshackle.new('geofence'))["country"].lower()
                             if any(x.lower() == current_region for x in self.GEOFENCE):
                                 self.log.info("Service is not Geoblocked in your region")
                             else:
@@ -178,19 +177,10 @@ class Service(metaclass=ABCMeta):
                         self.log.info("Service has no Geofence")
 
             if proxy:
-                self.session.proxies.update({"all": proxy})
-                proxy_parse = urlparse(proxy)
-                if proxy_parse.username and proxy_parse.password:
-                    self.session.headers.update(
-                        {
-                            "Proxy-Authorization": base64.b64encode(
-                                f"{proxy_parse.username}:{proxy_parse.password}".encode("utf8")
-                            ).decode()
-                        }
-                    )
+                http_unshackle.set_default_proxy(proxy)
                 # Always verify proxy IP - proxies can change exit nodes
                 try:
-                    proxy_ip_info = get_ip_info(self.session)
+                    proxy_ip_info = get_ip_info(http_unshackle.new('ipinfo'))
                     self.current_region = proxy_ip_info.get("country", "").lower() if proxy_ip_info else None
                 except Exception as e:
                     self.log.warning(f"Failed to verify proxy IP: {e}")
@@ -204,6 +194,7 @@ class Service(metaclass=ABCMeta):
                 except Exception as e:
                     self.log.debug(f"Failed to get cached IP info: {e}")
                     self.current_region = None
+        self.session = http_unshackle.new('service', service_config_dict.get('http', {}).get('default', {}))
 
     # Optional Abstract functions
     # The following functions may be implemented by the Service.

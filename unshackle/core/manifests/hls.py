@@ -57,7 +57,7 @@ class HLS:
             raise TypeError(f"Expected url to be a {str}, not {url!r}")
 
         if not session:
-            session = http_unshackle.get('hls')
+            session = http_unshackle.new('hls')
         elif not isinstance(session, BaseHttpClient):
             raise TypeError(f"Expected session to be a {BaseHttpClient}, not {session!r}")
 
@@ -269,7 +269,7 @@ class HLS:
         cdm: Optional[object] = None,
     ) -> None:
         if not session:
-            session = http_unshackle.get('hls')
+            session = http_unshackle.new('hls')
         elif not isinstance(session, BaseHttpClient):
             raise TypeError(f"Expected session to be a {BaseHttpClient}, not {session!r}")
 
@@ -841,7 +841,7 @@ class HLS:
             value = getattr(data, "value", None)
             if not value and data.uri:
                 if not session:
-                    session = http_unshackle.get('hls')
+                    session = http_unshackle.new('hls')
                 res = session.get(urljoin(manifest.base_uri or "", data.uri))
                 value = res.text
 
@@ -984,7 +984,7 @@ class HLS:
         Raises a NotImplementedError if the key system is not supported.
         """
         if not session:
-            session = http_unshackle.get('hls')
+            session = http_unshackle.new('hls')
         elif not isinstance(session, BaseHttpClient):
             raise TypeError(f"Expected session to be a {BaseHttpClient}, not {type(session)}")
 

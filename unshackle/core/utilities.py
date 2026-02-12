@@ -360,7 +360,7 @@ def get_ip_info(session: Optional[BaseHttpClient] = None) -> dict:
     If you provide a Requests Session with a Proxy, that proxies IP information
     is what will be returned.
     """
-    return (session or http_unshackle.get('ipinfo')).get("https://ipinfo.io/json").json()
+    return (session or http_unshackle.new('ipinfo')).get("https://ipinfo.io/json").json()
 
 
 def get_cached_ip_info(session: Optional[BaseHttpClient] = None) -> Optional[dict]:
@@ -392,7 +392,7 @@ def get_cached_ip_info(session: Optional[BaseHttpClient] = None) -> Optional[dic
         "ipapi": "https://ipapi.co/json",
     }
 
-    session = session or http_unshackle.get('ipinfo')
+    session = session or http_unshackle.new('ipinfo')
     provider_order = ["ipinfo", "ipapi"]
 
     current_time = time.time()
