@@ -9,15 +9,15 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
 
-import httpx
-import requests
-from curl_cffi.requests import Session as CurlSession
 from langcodes import Language, tag_is_valid
 from lxml.etree import Element
 from pyplayready.system.pssh import PSSH as PR_PSSH
 from pywidevine.pssh import PSSH
 from requests import Session
 
+from unshackle.core.clients.base import BaseHttpClient
+from unshackle.core.clients.exceptions import NetworkURLRequired
+from unshackle.core.clients.factory import http_unshackle
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
 from unshackle.core.events import events
@@ -31,22 +31,21 @@ class ISM:
         if manifest.tag != "SmoothStreamingMedia":
             raise TypeError(f"Expected 'SmoothStreamingMedia' document, got '{manifest.tag}'")
         if not url:
-            raise requests.URLRequired("ISM manifest URL must be provided for relative paths")
+            raise NetworkURLRequired("ISM manifest URL must be provided for relative paths")
         self.manifest = manifest
         self.url = url
 
     @classmethod
-    def from_url(cls, url: str, session: Optional[Union[Session, CurlSession, httpx.Client]] = None, **kwargs: Any) -> "ISM":
+    def from_url(cls, url: str, session: Optional[BaseHttpClient] = None, **kwargs: Any) -> "ISM":
         if not url:
-            raise requests.URLRequired("ISM manifest URL must be provided")
+            raise NetworkURLRequired("ISM manifest URL must be provided")
         if not session:
-            session = Session()
-        elif not isinstance(session, (Session, CurlSession, httpx.Client)):
-            raise TypeError(f"Expected session to be a {Session} or {CurlSession} or {httpx.Client}, not {session!r}")
+            session = http_unshackle.session('ism')
+        elif not isinstance(session, BaseHttpClient):
+            raise TypeError(f"Expected session to be a {BaseHttpClient}, not {session!r}")
         res = session.get(url, **kwargs)
         if res.url != url:
             url = res.url
-        res.raise_for_status()
         return cls(load_xml(res.content), url)
 
     @classmethod
@@ -54,7 +53,7 @@ class ISM:
         if not text:
             raise ValueError("ISM manifest text must be provided")
         if not url:
-            raise requests.URLRequired("ISM manifest URL must be provided for relative paths")
+            raise NetworkURLRequired("ISM manifest URL must be provided for relative paths")
         return cls(load_xml(text), url)
 
     @staticmethod
@@ -222,7 +221,7 @@ class ISM:
         save_path: Path,
         save_dir: Path,
         progress: partial,
-        session: Optional[Session] = None,
+        session: Optional[BaseHttpClient] = None,
         proxy: Optional[str] = None,
         max_workers: Optional[int] = None,
         license_widevine: Optional[Callable] = None,
@@ -230,9 +229,9 @@ class ISM:
         cdm: Optional[object] = None,
     ) -> None:
         if not session:
-            session = Session()
-        elif not isinstance(session, Session):
-            raise TypeError(f"Expected session to be a {Session}, not {session!r}")
+            session = http_unshackle.session('ism')
+        elif not isinstance(session, BaseHttpClient):
+            raise TypeError(f"Expected session to be a {BaseHttpClient}, not {session!r}")
 
         if proxy:
             session.proxies.update({"all": proxy})

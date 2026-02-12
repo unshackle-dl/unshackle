@@ -9,10 +9,9 @@ from pathlib import Path
 from typing import Optional, Tuple
 from xml.sax.saxutils import escape
 
-import requests
-from requests.adapters import HTTPAdapter, Retry
-
 from unshackle.core import binaries
+from unshackle.core.clients.exceptions import NetworkError
+from unshackle.core.clients.factory import http_unshackle
 from unshackle.core.config import config
 from unshackle.core.titles.episode import Episode
 from unshackle.core.titles.movie import Movie
@@ -24,22 +23,6 @@ HEADERS = {"User-Agent": "unshackle-tags/1.0"}
 
 
 log = logging.getLogger("TAGS")
-
-
-def _get_session() -> requests.Session:
-    """Create a requests session with retry logic for network failures."""
-    session = requests.Session()
-    session.headers.update(HEADERS)
-
-    retry = Retry(
-        total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504], allowed_methods=["GET", "POST"]
-    )
-
-    adapter = HTTPAdapter(max_retries=retry)
-    session.mount("https://", adapter)
-    session.mount("http://", adapter)
-
-    return session
 
 
 def _api_key() -> Optional[str]:
@@ -114,10 +97,9 @@ def search_simkl(
         filename += " 2160p.mkv"
 
     try:
-        session = _get_session()
+        session = http_unshackle.session('tags', config={'headers': HEADERS})
         headers = {"simkl-api-key": client_id}
         resp = session.post("https://api.simkl.com/search/file", json={"file": filename}, headers=headers, timeout=30)
-        resp.raise_for_status()
         data = resp.json()
         log.debug("Simkl API response received")
 
@@ -177,7 +159,7 @@ def search_simkl(
             log.debug("Simkl -> %s (TMDB ID %s)", movie_title, tmdb_id)
             return data, movie_title, tmdb_id
 
-    except (requests.RequestException, ValueError, KeyError) as exc:
+    except (NetworkError, ValueError, KeyError) as exc:
         log.debug("Simkl search failed: %s", exc)
 
     return None, None, None
@@ -211,15 +193,14 @@ def _fetch_tmdb_detail(tmdb_id: int, kind: str) -> Optional[dict]:
         return None
 
     try:
-        session = _get_session()
+        session = http_unshackle.session('tags', config={'headers': HEADERS})
         r = session.get(
             f"https://api.themoviedb.org/3/{kind}/{tmdb_id}",
             params={"api_key": api_key},
             timeout=30,
         )
-        r.raise_for_status()
         return r.json()
-    except requests.RequestException as exc:
+    except Exception as exc:
         log.debug("Failed to fetch TMDB detail: %s", exc)
         return None
 
@@ -231,15 +212,14 @@ def _fetch_tmdb_external_ids(tmdb_id: int, kind: str) -> Optional[dict]:
         return None
 
     try:
-        session = _get_session()
+        session = http_unshackle.session('tags', config={'headers': HEADERS})
         r = session.get(
             f"https://api.themoviedb.org/3/{kind}/{tmdb_id}/external_ids",
             params={"api_key": api_key},
             timeout=30,
         )
-        r.raise_for_status()
         return r.json()
-    except requests.RequestException as exc:
+    except NetworkError as exc:
         log.debug("Failed to fetch TMDB external IDs: %s", exc)
         return None
 
@@ -274,19 +254,19 @@ def search_tmdb(
         params["year" if kind == "movie" else "first_air_date_year"] = year
 
     try:
-        session = _get_session()
+        # TODO: init vs get
+        session = http_unshackle.session('tags', config={'headers': HEADERS})
         r = session.get(
             f"https://api.themoviedb.org/3/search/{kind}",
             params=params,
             timeout=30,
         )
-        r.raise_for_status()
         js = r.json()
         results = js.get("results") or []
         log.debug("TMDB returned %d results", len(results))
         if not results:
             return None, None
-    except requests.RequestException as exc:
+    except NetworkError as exc:
         log.warning("Failed to search TMDB for %s: %s", title, exc)
         return None, None
 
@@ -360,13 +340,12 @@ def get_title(
         return None
 
     try:
-        session = _get_session()
+        session = http_unshackle.session('tags', config={'headers': HEADERS})
         r = session.get(
             f"https://api.themoviedb.org/3/{kind}/{tmdb_id}",
             params={"api_key": api_key},
             timeout=30,
         )
-        r.raise_for_status()
         js = r.json()
 
         if title_cacher and cache_title_id:
@@ -380,7 +359,7 @@ def get_title(
                 log.debug("Failed to cache TMDB data: %s", exc)
 
         return js.get("title") or js.get("name")
-    except requests.RequestException as exc:
+    except NetworkError as exc:
         log.debug("Failed to fetch TMDB title: %s", exc)
         return None
 
@@ -410,13 +389,12 @@ def get_year(
         return None
 
     try:
-        session = _get_session()
+        session = http_unshackle.session('tags', config={'headers': HEADERS})
         r = session.get(
             f"https://api.themoviedb.org/3/{kind}/{tmdb_id}",
             params={"api_key": api_key},
             timeout=30,
         )
-        r.raise_for_status()
         js = r.json()
 
         if title_cacher and cache_title_id:
@@ -433,7 +411,7 @@ def get_year(
         if date and len(date) >= 4 and date[:4].isdigit():
             return int(date[:4])
         return None
-    except requests.RequestException as exc:
+    except NetworkError as exc:
         log.debug("Failed to fetch TMDB year: %s", exc)
         return None
 
@@ -459,13 +437,12 @@ def external_ids(
     log.debug("Fetching external IDs for %s %s", kind, tmdb_id)
 
     try:
-        session = _get_session()
+        session = http_unshackle.session('tags', config={'headers': HEADERS})
         r = session.get(
             url,
             params={"api_key": api_key},
             timeout=30,
         )
-        r.raise_for_status()
         js = r.json()
         log.debug("External IDs response: %s", js)
 
@@ -478,7 +455,7 @@ def external_ids(
                 log.debug("Failed to cache TMDB data: %s", exc)
 
         return js
-    except requests.RequestException as exc:
+    except NetworkError as exc:
         log.warning("Failed to fetch external IDs for %s %s: %s", kind, tmdb_id, exc)
         return {}
 
@@ -593,7 +570,7 @@ def tag_file(path: Path, title: Title, tmdb_id: Optional[int] | None = None) -> 
                         standard_tags["TMDB"] = f"{prefix}/{tmdb_id}"
                         try:
                             ids = external_ids(tmdb_id, kind)
-                        except requests.RequestException as exc:
+                        except NetworkError as exc:
                             log.debug("Failed to fetch external IDs: %s", exc)
                             ids = {}
                         else:
@@ -614,7 +591,7 @@ def tag_file(path: Path, title: Title, tmdb_id: Optional[int] | None = None) -> 
                     standard_tags["TMDB"] = f"{prefix}/{tmdb_id}"
                     try:
                         ids = external_ids(tmdb_id, kind)
-                    except requests.RequestException as exc:
+                    except NetworkError as exc:
                         log.debug("Failed to fetch external IDs: %s", exc)
                         ids = {}
                     else:

@@ -9,12 +9,11 @@ from urllib.parse import urlparse, urlunparse
 
 import click
 import m3u8
-import requests
-from requests.adapters import HTTPAdapter, Retry
 from rich.padding import Padding
 from rich.rule import Rule
 
 from unshackle.core.cacher import Cacher
+from unshackle.core.clients.factory import http_unshackle
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import AnyTrack
@@ -80,7 +79,7 @@ class Service(metaclass=ABCMeta):
 
         self.log = logging.getLogger(self.__class__.__name__)
 
-        self.session = self.get_session()
+        # TODO: http_unshackle -> http_service
         self.cache = Cacher(self.__class__.__name__)
         self.title_cache = TitleCacher(self.__class__.__name__)
 
@@ -158,7 +157,7 @@ class Service(metaclass=ABCMeta):
                     if self.GEOFENCE:
                         # Service has geofence - need fresh IP check to determine if proxy needed
                         try:
-                            current_region = get_ip_info(self.session)["country"].lower()
+                            current_region = get_ip_info(http_unshackle.session('geofence'))["country"].lower()
                             if any(x.lower() == current_region for x in self.GEOFENCE):
                                 self.log.info("Service is not Geoblocked in your region")
                             else:
@@ -178,19 +177,10 @@ class Service(metaclass=ABCMeta):
                         self.log.info("Service has no Geofence")
 
             if proxy:
-                self.session.proxies.update({"all": proxy})
-                proxy_parse = urlparse(proxy)
-                if proxy_parse.username and proxy_parse.password:
-                    self.session.headers.update(
-                        {
-                            "Proxy-Authorization": base64.b64encode(
-                                f"{proxy_parse.username}:{proxy_parse.password}".encode("utf8")
-                            ).decode()
-                        }
-                    )
+                http_unshackle.set_default_proxy(proxy)
                 # Always verify proxy IP - proxies can change exit nodes
                 try:
-                    proxy_ip_info = get_ip_info(self.session)
+                    proxy_ip_info = get_ip_info(http_unshackle.session('ipinfo'))
                     self.current_region = proxy_ip_info.get("country", "").lower() if proxy_ip_info else None
                 except Exception as e:
                     self.log.warning(f"Failed to verify proxy IP: {e}")
@@ -204,30 +194,12 @@ class Service(metaclass=ABCMeta):
                 except Exception as e:
                     self.log.debug(f"Failed to get cached IP info: {e}")
                     self.current_region = None
+        self.session = http_unshackle.session('service', service_config_dict.get('http', {}).get('default', {}))
 
     # Optional Abstract functions
     # The following functions may be implemented by the Service.
     # Otherwise, the base service code (if any) of the function will be executed on call.
     # The functions will be executed in shown order.
-
-    @staticmethod
-    def get_session() -> requests.Session:
-        """
-        Creates a Python-requests Session, adds common headers
-        from config, cookies, retry handler, and a proxy if available.
-        :returns: Prepared Python-requests Session
-        """
-        session = requests.Session()
-        session.headers.update(config.headers)
-        session.mount(
-            "https://",
-            HTTPAdapter(
-                max_retries=Retry(total=15, backoff_factor=0.2, status_forcelist=[429, 500, 502, 503, 504]),
-                pool_block=True,
-            ),
-        )
-        session.mount("http://", session.adapters["https://"])
-        return session
 
     def authenticate(self, cookies: Optional[CookieJar] = None, credential: Optional[Credential] = None) -> None:
         """

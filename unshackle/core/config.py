@@ -71,6 +71,7 @@ class Config:
             setattr(self.filenames, name, filename)
 
         self.headers: dict = kwargs.get("headers") or {}
+        self.http: dict = kwargs.get("http") or {}
         self.key_vaults: list[dict[str, Any]] = kwargs.get("key_vaults", [])
         self.muxing: dict = kwargs.get("muxing") or {}
         self.proxy_providers: dict = kwargs.get("proxy_providers") or {}

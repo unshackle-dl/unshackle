@@ -11,6 +11,8 @@ from requests import Session
 from requests.adapters import HTTPAdapter
 from rich import filesize
 
+from unshackle.core.clients.base import BaseHttpClient
+from unshackle.core.clients.factory import http_unshackle
 from unshackle.core.constants import DOWNLOAD_CANCELLED
 from unshackle.core.utilities import get_debug_logger, get_extension
 
@@ -24,7 +26,7 @@ LAST_SPEED_REFRESH = time.time()
 
 
 def download(
-    url: str, save_path: Path, session: Optional[Session] = None, segmented: bool = False, **kwargs: Any
+    url: str, save_path: Path, session: Optional[BaseHttpClient] = None, segmented: bool = False, **kwargs: Any
 ) -> Generator[dict[str, Any], None, None]:
     """
     Download a file using Python Requests.
@@ -55,7 +57,7 @@ def download(
     """
     global LAST_SPEED_REFRESH
 
-    session = session or Session()
+    session = session or http_unshackle.session('requests')
 
     save_dir = save_path.parent
     control_file = save_path.with_name(f"{save_path.name}.!dev")

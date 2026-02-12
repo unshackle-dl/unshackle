@@ -4,6 +4,7 @@ from uuid import UUID
 from requests import Session
 
 from unshackle.core import __version__
+from unshackle.core.clients.factory import http_unshackle
 from unshackle.core.vault import Vault
 
 
@@ -13,9 +14,12 @@ class API(Vault):
     def __init__(self, name: str, uri: str, token: str, no_push: bool = False):
         super().__init__(name, no_push)
         self.uri = uri.rstrip("/")
-        self.session = Session()
-        self.session.headers.update({"User-Agent": f"unshackle v{__version__}"})
-        self.session.headers.update({"Authorization": f"Bearer {token}"})
+        self.session = http_unshackle.session('vault', config={
+            'headers': {
+                "User-Agent": f"unshackle v{__version__}",
+                "Authorization": f"Bearer {token}"
+            }
+        })
 
     def get_key(self, kid: Union[UUID, str], service: str) -> Optional[str]:
         if isinstance(kid, UUID):

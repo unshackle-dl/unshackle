@@ -49,3 +49,15 @@ def merge_dict(source: dict, destination: dict) -> None:
             merge_dict(value, node)
         else:
             destination[key] = value
+
+def merge_dict_case_insensitive(source: dict, destination: dict) -> None:
+    """Recursively merge Source into Destination in-place."""
+    if not source:
+        return
+    for key, value in source.items():
+        if isinstance(value, dict):
+            # get node or create one
+            node = destination.setdefault(key, {})
+            merge_dict_case_insensitive(value, node)
+        else:
+            destination[key.lower()] = value

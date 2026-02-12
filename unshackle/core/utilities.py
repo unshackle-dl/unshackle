@@ -20,7 +20,6 @@ from uuid import uuid4
 
 import chardet
 import pycountry
-import requests
 from construct import ValidationError
 from fontTools import ttLib
 from langcodes import Language, closest_match
@@ -28,6 +27,8 @@ from pymp4.parser import Box
 from unidecode import unidecode
 
 from unshackle.core.cacher import Cacher
+from unshackle.core.clients.base import BaseHttpClient
+from unshackle.core.clients.factory import http_unshackle
 from unshackle.core.config import config
 from unshackle.core.constants import LANGUAGE_EXACT_DISTANCE, LANGUAGE_MAX_DISTANCE
 
@@ -352,17 +353,17 @@ def get_country_code(name: str) -> Optional[str]:
     return None
 
 
-def get_ip_info(session: Optional[requests.Session] = None) -> dict:
+def get_ip_info(session: Optional[BaseHttpClient] = None) -> dict:
     """
     Use ipinfo.io to get IP location information.
 
     If you provide a Requests Session with a Proxy, that proxies IP information
     is what will be returned.
     """
-    return (session or requests.Session()).get("https://ipinfo.io/json").json()
+    return (session or http_unshackle.session('ipinfo')).get("https://ipinfo.io/json").json()
 
 
-def get_cached_ip_info(session: Optional[requests.Session] = None) -> Optional[dict]:
+def get_cached_ip_info(session: Optional[BaseHttpClient] = None) -> Optional[dict]:
     """
     Get IP location information with 24-hour caching and fallback providers.
 
@@ -391,7 +392,7 @@ def get_cached_ip_info(session: Optional[requests.Session] = None) -> Optional[d
         "ipapi": "https://ipapi.co/json",
     }
 
-    session = session or requests.Session()
+    session = session or http_unshackle.session('ipinfo')
     provider_order = ["ipinfo", "ipapi"]
 
     current_time = time.time()
@@ -409,7 +410,7 @@ def get_cached_ip_info(session: Optional[requests.Session] = None) -> Optional[d
         try:
             log.debug(f"Trying IP provider: {provider_name}")
             response = session.get(provider_url, timeout=10)
-
+            # TODO: check conflicts with retry logic
             if response.status_code == 429:
                 log.warning(f"Provider {provider_name} returned 429 (rate limited), trying next provider")
                 if provider_name not in provider_state:

@@ -15,9 +15,6 @@ from urllib.parse import urljoin, urlparse
 from uuid import UUID
 from zlib import crc32
 
-import httpx
-import requests
-from curl_cffi.requests import Session as CurlSession
 from langcodes import Language, tag_is_valid
 from lxml.etree import Element, ElementTree
 from pyplayready.system.pssh import PSSH as PR_PSSH
@@ -26,6 +23,9 @@ from pywidevine.pssh import PSSH
 from requests import Session
 
 from unshackle.core.cdm.detect import is_playready_cdm
+from unshackle.core.clients.base import BaseHttpClient
+from unshackle.core.clients.exceptions import NetworkURLRequired
+from unshackle.core.clients.factory import http_unshackle
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.downloaders import requests as requests_downloader
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
@@ -43,7 +43,7 @@ class DASH:
             raise TypeError(f"Expected 'MPD' document, but received a '{manifest.tag}' document instead.")
 
         if not url:
-            raise requests.URLRequired("DASH manifest URL must be provided for relative path computations.")
+            raise NetworkURLRequired("DASH manifest URL must be provided for relative path computations.")
         if not isinstance(url, str):
             raise TypeError(f"Expected url to be a {str}, not {url!r}")
 
@@ -51,19 +51,16 @@ class DASH:
         self.url = url
 
     @classmethod
-    def from_url(cls, url: str, session: Optional[Union[Session, CurlSession, httpx.Client]] = None, **args: Any) -> DASH:
+    def from_url(cls, url: str, session: Optional[BaseHttpClient] = None, **args: Any) -> DASH:
         if not url:
-            raise requests.URLRequired("DASH manifest URL must be provided for relative path computations.")
+            raise NetworkURLRequired("DASH manifest URL must be provided for relative path computations.")
         if not isinstance(url, str):
             raise TypeError(f"Expected url to be a {str}, not {url!r}")
 
         if not session:
-            session = Session()
-        elif not isinstance(session, (Session, CurlSession, httpx.Client)):
-            raise TypeError(f"Expected session to be a {Session} or {CurlSession} or {httpx.Client}, not {session!r}")
+            session = http_unshackle.session('dash')
         try:
             res = session.get(url, **args)
-            res.raise_for_status()
         except Exception as e:
             raise RuntimeError("Failed to request the MPD document.") from e
         if res.url != url:
@@ -78,7 +75,7 @@ class DASH:
             raise TypeError(f"Expected text to be a {str}, not {text!r}")
 
         if not url:
-            raise requests.URLRequired("DASH manifest URL must be provided for relative path computations.")
+            raise NetworkURLRequired("DASH manifest URL must be provided for relative path computations.")
         if not isinstance(url, str):
             raise TypeError(f"Expected url to be a {str}, not {url!r}")
 
@@ -252,7 +249,7 @@ class DASH:
         save_path: Path,
         save_dir: Path,
         progress: partial,
-        session: Optional[Session] = None,
+        session: Optional[BaseHttpClient] = None,
         proxy: Optional[str] = None,
         max_workers: Optional[int] = None,
         license_widevine: Optional[Callable] = None,
@@ -260,10 +257,11 @@ class DASH:
         cdm: Optional[object] = None,
     ):
         if not session:
-            session = Session()
-        elif not isinstance(session, (Session, CurlSession, httpx.Client)):
-            raise TypeError(f"Expected session to be a {Session} or {CurlSession} or {httpx.Client}, not {session!r}")
+            session = http_unshackle.session('dash')
+        elif not isinstance(session, BaseHttpClient):
+            raise TypeError(f"Expected session to be a {BaseHttpClient}, not {session!r}")
 
+        # TODO: refactor
         if proxy:
             session.proxies.update({"all": proxy})
 
@@ -357,7 +355,6 @@ class DASH:
                         init_url, Bandwidth=representation.get("bandwidth"), RepresentationID=representation.get("id")
                     )
                 )
-                res.raise_for_status()
                 init_data = res.content
                 track_kid = track.get_key_id(init_data)
 
@@ -432,7 +429,6 @@ class DASH:
                     init_range_header = None
 
                 res = session.get(url=source_url, headers=init_range_header)
-                res.raise_for_status()
                 init_data = res.content
                 track_kid = track.get_key_id(init_data)
 
@@ -457,7 +453,6 @@ class DASH:
                     init_range_header = None
 
                 res = session.get(url=rep_base_url, headers=init_range_header)
-                res.raise_for_status()
                 init_data = res.content
                 track_kid = track.get_key_id(init_data)
                 total_size = res.headers.get("Content-Range", "").split("/")[-1]

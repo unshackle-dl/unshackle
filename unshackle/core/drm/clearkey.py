@@ -8,10 +8,10 @@ from urllib.parse import urljoin
 
 from Cryptodome.Cipher import AES
 from Cryptodome.Util.Padding import unpad
-from curl_cffi.requests import Session as CurlSession
 from m3u8.model import Key
-from requests import Session
-import httpx
+
+from unshackle.core.clients.base import BaseHttpClient
+from unshackle.core.clients.factory import http_unshackle
 
 
 class ClearKey:
@@ -59,7 +59,7 @@ class ClearKey:
         shutil.move(decrypted_path, path)
 
     @classmethod
-    def from_m3u_key(cls, m3u_key: Key, session: Optional[Session] = None) -> ClearKey:
+    def from_m3u_key(cls, m3u_key: Key, session: Optional[BaseHttpClient] = None) -> ClearKey:
         """
         Load a ClearKey from an M3U(8) Playlist's EXT-X-KEY.
 
@@ -71,17 +71,21 @@ class ClearKey:
         """
         if not isinstance(m3u_key, Key):
             raise ValueError(f"Provided M3U Key is in an unexpected type {m3u_key!r}")
-        if not isinstance(session, (Session, CurlSession, httpx.Client, type(None))):
-            raise TypeError(f"Expected session to be a {Session} or {CurlSession} or {httpx.Client}, not a {type(session)}")
+        if not session:
+            session = http_unshackle.session('m3u', config={
+                'headers': {
+                    "User-Agent": "smartexoplayer/1.1.0 (Linux;Android 8.0.0) ExoPlayerLib/2.13.3",
+                }
+            })
+        elif not isinstance(session, BaseHttpClient):
+            raise TypeError(f"Expected session to be a {BaseHttpClient}, not a {type(session)}")
 
         if not m3u_key.method.startswith("AES"):
             raise ValueError(f"Provided M3U Key is not an AES Clear Key, {m3u_key.method}")
         if not m3u_key.uri:
             raise ValueError("No URI in M3U Key, unable to get Key.")
 
-        if not session:
-            session = Session()
-
+        # TODO: refactor
         if not session.headers.get("User-Agent"):
             # commonly needed default for HLS playlists
             session.headers["User-Agent"] = "smartexoplayer/1.1.0 (Linux;Android 8.0.0) ExoPlayerLib/2.13.3"
@@ -95,7 +99,6 @@ class ClearKey:
         else:
             url = urljoin(m3u_key.base_uri, m3u_key.uri)
             res = session.get(url)
-            res.raise_for_status()
             if not res.content:
                 raise EOFError("Unexpected Empty Response by M3U Key URI.")
             if len(res.content) < 16:

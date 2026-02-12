@@ -13,10 +13,11 @@ from construct import Container
 from pymp4.parser import Box
 from pyplayready.cdm import Cdm as PlayReadyCdm
 from pyplayready.system.pssh import PSSH
-from requests import Session
 from rich.text import Text
 
 from unshackle.core import binaries
+from unshackle.core.clients.base import BaseHttpClient
+from unshackle.core.clients.factory import http_unshackle
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import AnyTrack
@@ -139,10 +140,9 @@ class PlayReady:
         return []
 
     @classmethod
-    def from_track(cls, track: AnyTrack, session: Optional[Session] = None) -> PlayReady:
+    def from_track(cls, track: AnyTrack, session: Optional[BaseHttpClient] = None) -> PlayReady:
         if not session:
-            session = Session()
-            session.headers.update(config.headers)
+            session = http_unshackle.session('playready')
 
         kid: Optional[UUID] = None
         pssh_boxes: list[Container] = []
