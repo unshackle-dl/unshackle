@@ -14,7 +14,7 @@ class API(Vault):
     def __init__(self, name: str, uri: str, token: str, no_push: bool = False):
         super().__init__(name, no_push)
         self.uri = uri.rstrip("/")
-        self.session = http_unshackle.new('vault', config={
+        self.session = http_unshackle.session('vault', config={
             'headers': {
                 "User-Agent": f"unshackle v{__version__}",
                 "Authorization": f"Bearer {token}"

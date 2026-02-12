@@ -40,7 +40,7 @@ class ISM:
         if not url:
             raise NetworkURLRequired("ISM manifest URL must be provided")
         if not session:
-            session = http_unshackle.new('ism')
+            session = http_unshackle.session('ism')
         elif not isinstance(session, BaseHttpClient):
             raise TypeError(f"Expected session to be a {BaseHttpClient}, not {session!r}")
         res = session.get(url, **kwargs)
@@ -229,7 +229,7 @@ class ISM:
         cdm: Optional[object] = None,
     ) -> None:
         if not session:
-            session = http_unshackle.new('ism')
+            session = http_unshackle.session('ism')
         elif not isinstance(session, BaseHttpClient):
             raise TypeError(f"Expected session to be a {BaseHttpClient}, not {session!r}")
 

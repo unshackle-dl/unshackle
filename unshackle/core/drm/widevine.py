@@ -73,7 +73,7 @@ class Widevine:
             KIDNotFound - If the KID was not found within the data or PSSH.
         """
         if not session:
-            session = http_unshackle.new('widevine')
+            session = http_unshackle.session('widevine')
 
         kid: Optional[UUID] = None
         pssh_boxes: list[Container] = []

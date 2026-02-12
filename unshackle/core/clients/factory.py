@@ -18,9 +18,7 @@ class HttpClientFactory:
         self.proxy = None
         self.clients: Dict[str, BaseHttpClient] = {}
 
-    def new(self, name: str = 'default', config: Optional[Union[HttpClientConfig,dict]] = None) -> BaseHttpClient:
-        if name in self.clients:
-            raise Exception(f'Client {name} already exists')
+    def session(self, name: str = 'default', config: Optional[Union[HttpClientConfig,dict]] = None) -> BaseHttpClient:
         if isinstance(config, HttpClientConfig):
             config = asdict(config)
         final_config_dict = {'proxy': self.proxy}
@@ -29,6 +27,9 @@ class HttpClientFactory:
             merge_dict_case_insensitive(config_unshackle.http.get(name, {}), final_config_dict)
         merge_dict_case_insensitive(config, final_config_dict)
         config_obj = load_config(final_config_dict)
+        if name in self.clients:
+            self.clients[name].update_config(config_obj)
+            return self.clients[name]
         cls = _REGISTRY[config_obj.type]
         client = cls(config_obj)
         self.clients[name] = client

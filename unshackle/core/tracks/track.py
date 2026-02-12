@@ -547,7 +547,7 @@ class Track:
             from pywidevine.cdm import Cdm as WidevineCdm
             from pywidevine.pssh import PSSH as WV_PSSH
 
-            session = getattr(self, "session", None) or http_unshackle.new('track')
+            session = getattr(self, "session", None) or http_unshackle.session('track')
 
             response = session.get(self.url)
             playlist = m3u8.loads(response.text, self.url)
@@ -614,7 +614,7 @@ class Track:
         if not isinstance(byte_range, (str, type(None))):
             raise TypeError(f"Expected byte_range to be a {str}, not {type(byte_range)}")
         if not session:
-            session = http_unshackle.new('track')
+            session = http_unshackle.session('track')
         else:
             if not isinstance(session, BaseHttpClient):
                 raise TypeError(f"Expected session to be a {BaseHttpClient}, not {type(session)}")

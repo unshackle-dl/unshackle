@@ -57,7 +57,7 @@ def download(
     """
     global LAST_SPEED_REFRESH
 
-    session = session or http_unshackle.new('requests')
+    session = session or http_unshackle.session('requests')
 
     save_dir = save_path.parent
     control_file = save_path.with_name(f"{save_path.name}.!dev")

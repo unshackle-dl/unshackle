@@ -142,7 +142,7 @@ class PlayReady:
     @classmethod
     def from_track(cls, track: AnyTrack, session: Optional[BaseHttpClient] = None) -> PlayReady:
         if not session:
-            session = http_unshackle.new('playready')
+            session = http_unshackle.session('playready')
 
         kid: Optional[UUID] = None
         pssh_boxes: list[Container] = []

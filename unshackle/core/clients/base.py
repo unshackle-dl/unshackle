@@ -29,6 +29,15 @@ class BaseHttpClient:
 
         self._client = self._build_client(config)
 
+    def update_config(self, config: HttpClientConfig):
+        if config.type != self._config.type:
+            raise RuntimeError('Cannot change client type, create new client')
+        if config.proxy != self._config.proxy:
+            raise RuntimeError('Cannot change proxy, create new client')
+        if (len(config.args)>0) and (config.args != self._config.args):
+            raise RuntimeError('Cannot change constructor args, create new client')
+        self._client.headers.update(config.headers)
+
     # --------------------
     # Adapter must implement
     # --------------------

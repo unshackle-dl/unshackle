@@ -97,7 +97,7 @@ def search_simkl(
         filename += " 2160p.mkv"
 
     try:
-        session = http_unshackle.new('tags', config={'headers': HEADERS})
+        session = http_unshackle.session('tags', config={'headers': HEADERS})
         headers = {"simkl-api-key": client_id}
         resp = session.post("https://api.simkl.com/search/file", json={"file": filename}, headers=headers, timeout=30)
         data = resp.json()
@@ -193,7 +193,7 @@ def _fetch_tmdb_detail(tmdb_id: int, kind: str) -> Optional[dict]:
         return None
 
     try:
-        session = http_unshackle.new('tags', config={'headers': HEADERS})
+        session = http_unshackle.session('tags', config={'headers': HEADERS})
         r = session.get(
             f"https://api.themoviedb.org/3/{kind}/{tmdb_id}",
             params={"api_key": api_key},
@@ -212,7 +212,7 @@ def _fetch_tmdb_external_ids(tmdb_id: int, kind: str) -> Optional[dict]:
         return None
 
     try:
-        session = http_unshackle.new('tags', config={'headers': HEADERS})
+        session = http_unshackle.session('tags', config={'headers': HEADERS})
         r = session.get(
             f"https://api.themoviedb.org/3/{kind}/{tmdb_id}/external_ids",
             params={"api_key": api_key},
@@ -255,7 +255,7 @@ def search_tmdb(
 
     try:
         # TODO: init vs get
-        session = http_unshackle.new('tags', config={'headers': HEADERS})
+        session = http_unshackle.session('tags', config={'headers': HEADERS})
         r = session.get(
             f"https://api.themoviedb.org/3/search/{kind}",
             params=params,
@@ -340,7 +340,7 @@ def get_title(
         return None
 
     try:
-        session = http_unshackle.new('tags', config={'headers': HEADERS})
+        session = http_unshackle.session('tags', config={'headers': HEADERS})
         r = session.get(
             f"https://api.themoviedb.org/3/{kind}/{tmdb_id}",
             params={"api_key": api_key},
@@ -389,7 +389,7 @@ def get_year(
         return None
 
     try:
-        session = http_unshackle.new('tags', config={'headers': HEADERS})
+        session = http_unshackle.session('tags', config={'headers': HEADERS})
         r = session.get(
             f"https://api.themoviedb.org/3/{kind}/{tmdb_id}",
             params={"api_key": api_key},
@@ -437,7 +437,7 @@ def external_ids(
     log.debug("Fetching external IDs for %s %s", kind, tmdb_id)
 
     try:
-        session = http_unshackle.new('tags', config={'headers': HEADERS})
+        session = http_unshackle.session('tags', config={'headers': HEADERS})
         r = session.get(
             url,
             params={"api_key": api_key},

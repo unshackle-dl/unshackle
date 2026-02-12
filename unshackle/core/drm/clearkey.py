@@ -72,7 +72,7 @@ class ClearKey:
         if not isinstance(m3u_key, Key):
             raise ValueError(f"Provided M3U Key is in an unexpected type {m3u_key!r}")
         if not session:
-            session = http_unshackle.new('m3u', config={
+            session = http_unshackle.session('m3u', config={
                 'headers': {
                     "User-Agent": "smartexoplayer/1.1.0 (Linux;Android 8.0.0) ExoPlayerLib/2.13.3",
                 }
