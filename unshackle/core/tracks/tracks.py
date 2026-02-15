@@ -221,13 +221,15 @@ class Tracks:
             self.videos.sort(key=lambda x: not is_close_match(language, [x.language]))
 
     def sort_audio(self, by_language: Optional[Sequence[Union[str, Language]]] = None) -> None:
-        """Sort audio tracks by bitrate, descriptive, and optionally language."""
+        """Sort audio tracks by bitrate, Atmos, descriptive, and optionally language."""
         if not self.audio:
             return
-        # descriptive
-        self.audio.sort(key=lambda x: x.descriptive)
-        # bitrate (within each descriptive group)
+        # bitrate (highest first)
         self.audio.sort(key=lambda x: float(x.bitrate or 0.0), reverse=True)
+        # Atmos tracks first (prioritize over higher bitrate non-Atmos)
+        self.audio.sort(key=lambda x: not x.atmos)
+        # descriptive tracks last
+        self.audio.sort(key=lambda x: x.descriptive)
         # language
         for language in reversed(by_language or []):
             if str(language) in ("all", "best"):
