@@ -6,7 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 This changelog is automatically generated using [git-cliff](https://git-cliff.org).
 
-## [Unreleased]
+## [3.0.0] - 2026-02-15
 
 ### Features
 
@@ -21,6 +21,9 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - *drm*: Add MonaLisa DRM support to core infrastructure
 - *audio*: Codec lists and split muxing
 - *proxy*: Add specific server selection for WindscribeVPN
+- *cdm*: Normalize CDM detection for local and remote implementations
+- *HLS*: Improve audio codec handling with error handling for codec extraction
+- *tracks*: Prioritize Atmos audio tracks over higher bitrate non-Atmos
 
 ### Bug Fixes
 
@@ -53,11 +56,39 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - *dl*: Always clean up hybrid temp hevc outputs
 - *hls*: Finalize n_m3u8dl_re outputs
 - *downloader*: Restore requests progress for single-url downloads
+- *dl*: Invert audio codec suffixing when splitting
+- *dl*: Support snake_case keys for RemoteCdm
+- *aria2c*: Warn on config mismatch and wait for RPC ready
+- *serve*: [**breaking**] Make PlayReady users config consistently a mapping
+- *dl*: Preserve proxy_query selector (not resolved URI)
+- *gluetun*: Stop leaking proxy/vpn secrets to process list
+- *monalisa*: Avoid leaking secrets and add worker safety
+- *dl*: Avoid selecting all variants when multiple audio codecs requested
+- *hls*: Keep range offset numeric and align MonaLisa licensing
+- *titles*: Remove trailing space from HDR dynamic range label
+- *config*: Normalize playready_remote remote_cdm keys
+- *titles*: Avoid None/double spaces in HDR tokens
+- *naming*: Keep technical tokens with scene_naming off
+- *api*: Log PSSH extraction failures
+- *proxies*: Harden surfshark and windscribe selection
+- *service*: Redact proxy credentials in logs
+- *monalisa*: Harden wasm calls and license handling
+- *hls*: Remove no-op encryption_data reassignment
+- *serve*: Default PlayReady access to none
+- *tracks*: Close temp session and improve path type error
+- *main*: Update copyright year dynamically in version display
+
+### Reverts
+
+- *monalisa*: Pass key via argv again
 
 ### Documentation
 
 - Add configuration documentation WIP
 - *changelog*: Add 2.4.0 release notes
+- *changelog*: Update cliff config and regenerate changelog
+- *changelog*: Complete 2.4.0 notes
+- *config*: Clarify sdh_method uses subtitle-filter
 
 ### Performance Improvements
 
@@ -451,7 +482,7 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - Reorganize Planned Features section in README for clarity
 - Improve track selection logic in dl.py
 
-[unreleased]: https://github.com/unshackle-dl/unshackle/compare/2.3.0..HEAD
+[3.0.0]: https://github.com/unshackle-dl/unshackle/compare/2.3.0..3.0.0
 [2.3.0]: https://github.com/unshackle-dl/unshackle/compare/2.2.0..2.3.0
 [2.2.0]: https://github.com/unshackle-dl/unshackle/compare/2.1.0..2.2.0
 [2.1.0]: https://github.com/unshackle-dl/unshackle/compare/2.0.0..2.1.0
