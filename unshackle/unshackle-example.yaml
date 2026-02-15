@@ -39,6 +39,10 @@ title_cache_enabled: true # Enable/disable title caching globally (default: true
 title_cache_time: 1800 # Cache duration in seconds (default: 1800 = 30 minutes)
 title_cache_max_retention: 86400 # Maximum cache retention for fallback when API fails (default: 86400 = 24 hours)
 
+# Filename Configuration
+unicode_filenames: false # optionally replace non-ASCII characters with ASCII equivalents
+insert_episodename_into_filenames: true # optionally determines whether the specific name of an episode is automatically included within the filename for series content.
+
 # Debug logging configuration
 # Comprehensive JSON-based debug logging for troubleshooting and service development
 debug:
