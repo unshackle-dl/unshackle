@@ -192,8 +192,10 @@ def build_download_args(
     if ad_keyword:
         args["--ad-keyword"] = ad_keyword
 
+    key_args = []
     if content_keys:
-        args["--key"] = next((f"{kid.hex}:{key.lower()}" for kid, key in content_keys.items()), None)
+        for kid, key in content_keys.items():
+            key_args.extend(["--key", f"{kid.hex}:{key.lower()}"])
 
         decryption_config = config.decryption.lower()
         engine_name = DECRYPTION_ENGINE.get(decryption_config) or "SHAKA_PACKAGER"
@@ -220,6 +222,9 @@ def build_download_args(
             command.extend([flag, "false"])
         elif value is not False and value is not None:
             command.extend([flag, str(value)])
+
+    # Append all content keys (multiple --key flags supported by N_m3u8DL-RE)
+    command.extend(key_args)
 
     if headers:
         for key, value in headers.items():
