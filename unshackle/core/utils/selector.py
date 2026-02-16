@@ -1,21 +1,25 @@
-import click
 import sys
+
+import click
 from rich.console import Group
 from rich.live import Live
 from rich.padding import Padding
 from rich.table import Table
 from rich.text import Text
+
 from unshackle.core.console import console
 
 IS_WINDOWS = sys.platform == "win32"
 if IS_WINDOWS:
     import msvcrt
 
+
 class Selector:
     """
     A custom interactive selector class using the Rich library.
     Allows for multi-selection of items with pagination.
     """
+
     def __init__(
         self,
         options: list[str],
@@ -24,7 +28,7 @@ class Selector:
         page_size: int = 8,
         minimal_count: int = 0,
         dependencies: dict[int, list[int]] = None,
-        prefixes: list[str] = None
+        prefixes: list[str] = None,
     ):
         """
         Initialize the Selector.
@@ -43,7 +47,7 @@ class Selector:
         self.page_size = page_size
         self.minimal_count = minimal_count
         self.dependencies = dependencies or {}
-        
+
         self.cursor_index = 0
         self.selected_indices = set()
         self.scroll_offset = 0
@@ -58,11 +62,11 @@ class Selector:
 
         for i in range(self.page_size):
             idx = self.scroll_offset + i
-            
+
             if idx < len(self.options):
                 option = self.options[idx]
-                is_cursor = (idx == self.cursor_index)
-                is_selected = (idx in self.selected_indices)
+                is_cursor = idx == self.cursor_index
+                is_selected = idx in self.selected_indices
 
                 symbol = "[X]" if is_selected else "[ ]"
                 style = self.cursor_style if is_cursor else self.text_style
@@ -77,12 +81,12 @@ class Selector:
 
         total_pages = (len(self.options) + self.page_size - 1) // self.page_size
         current_page = (self.scroll_offset // self.page_size) + 1
-        
+
         info_text = Text(
-            f"\n[Space]: Toggle  [a]: All  [←/→]: Page  [Enter]: Confirm  (Page {current_page}/{total_pages})", 
-            style="gray"
+            f"\n[Space]: Toggle  [a]: All  [←/→]: Page  [Enter]: Confirm  (Page {current_page}/{total_pages})",
+            style="gray",
         )
-        
+
         return Padding(Group(table, info_text), (0, 5))
 
     def move_cursor(self, delta: int):
@@ -117,7 +121,7 @@ class Selector:
         Propagates selection to children if defined in dependencies.
         """
         target_indices = {self.cursor_index}
-        
+
         if self.cursor_index in self.dependencies:
             target_indices.update(self.dependencies[self.cursor_index])
 
@@ -130,7 +134,7 @@ class Selector:
 
     def toggle_all(self):
         """
-        Toggles the selection of all items. 
+        Toggles the selection of all items.
         If all are selected, clears selection. Otherwise, selects all.
         """
         if len(self.selected_indices) == len(self.options):
@@ -144,28 +148,43 @@ class Selector:
         Returns command strings like 'UP', 'DOWN', 'ENTER', etc.
         """
         key = msvcrt.getch()
-        if key == b'\x03' or key == b'\x1b':
-            return 'CANCEL'
-        if key == b'\xe0' or key == b'\x00':
+        if key == b"\x03" or key == b"\x1b":
+            return "CANCEL"
+        if key == b"\xe0" or key == b"\x00":
             try:
                 key = msvcrt.getch()
-                if key == b'H': return 'UP'
-                if key == b'P': return 'DOWN'
-                if key == b'K': return 'LEFT'
-                if key == b'M': return 'RIGHT'
-            except: pass
-        
-        try: char = key.decode('utf-8', errors='ignore')
-        except: return None
-            
-        if char in ('\r', '\n'): return 'ENTER'
-        if char == ' ': return 'SPACE'
-        if char in ('q', 'Q'): return 'QUIT'
-        if char in ('a', 'A'): return 'ALL'
-        if char in ('w', 'W', 'k', 'K'): return 'UP'
-        if char in ('s', 'S', 'j', 'J'): return 'DOWN'
-        if char in ('h', 'H'): return 'LEFT'
-        if char in ('d', 'D', 'l', 'L'): return 'RIGHT'
+                if key == b"H":
+                    return "UP"
+                if key == b"P":
+                    return "DOWN"
+                if key == b"K":
+                    return "LEFT"
+                if key == b"M":
+                    return "RIGHT"
+            except Exception:
+                pass
+
+        try:
+            char = key.decode("utf-8", errors="ignore")
+        except Exception:
+            return None
+
+        if char in ("\r", "\n"):
+            return "ENTER"
+        if char == " ":
+            return "SPACE"
+        if char in ("q", "Q"):
+            return "QUIT"
+        if char in ("a", "A"):
+            return "ALL"
+        if char in ("w", "W", "k", "K"):
+            return "UP"
+        if char in ("s", "S", "j", "J"):
+            return "DOWN"
+        if char in ("h", "H"):
+            return "LEFT"
+        if char in ("d", "D", "l", "L"):
+            return "RIGHT"
         return None
 
     def get_input_unix(self):
@@ -174,44 +193,56 @@ class Selector:
         Returns command strings like 'UP', 'DOWN', 'ENTER', etc.
         """
         char = click.getchar()
-        if char == '\x03':
-            return 'CANCEL'
+        if char == "\x03":
+            return "CANCEL"
         mapping = {
-            '\x1b[A': 'UP',
-            '\x1b[B': 'DOWN',
-            '\x1b[C': 'RIGHT',
-            '\x1b[D': 'LEFT',
+            "\x1b[A": "UP",
+            "\x1b[B": "DOWN",
+            "\x1b[C": "RIGHT",
+            "\x1b[D": "LEFT",
         }
         if char in mapping:
             return mapping[char]
-        if char == '\x1b':
+        if char == "\x1b":
             try:
                 next1 = click.getchar()
-                if next1 in ('[', 'O'):
+                if next1 in ("[", "O"):
                     next2 = click.getchar()
-                    if next2 == 'A': return 'UP'
-                    if next2 == 'B': return 'DOWN'
-                    if next2 == 'C': return 'RIGHT'
-                    if next2 == 'D': return 'LEFT'
-                return 'CANCEL'
-            except:
-                return 'CANCEL'
+                    if next2 == "A":
+                        return "UP"
+                    if next2 == "B":
+                        return "DOWN"
+                    if next2 == "C":
+                        return "RIGHT"
+                    if next2 == "D":
+                        return "LEFT"
+                return "CANCEL"
+            except Exception:
+                return "CANCEL"
 
-        if char in ('\r', '\n'): return 'ENTER'
-        if char == ' ': return 'SPACE'
-        if char in ('q', 'Q'): return 'QUIT'
-        if char in ('a', 'A'): return 'ALL'
-        if char in ('w', 'W', 'k', 'K'): return 'UP'
-        if char in ('s', 'S', 'j', 'J'): return 'DOWN'
-        if char in ('h', 'H'): return 'LEFT'
-        if char in ('d', 'D', 'l', 'L'): return 'RIGHT'
+        if char in ("\r", "\n"):
+            return "ENTER"
+        if char == " ":
+            return "SPACE"
+        if char in ("q", "Q"):
+            return "QUIT"
+        if char in ("a", "A"):
+            return "ALL"
+        if char in ("w", "W", "k", "K"):
+            return "UP"
+        if char in ("s", "S", "j", "J"):
+            return "DOWN"
+        if char in ("h", "H"):
+            return "LEFT"
+        if char in ("d", "D", "l", "L"):
+            return "RIGHT"
         return None
 
     def run(self) -> list[int]:
         """
         Starts the main event loop for the selector.
         Renders the UI and processes input until confirmed or cancelled.
-        
+
         Returns:
             list[int]: A sorted list of selected indices.
         """
@@ -219,21 +250,31 @@ class Selector:
             with Live(self.get_renderable(), console=console, auto_refresh=False, transient=True) as live:
                 while True:
                     live.update(self.get_renderable(), refresh=True)
-                    if IS_WINDOWS: action = self.get_input_windows()
-                    else: action = self.get_input_unix()
-                    
-                    if action == 'UP': self.move_cursor(-1)
-                    elif action == 'DOWN': self.move_cursor(1)
-                    elif action == 'LEFT': self.change_page(-1)
-                    elif action == 'RIGHT': self.change_page(1)
-                    elif action == 'SPACE': self.toggle_selection()
-                    elif action == 'ALL': self.toggle_all()
-                    elif action in ('ENTER', 'QUIT'):
+                    if IS_WINDOWS:
+                        action = self.get_input_windows()
+                    else:
+                        action = self.get_input_unix()
+
+                    if action == "UP":
+                        self.move_cursor(-1)
+                    elif action == "DOWN":
+                        self.move_cursor(1)
+                    elif action == "LEFT":
+                        self.change_page(-1)
+                    elif action == "RIGHT":
+                        self.change_page(1)
+                    elif action == "SPACE":
+                        self.toggle_selection()
+                    elif action == "ALL":
+                        self.toggle_all()
+                    elif action in ("ENTER", "QUIT"):
                         if len(self.selected_indices) >= self.minimal_count:
                             return sorted(list(self.selected_indices))
-                    elif action == 'CANCEL': raise KeyboardInterrupt
+                    elif action == "CANCEL":
+                        raise KeyboardInterrupt
         except KeyboardInterrupt:
             return []
+
 
 def select_multiple(
     options: list[str],
@@ -241,11 +282,11 @@ def select_multiple(
     page_size: int = 8,
     return_indices: bool = True,
     cursor_style: str = "pink",
-    **kwargs
+    **kwargs,
 ) -> list[int]:
     """
     Drop-in replacement using custom Selector with global console.
-    
+
     Args:
         options: List of options to display.
         minimal_count: Minimum number of selections required.
@@ -259,11 +300,11 @@ def select_multiple(
         text_style="text",
         page_size=page_size,
         minimal_count=minimal_count,
-        **kwargs
+        **kwargs,
     )
-    
+
     selected_indices = selector.run()
-    
+
     if return_indices:
         return selected_indices
     return [options[i] for i in selected_indices]

@@ -195,12 +195,7 @@ class dl:
         sdh_suffix = ".sdh" if (subtitle.sdh or subtitle.cc) else ""
 
         extension = (target_codec or subtitle.codec or Subtitle.Codec.SubRip).extension
-        if (
-            not target_codec
-            and not subtitle.codec
-            and source_path
-            and source_path.suffix
-        ):
+        if not target_codec and not subtitle.codec and source_path and source_path.suffix:
             extension = source_path.suffix.lstrip(".")
 
         filename = f"{base_filename}.{lang_suffix}{forced_suffix}{sdh_suffix}.{extension}"
@@ -1056,13 +1051,13 @@ class dl:
             return
 
         # Enables manual selection for Series when --select-titles is set
-        if select_titles and type(titles) == Series:
-            console.print(Padding(Rule(f"[rule.text]Select Titles"), (1, 2)))
-            
+        if select_titles and isinstance(titles, Series):
+            console.print(Padding(Rule("[rule.text]Select Titles"), (1, 2)))
+
             selection_titles = []
             dependencies = {}
             original_indices = {}
-            
+
             current_season = None
             current_season_header_idx = -1
 
@@ -1082,36 +1077,30 @@ class dl:
 
                 # Format display name
                 display_name = ((t.name[:35].rstrip() + "…") if len(t.name) > 35 else t.name) if t.name else None
-                
+
                 # Apply indentation only for multiple seasons
                 prefix = " " if multiple_seasons else ""
-                option_text = (
-                    f"{prefix}{t.number}" + (f". {display_name}" if t.name else "")
-                )
-                
+                option_text = f"{prefix}{t.number}" + (f". {display_name}" if t.name else "")
+
                 selection_titles.append(option_text)
                 current_ui_idx = len(selection_titles) - 1
-                
+
                 # Map UI index to actual title index
                 original_indices[current_ui_idx] = i
-                
+
                 # Link episode to season header for group selection
                 if current_season_header_idx != -1:
                     dependencies[current_season_header_idx].append(current_ui_idx)
 
             selection_start = time.time()
-            
+
             # Execute selector with dependencies (headers select all children)
             selected_ui_idx = select_multiple(
-                selection_titles,
-                minimal_count=1,
-                page_size=8,
-                return_indices=True,
-                dependencies=dependencies
+                selection_titles, minimal_count=1, page_size=8, return_indices=True, dependencies=dependencies
             )
 
             selection_end = time.time()
-            start_time += (selection_end - selection_start)
+            start_time += selection_end - selection_start
 
             # Map UI indices back to title indices (excluding headers)
             selected_idx = []
@@ -1604,7 +1593,10 @@ class dl:
                                 if audio_description:
                                     standard_audio = [a for a in title.tracks.audio if not a.descriptive]
                                     selected_standards = title.tracks.by_language(
-                                        standard_audio, processed_lang, per_language=per_language, exact_match=exact_lang
+                                        standard_audio,
+                                        processed_lang,
+                                        per_language=per_language,
+                                        exact_match=exact_lang,
                                     )
                                     desc_audio = [a for a in title.tracks.audio if a.descriptive]
                                     # Include all descriptive tracks for the requested languages.
@@ -1728,9 +1720,7 @@ class dl:
                                         ),
                                         licence=partial(
                                             service.get_playready_license
-                                            if (
-                                                is_playready_cdm(self.cdm)
-                                            )
+                                            if (is_playready_cdm(self.cdm))
                                             and hasattr(service, "get_playready_license")
                                             else service.get_widevine_license,
                                             title=title,
@@ -1848,9 +1838,7 @@ class dl:
                 # Subtitle output mode configuration (for sidecar originals)
                 subtitle_output_mode = config.subtitle.get("output_mode", "mux")
                 sidecar_format = config.subtitle.get("sidecar_format", "srt")
-                skip_subtitle_mux = (
-                    subtitle_output_mode == "sidecar" and (title.tracks.videos or title.tracks.audio)
-                )
+                skip_subtitle_mux = subtitle_output_mode == "sidecar" and (title.tracks.videos or title.tracks.audio)
                 sidecar_subtitles: list[Subtitle] = []
                 sidecar_original_paths: dict[str, Path] = {}
                 if subtitle_output_mode in ("sidecar", "both") and not no_mux:
@@ -2101,7 +2089,9 @@ class dl:
 
                                 sidecar_dir = config.directories.downloads
                                 if not no_folder and isinstance(title, (Episode, Song)) and media_info:
-                                    sidecar_dir /= title.get_filename(media_info, show_service=not no_source, folder=True)
+                                    sidecar_dir /= title.get_filename(
+                                        media_info, show_service=not no_source, folder=True
+                                    )
                                 sidecar_dir.mkdir(parents=True, exist_ok=True)
 
                                 with console.status("Saving subtitle sidecar files..."):
