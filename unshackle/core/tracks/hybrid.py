@@ -13,11 +13,13 @@ from rich.rule import Rule
 from unshackle.core.binaries import FFMPEG, DoviTool, FFProbe, HDR10PlusTool
 from unshackle.core.config import config
 from unshackle.core.console import console
+from unshackle.core.utilities import get_debug_logger
 
 
 class Hybrid:
     def __init__(self, videos, source) -> None:
         self.log = logging.getLogger("hybrid")
+        self.debug_logger = get_debug_logger()
 
         """
             Takes the Dolby Vision and HDR10(+) streams out of the VideoTracks.
@@ -43,6 +45,19 @@ class Hybrid:
 
         console.print(Padding(Rule(f"[rule.text]HDR10+DV Hybrid ({self.resolution})"), (1, 2)))
 
+        if self.debug_logger:
+            self.debug_logger.log(
+                level="DEBUG",
+                operation="hybrid_init",
+                message="Starting HDR10+DV hybrid processing",
+                context={
+                    "source": source,
+                    "resolution": self.resolution,
+                    "video_count": len(videos),
+                    "video_ranges": [str(v.range) for v in videos],
+                },
+            )
+
         for video in self.videos:
             if not video.path or not os.path.exists(video.path):
                 raise ValueError(f"Video track {video.id} was not downloaded before injection.")
@@ -57,13 +72,13 @@ class Hybrid:
 
         # If we have HDR10+ but no DV, we can convert HDR10+ to DV
         if not has_dv and has_hdr10p:
-            self.log.info("✓ No DV track found, but HDR10+ is available. Will convert HDR10+ to DV.")
+            console.status("No DV track found, but HDR10+ is available. Will convert HDR10+ to DV.")
             self.hdr10plus_to_dv = True
         elif not has_dv:
             raise ValueError("No DV track available and no HDR10+ to convert.")
 
         if os.path.isfile(config.directories.temp / self.hevc_file):
-            self.log.info("✓ Already Injected")
+            console.status("Already Injected")
             return
 
         for video in videos:
@@ -105,6 +120,19 @@ class Hybrid:
 
         self.injecting()
 
+        if self.debug_logger:
+            self.debug_logger.log(
+                level="INFO",
+                operation="hybrid_complete",
+                message="Injection Completed",
+                context={
+                    "hdr_type": self.hdr_type,
+                    "resolution": self.resolution,
+                    "hdr10plus_to_dv": self.hdr10plus_to_dv,
+                    "rpu_file": self.rpu_file,
+                    "output_file": self.hevc_file,
+                },
+            )
         self.log.info("✓ Injection Completed")
         if self.source == ("itunes" or "appletvplus"):
             Path.unlink(config.directories.temp / "hdr10.mkv")
@@ -133,20 +161,41 @@ class Hybrid:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-        return p.returncode
+        return p
 
     def extract_stream(self, save_path, type_):
         output = Path(config.directories.temp / f"{type_}.hevc")
 
         with console.status(f"Extracting {type_} stream...", spinner="dots"):
-            returncode = self.ffmpeg_simple(save_path, output)
+            result = self.ffmpeg_simple(save_path, output)
 
-        if returncode:
+        if result.returncode:
             output.unlink(missing_ok=True)
+            if self.debug_logger:
+                self.debug_logger.log(
+                    level="ERROR",
+                    operation="hybrid_extract_stream",
+                    message=f"Failed extracting {type_} stream",
+                    context={
+                        "type": type_,
+                        "input": str(save_path),
+                        "output": str(output),
+                        "returncode": result.returncode,
+                        "stderr": (result.stderr or b"").decode(errors="replace"),
+                        "stdout": (result.stdout or b"").decode(errors="replace"),
+                    },
+                )
             self.log.error(f"x Failed extracting {type_} stream")
             sys.exit(1)
 
-        self.log.info(f"Extracted {type_} stream")
+        if self.debug_logger:
+            self.debug_logger.log(
+                level="DEBUG",
+                operation="hybrid_extract_stream",
+                message=f"Extracted {type_} stream",
+                context={"type": type_, "input": str(save_path), "output": str(output)},
+                success=True,
+            )
 
     def extract_rpu(self, video, untouched=False):
         if os.path.isfile(config.directories.temp / "RPU.bin") or os.path.isfile(
@@ -173,16 +222,36 @@ class Hybrid:
                 stderr=subprocess.PIPE,
             )
 
+        rpu_name = "RPU" if not untouched else "RPU_UNT"
         if rpu_extraction.returncode:
-            Path.unlink(config.directories.temp / f"{'RPU' if not untouched else 'RPU_UNT'}.bin")
+            Path.unlink(config.directories.temp / f"{rpu_name}.bin")
+            stderr_text = rpu_extraction.stderr.decode(errors="replace") if rpu_extraction.stderr else ""
+            if self.debug_logger:
+                self.debug_logger.log(
+                    level="ERROR",
+                    operation="hybrid_extract_rpu",
+                    message=f"Failed extracting{' untouched ' if untouched else ' '}RPU",
+                    context={
+                        "untouched": untouched,
+                        "returncode": rpu_extraction.returncode,
+                        "stderr": stderr_text,
+                        "args": [str(a) for a in extraction_args],
+                    },
+                )
             if b"MAX_PQ_LUMINANCE" in rpu_extraction.stderr:
                 self.extract_rpu(video, untouched=True)
             elif b"Invalid PPS index" in rpu_extraction.stderr:
                 raise ValueError("Dolby Vision VideoTrack seems to be corrupt")
             else:
                 raise ValueError(f"Failed extracting{' untouched ' if untouched else ' '}RPU from Dolby Vision stream")
-
-        self.log.info(f"Extracted{' untouched ' if untouched else ' '}RPU from Dolby Vision stream")
+        elif self.debug_logger:
+            self.debug_logger.log(
+                level="DEBUG",
+                operation="hybrid_extract_rpu",
+                message=f"Extracted{' untouched ' if untouched else ' '}RPU from Dolby Vision stream",
+                context={"untouched": untouched, "output": f"{rpu_name}.bin"},
+                success=True,
+            )
 
     def level_5(self, input_video):
         """Generate Level 5 active area metadata via crop detection on the HDR10 stream.
@@ -206,6 +275,13 @@ class Hybrid:
             )
 
             if result_duration.returncode != 0:
+                if self.debug_logger:
+                    self.debug_logger.log(
+                        level="WARNING",
+                        operation="hybrid_level5",
+                        message="Could not probe video duration",
+                        context={"returncode": result_duration.returncode, "stderr": (result_duration.stderr or "")},
+                    )
                 self.log.warning("Could not probe video duration, skipping L5 crop detection")
                 return
 
@@ -232,6 +308,13 @@ class Hybrid:
             )
 
             if result_streams.returncode != 0:
+                if self.debug_logger:
+                    self.debug_logger.log(
+                        level="WARNING",
+                        operation="hybrid_level5",
+                        message="Could not probe video resolution",
+                        context={"returncode": result_streams.returncode, "stderr": (result_streams.stderr or "")},
+                    )
                 self.log.warning("Could not probe video resolution, skipping L5 crop detection")
                 return
 
@@ -284,6 +367,13 @@ class Hybrid:
                     crop_results.append((left, top, right, bottom))
 
         if not crop_results:
+            if self.debug_logger:
+                self.debug_logger.log(
+                    level="WARNING",
+                    operation="hybrid_level5",
+                    message="No crop data detected, skipping L5",
+                    context={"samples": len(random_times)},
+                )
             self.log.warning("No crop data detected, skipping L5")
             return
 
@@ -327,9 +417,24 @@ class Hybrid:
             )
 
         if result.returncode:
+            if self.debug_logger:
+                self.debug_logger.log(
+                    level="ERROR",
+                    operation="hybrid_level5",
+                    message="Failed editing RPU Level 5 values",
+                    context={"returncode": result.returncode, "stderr": (result.stderr or b"").decode(errors="replace")},
+                )
             Path.unlink(config.directories.temp / "RPU_L5.bin", missing_ok=True)
             raise ValueError("Failed editing RPU Level 5 values")
 
+        if self.debug_logger:
+            self.debug_logger.log(
+                level="DEBUG",
+                operation="hybrid_level5",
+                message="Edited RPU Level 5 active area",
+                context={"crop": {"left": left, "right": right, "top": top, "bottom": bottom}, "samples": len(crop_results)},
+                success=True,
+            )
         self.rpu_file = "RPU_L5.bin"
 
     def level_6(self):
@@ -345,6 +450,13 @@ class Hybrid:
             )
 
         if result.returncode != 0:
+            if self.debug_logger:
+                self.debug_logger.log(
+                    level="ERROR",
+                    operation="hybrid_level6",
+                    message="Failed reading RPU metadata for Level 6 values",
+                    context={"returncode": result.returncode, "stderr": (result.stderr or "")},
+                )
             raise ValueError("Failed reading RPU metadata for Level 6 values")
 
         max_cll = None
@@ -365,6 +477,13 @@ class Hybrid:
                 max_mdl = int(float(max_lum))
 
         if any(v is None for v in (max_cll, max_fall, max_mdl, min_mdl)):
+            if self.debug_logger:
+                self.debug_logger.log(
+                    level="ERROR",
+                    operation="hybrid_level6",
+                    message="Could not extract Level 6 luminance data from RPU",
+                    context={"max_cll": max_cll, "max_fall": max_fall, "max_mdl": max_mdl, "min_mdl": min_mdl},
+                )
             raise ValueError("Could not extract Level 6 luminance data from RPU")
 
         level6_data = {
@@ -399,9 +518,29 @@ class Hybrid:
             )
 
         if result.returncode:
+            if self.debug_logger:
+                self.debug_logger.log(
+                    level="ERROR",
+                    operation="hybrid_level6",
+                    message="Failed editing RPU Level 6 values",
+                    context={"returncode": result.returncode, "stderr": (result.stderr or b"").decode(errors="replace")},
+                )
             Path.unlink(config.directories.temp / "RPU_L6.bin", missing_ok=True)
             raise ValueError("Failed editing RPU Level 6 values")
 
+        if self.debug_logger:
+            self.debug_logger.log(
+                level="DEBUG",
+                operation="hybrid_level6",
+                message="Edited RPU Level 6 luminance values",
+                context={
+                    "max_cll": max_cll,
+                    "max_fall": max_fall,
+                    "max_mdl": max_mdl,
+                    "min_mdl": min_mdl,
+                },
+                success=True,
+            )
         self.rpu_file = "RPU_L6.bin"
 
     def injecting(self):
@@ -422,7 +561,7 @@ class Hybrid:
             # Default to removing HDR10+ metadata since we're converting to DV
             if self.hdr10plus_to_dv:
                 inject_cmd.append("--drop-hdr10plus")
-                self.log.info("  - Removing HDR10+ metadata during injection")
+                console.status("Removing HDR10+ metadata during injection")
 
             inject_cmd.extend(["-o", config.directories.temp / self.hevc_file])
 
@@ -433,10 +572,29 @@ class Hybrid:
             )
 
         if inject.returncode:
+            if self.debug_logger:
+                self.debug_logger.log(
+                    level="ERROR",
+                    operation="hybrid_inject_rpu",
+                    message="Failed injecting Dolby Vision metadata into HDR10 stream",
+                    context={
+                        "returncode": inject.returncode,
+                        "stderr": (inject.stderr or b"").decode(errors="replace"),
+                        "stdout": (inject.stdout or b"").decode(errors="replace"),
+                        "cmd": [str(a) for a in inject_cmd],
+                    },
+                )
             Path.unlink(config.directories.temp / self.hevc_file)
             raise ValueError("Failed injecting Dolby Vision metadata into HDR10 stream")
 
-        self.log.info(f"Injected Dolby Vision metadata into {self.hdr_type} stream")
+        if self.debug_logger:
+            self.debug_logger.log(
+                level="DEBUG",
+                operation="hybrid_inject_rpu",
+                message=f"Injected Dolby Vision metadata into {self.hdr_type} stream",
+                context={"hdr_type": self.hdr_type, "rpu_file": self.rpu_file, "output": self.hevc_file, "drop_hdr10plus": self.hdr10plus_to_dv},
+                success=True,
+            )
 
     def extract_hdr10plus(self, _video):
         """Extract HDR10+ metadata from the video stream"""
@@ -461,13 +619,39 @@ class Hybrid:
             )
 
         if extraction.returncode:
+            if self.debug_logger:
+                self.debug_logger.log(
+                    level="ERROR",
+                    operation="hybrid_extract_hdr10plus",
+                    message="Failed extracting HDR10+ metadata",
+                    context={
+                        "returncode": extraction.returncode,
+                        "stderr": (extraction.stderr or b"").decode(errors="replace"),
+                        "stdout": (extraction.stdout or b"").decode(errors="replace"),
+                    },
+                )
             raise ValueError("Failed extracting HDR10+ metadata")
 
         # Check if the extracted file has content
-        if os.path.getsize(config.directories.temp / self.hdr10plus_file) == 0:
+        file_size = os.path.getsize(config.directories.temp / self.hdr10plus_file)
+        if file_size == 0:
+            if self.debug_logger:
+                self.debug_logger.log(
+                    level="ERROR",
+                    operation="hybrid_extract_hdr10plus",
+                    message="No HDR10+ metadata found in the stream",
+                    context={"file_size": 0},
+                )
             raise ValueError("No HDR10+ metadata found in the stream")
 
-        self.log.info("Extracted HDR10+ metadata")
+        if self.debug_logger:
+            self.debug_logger.log(
+                level="DEBUG",
+                operation="hybrid_extract_hdr10plus",
+                message="Extracted HDR10+ metadata",
+                context={"output": self.hdr10plus_file, "file_size": file_size},
+                success=True,
+            )
 
     def convert_hdr10plus_to_dv(self):
         """Convert HDR10+ metadata to Dolby Vision RPU"""
@@ -507,10 +691,26 @@ class Hybrid:
             )
 
         if conversion.returncode:
+            if self.debug_logger:
+                self.debug_logger.log(
+                    level="ERROR",
+                    operation="hybrid_convert_hdr10plus",
+                    message="Failed converting HDR10+ to Dolby Vision",
+                    context={
+                        "returncode": conversion.returncode,
+                        "stderr": (conversion.stderr or b"").decode(errors="replace"),
+                        "stdout": (conversion.stdout or b"").decode(errors="replace"),
+                    },
+                )
             raise ValueError("Failed converting HDR10+ to Dolby Vision")
 
-        self.log.info("Converted HDR10+ metadata to Dolby Vision")
-        self.log.info("✓ HDR10+ successfully converted to Dolby Vision Profile 8")
+        if self.debug_logger:
+            self.debug_logger.log(
+                level="DEBUG",
+                operation="hybrid_convert_hdr10plus",
+                message="Converted HDR10+ metadata to Dolby Vision Profile 8",
+                success=True,
+            )
 
         # Clean up temporary files
         Path.unlink(config.directories.temp / "extra.json")
