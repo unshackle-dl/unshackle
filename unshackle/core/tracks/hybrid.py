@@ -1,6 +1,8 @@
 import json
 import logging
 import os
+import random
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -8,7 +10,7 @@ from pathlib import Path
 from rich.padding import Padding
 from rich.rule import Rule
 
-from unshackle.core.binaries import FFMPEG, DoviTool, HDR10PlusTool
+from unshackle.core.binaries import FFMPEG, DoviTool, FFProbe, HDR10PlusTool
 from unshackle.core.config import config
 from unshackle.core.console import console
 
@@ -89,11 +91,17 @@ class Hybrid:
             self.extract_rpu(dv_video)
             if os.path.isfile(config.directories.temp / "RPU_UNT.bin"):
                 self.rpu_file = "RPU_UNT.bin"
-                self.level_6()
                 # Mode 3 conversion already done during extraction when not untouched
             elif os.path.isfile(config.directories.temp / "RPU.bin"):
                 # RPU already extracted with mode 3
                 pass
+
+        # Edit L6 with actual luminance values from RPU, then L5 active area
+        self.level_6()
+        hdr10_video = next((v for v in videos if v.range == Video.Range.HDR10), None)
+        hdr10_input = hdr10_video.path if hdr10_video else None
+        if hdr10_input:
+            self.level_5(hdr10_input)
 
         self.injecting()
 
@@ -104,6 +112,10 @@ class Hybrid:
         Path.unlink(config.directories.temp / "HDR10.hevc", missing_ok=True)
         Path.unlink(config.directories.temp / "DV.hevc", missing_ok=True)
         Path.unlink(config.directories.temp / f"{self.rpu_file}", missing_ok=True)
+        Path.unlink(config.directories.temp / "RPU_L6.bin", missing_ok=True)
+        Path.unlink(config.directories.temp / "RPU_L5.bin", missing_ok=True)
+        Path.unlink(config.directories.temp / "L5.json", missing_ok=True)
+        Path.unlink(config.directories.temp / "L6.json", missing_ok=True)
 
     def ffmpeg_simple(self, save_path, output):
         """Simple ffmpeg execution without progress tracking"""
@@ -172,47 +184,225 @@ class Hybrid:
 
         self.log.info(f"Extracted{' untouched ' if untouched else ' '}RPU from Dolby Vision stream")
 
-    def level_6(self):
-        """Edit RPU Level 6 values"""
-        with open(config.directories.temp / "L6.json", "w+") as level6_file:
-            level6 = {
-                "cm_version": "V29",
-                "length": 0,
-                "level6": {
-                    "max_display_mastering_luminance": 1000,
-                    "min_display_mastering_luminance": 1,
-                    "max_content_light_level": 0,
-                    "max_frame_average_light_level": 0,
-                },
-            }
+    def level_5(self, input_video):
+        """Generate Level 5 active area metadata via crop detection on the HDR10 stream.
 
-            json.dump(level6, level6_file, indent=3)
+        This resolves mismatches where DV has no black bars but HDR10 does (or vice versa)
+        by telling the display the correct active area.
+        """
+        if os.path.isfile(config.directories.temp / "RPU_L5.bin"):
+            return
 
-        if not os.path.isfile(config.directories.temp / "RPU_L6.bin"):
-            with console.status("Editing RPU Level 6 values...", spinner="dots"):
-                level6 = subprocess.run(
+        ffprobe_bin = str(FFProbe) if FFProbe else "ffprobe"
+        ffmpeg_bin = str(FFMPEG) if FFMPEG else "ffmpeg"
+
+        # Get video duration for random sampling
+        with console.status("Detecting active area (crop detection)...", spinner="dots"):
+            result_duration = subprocess.run(
+                [ffprobe_bin, "-v", "error", "-show_entries", "format=duration", "-of", "json", str(input_video)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+
+            if result_duration.returncode != 0:
+                self.log.warning("Could not probe video duration, skipping L5 crop detection")
+                return
+
+            duration_info = json.loads(result_duration.stdout)
+            duration = float(duration_info["format"]["duration"])
+
+            # Get video resolution for proper border calculation
+            result_streams = subprocess.run(
+                [
+                    ffprobe_bin,
+                    "-v",
+                    "error",
+                    "-select_streams",
+                    "v:0",
+                    "-show_entries",
+                    "stream=width,height",
+                    "-of",
+                    "json",
+                    str(input_video),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+
+            if result_streams.returncode != 0:
+                self.log.warning("Could not probe video resolution, skipping L5 crop detection")
+                return
+
+            stream_info = json.loads(result_streams.stdout)
+            original_width = int(stream_info["streams"][0]["width"])
+            original_height = int(stream_info["streams"][0]["height"])
+
+            # Sample 10 random timestamps and run cropdetect on each
+            random_times = sorted(random.uniform(0, duration) for _ in range(10))
+
+            crop_results = []
+            for t in random_times:
+                result_cropdetect = subprocess.run(
                     [
-                        str(DoviTool),
-                        "editor",
+                        ffmpeg_bin,
+                        "-y",
+                        "-nostdin",
+                        "-loglevel",
+                        "info",
+                        "-ss",
+                        f"{t:.2f}",
                         "-i",
-                        config.directories.temp / self.rpu_file,
-                        "-j",
-                        config.directories.temp / "L6.json",
-                        "-o",
-                        config.directories.temp / "RPU_L6.bin",
+                        str(input_video),
+                        "-vf",
+                        "cropdetect=round=2",
+                        "-vframes",
+                        "10",
+                        "-f",
+                        "null",
+                        "-",
                     ],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
+                    text=True,
                 )
 
-            if level6.returncode:
-                Path.unlink(config.directories.temp / "RPU_L6.bin")
-                raise ValueError("Failed editing RPU Level 6 values")
+                # cropdetect outputs crop=w:h:x:y
+                crop_match = re.search(
+                    r"crop=(\d+):(\d+):(\d+):(\d+)",
+                    (result_cropdetect.stdout or "") + (result_cropdetect.stderr or ""),
+                )
+                if crop_match:
+                    w, h = int(crop_match.group(1)), int(crop_match.group(2))
+                    x, y = int(crop_match.group(3)), int(crop_match.group(4))
+                    # Calculate actual border sizes from crop geometry
+                    left = x
+                    top = y
+                    right = original_width - w - x
+                    bottom = original_height - h - y
+                    crop_results.append((left, top, right, bottom))
 
-            self.log.info("Edited RPU Level 6 values")
+        if not crop_results:
+            self.log.warning("No crop data detected, skipping L5")
+            return
 
-            # Update rpu_file to use the edited version
-            self.rpu_file = "RPU_L6.bin"
+        # Find the most common crop values
+        crop_counts = {}
+        for crop in crop_results:
+            crop_counts[crop] = crop_counts.get(crop, 0) + 1
+        most_common = max(crop_counts, key=crop_counts.get)
+        left, top, right, bottom = most_common
+
+        # If all borders are 0 there's nothing to correct
+        if left == 0 and top == 0 and right == 0 and bottom == 0:
+            return
+
+        l5_json = {
+            "active_area": {
+                "crop": False,
+                "presets": [{"id": 0, "left": left, "right": right, "top": top, "bottom": bottom}],
+                "edits": {"all": 0},
+            }
+        }
+
+        l5_path = config.directories.temp / "L5.json"
+        with open(l5_path, "w") as f:
+            json.dump(l5_json, f, indent=4)
+
+        with console.status("Editing RPU Level 5 active area...", spinner="dots"):
+            result = subprocess.run(
+                [
+                    str(DoviTool),
+                    "editor",
+                    "-i",
+                    str(config.directories.temp / self.rpu_file),
+                    "-j",
+                    str(l5_path),
+                    "-o",
+                    str(config.directories.temp / "RPU_L5.bin"),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+        if result.returncode:
+            Path.unlink(config.directories.temp / "RPU_L5.bin", missing_ok=True)
+            raise ValueError("Failed editing RPU Level 5 values")
+
+        self.rpu_file = "RPU_L5.bin"
+
+    def level_6(self):
+        """Edit RPU Level 6 values using actual luminance data from the RPU."""
+        if os.path.isfile(config.directories.temp / "RPU_L6.bin"):
+            return
+
+        with console.status("Reading RPU luminance metadata...", spinner="dots"):
+            result = subprocess.run(
+                [str(DoviTool), "info", "-i", str(config.directories.temp / self.rpu_file), "-s"],
+                capture_output=True,
+                text=True,
+            )
+
+        if result.returncode != 0:
+            raise ValueError("Failed reading RPU metadata for Level 6 values")
+
+        max_cll = None
+        max_fall = None
+        max_mdl = None
+        min_mdl = None
+
+        for line in result.stdout.splitlines():
+            if "RPU content light level (L1):" in line:
+                parts = line.split("MaxCLL:")[1].split(",")
+                max_cll = int(float(parts[0].strip().split()[0]))
+                if len(parts) > 1 and "MaxFALL:" in parts[1]:
+                    max_fall = int(float(parts[1].split("MaxFALL:")[1].strip().split()[0]))
+            elif "RPU mastering display:" in line:
+                mastering = line.split(":", 1)[1].strip()
+                min_lum, max_lum = mastering.split("/")[0], mastering.split("/")[1].split(" ")[0]
+                min_mdl = int(float(min_lum) * 10000)
+                max_mdl = int(float(max_lum))
+
+        if any(v is None for v in (max_cll, max_fall, max_mdl, min_mdl)):
+            raise ValueError("Could not extract Level 6 luminance data from RPU")
+
+        level6_data = {
+            "level6": {
+                "remove_cmv4": False,
+                "remove_mapping": False,
+                "max_display_mastering_luminance": max_mdl,
+                "min_display_mastering_luminance": min_mdl,
+                "max_content_light_level": max_cll,
+                "max_frame_average_light_level": max_fall,
+            }
+        }
+
+        l6_path = config.directories.temp / "L6.json"
+        with open(l6_path, "w") as f:
+            json.dump(level6_data, f, indent=4)
+
+        with console.status("Editing RPU Level 6 values...", spinner="dots"):
+            result = subprocess.run(
+                [
+                    str(DoviTool),
+                    "editor",
+                    "-i",
+                    str(config.directories.temp / self.rpu_file),
+                    "-j",
+                    str(l6_path),
+                    "-o",
+                    str(config.directories.temp / "RPU_L6.bin"),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+        if result.returncode:
+            Path.unlink(config.directories.temp / "RPU_L6.bin", missing_ok=True)
+            raise ValueError("Failed editing RPU Level 6 values")
+
+        self.rpu_file = "RPU_L6.bin"
 
     def injecting(self):
         if os.path.isfile(config.directories.temp / self.hevc_file):
