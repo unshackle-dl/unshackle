@@ -267,6 +267,10 @@ class Selector:
             self.selected_indices = set(range(len(self.options)))
 
     def get_input_windows(self):
+        """
+        Captures and parses keyboard input on Windows systems using msvcrt.
+        Returns command strings like 'UP', 'DOWN', 'ENTER', etc.
+        """
         key = msvcrt.getch()
         # Ctrl+C (0x03) or ESC (0x1b)
         if key == b"\x03" or key == b"\x1b":
@@ -300,6 +304,10 @@ class Selector:
         return None
 
     def get_input_unix(self):
+        """
+        Captures and parses keyboard input on Unix/Linux systems using click.getchar().
+        Returns command strings like 'UP', 'DOWN', 'ENTER', etc.
+        """
         char = click.getchar()
         # Ctrl+C
         if char == "\x03": return "CANCEL"
@@ -340,6 +348,13 @@ class Selector:
         return None
 
     def run(self) -> list[int]:
+        """
+        Starts the main event loop for the selector.
+        Renders the UI and processes input until confirmed or cancelled.
+
+        Returns:
+            list[int]: A sorted list of selected indices.
+        """
         try:
             with Live(self.get_renderable(), console=console, auto_refresh=False, transient=True) as live:
                 while True:
@@ -385,6 +400,14 @@ def select_multiple(
 ) -> list[int]:
     """
     Drop-in replacement using custom Selector with global console.
+
+    Args:
+        options: List of options to display.
+        minimal_count: Minimum number of selections required.
+        page_size: Number of items per page.
+        return_indices: If True, returns indices; otherwise returns the option strings.
+        cursor_style: Style color for the cursor.
+        collapse_on_start: If True, child items are hidden initially.
     """
     selector = Selector(
         options=options,
