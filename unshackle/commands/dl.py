@@ -588,6 +588,59 @@ class dl:
                         },
                     },
                 )
+
+                # Log binary versions for diagnostics
+                binary_versions = {}
+                for name, binary in [
+                    ("shaka_packager", binaries.ShakaPackager),
+                    ("mp4decrypt", binaries.Mp4decrypt),
+                    ("n_m3u8dl_re", binaries.N_m3u8DL_RE),
+                    ("mkvmerge", binaries.MKVToolNix),
+                    ("ffmpeg", binaries.FFMPEG),
+                    ("ffprobe", binaries.FFProbe),
+                ]:
+                    if binary:
+                        version = None
+                        try:
+                            if name == "shaka_packager":
+                                r = subprocess.run(
+                                    [str(binary), "--version"], capture_output=True, text=True, timeout=5
+                                )
+                                version = (r.stdout or r.stderr or "").strip()
+                            elif name in ("ffmpeg", "ffprobe"):
+                                r = subprocess.run(
+                                    [str(binary), "-version"], capture_output=True, text=True, timeout=5
+                                )
+                                version = (r.stdout or "").split("\n")[0].strip()
+                            elif name == "mkvmerge":
+                                r = subprocess.run(
+                                    [str(binary), "--version"], capture_output=True, text=True, timeout=5
+                                )
+                                version = (r.stdout or "").strip()
+                            elif name == "mp4decrypt":
+                                r = subprocess.run(
+                                    [str(binary)], capture_output=True, text=True, timeout=5
+                                )
+                                output = (r.stdout or "") + (r.stderr or "")
+                                lines = [line.strip() for line in output.split("\n") if line.strip()]
+                                version = " | ".join(lines[:2]) if lines else None
+                            elif name == "n_m3u8dl_re":
+                                r = subprocess.run(
+                                    [str(binary), "--version"], capture_output=True, text=True, timeout=5
+                                )
+                                version = (r.stdout or r.stderr or "").strip().split("\n")[0]
+                        except Exception:
+                            version = "<error getting version>"
+                        binary_versions[name] = {"path": str(binary), "version": version}
+                    else:
+                        binary_versions[name] = None
+
+                self.debug_logger.log(
+                    level="DEBUG",
+                    operation="binary_versions",
+                    message="Binary tool versions",
+                    context=binary_versions,
+                )
         else:
             self.debug_logger = None
 
