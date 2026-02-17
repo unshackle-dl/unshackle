@@ -535,6 +535,10 @@ class Tracks:
             raise ValueError("No tracks provided, at least one track must be provided.")
 
         debug_logger = get_debug_logger()
+
+        # Build the full command for both execution and logging
+        full_cmd = [*cl, "--output", str(output_path), "--gui-mode"]
+
         if debug_logger:
             debug_logger.log(
                 level="DEBUG",
@@ -548,16 +552,38 @@ class Tracks:
                     "subtitle_count": len(self.subtitles),
                     "attachment_count": len(self.attachments),
                     "has_chapters": bool(self.chapters),
+                    "command": [str(c) for c in full_cmd],
                     "video_tracks": [
-                        {"id": v.id, "codec": getattr(v, "codec", None), "language": str(v.language)}
+                        {
+                            "id": v.id,
+                            "codec": str(getattr(v, "codec", None)),
+                            "language": str(v.language),
+                            "path": str(v.path) if v.path else None,
+                            "path_exists": v.path.exists() if v.path else False,
+                            "file_size": v.path.stat().st_size if v.path and v.path.exists() else 0,
+                            "drm": str(v.drm) if v.drm else None,
+                        }
                         for v in self.videos
                     ],
                     "audio_tracks": [
-                        {"id": a.id, "codec": getattr(a, "codec", None), "language": str(a.language)}
+                        {
+                            "id": a.id,
+                            "codec": str(getattr(a, "codec", None)),
+                            "language": str(a.language),
+                            "path": str(a.path) if a.path else None,
+                            "path_exists": a.path.exists() if a.path else False,
+                            "file_size": a.path.stat().st_size if a.path and a.path.exists() else 0,
+                            "drm": str(a.drm) if a.drm else None,
+                        }
                         for a in self.audio
                     ],
                     "subtitle_tracks": [
-                        {"id": s.id, "codec": getattr(s, "codec", None), "language": str(s.language)}
+                        {
+                            "id": s.id,
+                            "codec": str(getattr(s, "codec", None)),
+                            "language": str(s.language),
+                            "path": str(s.path) if s.path else None,
+                        }
                         for s in self.subtitles
                     ],
                 },
@@ -566,7 +592,7 @@ class Tracks:
         # let potential failures go to caller, caller should handle
         try:
             errors = []
-            p = subprocess.Popen([*cl, "--output", str(output_path), "--gui-mode"], text=True, stdout=subprocess.PIPE)
+            p = subprocess.Popen(full_cmd, text=True, stdout=subprocess.PIPE)
             for line in iter(p.stdout.readline, ""):
                 if line.startswith("#GUI#error") or line.startswith("#GUI#warning"):
                     errors.append(line)
@@ -595,6 +621,7 @@ class Tracks:
                         context={
                             "output_path": str(output_path),
                             "output_exists": output_path.exists() if output_path else False,
+                            "output_size": output_path.stat().st_size if output_path and output_path.exists() else 0,
                         },
                     )
 

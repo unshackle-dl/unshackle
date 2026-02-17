@@ -316,6 +316,17 @@ def download(
         ])
 
         track_url_display = track.url[:200] + "..." if len(track.url) > 200 else track.url
+        # Determine decryption engine info for logging
+        decryption_engine = None
+        decryption_binary = None
+        if content_keys:
+            decryption_config = config.decryption.lower()
+            decryption_engine = DECRYPTION_ENGINE.get(decryption_config) or "SHAKA_PACKAGER"
+            if decryption_engine == "SHAKA_PACKAGER" and binaries.ShakaPackager:
+                decryption_binary = str(binaries.ShakaPackager)
+            elif decryption_engine == "MP4DECRYPT" and binaries.Mp4decrypt:
+                decryption_binary = str(binaries.Mp4decrypt)
+
         debug_logger.log(
             level="DEBUG",
             operation="downloader_n_m3u8dl_re_start",
@@ -331,6 +342,9 @@ def download(
                 "retry_count": retry_count,
                 "has_content_keys": bool(content_keys),
                 "content_key_count": len(content_keys) if content_keys else 0,
+                "decryption_engine": decryption_engine,
+                "decryption_binary": decryption_binary,
+                "decryption_config": config.decryption if content_keys else None,
                 "has_proxy": bool(proxy),
                 "skip_merge": skip_merge,
                 "has_custom_args": bool(track.downloader_args),
