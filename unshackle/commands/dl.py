@@ -1050,6 +1050,7 @@ class dl:
         if list_titles:
             return
 
+        # The logic for the 'select-titles' feature below was referenced and adapted from code provided by "A_n_g_e_l_a".
         # Enables manual selection for Series when --select-titles is set
         if select_titles and isinstance(titles, Series):
             console.print(Padding(Rule("[rule.text]Select Titles"), (1, 2)))
@@ -1076,7 +1077,7 @@ class dl:
                     # Note: Headers are not mapped to actual title indices
 
                 # Format display name
-                display_name = ((t.name[:35].rstrip() + "…") if len(t.name) > 35 else t.name) if t.name else None
+                display_name = ((t.name[:30].rstrip() + "…") if len(t.name) > 30 else t.name) if t.name else None
 
                 # Apply indentation only for multiple seasons
                 prefix = " " if multiple_seasons else ""
@@ -1096,8 +1097,17 @@ class dl:
 
             # Execute selector with dependencies (headers select all children)
             selected_ui_idx = select_multiple(
-                selection_titles, minimal_count=1, page_size=8, return_indices=True, dependencies=dependencies
+                selection_titles,
+                minimal_count=1,
+                page_size=8,
+                return_indices=True,
+                dependencies=dependencies,
+                collapse_on_start=multiple_seasons
             )
+
+            if not selected_ui_idx:
+                console.print(Padding(":x: Selected Cancelled...", (0, 5, 1, 5)))
+                return
 
             selection_end = time.time()
             start_time += selection_end - selection_start
