@@ -441,37 +441,6 @@ def download(
                 yield dict(downloaded=f"{filesize.decimal(dl_speed)}/s")
 
             time.sleep(1)
-
-        if debug_logger:
-            output_files = []
-            output_total_size = 0
-            if output_dir.exists():
-                try:
-                    for f in sorted(output_dir.iterdir()):
-                        if f.is_file():
-                            fsize = f.stat().st_size
-                            output_files.append(f.name)
-                            output_total_size += fsize
-                except OSError:
-                    output_files = ["<error listing files>"]
-
-            debug_logger.log(
-                level="DEBUG",
-                operation="downloader_aria2c_complete",
-                message="Aria2c download completed successfully",
-                context={
-                    "url_count": len(urls),
-                    "gid_count": len(gids),
-                    "completed_count": len(completed),
-                    "output_dir": str(output_dir),
-                    "output_dir_exists": output_dir.exists(),
-                    "output_files_count": len(output_files),
-                    "output_files": output_files[:10],
-                    "output_total_size": output_total_size,
-                    "filename": filename,
-                },
-            )
-
     except KeyboardInterrupt:
         DOWNLOAD_CANCELLED.set()
         raise

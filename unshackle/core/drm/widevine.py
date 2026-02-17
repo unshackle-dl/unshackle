@@ -20,7 +20,7 @@ from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import AnyTrack
-from unshackle.core.utilities import get_boxes, get_debug_logger
+from unshackle.core.utilities import get_boxes
 from unshackle.core.utils.subprocess import ffprobe
 
 
@@ -257,21 +257,6 @@ class Widevine:
 
         decrypter = str(getattr(config, "decryption", "")).lower()
 
-        debug_logger = get_debug_logger()
-        if debug_logger:
-            debug_logger.log(
-                level="DEBUG",
-                operation="drm_decrypt_start",
-                message=f"Starting Widevine decryption with {decrypter or 'shaka_packager (default)'}",
-                context={
-                    "decrypter": decrypter or "shaka_packager",
-                    "path": str(path),
-                    "file_size": path.stat().st_size if path.exists() else 0,
-                    "content_key_count": len(self.content_keys),
-                    "kids": [kid.hex for kid in self.content_keys.keys()],
-                },
-            )
-
         if decrypter == "mp4decrypt":
             return self._decrypt_with_mp4decrypt(path)
         else:
@@ -279,8 +264,6 @@ class Widevine:
 
     def _decrypt_with_mp4decrypt(self, path: Path) -> None:
         """Decrypt using mp4decrypt"""
-        debug_logger = get_debug_logger()
-
         if not binaries.Mp4decrypt:
             raise EnvironmentError("mp4decrypt executable not found but is required.")
 
@@ -301,48 +284,10 @@ class Widevine:
             str(output_path),
         ]
 
-        if debug_logger:
-            debug_logger.log(
-                level="DEBUG",
-                operation="drm_mp4decrypt_start",
-                message="Running mp4decrypt",
-                context={
-                    "binary": str(binaries.Mp4decrypt),
-                    "input_path": str(path),
-                    "input_size": path.stat().st_size if path.exists() else 0,
-                    "output_path": str(output_path),
-                    "key_count": len(self.content_keys),
-                    "command": " ".join(str(c) for c in cmd[:3]) + " --key <REDACTED> ...",
-                },
-            )
-
         try:
-            result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
-            if debug_logger:
-                debug_logger.log(
-                    level="DEBUG",
-                    operation="drm_mp4decrypt_complete",
-                    message="mp4decrypt completed successfully",
-                    context={
-                        "output_path": str(output_path),
-                        "output_exists": output_path.exists(),
-                        "output_size": output_path.stat().st_size if output_path.exists() else 0,
-                        "stderr": (result.stderr or "")[:500],
-                    },
-                )
+            subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
         except subprocess.CalledProcessError as e:
             error_msg = e.stderr if e.stderr else f"mp4decrypt failed with exit code {e.returncode}"
-            if debug_logger:
-                debug_logger.log(
-                    level="ERROR",
-                    operation="drm_mp4decrypt_failed",
-                    message=f"mp4decrypt failed with exit code {e.returncode}",
-                    context={
-                        "returncode": e.returncode,
-                        "stderr": (e.stderr or "")[:1000],
-                        "stdout": (e.stdout or "")[:500],
-                    },
-                )
             raise subprocess.CalledProcessError(e.returncode, cmd, output=e.stdout, stderr=error_msg)
 
         if not output_path.exists():
@@ -355,8 +300,6 @@ class Widevine:
 
     def _decrypt_with_shaka_packager(self, path: Path) -> None:
         """Decrypt using Shaka Packager (original method)"""
-        debug_logger = get_debug_logger()
-
         if not binaries.ShakaPackager:
             raise EnvironmentError("Shaka Packager executable not found but is required.")
 
@@ -384,21 +327,6 @@ class Widevine:
                 "--temp_dir",
                 config.directories.temp,
             ]
-
-            if debug_logger:
-                debug_logger.log(
-                    level="DEBUG",
-                    operation="drm_shaka_start",
-                    message="Running Shaka Packager decryption",
-                    context={
-                        "binary": str(binaries.ShakaPackager),
-                        "input_path": str(path),
-                        "input_size": path.stat().st_size if path.exists() else 0,
-                        "output_path": str(output_path),
-                        "key_count": len(self.content_keys),
-                        "kids": [kid.hex for kid in self.content_keys.keys()],
-                    },
-                )
 
             p = subprocess.Popen(
                 [binaries.ShakaPackager, *arguments],
@@ -437,21 +365,6 @@ class Widevine:
                 console.log(Text.from_ansi("\n[Widevine]: " + shaka_log_buffer))
 
             p.wait()
-
-            if debug_logger:
-                debug_logger.log(
-                    level="DEBUG" if p.returncode == 0 and not had_error else "ERROR",
-                    operation="drm_shaka_complete" if p.returncode == 0 and not had_error else "drm_shaka_failed",
-                    message="Shaka Packager completed" if p.returncode == 0 and not had_error else "Shaka Packager failed",
-                    context={
-                        "returncode": p.returncode,
-                        "had_error": had_error,
-                        "stream_skipped": stream_skipped,
-                        "output_exists": output_path.exists(),
-                        "output_size": output_path.stat().st_size if output_path.exists() else 0,
-                        "shaka_log": shaka_log_buffer.strip()[:1000] if shaka_log_buffer else None,
-                    },
-                )
 
             if p.returncode != 0 or had_error:
                 raise subprocess.CalledProcessError(p.returncode, [binaries.ShakaPackager, *arguments])

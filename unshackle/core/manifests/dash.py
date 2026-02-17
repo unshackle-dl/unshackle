@@ -642,24 +642,7 @@ class DASH:
 
         if skip_merge:
             # N_m3u8DL-RE handles merging and decryption internally
-            source_file = segments_to_merge[0]
-            if debug_logger:
-                debug_logger.log(
-                    level="DEBUG",
-                    operation="manifest_dash_skip_merge_move",
-                    message="Moving n_m3u8dl_re output (decryption handled by downloader)",
-                    context={
-                        "track_id": getattr(track, "id", None),
-                        "track_type": track.__class__.__name__,
-                        "source_file": str(source_file),
-                        "source_size": source_file.stat().st_size if source_file.exists() else 0,
-                        "dest_path": str(save_path),
-                        "has_drm": bool(drm),
-                        "drm_type": drm.__class__.__name__ if drm else None,
-                        "content_key_count": len(drm.content_keys) if drm and hasattr(drm, "content_keys") else 0,
-                    },
-                )
-            shutil.move(source_file, save_path)
+            shutil.move(segments_to_merge[0], save_path)
             if drm:
                 track.drm = None
                 events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=drm, segment=None)
@@ -693,34 +676,8 @@ class DASH:
         events.emit(events.Types.TRACK_DOWNLOADED, track=track)
 
         if not skip_merge and drm:
-            if debug_logger:
-                debug_logger.log(
-                    level="DEBUG",
-                    operation="manifest_dash_decrypt_start",
-                    message="Starting post-download decryption",
-                    context={
-                        "track_id": getattr(track, "id", None),
-                        "track_type": track.__class__.__name__,
-                        "save_path": str(save_path),
-                        "file_size": save_path.stat().st_size if save_path.exists() else 0,
-                        "drm_type": drm.__class__.__name__,
-                        "content_key_count": len(drm.content_keys) if hasattr(drm, "content_keys") else 0,
-                    },
-                )
             progress(downloaded="Decrypting", completed=0, total=100)
             drm.decrypt(save_path)
-            if debug_logger:
-                debug_logger.log(
-                    level="DEBUG",
-                    operation="manifest_dash_decrypt_complete",
-                    message="Post-download decryption completed",
-                    context={
-                        "track_id": getattr(track, "id", None),
-                        "track_type": track.__class__.__name__,
-                        "save_path": str(save_path),
-                        "file_size": save_path.stat().st_size if save_path.exists() else 0,
-                    },
-                )
             track.drm = None
             events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=drm, segment=None)
             progress(downloaded="Decrypting", advance=100)

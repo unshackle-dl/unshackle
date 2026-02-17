@@ -303,18 +303,6 @@ def requests(
                     raise
 
         if debug_logger:
-            output_files = []
-            output_total_size = 0
-            if output_dir.exists():
-                try:
-                    for f in sorted(output_dir.iterdir()):
-                        if f.is_file():
-                            fsize = f.stat().st_size
-                            output_files.append(f.name)
-                            output_total_size += fsize
-                except OSError:
-                    output_files = ["<error listing files>"]
-
             debug_logger.log(
                 level="DEBUG",
                 operation="downloader_requests_complete",
@@ -322,10 +310,6 @@ def requests(
                 context={
                     "url_count": len(urls),
                     "output_dir": str(output_dir),
-                    "output_dir_exists": output_dir.exists(),
-                    "output_files_count": len(output_files),
-                    "output_files": output_files[:10],
-                    "output_total_size": output_total_size,
                     "filename": filename,
                 },
             )
