@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import mimetypes
 import os
+import re
 from pathlib import Path
 from typing import Optional, Union
 from urllib.parse import urlparse
@@ -56,7 +57,8 @@ class Attachment:
 
             # Use provided name for the file if available
             if name:
-                file_name = f"{name.replace(' ', '_')}{os.path.splitext(file_name)[1]}"
+                safe_name = re.sub(r'[<>:"/\\|?*]', "", name).replace(" ", "_")
+                file_name = f"{safe_name}{os.path.splitext(file_name)[1]}"
 
             download_path = config.directories.temp / file_name
 
