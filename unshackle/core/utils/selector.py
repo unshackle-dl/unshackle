@@ -23,7 +23,6 @@ were inspired by the 'beaupy' library (MIT License).
 
 IS_WINDOWS = sys.platform == "win32"
 if IS_WINDOWS: import msvcrt
-else: import termios
 
 class Selector:
     """
@@ -267,18 +266,6 @@ class Selector:
         else:
             self.selected_indices = set(range(len(self.options)))
 
-    def flush_input(self):
-        """
-        Forcefully flushes the STDIN buffer in a Linux environment 
-        to discard unread input.
-        """
-        if not IS_WINDOWS:
-            try:
-                # TCIFLUSH: 수신했지만 읽지 않은 데이터를 버림
-                termios.tcflush(sys.stdin, termios.TCIFLUSH)
-            except Exception:
-                pass
-
     def get_input_windows(self):
         key = msvcrt.getch()
         # Ctrl+C (0x03) or ESC (0x1b)
@@ -353,8 +340,6 @@ class Selector:
         return None
 
     def run(self) -> list[int]:
-        # Flush the input buffer before starting the Live context.
-        self.flush_input()
         try:
             with Live(self.get_renderable(), console=console, auto_refresh=False, transient=True) as live:
                 while True:
