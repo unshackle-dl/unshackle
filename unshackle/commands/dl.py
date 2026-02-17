@@ -1392,10 +1392,20 @@ class dl:
                                 self.log.warning(f"Skipping {color_range.name} video tracks as none are available.")
 
                     if vbitrate:
-                        title.tracks.select_video(lambda x: x.bitrate and x.bitrate // 1000 == vbitrate)
-                        if not title.tracks.videos:
-                            self.log.error(f"There's no {vbitrate}kbps Video Track...")
-                            sys.exit(1)
+                        if any(r == Video.Range.HYBRID for r in range_):
+                            # In HYBRID mode, only apply bitrate filter to non-DV tracks
+                            # DV tracks are kept regardless since they're only used for RPU metadata
+                            title.tracks.select_video(
+                                lambda x: x.range == Video.Range.DV or (x.bitrate and x.bitrate // 1000 == vbitrate)
+                            )
+                            if not any(x.range != Video.Range.DV for x in title.tracks.videos):
+                                self.log.error(f"There's no {vbitrate}kbps Video Track...")
+                                sys.exit(1)
+                        else:
+                            title.tracks.select_video(lambda x: x.bitrate and x.bitrate // 1000 == vbitrate)
+                            if not title.tracks.videos:
+                                self.log.error(f"There's no {vbitrate}kbps Video Track...")
+                                sys.exit(1)
 
                     video_languages = [lang for lang in (v_lang or lang) if lang != "best"]
                     if video_languages and "all" not in video_languages:
