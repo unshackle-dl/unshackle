@@ -1496,24 +1496,33 @@ class dl:
 
                     # validate hybrid mode requirements
                     if any(r == Video.Range.HYBRID for r in range_):
-                        hdr10_tracks = [v for v in title.tracks.videos if v.range == Video.Range.HDR10]
+                        base_tracks = [
+                            v for v in title.tracks.videos
+                            if v.range in (Video.Range.HDR10, Video.Range.HDR10P)
+                        ]
                         dv_tracks = [v for v in title.tracks.videos if v.range == Video.Range.DV]
 
-                        if not hdr10_tracks and not dv_tracks:
+                        if not base_tracks and not dv_tracks:
                             available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
-                            self.log.error("HYBRID mode requires both HDR10 and DV tracks, but neither is available")
+                            self.log.error(
+                                "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but neither is available"
+                            )
                             self.log.error(
                                 f"Available ranges: {', '.join(available_ranges) if available_ranges else 'none'}"
                             )
                             sys.exit(1)
-                        elif not hdr10_tracks:
+                        elif not base_tracks:
                             available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
-                            self.log.error("HYBRID mode requires both HDR10 and DV tracks, but only DV is available")
+                            self.log.error(
+                                "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but only DV is available"
+                            )
                             self.log.error(f"Available ranges: {', '.join(available_ranges)}")
                             sys.exit(1)
                         elif not dv_tracks:
                             available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
-                            self.log.error("HYBRID mode requires both HDR10 and DV tracks, but only HDR10 is available")
+                            self.log.error(
+                                "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but only HDR10 is available"
+                            )
                             self.log.error(f"Available ranges: {', '.join(available_ranges)}")
                             sys.exit(1)
 
@@ -2038,12 +2047,15 @@ class dl:
                         # Hybrid mode: process DV and HDR10 tracks separately for each resolution
                         self.log.info("Processing Hybrid HDR10+DV tracks...")
 
-                        # Group video tracks by resolution
+                        # Group video tracks by resolution (prefer HDR10+ over HDR10 as base)
                         resolutions_processed = set()
-                        hdr10_tracks = [v for v in title.tracks.videos if v.range == Video.Range.HDR10]
+                        base_tracks_list = [
+                            v for v in title.tracks.videos
+                            if v.range in (Video.Range.HDR10P, Video.Range.HDR10)
+                        ]
                         dv_tracks = [v for v in title.tracks.videos if v.range == Video.Range.DV]
 
-                        for hdr10_track in hdr10_tracks:
+                        for hdr10_track in base_tracks_list:
                             resolution = hdr10_track.height
                             if resolution in resolutions_processed:
                                 continue

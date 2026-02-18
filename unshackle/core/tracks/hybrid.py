@@ -67,8 +67,8 @@ class Hybrid:
         has_hdr10 = any(video.range == Video.Range.HDR10 for video in self.videos)
         has_hdr10p = any(video.range == Video.Range.HDR10P for video in self.videos)
 
-        if not has_hdr10:
-            raise ValueError("No HDR10 track available for hybrid processing.")
+        if not has_hdr10 and not has_hdr10p:
+            raise ValueError("No HDR10 or HDR10+ track available for hybrid processing.")
 
         # If we have HDR10+ but no DV, we can convert HDR10+ to DV
         if not has_dv and has_hdr10p:
@@ -113,10 +113,11 @@ class Hybrid:
 
         # Edit L6 with actual luminance values from RPU, then L5 active area
         self.level_6()
-        hdr10_video = next((v for v in videos if v.range == Video.Range.HDR10), None)
-        hdr10_input = hdr10_video.path if hdr10_video else None
-        if hdr10_input:
-            self.level_5(hdr10_input)
+        base_video = next(
+            (v for v in videos if v.range in (Video.Range.HDR10, Video.Range.HDR10P)), None
+        )
+        if base_video and base_video.path:
+            self.level_5(base_video.path)
 
         self.injecting()
 
@@ -556,12 +557,6 @@ class Hybrid:
                 "--rpu-in",
                 config.directories.temp / self.rpu_file,
             ]
-
-            # If we converted from HDR10+, optionally remove HDR10+ metadata during injection
-            # Default to removing HDR10+ metadata since we're converting to DV
-            if self.hdr10plus_to_dv:
-                inject_cmd.append("--drop-hdr10plus")
-                console.status("Removing HDR10+ metadata during injection")
 
             inject_cmd.extend(["-o", config.directories.temp / self.hevc_file])
 

@@ -278,23 +278,30 @@ class Tracks:
         self.subtitles = list(filter(x, self.subtitles))
 
     def select_hybrid(self, tracks, quality):
-        hdr10_tracks = [
-            v
-            for v in tracks
-            if v.range == Video.Range.HDR10 and (v.height in quality or int(v.width * 9 / 16) in quality)
-        ]
-        hdr10 = []
+        # Prefer HDR10+ over HDR10 as the base layer (preserves dynamic metadata)
+        base_ranges = (Video.Range.HDR10P, Video.Range.HDR10)
+        base_tracks = []
+        for range_type in base_ranges:
+            base_tracks = [
+                v
+                for v in tracks
+                if v.range == range_type and (v.height in quality or int(v.width * 9 / 16) in quality)
+            ]
+            if base_tracks:
+                break
+
+        base_selected = []
         for res in quality:
-            candidates = [v for v in hdr10_tracks if v.height == res or int(v.width * 9 / 16) == res]
+            candidates = [v for v in base_tracks if v.height == res or int(v.width * 9 / 16) == res]
             if candidates:
-                best = max(candidates, key=lambda v: v.bitrate)  # assumes .bitrate exists
-                hdr10.append(best)
+                best = max(candidates, key=lambda v: v.bitrate)
+                base_selected.append(best)
 
         dv_tracks = [v for v in tracks if v.range == Video.Range.DV]
         lowest_dv = min(dv_tracks, key=lambda v: v.height) if dv_tracks else None
 
         def select(x):
-            if x in hdr10:
+            if x in base_selected:
                 return True
             if lowest_dv and x is lowest_dv:
                 return True
