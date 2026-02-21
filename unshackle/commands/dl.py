@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import logging
 import math
+import os
 import random
 import re
 import shutil
@@ -1771,6 +1772,11 @@ class dl:
                             )
                             self.cdm = quality_based_cdm
 
+            for track in title.tracks.subtitles:
+                if callable(track.OnSegmentFilter) and track.downloader.__name__ == "n_m3u8dl_re":
+                    from unshackle.core.downloaders import requests as requests_downloader
+                    track.downloader = requests_downloader
+
             dl_start_time = time.time()
 
             try:
@@ -2266,6 +2272,7 @@ class dl:
                         self.log.debug(f"Saved: {final_path.name}")
                 else:
                     # Handle muxed files
+                    used_final_paths: set[Path] = set()
                     for muxed_path in muxed_paths:
                         media_info = MediaInfo.parse(muxed_path)
                         final_dir = config.directories.downloads
@@ -2282,14 +2289,15 @@ class dl:
                             final_filename = f"{final_filename.rstrip()}{sep}{audio_codec_suffix.name}"
                             final_path = final_dir / f"{final_filename}{muxed_path.suffix}"
 
-                        if final_path.exists():
+                        if final_path in used_final_paths:
                             sep = "." if config.scene_naming else " "
                             i = 2
-                            while final_path.exists():
+                            while final_path in used_final_paths:
                                 final_path = final_dir / f"{final_filename.rstrip()}{sep}{i}{muxed_path.suffix}"
                                 i += 1
 
-                        shutil.move(muxed_path, final_path)
+                        os.replace(muxed_path, final_path)
+                        used_final_paths.add(final_path)
                         tags.tag_file(final_path, title, self.tmdb_id)
 
                 title_dl_time = time_elapsed_since(dl_start_time)
