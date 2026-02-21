@@ -1608,7 +1608,7 @@ class dl:
                                 if language not in processed_lang:
                                     processed_lang.append(language)
 
-                        if "best" in processed_lang:
+                        if "best" in processed_lang or "all" in processed_lang:
                             unique_languages = {track.language for track in title.tracks.audio}
                             selected_audio = []
                             for language in unique_languages:
@@ -1631,7 +1631,7 @@ class dl:
                                     else:
                                         selected_audio.append(max(base_candidates, key=lambda x: x.bitrate or 0))
                             title.tracks.audio = selected_audio
-                        elif "all" not in processed_lang:
+                        else:
                             # If multiple codecs were explicitly requested, pick the best track per codec per
                             # requested language instead of selecting *all* bitrate variants of a codec.
                             if acodec and len(acodec) > 1:
