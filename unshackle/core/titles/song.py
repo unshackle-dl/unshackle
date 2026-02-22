@@ -100,6 +100,9 @@ class Song(Title):
             # NN. Song Name
             name = str(self).split(" / ")[1]
 
+        if getattr(config, "repack", False):
+            name += " REPACK"
+
         # Service (use track source if available)
         if show_service:
             source_name = None

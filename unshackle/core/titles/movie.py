@@ -91,6 +91,9 @@ class Movie(Title):
         # Name (Year)
         name = str(self).replace("$", "S")  # e.g., Arli$$
 
+        if getattr(config, "repack", False):
+            name += " REPACK"
+
         if primary_video_track:
             resolution_token = _get_resolution_token(primary_video_track)
             if resolution_token:

@@ -406,6 +406,7 @@ class dl:
     @click.option(
         "--tag", type=str, default=None, help="Set the Group Tag to be used, overriding the one in config if any."
     )
+    @click.option("--repack", is_flag=True, default=False, help="Add REPACK tag to the output filename.")
     @click.option(
         "--tmdb",
         "tmdb_id",
@@ -508,6 +509,7 @@ class dl:
         no_proxy: bool,
         profile: Optional[str] = None,
         proxy: Optional[str] = None,
+        repack: bool = False,
         tag: Optional[str] = None,
         tmdb_id: Optional[int] = None,
         tmdb_name: bool = False,
@@ -896,6 +898,9 @@ class dl:
         ctx.obj = ContextData(
             config=self.service_config, cdm=self.cdm, proxy_providers=self.proxy_providers, profile=self.profile
         )
+
+        if repack:
+            config.repack = True
 
         if tag:
             config.tag = tag
