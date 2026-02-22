@@ -2296,7 +2296,12 @@ class dl:
                                 final_path = final_dir / f"{final_filename.rstrip()}{sep}{i}{muxed_path.suffix}"
                                 i += 1
 
-                        os.replace(muxed_path, final_path)
+                        try:
+                            os.replace(muxed_path, final_path)
+                        except OSError:
+                            if final_path.exists():
+                                final_path.unlink()
+                            shutil.move(muxed_path, final_path)
                         used_final_paths.add(final_path)
                         tags.tag_file(final_path, title, self.tmdb_id)
 
