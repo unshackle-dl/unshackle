@@ -1,7 +1,8 @@
 import base64
 import logging
 from abc import ABCMeta, abstractmethod
-from collections.abc import Generator
+from collections.abc import Callable, Generator
+from dataclasses import dataclass, field
 from http.cookiejar import CookieJar
 from pathlib import Path
 from typing import Optional, Union
@@ -24,7 +25,24 @@ from unshackle.core.search_result import SearchResult
 from unshackle.core.title_cacher import TitleCacher, get_account_hash, get_region_from_proxy
 from unshackle.core.titles import Title_T, Titles_T
 from unshackle.core.tracks import Chapters, Tracks
+from unshackle.core.tracks.video import Video
 from unshackle.core.utilities import get_cached_ip_info, get_ip_info
+
+
+@dataclass
+class TrackRequest:
+    """Holds what the user requested for video codec and range selection.
+
+    Services read from this instead of ctx.parent.params for vcodec/range.
+
+    Attributes:
+        codecs: Requested codecs from CLI. Empty list means no filter (accept any).
+        ranges: Requested ranges from CLI. Defaults to [SDR].
+    """
+
+    codecs: list[Video.Codec] = field(default_factory=list)
+    ranges: list[Video.Range] = field(default_factory=lambda: [Video.Range.SDR])
+    best_available: bool = False
 
 
 def sanitize_proxy_for_log(uri: Optional[str]) -> Optional[str]:
@@ -88,6 +106,16 @@ class Service(metaclass=ABCMeta):
         self.ctx = ctx
         self.credential = None  # Will be set in authenticate()
         self.current_region = None  # Will be set based on proxy/geolocation
+
+        # Set track request from CLI params - services can read/override in their __init__
+        vcodec = ctx.parent.params.get("vcodec") if ctx.parent else None
+        range_ = ctx.parent.params.get("range_") if ctx.parent else None
+        best_available = ctx.parent.params.get("best_available", False) if ctx.parent else False
+        self.track_request = TrackRequest(
+            codecs=list(vcodec) if vcodec else [],
+            ranges=list(range_) if range_ else [Video.Range.SDR],
+            best_available=bool(best_available),
+        )
 
         if not ctx.parent or not ctx.parent.params.get("no_proxy"):
             if ctx.parent:
@@ -204,6 +232,76 @@ class Service(metaclass=ABCMeta):
                 except Exception as e:
                     self.log.debug(f"Failed to get cached IP info: {e}")
                     self.current_region = None
+
+    def _get_tracks_for_variants(
+        self,
+        title: Title_T,
+        fetch_fn: Callable[..., Tracks],
+    ) -> Tracks:
+        """Call fetch_fn for each codec/range combo in track_request, merge results.
+
+        Services that need separate API calls per codec/range combo can use this
+        helper from their get_tracks() implementation.
+
+        The fetch_fn signature should be: (title, codec, range_) -> Tracks
+
+        For HYBRID range, fetch_fn is called with HDR10 and DV separately and
+        the DV video tracks are merged into the HDR10 result.
+
+        Args:
+            title: The title being processed.
+            fetch_fn: A callable that fetches tracks for a specific codec/range.
+        """
+        all_tracks = Tracks()
+        first = True
+
+        codecs = self.track_request.codecs or [None]
+        ranges = self.track_request.ranges or [Video.Range.SDR]
+
+        for range_val in ranges:
+            if range_val == Video.Range.HYBRID:
+                # HYBRID: fetch HDR10 first (full tracks), then DV (video only)
+                for codec_val in codecs:
+                    try:
+                        hdr_tracks = fetch_fn(title, codec=codec_val, range_=Video.Range.HDR10)
+                    except (ValueError, SystemExit) as e:
+                        if self.track_request.best_available:
+                            self.log.warning(f" - HDR10 not available for HYBRID, skipping ({e})")
+                            continue
+                        raise
+                    if first:
+                        all_tracks.add(hdr_tracks, warn_only=True)
+                        first = False
+                    else:
+                        for video in hdr_tracks.videos:
+                            all_tracks.add(video, warn_only=True)
+
+                    try:
+                        dv_tracks = fetch_fn(title, codec=codec_val, range_=Video.Range.DV)
+                        for video in dv_tracks.videos:
+                            all_tracks.add(video, warn_only=True)
+                    except (ValueError, SystemExit):
+                        self.log.info(" - No DolbyVision manifest available for HYBRID")
+            else:
+                for codec_val in codecs:
+                    try:
+                        tracks = fetch_fn(title, codec=codec_val, range_=range_val)
+                    except (ValueError, SystemExit) as e:
+                        if self.track_request.best_available:
+                            codec_name = codec_val.name if codec_val else "default"
+                            self.log.warning(
+                                f" - {range_val.name}/{codec_name} not available, skipping ({e})"
+                            )
+                            continue
+                        raise
+                    if first:
+                        all_tracks.add(tracks, warn_only=True)
+                        first = False
+                    else:
+                        for video in tracks.videos:
+                            all_tracks.add(video, warn_only=True)
+
+        return all_tracks
 
     # Optional Abstract functions
     # The following functions may be implemented by the Service.
@@ -461,4 +559,4 @@ class Service(metaclass=ABCMeta):
         """
 
 
-__all__ = ("Service",)
+__all__ = ("Service", "TrackRequest")

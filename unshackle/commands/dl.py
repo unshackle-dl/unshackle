@@ -64,7 +64,8 @@ from unshackle.core.utilities import (find_font_with_fallbacks, get_debug_logger
                                       is_close_match, suggest_font_packages, time_elapsed_since)
 from unshackle.core.utils import tags
 from unshackle.core.utils.click_types import (AUDIO_CODEC_LIST, LANGUAGE_RANGE, QUALITY_LIST, SEASON_RANGE,
-                                              ContextData, MultipleChoice, SubtitleCodecChoice, VideoCodecChoice)
+                                              ContextData, MultipleChoice, MultipleVideoCodecChoice,
+                                              SubtitleCodecChoice)
 from unshackle.core.utils.collections import merge_dict
 from unshackle.core.utils.selector import select_multiple
 from unshackle.core.utils.subprocess import ffprobe
@@ -288,9 +289,9 @@ class dl:
     @click.option(
         "-v",
         "--vcodec",
-        type=VideoCodecChoice(Video.Codec),
-        default=None,
-        help="Video Codec to download, defaults to any codec.",
+        type=MultipleVideoCodecChoice(Video.Codec),
+        default=[],
+        help="Video Codec(s) to download, defaults to any codec.",
     )
     @click.option(
         "-a",
@@ -913,7 +914,7 @@ class dl:
         self,
         service: Service,
         quality: list[int],
-        vcodec: Optional[Video.Codec],
+        vcodec: list[Video.Codec],
         acodec: list[Audio.Codec],
         vbitrate: int,
         abitrate: int,
@@ -1273,8 +1274,78 @@ class dl:
 
             with console.status("Getting tracks...", spinner="dots"):
                 try:
-                    title.tracks.add(service.get_tracks(title), warn_only=True)
-                    title.tracks.chapters = service.get_chapters(title)
+                    # Migrated services use track_request and handle multi-codec/range
+                    # internally via _get_tracks_for_variants(). Unmigrated services
+                    # still expose self.vcodec/self.range as strings and need the
+                    # multi-fetch loop here.
+                    is_single_range_service = isinstance(getattr(service, "range", None), str)
+                    is_single_vcodec_service = isinstance(getattr(service, "vcodec", None), str)
+                    uses_legacy_pattern = is_single_range_service or is_single_vcodec_service
+
+                    if uses_legacy_pattern:
+                        # Legacy path for unmigrated services
+                        non_hybrid_ranges = [r for r in range_ if r != Video.Range.HYBRID]
+                        hybrid_requested = Video.Range.HYBRID in range_
+                        needs_multi_range = (
+                            is_single_range_service
+                            and not no_video
+                            and (len(non_hybrid_ranges) > 1 or (hybrid_requested and non_hybrid_ranges))
+                        )
+                        needs_multi_vcodec = is_single_vcodec_service and not no_video and len(vcodec) > 1
+
+                        if needs_multi_range or needs_multi_vcodec:
+                            original_range = getattr(service, "range", None)
+                            original_vcodec = getattr(service, "vcodec", None)
+
+                            range_iterations = non_hybrid_ranges if needs_multi_range else [None]
+                            vcodec_iterations = vcodec if needs_multi_vcodec else [None]
+
+                            first = True
+
+                            if needs_multi_range and hybrid_requested:
+                                service.range = "HYBRID"
+                                self.log.info("Fetching HYBRID tracks...")
+                                title.tracks.add(service.get_tracks(title), warn_only=True)
+                                title.tracks.chapters = service.get_chapters(title)
+                                first = False
+
+                            for r_val, vc_val in product(range_iterations, vcodec_iterations):
+                                label_parts = []
+                                if r_val:
+                                    service.range = r_val.name
+                                    label_parts.append(r_val.name)
+                                if vc_val and is_single_vcodec_service and original_vcodec is not None:
+                                    if "." in str(original_vcodec):
+                                        service.vcodec = vc_val.value
+                                    elif str(original_vcodec) == str(original_vcodec).lower():
+                                        service.vcodec = vc_val.value.lower()
+                                    else:
+                                        service.vcodec = vc_val.value.replace(".", "").replace("-", "")
+                                    label_parts.append(vc_val.name)
+
+                                if label_parts:
+                                    self.log.info(f"Fetching {' '.join(label_parts)} tracks...")
+
+                                fetch_tracks = service.get_tracks(title)
+                                if first:
+                                    title.tracks.add(fetch_tracks, warn_only=True)
+                                    title.tracks.chapters = service.get_chapters(title)
+                                    first = False
+                                else:
+                                    for video in fetch_tracks.videos:
+                                        title.tracks.add(video, warn_only=True)
+
+                            if original_range is not None:
+                                service.range = original_range
+                            if original_vcodec is not None:
+                                service.vcodec = original_vcodec
+                        else:
+                            title.tracks.add(service.get_tracks(title), warn_only=True)
+                            title.tracks.chapters = service.get_chapters(title)
+                    else:
+                        # Migrated services handle multi-codec/range via track_request
+                        title.tracks.add(service.get_tracks(title), warn_only=True)
+                        title.tracks.chapters = service.get_chapters(title)
                 except Exception as e:
                     if self.debug_logger:
                         self.debug_logger.log_error(
@@ -1384,9 +1455,12 @@ class dl:
                 if isinstance(title, (Movie, Episode)):
                     # filter video tracks
                     if vcodec:
-                        title.tracks.select_video(lambda x: x.codec == vcodec)
+                        title.tracks.select_video(lambda x: x.codec in vcodec)
+                        missing_codecs = [c for c in vcodec if not any(x.codec == c for x in title.tracks.videos)]
+                        for codec in missing_codecs:
+                            self.log.warning(f"Skipping {codec.name} video tracks as none are available.")
                         if not title.tracks.videos:
-                            self.log.error(f"There's no {vcodec.name} Video Track...")
+                            self.log.error(f"There's no {', '.join(c.name for c in vcodec)} Video Track...")
                             sys.exit(1)
 
                     if range_:
@@ -1438,10 +1512,38 @@ class dl:
                             self.log.error(f"There's no {processed_video_lang} Video Track...")
                             sys.exit(1)
 
+                    has_hybrid = any(r == Video.Range.HYBRID for r in range_)
+                    non_hybrid_ranges = [r for r in range_ if r != Video.Range.HYBRID]
+
                     if quality:
                         missing_resolutions = []
-                        if any(r == Video.Range.HYBRID for r in range_):
-                            title.tracks.select_video(title.tracks.select_hybrid(title.tracks.videos, quality))
+                        if has_hybrid:
+                            # Split tracks: hybrid candidates vs non-hybrid
+                            hybrid_candidate_tracks = [
+                                v for v in title.tracks.videos
+                                if v.range in (Video.Range.HDR10, Video.Range.HDR10P, Video.Range.DV)
+                            ]
+                            non_hybrid_tracks = [
+                                v for v in title.tracks.videos
+                                if v.range not in (Video.Range.HDR10, Video.Range.HDR10P, Video.Range.DV)
+                            ]
+
+                            # Apply hybrid selection to HDR10+DV tracks
+                            hybrid_filter = title.tracks.select_hybrid(hybrid_candidate_tracks, quality)
+                            hybrid_selected = list(filter(hybrid_filter, hybrid_candidate_tracks))
+
+                            if non_hybrid_ranges and non_hybrid_tracks:
+                                # Also filter non-hybrid tracks by resolution
+                                non_hybrid_selected = [
+                                    v for v in non_hybrid_tracks
+                                    if any(
+                                        v.height == res or int(v.width * (9 / 16)) == res
+                                        for res in quality
+                                    )
+                                ]
+                                title.tracks.videos = hybrid_selected + non_hybrid_selected
+                            else:
+                                title.tracks.videos = hybrid_selected
                         else:
                             title.tracks.by_resolutions(quality)
 
@@ -1468,21 +1570,63 @@ class dl:
                                 sys.exit(1)
 
                     # choose best track by range and quality
-                    if any(r == Video.Range.HYBRID for r in range_):
-                        # For hybrid mode, always apply hybrid selection
-                        # If no quality specified, use only the best (highest) resolution
+                    if has_hybrid:
+                        # Apply hybrid selection for HYBRID tracks
+                        hybrid_candidate_tracks = [
+                            v for v in title.tracks.videos
+                            if v.range in (Video.Range.HDR10, Video.Range.HDR10P, Video.Range.DV)
+                        ]
+                        non_hybrid_tracks = [
+                            v for v in title.tracks.videos
+                            if v.range not in (Video.Range.HDR10, Video.Range.HDR10P, Video.Range.DV)
+                        ]
+
                         if not quality:
-                            # Get the highest resolution available
-                            best_resolution = max((v.height for v in title.tracks.videos), default=None)
+                            best_resolution = max(
+                                (v.height for v in hybrid_candidate_tracks), default=None
+                            )
                             if best_resolution:
-                                # Use the hybrid selection logic with only the best resolution
-                                title.tracks.select_video(
-                                    title.tracks.select_hybrid(title.tracks.videos, [best_resolution])
+                                hybrid_filter = title.tracks.select_hybrid(
+                                    hybrid_candidate_tracks, [best_resolution]
                                 )
-                        # If quality was specified, hybrid selection was already applied above
+                                hybrid_selected = list(filter(hybrid_filter, hybrid_candidate_tracks))
+                            else:
+                                hybrid_selected = []
+                        else:
+                            hybrid_filter = title.tracks.select_hybrid(
+                                hybrid_candidate_tracks, quality
+                            )
+                            hybrid_selected = list(filter(hybrid_filter, hybrid_candidate_tracks))
+
+                        # For non-hybrid ranges, apply Cartesian product selection
+                        non_hybrid_selected: list[Video] = []
+                        if non_hybrid_ranges and non_hybrid_tracks:
+                            for resolution, color_range, codec in product(
+                                quality or [None], non_hybrid_ranges, vcodec or [None]
+                            ):
+                                match = next(
+                                    (
+                                        t
+                                        for t in non_hybrid_tracks
+                                        if (
+                                            not resolution
+                                            or t.height == resolution
+                                            or int(t.width * (9 / 16)) == resolution
+                                        )
+                                        and (not color_range or t.range == color_range)
+                                        and (not codec or t.codec == codec)
+                                    ),
+                                    None,
+                                )
+                                if match and match not in non_hybrid_selected:
+                                    non_hybrid_selected.append(match)
+
+                        title.tracks.videos = hybrid_selected + non_hybrid_selected
                     else:
                         selected_videos: list[Video] = []
-                        for resolution, color_range in product(quality or [None], range_ or [None]):
+                        for resolution, color_range, codec in product(
+                            quality or [None], range_ or [None], vcodec or [None]
+                        ):
                             match = next(
                                 (
                                     t
@@ -1493,6 +1637,7 @@ class dl:
                                         or int(t.width * (9 / 16)) == resolution
                                     )
                                     and (not color_range or t.range == color_range)
+                                    and (not codec or t.codec == codec)
                                 ),
                                 None,
                             )
@@ -1508,29 +1653,38 @@ class dl:
                         ]
                         dv_tracks = [v for v in title.tracks.videos if v.range == Video.Range.DV]
 
+                        hybrid_failed = False
                         if not base_tracks and not dv_tracks:
                             available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
-                            self.log.error(
-                                "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but neither is available"
-                            )
-                            self.log.error(
+                            msg = "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but neither is available"
+                            msg_detail = (
                                 f"Available ranges: {', '.join(available_ranges) if available_ranges else 'none'}"
                             )
-                            sys.exit(1)
+                            hybrid_failed = True
                         elif not base_tracks:
                             available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
-                            self.log.error(
-                                "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but only DV is available"
-                            )
-                            self.log.error(f"Available ranges: {', '.join(available_ranges)}")
-                            sys.exit(1)
+                            msg = "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but only DV is available"
+                            msg_detail = f"Available ranges: {', '.join(available_ranges)}"
+                            hybrid_failed = True
                         elif not dv_tracks:
                             available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
-                            self.log.error(
-                                "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but only HDR10 is available"
-                            )
-                            self.log.error(f"Available ranges: {', '.join(available_ranges)}")
-                            sys.exit(1)
+                            msg = "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but only HDR10 is available"
+                            msg_detail = f"Available ranges: {', '.join(available_ranges)}"
+                            hybrid_failed = True
+
+                        if hybrid_failed:
+                            other_ranges = [r for r in range_ if r != Video.Range.HYBRID]
+                            if best_available and other_ranges:
+                                self.log.warning(msg)
+                                self.log.warning(
+                                    f"Continuing with remaining range(s): "
+                                    f"{', '.join(r.name for r in other_ranges)}"
+                                )
+                                range_ = other_ranges
+                            else:
+                                self.log.error(msg)
+                                self.log.error(msg_detail)
+                                sys.exit(1)
 
                     # filter subtitle tracks
                     if require_subs:
@@ -2122,6 +2276,8 @@ class dl:
                                     task_description += f" {video_track.height}p"
                                 if len(range_) > 1:
                                     task_description += f" {video_track.range.name}"
+                                if len(vcodec) > 1:
+                                    task_description += f" {video_track.codec.name}"
 
                             task_tracks = Tracks(title.tracks) + title.tracks.chapters + title.tracks.attachments
                             if video_track:
