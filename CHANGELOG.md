@@ -6,6 +6,31 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 This changelog is automatically generated using [git-cliff](https://git-cliff.org).
 
+## [3.1.0] - 2026-02-23
+
+### Features
+
+- *hybrid*: Add L5 active area and dynamic L6 luminance metadata
+- *debug*: Add JSONL debug logging to decryption, muxing, and all downloaders
+- *debug*: Log binary tool versions at session start
+- *dl*: Add --repack flag to insert REPACK tag in output filenames
+- *core*: Add TrackRequest system for multi-codec/multi-range support
+
+### Bug Fixes
+
+- *n_m3u8dl_re*: Pass all content keys for DualKey DRM decryption
+- *hybrid*: Skip bitrate filter for DV tracks in HYBRID mode
+- *attachment*: Sanitize filenames with illegal Windows characters
+- *hybrid*: Accept HDR10+ tracks as valid base layer for HYBRID mode
+- *dl*: Allow selection of audio tracks for 'all' languages in addition to 'best'
+- *dl*: Overwrite existing files on re-download and use atomic replace
+- *dl*: Handle cross-device moves when temp and downloads differ
+
+### Changes
+
+- *hybrid*: Replace log.info with console status and add JSONL debug logging
+- *dl*: Remove legacy multi-fetch loop for unmigrated services
+
 ## [3.0.0] - 2026-02-15
 
 ### Features
@@ -102,6 +127,10 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 ### Maintenance
 
 - *api*: Remove remote services
+
+### Chore
+
+- *release*: [**breaking**] Bump version to 3.0.0
 
 ## [2.3.0] - 2026-01-18
 
@@ -482,6 +511,7 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - Reorganize Planned Features section in README for clarity
 - Improve track selection logic in dl.py
 
+[3.1.0]: https://github.com/unshackle-dl/unshackle/compare/3.0.0..3.1.0
 [3.0.0]: https://github.com/unshackle-dl/unshackle/compare/2.3.0..3.0.0
 [2.3.0]: https://github.com/unshackle-dl/unshackle/compare/2.2.0..2.3.0
 [2.2.0]: https://github.com/unshackle-dl/unshackle/compare/2.1.0..2.2.0
