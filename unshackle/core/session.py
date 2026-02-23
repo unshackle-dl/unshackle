@@ -56,7 +56,7 @@ class MaxRetriesError(exceptions.RequestException):
 class CurlSession(Session):
     def __init__(
         self,
-        max_retries: int = 10,
+        max_retries: int = 5,
         backoff_factor: float = 0.2,
         max_backoff: float = 60.0,
         status_forcelist: list[int] | None = None,

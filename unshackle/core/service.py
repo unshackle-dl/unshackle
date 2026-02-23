@@ -222,7 +222,7 @@ class Service(metaclass=ABCMeta):
         session.mount(
             "https://",
             HTTPAdapter(
-                max_retries=Retry(total=15, backoff_factor=0.2, status_forcelist=[429, 500, 502, 503, 504]),
+                max_retries=Retry(total=5, backoff_factor=0.2, status_forcelist=[429, 500, 502, 503, 504]),
                 pool_block=True,
             ),
         )
