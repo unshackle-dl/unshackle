@@ -1274,78 +1274,8 @@ class dl:
 
             with console.status("Getting tracks...", spinner="dots"):
                 try:
-                    # Migrated services use track_request and handle multi-codec/range
-                    # internally via _get_tracks_for_variants(). Unmigrated services
-                    # still expose self.vcodec/self.range as strings and need the
-                    # multi-fetch loop here.
-                    is_single_range_service = isinstance(getattr(service, "range", None), str)
-                    is_single_vcodec_service = isinstance(getattr(service, "vcodec", None), str)
-                    uses_legacy_pattern = is_single_range_service or is_single_vcodec_service
-
-                    if uses_legacy_pattern:
-                        # Legacy path for unmigrated services
-                        non_hybrid_ranges = [r for r in range_ if r != Video.Range.HYBRID]
-                        hybrid_requested = Video.Range.HYBRID in range_
-                        needs_multi_range = (
-                            is_single_range_service
-                            and not no_video
-                            and (len(non_hybrid_ranges) > 1 or (hybrid_requested and non_hybrid_ranges))
-                        )
-                        needs_multi_vcodec = is_single_vcodec_service and not no_video and len(vcodec) > 1
-
-                        if needs_multi_range or needs_multi_vcodec:
-                            original_range = getattr(service, "range", None)
-                            original_vcodec = getattr(service, "vcodec", None)
-
-                            range_iterations = non_hybrid_ranges if needs_multi_range else [None]
-                            vcodec_iterations = vcodec if needs_multi_vcodec else [None]
-
-                            first = True
-
-                            if needs_multi_range and hybrid_requested:
-                                service.range = "HYBRID"
-                                self.log.info("Fetching HYBRID tracks...")
-                                title.tracks.add(service.get_tracks(title), warn_only=True)
-                                title.tracks.chapters = service.get_chapters(title)
-                                first = False
-
-                            for r_val, vc_val in product(range_iterations, vcodec_iterations):
-                                label_parts = []
-                                if r_val:
-                                    service.range = r_val.name
-                                    label_parts.append(r_val.name)
-                                if vc_val and is_single_vcodec_service and original_vcodec is not None:
-                                    if "." in str(original_vcodec):
-                                        service.vcodec = vc_val.value
-                                    elif str(original_vcodec) == str(original_vcodec).lower():
-                                        service.vcodec = vc_val.value.lower()
-                                    else:
-                                        service.vcodec = vc_val.value.replace(".", "").replace("-", "")
-                                    label_parts.append(vc_val.name)
-
-                                if label_parts:
-                                    self.log.info(f"Fetching {' '.join(label_parts)} tracks...")
-
-                                fetch_tracks = service.get_tracks(title)
-                                if first:
-                                    title.tracks.add(fetch_tracks, warn_only=True)
-                                    title.tracks.chapters = service.get_chapters(title)
-                                    first = False
-                                else:
-                                    for video in fetch_tracks.videos:
-                                        title.tracks.add(video, warn_only=True)
-
-                            if original_range is not None:
-                                service.range = original_range
-                            if original_vcodec is not None:
-                                service.vcodec = original_vcodec
-                        else:
-                            title.tracks.add(service.get_tracks(title), warn_only=True)
-                            title.tracks.chapters = service.get_chapters(title)
-                    else:
-                        # Migrated services handle multi-codec/range via track_request
-                        title.tracks.add(service.get_tracks(title), warn_only=True)
-                        title.tracks.chapters = service.get_chapters(title)
+                    title.tracks.add(service.get_tracks(title), warn_only=True)
+                    title.tracks.chapters = service.get_chapters(title)
                 except Exception as e:
                     if self.debug_logger:
                         self.debug_logger.log_error(
