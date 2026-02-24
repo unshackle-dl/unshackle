@@ -1861,11 +1861,6 @@ class dl:
                             )
                             self.cdm = quality_based_cdm
 
-            for track in title.tracks.subtitles:
-                if callable(track.OnSegmentFilter) and track.downloader.__name__ == "n_m3u8dl_re":
-                    from unshackle.core.downloaders import requests as requests_downloader
-                    track.downloader = requests_downloader
-
             dl_start_time = time.time()
 
             try:
