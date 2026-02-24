@@ -314,6 +314,8 @@ class Service(metaclass=ABCMeta):
         :return: The License response as Bytes. Return the raw response from the server 
             to avoid unnecessary processing.
         """
+        # Delegates license handling to the Widevine license method by default if a service-specific PlayReady implementation is not provided.
+        self.get_widevine_license(challenge=challenge, title=title, track=track)
 
     # Required Abstract functions
     # The following functions *must* be implemented by the Service.
