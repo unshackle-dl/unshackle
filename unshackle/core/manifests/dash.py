@@ -19,12 +19,12 @@ import requests
 from curl_cffi.requests import Session as CurlSession
 from langcodes import Language, tag_is_valid
 from lxml.etree import Element, ElementTree
-from pyplayready.cdm import Cdm as PlayReadyCdm
 from pyplayready.system.pssh import PSSH as PR_PSSH
 from pywidevine.cdm import Cdm as WidevineCdm
 from pywidevine.pssh import PSSH
 from requests import Session
 
+from unshackle.core.cdm.detect import is_playready_cdm
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.downloaders import requests as requests_downloader
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
@@ -477,7 +477,7 @@ class DASH:
         track.data["dash"]["segment_durations"] = segment_durations
 
         if not track.drm and init_data and isinstance(track, (Video, Audio)):
-            prefers_playready = isinstance(cdm, PlayReadyCdm) or (hasattr(cdm, "is_playready") and cdm.is_playready)
+            prefers_playready = is_playready_cdm(cdm)
             if prefers_playready:
                 try:
                     track.drm = [PlayReady.from_init_data(init_data)]

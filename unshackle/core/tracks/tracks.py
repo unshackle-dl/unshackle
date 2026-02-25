@@ -95,7 +95,7 @@ class Tracks:
 
         return rep
 
-    def tree(self, add_progress: bool = False) -> tuple[Tree, list[partial]]:
+    def tree(self, add_progress: bool = False) -> tuple[Tree, list[Callable[..., None]]]:
         all_tracks = [*list(self), *self.chapters, *self.attachments]
 
         progress_callables = []
@@ -121,7 +121,29 @@ class Tracks:
                         speed_estimate_period=10,
                     )
                     task = progress.add_task("", downloaded="-")
-                    progress_callables.append(partial(progress.update, task_id=task))
+                    state = {"total": 100.0}
+
+                    def update_track_progress(
+                        task_id: int = task,
+                        _state: dict[str, float] = state,
+                        _progress: Progress = progress,
+                        **kwargs,
+                    ) -> None:
+                        """
+                        Ensure terminal status states render as a fully completed bar.
+
+                        Some downloaders can report completed slightly below total
+                        before emitting the final "Downloaded" state.
+                        """
+                        if "total" in kwargs and kwargs["total"] is not None:
+                            _state["total"] = kwargs["total"]
+
+                        downloaded_state = kwargs.get("downloaded")
+                        if downloaded_state in {"Downloaded", "Decrypted", "[yellow]SKIPPED"}:
+                            kwargs["completed"] = _state["total"]
+                        _progress.update(task_id=task_id, **kwargs)
+
+                    progress_callables.append(update_track_progress)
                     track_table = Table.grid()
                     track_table.add_row(str(track)[6:], style="text2")
                     track_table.add_row(progress)
@@ -199,13 +221,15 @@ class Tracks:
             self.videos.sort(key=lambda x: not is_close_match(language, [x.language]))
 
     def sort_audio(self, by_language: Optional[Sequence[Union[str, Language]]] = None) -> None:
-        """Sort audio tracks by bitrate, descriptive, and optionally language."""
+        """Sort audio tracks by bitrate, Atmos, descriptive, and optionally language."""
         if not self.audio:
             return
-        # descriptive
-        self.audio.sort(key=lambda x: x.descriptive)
-        # bitrate (within each descriptive group)
+        # bitrate (highest first)
         self.audio.sort(key=lambda x: float(x.bitrate or 0.0), reverse=True)
+        # Atmos tracks first (prioritize over higher bitrate non-Atmos)
+        self.audio.sort(key=lambda x: not x.atmos)
+        # descriptive tracks last
+        self.audio.sort(key=lambda x: x.descriptive)
         # language
         for language in reversed(by_language or []):
             if str(language) in ("all", "best"):
@@ -254,23 +278,30 @@ class Tracks:
         self.subtitles = list(filter(x, self.subtitles))
 
     def select_hybrid(self, tracks, quality):
-        hdr10_tracks = [
-            v
-            for v in tracks
-            if v.range == Video.Range.HDR10 and (v.height in quality or int(v.width * 9 / 16) in quality)
-        ]
-        hdr10 = []
+        # Prefer HDR10+ over HDR10 as the base layer (preserves dynamic metadata)
+        base_ranges = (Video.Range.HDR10P, Video.Range.HDR10)
+        base_tracks = []
+        for range_type in base_ranges:
+            base_tracks = [
+                v
+                for v in tracks
+                if v.range == range_type and (v.height in quality or int(v.width * 9 / 16) in quality)
+            ]
+            if base_tracks:
+                break
+
+        base_selected = []
         for res in quality:
-            candidates = [v for v in hdr10_tracks if v.height == res or int(v.width * 9 / 16) == res]
+            candidates = [v for v in base_tracks if v.height == res or int(v.width * 9 / 16) == res]
             if candidates:
-                best = max(candidates, key=lambda v: v.bitrate)  # assumes .bitrate exists
-                hdr10.append(best)
+                best = max(candidates, key=lambda v: v.bitrate)
+                base_selected.append(best)
 
         dv_tracks = [v for v in tracks if v.range == Video.Range.DV]
         lowest_dv = min(dv_tracks, key=lambda v: v.height) if dv_tracks else None
 
         def select(x):
-            if x in hdr10:
+            if x in base_selected:
                 return True
             if lowest_dv and x is lowest_dv:
                 return True

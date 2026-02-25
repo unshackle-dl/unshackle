@@ -36,6 +36,8 @@ system where required.
 You can also specify specific servers to use per-region with the `server_map` key.
 Sometimes a specific server works best for a service than others, so hard-coding one for a day or two helps.
 
+You can also select servers by city using the format `--proxy nordvpn:us:seattle` or `--proxy nordvpn:ca:calgary`.
+
 For example,
 
 ```yaml
@@ -48,8 +50,8 @@ server_map:
 The username and password should NOT be your normal NordVPN Account Credentials.
 They should be the `Service credentials` which can be found on your Nord Account Dashboard.
 
-Once set, you can also specifically opt in to use a NordVPN proxy by specifying `--proxy=gb` or such.
-You can even set a specific server number this way, e.g., `--proxy=gb2366`.
+Once set, you can also specifically opt in to use a NordVPN proxy by specifying `--proxy nordvpn:gb` or such.
+You can even set a specific server number this way, e.g., `--proxy nordvpn:gb2366`.
 
 Note that `gb` is used instead of `uk` to be more consistent across regional systems.
 
@@ -57,6 +59,8 @@ Note that `gb` is used instead of `uk` to be more consistent across regional sys
 
 Enable Surfshark VPN proxy service using Surfshark Service credentials (not your login password).
 You may pin specific server IDs per region using `server_map`.
+
+You can also select servers by city using the format `--proxy surfsharkvpn:us:seattle`.
 
 ```yaml
 username: your_surfshark_service_username # https://my.surfshark.com/vpn/manual-setup/main/openvpn
@@ -67,16 +71,13 @@ server_map:
   au: 4621 # force AU server #4621
 ```
 
-### hola (dict)
+### hola
 
 Enable Hola VPN proxy service. Requires the `hola-proxy` binary to be installed and available in your PATH.
+No configuration is needed under `proxy_providers`. Hola is loaded automatically when the `hola-proxy` binary
+is detected.
 
-```yaml
-proxy_providers:
-  hola: {}
-```
-
-Once configured, use `--proxy hola:us` or similar to connect through Hola.
+Once available, use `--proxy hola:us` or similar to connect through Hola.
 
 ### windscribevpn (dict)
 
@@ -105,32 +106,28 @@ proxy_providers:
       gb: uk-london-001.totallyacdn.com   # Force specific UK server
 ```
 
-Once configured, use `--proxy windscribe:us` or `--proxy windscribe:gb` etc. to connect through Windscribe.
+Once configured, use `--proxy windscribevpn:us` or `--proxy windscribevpn:gb` etc. to connect through Windscribe.
 
-### Legacy nordvpn Configuration
+You can also select specific servers by number (e.g., `--proxy windscribevpn:sg007`) or filter by city
+(e.g., `--proxy windscribevpn:ca:toronto`).
 
-**Legacy configuration. Use `proxy_providers.nordvpn` instead.**
+### gluetun (dict)
 
-Set your NordVPN Service credentials with `username` and `password` keys to automate the use of NordVPN as a Proxy
-system where required.
-
-You can also specify specific servers to use per-region with the `server_map` key.
-Sometimes a specific server works best for a service than others, so hard-coding one for a day or two helps.
-
-For example,
+Docker-managed VPN proxy supporting 50+ VPN providers via Gluetun. See [GLUETUN.md](GLUETUN.md) for full
+configuration and usage details.
 
 ```yaml
-nordvpn:
-  username: zxqsR7C5CyGwmGb6KSvk8qsZ # example of the login format
-  password: wXVHmht22hhRKUEQ32PQVjCZ
-  server_map:
-    us: 12 # force US server #12 for US proxies
+proxy_providers:
+  gluetun:
+    providers:
+      windscribe:
+        vpn_type: openvpn
+        credentials:
+          username: "YOUR_OPENVPN_USERNAME"
+          password: "YOUR_OPENVPN_PASSWORD"
 ```
 
-The username and password should NOT be your normal NordVPN Account Credentials.
-They should be the `Service credentials` which can be found on your Nord Account Dashboard.
-
-Note that `gb` is used instead of `uk` to be more consistent across regional systems.
+Usage: `--proxy gluetun:windscribe:us`
 
 ---
 
@@ -141,14 +138,14 @@ All requests will use these unless changed explicitly or implicitly via a Server
 These should be sane defaults and anything that would only be useful for some Services should not
 be put here.
 
-Avoid headers like 'Accept-Encoding' as that would be a compatibility header that Python-requests will
+Avoid headers like 'Accept-Encoding' as that would be a compatibility header that curl_cffi will
 set for you.
 
 I recommend using,
 
 ```yaml
 Accept-Language: "en-US,en;q=0.8"
-User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.75 Safari/537.36"
+User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 ```
 
 ---

@@ -1,5 +1,6 @@
 import atexit
 import logging
+from datetime import datetime
 
 import click
 import urllib3
@@ -58,7 +59,7 @@ def main(version: bool, debug: bool) -> None:
                     r" ▀▀▀ ▀▀ █▪ ▀▀▀▀ ▀▀▀ · ▀  ▀ ·▀▀▀ ·▀  ▀.▀▀▀  ▀▀▀ ",
                     style="ascii.art",
                 ),
-                f"v [repr.number]{__version__}[/] - © 2025 - github.com/unshackle-dl/unshackle",
+                f"v [repr.number]{__version__}[/] - © 2025-{datetime.now().year} - github.com/unshackle-dl/unshackle",
             ),
             (1, 11, 1, 10),
             expand=True,

@@ -7,8 +7,11 @@ a WebAssembly module that runs locally via wasmtime.
 
 import base64
 import ctypes
+import hashlib
 import json
+import logging
 import re
+import sys
 import uuid
 from pathlib import Path
 from typing import Dict, Optional, Union
@@ -16,6 +19,8 @@ from typing import Dict, Optional, Union
 import wasmtime
 
 from unshackle.core import binaries
+
+logger = logging.getLogger(__name__)
 
 
 class MonaLisaCDM:
@@ -128,10 +133,27 @@ class MonaLisaCDM:
             }
 
             self.exports["___wasm_call_ctors"](self.store)
-            self.ctx = self.exports["_monalisa_context_alloc"](self.store)
+            ctx = self.exports["_monalisa_context_alloc"](self.store)
+            self.ctx = ctx
+
+            # _monalisa_context_alloc is expected to return a positive pointer/handle.
+            # Treat 0/negative/non-int-like values as allocation failure.
+            try:
+                ctx_int = int(ctx)
+            except Exception:
+                ctx_int = None
+
+            if ctx_int is None or ctx_int <= 0:
+                # Ensure we don't leave a partially-initialized instance around.
+                self.close()
+                raise RuntimeError(f"Failed to allocate MonaLisa context (ctx={ctx!r})")
             return 1
         except Exception as e:
-            raise RuntimeError(f"Failed to initialize session: {e}")
+            # Clean up partial state (e.g., store/memory/instance) before propagating failure.
+            self.close()
+            if isinstance(e, RuntimeError):
+                raise
+            raise RuntimeError(f"Failed to initialize session: {e}") from e
 
     def close(self, session_id: int = 1) -> None:
         """
@@ -188,7 +210,9 @@ class MonaLisaCDM:
         # Extract DCID from license to generate KID
         try:
             decoded = base64.b64decode(license_b64).decode("ascii", errors="ignore")
-        except Exception:
+        except Exception as e:
+            # Avoid logging raw license content; log only safe metadata.
+            logger.exception("Failed to base64-decode MonaLisa license (len=%s): %s", len(license_b64), e)
             decoded = ""
 
         m = re.search(
@@ -198,7 +222,14 @@ class MonaLisaCDM:
         if m:
             kid_bytes = uuid.uuid5(uuid.NAMESPACE_DNS, m.group()).bytes
         else:
-            kid_bytes = uuid.UUID(int=0).bytes
+            # No DCID in the license: derive a deterministic per-license KID to avoid collisions.
+            try:
+                license_raw = base64.b64decode(license_b64)
+            except Exception:
+                license_raw = license_b64.encode("utf-8", errors="replace")
+
+            license_hash = hashlib.sha256(license_raw).hexdigest()
+            kid_bytes = uuid.uuid5(uuid.NAMESPACE_DNS, f"monalisa:license:{license_hash}").bytes
 
         return {"kid": kid_bytes.hex(), "key": key_bytes.hex(), "type": "CONTENT"}
 
@@ -221,21 +252,29 @@ class MonaLisaCDM:
         stack = 0
         converted_args = []
 
-        for arg in args:
-            if isinstance(arg, str):
-                if stack == 0:
-                    stack = self.exports["stackSave"](self.store)
-                max_length = (len(arg) << 2) + 1
-                ptr = self.exports["stackAlloc"](self.store, max_length)
-                self._string_to_utf8(arg, ptr, max_length)
-                converted_args.append(ptr)
-            else:
-                converted_args.append(arg)
+        try:
+            for arg in args:
+                if isinstance(arg, str):
+                    if stack == 0:
+                        stack = self.exports["stackSave"](self.store)
+                    max_length = (len(arg) << 2) + 1
+                    ptr = self.exports["stackAlloc"](self.store, max_length)
+                    self._string_to_utf8(arg, ptr, max_length)
+                    converted_args.append(ptr)
+                else:
+                    converted_args.append(arg)
 
-        result = self.exports[func_name](self.store, *converted_args)
-
-        if stack != 0:
-            self.exports["stackRestore"](self.store, stack)
+            result = self.exports[func_name](self.store, *converted_args)
+        finally:
+            # stackAlloc pointers live on the WASM stack; always restore even if the call throws.
+            if stack != 0:
+                exc = sys.exc_info()[1]
+                try:
+                    self.exports["stackRestore"](self.store, stack)
+                except Exception:
+                    # If we're already failing, don't mask the original exception.
+                    if exc is None:
+                        raise
 
         if return_type is bool:
             return bool(result)
@@ -243,6 +282,13 @@ class MonaLisaCDM:
 
     def _write_i32(self, addr: int, value: int) -> None:
         """Write a 32-bit integer to WASM memory."""
+        if addr % 4 != 0:
+            raise ValueError(f"Unaligned i32 write: addr={addr} (must be 4-byte aligned)")
+
+        data_len = self.memory.data_len(self.store)
+        if addr < 0 or addr + 4 > data_len:
+            raise IndexError(f"i32 write out of bounds: addr={addr}, mem_len={data_len}")
+
         data = self.memory.data_ptr(self.store)
         mem_ptr = ctypes.cast(data, ctypes.POINTER(ctypes.c_int32))
         mem_ptr[addr >> 2] = value

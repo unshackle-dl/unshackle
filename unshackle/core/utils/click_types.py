@@ -44,6 +44,33 @@ class VideoCodecChoice(click.Choice):
         self.fail(f"'{value}' is not a valid video codec", param, ctx)
 
 
+class MultipleVideoCodecChoice(VideoCodecChoice):
+    """
+    A multiple-value variant of VideoCodecChoice that accepts comma-separated codecs.
+
+    Accepts both enum names and values, e.g.: ``-v hevc,avc`` or ``-v H.264,H.265``
+    """
+
+    name = "multiple_video_codec_choice"
+
+    def convert(
+        self, value: Any, param: Optional[click.Parameter] = None, ctx: Optional[click.Context] = None
+    ) -> list[Any]:
+        if not value:
+            return []
+        if isinstance(value, list):
+            values = value
+        elif isinstance(value, str):
+            values = value.split(",")
+        else:
+            self.fail(f"{value!r} is not a supported value.", param, ctx)
+
+        chosen_values: list[Any] = []
+        for v in values:
+            chosen_values.append(super().convert(v.strip(), param, ctx))
+        return chosen_values
+
+
 class SubtitleCodecChoice(click.Choice):
     """
     A custom Choice type for subtitle codecs that accepts both enum names, values, and common aliases.
