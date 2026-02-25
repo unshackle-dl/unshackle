@@ -286,7 +286,7 @@ class EXAMPLE(Service):
         """Return the Widevine service certificate from config, if available."""
         return self.config.get("certificate")
 
-    def get_playready_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> Optional[bytes]:
+    def get_playready_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> Optional[Union[bytes, str]]:
         """Retrieve a PlayReady license for a given track."""
 
         license_url = self.config["endpoints"].get("playready_license")
