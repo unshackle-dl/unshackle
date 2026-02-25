@@ -296,7 +296,7 @@ class Service(metaclass=ABCMeta):
             Decode the data, return as is to reduce unnecessary computations.
         """
 
-    def get_playready_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> Optional[bytes]:
+    def get_playready_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> Optional[Union[bytes, str]]:
         """
         Get a PlayReady License message by sending a License Request (challenge).
 
