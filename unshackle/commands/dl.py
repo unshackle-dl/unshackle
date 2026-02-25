@@ -1050,7 +1050,6 @@ class dl:
         if list_titles:
             return
 
-        # The logic for the 'select-titles' feature below was referenced and adapted from code provided by "A_n_g_e_l_a".
         # Enables manual selection for Series when --select-titles is set
         if select_titles and isinstance(titles, Series):
             console.print(Padding(Rule("[rule.text]Select Titles"), (1, 2)))
