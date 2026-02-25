@@ -47,7 +47,7 @@ Format: `gluetun:provider:region`
 
 **OpenVPN (Recommended)**: Most providers support OpenVPN with just `username` and `password` - the simplest setup.
 
-**WireGuard**: Requires private keys and varies by provider. See the [Gluetun Wiki](https://github.com/qdm12/gluetun-wiki/tree/main/setup/providers) for provider-specific requirements.
+**WireGuard**: Requires private keys and varies by provider. See the [Gluetun Wiki](https://github.com/qdm12/gluetun-wiki/tree/main/setup/providers) for provider-specific requirements. Note that `vpn_type` defaults to `wireguard` if not specified.
 
 ## Getting Your Credentials
 
@@ -104,6 +104,13 @@ providers:
     credentials:
       private_key: YOUR_PRIVATE_KEY
 
+# Surfshark/Mullvad/IVPN (private_key AND addresses required)
+  surfshark:
+    vpn_type: wireguard
+    credentials:
+      private_key: YOUR_PRIVATE_KEY
+      addresses: 10.x.x.x/32
+
 # Windscribe (all three credentials required)
   windscribe:
     vpn_type: wireguard
@@ -124,6 +131,46 @@ Most providers use `SERVER_COUNTRIES`, but some use `SERVER_REGIONS`:
 
 Unshackle handles this automatically - just use 2-letter country codes.
 
+### Per-Provider Server Mapping
+
+You can explicitly map region codes to country names, cities, or hostnames per provider:
+
+```yaml
+providers:
+  nordvpn:
+    vpn_type: openvpn
+    credentials:
+      username: YOUR_USERNAME
+      password: YOUR_PASSWORD
+    server_countries:
+      us: "United States"
+      uk: "United Kingdom"
+    server_cities:
+      us: "New York"
+    server_hostnames:
+      us: "us1239.nordvpn.com"
+```
+
+### Specific Server Selection
+
+Use `--proxy gluetun:nordvpn:us1239` for specific server selection. Unshackle builds the hostname
+automatically based on the provider (e.g., `us1239.nordvpn.com` for NordVPN).
+
+### Extra Environment Variables
+
+You can pass additional Gluetun environment variables per provider using `extra_env`:
+
+```yaml
+providers:
+  nordvpn:
+    vpn_type: openvpn
+    credentials:
+      username: YOUR_USERNAME
+      password: YOUR_PASSWORD
+    extra_env:
+      LOG_LEVEL: debug
+```
+
 ## Global Settings
 
 ```yaml
@@ -133,17 +180,19 @@ proxy_providers:
     base_port: 8888           # Starting port (default: 8888)
     auto_cleanup: true        # Remove containers on exit (default: true)
     verify_ip: true           # Verify IP matches region (default: true)
-    container_prefix: "unshackle-gluetun"
+    container_prefix: "unshackle-gluetun"  # Docker container name prefix (default: "unshackle-gluetun")
     auth_user: username       # Proxy auth (optional)
-    auth_password: password
+    auth_password: password   # Proxy auth (optional)
 ```
 
 ## Features
 
-- **Container Reuse**: First request takes 10-30s; subsequent requests are instant
-- **IP Verification**: Automatically verifies VPN exit IP matches requested region
+- **Container Reuse**: First request takes 10-30s; subsequent requests are instant. Containers from other sessions are also detected and reused.
+- **IP Verification**: Automatically verifies VPN exit IP matches requested region (configurable via `verify_ip`)
 - **Concurrent Sessions**: Multiple downloads share the same container
 - **Specific Servers**: Use `--proxy gluetun:nordvpn:us1239` for specific server selection
+- **Automatic Image Pull**: The Gluetun Docker image (`qmcgaw/gluetun:latest`) is pulled automatically on first use
+- **Secure Credentials**: Credentials are passed via temporary env files (mode 0600) rather than command-line arguments
 
 ## Container Management
 
@@ -174,8 +223,9 @@ docker logs unshackle-gluetun-nordvpn-us
 
 Common issues:
 - Invalid/missing credentials
-- Windscribe requires `preshared_key` (can be empty string)
+- Windscribe WireGuard requires `preshared_key` (can be empty string, but must be set in credentials)
 - VPN provider server issues
+- Container startup timeout (default 60 seconds)
 
 ## Resources
 

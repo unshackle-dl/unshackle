@@ -27,6 +27,7 @@ unshackle/PRDs/
 temp/
 logs/
 services/
+/.[^/]*/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

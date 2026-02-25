@@ -325,7 +325,7 @@ class EXAMPLE(Service):
             return response.json().get("license")
         except ValueError:
             return response.content
-
+          
     def get_playready_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> Optional[Union[bytes, str]]:
         license_url = self.config["endpoints"].get("playready_license")
         if not license_url:
