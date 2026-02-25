@@ -7,20 +7,6 @@ from rich.table import Table
 from rich.text import Text
 from unshackle.core.console import console
 
-"""
-Select module for unshackle
-Author: CodeName393
-==========================
-[Acknowledgment]
-The interactive selection concept and user interface design of this module 
-were inspired by the 'beaupy' library (MIT License).
-(https://github.com/petereon/beaupy)
-
-[Note]
-1. This code is an original implementation written from scratch and does not contain source code from the 'beaupy' library.
-2. Parts of the implementation in this module were developed with the assistance of AI.
-"""
-
 IS_WINDOWS = sys.platform == "win32"
 if IS_WINDOWS: import msvcrt
 
