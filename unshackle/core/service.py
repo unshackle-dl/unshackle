@@ -409,8 +409,8 @@ class Service(metaclass=ABCMeta):
         :param title: The current `Title` from get_titles that is being executed. This is provided in
             case it has data needed to be used, e.g. for a HTTP request.
         :param track: The current `Track` needing decryption. Provided for same reason as `title`.
-        :return: The License response as Bytes. Return the raw response from the server 
-            to avoid unnecessary processing.
+        :return: The License response as Bytes or a Base64 string. Don't Base64 Encode or
+            Decode the data, return as is to reduce unnecessary computations.
         """
         # Delegates license handling to the Widevine license method by default if a service-specific PlayReady implementation is not provided.
         return self.get_widevine_license(challenge=challenge, title=title, track=track)
