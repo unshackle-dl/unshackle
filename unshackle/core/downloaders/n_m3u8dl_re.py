@@ -191,6 +191,9 @@ def build_download_args(
         args["--skip-merge"] = skip_merge
     if ad_keyword:
         args["--ad-keyword"] = ad_keyword
+    # Disable segment count validation to work around N_m3u8DL-RE's Math.Ceiling
+    # bug in duration-based SegmentTemplate calculation (see nilaoda/N_m3u8DL-RE#108)
+    args["--check-segments-count"] = False
 
     key_args = []
     if content_keys:
