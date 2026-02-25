@@ -41,6 +41,29 @@ DSNP:
 default: chromecdm_903_l3
 ```
 
+You can also select CDMs based on video resolution using comparison operators (`>=`, `>`, `<=`, `<`)
+or exact match on the resolution height.
+
+For example,
+
+```yaml
+EXAMPLE:
+  "<=1080": generic_android_l3   # Use L3 for 1080p and below
+  ">1080": nexus_5_l1            # Use L1 for above 1080p (1440p, 2160p)
+  default: generic_android_l3    # Fallback if no quality match
+```
+
+You can mix profiles and quality thresholds in the same service:
+
+```yaml
+NETFLIX:
+  john: netflix_l3_profile       # Profile-based selection
+  "<=720": netflix_mobile_l3     # Quality-based selection
+  "1080": netflix_standard_l3    # Exact match for 1080p
+  ">=1440": netflix_premium_l1   # Quality-based selection
+  default: netflix_standard_l3   # Fallback
+```
+
 ---
 
 ## remote_cdm (list\[dict])
@@ -113,8 +136,10 @@ remote_cdm:
 - Support for both Widevine and PlayReady
 - Multiple security levels (L1, L2, L3, SL2000, SL3000)
 
-**Note:** The `device_type` and `security_level` fields are optional metadata. They don't affect API communication
-but are used for internal device identification.
+**Note:** The `device_type` field determines whether the CDM operates in PlayReady or Widevine mode.
+Setting `device_type: PLAYREADY` (or using `device_name: SL2` / `SL3`) activates PlayReady mode.
+The `security_level` field is auto-computed from `device_name` when not specified (e.g., SL2 defaults
+to 2000, SL3 to 3000, and Widevine devices default to 3). You can override these if needed.
 
 ### Custom API Remote CDM
 
@@ -171,7 +196,7 @@ remote_cdm:
       header_name: X-API-Key
       key: YOUR_SECRET_KEY
       custom_headers:
-        User-Agent: Unshackle/2.0.0
+        User-Agent: Unshackle/3.1.0
         X-Client-Version: "1.0"
 
     # Endpoint configuration
@@ -224,6 +249,7 @@ remote_cdm:
 - `header` - Custom header authentication
 - `basic` - HTTP Basic authentication
 - `body` - Credentials in request body
+- `query` - Authentication added to query string parameters
 
 ### Legacy PyWidevine Serve Format
 
@@ -263,6 +289,58 @@ decrypt_labs_api_key: "your_api_key_here"
 API key that can be referenced across multiple DecryptLabs CDM configurations. If a `remote_cdm` entry with
 `type: "decrypt_labs"` does not have a `secret` field specified, the global `decrypt_labs_api_key` will be
 used as a fallback.
+
+---
+
+## decryption (str|dict)
+
+Configure which decryption tool to use for DRM-protected content. Default: `shaka`.
+
+Supported values:
+- `shaka` - Shaka Packager (default)
+- `mp4decrypt` - Bento4 mp4decrypt
+
+You can specify a single decrypter for all services:
+
+```yaml
+decryption: shaka
+```
+
+Or configure per-service with a `DEFAULT` fallback:
+
+```yaml
+decryption:
+  DEFAULT: shaka
+  AMZN: mp4decrypt
+  NF: shaka
+```
+
+Service keys are case-insensitive (normalized to uppercase internally).
+
+---
+
+## MonaLisa DRM
+
+MonaLisa is a WASM-based DRM system that uses local key extraction and two-stage segment decryption.
+Unlike Widevine and PlayReady, MonaLisa does not use a challenge/response flow with a license server.
+Instead, the PSSH value (ticket) is provided directly by the service API, and keys are extracted
+locally via a WASM module.
+
+### Requirements
+
+- **ML-Worker binary**: Must be available on your system `PATH` (discovered via `binaries.ML_Worker`).
+  This is the binary that performs stage-1 decryption.
+
+### Decryption stages
+
+1. **ML-Worker binary**: Removes MonaLisa encryption layer (bbts -> ents). The key is passed via command-line argument.
+2. **AES-ECB decryption**: Final decryption with service-provided key.
+
+MonaLisa uses per-segment decryption during download (not post-download like Widevine/PlayReady),
+so segments are decrypted as they are downloaded.
+
+**Note:** MonaLisa is configured per-service rather than through global config options. Services
+that use MonaLisa handle ticket/key retrieval and CDM initialization internally.
 
 ---
 

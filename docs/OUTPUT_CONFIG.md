@@ -37,6 +37,19 @@ Set scene-style naming for titles. When `true` uses scene naming patterns (e.g.,
 
 ---
 
+## dash_naming (bool)
+
+Use dash-separated naming convention for output files. Default: `false`.
+
+---
+
+## unicode_filenames (bool)
+
+Allow Unicode characters in output filenames. When `false`, Unicode characters are transliterated
+to ASCII equivalents. Default: `false`.
+
+---
+
 ## series_year (bool)
 
 Whether to include the series year in series names for episodes and folders. Default: `true`.
@@ -67,6 +80,14 @@ Enable/disable tagging downloaded files with IMDB/TMDB/TVDB identifiers (when av
 
 - `set_title`
   Set the container title to `Show SXXEXX Episode Name` or `Movie (Year)`. Default: `true`
+- `merge_audio`
+  Merge all audio tracks into each output file. Default: `true`
+  - `true`: All selected audio tracks are muxed into one MKV per quality.
+  - `false`: Separate MKV per (quality, audio_codec) combination.
+    For example: `Title.1080p.AAC.mkv`, `Title.1080p.EC3.mkv`.
+
+  Note: The `--split-audio` CLI flag overrides this setting. When `--split-audio` is passed,
+  `merge_audio` is effectively set to `false` for that run.
 
 ---
 
@@ -114,8 +135,9 @@ Notes:
 For example,
 
 ```yaml
-downloads: "D:/Downloads/unshackle"
-temp: "D:/Temp/unshackle"
+directories:
+  downloads: "D:/Downloads/unshackle"
+  temp: "D:/Temp/unshackle"
 ```
 
 There are directories not listed that cannot be modified as they are crucial to the operation of unshackle.
