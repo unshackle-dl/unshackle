@@ -107,7 +107,6 @@ class Episode(Title):
                 return ""
             width = getattr(track, "width", track.height)
             resolution = min(width, track.height)
-
             try:
                 dar = getattr(track, "other_display_aspect_ratio", None) or []
                 if dar and dar[0]:
@@ -155,6 +154,9 @@ class Episode(Title):
                     number=self.number,
                     name=self.name if self.name and config.insert_episodename_into_filenames else "",
                 ).strip()
+
+        if getattr(config, "repack", False):
+            name += " REPACK"
 
         if primary_video_track:
             resolution_token = _get_resolution_token(primary_video_track)
