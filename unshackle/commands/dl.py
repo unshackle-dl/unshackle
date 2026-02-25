@@ -487,6 +487,14 @@ class dl:
         help="Max workers/threads to download with per-track. Default depends on the downloader.",
     )
     @click.option("--downloads", type=int, default=1, help="Amount of tracks to download concurrently.")
+    @click.option(
+        "-o",
+        "--output",
+        "output_dir",
+        type=Path,
+        default=None,
+        help="Override the output directory for this download, instead of the one in config.",
+    )
     @click.option("--no-cache", "no_cache", is_flag=True, default=False, help="Bypass title cache for this download.")
     @click.option(
         "--reset-cache", "reset_cache", is_flag=True, default=False, help="Clear title cache before fetching."
@@ -515,6 +523,7 @@ class dl:
         tmdb_id: Optional[int] = None,
         tmdb_name: bool = False,
         tmdb_year: bool = False,
+        output_dir: Optional[Path] = None,
         *_: Any,
         **__: Any,
     ):
@@ -560,6 +569,7 @@ class dl:
         self.tmdb_id = tmdb_id
         self.tmdb_name = tmdb_name
         self.tmdb_year = tmdb_year
+        self.output_dir = output_dir
 
         # Initialize debug logger with service name if debug logging is enabled
         if config.debug or logging.root.level == logging.DEBUG:
@@ -2254,7 +2264,7 @@ class dl:
                                 else:
                                     base_filename = str(title)
 
-                                sidecar_dir = config.directories.downloads
+                                sidecar_dir = self.output_dir or config.directories.downloads
                                 if not no_folder and isinstance(title, (Episode, Song)) and media_info:
                                     sidecar_dir /= title.get_filename(
                                         media_info, show_service=not no_source, folder=True
@@ -2308,7 +2318,7 @@ class dl:
 
                 if no_mux:
                     # Handle individual track files without muxing
-                    final_dir = config.directories.downloads
+                    final_dir = self.output_dir or config.directories.downloads
                     if not no_folder and isinstance(title, (Episode, Song)):
                         # Create folder based on title
                         # Use first available track for filename generation
@@ -2361,7 +2371,7 @@ class dl:
                     used_final_paths: set[Path] = set()
                     for muxed_path in muxed_paths:
                         media_info = MediaInfo.parse(muxed_path)
-                        final_dir = config.directories.downloads
+                        final_dir = self.output_dir or config.directories.downloads
                         final_filename = title.get_filename(media_info, show_service=not no_source)
                         audio_codec_suffix = muxed_audio_codecs.get(muxed_path)
 
