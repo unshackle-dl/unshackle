@@ -291,7 +291,7 @@ class Video(Track):
                             ],
                         )
                     ),
-                    self.edition,
+                    ", ".join(self.edition) if self.edition else None,
                 ],
             )
         )

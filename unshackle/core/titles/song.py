@@ -103,6 +103,11 @@ class Song(Title):
         if getattr(config, "repack", False):
             name += " REPACK"
 
+        if self.tracks:
+            first_track = next(iter(self.tracks), None)
+            if first_track and first_track.edition:
+                name += " " + " ".join(first_track.edition)
+
         # Service (use track source if available)
         if show_service:
             source_name = None

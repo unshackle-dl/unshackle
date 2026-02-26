@@ -66,8 +66,8 @@ class Track:
             raise TypeError(f"Expected name to be a {str}, not {type(name)}")
         if not isinstance(id_, (str, type(None))):
             raise TypeError(f"Expected id_ to be a {str}, not {type(id_)}")
-        if not isinstance(edition, (str, type(None))):
-            raise TypeError(f"Expected edition to be a {str}, not {type(edition)}")
+        if not isinstance(edition, (str, list, type(None))):
+            raise TypeError(f"Expected edition to be a {str}, {list}, or None, not {type(edition)}")
         if not isinstance(downloader, (Callable, type(None))):
             raise TypeError(f"Expected downloader to be a {Callable}, not {type(downloader)}")
         if not isinstance(downloader_args, (dict, type(None))):
@@ -103,7 +103,7 @@ class Track:
         self.needs_repack = needs_repack
         self.name = name
         self.drm = drm
-        self.edition: str = edition
+        self.edition: list[str] = [edition] if isinstance(edition, str) else (edition or [])
         self.downloader = downloader
         self.downloader_args = downloader_args
         self.from_file = from_file

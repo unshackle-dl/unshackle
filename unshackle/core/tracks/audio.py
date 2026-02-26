@@ -151,7 +151,7 @@ class Audio(Track):
                     ),
                     f"{self.bitrate // 1000} kb/s" if self.bitrate else None,
                     self.get_track_name(),
-                    self.edition,
+                    ", ".join(self.edition) if self.edition else None,
                 ],
             )
         )

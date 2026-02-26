@@ -158,6 +158,11 @@ class Episode(Title):
         if getattr(config, "repack", False):
             name += " REPACK"
 
+        if self.tracks:
+            first_track = next(iter(self.tracks), None)
+            if first_track and first_track.edition:
+                name += " " + " ".join(first_track.edition)
+
         if primary_video_track:
             resolution_token = _get_resolution_token(primary_video_track)
             if resolution_token:
