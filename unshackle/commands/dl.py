@@ -994,6 +994,10 @@ class dl:
             self.log.error("--require-subs and --s-lang cannot be used together")
             sys.exit(1)
 
+        if select_titles and wanted:
+            self.log.error("--select-titles and -w/--wanted cannot be used together")
+            sys.exit(1)
+
         # Check if dovi_tool is available when hybrid mode is requested
         if any(r == Video.Range.HYBRID for r in range_):
             from unshackle.core.binaries import DoviTool
@@ -1152,7 +1156,7 @@ class dl:
                     # Note: Headers are not mapped to actual title indices
 
                 # Format display name
-                display_name = ((t.name[:35].rstrip() + "…") if len(t.name) > 35 else t.name) if t.name else None
+                display_name = ((t.name[:30].rstrip() + "…") if len(t.name) > 30 else t.name) if t.name else None
 
                 # Apply indentation only for multiple seasons
                 prefix = " " if multiple_seasons else ""
@@ -1172,8 +1176,17 @@ class dl:
 
             # Execute selector with dependencies (headers select all children)
             selected_ui_idx = select_multiple(
-                selection_titles, minimal_count=1, page_size=8, return_indices=True, dependencies=dependencies
+                selection_titles,
+                minimal_count=1,
+                page_size=8,
+                return_indices=True,
+                dependencies=dependencies,
+                collapse_on_start=multiple_seasons
             )
+
+            if not selected_ui_idx:
+                console.print(Padding(":x: Selection Cancelled...", (0, 5, 1, 5)))
+                return
 
             selection_end = time.time()
             start_time += selection_end - selection_start
