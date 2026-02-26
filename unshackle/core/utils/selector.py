@@ -8,7 +8,8 @@ from rich.text import Text
 from unshackle.core.console import console
 
 IS_WINDOWS = sys.platform == "win32"
-if IS_WINDOWS: import msvcrt
+if IS_WINDOWS: 
+    import msvcrt
 
 class Selector:
     """
@@ -44,7 +45,7 @@ class Selector:
         self.page_size = page_size
         self.minimal_count = minimal_count
         self.dependencies = dependencies or {}
-        
+
         # Parent-Child mapping for quick lookup
         self.child_to_parent = {}
         for parent, children in self.dependencies.items():
@@ -83,7 +84,7 @@ class Selector:
         Constructs and returns the renderable object (Table + Info) for the current state.
         """
         visible_indices = self.get_visible_indices()
-        
+
         # Adjust scroll offset to ensure cursor is visible
         if self.cursor_index not in visible_indices:
             # Fallback if cursor got hidden (should be handled in move, but safety check)
@@ -98,13 +99,13 @@ class Selector:
         # Calculate logical page start/end based on VISIBLE items
         start_idx = self.scroll_offset
         end_idx = start_idx + self.page_size
-        
+
         # Dynamic scroll adjustment
         if cursor_visual_pos < start_idx:
             self.scroll_offset = cursor_visual_pos
         elif cursor_visual_pos >= end_idx:
             self.scroll_offset = cursor_visual_pos - self.page_size + 1
-        
+
         # Re-calc render range
         render_indices = visible_indices[self.scroll_offset : self.scroll_offset + self.page_size]
 
@@ -133,7 +134,8 @@ class Selector:
 
         total_visible = len(visible_indices)
         total_pages = (total_visible + self.page_size - 1) // self.page_size
-        if total_pages == 0: total_pages = 1
+        if total_pages == 0:
+            total_pages = 1
         current_page = (self.scroll_offset // self.page_size) + 1
 
         if self.dependencies:
@@ -174,16 +176,16 @@ class Selector:
             return
 
         total_visible = len(visible_indices)
-        
+
         # Calculate current logical page
         current_page = self.scroll_offset // self.page_size
         total_pages = (total_visible + self.page_size - 1) // self.page_size
-        
+
         new_page = current_page + delta
 
         if 0 <= new_page < total_pages:
             self.scroll_offset = new_page * self.page_size
-            
+
             # Move cursor to top of new page
             try:
                 # Calculate what visual index corresponds to the start of the new page
@@ -210,24 +212,16 @@ class Selector:
             self.selected_indices.update(target_indices)
         else:
             self.selected_indices.difference_update(target_indices)
-            
-    def toggle_expand(self, expand: bool = None):
+
+    def toggle_expand(self):
         """
         Expands or collapses the current header.
-        Args:
-            expand: True to expand, False to collapse, None to toggle.
         """
         if self.cursor_index in self.dependencies:
-            if expand is None:
-                if self.cursor_index in self.expanded_headers:
-                    self.expanded_headers.remove(self.cursor_index)
-                else:
-                    self.expanded_headers.add(self.cursor_index)
-            elif expand:
-                self.expanded_headers.add(self.cursor_index)
+            if self.cursor_index in self.expanded_headers:
+                self.expanded_headers.remove(self.cursor_index)
             else:
-                if self.cursor_index in self.expanded_headers:
-                    self.expanded_headers.remove(self.cursor_index)
+                self.expanded_headers.add(self.cursor_index)
 
     def toggle_expand_all(self):
         """
@@ -265,10 +259,14 @@ class Selector:
         if key == b"\xe0" or key == b"\x00":
             try:
                 key = msvcrt.getch()
-                if key == b"H": return "UP" # Arrow Up
-                if key == b"P": return "DOWN" # Arrow Down
-                if key == b"K": return "LEFT" # Arrow Left
-                if key == b"M": return "RIGHT" # Arrow Right
+                if key == b"H": # Arrow Up
+                    return "UP"
+                if key == b"P": # Arrow Down
+                    return "DOWN"
+                if key == b"K": # Arrow Left
+                    return "LEFT"
+                if key == b"M": # Arrow Right
+                    return "RIGHT"
             except Exception:
                 pass
 
@@ -277,16 +275,26 @@ class Selector:
         except Exception:
             return None
 
-        if char in ("\r", "\n"): return "ENTER"
-        if char == " ": return "SPACE"
-        if char in ("q", "Q"): return "QUIT"
-        if char in ("a", "A"): return "ALL"
-        if char == "e": return "EXPAND"
-        if char == "E": return "EXPAND_ALL"
-        if char in ("w", "W", "k", "K"): return "UP"
-        if char in ("s", "S", "j", "J"): return "DOWN"
-        if char in ("h", "H"): return "LEFT"
-        if char in ("d", "D", "l", "L"): return "RIGHT"
+        if char in ("\r", "\n"):
+            return "ENTER"
+        if char == " ":
+            return "SPACE"
+        if char in ("q", "Q"):
+            return "QUIT"
+        if char in ("a", "A"):
+            return "ALL"
+        if char == "e":
+            return "EXPAND"
+        if char == "E":
+            return "EXPAND_ALL"
+        if char in ("w", "W", "k", "K"):
+            return "UP"
+        if char in ("s", "S", "j", "J"):
+            return "DOWN"
+        if char in ("h", "H"):
+            return "LEFT"
+        if char in ("d", "D", "l", "L"):
+            return "RIGHT"
         return None
 
     def get_input_unix(self):
@@ -297,7 +305,7 @@ class Selector:
         char = click.getchar()
         # Ctrl+C
         if char == "\x03": return "CANCEL"
-        
+
         # ANSI Escape Sequences for Arrow Keys
         mapping = {
             "\x1b[A": "UP", # Escape + [ + A
@@ -306,31 +314,45 @@ class Selector:
             "\x1b[D": "LEFT", # Escape + [ + D
         }
         if char in mapping: return mapping[char]
-        
+
         # Handling manual Escape sequences
         if char == "\x1b": # ESC
             try:
                 next1 = click.getchar()
                 if next1 in ("[", "O"): # Sequence indicators
                     next2 = click.getchar()
-                    if next2 == "A": return "UP" # Arrow Up
-                    if next2 == "B": return "DOWN" # Arrow Down
-                    if next2 == "C": return "RIGHT" # Arrow Right
-                    if next2 == "D": return "LEFT" # Arrow Left
+                    if next2 == "A": # Arrow Up
+                        return "UP"
+                    if next2 == "B": # Arrow Down
+                        return "DOWN"
+                    if next2 == "C": # Arrow Right
+                        return "RIGHT"
+                    if next2 == "D": # Arrow Left
+                        return "LEFT"
                 return "CANCEL"
             except Exception:
                 return "CANCEL"
 
-        if char in ("\r", "\n"): return "ENTER"
-        if char == " ": return "SPACE"
-        if char in ("q", "Q"): return "QUIT"
-        if char in ("a", "A"): return "ALL"
-        if char == "e": return "EXPAND"
-        if char == "E": return "EXPAND_ALL"
-        if char in ("w", "W", "k", "K"): return "UP"
-        if char in ("s", "S", "j", "J"): return "DOWN"
-        if char in ("h", "H"): return "LEFT"
-        if char in ("d", "D", "l", "L"): return "RIGHT"
+        if char in ("\r", "\n"):
+            return "ENTER"
+        if char == " ":
+            return "SPACE"
+        if char in ("q", "Q"):
+            return "QUIT"
+        if char in ("a", "A"):
+            return "ALL"
+        if char == "e":
+            return "EXPAND"
+        if char == "E":
+            return "EXPAND_ALL"
+        if char in ("w", "W", "k", "K"):
+            return "UP"
+        if char in ("s", "S", "j", "J"):
+            return "DOWN"
+        if char in ("h", "H"):
+            return "LEFT"
+        if char in ("d", "D", "l", "L"):
+            return "RIGHT"
         return None
 
     def run(self) -> list[int]:
@@ -359,7 +381,7 @@ class Selector:
                     elif action == "RIGHT":
                         self.change_page(1)
                     elif action == "EXPAND":
-                        self.toggle_expand(expand=None)
+                        self.toggle_expand()
                     elif action == "EXPAND_ALL":
                         self.toggle_expand_all()
                     elif action == "SPACE":
@@ -373,7 +395,6 @@ class Selector:
                         raise KeyboardInterrupt
         except KeyboardInterrupt:
             return []
-
 
 def select_multiple(
     options: list[str],
