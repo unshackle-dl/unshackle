@@ -1734,6 +1734,7 @@ class dl:
                                         licence=partial(
                                             service.get_playready_license
                                             if (is_playready_cdm(self.cdm))
+                                            and hasattr(service, "get_playready_license")
                                             else service.get_widevine_license,
                                             title=title,
                                             track=track,
