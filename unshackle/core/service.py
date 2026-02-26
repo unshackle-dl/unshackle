@@ -394,6 +394,27 @@ class Service(metaclass=ABCMeta):
             Decode the data, return as is to reduce unnecessary computations.
         """
 
+    def get_playready_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> Optional[Union[bytes, str]]:
+        """
+        Get a PlayReady License message by sending a License Request (challenge).
+
+        This License message contains the encrypted Content Decryption Keys and will be
+        read by the CDM and decrypted.
+
+        This is a very important request to get correct. A bad, unexpected, or missing
+        value in the request can cause your key to be detected and promptly banned,
+        revoked, disabled, or downgraded.
+
+        :param challenge: The license challenge from the PlayReady CDM.
+        :param title: The current `Title` from get_titles that is being executed. This is provided in
+            case it has data needed to be used, e.g. for a HTTP request.
+        :param track: The current `Track` needing decryption. Provided for same reason as `title`.
+        :return: The License response as Bytes or a Base64 string. Don't Base64 Encode or
+            Decode the data, return as is to reduce unnecessary computations.
+        """
+        # Delegates license handling to the Widevine license method by default if a service-specific PlayReady implementation is not provided.
+        return self.get_widevine_license(challenge=challenge, title=title, track=track)
+
     # Required Abstract functions
     # The following functions *must* be implemented by the Service.
     # The functions will be executed in shown order.

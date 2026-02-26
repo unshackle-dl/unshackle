@@ -303,21 +303,6 @@ class EXAMPLE(Service):
     def get_widevine_service_certificate(self, **_: any) -> str:
         return self.config.get("certificate")
 
-    def get_playready_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> Optional[bytes]:
-        license_url = self.config["endpoints"].get("playready_license")
-        if not license_url:
-            raise ValueError("PlayReady license endpoint not configured")
-
-        response = self.session.post(
-            url=license_url,
-            data=challenge,
-            headers={
-                "user-agent": self.config["client"][self.device]["license_user_agent"],
-            },
-        )
-        response.raise_for_status()
-        return response.content
-
     def get_widevine_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> Optional[Union[bytes, str]]:
         license_url = self.license_data.get("url") or self.config["endpoints"].get("widevine_license")
         if not license_url:
@@ -340,3 +325,18 @@ class EXAMPLE(Service):
             return response.json().get("license")
         except ValueError:
             return response.content
+          
+    def get_playready_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> Optional[Union[bytes, str]]:
+        license_url = self.config["endpoints"].get("playready_license")
+        if not license_url:
+            raise ValueError("PlayReady license endpoint not configured")
+
+        response = self.session.post(
+            url=license_url,
+            data=challenge,
+            headers={
+                "user-agent": self.config["client"][self.device]["license_user_agent"],
+            },
+        )
+        response.raise_for_status()
+        return response.content
