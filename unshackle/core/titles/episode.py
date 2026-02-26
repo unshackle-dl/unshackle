@@ -105,22 +105,21 @@ class Episode(Title):
         def _get_resolution_token(track: Any) -> str:
             if not track or not getattr(track, "height", None):
                 return ""
-            resolution = track.height
+            width = getattr(track, "width", track.height)
+            resolution = min(width, track.height)
             try:
                 dar = getattr(track, "other_display_aspect_ratio", None) or []
                 if dar and dar[0]:
                     aspect_ratio = [int(float(plane)) for plane in str(dar[0]).split(":")]
                     if len(aspect_ratio) == 1:
                         aspect_ratio.append(1)
-                    if aspect_ratio[0] / aspect_ratio[1] not in (16 / 9, 4 / 3):
-                        resolution = int(track.width * (9 / 16))
+                    ratio = aspect_ratio[0] / aspect_ratio[1]
+                    if ratio not in (16 / 9, 4 / 3, 9 / 16, 3 / 4):
+                        resolution = int(max(width, track.height) * (9 / 16))
             except Exception:
                 pass
 
-            scan_suffix = "p"
-            scan_type = getattr(track, "scan_type", None)
-            if scan_type and str(scan_type).lower() == "interlaced":
-                scan_suffix = "i"
+            scan_suffix = "i" if str(getattr(track, "scan_type", "")).lower() == "interlaced" else "p"
             return f"{resolution}{scan_suffix}"
 
         # Title [Year] SXXEXX Name (or Title [Year] SXX if folder)
@@ -142,7 +141,7 @@ class Episode(Title):
                 name += f" - S{self.season:02}E{self.number:02}"
 
                 # Add episode name with dash separator
-                if self.name:
+                if self.name and config.insert_episodename_into_filenames:
                     name += f" - {self.name}"
 
                 name = name.strip()
@@ -153,7 +152,7 @@ class Episode(Title):
                     year=f" {self.year}" if self.year and config.series_year else "",
                     season=self.season,
                     number=self.number,
-                    name=self.name or "",
+                    name=self.name if self.name and config.insert_episodename_into_filenames else "",
                 ).strip()
 
         if getattr(config, "repack", False):
