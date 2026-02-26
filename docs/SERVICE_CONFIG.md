@@ -94,7 +94,7 @@ For example,
 tmdb_api_key: cf66bf18956kca5311ada3bebb84eb9a # Not a real key
 ```
 
-**Note**: Keep your API key secure and do not share it publicly. This key is used by the core/utils/tags.py module to fetch metadata from TMDB for proper file tagging.
+**Note**: Keep your API key secure and do not share it publicly. This key is used by the `core/providers/tmdb.py` metadata provider to fetch metadata from TMDB for proper file tagging and ID enrichment.
 
 ---
 
@@ -115,7 +115,7 @@ For example,
 simkl_client_id: "your_client_id_here"
 ```
 
-**Note**: While optional, having a SIMKL Client ID improves metadata lookup reliability. SIMKL serves as an alternative or fallback metadata source to TMDB. This is used by the `core/utils/tags.py` module.
+**Note**: While optional, having a SIMKL Client ID improves metadata lookup reliability. SIMKL serves as an alternative or fallback metadata source to TMDB. This is used by the `core/providers/simkl.py` metadata provider.
 
 ---
 

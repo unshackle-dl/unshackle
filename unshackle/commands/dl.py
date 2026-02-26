@@ -42,7 +42,7 @@ from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
 
-from unshackle.core import binaries
+from unshackle.core import binaries, providers
 from unshackle.core.cdm import CustomRemoteCDM, DecryptLabsRemoteCDM
 from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 from unshackle.core.config import config
@@ -430,6 +430,13 @@ class dl:
         help="Use the release year from TMDB for naming and tagging.",
     )
     @click.option(
+        "--imdb",
+        "imdb_id",
+        type=str,
+        default=None,
+        help="Use this IMDB ID (e.g. tt1375666) for tagging instead of automatic lookup.",
+    )
+    @click.option(
         "--sub-format",
         type=SubtitleCodecChoice(Subtitle.Codec),
         default=None,
@@ -523,6 +530,7 @@ class dl:
         tmdb_id: Optional[int] = None,
         tmdb_name: bool = False,
         tmdb_year: bool = False,
+        imdb_id: Optional[str] = None,
         output_dir: Optional[Path] = None,
         *_: Any,
         **__: Any,
@@ -569,6 +577,7 @@ class dl:
         self.tmdb_id = tmdb_id
         self.tmdb_name = tmdb_name
         self.tmdb_year = tmdb_year
+        self.imdb_id = imdb_id
         self.output_dir = output_dir
 
         # Initialize debug logger with service name if debug logging is enabled
@@ -595,10 +604,11 @@ class dl:
                         "tmdb_id": tmdb_id,
                         "tmdb_name": tmdb_name,
                         "tmdb_year": tmdb_year,
+                        "imdb_id": imdb_id,
                         "cli_params": {
                             k: v
                             for k, v in ctx.params.items()
-                            if k not in ["profile", "proxy", "tag", "tmdb_id", "tmdb_name", "tmdb_year"]
+                            if k not in ["profile", "proxy", "tag", "tmdb_id", "tmdb_name", "tmdb_year", "imdb_id"]
                         },
                     },
                 )
@@ -622,9 +632,7 @@ class dl:
                                 )
                                 version = (r.stdout or r.stderr or "").strip()
                             elif name in ("ffmpeg", "ffprobe"):
-                                r = subprocess.run(
-                                    [str(binary), "-version"], capture_output=True, text=True, timeout=5
-                                )
+                                r = subprocess.run([str(binary), "-version"], capture_output=True, text=True, timeout=5)
                                 version = (r.stdout or "").split("\n")[0].strip()
                             elif name == "mkvmerge":
                                 r = subprocess.run(
@@ -632,9 +640,7 @@ class dl:
                                 )
                                 version = (r.stdout or "").strip()
                             elif name == "mp4decrypt":
-                                r = subprocess.run(
-                                    [str(binary)], capture_output=True, text=True, timeout=5
-                                )
+                                r = subprocess.run([str(binary)], capture_output=True, text=True, timeout=5)
                                 output = (r.stdout or "") + (r.stderr or "")
                                 lines = [line.strip() for line in output.split("\n") if line.strip()]
                                 version = " | ".join(lines[:2]) if lines else None
@@ -1087,12 +1093,12 @@ class dl:
             tmdb_name_val = None
 
             if self.tmdb_year:
-                tmdb_year_val = tags.get_year(
+                tmdb_year_val = providers.get_year_by_id(
                     self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
                 )
 
             if self.tmdb_name:
-                tmdb_name_val = tags.get_title(
+                tmdb_name_val = providers.get_title_by_id(
                     self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
                 )
 
@@ -1214,15 +1220,20 @@ class dl:
 
             if isinstance(title, Episode) and not self.tmdb_searched:
                 kind = "tv"
+                tmdb_title: Optional[str] = None
                 if self.tmdb_id:
-                    tmdb_title = tags.get_title(
+                    tmdb_title = providers.get_title_by_id(
                         self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
                     )
                 else:
-                    self.tmdb_id, tmdb_title, self.search_source = tags.search_show_info(
+                    result = providers.search_metadata(
                         title.title, title.year, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
                     )
-                    if not (self.tmdb_id and tmdb_title and tags.fuzzy_match(tmdb_title, title.title)):
+                    if result and result.title and providers.fuzzy_match(result.title, title.title):
+                        self.tmdb_id = result.external_ids.tmdb_id
+                        tmdb_title = result.title
+                        self.search_source = result.source
+                    else:
                         self.tmdb_id = None
                 if list_ or list_titles:
                     if self.tmdb_id:
@@ -1237,22 +1248,25 @@ class dl:
                 self.tmdb_searched = True
 
             if isinstance(title, Movie) and (list_ or list_titles) and not self.tmdb_id:
-                movie_id, movie_title, _ = tags.search_show_info(
+                movie_result = providers.search_metadata(
                     title.name, title.year, "movie", title_cacher, cache_title_id, cache_region, cache_account_hash
                 )
-                if movie_id:
+                if movie_result and movie_result.external_ids.tmdb_id:
                     console.print(
                         Padding(
-                            f"Search -> {movie_title or '?'} [bright_black](ID {movie_id})",
+                            f"Search -> {movie_result.title or '?'} "
+                            f"[bright_black](ID {movie_result.external_ids.tmdb_id})",
                             (0, 5),
                         )
                     )
                 else:
                     console.print(Padding("Search -> [bright_black]No match found[/]", (0, 5)))
 
-            if self.tmdb_id and getattr(self, "search_source", None) != "simkl":
+            if self.tmdb_id and getattr(self, "search_source", None) not in ("simkl", "imdbapi"):
                 kind = "tv" if isinstance(title, Episode) else "movie"
-                tags.external_ids(self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash)
+                providers.fetch_external_ids(
+                    self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
+                )
 
             if slow and i != 0:
                 delay = random.randint(60, 120)
@@ -1460,11 +1474,13 @@ class dl:
                         if has_hybrid:
                             # Split tracks: hybrid candidates vs non-hybrid
                             hybrid_candidate_tracks = [
-                                v for v in title.tracks.videos
+                                v
+                                for v in title.tracks.videos
                                 if v.range in (Video.Range.HDR10, Video.Range.HDR10P, Video.Range.DV)
                             ]
                             non_hybrid_tracks = [
-                                v for v in title.tracks.videos
+                                v
+                                for v in title.tracks.videos
                                 if v.range not in (Video.Range.HDR10, Video.Range.HDR10P, Video.Range.DV)
                             ]
 
@@ -1475,11 +1491,9 @@ class dl:
                             if non_hybrid_ranges and non_hybrid_tracks:
                                 # Also filter non-hybrid tracks by resolution
                                 non_hybrid_selected = [
-                                    v for v in non_hybrid_tracks
-                                    if any(
-                                        v.height == res or int(v.width * (9 / 16)) == res
-                                        for res in quality
-                                    )
+                                    v
+                                    for v in non_hybrid_tracks
+                                    if any(v.height == res or int(v.width * (9 / 16)) == res for res in quality)
                                 ]
                                 title.tracks.videos = hybrid_selected + non_hybrid_selected
                             else:
@@ -1513,29 +1527,25 @@ class dl:
                     if has_hybrid:
                         # Apply hybrid selection for HYBRID tracks
                         hybrid_candidate_tracks = [
-                            v for v in title.tracks.videos
+                            v
+                            for v in title.tracks.videos
                             if v.range in (Video.Range.HDR10, Video.Range.HDR10P, Video.Range.DV)
                         ]
                         non_hybrid_tracks = [
-                            v for v in title.tracks.videos
+                            v
+                            for v in title.tracks.videos
                             if v.range not in (Video.Range.HDR10, Video.Range.HDR10P, Video.Range.DV)
                         ]
 
                         if not quality:
-                            best_resolution = max(
-                                (v.height for v in hybrid_candidate_tracks), default=None
-                            )
+                            best_resolution = max((v.height for v in hybrid_candidate_tracks), default=None)
                             if best_resolution:
-                                hybrid_filter = title.tracks.select_hybrid(
-                                    hybrid_candidate_tracks, [best_resolution]
-                                )
+                                hybrid_filter = title.tracks.select_hybrid(hybrid_candidate_tracks, [best_resolution])
                                 hybrid_selected = list(filter(hybrid_filter, hybrid_candidate_tracks))
                             else:
                                 hybrid_selected = []
                         else:
-                            hybrid_filter = title.tracks.select_hybrid(
-                                hybrid_candidate_tracks, quality
-                            )
+                            hybrid_filter = title.tracks.select_hybrid(hybrid_candidate_tracks, quality)
                             hybrid_selected = list(filter(hybrid_filter, hybrid_candidate_tracks))
 
                         # For non-hybrid ranges, apply Cartesian product selection
@@ -1588,8 +1598,7 @@ class dl:
                     # validate hybrid mode requirements
                     if any(r == Video.Range.HYBRID for r in range_):
                         base_tracks = [
-                            v for v in title.tracks.videos
-                            if v.range in (Video.Range.HDR10, Video.Range.HDR10P)
+                            v for v in title.tracks.videos if v.range in (Video.Range.HDR10, Video.Range.HDR10P)
                         ]
                         dv_tracks = [v for v in title.tracks.videos if v.range == Video.Range.DV]
 
@@ -1617,8 +1626,7 @@ class dl:
                             if best_available and other_ranges:
                                 self.log.warning(msg)
                                 self.log.warning(
-                                    f"Continuing with remaining range(s): "
-                                    f"{', '.join(r.name for r in other_ranges)}"
+                                    f"Continuing with remaining range(s): {', '.join(r.name for r in other_ranges)}"
                                 )
                                 range_ = other_ranges
                             else:
@@ -2150,8 +2158,7 @@ class dl:
                         # Group video tracks by resolution (prefer HDR10+ over HDR10 as base)
                         resolutions_processed = set()
                         base_tracks_list = [
-                            v for v in title.tracks.videos
-                            if v.range in (Video.Range.HDR10P, Video.Range.HDR10)
+                            v for v in title.tracks.videos if v.range in (Video.Range.HDR10P, Video.Range.HDR10)
                         ]
                         dv_tracks = [v for v in title.tracks.videos if v.range == Video.Range.DV]
 
@@ -2399,7 +2406,7 @@ class dl:
                                 final_path.unlink()
                             shutil.move(muxed_path, final_path)
                         used_final_paths.add(final_path)
-                        tags.tag_file(final_path, title, self.tmdb_id)
+                        tags.tag_file(final_path, title, self.tmdb_id, self.imdb_id)
 
                 title_dl_time = time_elapsed_since(dl_start_time)
                 console.print(
