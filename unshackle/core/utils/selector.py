@@ -11,6 +11,7 @@ IS_WINDOWS = sys.platform == "win32"
 if IS_WINDOWS:
     import msvcrt
 
+
 class Selector:
     """
     A custom interactive selector class using the Rich library.
@@ -25,7 +26,7 @@ class Selector:
         page_size: int = 8,
         minimal_count: int = 0,
         dependencies: dict[int, list[int]] = None,
-        collapse_on_start: bool = False
+        collapse_on_start: bool = False,
     ):
         """
         Initialize the Selector.
@@ -259,13 +260,13 @@ class Selector:
         if key == b"\xe0" or key == b"\x00":
             try:
                 key = msvcrt.getch()
-                if key == b"H": # Arrow Up
+                if key == b"H":  # Arrow Up
                     return "UP"
-                if key == b"P": # Arrow Down
+                if key == b"P":  # Arrow Down
                     return "DOWN"
-                if key == b"K": # Arrow Left
+                if key == b"K":  # Arrow Left
                     return "LEFT"
-                if key == b"M": # Arrow Right
+                if key == b"M":  # Arrow Right
                     return "RIGHT"
             except Exception:
                 pass
@@ -309,27 +310,27 @@ class Selector:
 
         # ANSI Escape Sequences for Arrow Keys
         mapping = {
-            "\x1b[A": "UP", # Escape + [ + A
-            "\x1b[B": "DOWN", # Escape + [ + B
-            "\x1b[C": "RIGHT", # Escape + [ + C
-            "\x1b[D": "LEFT", # Escape + [ + D
+            "\x1b[A": "UP",  # Escape + [ + A
+            "\x1b[B": "DOWN",  # Escape + [ + B
+            "\x1b[C": "RIGHT",  # Escape + [ + C
+            "\x1b[D": "LEFT",  # Escape + [ + D
         }
         if char in mapping:
             return mapping[char]
 
         # Handling manual Escape sequences
-        if char == "\x1b": # ESC
+        if char == "\x1b":  # ESC
             try:
                 next1 = click.getchar()
-                if next1 in ("[", "O"): # Sequence indicators
+                if next1 in ("[", "O"):  # Sequence indicators
                     next2 = click.getchar()
-                    if next2 == "A": # Arrow Up
+                    if next2 == "A":  # Arrow Up
                         return "UP"
-                    if next2 == "B": # Arrow Down
+                    if next2 == "B":  # Arrow Down
                         return "DOWN"
-                    if next2 == "C": # Arrow Right
+                    if next2 == "C":  # Arrow Right
                         return "RIGHT"
-                    if next2 == "D": # Arrow Left
+                    if next2 == "D":  # Arrow Left
                         return "LEFT"
                 return "CANCEL"
             except Exception:
@@ -397,6 +398,7 @@ class Selector:
                         raise KeyboardInterrupt
         except KeyboardInterrupt:
             return []
+
 
 def select_multiple(
     options: list[str],
