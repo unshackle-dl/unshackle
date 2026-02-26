@@ -8,7 +8,7 @@ from rich.text import Text
 from unshackle.core.console import console
 
 IS_WINDOWS = sys.platform == "win32"
-if IS_WINDOWS: 
+if IS_WINDOWS:
     import msvcrt
 
 class Selector:
@@ -304,7 +304,8 @@ class Selector:
         """
         char = click.getchar()
         # Ctrl+C
-        if char == "\x03": return "CANCEL"
+        if char == "\x03":
+            return "CANCEL"
 
         # ANSI Escape Sequences for Arrow Keys
         mapping = {
@@ -313,7 +314,8 @@ class Selector:
             "\x1b[C": "RIGHT", # Escape + [ + C
             "\x1b[D": "LEFT", # Escape + [ + D
         }
-        if char in mapping: return mapping[char]
+        if char in mapping:
+            return mapping[char]
 
         # Handling manual Escape sequences
         if char == "\x1b": # ESC
