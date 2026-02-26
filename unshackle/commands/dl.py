@@ -918,6 +918,10 @@ class dl:
             self.log.error("--require-subs and --s-lang cannot be used together")
             sys.exit(1)
 
+        if select_titles and wanted:
+            self.log.error("--select-titles and -w/--wanted cannot be used together")
+            sys.exit(1)
+
         # Check if dovi_tool is available when hybrid mode is requested
         if any(r == Video.Range.HYBRID for r in range_):
             from unshackle.core.binaries import DoviTool
@@ -1105,7 +1109,7 @@ class dl:
             )
 
             if not selected_ui_idx:
-                console.print(Padding(":x: Selected Cancelled...", (0, 5, 1, 5)))
+                console.print(Padding(":x: Selection Cancelled...", (0, 5, 1, 5)))
                 return
 
             selection_end = time.time()
@@ -1730,7 +1734,6 @@ class dl:
                                         licence=partial(
                                             service.get_playready_license
                                             if (is_playready_cdm(self.cdm))
-                                            and hasattr(service, "get_playready_license")
                                             else service.get_widevine_license,
                                             title=title,
                                             track=track,
