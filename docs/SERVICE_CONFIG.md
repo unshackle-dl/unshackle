@@ -4,12 +4,12 @@ This document covers service-specific configuration, authentication, and metadat
 
 ## services (dict)
 
-Configuration data for each Service. The Service will have the data within this section merged into the `config.yaml`
-before provided to the Service class.
+Configuration data for each Service. The Service will have the data within this section merged into the per-service
+`config.yaml` (located in the service's directory) before being provided to the Service class.
 
 Think of this config to be used for more sensitive configuration data, like user or device-specific API keys, IDs,
-device attributes, and so on. A `config.yaml` file is typically shared and not meant to be modified, so use this for
-any sensitive configuration data.
+device attributes, and so on. A per-service `config.yaml` file is typically shared and not meant to be modified,
+so use this for any sensitive configuration data.
 
 The Key is the Service Tag, but can take any arbitrary form for its value. It's expected to begin as either a list or
 a dictionary.
@@ -21,6 +21,29 @@ NOW:
   client:
     auth_scheme: MESSO
     # ... more sensitive data
+```
+
+### Per-Service Configuration Overrides
+
+You can override many global configuration options on a per-service basis by nesting them under the
+service tag in the `services` section. Supported override keys include: `dl`, `aria2c`, `n_m3u8dl_re`,
+`curl_impersonate`, `subtitle`, `muxing`, `headers`, and more.
+
+Overrides are merged with global config (not replaced) -- only specified keys are overridden, others
+use global defaults. CLI arguments always take priority over service-specific config.
+
+For example,
+
+```yaml
+services:
+  RATE_LIMITED_SERVICE:
+    dl:
+      downloads: 2       # Limit concurrent track downloads
+      workers: 4          # Reduce workers to avoid rate limits
+    n_m3u8dl_re:
+      thread_count: 4     # Very low thread count
+    aria2c:
+      max_concurrent_downloads: 1
 ```
 
 ---
@@ -71,7 +94,7 @@ For example,
 tmdb_api_key: cf66bf18956kca5311ada3bebb84eb9a # Not a real key
 ```
 
-**Note**: Keep your API key secure and do not share it publicly. This key is used by the core/utils/tags.py module to fetch metadata from TMDB for proper file tagging.
+**Note**: Keep your API key secure and do not share it publicly. This key is used by the `core/providers/tmdb.py` metadata provider to fetch metadata from TMDB for proper file tagging and ID enrichment.
 
 ---
 
@@ -92,7 +115,7 @@ For example,
 simkl_client_id: "your_client_id_here"
 ```
 
-**Note**: While optional, having a SIMKL Client ID improves metadata lookup reliability. SIMKL serves as an alternative or fallback metadata source to TMDB. This is used by the `core/utils/tags.py` module.
+**Note**: While optional, having a SIMKL Client ID improves metadata lookup reliability. SIMKL serves as an alternative or fallback metadata source to TMDB. This is used by the `core/providers/simkl.py` metadata provider.
 
 ---
 
@@ -112,5 +135,30 @@ Cache duration in seconds for title metadata. Default: `1800` (30 minutes).
 
 Maximum retention time in seconds for serving slightly stale cached title metadata when API calls fail.
 Default: `86400` (24 hours). Effective retention is `min(title_cache_time + grace, title_cache_max_retention)`.
+
+---
+
+## debug (bool)
+
+Enable structured JSON debug logging for troubleshooting and service development. Default: `false`.
+
+When enabled (via config or the `--debug` CLI flag):
+- Creates JSON Lines (`.jsonl`) log files with complete debugging context
+- Logs: session info, CLI params, service config, CDM details, authentication, titles, tracks metadata,
+  DRM operations, vault queries, errors with stack traces
+- File location: `logs/unshackle_debug_{service}_{timestamp}.jsonl`
+
+---
+
+## debug_keys (bool)
+
+Log decryption keys in debug logs. Default: `false`.
+
+When `true`, actual content encryption keys (CEKs) are included in debug log output. Useful for
+debugging key retrieval and decryption issues.
+
+**Security note:** Passwords, tokens, cookies, and session tokens are always redacted regardless
+of this setting. Only content keys (`content_key`, `key` fields) are affected. Key IDs (`kid`),
+key counts, and other metadata are always logged.
 
 ---

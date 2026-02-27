@@ -30,23 +30,116 @@ filenames:
 
 ---
 
-## scene_naming (bool)
+## output_template (dict)
 
-Set scene-style naming for titles. When `true` uses scene naming patterns (e.g., `Prime.Suspect.S07E01...`), when
-`false` uses a more human-readable style (e.g., `Prime Suspect S07E01 ...`). Default: `true`.
+Configure custom output filename templates for movies, series, and songs.
+This is **required** in your `unshackle.yaml` — a warning is shown if not configured.
+
+Available variables: `{title}`, `{year}`, `{season}`, `{episode}`, `{season_episode}`, `{episode_name}`,
+`{quality}`, `{resolution}`, `{source}`, `{audio}`, `{audio_channels}`, `{audio_full}`,
+`{video}`, `{hdr}`, `{hfr}`, `{atmos}`, `{dual}`, `{multi}`, `{tag}`, `{edition}`, `{repack}`,
+`{lang_tag}`
+
+Add `?` suffix to make a variable conditional (omitted when empty): `{year?}`, `{hdr?}`, `{repack?}`
+
+```yaml
+output_template:
+  # Scene-style (dot-separated)
+  movies: '{title}.{year}.{repack?}.{edition?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}'
+  series: '{title}.{year?}.{season_episode}.{episode_name?}.{repack?}.{edition?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}'
+  songs: '{track_number}.{title}.{repack?}.{edition?}.{source?}.WEB-DL.{audio_full}.{atmos?}-{tag}'
+
+  # Plex-friendly (space-separated)
+  # movies: '{title} ({year}) {quality}'
+  # series: '{title} {season_episode} {episode_name?}'
+  # songs: '{track_number}. {title}'
+```
+
+Example outputs:
+- Scene movies: `The.Matrix.1999.1080p.NF.WEB-DL.DDP5.1.H.264-EXAMPLE`
+- Scene movies (REPACK): `Dune.2021.REPACK.2160p.HBO.WEB-DL.DDP5.1.H.265-EXAMPLE`
+- Scene series: `Breaking.Bad.2008.S01E01.Pilot.1080p.NF.WEB-DL.DDP5.1.H.264-EXAMPLE`
+- Plex movies: `The Matrix (1999) 1080p`
 
 ---
 
-## series_year (bool)
+---
 
-Whether to include the series year in series names for episodes and folders. Default: `true`.
+## language_tags (dict)
+
+Automatically adds language-based identifiers (e.g., `DANiSH`, `NORDiC`, `DKsubs`) to output filenames
+based on audio and subtitle track languages. Use `{lang_tag?}` in your `output_template` to place the tag.
+
+Rules are evaluated in order; the first matching rule wins. All conditions within a single rule
+must match (AND logic). If no rules match, `{lang_tag?}` is cleanly removed from the filename.
+
+### Conditions
+
+| Condition | Type | Description |
+|-----------|------|-------------|
+| `audio` | string | Matches if any selected audio track has this language |
+| `subs_contain` | string | Matches if any selected subtitle has this language |
+| `subs_contain_all` | list | Matches if subtitles include ALL listed languages |
+
+Language matching uses fuzzy matching (e.g., `en` matches `en-US`, `en-GB`).
+
+### Example: Nordic tagging
+
+```yaml
+language_tags:
+  rules:
+    - audio: da
+      tag: DANiSH
+    - audio: sv
+      tag: SWEDiSH
+    - audio: nb
+      tag: NORWEGiAN
+    - audio: en
+      subs_contain_all: [da, sv, nb]
+      tag: NORDiC
+    - audio: en
+      subs_contain: da
+      tag: DKsubs
+
+output_template:
+  movies: '{title}.{year?}.{lang_tag?}.{quality}.{source}.WEB-DL.{audio_full}.{video}-{tag}'
+```
+
+Example outputs:
+- Danish audio: `Show.S01E01.DANiSH.1080p.NF.WEB-DL.DDP5.1.H.264-TAG`
+- English audio + multiple Nordic subs: `Show.S01E01.NORDiC.1080p.NF.WEB-DL.DDP5.1.H.264-TAG`
+- English audio + Danish subs only: `Show.S01E01.DKsubs.1080p.NF.WEB-DL.DDP5.1.H.264-TAG`
+- No matching languages: `Show.S01E01.1080p.NF.WEB-DL.DDP5.1.H.264-TAG`
+
+### Example: Other regional tags
+
+```yaml
+language_tags:
+  rules:
+    - audio: nl
+      tag: DUTCH
+    - audio: de
+      tag: GERMAN
+    - audio: fr
+      subs_contain: en
+      tag: ENGFR
+    - audio: fr
+      tag: FRENCH
+```
+
+---
+
+## unicode_filenames (bool)
+
+Allow Unicode characters in output filenames. When `false`, Unicode characters are transliterated
+to ASCII equivalents. Default: `false`.
 
 ---
 
 ## tag (str)
 
 Group or Username to postfix to the end of download filenames following a dash.
-Only applies when `scene_naming` is enabled.
+Use `{tag}` in your output template to include it.
 For example, `tag: "J0HN"` will have `-J0HN` at the end of all download filenames.
 
 ---
@@ -67,6 +160,14 @@ Enable/disable tagging downloaded files with IMDB/TMDB/TVDB identifiers (when av
 
 - `set_title`
   Set the container title to `Show SXXEXX Episode Name` or `Movie (Year)`. Default: `true`
+- `merge_audio`
+  Merge all audio tracks into each output file. Default: `true`
+  - `true`: All selected audio tracks are muxed into one MKV per quality.
+  - `false`: Separate MKV per (quality, audio_codec) combination.
+    For example: `Title.1080p.AAC.mkv`, `Title.1080p.EC3.mkv`.
+
+  Note: The `--split-audio` CLI flag overrides this setting. When `--split-audio` is passed,
+  `merge_audio` is effectively set to `false` for that run.
 
 ---
 
@@ -114,8 +215,9 @@ Notes:
 For example,
 
 ```yaml
-downloads: "D:/Downloads/unshackle"
-temp: "D:/Temp/unshackle"
+directories:
+  downloads: "D:/Downloads/unshackle"
+  temp: "D:/Temp/unshackle"
 ```
 
 There are directories not listed that cannot be modified as they are crucial to the operation of unshackle.

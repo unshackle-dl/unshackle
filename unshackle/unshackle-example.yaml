@@ -17,15 +17,66 @@ tag_imdb_tmdb: true
 # Set terminal background color (custom option not in CONFIG.md)
 set_terminal_bg: false
 
-# Set file naming convention
-#  true for style - Prime.Suspect.S07E01.The.Final.Act.Part.One.1080p.ITV.WEB-DL.AAC2.0.H.264
-#  false for style - Prime Suspect S07E01 The Final Act - Part One
-scene_naming: true
+# Custom output templates for filenames
+# Configure output_template in your unshackle.yaml to control filename format.
+# If not configured, default scene-style templates are used and a warning is shown.
+# Available variables: {title}, {year}, {season}, {episode}, {season_episode}, {episode_name},
+#                     {quality}, {resolution}, {source}, {audio}, {audio_channels}, {audio_full},
+#                     {video}, {hdr}, {hfr}, {atmos}, {dual}, {multi}, {tag}, {edition}, {repack},
+#                     {lang_tag}
+# Conditional variables (included only if present): Add ? suffix like {year?}, {episode_name?}, {hdr?}
+# Customize the templates below:
+#
+# Example outputs:
+# Scene movies: 'The.Matrix.1999.1080p.SERVICE.WEB-DL.DDP5.1.H.264-EXAMPLE'
+# Scene movies (HDR): 'Dune.2021.2160p.SERVICE.WEB-DL.DDP5.1.HDR10.H.265-EXAMPLE'
+# Scene movies (REPACK): 'Dune.2021.REPACK.2160p.SERVICE.WEB-DL.DDP5.1.H.265-EXAMPLE'
+# Scene series: 'Breaking.Bad.2008.S01E01.Pilot.1080p.SERVICE.WEB-DL.DDP5.1.H.264-EXAMPLE'
+# Plex movies: 'The Matrix (1999) 1080p'
+# Plex series: 'Breaking Bad S01E01 Pilot'
+output_template:
+  # Scene-style naming (dot-separated)
+  movies: '{title}.{year}.{repack?}.{edition?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}'
+  series: '{title}.{year?}.{season_episode}.{episode_name?}.{repack?}.{edition?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}'
+  songs: '{track_number}.{title}.{repack?}.{edition?}.{source?}.WEB-DL.{audio_full}.{atmos?}-{tag}'
+  #
+  # Plex-friendly naming (space-separated, clean format)
+  # movies: '{title} ({year}) {quality}'
+  # series: '{title} {season_episode} {episode_name?}'
+  # songs: '{track_number}. {title}'
+  #
+  # Minimal naming (basic info only)
+  # movies: '{title}.{year}.{quality}'
+  # series: '{title}.{season_episode}.{episode_name?}'
+  #
+  # Custom scene-style with specific elements
+  # movies: '{title}.{year}.{quality}.{hdr?}.{source}.WEB-DL.{audio_full}.{video}-{tag}'
+  # series: '{title}.{year?}.{season_episode}.{episode_name?}.{quality}.{hdr?}.{source}.WEB-DL.{audio_full}.{atmos?}.{video}-{tag}'
 
-# Whether to include the year in series names for episodes and folders (default: true)
-#  true for style - Show Name (2023) S01E01 Episode Name
-#  false for style - Show Name S01E01 Episode Name
-series_year: true
+# Language-based tagging for output filenames
+# Automatically adds language identifiers (e.g., DANiSH, NORDiC, DKsubs) based on
+# audio and subtitle track languages. Rules are evaluated in order; first match wins.
+# Use {lang_tag?} in your output_template to place the tag in the filename.
+#
+# Conditions (all conditions in a rule must match):
+#   audio: <lang>                  - any audio track matches this language
+#   subs_contain: <lang>           - any subtitle matches this language
+#   subs_contain_all: [lang, ...]  - subtitles include ALL listed languages
+#
+# language_tags:
+#   rules:
+#     - audio: da
+#       tag: DANiSH
+#     - audio: sv
+#       tag: SWEDiSH
+#     - audio: nb
+#       tag: NORWEGiAN
+#     - audio: en
+#       subs_contain_all: [da, sv, nb]
+#       tag: NORDiC
+#     - audio: en
+#       subs_contain: da
+#       tag: DKsubs
 
 # Check for updates from GitHub repository on startup (default: true)
 update_checks: true
@@ -38,6 +89,9 @@ update_check_interval: 24
 title_cache_enabled: true # Enable/disable title caching globally (default: true)
 title_cache_time: 1800 # Cache duration in seconds (default: 1800 = 30 minutes)
 title_cache_max_retention: 86400 # Maximum cache retention for fallback when API fails (default: 86400 = 24 hours)
+
+# Filename Configuration
+unicode_filenames: false # optionally replace non-ASCII characters with ASCII equivalents
 
 # Debug logging configuration
 # Comprehensive JSON-based debug logging for troubleshooting and service development

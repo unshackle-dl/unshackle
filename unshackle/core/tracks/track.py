@@ -24,7 +24,7 @@ from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY
 from unshackle.core.downloaders import aria2c, curl_impersonate, n_m3u8dl_re, requests
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
 from unshackle.core.events import events
-from unshackle.core.utilities import get_boxes, get_extension, try_ensure_utf8
+from unshackle.core.utilities import get_boxes, try_ensure_utf8
 from unshackle.core.utils.subprocess import ffprobe
 
 
@@ -66,8 +66,8 @@ class Track:
             raise TypeError(f"Expected name to be a {str}, not {type(name)}")
         if not isinstance(id_, (str, type(None))):
             raise TypeError(f"Expected id_ to be a {str}, not {type(id_)}")
-        if not isinstance(edition, (str, type(None))):
-            raise TypeError(f"Expected edition to be a {str}, not {type(edition)}")
+        if not isinstance(edition, (str, list, type(None))):
+            raise TypeError(f"Expected edition to be a {str}, {list}, or None, not {type(edition)}")
         if not isinstance(downloader, (Callable, type(None))):
             raise TypeError(f"Expected downloader to be a {Callable}, not {type(downloader)}")
         if not isinstance(downloader_args, (dict, type(None))):
@@ -103,7 +103,7 @@ class Track:
         self.needs_repack = needs_repack
         self.name = name
         self.drm = drm
-        self.edition: str = edition
+        self.edition: list[str] = [edition] if isinstance(edition, str) else (edition or [])
         self.downloader = downloader
         self.downloader_args = downloader_args
         self.from_file = from_file
@@ -210,23 +210,12 @@ class Track:
         save_path = config.directories.temp / f"{track_type}_{self.id}.mp4"
         if track_type == "Subtitle":
             save_path = save_path.with_suffix(f".{self.codec.extension}")
-            # n_m3u8dl_re doesn't support directly downloading subtitles from URLs
-            # or when the subtitle has a direct file extension
-            if self.downloader.__name__ == "n_m3u8dl_re" and (
-                self.descriptor == self.Descriptor.URL
-                or get_extension(self.url)
-                in {
-                    ".srt",
-                    ".vtt",
-                    ".ttml",
-                    ".ssa",
-                    ".ass",
-                    ".stpp",
-                    ".wvtt",
-                    ".xml",
-                }
-            ):
-                self.downloader = requests
+
+        if self.downloader.__name__ == "n_m3u8dl_re" and (
+            self.descriptor == self.Descriptor.URL
+            or track_type in ("Subtitle", "Attachment")
+        ):
+            self.downloader = requests
 
         if self.descriptor != self.Descriptor.URL:
             save_dir = save_path.with_name(save_path.name + "_segments")

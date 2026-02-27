@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+import warnings
 from pathlib import Path
 from typing import Any, Optional
 
@@ -94,9 +96,26 @@ class Config:
         self.decrypt_labs_api_key: str = kwargs.get("decrypt_labs_api_key") or ""
         self.update_checks: bool = kwargs.get("update_checks", True)
         self.update_check_interval: int = kwargs.get("update_check_interval", 24)
-        self.scene_naming: bool = kwargs.get("scene_naming", True)
-        self.dash_naming: bool = kwargs.get("dash_naming", False)
-        self.series_year: bool = kwargs.get("series_year", True)
+
+        self.language_tags: dict = kwargs.get("language_tags") or {}
+        self.output_template: dict = kwargs.get("output_template") or {}
+
+        if kwargs.get("scene_naming") is not None:
+            raise SystemExit(
+                "ERROR: The 'scene_naming' option has been removed.\n"
+                "Please configure 'output_template' in your unshackle.yaml instead.\n"
+                "See unshackle-example.yaml for examples."
+            )
+
+        if not self.output_template:
+            raise SystemExit(
+                "ERROR: No 'output_template' configured in your unshackle.yaml.\n"
+                "Please add an 'output_template' section with movies, series, and songs templates.\n"
+                "See unshackle-example.yaml for examples."
+            )
+
+        self._validate_output_templates()
+
         self.unicode_filenames: bool = kwargs.get("unicode_filenames", False)
 
         self.title_cache_time: int = kwargs.get("title_cache_time", 1800)  # 30 minutes default
@@ -105,6 +124,78 @@ class Config:
 
         self.debug: bool = kwargs.get("debug", False)
         self.debug_keys: bool = kwargs.get("debug_keys", False)
+
+    def _validate_output_templates(self) -> None:
+        """Validate output template configurations and warn about potential issues."""
+        if not self.output_template:
+            return
+
+        valid_variables = {
+            "title",
+            "year",
+            "season",
+            "episode",
+            "season_episode",
+            "episode_name",
+            "quality",
+            "resolution",
+            "source",
+            "tag",
+            "track_number",
+            "artist",
+            "album",
+            "disc",
+            "audio",
+            "audio_channels",
+            "audio_full",
+            "atmos",
+            "dual",
+            "multi",
+            "video",
+            "hdr",
+            "hfr",
+            "edition",
+            "repack",
+            "lang_tag",
+        }
+
+        unsafe_chars = r'[<>:"/\\|?*]'
+
+        for template_type, template_str in self.output_template.items():
+            if not isinstance(template_str, str):
+                warnings.warn(f"Template '{template_type}' must be a string, got {type(template_str).__name__}")
+                continue
+
+            variables = re.findall(r"\{([^}]+)\}", template_str)
+
+            for var in variables:
+                var_clean = var.rstrip("?")
+                if var_clean not in valid_variables:
+                    warnings.warn(f"Unknown template variable '{var}' in {template_type} template")
+
+            test_template = re.sub(r"\{[^}]+\}", "TEST", template_str)
+            if re.search(unsafe_chars, test_template):
+                warnings.warn(f"Template '{template_type}' may contain filesystem-unsafe characters")
+
+            if not template_str.strip():
+                warnings.warn(f"Template '{template_type}' is empty")
+
+    def get_template_separator(self, template_type: str = "movies") -> str:
+        """Get the filename separator for the given template type.
+
+        Analyzes the active template to determine whether it uses dots or spaces
+        between variables. Falls back to dot separator (scene-style) by default.
+
+        Args:
+            template_type: One of "movies", "series", or "songs".
+        """
+        template = self.output_template[template_type]
+        between_vars = re.findall(r"\}([^{]*)\{", template)
+        separator_text = "".join(between_vars)
+        dot_count = separator_text.count(".")
+        space_count = separator_text.count(" ")
+
+        return " " if space_count > dot_count else "."
 
     @classmethod
     def from_yaml(cls, path: Path) -> Config:

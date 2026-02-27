@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import logging
 import math
+import os
 import random
 import re
 import shutil
@@ -41,7 +42,7 @@ from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
 
-from unshackle.core import binaries
+from unshackle.core import binaries, providers
 from unshackle.core.cdm import CustomRemoteCDM, DecryptLabsRemoteCDM
 from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 from unshackle.core.config import config
@@ -63,7 +64,8 @@ from unshackle.core.utilities import (find_font_with_fallbacks, get_debug_logger
                                       is_close_match, suggest_font_packages, time_elapsed_since)
 from unshackle.core.utils import tags
 from unshackle.core.utils.click_types import (AUDIO_CODEC_LIST, LANGUAGE_RANGE, QUALITY_LIST, SEASON_RANGE,
-                                              ContextData, MultipleChoice, SubtitleCodecChoice, VideoCodecChoice)
+                                              ContextData, MultipleChoice, MultipleVideoCodecChoice,
+                                              SubtitleCodecChoice)
 from unshackle.core.utils.collections import merge_dict
 from unshackle.core.utils.selector import select_multiple
 from unshackle.core.utils.subprocess import ffprobe
@@ -195,12 +197,7 @@ class dl:
         sdh_suffix = ".sdh" if (subtitle.sdh or subtitle.cc) else ""
 
         extension = (target_codec or subtitle.codec or Subtitle.Codec.SubRip).extension
-        if (
-            not target_codec
-            and not subtitle.codec
-            and source_path
-            and source_path.suffix
-        ):
+        if not target_codec and not subtitle.codec and source_path and source_path.suffix:
             extension = source_path.suffix.lstrip(".")
 
         filename = f"{base_filename}.{lang_suffix}{forced_suffix}{sdh_suffix}.{extension}"
@@ -292,9 +289,9 @@ class dl:
     @click.option(
         "-v",
         "--vcodec",
-        type=VideoCodecChoice(Video.Codec),
-        default=None,
-        help="Video Codec to download, defaults to any codec.",
+        type=MultipleVideoCodecChoice(Video.Codec),
+        default=[],
+        help="Video Codec(s) to download, defaults to any codec.",
     )
     @click.option(
         "-a",
@@ -410,6 +407,7 @@ class dl:
     @click.option(
         "--tag", type=str, default=None, help="Set the Group Tag to be used, overriding the one in config if any."
     )
+    @click.option("--repack", is_flag=True, default=False, help="Add REPACK tag to the output filename.")
     @click.option(
         "--tmdb",
         "tmdb_id",
@@ -430,6 +428,13 @@ class dl:
         is_flag=True,
         default=False,
         help="Use the release year from TMDB for naming and tagging.",
+    )
+    @click.option(
+        "--imdb",
+        "imdb_id",
+        type=str,
+        default=None,
+        help="Use this IMDB ID (e.g. tt1375666) for tagging instead of automatic lookup.",
     )
     @click.option(
         "--sub-format",
@@ -489,6 +494,14 @@ class dl:
         help="Max workers/threads to download with per-track. Default depends on the downloader.",
     )
     @click.option("--downloads", type=int, default=1, help="Amount of tracks to download concurrently.")
+    @click.option(
+        "-o",
+        "--output",
+        "output_dir",
+        type=Path,
+        default=None,
+        help="Override the output directory for this download, instead of the one in config.",
+    )
     @click.option("--no-cache", "no_cache", is_flag=True, default=False, help="Bypass title cache for this download.")
     @click.option(
         "--reset-cache", "reset_cache", is_flag=True, default=False, help="Clear title cache before fetching."
@@ -512,10 +525,13 @@ class dl:
         no_proxy: bool,
         profile: Optional[str] = None,
         proxy: Optional[str] = None,
+        repack: bool = False,
         tag: Optional[str] = None,
         tmdb_id: Optional[int] = None,
         tmdb_name: bool = False,
         tmdb_year: bool = False,
+        imdb_id: Optional[str] = None,
+        output_dir: Optional[Path] = None,
         *_: Any,
         **__: Any,
     ):
@@ -561,6 +577,8 @@ class dl:
         self.tmdb_id = tmdb_id
         self.tmdb_name = tmdb_name
         self.tmdb_year = tmdb_year
+        self.imdb_id = imdb_id
+        self.output_dir = output_dir
 
         # Initialize debug logger with service name if debug logging is enabled
         if config.debug or logging.root.level == logging.DEBUG:
@@ -586,12 +604,62 @@ class dl:
                         "tmdb_id": tmdb_id,
                         "tmdb_name": tmdb_name,
                         "tmdb_year": tmdb_year,
+                        "imdb_id": imdb_id,
                         "cli_params": {
                             k: v
                             for k, v in ctx.params.items()
-                            if k not in ["profile", "proxy", "tag", "tmdb_id", "tmdb_name", "tmdb_year"]
+                            if k not in ["profile", "proxy", "tag", "tmdb_id", "tmdb_name", "tmdb_year", "imdb_id"]
                         },
                     },
+                )
+
+                # Log binary versions for diagnostics
+                binary_versions = {}
+                for name, binary in [
+                    ("shaka_packager", binaries.ShakaPackager),
+                    ("mp4decrypt", binaries.Mp4decrypt),
+                    ("n_m3u8dl_re", binaries.N_m3u8DL_RE),
+                    ("mkvmerge", binaries.MKVToolNix),
+                    ("ffmpeg", binaries.FFMPEG),
+                    ("ffprobe", binaries.FFProbe),
+                ]:
+                    if binary:
+                        version = None
+                        try:
+                            if name == "shaka_packager":
+                                r = subprocess.run(
+                                    [str(binary), "--version"], capture_output=True, text=True, timeout=5
+                                )
+                                version = (r.stdout or r.stderr or "").strip()
+                            elif name in ("ffmpeg", "ffprobe"):
+                                r = subprocess.run([str(binary), "-version"], capture_output=True, text=True, timeout=5)
+                                version = (r.stdout or "").split("\n")[0].strip()
+                            elif name == "mkvmerge":
+                                r = subprocess.run(
+                                    [str(binary), "--version"], capture_output=True, text=True, timeout=5
+                                )
+                                version = (r.stdout or "").strip()
+                            elif name == "mp4decrypt":
+                                r = subprocess.run([str(binary)], capture_output=True, text=True, timeout=5)
+                                output = (r.stdout or "") + (r.stderr or "")
+                                lines = [line.strip() for line in output.split("\n") if line.strip()]
+                                version = " | ".join(lines[:2]) if lines else None
+                            elif name == "n_m3u8dl_re":
+                                r = subprocess.run(
+                                    [str(binary), "--version"], capture_output=True, text=True, timeout=5
+                                )
+                                version = (r.stdout or r.stderr or "").strip().split("\n")[0]
+                        except Exception:
+                            version = "<error getting version>"
+                        binary_versions[name] = {"path": str(binary), "version": version}
+                    else:
+                        binary_versions[name] = None
+
+                self.debug_logger.log(
+                    level="DEBUG",
+                    operation="binary_versions",
+                    message="Binary tool versions",
+                    context=binary_versions,
                 )
         else:
             self.debug_logger = None
@@ -848,6 +916,9 @@ class dl:
             config=self.service_config, cdm=self.cdm, proxy_providers=self.proxy_providers, profile=self.profile
         )
 
+        if repack:
+            config.repack = True
+
         if tag:
             config.tag = tag
 
@@ -859,7 +930,7 @@ class dl:
         self,
         service: Service,
         quality: list[int],
-        vcodec: Optional[Video.Codec],
+        vcodec: list[Video.Codec],
         acodec: list[Audio.Codec],
         vbitrate: int,
         abitrate: int,
@@ -921,6 +992,10 @@ class dl:
 
         if require_subs and s_lang != ["all"]:
             self.log.error("--require-subs and --s-lang cannot be used together")
+            sys.exit(1)
+
+        if select_titles and wanted:
+            self.log.error("--select-titles and -w/--wanted cannot be used together")
             sys.exit(1)
 
         # Check if dovi_tool is available when hybrid mode is requested
@@ -1022,12 +1097,12 @@ class dl:
             tmdb_name_val = None
 
             if self.tmdb_year:
-                tmdb_year_val = tags.get_year(
+                tmdb_year_val = providers.get_year_by_id(
                     self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
                 )
 
             if self.tmdb_name:
-                tmdb_name_val = tags.get_title(
+                tmdb_name_val = providers.get_title_by_id(
                     self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
                 )
 
@@ -1056,13 +1131,13 @@ class dl:
             return
 
         # Enables manual selection for Series when --select-titles is set
-        if select_titles and type(titles) == Series:
-            console.print(Padding(Rule(f"[rule.text]Select Titles"), (1, 2)))
-            
+        if select_titles and isinstance(titles, Series):
+            console.print(Padding(Rule("[rule.text]Select Titles"), (1, 2)))
+
             selection_titles = []
             dependencies = {}
             original_indices = {}
-            
+
             current_season = None
             current_season_header_idx = -1
 
@@ -1081,37 +1156,40 @@ class dl:
                     # Note: Headers are not mapped to actual title indices
 
                 # Format display name
-                display_name = ((t.name[:35].rstrip() + "…") if len(t.name) > 35 else t.name) if t.name else None
-                
+                display_name = ((t.name[:30].rstrip() + "…") if len(t.name) > 30 else t.name) if t.name else None
+
                 # Apply indentation only for multiple seasons
                 prefix = " " if multiple_seasons else ""
-                option_text = (
-                    f"{prefix}{t.number}" + (f". {display_name}" if t.name else "")
-                )
-                
+                option_text = f"{prefix}{t.number}" + (f". {display_name}" if t.name else "")
+
                 selection_titles.append(option_text)
                 current_ui_idx = len(selection_titles) - 1
-                
+
                 # Map UI index to actual title index
                 original_indices[current_ui_idx] = i
-                
+
                 # Link episode to season header for group selection
                 if current_season_header_idx != -1:
                     dependencies[current_season_header_idx].append(current_ui_idx)
 
             selection_start = time.time()
-            
+
             # Execute selector with dependencies (headers select all children)
             selected_ui_idx = select_multiple(
                 selection_titles,
                 minimal_count=1,
                 page_size=8,
                 return_indices=True,
-                dependencies=dependencies
+                dependencies=dependencies,
+                collapse_on_start=multiple_seasons
             )
 
+            if not selected_ui_idx:
+                console.print(Padding(":x: Selection Cancelled...", (0, 5, 1, 5)))
+                return
+
             selection_end = time.time()
-            start_time += (selection_end - selection_start)
+            start_time += selection_end - selection_start
 
             # Map UI indices back to title indices (excluding headers)
             selected_idx = []
@@ -1155,15 +1233,20 @@ class dl:
 
             if isinstance(title, Episode) and not self.tmdb_searched:
                 kind = "tv"
+                tmdb_title: Optional[str] = None
                 if self.tmdb_id:
-                    tmdb_title = tags.get_title(
+                    tmdb_title = providers.get_title_by_id(
                         self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
                     )
                 else:
-                    self.tmdb_id, tmdb_title, self.search_source = tags.search_show_info(
+                    result = providers.search_metadata(
                         title.title, title.year, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
                     )
-                    if not (self.tmdb_id and tmdb_title and tags.fuzzy_match(tmdb_title, title.title)):
+                    if result and result.title and providers.fuzzy_match(result.title, title.title):
+                        self.tmdb_id = result.external_ids.tmdb_id
+                        tmdb_title = result.title
+                        self.search_source = result.source
+                    else:
                         self.tmdb_id = None
                 if list_ or list_titles:
                     if self.tmdb_id:
@@ -1178,22 +1261,25 @@ class dl:
                 self.tmdb_searched = True
 
             if isinstance(title, Movie) and (list_ or list_titles) and not self.tmdb_id:
-                movie_id, movie_title, _ = tags.search_show_info(
+                movie_result = providers.search_metadata(
                     title.name, title.year, "movie", title_cacher, cache_title_id, cache_region, cache_account_hash
                 )
-                if movie_id:
+                if movie_result and movie_result.external_ids.tmdb_id:
                     console.print(
                         Padding(
-                            f"Search -> {movie_title or '?'} [bright_black](ID {movie_id})",
+                            f"Search -> {movie_result.title or '?'} "
+                            f"[bright_black](ID {movie_result.external_ids.tmdb_id})",
                             (0, 5),
                         )
                     )
                 else:
                     console.print(Padding("Search -> [bright_black]No match found[/]", (0, 5)))
 
-            if self.tmdb_id and getattr(self, "search_source", None) != "simkl":
+            if self.tmdb_id and getattr(self, "search_source", None) not in ("simkl", "imdbapi"):
                 kind = "tv" if isinstance(title, Episode) else "movie"
-                tags.external_ids(self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash)
+                providers.fetch_external_ids(
+                    self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
+                )
 
             if slow and i != 0:
                 delay = random.randint(60, 120)
@@ -1336,9 +1422,12 @@ class dl:
                 if isinstance(title, (Movie, Episode)):
                     # filter video tracks
                     if vcodec:
-                        title.tracks.select_video(lambda x: x.codec == vcodec)
+                        title.tracks.select_video(lambda x: x.codec in vcodec)
+                        missing_codecs = [c for c in vcodec if not any(x.codec == c for x in title.tracks.videos)]
+                        for codec in missing_codecs:
+                            self.log.warning(f"Skipping {codec.name} video tracks as none are available.")
                         if not title.tracks.videos:
-                            self.log.error(f"There's no {vcodec.name} Video Track...")
+                            self.log.error(f"There's no {', '.join(c.name for c in vcodec)} Video Track...")
                             sys.exit(1)
 
                     if range_:
@@ -1350,10 +1439,20 @@ class dl:
                                 self.log.warning(f"Skipping {color_range.name} video tracks as none are available.")
 
                     if vbitrate:
-                        title.tracks.select_video(lambda x: x.bitrate and x.bitrate // 1000 == vbitrate)
-                        if not title.tracks.videos:
-                            self.log.error(f"There's no {vbitrate}kbps Video Track...")
-                            sys.exit(1)
+                        if any(r == Video.Range.HYBRID for r in range_):
+                            # In HYBRID mode, only apply bitrate filter to non-DV tracks
+                            # DV tracks are kept regardless since they're only used for RPU metadata
+                            title.tracks.select_video(
+                                lambda x: x.range == Video.Range.DV or (x.bitrate and x.bitrate // 1000 == vbitrate)
+                            )
+                            if not any(x.range != Video.Range.DV for x in title.tracks.videos):
+                                self.log.error(f"There's no {vbitrate}kbps Video Track...")
+                                sys.exit(1)
+                        else:
+                            title.tracks.select_video(lambda x: x.bitrate and x.bitrate // 1000 == vbitrate)
+                            if not title.tracks.videos:
+                                self.log.error(f"There's no {vbitrate}kbps Video Track...")
+                                sys.exit(1)
 
                     video_languages = [lang for lang in (v_lang or lang) if lang != "best"]
                     if video_languages and "all" not in video_languages:
@@ -1380,10 +1479,38 @@ class dl:
                             self.log.error(f"There's no {processed_video_lang} Video Track...")
                             sys.exit(1)
 
+                    has_hybrid = any(r == Video.Range.HYBRID for r in range_)
+                    non_hybrid_ranges = [r for r in range_ if r != Video.Range.HYBRID]
+
                     if quality:
                         missing_resolutions = []
-                        if any(r == Video.Range.HYBRID for r in range_):
-                            title.tracks.select_video(title.tracks.select_hybrid(title.tracks.videos, quality))
+                        if has_hybrid:
+                            # Split tracks: hybrid candidates vs non-hybrid
+                            hybrid_candidate_tracks = [
+                                v
+                                for v in title.tracks.videos
+                                if v.range in (Video.Range.HDR10, Video.Range.HDR10P, Video.Range.DV)
+                            ]
+                            non_hybrid_tracks = [
+                                v
+                                for v in title.tracks.videos
+                                if v.range not in (Video.Range.HDR10, Video.Range.HDR10P, Video.Range.DV)
+                            ]
+
+                            # Apply hybrid selection to HDR10+DV tracks
+                            hybrid_filter = title.tracks.select_hybrid(hybrid_candidate_tracks, quality)
+                            hybrid_selected = list(filter(hybrid_filter, hybrid_candidate_tracks))
+
+                            if non_hybrid_ranges and non_hybrid_tracks:
+                                # Also filter non-hybrid tracks by resolution
+                                non_hybrid_selected = [
+                                    v
+                                    for v in non_hybrid_tracks
+                                    if any(v.height == res or int(v.width * (9 / 16)) == res for res in quality)
+                                ]
+                                title.tracks.videos = hybrid_selected + non_hybrid_selected
+                            else:
+                                title.tracks.videos = hybrid_selected
                         else:
                             title.tracks.by_resolutions(quality)
 
@@ -1410,21 +1537,59 @@ class dl:
                                 sys.exit(1)
 
                     # choose best track by range and quality
-                    if any(r == Video.Range.HYBRID for r in range_):
-                        # For hybrid mode, always apply hybrid selection
-                        # If no quality specified, use only the best (highest) resolution
+                    if has_hybrid:
+                        # Apply hybrid selection for HYBRID tracks
+                        hybrid_candidate_tracks = [
+                            v
+                            for v in title.tracks.videos
+                            if v.range in (Video.Range.HDR10, Video.Range.HDR10P, Video.Range.DV)
+                        ]
+                        non_hybrid_tracks = [
+                            v
+                            for v in title.tracks.videos
+                            if v.range not in (Video.Range.HDR10, Video.Range.HDR10P, Video.Range.DV)
+                        ]
+
                         if not quality:
-                            # Get the highest resolution available
-                            best_resolution = max((v.height for v in title.tracks.videos), default=None)
+                            best_resolution = max((v.height for v in hybrid_candidate_tracks), default=None)
                             if best_resolution:
-                                # Use the hybrid selection logic with only the best resolution
-                                title.tracks.select_video(
-                                    title.tracks.select_hybrid(title.tracks.videos, [best_resolution])
+                                hybrid_filter = title.tracks.select_hybrid(hybrid_candidate_tracks, [best_resolution])
+                                hybrid_selected = list(filter(hybrid_filter, hybrid_candidate_tracks))
+                            else:
+                                hybrid_selected = []
+                        else:
+                            hybrid_filter = title.tracks.select_hybrid(hybrid_candidate_tracks, quality)
+                            hybrid_selected = list(filter(hybrid_filter, hybrid_candidate_tracks))
+
+                        # For non-hybrid ranges, apply Cartesian product selection
+                        non_hybrid_selected: list[Video] = []
+                        if non_hybrid_ranges and non_hybrid_tracks:
+                            for resolution, color_range, codec in product(
+                                quality or [None], non_hybrid_ranges, vcodec or [None]
+                            ):
+                                match = next(
+                                    (
+                                        t
+                                        for t in non_hybrid_tracks
+                                        if (
+                                            not resolution
+                                            or t.height == resolution
+                                            or int(t.width * (9 / 16)) == resolution
+                                        )
+                                        and (not color_range or t.range == color_range)
+                                        and (not codec or t.codec == codec)
+                                    ),
+                                    None,
                                 )
-                        # If quality was specified, hybrid selection was already applied above
+                                if match and match not in non_hybrid_selected:
+                                    non_hybrid_selected.append(match)
+
+                        title.tracks.videos = hybrid_selected + non_hybrid_selected
                     else:
                         selected_videos: list[Video] = []
-                        for resolution, color_range in product(quality or [None], range_ or [None]):
+                        for resolution, color_range, codec in product(
+                            quality or [None], range_ or [None], vcodec or [None]
+                        ):
                             match = next(
                                 (
                                     t
@@ -1435,6 +1600,7 @@ class dl:
                                         or int(t.width * (9 / 16)) == resolution
                                     )
                                     and (not color_range or t.range == color_range)
+                                    and (not codec or t.codec == codec)
                                 ),
                                 None,
                             )
@@ -1444,26 +1610,42 @@ class dl:
 
                     # validate hybrid mode requirements
                     if any(r == Video.Range.HYBRID for r in range_):
-                        hdr10_tracks = [v for v in title.tracks.videos if v.range == Video.Range.HDR10]
+                        base_tracks = [
+                            v for v in title.tracks.videos if v.range in (Video.Range.HDR10, Video.Range.HDR10P)
+                        ]
                         dv_tracks = [v for v in title.tracks.videos if v.range == Video.Range.DV]
 
-                        if not hdr10_tracks and not dv_tracks:
+                        hybrid_failed = False
+                        if not base_tracks and not dv_tracks:
                             available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
-                            self.log.error("HYBRID mode requires both HDR10 and DV tracks, but neither is available")
-                            self.log.error(
+                            msg = "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but neither is available"
+                            msg_detail = (
                                 f"Available ranges: {', '.join(available_ranges) if available_ranges else 'none'}"
                             )
-                            sys.exit(1)
-                        elif not hdr10_tracks:
+                            hybrid_failed = True
+                        elif not base_tracks:
                             available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
-                            self.log.error("HYBRID mode requires both HDR10 and DV tracks, but only DV is available")
-                            self.log.error(f"Available ranges: {', '.join(available_ranges)}")
-                            sys.exit(1)
+                            msg = "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but only DV is available"
+                            msg_detail = f"Available ranges: {', '.join(available_ranges)}"
+                            hybrid_failed = True
                         elif not dv_tracks:
                             available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
-                            self.log.error("HYBRID mode requires both HDR10 and DV tracks, but only HDR10 is available")
-                            self.log.error(f"Available ranges: {', '.join(available_ranges)}")
-                            sys.exit(1)
+                            msg = "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but only HDR10 is available"
+                            msg_detail = f"Available ranges: {', '.join(available_ranges)}"
+                            hybrid_failed = True
+
+                        if hybrid_failed:
+                            other_ranges = [r for r in range_ if r != Video.Range.HYBRID]
+                            if best_available and other_ranges:
+                                self.log.warning(msg)
+                                self.log.warning(
+                                    f"Continuing with remaining range(s): {', '.join(r.name for r in other_ranges)}"
+                                )
+                                range_ = other_ranges
+                            else:
+                                self.log.error(msg)
+                                self.log.error(msg_detail)
+                                sys.exit(1)
 
                     # filter subtitle tracks
                     if require_subs:
@@ -1547,7 +1729,7 @@ class dl:
                                 if language not in processed_lang:
                                     processed_lang.append(language)
 
-                        if "best" in processed_lang:
+                        if "best" in processed_lang or "all" in processed_lang:
                             unique_languages = {track.language for track in title.tracks.audio}
                             selected_audio = []
                             for language in unique_languages:
@@ -1570,7 +1752,7 @@ class dl:
                                     else:
                                         selected_audio.append(max(base_candidates, key=lambda x: x.bitrate or 0))
                             title.tracks.audio = selected_audio
-                        elif "all" not in processed_lang:
+                        else:
                             # If multiple codecs were explicitly requested, pick the best track per codec per
                             # requested language instead of selecting *all* bitrate variants of a codec.
                             if acodec and len(acodec) > 1:
@@ -1604,7 +1786,10 @@ class dl:
                                 if audio_description:
                                     standard_audio = [a for a in title.tracks.audio if not a.descriptive]
                                     selected_standards = title.tracks.by_language(
-                                        standard_audio, processed_lang, per_language=per_language, exact_match=exact_lang
+                                        standard_audio,
+                                        processed_lang,
+                                        per_language=per_language,
+                                        exact_match=exact_lang,
                                     )
                                     desc_audio = [a for a in title.tracks.audio if a.descriptive]
                                     # Include all descriptive tracks for the requested languages.
@@ -1728,10 +1913,7 @@ class dl:
                                         ),
                                         licence=partial(
                                             service.get_playready_license
-                                            if (
-                                                is_playready_cdm(self.cdm)
-                                            )
-                                            and hasattr(service, "get_playready_license")
+                                            if is_playready_cdm(self.cdm)
                                             else service.get_widevine_license,
                                             title=title,
                                             track=track,
@@ -1848,9 +2030,7 @@ class dl:
                 # Subtitle output mode configuration (for sidecar originals)
                 subtitle_output_mode = config.subtitle.get("output_mode", "mux")
                 sidecar_format = config.subtitle.get("sidecar_format", "srt")
-                skip_subtitle_mux = (
-                    subtitle_output_mode == "sidecar" and (title.tracks.videos or title.tracks.audio)
-                )
+                skip_subtitle_mux = subtitle_output_mode == "sidecar" and (title.tracks.videos or title.tracks.audio)
                 sidecar_subtitles: list[Subtitle] = []
                 sidecar_original_paths: dict[str, Path] = {}
                 if subtitle_output_mode in ("sidecar", "both") and not no_mux:
@@ -1987,12 +2167,14 @@ class dl:
                         # Hybrid mode: process DV and HDR10 tracks separately for each resolution
                         self.log.info("Processing Hybrid HDR10+DV tracks...")
 
-                        # Group video tracks by resolution
+                        # Group video tracks by resolution (prefer HDR10+ over HDR10 as base)
                         resolutions_processed = set()
-                        hdr10_tracks = [v for v in title.tracks.videos if v.range == Video.Range.HDR10]
+                        base_tracks_list = [
+                            v for v in title.tracks.videos if v.range in (Video.Range.HDR10P, Video.Range.HDR10)
+                        ]
                         dv_tracks = [v for v in title.tracks.videos if v.range == Video.Range.DV]
 
-                        for hdr10_track in hdr10_tracks:
+                        for hdr10_track in base_tracks_list:
                             resolution = hdr10_track.height
                             if resolution in resolutions_processed:
                                 continue
@@ -2048,6 +2230,8 @@ class dl:
                                     task_description += f" {video_track.height}p"
                                 if len(range_) > 1:
                                     task_description += f" {video_track.range.name}"
+                                if len(vcodec) > 1:
+                                    task_description += f" {video_track.codec.name}"
 
                             task_tracks = Tracks(title.tracks) + title.tracks.chapters + title.tracks.attachments
                             if video_track:
@@ -2099,9 +2283,11 @@ class dl:
                                 else:
                                     base_filename = str(title)
 
-                                sidecar_dir = config.directories.downloads
+                                sidecar_dir = self.output_dir or config.directories.downloads
                                 if not no_folder and isinstance(title, (Episode, Song)) and media_info:
-                                    sidecar_dir /= title.get_filename(media_info, show_service=not no_source, folder=True)
+                                    sidecar_dir /= title.get_filename(
+                                        media_info, show_service=not no_source, folder=True
+                                    )
                                 sidecar_dir.mkdir(parents=True, exist_ok=True)
 
                                 with console.status("Saving subtitle sidecar files..."):
@@ -2151,7 +2337,7 @@ class dl:
 
                 if no_mux:
                     # Handle individual track files without muxing
-                    final_dir = config.directories.downloads
+                    final_dir = self.output_dir or config.directories.downloads
                     if not no_folder and isinstance(title, (Episode, Song)):
                         # Create folder based on title
                         # Use first available track for filename generation
@@ -2201,9 +2387,10 @@ class dl:
                         self.log.debug(f"Saved: {final_path.name}")
                 else:
                     # Handle muxed files
+                    used_final_paths: set[Path] = set()
                     for muxed_path in muxed_paths:
                         media_info = MediaInfo.parse(muxed_path)
-                        final_dir = config.directories.downloads
+                        final_dir = self.output_dir or config.directories.downloads
                         final_filename = title.get_filename(media_info, show_service=not no_source)
                         audio_codec_suffix = muxed_audio_codecs.get(muxed_path)
 
@@ -2212,20 +2399,27 @@ class dl:
 
                         final_dir.mkdir(parents=True, exist_ok=True)
                         final_path = final_dir / f"{final_filename}{muxed_path.suffix}"
+                        template_type = "series" if isinstance(title, Episode) else "songs" if isinstance(title, Song) else "movies"
+                        sep = config.get_template_separator(template_type)
+
                         if final_path.exists() and audio_codec_suffix and append_audio_codec_suffix:
-                            sep = "." if config.scene_naming else " "
                             final_filename = f"{final_filename.rstrip()}{sep}{audio_codec_suffix.name}"
                             final_path = final_dir / f"{final_filename}{muxed_path.suffix}"
 
-                        if final_path.exists():
-                            sep = "." if config.scene_naming else " "
+                        if final_path in used_final_paths:
                             i = 2
-                            while final_path.exists():
+                            while final_path in used_final_paths:
                                 final_path = final_dir / f"{final_filename.rstrip()}{sep}{i}{muxed_path.suffix}"
                                 i += 1
 
-                        shutil.move(muxed_path, final_path)
-                        tags.tag_file(final_path, title, self.tmdb_id)
+                        try:
+                            os.replace(muxed_path, final_path)
+                        except OSError:
+                            if final_path.exists():
+                                final_path.unlink()
+                            shutil.move(muxed_path, final_path)
+                        used_final_paths.add(final_path)
+                        tags.tag_file(final_path, title, self.tmdb_id, self.imdb_id)
 
                 title_dl_time = time_elapsed_since(dl_start_time)
                 console.print(

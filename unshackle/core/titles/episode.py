@@ -9,9 +9,9 @@ from rich.tree import Tree
 from sortedcontainers import SortedKeyList
 
 from unshackle.core.config import config
-from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP
 from unshackle.core.titles.title import Title
 from unshackle.core.utilities import sanitize_filename
+from unshackle.core.utils.template_formatter import TemplateFormatter
 
 
 class Episode(Title):
@@ -78,173 +78,60 @@ class Episode(Title):
         self.year = year
         self.description = description
 
+    def _build_template_context(self, media_info: MediaInfo, show_service: bool = True) -> dict:
+        """Build template context dictionary from MediaInfo."""
+        context = self._build_base_template_context(media_info, show_service)
+        context["title"] = self.title.replace("$", "S")
+        context["year"] = self.year or ""
+        context["season"] = f"S{self.season:02}"
+        context["episode"] = f"E{self.number:02}"
+        context["season_episode"] = f"S{self.season:02}E{self.number:02}"
+        context["episode_name"] = self.name or ""
+        return context
+
     def __str__(self) -> str:
         return "{title}{year} S{season:02}E{number:02} {name}".format(
             title=self.title,
-            year=f" {self.year}" if self.year and config.series_year else "",
+            year=f" {self.year}" if self.year else "",
             season=self.season,
             number=self.number,
             name=self.name or "",
         ).strip()
 
     def get_filename(self, media_info: MediaInfo, folder: bool = False, show_service: bool = True) -> str:
-        primary_video_track = next(iter(media_info.video_tracks), None)
-        primary_audio_track = None
-        if media_info.audio_tracks:
-            sorted_audio = sorted(
-                media_info.audio_tracks,
-                key=lambda x: (
-                    float(x.bit_rate) if x.bit_rate else 0,
-                    bool(x.format_additionalfeatures and "JOC" in x.format_additionalfeatures),
-                ),
-                reverse=True,
-            )
-            primary_audio_track = sorted_audio[0]
-        unique_audio_languages = len({x.language.split("-")[0] for x in media_info.audio_tracks if x.language})
-
-        def _get_resolution_token(track: Any) -> str:
-            if not track or not getattr(track, "height", None):
-                return ""
-            resolution = track.height
-            try:
-                dar = getattr(track, "other_display_aspect_ratio", None) or []
-                if dar and dar[0]:
-                    aspect_ratio = [int(float(plane)) for plane in str(dar[0]).split(":")]
-                    if len(aspect_ratio) == 1:
-                        aspect_ratio.append(1)
-                    if aspect_ratio[0] / aspect_ratio[1] not in (16 / 9, 4 / 3):
-                        resolution = int(track.width * (9 / 16))
-            except Exception:
-                pass
-
-            scan_suffix = "p"
-            scan_type = getattr(track, "scan_type", None)
-            if scan_type and str(scan_type).lower() == "interlaced":
-                scan_suffix = "i"
-            return f"{resolution}{scan_suffix}"
-
-        # Title [Year] SXXEXX Name (or Title [Year] SXX if folder)
         if folder:
-            name = f"{self.title}"
-            if self.year and config.series_year:
-                name += f" {self.year}"
-            name += f" S{self.season:02}"
-        else:
-            if config.dash_naming:
-                # Format: Title - SXXEXX - Episode Name
-                name = self.title.replace("$", "S")  # e.g., Arli$$
+            series_template = config.output_template.get("series")
+            if series_template:
+                folder_template = series_template
+                folder_template = re.sub(r'\{episode\}', '', folder_template)
+                folder_template = re.sub(r'\{episode_name\?\}', '', folder_template)
+                folder_template = re.sub(r'\{episode_name\}', '', folder_template)
+                folder_template = re.sub(r'\{season_episode\}', '{season}', folder_template)
 
-                # Add year if configured
-                if self.year and config.series_year:
-                    name += f" {self.year}"
+                folder_template = re.sub(r'\.{2,}', '.', folder_template)
+                folder_template = re.sub(r'\s{2,}', ' ', folder_template)
+                folder_template = re.sub(r'^[\.\s]+|[\.\s]+$', '', folder_template)
 
-                # Add season and episode
-                name += f" - S{self.season:02}E{self.number:02}"
+                formatter = TemplateFormatter(folder_template)
+                context = self._build_template_context(media_info, show_service)
+                context['season'] = f"S{self.season:02}"
 
-                # Add episode name with dash separator
-                if self.name:
-                    name += f" - {self.name}"
+                folder_name = formatter.format(context)
 
-                name = name.strip()
-            else:
-                # Standard format without extra dashes
-                name = "{title}{year} S{season:02}E{number:02} {name}".format(
-                    title=self.title.replace("$", "S"),  # e.g., Arli$$
-                    year=f" {self.year}" if self.year and config.series_year else "",
-                    season=self.season,
-                    number=self.number,
-                    name=self.name or "",
-                ).strip()
-
-        if primary_video_track:
-            resolution_token = _get_resolution_token(primary_video_track)
-            if resolution_token:
-                name += f" {resolution_token}"
-
-        # Service (use track source if available)
-        if show_service:
-            source_name = None
-            if self.tracks:
-                first_track = next(iter(self.tracks), None)
-                if first_track and hasattr(first_track, "source") and first_track.source:
-                    source_name = first_track.source
-            name += f" {source_name or self.service.__name__}"
-
-        # 'WEB-DL'
-        name += " WEB-DL"
-
-        # DUAL
-        if unique_audio_languages == 2:
-            name += " DUAL"
-
-        # MULTi
-        if unique_audio_languages > 2:
-            name += " MULTi"
-
-        # Audio Codec + Channels (+ feature)
-        if primary_audio_track:
-            codec = primary_audio_track.format
-            channel_layout = primary_audio_track.channel_layout or primary_audio_track.channellayout_original
-            if channel_layout:
-                channels = float(
-                    sum({"LFE": 0.1}.get(position.upper(), 1) for position in channel_layout.split(" "))
-                )
-            else:
-                channel_count = primary_audio_track.channel_s or primary_audio_track.channels or 0
-                channels = float(channel_count)
-
-            features = primary_audio_track.format_additionalfeatures or ""
-            name += f" {AUDIO_CODEC_MAP.get(codec, codec)}{channels:.1f}"
-            if "JOC" in features or primary_audio_track.joc:
-                name += " Atmos"
-
-        # Video (dynamic range + hfr +) Codec
-        if primary_video_track:
-            codec = primary_video_track.format
-            hdr_format = primary_video_track.hdr_format_commercial
-            hdr_format_full = primary_video_track.hdr_format or ""
-            trc = (
-                primary_video_track.transfer_characteristics
-                or primary_video_track.transfer_characteristics_original
-                or ""
-            )
-            frame_rate = float(primary_video_track.frame_rate)
-
-            def _append_token(current: str, token: Optional[str]) -> str:
-                token = (token or "").strip()
-                current = current.rstrip()
-                if not token:
-                    return current
-                if current.endswith(f" {token}"):
-                    return current
-                return f"{current} {token}"
-
-            # Primary HDR format detection
-            if hdr_format:
-                if hdr_format_full.startswith("Dolby Vision"):
-                    name = _append_token(name, "DV")
-                    if any(
-                        indicator in (hdr_format_full + " " + hdr_format)
-                        for indicator in ["HDR10", "SMPTE ST 2086"]
-                    ):
-                        name = _append_token(name, "HDR")
-                elif "HDR Vivid" in hdr_format:
-                    name = _append_token(name, "HDR")
+                if '.' in series_template and ' ' not in series_template:
+                    return sanitize_filename(folder_name, ".")
                 else:
-                    dynamic_range = DYNAMIC_RANGE_MAP.get(hdr_format) or hdr_format or ""
-                    name = _append_token(name, dynamic_range)
-            elif "HLG" in trc or "Hybrid Log-Gamma" in trc or "ARIB STD-B67" in trc or "arib-std-b67" in trc.lower():
-                name += " HLG"
-            elif any(indicator in trc for indicator in ["PQ", "SMPTE ST 2084", "BT.2100"]) or "smpte2084" in trc.lower() or "bt.2020-10" in trc.lower():
-                name += " HDR"
-            if frame_rate > 30:
-                name += " HFR"
-            name += f" {VIDEO_CODEC_MAP.get(codec, codec)}"
+                    return sanitize_filename(folder_name, " ")
+            else:
+                name = f"{self.title}"
+                if self.year:
+                    name += f" {self.year}"
+                name += f" S{self.season:02}"
+                return sanitize_filename(name, " ")
 
-        if config.tag:
-            name += f"-{config.tag}"
-
-        return sanitize_filename(name, "." if config.scene_naming else " ")
+        formatter = TemplateFormatter(config.output_template["series"])
+        context = self._build_template_context(media_info, show_service)
+        return formatter.format(context)
 
 
 class Series(SortedKeyList, ABC):
@@ -254,7 +141,7 @@ class Series(SortedKeyList, ABC):
     def __str__(self) -> str:
         if not self:
             return super().__str__()
-        return self[0].title + (f" ({self[0].year})" if self[0].year and config.series_year else "")
+        return self[0].title + (f" ({self[0].year})" if self[0].year else "")
 
     def tree(self, verbose: bool = False) -> Tree:
         seasons = Counter(x.season for x in self)
