@@ -44,16 +44,15 @@ class PlayReady:
         else:
             kids = []
 
-        # Extract KIDs using pyplayready's method (may miss some KIDs)
+        # Extract KIDs using pyplayready's WrmHeader key_ids
         if not kids:
             for header in pssh.wrm_headers:
-                try:
-                    signed_ids, _, _, _ = header.read_attributes()
-                except Exception:
-                    continue
-                for signed_id in signed_ids:
+                for signed_key_id in getattr(header, "key_ids", []):
                     try:
-                        kids.append(UUID(bytes_le=base64.b64decode(signed_id.value)))
+                        if isinstance(signed_key_id.value, UUID):
+                            kids.append(signed_key_id.value)
+                        else:
+                            kids.append(UUID(bytes_le=base64.b64decode(signed_key_id.value)))
                     except Exception:
                         continue
 
@@ -119,7 +118,33 @@ class PlayReady:
                         except Exception:
                             pass
 
-                # Also get individual KID
+                # v4.2/v4.3: DATA/PROTECTINFO/KIDS/KID
+                protectinfo_kids = root.findall(".//pr:DATA/pr:PROTECTINFO/pr:KIDS/pr:KID", ns)
+                for kid_elem in protectinfo_kids:
+                    value = kid_elem.get("VALUE")
+                    if value:
+                        try:
+                            kid_bytes = base64.b64decode(value + "==")
+                            kid_uuid = UUID(bytes_le=kid_bytes)
+                            if kid_uuid not in kids:
+                                kids.append(kid_uuid)
+                        except Exception:
+                            pass
+
+                # v4.1: DATA/PROTECTINFO/KID
+                protectinfo_kid = root.findall(".//pr:DATA/pr:PROTECTINFO/pr:KID", ns)
+                for kid_elem in protectinfo_kid:
+                    value = kid_elem.get("VALUE")
+                    if value:
+                        try:
+                            kid_bytes = base64.b64decode(value + "==")
+                            kid_uuid = UUID(bytes_le=kid_bytes)
+                            if kid_uuid not in kids:
+                                kids.append(kid_uuid)
+                        except Exception:
+                            pass
+
+                # v4.0: DATA/KID
                 individual_kids = root.findall(".//pr:DATA/pr:KID", ns)
                 for kid_elem in individual_kids:
                     if kid_elem.text:
