@@ -18,6 +18,7 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - *dl*: Add --output option to override download directory
 - *tracks*: Add edition tags to output filenames
 - *templates*: [**breaking**] Add customizable output filename templates
+- *templates*: Add configurable language tagging rule engine
 
 ### Bug Fixes
 
@@ -43,6 +44,10 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - *dl*: Remove legacy multi-fetch loop for unmigrated services
 - *example*: Migrate EXAMPLE service to track_request pattern
 - *providers*: Extract metadata providers into modular system
+
+### Maintenance
+
+- *changelog*: Update changelog for upcoming release and reorganize sections
 
 ## [3.0.0] - 2026-02-15
 
