@@ -7,9 +7,9 @@ from rich.tree import Tree
 from sortedcontainers import SortedKeyList
 
 from unshackle.core.config import config
-from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP
 from unshackle.core.titles.title import Title
 from unshackle.core.utilities import sanitize_filename
+from unshackle.core.utils.template_formatter import TemplateFormatter
 
 
 class Movie(Title):
@@ -45,148 +45,28 @@ class Movie(Title):
         self.year = year
         self.description = description
 
+    def _build_template_context(self, media_info: MediaInfo, show_service: bool = True) -> dict:
+        """Build template context dictionary from MediaInfo."""
+        context = self._build_base_template_context(media_info, show_service)
+        context["title"] = self.name.replace("$", "S")
+        context["year"] = self.year or ""
+        return context
+
     def __str__(self) -> str:
         if self.year:
-            if config.dash_naming:
-                return f"{self.name} - {self.year}"
             return f"{self.name} ({self.year})"
         return self.name
 
     def get_filename(self, media_info: MediaInfo, folder: bool = False, show_service: bool = True) -> str:
-        primary_video_track = next(iter(media_info.video_tracks), None)
-        primary_audio_track = None
-        if media_info.audio_tracks:
-            sorted_audio = sorted(
-                media_info.audio_tracks,
-                key=lambda x: (
-                    float(x.bit_rate) if x.bit_rate else 0,
-                    bool(x.format_additionalfeatures and "JOC" in x.format_additionalfeatures),
-                ),
-                reverse=True,
-            )
-            primary_audio_track = sorted_audio[0]
-        unique_audio_languages = len({x.language.split("-")[0] for x in media_info.audio_tracks if x.language})
+        if folder:
+            name = f"{self.name}"
+            if self.year:
+                name += f" ({self.year})"
+            return sanitize_filename(name, " ")
 
-        def _get_resolution_token(track: Any) -> str:
-            if not track or not getattr(track, "height", None):
-                return ""
-            width = getattr(track, "width", track.height)
-            resolution = min(width, track.height)
-            try:
-                dar = getattr(track, "other_display_aspect_ratio", None) or []
-                if dar and dar[0]:
-                    aspect_ratio = [int(float(plane)) for plane in str(dar[0]).split(":")]
-                    if len(aspect_ratio) == 1:
-                        aspect_ratio.append(1)
-                    ratio = aspect_ratio[0] / aspect_ratio[1]
-                    if ratio not in (16 / 9, 4 / 3, 9 / 16, 3 / 4):
-                        resolution = int(max(width, track.height) * (9 / 16))
-            except Exception:
-                pass
-
-            scan_suffix = "i" if str(getattr(track, "scan_type", "")).lower() == "interlaced" else "p"
-            return f"{resolution}{scan_suffix}"
-
-        # Name (Year)
-        name = str(self).replace("$", "S")  # e.g., Arli$$
-
-        if getattr(config, "repack", False):
-            name += " REPACK"
-
-        if self.tracks:
-            first_track = next(iter(self.tracks), None)
-            if first_track and first_track.edition:
-                name += " " + " ".join(first_track.edition)
-
-        if primary_video_track:
-            resolution_token = _get_resolution_token(primary_video_track)
-            if resolution_token:
-                name += f" {resolution_token}"
-
-        # Service (use track source if available)
-        if show_service:
-            source_name = None
-            if self.tracks:
-                first_track = next(iter(self.tracks), None)
-                if first_track and hasattr(first_track, "source") and first_track.source:
-                    source_name = first_track.source
-            name += f" {source_name or self.service.__name__}"
-
-        # 'WEB-DL'
-        name += " WEB-DL"
-
-        # DUAL
-        if unique_audio_languages == 2:
-            name += " DUAL"
-
-        # MULTi
-        if unique_audio_languages > 2:
-            name += " MULTi"
-
-        # Audio Codec + Channels (+ feature)
-        if primary_audio_track:
-            codec = primary_audio_track.format
-            channel_layout = primary_audio_track.channel_layout or primary_audio_track.channellayout_original
-            if channel_layout:
-                channels = float(
-                    sum({"LFE": 0.1}.get(position.upper(), 1) for position in channel_layout.split(" "))
-                )
-            else:
-                channel_count = primary_audio_track.channel_s or primary_audio_track.channels or 0
-                channels = float(channel_count)
-
-            features = primary_audio_track.format_additionalfeatures or ""
-            name += f" {AUDIO_CODEC_MAP.get(codec, codec)}{channels:.1f}"
-            if "JOC" in features or primary_audio_track.joc:
-                name += " Atmos"
-
-        # Video (dynamic range + hfr +) Codec
-        if primary_video_track:
-            codec = primary_video_track.format
-            hdr_format = primary_video_track.hdr_format_commercial
-            hdr_format_full = primary_video_track.hdr_format or ""
-            trc = (
-                primary_video_track.transfer_characteristics
-                or primary_video_track.transfer_characteristics_original
-                or ""
-            )
-            frame_rate = float(primary_video_track.frame_rate)
-
-            def _append_token(current: str, token: Optional[str]) -> str:
-                token = (token or "").strip()
-                current = current.rstrip()
-                if not token:
-                    return current
-                if current.endswith(f" {token}"):
-                    return current
-                return f"{current} {token}"
-
-            # Primary HDR format detection
-            if hdr_format:
-                if hdr_format_full.startswith("Dolby Vision"):
-                    name = _append_token(name, "DV")
-                    if any(
-                        indicator in (hdr_format_full + " " + hdr_format)
-                        for indicator in ["HDR10", "SMPTE ST 2086"]
-                    ):
-                        name = _append_token(name, "HDR")
-                elif "HDR Vivid" in hdr_format:
-                    name = _append_token(name, "HDR")
-                else:
-                    dynamic_range = DYNAMIC_RANGE_MAP.get(hdr_format) or hdr_format or ""
-                    name = _append_token(name, dynamic_range)
-            elif "HLG" in trc or "Hybrid Log-Gamma" in trc or "ARIB STD-B67" in trc or "arib-std-b67" in trc.lower():
-                name += " HLG"
-            elif any(indicator in trc for indicator in ["PQ", "SMPTE ST 2084", "BT.2100"]) or "smpte2084" in trc.lower() or "bt.2020-10" in trc.lower():
-                name += " HDR"
-            if frame_rate > 30:
-                name += " HFR"
-            name += f" {VIDEO_CODEC_MAP.get(codec, codec)}"
-
-        if config.tag:
-            name += f"-{config.tag}"
-
-        return sanitize_filename(name, "." if config.scene_naming else " ")
+        formatter = TemplateFormatter(config.output_template["movies"])
+        context = self._build_template_context(media_info, show_service)
+        return formatter.format(context)
 
 
 class Movies(SortedKeyList, ABC):

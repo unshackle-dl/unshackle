@@ -30,16 +30,35 @@ filenames:
 
 ---
 
-## scene_naming (bool)
+## output_template (dict)
 
-Set scene-style naming for titles. When `true` uses scene naming patterns (e.g., `Prime.Suspect.S07E01...`), when
-`false` uses a more human-readable style (e.g., `Prime Suspect S07E01 ...`). Default: `true`.
+Configure custom output filename templates for movies, series, and songs.
+This is **required** in your `unshackle.yaml` — a warning is shown if not configured.
 
----
+Available variables: `{title}`, `{year}`, `{season}`, `{episode}`, `{season_episode}`, `{episode_name}`,
+`{quality}`, `{resolution}`, `{source}`, `{audio}`, `{audio_channels}`, `{audio_full}`,
+`{video}`, `{hdr}`, `{hfr}`, `{atmos}`, `{dual}`, `{multi}`, `{tag}`, `{edition}`, `{repack}`
 
-## dash_naming (bool)
+Add `?` suffix to make a variable conditional (omitted when empty): `{year?}`, `{hdr?}`, `{repack?}`
 
-Use dash-separated naming convention for output files. Default: `false`.
+```yaml
+output_template:
+  # Scene-style (dot-separated)
+  movies: '{title}.{year}.{repack?}.{edition?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}'
+  series: '{title}.{year?}.{season_episode}.{episode_name?}.{repack?}.{edition?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}'
+  songs: '{track_number}.{title}.{repack?}.{edition?}.{source?}.WEB-DL.{audio_full}.{atmos?}-{tag}'
+
+  # Plex-friendly (space-separated)
+  # movies: '{title} ({year}) {quality}'
+  # series: '{title} {season_episode} {episode_name?}'
+  # songs: '{track_number}. {title}'
+```
+
+Example outputs:
+- Scene movies: `The.Matrix.1999.1080p.NF.WEB-DL.DDP5.1.H.264-EXAMPLE`
+- Scene movies (REPACK): `Dune.2021.REPACK.2160p.HBO.WEB-DL.DDP5.1.H.265-EXAMPLE`
+- Scene series: `Breaking.Bad.2008.S01E01.Pilot.1080p.NF.WEB-DL.DDP5.1.H.264-EXAMPLE`
+- Plex movies: `The Matrix (1999) 1080p`
 
 ---
 
@@ -50,16 +69,10 @@ to ASCII equivalents. Default: `false`.
 
 ---
 
-## series_year (bool)
-
-Whether to include the series year in series names for episodes and folders. Default: `true`.
-
----
-
 ## tag (str)
 
 Group or Username to postfix to the end of download filenames following a dash.
-Only applies when `scene_naming` is enabled.
+Use `{tag}` in your output template to include it.
 For example, `tag: "J0HN"` will have `-J0HN` at the end of all download filenames.
 
 ---

@@ -136,7 +136,7 @@ def sanitize_filename(filename: str, spacer: str = ".") -> str:
     if spacer == ".":
         filename = re.sub(r" - ", spacer, filename)  # title separators to spacer (avoids .-. pattern)
     filename = re.sub(r"[:; ]", spacer, filename)  # structural chars to (spacer)
-    filename = re.sub(r"[\\*!?¿,'\"" "()<>|$#~]", "", filename)  # not filename safe chars
+    filename = re.sub(r"[\\*!?¿,'\"" "<>|$#~]", "", filename)  # not filename safe chars
     filename = re.sub(rf"[{spacer}]{{2,}}", spacer, filename)  # remove extra neighbouring (spacer)s
 
     return filename

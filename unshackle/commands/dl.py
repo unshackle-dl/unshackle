@@ -2399,13 +2399,14 @@ class dl:
 
                         final_dir.mkdir(parents=True, exist_ok=True)
                         final_path = final_dir / f"{final_filename}{muxed_path.suffix}"
+                        template_type = "series" if isinstance(title, Episode) else "songs" if isinstance(title, Song) else "movies"
+                        sep = config.get_template_separator(template_type)
+
                         if final_path.exists() and audio_codec_suffix and append_audio_codec_suffix:
-                            sep = "." if config.scene_naming else " "
                             final_filename = f"{final_filename.rstrip()}{sep}{audio_codec_suffix.name}"
                             final_path = final_dir / f"{final_filename}{muxed_path.suffix}"
 
                         if final_path in used_final_paths:
-                            sep = "." if config.scene_naming else " "
                             i = 2
                             while final_path in used_final_paths:
                                 final_path = final_dir / f"{final_filename.rstrip()}{sep}{i}{muxed_path.suffix}"

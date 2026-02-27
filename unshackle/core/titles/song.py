@@ -7,9 +7,9 @@ from rich.tree import Tree
 from sortedcontainers import SortedKeyList
 
 from unshackle.core.config import config
-from unshackle.core.constants import AUDIO_CODEC_MAP
 from unshackle.core.titles.title import Title
 from unshackle.core.utilities import sanitize_filename
+from unshackle.core.utils.template_formatter import TemplateFormatter
 
 
 class Song(Title):
@@ -41,7 +41,7 @@ class Song(Title):
         if not album:
             raise ValueError("Song album must be provided")
         if not isinstance(album, str):
-            raise TypeError(f"Expected album to be a str, not {name!r}")
+            raise TypeError(f"Expected album to be a str, not {album!r}")
 
         if not track:
             raise ValueError("Song track must be provided")
@@ -81,54 +81,27 @@ class Song(Title):
             artist=self.artist, album=self.album, year=self.year, track=self.track, name=self.name
         ).strip()
 
+    def _build_template_context(self, media_info: MediaInfo, show_service: bool = True) -> dict:
+        """Build template context dictionary from MediaInfo."""
+        context = self._build_base_template_context(media_info, show_service)
+        context["title"] = self.name.replace("$", "S")
+        context["year"] = self.year or ""
+        context["track_number"] = f"{self.track:02}"
+        context["artist"] = self.artist.replace("$", "S")
+        context["album"] = self.album.replace("$", "S")
+        context["disc"] = f"{self.disc:02}" if self.disc > 1 else ""
+        return context
+
     def get_filename(self, media_info: MediaInfo, folder: bool = False, show_service: bool = True) -> str:
-        audio_track = next(iter(media_info.audio_tracks), None)
-        codec = audio_track.format
-        channel_layout = audio_track.channel_layout or audio_track.channellayout_original
-        if channel_layout:
-            channels = float(sum({"LFE": 0.1}.get(position.upper(), 1) for position in channel_layout.split(" ")))
-        else:
-            channel_count = audio_track.channel_s or audio_track.channels or 0
-            channels = float(channel_count)
-
-        features = audio_track.format_additionalfeatures or ""
-
         if folder:
-            # Artist - Album (Year)
-            name = str(self).split(" / ")[0]
-        else:
-            # NN. Song Name
-            name = str(self).split(" / ")[1]
+            name = f"{self.artist} - {self.album}"
+            if self.year:
+                name += f" ({self.year})"
+            return sanitize_filename(name, " ")
 
-        if getattr(config, "repack", False):
-            name += " REPACK"
-
-        if self.tracks:
-            first_track = next(iter(self.tracks), None)
-            if first_track and first_track.edition:
-                name += " " + " ".join(first_track.edition)
-
-        # Service (use track source if available)
-        if show_service:
-            source_name = None
-            if self.tracks:
-                first_track = next(iter(self.tracks), None)
-                if first_track and hasattr(first_track, "source") and first_track.source:
-                    source_name = first_track.source
-            name += f" {source_name or self.service.__name__}"
-
-        # 'WEB-DL'
-        name += " WEB-DL"
-
-        # Audio Codec + Channels (+ feature)
-        name += f" {AUDIO_CODEC_MAP.get(codec, codec)}{channels:.1f}"
-        if "JOC" in features or audio_track.joc:
-            name += " Atmos"
-
-        if config.tag:
-            name += f"-{config.tag}"
-
-        return sanitize_filename(name, " ")
+        formatter = TemplateFormatter(config.output_template["songs"])
+        context = self._build_template_context(media_info, show_service)
+        return formatter.format(context)
 
 
 class Album(SortedKeyList, ABC):
