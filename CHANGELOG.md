@@ -6,7 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 This changelog is automatically generated using [git-cliff](https://git-cliff.org).
 
-## [3.1.0] - 2026-02-23
+## [Unreleased]
 
 ### Features
 
@@ -15,6 +15,9 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - *debug*: Log binary tool versions at session start
 - *dl*: Add --repack flag to insert REPACK tag in output filenames
 - *core*: Add TrackRequest system for multi-codec/multi-range support
+- *dl*: Add --output option to override download directory
+- *tracks*: Add edition tags to output filenames
+- *templates*: [**breaking**] Add customizable output filename templates
 
 ### Bug Fixes
 
@@ -25,11 +28,21 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - *dl*: Allow selection of audio tracks for 'all' languages in addition to 'best'
 - *dl*: Overwrite existing files on re-download and use atomic replace
 - *dl*: Handle cross-device moves when temp and downloads differ
+- *track*: Fallback to requests downloader from n_m3u8dl_re for unsupported track types
+- *n_m3u8dl_re*: Disable segment count validation for duration-based DASH
+- Correct formatting and add missing newlines in selector and EXAMPLE service
+- *dependencies*: Update pyplayready version to 0.8.3 and adjust dependencies
+
+### Documentation
+
+- Update and correct configuration documentation
 
 ### Changes
 
 - *hybrid*: Replace log.info with console status and add JSONL debug logging
 - *dl*: Remove legacy multi-fetch loop for unmigrated services
+- *example*: Migrate EXAMPLE service to track_request pattern
+- *providers*: Extract metadata providers into modular system
 
 ## [3.0.0] - 2026-02-15
 
@@ -511,7 +524,7 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - Reorganize Planned Features section in README for clarity
 - Improve track selection logic in dl.py
 
-[3.1.0]: https://github.com/unshackle-dl/unshackle/compare/3.0.0..3.1.0
+[unreleased]: https://github.com/unshackle-dl/unshackle/compare/3.0.0..HEAD
 [3.0.0]: https://github.com/unshackle-dl/unshackle/compare/2.3.0..3.0.0
 [2.3.0]: https://github.com/unshackle-dl/unshackle/compare/2.2.0..2.3.0
 [2.2.0]: https://github.com/unshackle-dl/unshackle/compare/2.1.0..2.2.0
