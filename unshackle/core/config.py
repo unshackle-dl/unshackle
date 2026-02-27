@@ -96,6 +96,7 @@ class Config:
         self.update_checks: bool = kwargs.get("update_checks", True)
         self.update_check_interval: int = kwargs.get("update_check_interval", 24)
 
+        self.language_tags: dict = kwargs.get("language_tags") or {}
         self.output_template: dict = kwargs.get("output_template") or {}
 
         if kwargs.get("scene_naming") is not None:
@@ -154,6 +155,7 @@ class Config:
             "hfr",
             "edition",
             "repack",
+            "lang_tag",
         }
 
         unsafe_chars = r'[<>:"/\\|?*]'

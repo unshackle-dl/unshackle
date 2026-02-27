@@ -80,6 +80,7 @@ class Title:
             "hdr": "",
             "hfr": "",
             "edition": "",
+            "lang_tag": "",
         }
 
         if self.tracks:
@@ -160,6 +161,14 @@ class Title:
         else:
             context["dual"] = ""
             context["multi"] = ""
+
+        lang_tag_rules = config.language_tags.get("rules") if config.language_tags else None
+        if lang_tag_rules and self.tracks:
+            from unshackle.core.utils.language_tags import evaluate_language_tag
+
+            audio_langs = [a.language for a in self.tracks.audio]
+            sub_langs = [s.language for s in self.tracks.subtitles]
+            context["lang_tag"] = evaluate_language_tag(lang_tag_rules, audio_langs, sub_langs)
 
         return context
 

@@ -22,7 +22,8 @@ set_terminal_bg: false
 # If not configured, default scene-style templates are used and a warning is shown.
 # Available variables: {title}, {year}, {season}, {episode}, {season_episode}, {episode_name},
 #                     {quality}, {resolution}, {source}, {audio}, {audio_channels}, {audio_full},
-#                     {video}, {hdr}, {hfr}, {atmos}, {dual}, {multi}, {tag}, {edition}, {repack}
+#                     {video}, {hdr}, {hfr}, {atmos}, {dual}, {multi}, {tag}, {edition}, {repack},
+#                     {lang_tag}
 # Conditional variables (included only if present): Add ? suffix like {year?}, {episode_name?}, {hdr?}
 # Customize the templates below:
 #
@@ -51,6 +52,31 @@ output_template:
   # Custom scene-style with specific elements
   # movies: '{title}.{year}.{quality}.{hdr?}.{source}.WEB-DL.{audio_full}.{video}-{tag}'
   # series: '{title}.{year?}.{season_episode}.{episode_name?}.{quality}.{hdr?}.{source}.WEB-DL.{audio_full}.{atmos?}.{video}-{tag}'
+
+# Language-based tagging for output filenames
+# Automatically adds language identifiers (e.g., DANiSH, NORDiC, DKsubs) based on
+# audio and subtitle track languages. Rules are evaluated in order; first match wins.
+# Use {lang_tag?} in your output_template to place the tag in the filename.
+#
+# Conditions (all conditions in a rule must match):
+#   audio: <lang>                  - any audio track matches this language
+#   subs_contain: <lang>           - any subtitle matches this language
+#   subs_contain_all: [lang, ...]  - subtitles include ALL listed languages
+#
+# language_tags:
+#   rules:
+#     - audio: da
+#       tag: DANiSH
+#     - audio: sv
+#       tag: SWEDiSH
+#     - audio: nb
+#       tag: NORWEGiAN
+#     - audio: en
+#       subs_contain_all: [da, sv, nb]
+#       tag: NORDiC
+#     - audio: en
+#       subs_contain: da
+#       tag: DKsubs
 
 # Check for updates from GitHub repository on startup (default: true)
 update_checks: true
