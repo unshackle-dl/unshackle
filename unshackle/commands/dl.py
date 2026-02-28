@@ -1341,6 +1341,15 @@ class dl:
                 v_lang = None
                 title.tracks.videos = []
 
+            if no_audio:
+                console.log("Skipped audio as --no-audio was used...")
+                a_lang = None
+                title.tracks.audio = []
+
+            if no_chapters:
+                console.log("Skipped chapters as --no-chapters was used...")
+                title.tracks.chapters = []
+
             with console.status("Getting tracks...", spinner="dots"):
                 try:
                     title.tracks.add(service.get_tracks(title), warn_only=True)
