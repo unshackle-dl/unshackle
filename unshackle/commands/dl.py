@@ -416,18 +416,17 @@ class dl:
         help="Use this TMDB ID for tagging instead of automatic lookup.",
     )
     @click.option(
-        "--tmdb-name",
-        "tmdb_name",
-        is_flag=True,
-        default=False,
-        help="Rename titles using the name returned from TMDB lookup.",
+        "--animeapi",
+        "animeapi_id",
+        type=str,
+        default=None,
+        help="Anime database ID via AnimeAPI (e.g. mal:12345, anilist:98765). Defaults to MAL if no prefix.",
     )
     @click.option(
-        "--tmdb-year",
-        "tmdb_year",
+        "--enrich",
         is_flag=True,
         default=False,
-        help="Use the release year from TMDB for naming and tagging.",
+        help="Override show title and year from external source. Requires --tmdb, --imdb, or --animeapi.",
     )
     @click.option(
         "--imdb",
@@ -528,9 +527,9 @@ class dl:
         repack: bool = False,
         tag: Optional[str] = None,
         tmdb_id: Optional[int] = None,
-        tmdb_name: bool = False,
-        tmdb_year: bool = False,
         imdb_id: Optional[str] = None,
+        animeapi_id: Optional[str] = None,
+        enrich: bool = False,
         output_dir: Optional[Path] = None,
         *_: Any,
         **__: Any,
@@ -575,10 +574,23 @@ class dl:
 
         self.profile = profile
         self.tmdb_id = tmdb_id
-        self.tmdb_name = tmdb_name
-        self.tmdb_year = tmdb_year
         self.imdb_id = imdb_id
+        self.enrich = enrich
+        self.animeapi_title: Optional[str] = None
         self.output_dir = output_dir
+
+        if animeapi_id:
+            from unshackle.core.utils.animeapi import resolve_animeapi
+
+            anime_title, anime_ids = resolve_animeapi(animeapi_id)
+            self.animeapi_title = anime_title
+            if not self.tmdb_id and anime_ids.tmdb_id:
+                self.tmdb_id = anime_ids.tmdb_id
+            if not self.imdb_id and anime_ids.imdb_id:
+                self.imdb_id = anime_ids.imdb_id
+
+        if self.enrich and not (self.tmdb_id or self.imdb_id or self.animeapi_title):
+            raise click.UsageError("--enrich requires --tmdb, --imdb, or --animeapi to provide a metadata source.")
 
         # Initialize debug logger with service name if debug logging is enabled
         if config.debug or logging.root.level == logging.DEBUG:
@@ -601,14 +613,23 @@ class dl:
                         "profile": profile,
                         "proxy": proxy,
                         "tag": tag,
-                        "tmdb_id": tmdb_id,
-                        "tmdb_name": tmdb_name,
-                        "tmdb_year": tmdb_year,
-                        "imdb_id": imdb_id,
+                        "tmdb_id": self.tmdb_id,
+                        "imdb_id": self.imdb_id,
+                        "animeapi_id": animeapi_id,
+                        "enrich": enrich,
                         "cli_params": {
                             k: v
                             for k, v in ctx.params.items()
-                            if k not in ["profile", "proxy", "tag", "tmdb_id", "tmdb_name", "tmdb_year", "imdb_id"]
+                            if k
+                            not in [
+                                "profile",
+                                "proxy",
+                                "tag",
+                                "tmdb_id",
+                                "imdb_id",
+                                "animeapi_id",
+                                "enrich",
+                            ]
                         },
                     },
                 )
@@ -1089,40 +1110,51 @@ class dl:
         cache_region = service.current_region if hasattr(service, "current_region") else None
         cache_account_hash = get_account_hash(service.credential) if hasattr(service, "credential") else None
 
-        if (self.tmdb_year or self.tmdb_name) and self.tmdb_id:
+        if self.enrich:
             sample_title = titles[0] if hasattr(titles, "__getitem__") else titles
             kind = "tv" if isinstance(sample_title, Episode) else "movie"
 
-            tmdb_year_val = None
-            tmdb_name_val = None
+            enrich_title: Optional[str] = None
+            enrich_year: Optional[int] = None
 
-            if self.tmdb_year:
-                tmdb_year_val = providers.get_year_by_id(
+            if self.animeapi_title:
+                enrich_title = self.animeapi_title
+
+            if self.tmdb_id:
+                if not enrich_title:
+                    enrich_title = providers.get_title_by_id(
+                        self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
+                    )
+                enrich_year = providers.get_year_by_id(
                     self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
                 )
+            elif self.imdb_id:
+                imdbapi = providers.get_provider("imdbapi")
+                if imdbapi:
+                    imdb_result = imdbapi.get_by_id(self.imdb_id, kind)
+                    if imdb_result:
+                        if not enrich_title:
+                            enrich_title = imdb_result.title
+                        enrich_year = imdb_result.year
 
-            if self.tmdb_name:
-                tmdb_name_val = providers.get_title_by_id(
-                    self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
-                )
-
-            if isinstance(titles, (Series, Movies)):
-                for t in titles:
-                    if tmdb_year_val:
-                        t.year = tmdb_year_val
-                    if tmdb_name_val:
-                        if isinstance(t, Episode):
-                            t.title = tmdb_name_val
+            if enrich_title or enrich_year:
+                if isinstance(titles, (Series, Movies)):
+                    for t in titles:
+                        if enrich_title:
+                            if isinstance(t, Episode):
+                                t.title = enrich_title
+                            else:
+                                t.name = enrich_title
+                        if enrich_year and not t.year:
+                            t.year = enrich_year
+                else:
+                    if enrich_title:
+                        if isinstance(titles, Episode):
+                            titles.title = enrich_title
                         else:
-                            t.name = tmdb_name_val
-            else:
-                if tmdb_year_val:
-                    titles.year = tmdb_year_val
-                if tmdb_name_val:
-                    if isinstance(titles, Episode):
-                        titles.title = tmdb_name_val
-                    else:
-                        titles.name = tmdb_name_val
+                            titles.name = enrich_title
+                    if enrich_year and not titles.year:
+                        titles.year = enrich_year
 
         console.print(Padding(Rule(f"[rule.text]{titles.__class__.__name__}: {titles}"), (1, 2)))
 
@@ -1181,7 +1213,7 @@ class dl:
                 page_size=8,
                 return_indices=True,
                 dependencies=dependencies,
-                collapse_on_start=multiple_seasons
+                collapse_on_start=multiple_seasons,
             )
 
             if not selected_ui_idx:
@@ -2399,7 +2431,9 @@ class dl:
 
                         final_dir.mkdir(parents=True, exist_ok=True)
                         final_path = final_dir / f"{final_filename}{muxed_path.suffix}"
-                        template_type = "series" if isinstance(title, Episode) else "songs" if isinstance(title, Song) else "movies"
+                        template_type = (
+                            "series" if isinstance(title, Episode) else "songs" if isinstance(title, Song) else "movies"
+                        )
                         sep = config.get_template_separator(template_type)
 
                         if final_path.exists() and audio_codec_suffix and append_audio_codec_suffix:

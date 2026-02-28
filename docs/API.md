@@ -231,9 +231,9 @@ Start a download job. Returns immediately with a job ID (HTTP 202).
 | `tag` | string | `null` | Override group tag |
 | `repack` | boolean | `false` | Add REPACK tag to filename |
 | `tmdb_id` | int | `null` | Use specific TMDB ID for tagging |
-| `tmdb_name` | boolean | `false` | Rename titles using TMDB name |
-| `tmdb_year` | boolean | `false` | Use TMDB release year |
 | `imdb_id` | string | `null` | Use specific IMDB ID (e.g., `tt1375666`) |
+| `animeapi_id` | string | `null` | Anime database ID via AnimeAPI (e.g., `mal:12345`) |
+| `enrich` | boolean | `false` | Override show title and year from external source |
 | `no_folder` | boolean | `false` | Disable folder creation for TV shows |
 | `no_source` | boolean | `false` | Remove source tag from filename |
 | `no_mux` | boolean | `false` | Do not mux tracks into container |

@@ -623,12 +623,12 @@ async def download(request: web.Request) -> web.Response:
               tmdb_id:
                 type: integer
                 description: Use this TMDB ID for tagging (default - None)
-              tmdb_name:
+              animeapi_id:
+                type: string
+                description: Anime database ID via AnimeAPI, e.g. mal:12345 (default - None)
+              enrich:
                 type: boolean
-                description: Rename titles using TMDB name (default - false)
-              tmdb_year:
-                type: boolean
-                description: Use release year from TMDB (default - false)
+                description: Override show title and year from external source (default - false)
               no_folder:
                 type: boolean
                 description: Disable folder creation for TV shows (default - false)

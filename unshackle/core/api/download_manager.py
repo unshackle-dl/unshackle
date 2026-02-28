@@ -164,9 +164,9 @@ def _perform_download(
         "repack": params.get("repack", False),
         "tag": params.get("tag"),
         "tmdb_id": params.get("tmdb_id"),
-        "tmdb_name": params.get("tmdb_name", False),
-        "tmdb_year": params.get("tmdb_year", False),
         "imdb_id": params.get("imdb_id"),
+        "animeapi_id": params.get("animeapi_id"),
+        "enrich": params.get("enrich", False),
         "output_dir": Path(params["output_dir"]) if params.get("output_dir") else None,
         "no_cache": params.get("no_cache", False),
         "reset_cache": params.get("reset_cache", False),
@@ -180,9 +180,9 @@ def _perform_download(
         repack=params.get("repack", False),
         tag=params.get("tag"),
         tmdb_id=params.get("tmdb_id"),
-        tmdb_name=params.get("tmdb_name", False),
-        tmdb_year=params.get("tmdb_year", False),
         imdb_id=params.get("imdb_id"),
+        animeapi_id=params.get("animeapi_id"),
+        enrich=params.get("enrich", False),
         output_dir=Path(params["output_dir"]) if params.get("output_dir") else None,
     )
 

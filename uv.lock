@@ -110,6 +110,20 @@ wheels = [
 ]
 
 [[package]]
+name = "animeapi-py"
+version = "3.8.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "dacite" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/28/a2/f868bba3b6399e2c953f8796fa90c8de91f797ad0fe19c7e2c536cd0092f/animeapi_py-3.8.1.tar.gz", hash = "sha256:9ed10f8207f1ccd7949ee3728285f4aced9a5ec57f71d211594ca5dc356fdea5", size = 25663, upload-time = "2026-02-25T15:29:17.879Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ba/98/6775d71cf7d88d554e8394f5ce5cda90041c99fdf1b2b60af02001e8c790/animeapi_py-3.8.1-py3-none-any.whl", hash = "sha256:c29f6e633d17bb613f459aa6514c0baab7ae325881f8a109eb6e4b3be5c22827", size = 26983, upload-time = "2026-02-25T15:29:16.685Z" },
+]
+
+[[package]]
 name = "anyio"
 version = "4.12.1"
 source = { registry = "https://pypi.org/simple" }
@@ -447,6 +461,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/1a/91/6dd1910a212f2e8eafe57877bcf97748eb24849e1511a266687546066b8a/curl_cffi-0.13.0-cp39-abi3-musllinux_1_1_x86_64.whl", hash = "sha256:6d433ffcb455ab01dd0d7bde47109083aa38b59863aa183d29c668ae4c96bf8e", size = 8711908, upload-time = "2025-08-06T13:05:38.741Z" },
     { url = "https://files.pythonhosted.org/packages/6d/e4/15a253f9b4bf8d008c31e176c162d2704a7e0c5e24d35942f759df107b68/curl_cffi-0.13.0-cp39-abi3-win_amd64.whl", hash = "sha256:66a6b75ce971de9af64f1b6812e275f60b88880577bac47ef1fa19694fa21cd3", size = 1614510, upload-time = "2025-08-06T13:05:40.451Z" },
     { url = "https://files.pythonhosted.org/packages/f9/0f/9c5275f17ad6ff5be70edb8e0120fdc184a658c9577ca426d4230f654beb/curl_cffi-0.13.0-cp39-abi3-win_arm64.whl", hash = "sha256:d438a3b45244e874794bc4081dc1e356d2bb926dcc7021e5a8fef2e2105ef1d8", size = 1365753, upload-time = "2025-08-06T13:05:41.879Z" },
+]
+
+[[package]]
+name = "dacite"
+version = "1.9.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/55/a0/7ca79796e799a3e782045d29bf052b5cde7439a2bbb17f15ff44f7aacc63/dacite-1.9.2.tar.gz", hash = "sha256:6ccc3b299727c7aa17582f0021f6ae14d5de47c7227932c47fec4cdfefd26f09", size = 22420, upload-time = "2025-02-05T09:27:29.757Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/94/35/386550fd60316d1e37eccdda609b074113298f23cef5bddb2049823fe666/dacite-1.9.2-py3-none-any.whl", hash = "sha256:053f7c3f5128ca2e9aceb66892b1a3c8936d02c686e707bee96e19deef4bc4a0", size = 16600, upload-time = "2025-02-05T09:27:24.345Z" },
 ]
 
 [[package]]
@@ -1632,6 +1655,7 @@ source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "aiohttp-swagger3" },
+    { name = "animeapi-py" },
     { name = "appdirs" },
     { name = "brotli" },
     { name = "chardet" },
@@ -1690,6 +1714,7 @@ dev = [
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.13.3,<4" },
     { name = "aiohttp-swagger3", specifier = ">=0.9.0,<1" },
+    { name = "animeapi-py", specifier = ">=0.6.0" },
     { name = "appdirs", specifier = ">=1.4.4,<2" },
     { name = "brotli", specifier = ">=1.1.0,<2" },
     { name = "chardet", specifier = ">=5.2.0,<6" },
