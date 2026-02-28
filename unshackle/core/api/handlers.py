@@ -1,3 +1,4 @@
+import enum
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -42,8 +43,10 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "no_subs": False,
     "no_audio": False,
     "no_chapters": False,
+    "no_video": False,
     "audio_description": False,
     "slow": False,
+    "split_audio": None,
     "skip_dl": False,
     "export": None,
     "cdm_only": None,
@@ -54,6 +57,11 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "workers": None,
     "downloads": 1,
     "best_available": False,
+    "repack": False,
+    "imdb_id": None,
+    "output_dir": None,
+    "no_cache": False,
+    "reset_cache": False,
 }
 
 
@@ -341,6 +349,137 @@ def serialize_subtitle_track(track: Subtitle, include_url: bool = False) -> Dict
     return result
 
 
+async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
+    """Handle search request."""
+    import inspect
+
+    import click
+    import yaml
+
+    from unshackle.commands.dl import dl
+    from unshackle.core.config import config
+    from unshackle.core.services import Services
+    from unshackle.core.utils.click_types import ContextData
+    from unshackle.core.utils.collections import merge_dict
+
+    service_tag = data.get("service")
+    query = data.get("query")
+
+    if not service_tag:
+        raise APIError(APIErrorCode.MISSING_SERVICE, "Missing required 'service' field")
+    if not query:
+        raise APIError(APIErrorCode.INVALID_PARAMETERS, "Missing required 'query' field")
+
+    normalized_service = Services.get_tag(service_tag)
+    if not normalized_service:
+        raise APIError(
+            APIErrorCode.INVALID_SERVICE,
+            f"Service '{service_tag}' not found",
+            details={"service": service_tag},
+        )
+
+    profile = data.get("profile")
+    proxy_param = data.get("proxy")
+    no_proxy = data.get("no_proxy", False)
+
+    service_config_path = Services.get_path(normalized_service) / config.filenames.config
+    if service_config_path.exists():
+        service_config = yaml.safe_load(service_config_path.read_text(encoding="utf8"))
+    else:
+        service_config = {}
+    merge_dict(config.services.get(normalized_service), service_config)
+
+    proxy_providers = []
+    if not no_proxy:
+        proxy_providers = initialize_proxy_providers()
+
+    if proxy_param and not no_proxy:
+        try:
+            resolved_proxy = resolve_proxy(proxy_param, proxy_providers)
+            proxy_param = resolved_proxy
+        except ValueError as e:
+            raise APIError(
+                APIErrorCode.INVALID_PROXY,
+                f"Proxy error: {e}",
+                details={"proxy": proxy_param, "service": normalized_service},
+            )
+
+    @click.command()
+    @click.pass_context
+    def dummy_service(ctx: click.Context) -> None:
+        pass
+
+    ctx = click.Context(dummy_service)
+    ctx.obj = ContextData(config=service_config, cdm=None, proxy_providers=proxy_providers, profile=profile)
+    ctx.params = {"proxy": proxy_param, "no_proxy": no_proxy}
+
+    service_module = Services.load(normalized_service)
+
+    dummy_service.name = normalized_service
+    ctx.invoked_subcommand = normalized_service
+
+    service_ctx = click.Context(dummy_service, parent=ctx)
+    service_ctx.obj = ctx.obj
+
+    service_init_params = inspect.signature(service_module.__init__).parameters
+    service_kwargs = {"title": query}
+
+    # Extract default values from the click command
+    if hasattr(service_module, "cli") and hasattr(service_module.cli, "params"):
+        for param in service_module.cli.params:
+            if hasattr(param, "name") and param.name not in service_kwargs:
+                if hasattr(param, "default") and param.default is not None and not isinstance(param.default, enum.Enum):
+                    service_kwargs[param.name] = param.default
+
+    for param_name, param_info in service_init_params.items():
+        if param_name not in service_kwargs and param_name not in ["self", "ctx"]:
+            if param_info.default is inspect.Parameter.empty:
+                if param_name == "meta_lang":
+                    service_kwargs[param_name] = None
+                elif param_name == "movie":
+                    service_kwargs[param_name] = False
+                else:
+                    service_kwargs[param_name] = None
+
+    # Filter to only accepted params
+    accepted_params = set(service_init_params.keys()) - {"self", "ctx"}
+    service_kwargs = {k: v for k, v in service_kwargs.items() if k in accepted_params}
+
+    try:
+        service_instance = service_module(service_ctx, **service_kwargs)
+    except Exception as exc:
+        raise APIError(
+            APIErrorCode.SERVICE_ERROR,
+            f"Failed to initialize service: {exc}",
+            details={"service": normalized_service},
+        )
+
+    # Authenticate
+    cookies = dl.get_cookie_jar(normalized_service, profile)
+    credential = dl.get_credentials(normalized_service, profile)
+    service_instance.authenticate(cookies, credential)
+
+    # Search
+    results = []
+    try:
+        for result in service_instance.search():
+            results.append({
+                "id": result.id,
+                "title": result.title,
+                "description": result.description,
+                "label": result.label,
+                "url": result.url,
+            })
+    except NotImplementedError:
+        raise APIError(
+            APIErrorCode.SERVICE_ERROR,
+            f"Search is not supported by {normalized_service}",
+            details={"service": normalized_service},
+        )
+
+    return web.json_response({"results": results, "count": len(results)})
+
+
 async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
     """Handle list-titles request."""
     service_tag = data.get("service")
@@ -439,7 +578,7 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
             for param in service_module.cli.params:
                 if hasattr(param, "name") and param.name not in service_kwargs:
                     # Add default value if parameter is not already provided
-                    if hasattr(param, "default") and param.default is not None:
+                    if hasattr(param, "default") and param.default is not None and not isinstance(param.default, enum.Enum):
                         service_kwargs[param.name] = param.default
 
         # Handle required parameters that don't have click defaults
@@ -587,7 +726,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
             for param in service_module.cli.params:
                 if hasattr(param, "name") and param.name not in service_kwargs:
                     # Add default value if parameter is not already provided
-                    if hasattr(param, "default") and param.default is not None:
+                    if hasattr(param, "default") and param.default is not None and not isinstance(param.default, enum.Enum):
                         service_kwargs[param.name] = param.default
 
         # Handle required parameters that don't have click defaults
@@ -631,7 +770,10 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
 
                 try:
                     season_range = SeasonRange()
-                    wanted = season_range.parse_tokens(wanted_param)
+                    if isinstance(wanted_param, list):
+                        wanted = season_range.parse_tokens(*wanted_param)
+                    else:
+                        wanted = season_range.parse_tokens(wanted_param)
                     log.debug(f"Parsed wanted '{wanted_param}' into {len(wanted)} episodes: {wanted[:10]}...")
                 except Exception as e:
                     raise APIError(
@@ -760,9 +902,17 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
         None if valid, error message string if invalid
     """
     if "vcodec" in data and data["vcodec"]:
-        valid_vcodecs = ["H264", "H265", "VP9", "AV1"]
-        if data["vcodec"].upper() not in valid_vcodecs:
-            return f"Invalid vcodec: {data['vcodec']}. Must be one of: {', '.join(valid_vcodecs)}"
+        valid_vcodecs = ["H264", "H265", "H.264", "H.265", "AVC", "HEVC", "VC1", "VC-1", "VP8", "VP9", "AV1"]
+        if isinstance(data["vcodec"], str):
+            vcodec_values = [v.strip() for v in data["vcodec"].split(",") if v.strip()]
+        elif isinstance(data["vcodec"], list):
+            vcodec_values = [str(v).strip() for v in data["vcodec"] if str(v).strip()]
+        else:
+            return "vcodec must be a string or list"
+
+        invalid = [value for value in vcodec_values if value.upper() not in valid_vcodecs]
+        if invalid:
+            return f"Invalid vcodec: {', '.join(invalid)}. Must be one of: {', '.join(valid_vcodecs)}"
 
     if "acodec" in data and data["acodec"]:
         valid_acodecs = ["AAC", "AC3", "EC3", "EAC3", "DD", "DD+", "AC4", "OPUS", "FLAC", "ALAC", "VORBIS", "OGG", "DTS"]
@@ -778,7 +928,7 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
             return f"Invalid acodec: {', '.join(invalid)}. Must be one of: {', '.join(valid_acodecs)}"
 
     if "sub_format" in data and data["sub_format"]:
-        valid_sub_formats = ["SRT", "VTT", "ASS", "SSA"]
+        valid_sub_formats = ["SRT", "VTT", "ASS", "SSA", "TTML", "STPP", "WVTT", "SMI", "SUB", "MPL2", "TMP"]
         if data["sub_format"].upper() not in valid_sub_formats:
             return f"Invalid sub_format: {data['sub_format']}. Must be one of: {', '.join(valid_sub_formats)}"
 
@@ -880,7 +1030,7 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
         # Extract default values from the service's click command
         if hasattr(service_module, "cli") and hasattr(service_module.cli, "params"):
             for param in service_module.cli.params:
-                if hasattr(param, "name") and hasattr(param, "default") and param.default is not None:
+                if hasattr(param, "name") and hasattr(param, "default") and param.default is not None and not isinstance(param.default, enum.Enum):
                     # Store service-specific defaults (e.g., drm_system, hydrate_track, profile for NF)
                     service_specific_defaults[param.name] = param.default
 

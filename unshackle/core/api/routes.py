@@ -7,7 +7,8 @@ from aiohttp_swagger3 import SwaggerDocs, SwaggerInfo, SwaggerUiSettings
 from unshackle.core import __version__
 from unshackle.core.api.errors import APIError, APIErrorCode, build_error_response, handle_api_exception
 from unshackle.core.api.handlers import (cancel_download_job_handler, download_handler, get_download_job_handler,
-                                         list_download_jobs_handler, list_titles_handler, list_tracks_handler)
+                                         list_download_jobs_handler, list_titles_handler, list_tracks_handler,
+                                         search_handler)
 from unshackle.core.services import Services
 from unshackle.core.update_checker import UpdateChecker
 
@@ -197,6 +198,93 @@ async def services(request: web.Request) -> web.Response:
         log.exception("Error listing services")
         debug_mode = request.app.get("debug_api", False)
         return handle_api_exception(e, context={"operation": "list_services"}, debug_mode=debug_mode)
+
+
+async def search(request: web.Request) -> web.Response:
+    """
+    Search for titles from a service.
+    ---
+    summary: Search for titles
+    description: Search for titles by query string from a service
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - service
+              - query
+            properties:
+              service:
+                type: string
+                description: Service tag (e.g., NF, AMZN, ATV)
+              query:
+                type: string
+                description: Search query string
+              profile:
+                type: string
+                description: Profile to use for credentials and cookies (default - None)
+              proxy:
+                type: string
+                description: Proxy URI or country code (default - None)
+              no_proxy:
+                type: boolean
+                description: Force disable all proxy use (default - false)
+    responses:
+      '200':
+        description: Search results
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                results:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        description: Title ID for use with other endpoints
+                      title:
+                        type: string
+                        description: Title name
+                      description:
+                        type: string
+                        description: Title description
+                      label:
+                        type: string
+                        description: Informative label (e.g., availability, region)
+                      url:
+                        type: string
+                        description: URL to the title page
+                count:
+                  type: integer
+                  description: Number of results returned
+      '400':
+        description: Invalid request
+    """
+    try:
+        data = await request.json()
+    except Exception as e:
+        return build_error_response(
+            APIError(
+                APIErrorCode.INVALID_INPUT,
+                "Invalid JSON request body",
+                details={"error": str(e)},
+            ),
+            request.app.get("debug_api", False),
+        )
+
+    try:
+        return await search_handler(data, request)
+    except APIError as e:
+        return build_error_response(e, request.app.get("debug_api", False))
+    except Exception as e:
+        log.exception("Error in search")
+        debug_mode = request.app.get("debug_api", False)
+        return handle_api_exception(e, context={"operation": "search"}, debug_mode=debug_mode)
 
 
 async def list_titles(request: web.Request) -> web.Response:
@@ -409,11 +497,19 @@ async def download(request: web.Request) -> web.Response:
                   type: integer
                 description: Download resolution(s) (default - best available)
               vcodec:
-                type: string
-                description: Video codec to download (e.g., H264, H265, VP9, AV1) (default - None)
+                oneOf:
+                  - type: string
+                  - type: array
+                    items:
+                      type: string
+                description: Video codec(s) to download (e.g., "H265" or ["H264", "H265"]) - accepts H264, H265, AVC, HEVC, VP8, VP9, AV1, VC1 (default - None)
               acodec:
-                type: string
-                description: Audio codec(s) to download (e.g., AAC or AAC,EC3) (default - None)
+                oneOf:
+                  - type: string
+                  - type: array
+                    items:
+                      type: string
+                description: Audio codec(s) to download (e.g., "AAC" or ["AAC", "EC3"]) - accepts AAC, AC3, EC3, AC4, OPUS, FLAC, ALAC, DTS, OGG (default - None)
               vbitrate:
                 type: integer
                 description: Video bitrate in kbps (default - None)
@@ -424,7 +520,7 @@ async def download(request: web.Request) -> web.Response:
                 type: array
                 items:
                   type: string
-                description: Video color range (SDR, HDR10, DV) (default - ["SDR"])
+                description: Video color range (SDR, HDR10, HDR10+, HLG, DV, HYBRID) (default - ["SDR"])
               channels:
                 type: number
                 description: Audio channels (e.g., 2.0, 5.1, 7.1) (default - None)
@@ -494,12 +590,18 @@ async def download(request: web.Request) -> web.Response:
               no_chapters:
                 type: boolean
                 description: Do not download chapters (default - false)
+              no_video:
+                type: boolean
+                description: Do not download video tracks (default - false)
               audio_description:
                 type: boolean
                 description: Download audio description tracks (default - false)
               slow:
                 type: boolean
                 description: Add 60-120s delay between downloads (default - false)
+              split_audio:
+                type: boolean
+                description: Create separate output files per audio codec instead of merging all audio (default - null)
               skip_dl:
                 type: boolean
                 description: Skip downloading, only retrieve decryption keys (default - false)
@@ -545,6 +647,21 @@ async def download(request: web.Request) -> web.Response:
               best_available:
                 type: boolean
                 description: Continue with best available if requested quality unavailable (default - false)
+              repack:
+                type: boolean
+                description: Add REPACK tag to the output filename (default - false)
+              imdb_id:
+                type: string
+                description: Use this IMDB ID (e.g. tt1375666) for tagging (default - None)
+              output_dir:
+                type: string
+                description: Override the output directory for this download (default - None)
+              no_cache:
+                type: boolean
+                description: Bypass title cache for this download (default - false)
+              reset_cache:
+                type: boolean
+                description: Clear title cache before fetching (default - false)
     responses:
       '202':
         description: Download job created
@@ -723,6 +840,7 @@ def setup_routes(app: web.Application) -> None:
     """Setup all API routes."""
     app.router.add_get("/api/health", health)
     app.router.add_get("/api/services", services)
+    app.router.add_post("/api/search", search)
     app.router.add_post("/api/list-titles", list_titles)
     app.router.add_post("/api/list-tracks", list_tracks)
     app.router.add_post("/api/download", download)
@@ -748,6 +866,7 @@ def setup_swagger(app: web.Application) -> None:
         [
             web.get("/api/health", health),
             web.get("/api/services", services),
+            web.post("/api/search", search),
             web.post("/api/list-titles", list_titles),
             web.post("/api/list-tracks", list_tracks),
             web.post("/api/download", download),

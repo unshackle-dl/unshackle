@@ -4,11 +4,34 @@ This document covers advanced features, debugging, and system-level configuratio
 
 ## serve (dict)
 
-Configuration data for pywidevine's serve functionality run through unshackle.
-This effectively allows you to run `unshackle serve` to start serving pywidevine Serve-compliant CDMs right from your
-local widevine device files.
+Configuration for the integrated server that provides CDM endpoints (Widevine/PlayReady) and a REST API for remote downloading.
 
-- `api_secret` - Secret key for REST API authentication. When set, enables the REST API server alongside the CDM serve functionality. This key is required for authenticating API requests.
+Start the server with:
+
+```bash
+unshackle serve                          # Default: localhost:8786
+unshackle serve -h 0.0.0.0 -p 8888      # Listen on all interfaces
+unshackle serve --no-key                 # Disable authentication
+unshackle serve --api-only               # REST API only, no CDM endpoints
+```
+
+### CLI Options
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `-h, --host` | `127.0.0.1` | Host to serve from |
+| `-p, --port` | `8786` | Port to serve from |
+| `--caddy` | `false` | Also serve with Caddy reverse-proxy for HTTPS |
+| `--api-only` | `false` | Serve only the REST API, disable CDM endpoints |
+| `--no-widevine` | `false` | Disable Widevine CDM endpoints |
+| `--no-playready` | `false` | Disable PlayReady CDM endpoints |
+| `--no-key` | `false` | Disable API key authentication (allows all requests) |
+| `--debug-api` | `false` | Include tracebacks and stderr in API error responses |
+| `--debug` | `false` | Enable debug logging for API operations |
+
+### Configuration
+
+- `api_secret` - Secret key for REST API authentication. Required unless `--no-key` is used. All API requests must include this key via the `X-API-Key` header or `api_key` query parameter.
 - `devices` - List of Widevine device files (.wvd). If not specified, auto-populated from the WVDs directory.
 - `playready_devices` - List of PlayReady device files (.prd). If not specified, auto-populated from the PRDs directory.
 - `users` - Dictionary mapping user secret keys to their access configuration:
@@ -41,6 +64,14 @@ serve:
   # devices:
   #   - 'C:\Users\john\Devices\test_devices_001.wvd'
 ```
+
+### REST API
+
+When the server is running, interactive API documentation is available at:
+
+- **Swagger UI**: `http://localhost:8786/api/docs/`
+
+See [API.md](API.md) for full REST API documentation with endpoints, parameters, and examples.
 
 ---
 

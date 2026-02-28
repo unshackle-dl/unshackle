@@ -10,6 +10,7 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 log = logging.getLogger("download_manager")
@@ -105,10 +106,43 @@ def _perform_download(
     from unshackle.commands.dl import dl
     from unshackle.core.config import config
     from unshackle.core.services import Services
+    from unshackle.core.tracks import Subtitle, Video
     from unshackle.core.utils.click_types import ContextData
     from unshackle.core.utils.collections import merge_dict
 
     log.info(f"Starting sync download for job {job_id}")
+
+    # Convert string parameters to enums (API receives strings, dl.result() expects enums)
+    vcodec_raw = params.get("vcodec")
+    if vcodec_raw:
+        if isinstance(vcodec_raw, str):
+            vcodec_raw = [vcodec_raw]
+        if isinstance(vcodec_raw, list) and vcodec_raw and not isinstance(vcodec_raw[0], Video.Codec):
+            codec_map = {c.name.upper(): c for c in Video.Codec}
+            codec_map.update({c.value.upper(): c for c in Video.Codec})
+            params["vcodec"] = [codec_map[v.upper()] for v in vcodec_raw if v.upper() in codec_map]
+    else:
+        params["vcodec"] = []
+
+    range_raw = params.get("range")
+    if range_raw:
+        if isinstance(range_raw, str):
+            range_raw = [range_raw]
+        if isinstance(range_raw, list) and range_raw and not isinstance(range_raw[0], Video.Range):
+            range_map = {r.name.upper(): r for r in Video.Range}
+            range_map.update({r.value.upper(): r for r in Video.Range})
+            params["range"] = [range_map[r.upper()] for r in range_raw if r.upper() in range_map]
+    else:
+        params["range"] = [Video.Range.SDR]
+
+    sub_format_raw = params.get("sub_format")
+    if sub_format_raw and isinstance(sub_format_raw, str):
+        sub_map = {c.name.upper(): c for c in Subtitle.Codec}
+        sub_map.update({c.value.upper(): c for c in Subtitle.Codec})
+        params["sub_format"] = sub_map.get(sub_format_raw.upper())
+
+    if params.get("export") and isinstance(params["export"], str):
+        params["export"] = Path(params["export"])
 
     # Load service configuration
     service_config_path = Services.get_path(service) / config.filenames.config
@@ -127,10 +161,15 @@ def _perform_download(
         "proxy": params.get("proxy"),
         "no_proxy": params.get("no_proxy", False),
         "profile": params.get("profile"),
+        "repack": params.get("repack", False),
         "tag": params.get("tag"),
         "tmdb_id": params.get("tmdb_id"),
         "tmdb_name": params.get("tmdb_name", False),
         "tmdb_year": params.get("tmdb_year", False),
+        "imdb_id": params.get("imdb_id"),
+        "output_dir": Path(params["output_dir"]) if params.get("output_dir") else None,
+        "no_cache": params.get("no_cache", False),
+        "reset_cache": params.get("reset_cache", False),
     }
 
     dl_instance = dl(
@@ -138,10 +177,13 @@ def _perform_download(
         no_proxy=params.get("no_proxy", False),
         profile=params.get("profile"),
         proxy=params.get("proxy"),
+        repack=params.get("repack", False),
         tag=params.get("tag"),
         tmdb_id=params.get("tmdb_id"),
         tmdb_name=params.get("tmdb_name", False),
         tmdb_year=params.get("tmdb_year", False),
+        imdb_id=params.get("imdb_id"),
+        output_dir=Path(params["output_dir"]) if params.get("output_dir") else None,
     )
 
     service_module = Services.load(service)
@@ -220,14 +262,14 @@ def _perform_download(
             dl_instance.result(
                 service=service_instance,
                 quality=params.get("quality", []),
-                vcodec=params.get("vcodec"),
+                vcodec=params.get("vcodec", []),
                 acodec=params.get("acodec"),
                 vbitrate=params.get("vbitrate"),
                 abitrate=params.get("abitrate"),
                 range_=params.get("range", ["SDR"]),
                 channels=params.get("channels"),
                 no_atmos=params.get("no_atmos", False),
-                split_audio=params.get("split_audio"),
+                select_titles=False,
                 wanted=params.get("wanted", []),
                 latest_episode=params.get("latest_episode", False),
                 lang=params.get("lang", ["orig"]),
@@ -245,6 +287,7 @@ def _perform_download(
                 no_subs=params.get("no_subs", False),
                 no_audio=params.get("no_audio", False),
                 no_chapters=params.get("no_chapters", False),
+                no_video=params.get("no_video", False),
                 audio_description=params.get("audio_description", False),
                 slow=params.get("slow", False),
                 list_=False,
@@ -259,6 +302,7 @@ def _perform_download(
                 workers=params.get("workers"),
                 downloads=params.get("downloads", 1),
                 best_available=params.get("best_available", False),
+                split_audio=params.get("split_audio"),
             )
 
     except SystemExit as exc:
