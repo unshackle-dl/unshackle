@@ -7,7 +7,7 @@ import math
 import re
 import shutil
 import sys
-from copy import copy
+from copy import copy, deepcopy
 from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
@@ -18,6 +18,7 @@ from zlib import crc32
 import requests
 from curl_cffi.requests import Session as CurlSession
 from langcodes import Language, tag_is_valid
+from lxml import etree
 from lxml.etree import Element, ElementTree
 from pyplayready.system.pssh import PSSH as PR_PSSH
 from pywidevine.cdm import Cdm as WidevineCdm
@@ -101,14 +102,22 @@ class DASH:
         """
         tracks = Tracks()
 
+        filtered_period_ids: list[str] = []
+
         for period in self.manifest.findall("Period"):
             if callable(period_filter) and period_filter(period):
+                if period_id := period.get("id"):
+                    filtered_period_ids.append(period_id)
                 continue
             if next(iter(period.xpath("SegmentType/@value")), "content") != "content":
+                if period_id := period.get("id"):
+                    filtered_period_ids.append(period_id)
                 continue
             if "urn:amazon:primevideo:cachingBreadth" in [
                 x.get("schemeIdUri") for x in period.findall("SupplementalProperty")
             ]:
+                if period_id := period.get("id"):
+                    filtered_period_ids.append(period_id)
                 continue
 
             for adaptation_set in period.findall("AdaptationSet"):
@@ -235,6 +244,7 @@ class DASH:
                                     "period": period,
                                     "adaptation_set": adaptation_set,
                                     "representation": rep,
+                                    "filtered_period_ids": filtered_period_ids,
                                 }
                             },
                             **track_args,
@@ -541,6 +551,26 @@ class DASH:
         skip_merge = False
         if downloader.__name__ == "n_m3u8dl_re":
             skip_merge = True
+
+            # When periods were filtered out during to_tracks(), n_m3u8dl_re will re-parse
+            # the raw MPD and download ALL periods (including ads/pre-rolls). Write a filtered
+            # MPD with the rejected periods removed so n_m3u8dl_re downloads the correct content.
+            filtered_period_ids = track.data.get("dash", {}).get("filtered_period_ids", [])
+            if filtered_period_ids:
+                filtered_manifest = deepcopy(manifest)
+                for child in list(filtered_manifest):
+                    if not hasattr(child.tag, "find"):
+                        continue
+                    if child.tag == "Period" and child.get("id") in filtered_period_ids:
+                        filtered_manifest.remove(child)
+
+                filtered_mpd_path = save_dir / f".{track.id}_filtered.mpd"
+                filtered_mpd_path.parent.mkdir(parents=True, exist_ok=True)
+                etree.ElementTree(filtered_manifest).write(
+                    str(filtered_mpd_path), xml_declaration=True, encoding="utf-8"
+                )
+                track.from_file = filtered_mpd_path
+
             downloader_args.update(
                 {
                     "filename": track.id,
@@ -577,6 +607,11 @@ class DASH:
                 if downloaded and downloaded.endswith("/s"):
                     status_update["downloaded"] = f"DASH {downloaded}"
                 progress(**status_update)
+
+        # Clean up filtered MPD temp file before enumerating segments
+        filtered_mpd_path = save_dir / f".{track.id}_filtered.mpd"
+        if filtered_mpd_path.exists():
+            filtered_mpd_path.unlink()
 
         # see https://github.com/devine-dl/devine/issues/71
         for control_file in save_dir.glob("*.aria2__temp"):
