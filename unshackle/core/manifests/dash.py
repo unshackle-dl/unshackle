@@ -552,24 +552,28 @@ class DASH:
         if downloader.__name__ == "n_m3u8dl_re":
             skip_merge = True
 
-            # When periods were filtered out during to_tracks(), n_m3u8dl_re will re-parse
-            # the raw MPD and download ALL periods (including ads/pre-rolls). Write a filtered
-            # MPD with the rejected periods removed so n_m3u8dl_re downloads the correct content.
+            # N_m3u8DL-RE re-requests the raw MPD from the server by default, losing any
+            # in-memory modifications (like XML entity fixes or injected BaseURLs).
+            # Therefore, we always write the modified manifest to a temporary file.
+            # also remove any rejected periods (e.g., ads) filtered out during to_tracks().
             filtered_period_ids = track.data.get("dash", {}).get("filtered_period_ids", [])
+            modified_manifest = deepcopy(manifest)
+
             if filtered_period_ids:
-                filtered_manifest = deepcopy(manifest)
-                for child in list(filtered_manifest):
+                for child in list(modified_manifest):
                     if not hasattr(child.tag, "find"):
                         continue
                     if child.tag == "Period" and child.get("id") in filtered_period_ids:
-                        filtered_manifest.remove(child)
+                        modified_manifest.remove(child)
 
-                filtered_mpd_path = save_dir / f".{track.id}_filtered.mpd"
-                filtered_mpd_path.parent.mkdir(parents=True, exist_ok=True)
-                etree.ElementTree(filtered_manifest).write(
-                    str(filtered_mpd_path), xml_declaration=True, encoding="utf-8"
-                )
-                track.from_file = filtered_mpd_path
+            modified_mpd_path = save_dir / f".{track.id}_modified.mpd"
+            modified_mpd_path.parent.mkdir(parents=True, exist_ok=True)
+            etree.ElementTree(modified_manifest).write(
+                str(modified_mpd_path),
+                xml_declaration=True,
+                encoding="utf-8",
+            )
+            track.from_file = modified_mpd_path
 
             downloader_args.update(
                 {
@@ -608,10 +612,10 @@ class DASH:
                     status_update["downloaded"] = f"DASH {downloaded}"
                 progress(**status_update)
 
-        # Clean up filtered MPD temp file before enumerating segments
-        filtered_mpd_path = save_dir / f".{track.id}_filtered.mpd"
-        if filtered_mpd_path.exists():
-            filtered_mpd_path.unlink()
+        # Clean up the temporary modified MPD file before enumerating segments
+        modified_mpd_path = save_dir / f".{track.id}_modified.mpd"
+        if modified_mpd_path.exists():
+            modified_mpd_path.unlink()
 
         # see https://github.com/devine-dl/devine/issues/71
         for control_file in save_dir.glob("*.aria2__temp"):
