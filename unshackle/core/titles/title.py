@@ -121,6 +121,8 @@ class Title:
                     base_layer = DYNAMIC_RANGE_MAP.get(hdr_format)
                     if base_layer and base_layer != "DV":
                         context["hdr"] += f".{base_layer}"
+                elif (primary_video_track.hdr_format or "").startswith("HDR Vivid"):
+                    context["hdr"] = "HDR"
                 else:
                     context["hdr"] = DYNAMIC_RANGE_MAP.get(hdr_format, "")
             elif trc and "HLG" in trc:
