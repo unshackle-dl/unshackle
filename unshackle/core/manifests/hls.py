@@ -112,6 +112,15 @@ class HLS:
         session_drm = HLS.get_all_drm(session_keys)
 
         audio_codecs_by_group_id: dict[str, Audio.Codec] = {}
+        cc_by_group_id: dict[str, list[dict[str, Any]]] = {}
+        for media in self.manifest.media:
+            if media.type == "CLOSED-CAPTIONS":
+                cc_by_group_id.setdefault(media.group_id, []).append({
+                    "language": media.language,
+                    "name": media.name,
+                    "instream_id": media.instream_id,
+                    "characteristics": media.characteristics,
+                })
         tracks = Tracks()
 
         for playlist in self.manifest.playlists:
@@ -161,6 +170,9 @@ class HLS:
                             width=playlist.stream_info.resolution[0] if playlist.stream_info.resolution else None,
                             height=playlist.stream_info.resolution[1] if playlist.stream_info.resolution else None,
                             fps=playlist.stream_info.frame_rate,
+                            closed_captions=cc_by_group_id.get(
+                                (playlist.stream_info.closed_captions or "").strip('"'), []
+                            ),
                         )
                         if primary_track_type is Video
                         else {}

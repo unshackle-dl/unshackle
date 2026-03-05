@@ -200,6 +200,7 @@ class Video(Track):
         height: Optional[int] = None,
         fps: Optional[Union[str, int, float]] = None,
         scan_type: Optional[Video.ScanType] = None,
+        closed_captions: Optional[list[dict[str, Any]]] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -264,6 +265,7 @@ class Video(Track):
             raise ValueError("Expected fps to be a number, float, or a string as numerator/denominator form, " + str(e))
 
         self.scan_type = scan_type
+        self.closed_captions: list[dict[str, Any]] = closed_captions or []
         self.needs_duration_fix = False
 
     def __str__(self) -> str:
@@ -346,22 +348,27 @@ class Video(Track):
         if not binaries.CCExtractor:
             raise EnvironmentError("ccextractor executable was not found.")
 
-        # ccextractor often fails in weird ways unless we repack
-        self.repackage()
-
         out_path = Path(out_path)
 
-        try:
-            subprocess.run(
-                [binaries.CCExtractor, "-trim", "-nobom", "-noru", "-ru1", "-o", out_path, self.path],
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-        except subprocess.CalledProcessError as e:
-            out_path.unlink(missing_ok=True)
-            if not e.returncode == 10:  # No captions found
-                raise
+        def _run_ccextractor() -> bool:
+            try:
+                subprocess.run(
+                    [binaries.CCExtractor, "-trim", "-nobom", "-noru", "-ru1", "-o", out_path, self.path],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+            except subprocess.CalledProcessError as e:
+                out_path.unlink(missing_ok=True)
+                if e.returncode != 10:  # 10 = No captions found
+                    raise
+            return out_path.exists()
+
+        # Try on the original file first (preserves container-level CC data like c608 boxes),
+        # then fall back to repacked file (ccextractor can fail on some container formats).
+        if not _run_ccextractor():
+            self.repackage()
+            _run_ccextractor()
 
         if out_path.exists():
             cc_track = Subtitle(

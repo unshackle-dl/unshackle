@@ -103,53 +103,78 @@ class Tracks:
         tree = Tree("", hide_root=True)
         for track_type in self.TRACK_ORDER_MAP:
             tracks = list(x for x in all_tracks if isinstance(x, track_type))
-            if not tracks:
-                continue
-            num_tracks = len(tracks)
-            track_type_plural = track_type.__name__ + ("s" if track_type != Audio and num_tracks != 1 else "")
-            tracks_tree = tree.add(f"[repr.number]{num_tracks}[/] {track_type_plural}")
-            for track in tracks:
-                if add_progress and track_type not in (Chapter, Attachment):
-                    progress = Progress(
-                        SpinnerColumn(finished_text=""),
-                        BarColumn(),
-                        "•",
-                        TimeRemainingColumn(compact=True, elapsed_when_finished=True),
-                        "•",
-                        TextColumn("[progress.data.speed]{task.fields[downloaded]}"),
-                        console=console,
-                        speed_estimate_period=10,
+            if tracks:
+                num_tracks = len(tracks)
+                track_type_plural = track_type.__name__ + ("s" if track_type != Audio and num_tracks != 1 else "")
+                tracks_tree = tree.add(f"[repr.number]{num_tracks}[/] {track_type_plural}")
+                for track in tracks:
+                    if add_progress and track_type not in (Chapter, Attachment):
+                        progress = Progress(
+                            SpinnerColumn(finished_text=""),
+                            BarColumn(),
+                            "•",
+                            TimeRemainingColumn(compact=True, elapsed_when_finished=True),
+                            "•",
+                            TextColumn("[progress.data.speed]{task.fields[downloaded]}"),
+                            console=console,
+                            speed_estimate_period=10,
+                        )
+                        task = progress.add_task("", downloaded="-")
+                        state = {"total": 100.0}
+
+                        def update_track_progress(
+                            task_id: int = task,
+                            _state: dict[str, float] = state,
+                            _progress: Progress = progress,
+                            **kwargs,
+                        ) -> None:
+                            """
+                            Ensure terminal status states render as a fully completed bar.
+
+                            Some downloaders can report completed slightly below total
+                            before emitting the final "Downloaded" state.
+                            """
+                            if "total" in kwargs and kwargs["total"] is not None:
+                                _state["total"] = kwargs["total"]
+
+                            downloaded_state = kwargs.get("downloaded")
+                            if downloaded_state in {"Downloaded", "Decrypted", "[yellow]SKIPPED"}:
+                                kwargs["completed"] = _state["total"]
+                            _progress.update(task_id=task_id, **kwargs)
+
+                        progress_callables.append(update_track_progress)
+                        track_table = Table.grid()
+                        track_table.add_row(str(track)[6:], style="text2")
+                        track_table.add_row(progress)
+                        tracks_tree.add(track_table)
+                    else:
+                        tracks_tree.add(str(track)[6:], style="text2")
+
+            # Show Closed Captions right after Subtitles (even if no subtitle tracks exist)
+            if track_type is Subtitle:
+                seen_cc: set[str] = set()
+                unique_cc: list[str] = []
+                for video in (x for x in all_tracks if isinstance(x, Video)):
+                    for cc in getattr(video, "closed_captions", []):
+                        lang = cc.get("language", "und")
+                        name = cc.get("name", "")
+                        instream_id = cc.get("instream_id", "")
+                        key = f"{lang}|{instream_id}"
+                        if key in seen_cc:
+                            continue
+                        seen_cc.add(key)
+                        parts = [f"[CC] | {lang}"]
+                        if name:
+                            parts.append(name)
+                        if instream_id:
+                            parts.append(instream_id)
+                        unique_cc.append(" | ".join(parts))
+                if unique_cc:
+                    cc_tree = tree.add(
+                        f"[repr.number]{len(unique_cc)}[/] Closed Caption{'s' if len(unique_cc) != 1 else ''}"
                     )
-                    task = progress.add_task("", downloaded="-")
-                    state = {"total": 100.0}
-
-                    def update_track_progress(
-                        task_id: int = task,
-                        _state: dict[str, float] = state,
-                        _progress: Progress = progress,
-                        **kwargs,
-                    ) -> None:
-                        """
-                        Ensure terminal status states render as a fully completed bar.
-
-                        Some downloaders can report completed slightly below total
-                        before emitting the final "Downloaded" state.
-                        """
-                        if "total" in kwargs and kwargs["total"] is not None:
-                            _state["total"] = kwargs["total"]
-
-                        downloaded_state = kwargs.get("downloaded")
-                        if downloaded_state in {"Downloaded", "Decrypted", "[yellow]SKIPPED"}:
-                            kwargs["completed"] = _state["total"]
-                        _progress.update(task_id=task_id, **kwargs)
-
-                    progress_callables.append(update_track_progress)
-                    track_table = Table.grid()
-                    track_table.add_row(str(track)[6:], style="text2")
-                    track_table.add_row(progress)
-                    tracks_tree.add(track_table)
-                else:
-                    tracks_tree.add(str(track)[6:], style="text2")
+                    for cc_str in unique_cc:
+                        cc_tree.add(cc_str, style="text2")
 
         return tree, progress_callables
 

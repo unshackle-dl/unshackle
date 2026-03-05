@@ -25,6 +25,7 @@ import click
 import jsonpickle
 import yaml
 from construct import ConstError
+from langcodes import Language
 from pymediainfo import MediaInfo
 from pyplayready.cdm import Cdm as PlayReadyCdm
 from pyplayready.device import Device as PlayReadyDevice
@@ -2025,49 +2026,6 @@ class dl:
                 dl_time = time_elapsed_since(dl_start_time)
                 console.print(Padding(f"Track downloads finished in [progress.elapsed]{dl_time}[/]", (0, 5)))
 
-                video_track_n = 0
-
-                while (
-                    not title.tracks.subtitles
-                    and not no_subs
-                    and not (hasattr(service, "NO_SUBTITLES") and service.NO_SUBTITLES)
-                    and not video_only
-                    and not no_video
-                    and len(title.tracks.videos) > video_track_n
-                    and any(
-                        x.get("codec_name", "").startswith("eia_")
-                        for x in ffprobe(title.tracks.videos[video_track_n].path).get("streams", [])
-                    )
-                ):
-                    with console.status(f"Checking Video track {video_track_n + 1} for Closed Captions..."):
-                        try:
-                            # TODO: Figure out the real language, it might be different
-                            #       EIA-CC tracks sadly don't carry language information :(
-                            # TODO: Figure out if the CC language is original lang or not.
-                            #       Will need to figure out above first to do so.
-                            video_track = title.tracks.videos[video_track_n]
-                            track_id = f"ccextractor-{video_track.id}"
-                            cc_lang = title.language or video_track.language
-                            cc = video_track.ccextractor(
-                                track_id=track_id,
-                                out_path=config.directories.temp
-                                / config.filenames.subtitle.format(id=track_id, language=cc_lang),
-                                language=cc_lang,
-                                original=False,
-                            )
-                            if cc:
-                                # will not appear in track listings as it's added after all times it lists
-                                title.tracks.add(cc)
-                                self.log.info(f"Extracted a Closed Caption from Video track {video_track_n + 1}")
-                            else:
-                                self.log.info(f"No Closed Captions were found in Video track {video_track_n + 1}")
-                        except EnvironmentError:
-                            self.log.error(
-                                "Cannot extract Closed Captions as the ccextractor executable was not found..."
-                            )
-                            break
-                    video_track_n += 1
-
                 # Subtitle output mode configuration (for sidecar originals)
                 subtitle_output_mode = config.subtitle.get("output_mode", "mux")
                 sidecar_format = config.subtitle.get("sidecar_format", "srt")
@@ -2132,6 +2090,57 @@ class dl:
                                 )
                         if has_decrypted:
                             self.log.info(f"Decrypted tracks with {decrypt_tool}")
+
+                # Extract Closed Captions from decrypted video tracks
+                if (
+                    not no_subs
+                    and not (hasattr(service, "NO_SUBTITLES") and service.NO_SUBTITLES)
+                    and not video_only
+                    and not no_video
+                ):
+                    for video_track_n, video_track in enumerate(title.tracks.videos):
+                        has_manifest_cc = bool(getattr(video_track, "closed_captions", None))
+                        has_eia_cc = (
+                            not has_manifest_cc
+                            and not title.tracks.subtitles
+                            and any(
+                                x.get("codec_name", "").startswith("eia_")
+                                for x in ffprobe(video_track.path).get("streams", [])
+                            )
+                        )
+                        if not has_manifest_cc and not has_eia_cc:
+                            continue
+
+                        with console.status(f"Checking Video track {video_track_n + 1} for Closed Captions..."):
+                            try:
+                                cc_lang = (
+                                    Language.get(video_track.closed_captions[0]["language"])
+                                    if has_manifest_cc and video_track.closed_captions[0].get("language")
+                                    else title.language or video_track.language
+                                )
+                                track_id = f"ccextractor-{video_track.id}"
+                                cc = video_track.ccextractor(
+                                    track_id=track_id,
+                                    out_path=config.directories.temp
+                                    / config.filenames.subtitle.format(id=track_id, language=cc_lang),
+                                    language=cc_lang,
+                                    original=False,
+                                )
+                                if cc:
+                                    cc.cc = True
+                                    title.tracks.add(cc)
+                                    self.log.info(
+                                        f"Extracted a Closed Caption from Video track {video_track_n + 1}"
+                                    )
+                                else:
+                                    self.log.info(
+                                        f"No Closed Captions were found in Video track {video_track_n + 1}"
+                                    )
+                            except EnvironmentError:
+                                self.log.error(
+                                    "Cannot extract Closed Captions as the ccextractor executable was not found..."
+                                )
+                                break
 
                 # Now repack the decrypted tracks
                 with console.status("Repackaging tracks with FFMPEG..."):
