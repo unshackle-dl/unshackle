@@ -145,7 +145,14 @@ class ISM:
                         fragment_time += duration_frag
 
                 track_id = hashlib.md5(
-                    f"{codec}-{track_lang}-{ql.get('Bitrate') or 0}-{ql.get('Index') or 0}".encode()
+                    "{codec}-{lang}-{bitrate}-{index}-{name}-{url}".format(
+                        codec=codec,
+                        lang=track_lang,
+                        bitrate=ql.get("Bitrate") or 0,
+                        index=ql.get("Index") or 0,
+                        name=stream_index.get("Name") or "",
+                        url=stream_index.get("Url") or "",
+                    ).encode()
                 ).hexdigest()
 
                 data = {
