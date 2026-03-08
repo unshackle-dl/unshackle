@@ -431,14 +431,24 @@ def download(
                         raise ValueError(error)
 
             # Yield aggregate progress for this call's downloads
-            if total_size > 0:
-                # Yield both advance (bytes downloaded this iteration) and total for rich progress
-                if dl_speed != -1:
-                    yield dict(downloaded=f"{filesize.decimal(dl_speed)}/s", advance=0, completed=total_completed, total=total_size)
+            progress_data = {"advance": 0}
+
+            if len(gids) > 1:
+                # Multi-file mode (e.g., HLS): Return the count of completed segments
+                progress_data["completed"] = len(completed)
+                progress_data["total"] = len(gids)
+            else:
+                # Single-file mode: Return the total bytes downloaded
+                progress_data["completed"] = total_completed
+                if total_size > 0:
+                    progress_data["total"] = total_size
                 else:
-                    yield dict(advance=0, completed=total_completed, total=total_size)
-            elif dl_speed != -1:
-                yield dict(downloaded=f"{filesize.decimal(dl_speed)}/s")
+                    progress_data["total"] = None
+
+            if dl_speed != -1:
+                progress_data["downloaded"] = f"{filesize.decimal(dl_speed)}/s"
+
+            yield progress_data
 
             time.sleep(1)
     except KeyboardInterrupt:
