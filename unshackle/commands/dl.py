@@ -507,6 +507,12 @@ class dl:
         "--reset-cache", "reset_cache", is_flag=True, default=False, help="Clear title cache before fetching."
     )
     @click.option(
+        "--worst",
+        is_flag=True,
+        default=False,
+        help="Select the lowest bitrate track within the specified quality. Requires -q/--quality.",
+    )
+    @click.option(
         "--best-available",
         "best_available",
         is_flag=True,
@@ -991,6 +997,7 @@ class dl:
         no_mux: bool,
         workers: Optional[int],
         downloads: int,
+        worst: bool,
         best_available: bool,
         split_audio: Optional[bool] = None,
         *_: Any,
@@ -1014,6 +1021,10 @@ class dl:
 
         if require_subs and s_lang != ["all"]:
             self.log.error("--require-subs and --s-lang cannot be used together")
+            sys.exit(1)
+
+        if worst and not quality:
+            self.log.error("--worst requires -q/--quality to be specified")
             sys.exit(1)
 
         if select_titles and wanted:
@@ -1609,20 +1620,18 @@ class dl:
                             for resolution, color_range, codec in product(
                                 quality or [None], non_hybrid_ranges, vcodec or [None]
                             ):
-                                match = next(
-                                    (
-                                        t
-                                        for t in non_hybrid_tracks
-                                        if (
-                                            not resolution
-                                            or t.height == resolution
-                                            or int(t.width * (9 / 16)) == resolution
-                                        )
-                                        and (not color_range or t.range == color_range)
-                                        and (not codec or t.codec == codec)
-                                    ),
-                                    None,
-                                )
+                                candidates = [
+                                    t
+                                    for t in non_hybrid_tracks
+                                    if (
+                                        not resolution
+                                        or t.height == resolution
+                                        or int(t.width * (9 / 16)) == resolution
+                                    )
+                                    and (not color_range or t.range == color_range)
+                                    and (not codec or t.codec == codec)
+                                ]
+                                match = candidates[-1] if worst and candidates else next(iter(candidates), None)
                                 if match and match not in non_hybrid_selected:
                                     non_hybrid_selected.append(match)
 
@@ -1632,20 +1641,18 @@ class dl:
                         for resolution, color_range, codec in product(
                             quality or [None], range_ or [None], vcodec or [None]
                         ):
-                            match = next(
-                                (
-                                    t
-                                    for t in title.tracks.videos
-                                    if (
-                                        not resolution
-                                        or t.height == resolution
-                                        or int(t.width * (9 / 16)) == resolution
-                                    )
-                                    and (not color_range or t.range == color_range)
-                                    and (not codec or t.codec == codec)
-                                ),
-                                None,
-                            )
+                            candidates = [
+                                t
+                                for t in title.tracks.videos
+                                if (
+                                    not resolution
+                                    or t.height == resolution
+                                    or int(t.width * (9 / 16)) == resolution
+                                )
+                                and (not color_range or t.range == color_range)
+                                and (not codec or t.codec == codec)
+                            ]
+                            match = candidates[-1] if worst and candidates else next(iter(candidates), None)
                             if match and match not in selected_videos:
                                 selected_videos.append(match)
                         title.tracks.videos = selected_videos
