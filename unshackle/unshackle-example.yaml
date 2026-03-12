@@ -39,6 +39,9 @@ title_cache_enabled: true # Enable/disable title caching globally (default: true
 title_cache_time: 1800 # Cache duration in seconds (default: 1800 = 30 minutes)
 title_cache_max_retention: 86400 # Maximum cache retention for fallback when API fails (default: 86400 = 24 hours)
 
+# Save requested title IDs and names
+saved_titles_enabled: true # Enable/disable saving title IDs and names (default: true)
+
 # Debug logging configuration
 # Comprehensive JSON-based debug logging for troubleshooting and service development
 debug:
@@ -91,6 +94,7 @@ credentials:
 # Override default directories used across unshackle
 directories:
   cache: Cache
+  saved_titles: saved_titles
   cookies: Cookies
   dcsl: DCSL # Device Certificate Status List
   downloads: Downloads

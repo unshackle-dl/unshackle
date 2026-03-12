@@ -20,6 +20,7 @@ from unshackle.core.console import console
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.drm import DRM_T
+from unshackle.core.saved_titles import get_saved_titles_store
 from unshackle.core.search_result import SearchResult
 from unshackle.core.title_cacher import TitleCacher, get_account_hash, get_region_from_proxy
 from unshackle.core.titles import Title_T, Titles_T
@@ -88,6 +89,11 @@ class Service(metaclass=ABCMeta):
         self.ctx = ctx
         self.credential = None  # Will be set in authenticate()
         self.current_region = None  # Will be set based on proxy/geolocation
+        self.title_input = None
+        if getattr(ctx, "params", None):
+            title_input = ctx.params.get("title") or ctx.params.get("title_id")
+            if title_input not in (None, ""):
+                self.title_input = str(title_input)
 
         if not ctx.parent or not ctx.parent.params.get("no_proxy"):
             if ctx.parent:
@@ -360,6 +366,47 @@ class Service(metaclass=ABCMeta):
             no_cache=no_cache,
             reset_cache=reset_cache,
         )
+
+    def observe_titles(self, titles: Titles_T) -> Titles_T:
+        """
+        Save the requested title ID and title name after titles are fetched.
+
+        If saving fails, continue without interrupting normal title handling.
+        """
+        try:
+            observed_title = None
+            if hasattr(titles, "__getitem__") and hasattr(titles, "__len__"):
+                if len(titles) > 0:
+                    observed_title = titles[0]
+            else:
+                observed_title = titles
+
+            if observed_title is None:
+                return titles
+
+            title_id = self.title_input or getattr(self, "title", None) or getattr(self, "title_id", None)
+            get_saved_titles_store().observe(self.__class__.__name__, observed_title, title_id=title_id)
+        except Exception as exc:
+            self.log.debug("Failed to save title ID and name for %r: %s", titles, exc)
+
+        return titles
+
+    def get_observed_titles(self) -> Titles_T:
+        """Fetch titles and save the requested title ID and title name."""
+        return self.observe_titles(self.get_titles())
+
+    def get_observed_titles_cached(self, title_id: str = None) -> Titles_T:
+        """Fetch cached titles and save the requested title ID and title name."""
+        return self.observe_titles(self.get_titles_cached(title_id=title_id))
+
+    def get_observed_tracks(self, title: Title_T) -> Tracks:
+        """
+        Fetch tracks and add them to ``title.tracks``.
+        """
+        tracks = self.get_tracks(title)
+        title.tracks.add(tracks, warn_only=True)
+
+        return tracks
 
     @abstractmethod
     def get_tracks(self, title: Title_T) -> Tracks:
