@@ -22,6 +22,7 @@ class Config:
         downloads = core_dir.parent.parent / "downloads"
         temp = core_dir.parent.parent / "temp"
         cache = data / "cache"
+        saved_titles = data / "saved_titles"
         cookies = data / "cookies"
         logs = data / "logs"
         wvds = data / "WVDs"
@@ -101,6 +102,7 @@ class Config:
         self.title_cache_time: int = kwargs.get("title_cache_time", 1800)  # 30 minutes default
         self.title_cache_max_retention: int = kwargs.get("title_cache_max_retention", 86400)  # 24 hours default
         self.title_cache_enabled: bool = kwargs.get("title_cache_enabled", True)
+        self.saved_titles_enabled: bool = kwargs.get("saved_titles_enabled", True)
 
         self.debug: bool = kwargs.get("debug", False)
         self.debug_keys: bool = kwargs.get("debug_keys", False)

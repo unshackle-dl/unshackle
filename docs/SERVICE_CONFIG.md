@@ -114,3 +114,9 @@ Maximum retention time in seconds for serving slightly stale cached title metada
 Default: `86400` (24 hours). Effective retention is `min(title_cache_time + grace, title_cache_max_retention)`.
 
 ---
+
+## saved_titles_enabled (bool)
+
+Enable/disable saving title IDs and names. Default: `true`.
+
+---

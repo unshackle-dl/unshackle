@@ -20,6 +20,7 @@ device_client_id_blob
 device_private_key
 device_vmp_blob
 unshackle/cache/
+unshackle/saved_titles/
 unshackle/cookies/
 unshackle/certs/
 unshackle/WVDs/

@@ -968,7 +968,7 @@ class dl:
 
         with console.status("Fetching Title Metadata...", spinner="dots"):
             try:
-                titles = service.get_titles_cached()
+                titles = service.get_observed_titles_cached()
                 if not titles:
                     self.log.error("No titles returned, nothing to download...")
                     if self.debug_logger:
@@ -1139,7 +1139,7 @@ class dl:
 
             with console.status("Getting tracks...", spinner="dots"):
                 try:
-                    title.tracks.add(service.get_tracks(title), warn_only=True)
+                    service.get_observed_tracks(title)
                     title.tracks.chapters = service.get_chapters(title)
                 except Exception as e:
                     if self.debug_logger:

@@ -463,12 +463,13 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
                 filtered_kwargs[key] = value
 
         service_instance = service_module(service_ctx, **filtered_kwargs)
+        service_instance.title_input = str(title_id)
 
         cookies = dl.get_cookie_jar(normalized_service, profile)
         credential = dl.get_credentials(normalized_service, profile)
         service_instance.authenticate(cookies, credential)
 
-        titles = service_instance.get_titles()
+        titles = service_instance.get_observed_titles()
 
         if hasattr(titles, "__iter__") and not isinstance(titles, str):
             title_list = [serialize_title(t) for t in titles]
@@ -611,12 +612,13 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                 filtered_kwargs[key] = value
 
         service_instance = service_module(service_ctx, **filtered_kwargs)
+        service_instance.title_input = str(title_id)
 
         cookies = dl.get_cookie_jar(normalized_service, profile)
         credential = dl.get_credentials(normalized_service, profile)
         service_instance.authenticate(cookies, credential)
 
-        titles = service_instance.get_titles()
+        titles = service_instance.get_observed_titles()
 
         wanted_param = data.get("wanted")
         season = data.get("season")
@@ -680,7 +682,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
 
                     for title in sorted_titles:
                         try:
-                            tracks = service_instance.get_tracks(title)
+                            tracks = service_instance.get_observed_tracks(title)
                             video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
                             audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
 
@@ -726,7 +728,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
         else:
             first_title = titles
 
-        tracks = service_instance.get_tracks(first_title)
+        tracks = service_instance.get_observed_tracks(first_title)
 
         video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
         audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)

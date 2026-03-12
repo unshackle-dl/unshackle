@@ -101,6 +101,7 @@ The following directories are available and may be overridden,
 - `downloads` - Downloads.
 - `temp` - Temporary files or conversions during download.
 - `cache` - Expiring data like Authorization tokens, or other misc data.
+- `saved_titles` - Saved title IDs and names.
 - `cookies` - Expiring Cookie data.
 - `logs` - Logs.
 - `wvds` - Widevine Devices.
