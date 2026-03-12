@@ -68,6 +68,10 @@ dependencies = [
     "language-data>=1.4.0",
     "wasmtime>=41.0.0",
     "animeapi-py>=0.6.0",
+    "requests-file>=3.0.1",
+    "tldextract>=5.3.1",
+    "xmltodict>=1.0.4",
+    "yt-dlp>=2026.3.3",
 ]
 
 [project.urls]
