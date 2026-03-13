@@ -360,9 +360,37 @@ class MultipleChoice(click.Choice):
         return super(self).shell_complete(ctx, param, incomplete)
 
 
+class OffsetType(click.ParamType):
+    """
+    Parses human-friendly time offset strings into milliseconds.
+
+    Accepts: '10s', '500ms', '-5.5s', '200' (bare number = ms).
+    """
+
+    name = "offset"
+
+    _PATTERN = re.compile(r"^(-?\d+(?:\.\d+)?)\s*(s|ms)?$")
+
+    def convert(
+        self, value: Any, param: Optional[click.Parameter] = None, ctx: Optional[click.Context] = None
+    ) -> int:
+        if isinstance(value, int):
+            return value
+        value = str(value).strip()
+        m = self._PATTERN.match(value)
+        if not m:
+            self.fail(f"'{value}' is not a valid offset. Use e.g. '10s', '500ms', '-5.5s'.", param, ctx)
+        number = float(m.group(1))
+        unit = m.group(2) or "ms"
+        if unit == "s":
+            return int(number * 1000)
+        return int(number)
+
+
 SEASON_RANGE = SeasonRange()
 LANGUAGE_RANGE = LanguageRange()
 QUALITY_LIST = QualityList()
 AUDIO_CODEC_LIST = AudioCodecList(Audio.Codec)
+OFFSET = OffsetType()
 
 # VIDEO_CODEC_CHOICE will be created dynamically when imported

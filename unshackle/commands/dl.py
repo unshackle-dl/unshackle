@@ -64,7 +64,7 @@ from unshackle.core.tracks.hybrid import Hybrid
 from unshackle.core.utilities import (find_font_with_fallbacks, get_debug_logger, get_system_fonts, init_debug_logger,
                                       is_close_match, suggest_font_packages, time_elapsed_since)
 from unshackle.core.utils import tags
-from unshackle.core.utils.click_types import (AUDIO_CODEC_LIST, LANGUAGE_RANGE, QUALITY_LIST, SEASON_RANGE,
+from unshackle.core.utils.click_types import (AUDIO_CODEC_LIST, LANGUAGE_RANGE, OFFSET, QUALITY_LIST, SEASON_RANGE,
                                               ContextData, MultipleChoice, MultipleVideoCodecChoice,
                                               SubtitleCodecChoice)
 from unshackle.core.utils.collections import merge_dict
@@ -519,6 +519,58 @@ class dl:
         default=False,
         help="Continue with best available quality if requested resolutions are not available.",
     )
+    @click.option(
+        "--cross-video",
+        nargs=2,
+        type=(str, str),
+        default=None,
+        help="Cross-mux: use video from another service. Format: SERVICE URL.",
+    )
+    @click.option(
+        "--cross-audio",
+        nargs=2,
+        type=(str, str),
+        default=None,
+        help="Cross-mux: use audio from another service. Format: SERVICE URL.",
+    )
+    @click.option(
+        "--cross-subtitles",
+        nargs=2,
+        type=(str, str),
+        default=None,
+        help="Cross-mux: use subtitles from another service. Format: SERVICE URL.",
+    )
+    @click.option(
+        "--cross-chapters",
+        nargs=2,
+        type=(str, str),
+        default=None,
+        help="Cross-mux: use chapters from another service. Format: SERVICE URL.",
+    )
+    @click.option(
+        "--cross-audio-offset",
+        type=OFFSET,
+        default=None,
+        help="Timing offset for cross-sourced audio, e.g. '10s', '500ms', '-5.5s'.",
+    )
+    @click.option(
+        "--cross-subtitle-offset",
+        type=OFFSET,
+        default=None,
+        help="Timing offset for cross-sourced subtitles, e.g. '10s', '500ms', '-5.5s'.",
+    )
+    @click.option(
+        "--cross-profile",
+        type=str,
+        default=None,
+        help="Profile to use for cross-service credentials. Defaults to --profile.",
+    )
+    @click.option(
+        "--cross-wanted",
+        type=str,
+        default=None,
+        help="Override episode mapping for cross-services, e.g. 'S01E02'.",
+    )
     @click.pass_context
     def cli(ctx: click.Context, **kwargs: Any) -> dl:
         return dl(ctx, **kwargs)
@@ -538,6 +590,14 @@ class dl:
         animeapi_id: Optional[str] = None,
         enrich: bool = False,
         output_dir: Optional[Path] = None,
+        cross_video: Optional[tuple[str, str]] = None,
+        cross_audio: Optional[tuple[str, str]] = None,
+        cross_subtitles: Optional[tuple[str, str]] = None,
+        cross_chapters: Optional[tuple[str, str]] = None,
+        cross_audio_offset: Optional[int] = None,
+        cross_subtitle_offset: Optional[int] = None,
+        cross_profile: Optional[str] = None,
+        cross_wanted: Optional[str] = None,
         *_: Any,
         **__: Any,
     ):
@@ -585,6 +645,16 @@ class dl:
         self.enrich = enrich
         self.animeapi_title: Optional[str] = None
         self.output_dir = output_dir
+
+        # Cross-mux settings
+        self.cross_video = cross_video
+        self.cross_audio = cross_audio
+        self.cross_subtitles = cross_subtitles
+        self.cross_chapters = cross_chapters
+        self.cross_audio_offset = cross_audio_offset
+        self.cross_subtitle_offset = cross_subtitle_offset
+        self.cross_profile = cross_profile or profile
+        self.cross_wanted = cross_wanted
 
         if animeapi_id:
             from unshackle.core.utils.animeapi import resolve_animeapi
@@ -953,6 +1023,218 @@ class dl:
         # needs to be added this way instead of @cli.result_callback to be
         # able to keep `self` as the first positional
         self.cli._result_callback = self.result
+
+    def _instantiate_cross_service(self, tag: str, url: str) -> tuple[Service, str]:
+        """
+        Instantiate a cross-service for cross-mux by tag and URL.
+
+        Returns (service_instance, title_url) after authentication.
+        """
+        tag = Services.get_tag(tag)
+        service_cls = Services.load(tag)
+
+        # Build service config for the cross-service
+        service_config_path = Services.get_path(tag) / config.filenames.config
+        if service_config_path.exists():
+            cross_service_config = yaml.safe_load(service_config_path.read_text(encoding="utf8"))
+        else:
+            cross_service_config = {}
+
+        # Load CDM for the cross-service
+        cross_cdm = self.get_cdm(tag, self.cross_profile)
+
+        # Build a synthetic Click context for the cross-service
+        cross_ctx_obj = ContextData(
+            config=cross_service_config,
+            cdm=cross_cdm,
+            proxy_providers=self.proxy_providers,
+            profile=self.cross_profile,
+        )
+
+        # Extract the title argument from the URL using TITLE_RE
+        title_id = url
+        if hasattr(service_cls, "TITLE_RE"):
+            m = re.match(service_cls.TITLE_RE, url)
+            if m:
+                # Try named group 'title_id' first, then 'id', then group(1)
+                title_id = m.group("title_id") if "title_id" in m.groupdict() else (
+                    m.group("id") if "id" in m.groupdict() else m.group(1)
+                )
+
+        # Build kwargs from the service cli command's params with defaults
+        cli_cmd = service_cls.cli
+        kwargs = {"title": title_id}
+        for param in cli_cmd.params:
+            if param.name and param.name != "title" and param.name not in kwargs:
+                kwargs[param.name] = param.default
+
+        # Create a parent context that mimics what dl.__init__ sets up.
+        # Services access ctx.parent.params for various dl-level options,
+        # so we provide a complete set of defaults to avoid KeyError.
+        parent_ctx = click.Context(self.cli, info_name="dl")
+        parent_ctx.params = {
+            "no_proxy": True,
+            "proxy": None,
+            "proxy_query": None,
+            "proxy_provider": None,
+            "vcodec": [],
+            "acodec": [],
+            "range_": [Video.Range.SDR],
+            "best_available": False,
+            "profile": self.cross_profile,
+            "quality": [],
+            "wanted": None,
+            "video_only": False,
+            "audio_only": False,
+            "subs_only": False,
+            "chapters_only": False,
+            "list_": False,
+            "skip_dl": False,
+            "no_cache": False,
+            "reset_cache": False,
+        }
+        ctx = click.Context(cli_cmd, parent=parent_ctx, info_name=tag)
+        ctx.obj = cross_ctx_obj
+
+        # Instantiate the service
+        cross_service = service_cls(ctx, **kwargs)
+
+        # Authenticate
+        cookies = self.get_cookie_jar(tag, self.cross_profile)
+        credential = self.get_credentials(tag, self.cross_profile)
+        cross_service.authenticate(cookies, credential)
+
+        return cross_service
+
+    def _match_cross_title(
+        self, primary_title: Title_T, cross_titles: Any
+    ) -> Optional[Title_T]:
+        """Match a primary title to its counterpart in cross-service titles."""
+        if isinstance(primary_title, Movie):
+            # For movies, the cross URL should resolve to the same movie
+            if hasattr(cross_titles, "__iter__"):
+                for t in cross_titles:
+                    if isinstance(t, Movie):
+                        return t
+            return None
+
+        if isinstance(primary_title, Episode):
+            if self.cross_wanted:
+                # Manual override: parse S01E02 format
+                m = re.match(r"S(\d+)E(\d+)", self.cross_wanted, re.IGNORECASE)
+                if m:
+                    wanted_season = int(m.group(1))
+                    wanted_episode = int(m.group(2))
+                    for t in cross_titles:
+                        if isinstance(t, Episode) and t.season == wanted_season and t.number == wanted_episode:
+                            return t
+                    self.log.warning(
+                        f"Cross-wanted S{wanted_season:02d}E{wanted_episode:02d} not found in cross-service"
+                    )
+                    return None
+
+            # Auto-match by season + episode number
+            for t in cross_titles:
+                if isinstance(t, Episode) and t.season == primary_title.season and t.number == primary_title.number:
+                    return t
+
+            self.log.warning(
+                f"No cross-service match for S{primary_title.season:02d}E{primary_title.number:02d}"
+            )
+            return None
+
+        return None
+
+    def _process_cross_services(self, title: Title_T) -> dict[str, tuple[Service, Title_T, Tracks]]:
+        """
+        Process all cross-service specs and return fetched tracks per track type.
+
+        Returns dict like {"video": (service, matched_title, tracks), ...}
+        """
+        cross_specs: list[tuple[str, Optional[tuple[str, str]]]] = [
+            ("video", self.cross_video),
+            ("audio", self.cross_audio),
+            ("subtitles", self.cross_subtitles),
+            ("chapters", self.cross_chapters),
+        ]
+
+        # Cache instantiated services by (tag, url) to avoid duplicate auth
+        service_cache: dict[tuple[str, str], Service] = {}
+        result: dict[str, tuple[Service, Title_T, Tracks]] = {}
+
+        for track_type, spec in cross_specs:
+            if not spec:
+                continue
+
+            tag, url = spec
+            cache_key = (Services.get_tag(tag), url)
+
+            if cache_key not in service_cache:
+                self.log.info(f"Cross-mux: loading {track_type} from {tag}")
+                cross_service = self._instantiate_cross_service(tag, url)
+                service_cache[cache_key] = cross_service
+            else:
+                cross_service = service_cache[cache_key]
+
+            # Get titles from cross-service
+            cross_titles = cross_service.get_titles()
+
+            # Match the primary title to a cross-service title
+            cross_title = self._match_cross_title(title, cross_titles)
+            if not cross_title:
+                self.log.warning(f"Cross-mux: could not match title for {track_type} from {tag}, skipping")
+                continue
+
+            # Get tracks from cross-service
+            cross_tracks = cross_service.get_tracks(cross_title)
+            cross_chapters = cross_service.get_chapters(cross_title)
+            cross_tracks.chapters = cross_chapters
+
+            result[track_type] = (cross_service, cross_title, cross_tracks)
+
+        return result
+
+    def _apply_cross_tracks(
+        self,
+        title: Title_T,
+        cross_results: dict[str, tuple[Service, Title_T, Tracks]],
+    ) -> None:
+        """Replace primary tracks with cross-service tracks and mark with metadata."""
+        if "video" in cross_results:
+            cross_service, cross_title, cross_tracks = cross_results["video"]
+            title.tracks.videos = cross_tracks.videos
+            for track in title.tracks.videos:
+                track.data["_cross_service"] = cross_service
+                track.data["_cross_title"] = cross_title
+                track.data["cross_source"] = cross_service.__class__.__name__
+
+        if "audio" in cross_results:
+            cross_service, cross_title, cross_tracks = cross_results["audio"]
+            title.tracks.audio = cross_tracks.audio
+            for track in title.tracks.audio:
+                track.data["_cross_service"] = cross_service
+                track.data["_cross_title"] = cross_title
+                track.data["cross_source"] = cross_service.__class__.__name__
+                if self.cross_audio_offset:
+                    track.data["cross_offset_ms"] = self.cross_audio_offset
+
+        if "subtitles" in cross_results:
+            cross_service, cross_title, cross_tracks = cross_results["subtitles"]
+            title.tracks.subtitles = cross_tracks.subtitles
+            for track in title.tracks.subtitles:
+                track.data["_cross_service"] = cross_service
+                track.data["_cross_title"] = cross_title
+                track.data["cross_source"] = cross_service.__class__.__name__
+                if self.cross_subtitle_offset:
+                    track.data["cross_offset_ms"] = self.cross_subtitle_offset
+
+        if "chapters" in cross_results:
+            _, _, cross_tracks = cross_results["chapters"]
+            title.tracks.chapters = cross_tracks.chapters
+
+    @property
+    def has_cross_mux(self) -> bool:
+        return any([self.cross_video, self.cross_audio, self.cross_subtitles, self.cross_chapters])
 
     def result(
         self,
@@ -1415,6 +1697,25 @@ class dl:
                     self.debug_logger.log(
                         level="INFO", operation="get_tracks", service=self.service, context=tracks_info
                     )
+
+            # Cross-mux: replace tracks from cross-services if configured
+            if self.has_cross_mux:
+                with console.status("Cross-mux: fetching tracks from cross-services...", spinner="dots"):
+                    try:
+                        cross_results = self._process_cross_services(title)
+                        if cross_results:
+                            self._apply_cross_tracks(title, cross_results)
+                            cross_sources = ", ".join(
+                                f"{k}={v[0].__class__.__name__}" for k, v in cross_results.items()
+                            )
+                            self.log.info(f"Cross-mux: applied tracks from {cross_sources}")
+                    except Exception as e:
+                        self.log.error(f"Cross-mux failed: {e}")
+                        if self.debug_logger:
+                            self.debug_logger.log_error(
+                                "cross_mux", e, service=self.service, context={"title": str(title)}
+                            )
+                        raise
 
             # strip SDH subs to non-SDH if no equivalent same-lang non-SDH is available
             # uses a loose check, e.g, wont strip en-US SDH sub if a non-SDH en-GB is available
@@ -1950,21 +2251,35 @@ class dl:
                             (
                                 pool.submit(
                                     track.download,
-                                    session=service.session,
+                                    session=(
+                                        track.data["_cross_service"].session
+                                        if track.data.get("_cross_service")
+                                        else service.session
+                                    ),
                                     prepare_drm=partial(
                                         partial(self.prepare_drm, table=download_table),
                                         track=track,
-                                        title=title,
+                                        title=track.data.get("_cross_title", title),
                                         certificate=partial(
-                                            service.get_widevine_service_certificate,
-                                            title=title,
+                                            (
+                                                track.data["_cross_service"].get_widevine_service_certificate
+                                                if track.data.get("_cross_service")
+                                                else service.get_widevine_service_certificate
+                                            ),
+                                            title=track.data.get("_cross_title", title),
                                             track=track,
                                         ),
                                         licence=partial(
-                                            service.get_playready_license
-                                            if is_playready_cdm(self.cdm)
-                                            else service.get_widevine_license,
-                                            title=title,
+                                            (
+                                                track.data["_cross_service"].get_playready_license
+                                                if track.data.get("_cross_service") and is_playready_cdm(self.cdm)
+                                                else track.data["_cross_service"].get_widevine_license
+                                                if track.data.get("_cross_service")
+                                                else service.get_playready_license
+                                                if is_playready_cdm(self.cdm)
+                                                else service.get_widevine_license
+                                            ),
+                                            title=track.data.get("_cross_title", title),
                                             track=track,
                                         ),
                                         cdm_only=cdm_only,

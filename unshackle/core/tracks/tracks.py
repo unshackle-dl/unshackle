@@ -477,25 +477,25 @@ class Tracks:
             if not at.path or not at.path.exists():
                 raise ValueError("Audio Track must be downloaded before muxing...")
             events.emit(events.Types.TRACK_MULTIPLEX, track=at)
-            cl.extend(
-                [
-                    "--track-name",
-                    f"0:{at.get_track_name() or ''}",
-                    "--language",
-                    f"0:{at.language}",
-                    "--default-track",
-                    f"0:{at.is_original_lang}",
-                    "--visual-impaired-flag",
-                    f"0:{at.descriptive}",
-                    "--original-flag",
-                    f"0:{at.is_original_lang}",
-                    "--compression",
-                    "0:none",  # disable extra compression
-                    "(",
-                    str(at.path),
-                    ")",
-                ]
-            )
+            audio_args = [
+                "--track-name",
+                f"0:{at.get_track_name() or ''}",
+                "--language",
+                f"0:{at.language}",
+                "--default-track",
+                f"0:{at.is_original_lang}",
+                "--visual-impaired-flag",
+                f"0:{at.descriptive}",
+                "--original-flag",
+                f"0:{at.is_original_lang}",
+                "--compression",
+                "0:none",  # disable extra compression
+            ]
+
+            if at.data.get("cross_offset_ms"):
+                audio_args.extend(["--sync", f"0:{at.data['cross_offset_ms']}"])
+
+            cl.extend(audio_args + ["(", str(at.path), ")"])
 
         if not skip_subtitles:
             for st in self.subtitles:
@@ -503,29 +503,29 @@ class Tracks:
                     raise ValueError("Text Track must be downloaded before muxing...")
                 events.emit(events.Types.TRACK_MULTIPLEX, track=st)
                 default = bool(self.audio and is_close_match(st.language, [self.audio[0].language]) and st.forced)
-                cl.extend(
-                    [
-                        "--track-name",
-                        f"0:{st.get_track_name() or ''}",
-                        "--language",
-                        f"0:{st.language}",
-                        "--sub-charset",
-                        "0:UTF-8",
-                        "--forced-track",
-                        f"0:{st.forced}",
-                        "--default-track",
-                        f"0:{default}",
-                        "--hearing-impaired-flag",
-                        f"0:{st.sdh}",
-                        "--original-flag",
-                        f"0:{st.is_original_lang}",
-                        "--compression",
-                        "0:none",  # disable extra compression (probably zlib)
-                        "(",
-                        str(st.path),
-                        ")",
-                    ]
-                )
+                sub_args = [
+                    "--track-name",
+                    f"0:{st.get_track_name() or ''}",
+                    "--language",
+                    f"0:{st.language}",
+                    "--sub-charset",
+                    "0:UTF-8",
+                    "--forced-track",
+                    f"0:{st.forced}",
+                    "--default-track",
+                    f"0:{default}",
+                    "--hearing-impaired-flag",
+                    f"0:{st.sdh}",
+                    "--original-flag",
+                    f"0:{st.is_original_lang}",
+                    "--compression",
+                    "0:none",  # disable extra compression (probably zlib)
+                ]
+
+                if st.data.get("cross_offset_ms"):
+                    sub_args.extend(["--sync", f"0:{st.data['cross_offset_ms']}"])
+
+                cl.extend(sub_args + ["(", str(st.path), ")"])
 
         if self.chapters:
             chapters_path = config.directories.temp / config.filenames.chapters.format(
