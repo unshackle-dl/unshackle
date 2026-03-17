@@ -19,6 +19,11 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - *tracks*: Add edition tags to output filenames
 - *templates*: [**breaking**] Add customizable output filename templates
 - *templates*: Add configurable language tagging rule engine
+- Update unshackle version to 4.0.0
+- *dl*: Add --animeapi and --enrich options for anime metadata and tagging
+- *dl*: Add skip messages for --no-audio and --no-chapters flags
+- *dl*: Extract closed captions from HLS manifests and improve CC extraction
+- *dl*: Add --worst flag and SHIELD OkHttp fingerprint preset
 
 ### Bug Fixes
 
@@ -33,6 +38,13 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - *n_m3u8dl_re*: Disable segment count validation for duration-based DASH
 - Correct formatting and add missing newlines in selector and EXAMPLE service
 - *dependencies*: Update pyplayready version to 0.8.3 and adjust dependencies
+- *drm*: Update PlayReady KID extraction for pyplayready 0.8.3 compatibility
+- *api*: Resolve Sentinel serialization, missing params, and add search endpoint
+- *dash*: Pass period_filter to n_m3u8dl_re via filtered MPD file
+- *title*: Add HDR Vivid Format HDR Tag
+- *ism*: Prevent duplicate track IDs for audio tracks with same lang/codec/bitrate
+- *aria2c*: Correct progress bar tracking for HLS downloads
+- *dl*: Filter CC subtitle languages with --s-lang and extract all manifest CCs
 
 ### Documentation
 
@@ -44,10 +56,6 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - *dl*: Remove legacy multi-fetch loop for unmigrated services
 - *example*: Migrate EXAMPLE service to track_request pattern
 - *providers*: Extract metadata providers into modular system
-
-### Maintenance
-
-- *changelog*: Update changelog for upcoming release and reorganize sections
 
 ## [3.0.0] - 2026-02-15
 
