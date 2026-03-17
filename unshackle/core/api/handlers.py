@@ -1367,7 +1367,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
         from unshackle.core.config import config as app_config
 
         session_id = str(uuid_mod.uuid4())
-        api_key = request.headers.get("X-API-Key", "anonymous") if request else "anonymous"
+        api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
         api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:12]
         session_cache_tag = f"_sessions/{api_key_hash}/{session_id}/{normalized_service}"
 

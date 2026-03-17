@@ -47,7 +47,7 @@ class RemoteClient:
         if self._session is None:
             self._session = requests.Session()
             if self.api_key:
-                self._session.headers["X-API-Key"] = self.api_key
+                self._session.headers["X-Secret-Key"] = self.api_key
         return self._session
 
     def _request(self, method: str, endpoint: str, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
