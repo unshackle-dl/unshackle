@@ -1,0 +1,90 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "pyproject.toml"
+
+permissions:
+  contents: write
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.version_check.outputs.should_release }}
+      new_version: ${{ steps.version_check.outputs.new_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for major/minor version bump
+        id: version_check
+        run: |
+          NEW_VERSION=$(grep -m1 '^version' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          echo "Detected version in pyproject.toml: $NEW_VERSION"
+
+          LATEST_TAG=$(git tag --list | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+          echo "Latest git tag: $LATEST_TAG"
+
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No previous tag found, treating as new release"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          OLD_MAJOR=$(echo "$LATEST_TAG" | cut -d. -f1)
+          OLD_MINOR=$(echo "$LATEST_TAG" | cut -d. -f2)
+          NEW_MAJOR=$(echo "$NEW_VERSION" | cut -d. -f1)
+          NEW_MINOR=$(echo "$NEW_VERSION" | cut -d. -f2)
+
+          if [ "$NEW_MAJOR" -gt "$OLD_MAJOR" ] || [ "$NEW_MINOR" -gt "$OLD_MINOR" ]; then
+            echo "Major or minor version bump detected: $LATEST_TAG -> $NEW_VERSION"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Patch-only change ($LATEST_TAG -> $NEW_VERSION), skipping release"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: check-version
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies and build
+        run: |
+          uv sync
+          uv build
+
+      - name: Extract changelog for release
+        id: changelog
+        run: |
+          VERSION=${{ needs.check-version.outputs.new_version }}
+          # Extract the section for this version from CHANGELOG.md
+          awk "/^## \[$VERSION\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md > release_notes.md
+          echo "Extracted release notes:"
+          cat release_notes.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=${{ needs.check-version.outputs.new_version }}
+          gh release create "$VERSION" \
+            --title "$VERSION" \
+            --notes-file release_notes.md \
+            dist/unshackle-${VERSION}-py3-none-any.whl \
+            dist/unshackle-${VERSION}.tar.gz
