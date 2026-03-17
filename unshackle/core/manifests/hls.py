@@ -339,6 +339,7 @@ class HLS:
                 media_drm = HLS.get_drm(media_playlist_key, session)
                 if isinstance(media_drm, (Widevine, PlayReady)):
                     track_kid = HLS.get_track_kid_from_init(master, track, session) or media_drm.kid
+                    track.drm = [media_drm]
                     try:
                         if not license_widevine:
                             raise ValueError("license_widevine func must be supplied to use DRM")
@@ -347,7 +348,6 @@ class HLS:
                         progress(downloaded="[yellow]LICENSED")
                         initial_drm_licensed = True
                         initial_drm_key = media_playlist_key
-                        track.drm = [media_drm]
                         session_drm = media_drm
                     except Exception:  # noqa
                         DOWNLOAD_CANCELLED.set()  # skip pending track downloads

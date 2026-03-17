@@ -119,15 +119,39 @@ def serve(
             config.serve["playready_devices"] = []
         config.serve["playready_devices"].extend(list(config.directories.prds.glob("*.prd")))
 
+        @web.middleware
+        async def api_key_authentication(request: web.Request, handler) -> web.Response:
+            """Authenticate API requests using X-Secret-Key header."""
+            secret_key = request.headers.get("X-Secret-Key")
+            if not secret_key:
+                return web.json_response({"status": 401, "message": "Secret Key is Empty."}, status=401)
+            if secret_key not in request.app["config"]["users"]:
+                return web.json_response({"status": 401, "message": "Secret Key is Invalid."}, status=401)
+            return await handler(request)
+
         if api_only:
             log.info("Starting REST API server (pywidevine/pyplayready CDM disabled)")
             if no_key:
                 app = web.Application(middlewares=[cors_middleware])
                 app["config"] = {"users": {}}
             else:
-                app = web.Application(middlewares=[cors_middleware, pywidevine_serve.authentication])
+                app = web.Application(middlewares=[cors_middleware, api_key_authentication])
                 app["config"] = {"users": {api_secret: {"devices": [], "username": "api_user"}}}
             app["debug_api"] = debug_api
+
+            # Start session cleanup loop for remote-dl sessions
+            from unshackle.core.api.session_store import get_session_store
+            session_store = get_session_store()
+
+            async def start_session_cleanup(_app: web.Application) -> None:
+                await session_store.start_cleanup_loop()
+
+            async def stop_session_cleanup(_app: web.Application) -> None:
+                await session_store.stop_cleanup_loop()
+
+            app.on_startup.append(start_session_cleanup)
+            app.on_cleanup.append(stop_session_cleanup)
+
             setup_routes(app)
             setup_swagger(app)
             log.info(f"REST API endpoints available at http://{host}:{port}/api/")
@@ -194,6 +218,19 @@ def serve(
 
             app["config"] = serve_config
             app["debug_api"] = debug_api
+
+            # Start session cleanup loop for remote-dl sessions
+            from unshackle.core.api.session_store import get_session_store
+            session_store = get_session_store()
+
+            async def start_session_cleanup(_app: web.Application) -> None:
+                await session_store.start_cleanup_loop()
+
+            async def stop_session_cleanup(_app: web.Application) -> None:
+                await session_store.stop_cleanup_loop()
+
+            app.on_startup.append(start_session_cleanup)
+            app.on_cleanup.append(stop_session_cleanup)
 
             if serve_widevine:
                 app.on_startup.append(pywidevine_serve._startup)
