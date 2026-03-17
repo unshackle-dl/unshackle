@@ -35,6 +35,8 @@ class APIErrorCode(str, Enum):
     NOT_FOUND = "NOT_FOUND"  # Resource not found (title, job, etc.)
     NO_CONTENT = "NO_CONTENT"  # No titles/tracks/episodes found
     JOB_NOT_FOUND = "JOB_NOT_FOUND"  # Download job doesn't exist
+    SESSION_NOT_FOUND = "SESSION_NOT_FOUND"  # Remote-dl session doesn't exist or expired
+    TRACK_NOT_FOUND = "TRACK_NOT_FOUND"  # Track ID not found in session
 
     RATE_LIMITED = "RATE_LIMITED"  # Service rate limiting
 
@@ -97,6 +99,8 @@ class APIError(Exception):
             APIErrorCode.NOT_FOUND: 404,
             APIErrorCode.NO_CONTENT: 404,
             APIErrorCode.JOB_NOT_FOUND: 404,
+            APIErrorCode.SESSION_NOT_FOUND: 404,
+            APIErrorCode.TRACK_NOT_FOUND: 404,
             # 429 Too Many Requests
             APIErrorCode.RATE_LIMITED: 429,
             # 500 Internal Server Error

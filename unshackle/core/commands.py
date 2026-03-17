@@ -17,11 +17,11 @@ class Commands(click.MultiCommand):
 
     def list_commands(self, ctx: click.Context) -> list[str]:
         """Returns a list of command names from the command filenames."""
-        return [x.stem for x in _COMMANDS]
+        return [x.stem.replace("_", "-") for x in _COMMANDS]
 
     def get_command(self, ctx: click.Context, name: str) -> Optional[click.Command]:
         """Load the command code and return the main click command function."""
-        module = _MODULES.get(name)
+        module = _MODULES.get(name) or _MODULES.get(name.replace("-", "_"))
         if not module:
             raise click.ClickException(f"Unable to find command by the name '{name}'")
 

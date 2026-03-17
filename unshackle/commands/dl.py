@@ -62,7 +62,7 @@ from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.hybrid import Hybrid
 from unshackle.core.utilities import (find_font_with_fallbacks, get_debug_logger, get_system_fonts, init_debug_logger,
-                                      is_close_match, is_exact_match, suggest_font_packages, time_elapsed_since)
+                                      is_close_match, suggest_font_packages, time_elapsed_since)
 from unshackle.core.utils import tags
 from unshackle.core.utils.click_types import (AUDIO_CODEC_LIST, LANGUAGE_RANGE, QUALITY_LIST, SEASON_RANGE,
                                               ContextData, MultipleChoice, MultipleVideoCodecChoice,
@@ -519,6 +519,18 @@ class dl:
         default=False,
         help="Continue with best available quality if requested resolutions are not available.",
     )
+    @click.option(
+        "--remote",
+        is_flag=True,
+        default=False,
+        help="Use a remote unshackle server instead of local service code.",
+    )
+    @click.option(
+        "--server",
+        type=str,
+        default=None,
+        help="Name of the remote server from remote_services config (if multiple configured).",
+    )
     @click.pass_context
     def cli(ctx: click.Context, **kwargs: Any) -> dl:
         return dl(ctx, **kwargs)
@@ -696,19 +708,22 @@ class dl:
             self.log.info(f"Using profile: '{self.profile}'")
 
         with console.status("Loading Service Config...", spinner="dots"):
-            service_config_path = Services.get_path(self.service) / config.filenames.config
-            if service_config_path.exists():
-                self.service_config = yaml.safe_load(service_config_path.read_text(encoding="utf8"))
-                self.log.info("Service Config loaded")
-                if self.debug_logger:
-                    self.debug_logger.log(
-                        level="DEBUG",
-                        operation="load_service_config",
-                        service=self.service,
-                        context={"config_path": str(service_config_path), "config": self.service_config},
-                    )
-            else:
-                self.service_config = {}
+            self.service_config = {}
+            if not ctx.params.get("remote"):
+                try:
+                    service_config_path = Services.get_path(self.service) / config.filenames.config
+                    if service_config_path.exists():
+                        self.service_config = yaml.safe_load(service_config_path.read_text(encoding="utf8"))
+                        self.log.info("Service Config loaded")
+                        if self.debug_logger:
+                            self.debug_logger.log(
+                                level="DEBUG",
+                                operation="load_service_config",
+                                service=self.service,
+                                context={"config_path": str(service_config_path), "config": self.service_config},
+                            )
+                except KeyError:
+                    pass
             merge_dict(config.services.get(self.service), self.service_config)
 
         if getattr(config, "downloader_map", None):
@@ -1712,6 +1727,8 @@ class dl:
                             f"Required languages found ({', '.join(require_subs)}), downloading all available subtitles"
                         )
                     elif s_lang and "all" not in s_lang:
+                        from unshackle.core.utilities import is_exact_match
+
                         match_func = is_exact_match if exact_lang else is_close_match
 
                         missing_langs = [
@@ -2103,7 +2120,6 @@ class dl:
                     and not video_only
                     and not no_video
                 ):
-                    match_func = is_exact_match if exact_lang else is_close_match
                     for video_track_n, video_track in enumerate(title.tracks.videos):
                         has_manifest_cc = bool(getattr(video_track, "closed_captions", None))
                         has_eia_cc = (
@@ -2117,48 +2133,31 @@ class dl:
                         if not has_manifest_cc and not has_eia_cc:
                             continue
 
-                        # Build list of CC entries to extract
-                        if has_manifest_cc:
-                            cc_entries = video_track.closed_captions
-                            # Filter CC languages against --s-lang if specified
-                            if s_lang and "all" not in s_lang:
-                                cc_entries = [
-                                    entry for entry in cc_entries
-                                    if entry.get("language")
-                                    and match_func(Language.get(entry["language"]), s_lang)
-                                ]
-                                if not cc_entries:
-                                    continue
-                        else:
-                            # EIA fallback: single entry with unknown language
-                            cc_entries = [{}]
-
                         with console.status(f"Checking Video track {video_track_n + 1} for Closed Captions..."):
                             try:
-                                for cc_idx, cc_entry in enumerate(cc_entries):
-                                    cc_lang = (
-                                        Language.get(cc_entry["language"])
-                                        if cc_entry.get("language")
-                                        else title.language or video_track.language
+                                cc_lang = (
+                                    Language.get(video_track.closed_captions[0]["language"])
+                                    if has_manifest_cc and video_track.closed_captions[0].get("language")
+                                    else title.language or video_track.language
+                                )
+                                track_id = f"ccextractor-{video_track.id}"
+                                cc = video_track.ccextractor(
+                                    track_id=track_id,
+                                    out_path=config.directories.temp
+                                    / config.filenames.subtitle.format(id=track_id, language=cc_lang),
+                                    language=cc_lang,
+                                    original=False,
+                                )
+                                if cc:
+                                    cc.cc = True
+                                    title.tracks.add(cc)
+                                    self.log.info(
+                                        f"Extracted a Closed Caption from Video track {video_track_n + 1}"
                                     )
-                                    track_id = f"ccextractor-{video_track.id}-{cc_idx}"
-                                    cc = video_track.ccextractor(
-                                        track_id=track_id,
-                                        out_path=config.directories.temp
-                                        / config.filenames.subtitle.format(id=track_id, language=cc_lang),
-                                        language=cc_lang,
-                                        original=False,
+                                else:
+                                    self.log.info(
+                                        f"No Closed Captions were found in Video track {video_track_n + 1}"
                                     )
-                                    if cc:
-                                        cc.cc = True
-                                        title.tracks.add(cc)
-                                        self.log.info(
-                                            f"Extracted a Closed Caption ({cc_lang}) from Video track {video_track_n + 1}"
-                                        )
-                                    else:
-                                        self.log.info(
-                                            f"No Closed Captions were found in Video track {video_track_n + 1}"
-                                        )
                             except EnvironmentError:
                                 self.log.error(
                                     "Cannot extract Closed Captions as the ccextractor executable was not found..."
@@ -2501,10 +2500,13 @@ class dl:
                     Padding(f":tada: Title downloaded in [progress.elapsed]{title_dl_time}[/]!", (0, 5, 1, 5))
                 )
 
-            # update cookies
-            cookie_file = self.get_cookie_path(self.service, self.profile)
-            if cookie_file:
-                self.save_cookies(cookie_file, service.session.cookies)
+            if not hasattr(service, "close"):
+                cookie_file = self.get_cookie_path(self.service, self.profile)
+                if cookie_file:
+                    self.save_cookies(cookie_file, service.session.cookies)
+
+        if hasattr(service, "close"):
+            service.close()
 
         dl_time = time_elapsed_since(start_time)
 
