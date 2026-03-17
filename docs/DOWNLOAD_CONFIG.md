@@ -145,6 +145,97 @@ or to change the output subtitle format from the default (original format) to We
 sub_format: vtt
 ```
 
+### All Available `dl` Keys
+
+Below is a comprehensive list of keys that can be pre-defined in the `dl` section. Each corresponds
+to a CLI option on the `dl` command. CLI arguments always take priority over config values.
+
+**Quality and codec:**
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `quality` | int or list | best | Resolution(s) to download (e.g., `1080`, `[1080, 2160]`) |
+| `vcodec` | str or list | any | Video codec(s): `H264`, `H265`, `VP9`, `AV1`, `VC1` |
+| `acodec` | str or list | any | Audio codec(s): `AAC`, `AC3`, `EC3`, `AC4`, `OPUS`, `FLAC`, `ALAC`, `DTS` |
+| `vbitrate` | int | highest | Video bitrate in kbps |
+| `abitrate` | int | highest | Audio bitrate in kbps |
+| `range_` | str or list | `SDR` | Color range(s): `SDR`, `HDR10`, `HDR10+`, `HLG`, `DV`, `HYBRID` |
+| `channels` | float | any | Audio channels (e.g., `5.1`, `7.1`) |
+| `worst` | bool | `false` | Select the lowest bitrate track within the specified quality. Requires `quality` |
+| `best_available` | bool | `false` | Continue if requested quality is unavailable |
+
+**Language:**
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `lang` | str or list | `orig` | Language for video and audio (`orig` = original language) |
+| `v_lang` | list | `[]` | Language override for video tracks only |
+| `a_lang` | list | `[]` | Language override for audio tracks only |
+| `s_lang` | list | `["all"]` | Language for subtitles |
+| `require_subs` | list | `[]` | Required subtitle languages (skip title if missing) |
+| `forced_subs` | bool | `false` | Include forced subtitle tracks |
+| `exact_lang` | bool | `false` | Exact language matching (no regional variants) |
+
+**Track selection:**
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `video_only` | bool | `false` | Only download video tracks |
+| `audio_only` | bool | `false` | Only download audio tracks |
+| `subs_only` | bool | `false` | Only download subtitle tracks |
+| `chapters_only` | bool | `false` | Only download chapters |
+| `no_video` | bool | `false` | Skip video tracks |
+| `no_audio` | bool | `false` | Skip audio tracks |
+| `no_subs` | bool | `false` | Skip subtitle tracks |
+| `no_chapters` | bool | `false` | Skip chapters |
+| `no_atmos` | bool | `false` | Exclude Dolby Atmos audio tracks |
+| `audio_description` | bool | `false` | Include audio description tracks |
+
+**Output and tagging:**
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `tag` | str | config default | Override group tag |
+| `repack` | bool | `false` | Add REPACK tag to output filename |
+| `sub_format` | str | original | Output subtitle format: `srt`, `vtt`, `ass`, `ssa`, `ttml` |
+| `no_folder` | bool | `false` | Disable folder creation for TV shows |
+| `no_source` | bool | `false` | Remove source tag from filename |
+| `no_mux` | bool | `false` | Do not mux tracks into a container file |
+| `split_audio` | bool | `false` | Create separate output files per audio codec |
+
+**Metadata enrichment:**
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `tmdb_id` | int | `null` | Use specific TMDB ID for tagging |
+| `imdb_id` | str | `null` | Use specific IMDB ID (e.g., `tt1375666`) |
+| `animeapi_id` | str | `null` | Anime database ID via AnimeAPI (e.g., `mal:12345`, `anilist:98765`) |
+| `enrich` | bool | `false` | Override show title and year from external source. Requires `tmdb_id`, `imdb_id`, or `animeapi_id` |
+
+**Download behavior:**
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `downloads` | int | `1` | Concurrent track downloads |
+| `workers` | int | auto | Max threads per track download |
+| `slow` | bool | `false` | Add 60-120s delay between titles |
+| `skip_dl` | bool | `false` | Skip download, only get decryption keys |
+| `cdm_only` | bool | `null` | Only use CDM (`true`) or only vaults (`false`) |
+
+You can also set per-service `dl` overrides (see [Service Integration & Authentication Configuration](SERVICE_CONFIG.md)):
+
+```yaml
+dl:
+  lang: en
+  downloads: 4
+  workers: 16
+  AMZN:
+    bitrate: CVBR
+  NF:
+    worst: true
+    quality: 1080
+```
+
 ---
 
 ## subtitle (dict)
