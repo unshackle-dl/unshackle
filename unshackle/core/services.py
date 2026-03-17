@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import click
@@ -26,12 +28,28 @@ class Services(click.MultiCommand):
     # Click-specific methods
 
     def list_commands(self, ctx: click.Context) -> list[str]:
-        """Returns a list of all available Services as command names for Click."""
-        return Services.get_tags()
+        """Returns a list of all available Services as command names for Click.
+
+        In remote mode, also includes service tags from remote_services config
+        so the user can use services that aren't installed locally.
+        """
+        tags = Services.get_tags()
+        remote = ctx.params.get("remote") or (ctx.parent and ctx.parent.params.get("remote"))
+        if remote:
+            for svc_cfg in config.remote_services.values():
+                for remote_tag in svc_cfg.get("services", {}).keys():
+                    if remote_tag not in tags:
+                        tags.append(remote_tag)
+        return tags
 
     def get_command(self, ctx: click.Context, name: str) -> click.Command:
         """Load the Service and return the Click CLI method."""
         tag = Services.get_tag(name)
+
+        remote = ctx.params.get("remote") or (ctx.parent and ctx.parent.params.get("remote"))
+        if remote:
+            return Services._make_remote_command(tag)
+
         try:
             service = Services.load(tag)
         except KeyError as e:
@@ -46,6 +64,22 @@ class Services(click.MultiCommand):
             return service.cli
 
         raise click.ClickException(f"Service '{tag}' has no 'cli' method configured.")
+
+    @staticmethod
+    def _make_remote_command(tag: str) -> click.Command:
+        """Create a synthetic Click command for a remote service."""
+
+        @click.command(name=tag)
+        @click.argument("title", type=str)
+        @click.pass_context
+        def remote_cli(ctx: click.Context, title: str) -> object:
+            from unshackle.core.remote_service import RemoteService, resolve_server
+
+            server_name = ctx.parent.params.get("server") if ctx.parent else None
+            server_url, api_key, services_config = resolve_server(server_name)
+            return RemoteService(ctx, tag, title, server_url, api_key, services_config)
+
+        return remote_cli
 
     # Methods intended to be used anywhere
 

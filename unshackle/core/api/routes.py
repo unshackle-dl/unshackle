@@ -8,7 +8,9 @@ from unshackle.core import __version__
 from unshackle.core.api.errors import APIError, APIErrorCode, build_error_response, handle_api_exception
 from unshackle.core.api.handlers import (cancel_download_job_handler, download_handler, get_download_job_handler,
                                          list_download_jobs_handler, list_titles_handler, list_tracks_handler,
-                                         search_handler)
+                                         search_handler, session_create_handler, session_delete_handler,
+                                         session_info_handler, session_license_handler, session_segments_handler,
+                                         session_titles_handler, session_tracks_handler)
 from unshackle.core.services import Services
 from unshackle.core.update_checker import UpdateChecker
 
@@ -836,6 +838,294 @@ async def cancel_download_job(request: web.Request) -> web.Response:
         return build_error_response(e, debug_mode)
 
 
+async def session_create(request: web.Request) -> web.Response:
+    """
+    Create a remote-dl session.
+    ---
+    summary: Create session
+    description: Authenticate with a service, get titles, tracks, and chapters in one call
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+            required:
+              - service
+              - title_id
+            properties:
+              service:
+                type: string
+              title_id:
+                type: string
+              credentials:
+                type: object
+                additionalProperties: true
+              cookies:
+                type: string
+              proxy:
+                type: string
+              no_proxy:
+                type: boolean
+              profile:
+                type: string
+              cache:
+                type: object
+                additionalProperties: true
+    responses:
+      '200':
+        description: Session created with titles, tracks, and chapters
+      '400':
+        description: Invalid request
+      '401':
+        description: Authentication failed
+    """
+    try:
+        data = await request.json()
+    except Exception as e:
+        return build_error_response(
+            APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}),
+            request.app.get("debug_api", False),
+        )
+    try:
+        return await session_create_handler(data, request)
+    except APIError as e:
+        return build_error_response(e, request.app.get("debug_api", False))
+    except Exception as e:
+        log.exception("Error in session create")
+        return handle_api_exception(e, context={"operation": "session_create"}, debug_mode=request.app.get("debug_api", False))
+
+
+async def session_titles(request: web.Request) -> web.Response:
+    """
+    Get titles for an authenticated session.
+    ---
+    summary: Get titles
+    description: Fetch titles from the authenticated service session
+    parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+    responses:
+      '200':
+        description: List of titles
+      '404':
+        description: Session not found
+    """
+    session_id = request.match_info["session_id"]
+    try:
+        return await session_titles_handler(session_id, request)
+    except APIError as e:
+        return build_error_response(e, request.app.get("debug_api", False))
+    except Exception as e:
+        log.exception("Error in session titles")
+        return handle_api_exception(e, context={"operation": "session_titles"}, debug_mode=request.app.get("debug_api", False))
+
+
+async def session_tracks(request: web.Request) -> web.Response:
+    """
+    Get tracks and chapters for a specific title.
+    ---
+    summary: Get tracks
+    description: Fetch tracks and chapters for a title in the session
+    parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - title_id
+            properties:
+              title_id:
+                type: string
+                description: ID of the title to get tracks for
+    responses:
+      '200':
+        description: Tracks and chapters for the title
+      '404':
+        description: Session or title not found
+    """
+    session_id = request.match_info["session_id"]
+    try:
+        data = await request.json()
+    except Exception as e:
+        return build_error_response(
+            APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}),
+            request.app.get("debug_api", False),
+        )
+    try:
+        return await session_tracks_handler(data, session_id, request)
+    except APIError as e:
+        return build_error_response(e, request.app.get("debug_api", False))
+    except Exception as e:
+        log.exception("Error in session tracks")
+        return handle_api_exception(e, context={"operation": "session_tracks"}, debug_mode=request.app.get("debug_api", False))
+
+
+async def session_segments(request: web.Request) -> web.Response:
+    """
+    Resolve segment URLs for selected tracks.
+    ---
+    summary: Resolve segments
+    description: Get download URLs, DRM info, and headers for selected tracks
+    parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - track_ids
+            properties:
+              track_ids:
+                type: array
+                items:
+                  type: string
+                description: List of track IDs to resolve
+    responses:
+      '200':
+        description: Segment URLs and DRM info for each track
+      '404':
+        description: Session or track not found
+    """
+    session_id = request.match_info["session_id"]
+    try:
+        data = await request.json()
+    except Exception as e:
+        return build_error_response(
+            APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}),
+            request.app.get("debug_api", False),
+        )
+    try:
+        return await session_segments_handler(data, session_id, request)
+    except APIError as e:
+        return build_error_response(e, request.app.get("debug_api", False))
+    except Exception as e:
+        log.exception("Error in session segments")
+        return handle_api_exception(e, context={"operation": "session_segments"}, debug_mode=request.app.get("debug_api", False))
+
+
+async def session_license(request: web.Request) -> web.Response:
+    """
+    Proxy DRM license through authenticated service.
+    ---
+    summary: Proxy license
+    description: Forward a CDM challenge to the service's license endpoint
+    parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - track_id
+              - challenge
+            properties:
+              track_id:
+                type: string
+                description: Track ID this license is for
+              challenge:
+                type: string
+                description: Base64-encoded CDM challenge
+              drm_type:
+                type: string
+                enum: [widevine, playready]
+                description: DRM type (default widevine)
+    responses:
+      '200':
+        description: License response
+      '404':
+        description: Session or track not found
+    """
+    session_id = request.match_info["session_id"]
+    try:
+        data = await request.json()
+    except Exception as e:
+        return build_error_response(
+            APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}),
+            request.app.get("debug_api", False),
+        )
+    try:
+        return await session_license_handler(data, session_id, request)
+    except APIError as e:
+        return build_error_response(e, request.app.get("debug_api", False))
+    except Exception as e:
+        log.exception("Error in session license")
+        return handle_api_exception(e, context={"operation": "session_license"}, debug_mode=request.app.get("debug_api", False))
+
+
+async def session_info(request: web.Request) -> web.Response:
+    """
+    Get session info.
+    ---
+    summary: Session info
+    description: Check session validity and get metadata
+    parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Session info
+      '404':
+        description: Session not found
+    """
+    session_id = request.match_info["session_id"]
+    try:
+        return await session_info_handler(session_id, request)
+    except APIError as e:
+        return build_error_response(e, request.app.get("debug_api", False))
+
+
+async def session_delete(request: web.Request) -> web.Response:
+    """
+    Delete a session.
+    ---
+    summary: Delete session
+    description: Clean up a remote-dl session
+    parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Session deleted
+      '404':
+        description: Session not found
+    """
+    session_id = request.match_info["session_id"]
+    try:
+        return await session_delete_handler(session_id, request)
+    except APIError as e:
+        return build_error_response(e, request.app.get("debug_api", False))
+
+
 def setup_routes(app: web.Application) -> None:
     """Setup all API routes."""
     app.router.add_get("/api/health", health)
@@ -847,6 +1137,15 @@ def setup_routes(app: web.Application) -> None:
     app.router.add_get("/api/download/jobs", download_jobs)
     app.router.add_get("/api/download/jobs/{job_id}", download_job_detail)
     app.router.add_delete("/api/download/jobs/{job_id}", cancel_download_job)
+
+    # Remote-DL session endpoints
+    app.router.add_post("/api/session/create", session_create)
+    app.router.add_get("/api/session/{session_id}/titles", session_titles)
+    app.router.add_post("/api/session/{session_id}/tracks", session_tracks)
+    app.router.add_post("/api/session/{session_id}/segments", session_segments)
+    app.router.add_post("/api/session/{session_id}/license", session_license)
+    app.router.add_get("/api/session/{session_id}", session_info)
+    app.router.add_delete("/api/session/{session_id}", session_delete)
 
 
 def setup_swagger(app: web.Application) -> None:
@@ -873,5 +1172,13 @@ def setup_swagger(app: web.Application) -> None:
             web.get("/api/download/jobs", download_jobs),
             web.get("/api/download/jobs/{job_id}", download_job_detail),
             web.delete("/api/download/jobs/{job_id}", cancel_download_job),
+            # Remote-DL session endpoints
+            web.post("/api/session/create", session_create),
+            web.get("/api/session/{session_id}/titles", session_titles),
+            web.post("/api/session/{session_id}/tracks", session_tracks),
+            web.post("/api/session/{session_id}/segments", session_segments),
+            web.post("/api/session/{session_id}/license", session_license),
+            web.get("/api/session/{session_id}", session_info),
+            web.delete("/api/session/{session_id}", session_delete),
         ]
     )

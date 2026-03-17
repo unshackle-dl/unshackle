@@ -171,6 +171,8 @@ def validate_service(service_tag: str) -> Optional[str]:
 
 def serialize_title(title: Title_T) -> Dict[str, Any]:
     """Convert a title object to JSON-serializable dict."""
+    title_language = str(title.language) if hasattr(title, "language") and title.language else None
+
     if isinstance(title, Episode):
         episode_name = title.name if title.name else f"Episode {title.number:02d}"
         result = {
@@ -181,6 +183,7 @@ def serialize_title(title: Title_T) -> Dict[str, Any]:
             "number": title.number,
             "year": title.year,
             "id": str(title.id) if hasattr(title, "id") else None,
+            "language": title_language,
         }
     elif isinstance(title, Movie):
         result = {
@@ -188,12 +191,14 @@ def serialize_title(title: Title_T) -> Dict[str, Any]:
             "name": str(title.name) if hasattr(title, "name") else str(title),
             "year": title.year,
             "id": str(title.id) if hasattr(title, "id") else None,
+            "language": title_language,
         }
     else:
         result = {
             "type": "other",
             "name": str(title.name) if hasattr(title, "name") else str(title),
             "id": str(title.id) if hasattr(title, "id") else None,
+            "language": title_language,
         }
 
     return result
@@ -1192,3 +1197,626 @@ async def cancel_download_job_handler(job_id: str, request: Optional[web.Request
             context={"operation": "cancel_download_job", "job_id": job_id},
             debug_mode=debug_mode,
         )
+
+
+# ---------------------------------------------------------------------------
+# Remote-DL Session Handlers
+# ---------------------------------------------------------------------------
+
+
+def _create_service_instance(
+    normalized_service: str,
+    title_id: str,
+    data: Dict[str, Any],
+    proxy_param: Optional[str],
+    proxy_providers: list,
+    profile: Optional[str],
+) -> Any:
+    """Create and authenticate a service instance.
+
+    Supports client-sent credentials/cookies (for remote-dl) with fallback
+    to server-local config (for backward compatibility).
+    """
+    import inspect
+
+    import click
+    import yaml
+
+    from unshackle.commands.dl import dl
+    from unshackle.core.config import config
+    from unshackle.core.credential import Credential
+    from unshackle.core.utils.click_types import ContextData
+    from unshackle.core.utils.collections import merge_dict
+
+    service_config_path = Services.get_path(normalized_service) / config.filenames.config
+    if service_config_path.exists():
+        service_config = yaml.safe_load(service_config_path.read_text(encoding="utf8"))
+    else:
+        service_config = {}
+    merge_dict(config.services.get(normalized_service), service_config)
+
+    @click.command()
+    @click.pass_context
+    def dummy_service(ctx: click.Context) -> None:
+        pass
+
+    ctx = click.Context(dummy_service)
+    ctx.obj = ContextData(config=service_config, cdm=None, proxy_providers=proxy_providers, profile=profile)
+    ctx.params = {"proxy": proxy_param, "no_proxy": data.get("no_proxy", False)}
+
+    service_module = Services.load(normalized_service)
+
+    dummy_service.name = normalized_service
+    dummy_service.params = [click.Argument([title_id], type=str)]
+    ctx.invoked_subcommand = normalized_service
+
+    service_ctx = click.Context(dummy_service, parent=ctx)
+    service_ctx.obj = ctx.obj
+
+    service_kwargs: Dict[str, Any] = {"title": title_id}
+
+    for key, value in data.items():
+        if key not in [
+            "service", "title_id", "profile", "season", "episode", "wanted",
+            "proxy", "no_proxy", "credentials", "cookies",
+        ]:
+            service_kwargs[key] = value
+
+    service_init_params = inspect.signature(service_module.__init__).parameters
+
+    if hasattr(service_module, "cli") and hasattr(service_module.cli, "params"):
+        for param in service_module.cli.params:
+            if hasattr(param, "name") and param.name not in service_kwargs:
+                if hasattr(param, "default") and param.default is not None and not isinstance(param.default, enum.Enum):
+                    service_kwargs[param.name] = param.default
+
+    for param_name, param_info in service_init_params.items():
+        if param_name not in service_kwargs and param_name not in ["self", "ctx"]:
+            if param_info.default is inspect.Parameter.empty:
+                if param_name == "meta_lang":
+                    service_kwargs[param_name] = None
+                elif param_name == "movie":
+                    service_kwargs[param_name] = False
+                else:
+                    log.warning(f"Unknown required parameter '{param_name}' for service {normalized_service}")
+
+    filtered_kwargs = {k: v for k, v in service_kwargs.items() if k in service_init_params}
+    service_instance = service_module(service_ctx, **filtered_kwargs)
+
+    # Resolve credentials: client-sent > server-local
+    cred_data = data.get("credentials")
+    if cred_data and isinstance(cred_data, dict):
+        credential = Credential(
+            username=cred_data["username"],
+            password=cred_data["password"],
+            extra=cred_data.get("extra"),
+        )
+    else:
+        credential = dl.get_credentials(normalized_service, profile)
+
+    # Resolve cookies: client-sent > server-local
+    cookie_text = data.get("cookies")
+    if cookie_text and isinstance(cookie_text, str):
+        import tempfile
+        from http.cookiejar import MozillaCookieJar
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as f:
+            f.write(cookie_text)
+            tmp_path = f.name
+        try:
+            cookies = MozillaCookieJar(tmp_path)
+            cookies.load(ignore_discard=True, ignore_expires=True)
+        finally:
+            import os
+            os.unlink(tmp_path)
+    else:
+        cookies = dl.get_cookie_jar(normalized_service, profile)
+
+    return service_instance, cookies, credential
+
+
+async def session_create_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
+    """Handle session creation: authenticate + get titles + get tracks + get chapters.
+
+    This is the main entry point for remote-dl clients. It creates a persistent
+    session on the server with the authenticated service instance, fetches all
+    titles and tracks, and returns everything the client needs for track selection.
+    """
+    from unshackle.core.api.session_store import get_session_store
+
+    service_tag = data.get("service")
+    title_id = data.get("title_id")
+    profile = data.get("profile")
+
+    if not service_tag:
+        raise APIError(APIErrorCode.INVALID_INPUT, "Missing required parameter: service")
+    if not title_id:
+        raise APIError(APIErrorCode.INVALID_INPUT, "Missing required parameter: title_id")
+
+    normalized_service = validate_service(service_tag)
+    if not normalized_service:
+        raise APIError(
+            APIErrorCode.INVALID_SERVICE,
+            f"Invalid or unavailable service: {service_tag}",
+            details={"service": service_tag},
+        )
+
+    try:
+        # Resolve proxy
+        proxy_param = data.get("proxy")
+        no_proxy = data.get("no_proxy", False)
+        proxy_providers: list = []
+
+        if not no_proxy:
+            proxy_providers = initialize_proxy_providers()
+
+        if proxy_param and not no_proxy:
+            try:
+                proxy_param = resolve_proxy(proxy_param, proxy_providers)
+            except ValueError as e:
+                raise APIError(
+                    APIErrorCode.INVALID_PROXY,
+                    f"Proxy error: {e}",
+                    details={"proxy": data.get("proxy"), "service": normalized_service},
+                )
+
+        import hashlib
+        import uuid as uuid_mod
+
+        from unshackle.core.cacher import Cacher
+        from unshackle.core.config import config as app_config
+
+        session_id = str(uuid_mod.uuid4())
+        api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
+        api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:12]
+        session_cache_tag = f"_sessions/{api_key_hash}/{session_id}/{normalized_service}"
+
+        service_instance, cookies, credential = _create_service_instance(
+            normalized_service, title_id, data, proxy_param, proxy_providers, profile,
+        )
+
+        service_instance.cache = Cacher(session_cache_tag)
+
+        cache_data = data.get("cache", {})
+        if cache_data:
+            cache_dir = app_config.directories.cache / session_cache_tag
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            for key, content in cache_data.items():
+                (cache_dir / key).with_suffix(".json").write_text(content, encoding="utf-8")
+
+        service_instance.authenticate(cookies, credential)
+
+        store = get_session_store()
+        session = await store.create(
+            normalized_service, service_instance, session_id=session_id,
+        )
+        session.cache_tag = session_cache_tag
+
+        return web.json_response({
+            "session_id": session.session_id,
+            "service": normalized_service,
+        })
+
+    except APIError:
+        raise
+    except Exception as e:
+        log.exception("Error creating session")
+        debug_mode = request.app.get("debug_api", False) if request else False
+        return handle_api_exception(
+            e,
+            context={"operation": "session_create", "service": service_tag, "title_id": title_id},
+            debug_mode=debug_mode,
+        )
+
+
+async def session_titles_handler(session_id: str,
+                                 request: Optional[web.Request] = None) -> web.Response:
+    """Get titles for the authenticated session.
+
+    Called after session/create. This is separate from auth so that
+    interactive auth flows (OTP, captcha) can complete before titles
+    are fetched.
+    """
+    from unshackle.core.api.session_store import get_session_store
+
+    store = get_session_store()
+    session = await store.get(session_id)
+    if not session:
+        raise APIError(
+            APIErrorCode.SESSION_NOT_FOUND,
+            f"Session not found: {session_id}",
+        )
+
+    try:
+        service_instance = session.service_instance
+        titles = service_instance.get_titles()
+        session.titles = titles
+
+        # Serialize titles and build title map
+        if hasattr(titles, "__iter__") and not isinstance(titles, str):
+            titles_list = list(titles)
+        else:
+            titles_list = [titles]
+
+        serialized_titles = []
+        for t in titles_list:
+            tid = str(t.id) if hasattr(t, "id") else str(id(t))
+            session.title_map[tid] = t
+            serialized_titles.append(serialize_title(t))
+
+        return web.json_response({
+            "session_id": session_id,
+            "titles": serialized_titles,
+        })
+
+    except Exception as e:
+        log.exception("Error getting titles")
+        debug_mode = request.app.get("debug_api", False) if request else False
+        return handle_api_exception(
+            e,
+            context={"operation": "session_titles", "session_id": session_id},
+            debug_mode=debug_mode,
+        )
+
+
+async def session_tracks_handler(data: Dict[str, Any], session_id: str,
+                                 request: Optional[web.Request] = None) -> web.Response:
+    """Get tracks and chapters for a specific title in the session.
+
+    Called per-title by the client after session/create returns titles.
+    This keeps auth separate from track fetching, allowing interactive
+    auth flows (OTP, captcha) before any tracks are requested.
+    """
+    from unshackle.core.api.session_store import get_session_store
+
+    store = get_session_store()
+    session = await store.get(session_id)
+    if not session:
+        raise APIError(
+            APIErrorCode.SESSION_NOT_FOUND,
+            f"Session not found: {session_id}",
+        )
+
+    title_id = data.get("title_id")
+    if not title_id:
+        raise APIError(APIErrorCode.INVALID_INPUT, "Missing required parameter: title_id")
+
+    title = session.title_map.get(str(title_id))
+    if not title:
+        raise APIError(
+            APIErrorCode.INVALID_INPUT,
+            f"Title not found in session: {title_id}",
+            details={"available_titles": list(session.title_map.keys())},
+        )
+
+    try:
+        service_instance = session.service_instance
+        tracks = service_instance.get_tracks(title)
+
+        title_tracks: Dict[str, Any] = {}
+        for track in tracks.videos:
+            title_tracks[str(track.id)] = track
+            session.tracks[str(track.id)] = track
+        for track in tracks.audio:
+            title_tracks[str(track.id)] = track
+            session.tracks[str(track.id)] = track
+        for track in tracks.subtitles:
+            title_tracks[str(track.id)] = track
+            session.tracks[str(track.id)] = track
+        session.tracks_by_title[str(title_id)] = title_tracks
+
+        try:
+            chapters = service_instance.get_chapters(title)
+            session.chapters_by_title[str(title_id)] = chapters if chapters else []
+        except (NotImplementedError, Exception):
+            session.chapters_by_title[str(title_id)] = []
+
+        video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
+        audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
+
+        return web.json_response({
+            "title": serialize_title(title),
+            "video": [serialize_video_track(t, include_url=True) for t in video_tracks],
+            "audio": [serialize_audio_track(t, include_url=True) for t in audio_tracks],
+            "subtitles": [serialize_subtitle_track(t, include_url=True) for t in tracks.subtitles],
+            "chapters": [
+                {"timestamp": ch.timestamp, "name": ch.name}
+                for ch in session.chapters_by_title.get(str(title_id), [])
+            ],
+            "attachments": [
+                {"url": a.url, "name": a.name, "mime_type": a.mime_type, "description": a.description}
+                for a in tracks.attachments
+                if hasattr(a, "url") and a.url
+            ],
+        })
+
+    except Exception as e:
+        log.exception(f"Error getting tracks for title {title_id}")
+        debug_mode = request.app.get("debug_api", False) if request else False
+        return handle_api_exception(
+            e,
+            context={"operation": "session_tracks", "session_id": session_id, "title_id": title_id},
+            debug_mode=debug_mode,
+        )
+
+
+async def session_segments_handler(data: Dict[str, Any], session_id: str,
+                                   request: Optional[web.Request] = None) -> web.Response:
+    """Resolve segment URLs for selected tracks.
+
+    The client calls this after selecting which tracks to download.
+    Returns segment URLs, init data, DRM info, and any headers/cookies
+    needed for CDN download.
+    """
+    from unshackle.core.api.session_store import get_session_store
+
+    store = get_session_store()
+    session = await store.get(session_id)
+    if not session:
+        raise APIError(
+            APIErrorCode.SESSION_NOT_FOUND,
+            f"Session not found or expired: {session_id}",
+            details={"session_id": session_id},
+        )
+
+    track_ids = data.get("track_ids", [])
+    if not track_ids:
+        raise APIError(APIErrorCode.INVALID_INPUT, "Missing required parameter: track_ids")
+
+    try:
+        result: Dict[str, Any] = {}
+
+        for track_id in track_ids:
+            track = session.tracks.get(track_id)
+            if not track:
+                raise APIError(
+                    APIErrorCode.TRACK_NOT_FOUND,
+                    f"Track not found in session: {track_id}",
+                    details={"track_id": track_id, "session_id": session_id},
+                )
+
+            descriptor_name = track.descriptor.name if hasattr(track.descriptor, "name") else str(track.descriptor)
+
+            track_info: Dict[str, Any] = {
+                "descriptor": descriptor_name,
+                "url": str(track.url) if track.url else None,
+                "drm": serialize_drm(track.drm) if hasattr(track, "drm") and track.drm else None,
+            }
+
+            # Extract session headers/cookies for CDN access
+            service_session = session.service_instance.session
+            if hasattr(service_session, "headers"):
+                # Only include relevant headers, not all session headers
+                headers = dict(service_session.headers) if service_session.headers else {}
+                track_info["headers"] = headers
+            else:
+                track_info["headers"] = {}
+
+            if hasattr(service_session, "cookies"):
+                cookie_dict = {}
+                for cookie in service_session.cookies:
+                    if hasattr(cookie, "name") and hasattr(cookie, "value"):
+                        cookie_dict[cookie.name] = cookie.value
+                    elif isinstance(cookie, str):
+                        pass  # Skip non-standard cookie objects
+                track_info["cookies"] = cookie_dict
+            else:
+                track_info["cookies"] = {}
+
+            # Include manifest-specific data for segment resolution
+            if hasattr(track, "data") and track.data:
+                track_data = {}
+                for key, val in track.data.items():
+                    if isinstance(val, dict):
+                        # Convert non-serializable values
+                        serializable = {}
+                        for k, v in val.items():
+                            try:
+                                import json
+                                json.dumps(v)
+                                serializable[k] = v
+                            except (TypeError, ValueError):
+                                serializable[k] = str(v)
+                        track_data[key] = serializable
+                    else:
+                        try:
+                            import json
+                            json.dumps(val)
+                            track_data[key] = val
+                        except (TypeError, ValueError):
+                            track_data[key] = str(val)
+                track_info["data"] = track_data
+            else:
+                track_info["data"] = {}
+
+            result[track_id] = track_info
+
+        return web.json_response({"tracks": result})
+
+    except APIError:
+        raise
+    except Exception as e:
+        log.exception("Error resolving segments")
+        debug_mode = request.app.get("debug_api", False) if request else False
+        return handle_api_exception(
+            e,
+            context={"operation": "session_segments", "session_id": session_id},
+            debug_mode=debug_mode,
+        )
+
+
+async def session_license_handler(data: Dict[str, Any], session_id: str,
+                                  request: Optional[web.Request] = None) -> web.Response:
+    """Proxy a DRM license challenge through the authenticated service.
+
+    The client generates a CDM challenge locally, sends it here, and the server
+    calls the service's get_widevine_license/get_playready_license method using
+    the authenticated session. Returns the raw license response for the client
+    to process with their local CDM.
+    """
+    import base64
+
+    from unshackle.core.api.session_store import get_session_store
+
+    store = get_session_store()
+    session = await store.get(session_id)
+    if not session:
+        raise APIError(
+            APIErrorCode.SESSION_NOT_FOUND,
+            f"Session not found or expired: {session_id}",
+            details={"session_id": session_id},
+        )
+
+    track_id = data.get("track_id")
+    challenge_b64 = data.get("challenge")
+    drm_type = data.get("drm_type", "widevine")
+
+    if not track_id:
+        raise APIError(APIErrorCode.INVALID_INPUT, "Missing required parameter: track_id")
+    if not challenge_b64:
+        raise APIError(APIErrorCode.INVALID_INPUT, "Missing required parameter: challenge")
+
+    track = session.tracks.get(track_id)
+    if not track:
+        raise APIError(
+            APIErrorCode.TRACK_NOT_FOUND,
+            f"Track not found in session: {track_id}",
+            details={"track_id": track_id, "session_id": session_id},
+        )
+
+    try:
+        challenge_bytes = base64.b64decode(challenge_b64)
+
+        title = None
+        for tid, tracks_dict in session.tracks_by_title.items():
+            if track_id in tracks_dict:
+                title = session.title_map.get(tid)
+                break
+
+        if title is None:
+            if session.title_map:
+                title = next(iter(session.title_map.values()))
+
+        service = session.service_instance
+
+        pssh_b64 = data.get("pssh")
+        if pssh_b64:
+            if not track.drm:
+                track.drm = []
+            if drm_type == "playready":
+                track.pr_pssh = pssh_b64
+                from pyplayready.system.pssh import PSSH as PlayReadyPSSH
+
+                from unshackle.core.drm import PlayReady
+                pr_pssh = PlayReadyPSSH(base64.b64decode(pssh_b64))
+                pr_drm = PlayReady(pssh=pr_pssh, pssh_b64=pssh_b64)
+                track.drm.append(pr_drm)
+            elif drm_type == "widevine":
+                from pywidevine.pssh import PSSH as WidevinePSSH
+
+                from unshackle.core.drm import Widevine
+                wv_pssh = WidevinePSSH(pssh_b64)
+                wv_drm = Widevine(pssh=wv_pssh)
+                track.drm.append(wv_drm)
+
+        if drm_type == "widevine":
+            license_response = service.get_widevine_license(
+                challenge=challenge_bytes, title=title, track=track,
+            )
+        elif drm_type == "playready":
+            license_response = service.get_playready_license(
+                challenge=challenge_bytes, title=title, track=track,
+            )
+        else:
+            raise APIError(
+                APIErrorCode.INVALID_PARAMETERS,
+                f"Unsupported DRM type: {drm_type}",
+                details={"drm_type": drm_type, "supported": ["widevine", "playready"]},
+            )
+
+        # Ensure response is bytes for base64 encoding
+        if isinstance(license_response, str):
+            license_response = license_response.encode("utf-8")
+
+        return web.json_response({
+            "license": base64.b64encode(license_response).decode("ascii"),
+        })
+
+    except APIError:
+        raise
+    except Exception as e:
+        log.exception(f"Error proxying license for track {track_id}")
+        debug_mode = request.app.get("debug_api", False) if request else False
+        return handle_api_exception(
+            e,
+            context={
+                "operation": "session_license",
+                "session_id": session_id,
+                "track_id": track_id,
+                "drm_type": drm_type,
+            },
+            debug_mode=debug_mode,
+        )
+
+
+async def session_info_handler(session_id: str, request: Optional[web.Request] = None) -> web.Response:
+    """Check session validity and get session info."""
+    from datetime import timezone
+
+    from unshackle.core.api.session_store import get_session_store
+
+    store = get_session_store()
+    session = await store.get(session_id)
+    if not session:
+        raise APIError(
+            APIErrorCode.SESSION_NOT_FOUND,
+            f"Session not found or expired: {session_id}",
+            details={"session_id": session_id},
+        )
+
+    from datetime import datetime
+    now = datetime.now(timezone.utc)
+    elapsed = (now - session.last_accessed).total_seconds()
+    expires_in = max(0, store._ttl - int(elapsed))
+
+    return web.json_response({
+        "session_id": session.session_id,
+        "service": session.service_tag,
+        "valid": True,
+        "expires_in": expires_in,
+        "track_count": len(session.tracks),
+        "title_count": len(session.title_map),
+    })
+
+
+async def session_delete_handler(session_id: str, request: Optional[web.Request] = None) -> web.Response:
+    """Delete a session and clean up client-sent data from the server."""
+    import shutil
+
+    from unshackle.core.api.session_store import get_session_store
+    from unshackle.core.config import config as app_config
+
+    store = get_session_store()
+    session = await store.get(session_id)
+    if not session:
+        raise APIError(
+            APIErrorCode.SESSION_NOT_FOUND,
+            f"Session not found: {session_id}",
+            details={"session_id": session_id},
+        )
+
+    cache_tag = session.cache_tag
+    await store.delete(session_id)
+
+    if cache_tag:
+        cache_dir = app_config.directories.cache / cache_tag
+        if cache_dir.is_dir():
+            shutil.rmtree(cache_dir, ignore_errors=True)
+        # Clean up empty parent directories (session_id, api_key_hash, _sessions)
+        for parent in cache_dir.parents:
+            if parent == app_config.directories.cache:
+                break
+            if parent.is_dir() and not any(parent.iterdir()):
+                parent.rmdir()
+
+    return web.json_response({"status": "ok"})
