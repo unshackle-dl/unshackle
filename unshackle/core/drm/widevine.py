@@ -27,6 +27,12 @@ from unshackle.core.utils.subprocess import ffprobe
 class Widevine:
     """Widevine DRM System."""
 
+    PLACEHOLDER_KIDS = {
+        UUID("00000000-0000-0000-0000-000000000000"),  # All zeros (key rotation default)
+        UUID("00010203-0405-0607-0809-0a0b0c0d0e0f"),  # Sequential 0x00-0x0f
+        UUID("00010203-0405-0607-0809-101112131415"),  # Shaka Packager test pattern
+    }
+
     def __init__(self, pssh: PSSH, kid: Union[UUID, str, bytes, None] = None, **kwargs: Any):
         if not pssh:
             raise ValueError("Provided PSSH is empty.")
@@ -36,6 +42,7 @@ class Widevine:
         if pssh.system_id == PSSH.SystemId.PlayReady:
             pssh.to_widevine()
 
+        self._kid: Optional[UUID] = None
         if kid:
             if isinstance(kid, str):
                 kid = UUID(hex=kid)
@@ -43,7 +50,9 @@ class Widevine:
                 kid = UUID(bytes=kid)
             if not isinstance(kid, UUID):
                 raise ValueError(f"Expected kid to be a {UUID}, str, or bytes, not {kid!r}")
-            pssh.set_key_ids([kid])
+            self._kid = kid
+            if pssh.key_ids and all(k in self.PLACEHOLDER_KIDS for k in pssh.key_ids):
+                pssh.set_key_ids([kid])
 
         self._pssh = pssh
 
@@ -161,8 +170,13 @@ class Widevine:
 
     @property
     def kids(self) -> list[UUID]:
-        """Get all Key IDs."""
-        return self._pssh.key_ids
+        """Get all Key IDs from PSSH, falling back to the externally provided KID."""
+        pssh_kids = self._pssh.key_ids
+        if pssh_kids:
+            return pssh_kids
+        if self._kid:
+            return [self._kid]
+        return []
 
     def get_content_keys(self, cdm: WidevineCdm, certificate: Callable, licence: Callable) -> None:
         """

@@ -924,7 +924,7 @@ class DASH:
                         None,
                     )
 
-                if kid and (not pssh.key_ids or all(k.int == 0 or k in PLACEHOLDER_KIDS for k in pssh.key_ids)):
+                if kid and pssh.key_ids and all(k.int == 0 or k in PLACEHOLDER_KIDS for k in pssh.key_ids):
                     pssh.set_key_ids([kid])
 
                 drm.append(Widevine(pssh=pssh, kid=kid))
