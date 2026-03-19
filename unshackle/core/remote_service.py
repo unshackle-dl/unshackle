@@ -45,7 +45,10 @@ class RemoteClient:
     @property
     def session(self) -> requests.Session:
         if self._session is None:
+            from unshackle.core import __version__
+
             self._session = requests.Session()
+            self._session.headers["User-Agent"] = f"unshackle/{__version__}"
             if self.api_key:
                 self._session.headers["X-Secret-Key"] = self.api_key
         return self._session
@@ -179,11 +182,13 @@ def _build_tracks(data: Dict[str, Any]) -> Tracks:
 def _resolve_manifest_data(tracks: Tracks, manifests: list, session: Any) -> None:
     """Re-parse serialized manifests and populate track.data for downloading.
 
-    The server serializes DASH and ISM manifest XML as base64. We decode and
-    re-parse locally, then match each remote track to the locally-parsed track
-    by ID to copy track.data. HLS is skipped as it re-fetches from track.url.
+    The server serializes DASH and ISM manifest XML as zlib-compressed base64.
+    We decode and decompress locally, re-parse with the appropriate manifest
+    parser, then match each remote track to the locally-parsed track by ID
+    to copy track.data. HLS is skipped as it re-fetches from track.url.
     """
     import base64 as b64
+    import zlib
 
     if not manifests:
         return
@@ -199,7 +204,7 @@ def _resolve_manifest_data(tracks: Tracks, manifests: list, session: Any) -> Non
             continue
 
         try:
-            raw = b64.b64decode(m_data)
+            raw = zlib.decompress(b64.b64decode(m_data))
 
             if m_type == "dash":
                 from lxml import etree
@@ -328,11 +333,13 @@ def _load_credentials_for_transport(service_tag: str, profile: Optional[str]) ->
 
 
 def _load_cookies_for_transport(service_tag: str, profile: Optional[str]) -> Optional[str]:
+    import zlib
+
     from unshackle.commands.dl import dl
 
     cookie_path = dl.get_cookie_path(service_tag, profile)
     if cookie_path and cookie_path.exists():
-        return cookie_path.read_text(encoding="utf-8")
+        return base64.b64encode(zlib.compress(cookie_path.read_bytes())).decode("ascii")
     return None
 
 
@@ -685,11 +692,15 @@ class RemoteService:
             self._session_id = None
 
     def _load_cache_files(self) -> Dict[str, str]:
+        import zlib
+
         cache_dir = config.directories.cache / self.service_tag
         if not cache_dir.is_dir():
             return {}
         return {
-            f.stem: f.read_text(encoding="utf-8") for f in cache_dir.glob("*.json") if not f.stem.startswith("titles_")
+            f.stem: base64.b64encode(zlib.compress(f.read_bytes())).decode("ascii")
+            for f in cache_dir.glob("*.json")
+            if not f.stem.startswith("titles_")
         }
 
 

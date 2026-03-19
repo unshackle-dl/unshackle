@@ -6,6 +6,7 @@ from aiohttp import web
 
 from unshackle.core import binaries
 from unshackle.core.api import cors_middleware, setup_routes, setup_swagger
+from unshackle.core.api.compression import compression_middleware
 from unshackle.core.config import config
 from unshackle.core.constants import context_settings
 
@@ -132,10 +133,10 @@ def serve(
         if api_only:
             log.info("Starting REST API server (pywidevine/pyplayready CDM disabled)")
             if no_key:
-                app = web.Application(middlewares=[cors_middleware])
+                app = web.Application(middlewares=[cors_middleware, compression_middleware])
                 app["config"] = {"users": {}}
             else:
-                app = web.Application(middlewares=[cors_middleware, api_key_authentication])
+                app = web.Application(middlewares=[cors_middleware, api_key_authentication, compression_middleware])
                 app["config"] = {"users": {api_secret: {"devices": [], "username": "api_user"}}}
             app["debug_api"] = debug_api
 
@@ -211,10 +212,10 @@ def serve(
                 return serve_authentication
 
             if no_key:
-                app = web.Application(middlewares=[cors_middleware])
+                app = web.Application(middlewares=[cors_middleware, compression_middleware])
             else:
                 serve_auth = create_serve_authentication(serve_playready and bool(prd_devices))
-                app = web.Application(middlewares=[cors_middleware, serve_auth])
+                app = web.Application(middlewares=[cors_middleware, serve_auth, compression_middleware])
 
             app["config"] = serve_config
             app["debug_api"] = debug_api

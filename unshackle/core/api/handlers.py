@@ -113,13 +113,18 @@ def serialize_title(title: Title_T) -> Dict[str, Any]:
 def _extract_manifests(tracks) -> List[Dict[str, Any]]:
     """Extract manifest data from tracks for client-side re-parsing.
 
-    Serializes DASH and ISM manifest XML as base64 strings so the client
-    can reconstruct track.data locally. HLS tracks download directly from
-    their URL so no manifest serialization is needed.
+    Serializes DASH and ISM manifest XML as zlib-compressed base64 strings
+    so the client can reconstruct track.data locally. HLS tracks download
+    directly from their URL so no manifest serialization is needed.
     """
     import base64
+    import zlib
 
     from lxml import etree
+
+    from unshackle.core.config import config as app_config
+
+    compression_level = app_config.serve.get("compression_level", 1)
 
     seen: set[str] = set()
     manifests: List[Dict[str, Any]] = []
@@ -132,21 +137,23 @@ def _extract_manifests(tracks) -> List[Dict[str, Any]]:
         if track.data.get("dash") and track.data["dash"].get("manifest"):
             seen.add(manifest_url)
             xml_bytes = etree.tostring(track.data["dash"]["manifest"], xml_declaration=True, encoding="UTF-8")
+            compressed = zlib.compress(xml_bytes, compression_level) if compression_level else xml_bytes
             manifests.append(
                 {
                     "type": "dash",
                     "url": manifest_url,
-                    "data": base64.b64encode(xml_bytes).decode("ascii"),
+                    "data": base64.b64encode(compressed).decode("ascii"),
                 }
             )
         elif track.data.get("ism") and track.data["ism"].get("manifest"):
             seen.add(manifest_url)
             xml_bytes = etree.tostring(track.data["ism"]["manifest"], xml_declaration=True, encoding="UTF-8")
+            compressed = zlib.compress(xml_bytes, compression_level) if compression_level else xml_bytes
             manifests.append(
                 {
                     "type": "ism",
                     "url": manifest_url,
-                    "data": base64.b64encode(xml_bytes).decode("ascii"),
+                    "data": base64.b64encode(compressed).decode("ascii"),
                 }
             )
 
@@ -1284,11 +1291,14 @@ def _create_service_instance(
     # Resolve cookies: client-sent > server-local
     cookie_text = data.get("cookies")
     if cookie_text and isinstance(cookie_text, str):
+        import base64
         import tempfile
+        import zlib
         from http.cookiejar import MozillaCookieJar
 
+        cookie_str = zlib.decompress(base64.b64decode(cookie_text)).decode("utf-8")
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as f:
-            f.write(cookie_text)
+            f.write(cookie_str)
             tmp_path = f.name
         try:
             cookies = MozillaCookieJar(tmp_path)
@@ -1356,10 +1366,14 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
 
         cache_data = data.get("cache", {})
         if cache_data:
+            import base64
+            import zlib
+
             cache_dir = app_config.directories.cache / session_cache_tag
             cache_dir.mkdir(parents=True, exist_ok=True)
             for key, content in cache_data.items():
-                (cache_dir / key).with_suffix(".json").write_text(content, encoding="utf-8")
+                decompressed = zlib.decompress(base64.b64decode(content)).decode("utf-8")
+                (cache_dir / key).with_suffix(".json").write_text(decompressed, encoding="utf-8")
 
         service_instance.authenticate(cookies, credential)
 

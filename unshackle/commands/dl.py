@@ -700,9 +700,11 @@ class dl:
         if self.profile:
             self.log.info(f"Using profile: '{self.profile}'")
 
+        self.is_remote = bool(ctx.params.get("remote"))
+
         with console.status("Loading Service Config...", spinner="dots"):
             self.service_config = {}
-            if not ctx.params.get("remote"):
+            if not self.is_remote:
                 try:
                     service_config_path = Services.get_path(self.service) / config.filenames.config
                     if service_config_path.exists():
@@ -1065,7 +1067,7 @@ class dl:
                 },
             )
 
-        with console.status("Authenticating with Service...", spinner="dots"):
+        with console.status("Authenticating with Remote Service..." if self.is_remote else "Authenticating with Service...", spinner="dots"):
             try:
                 cookies = self.get_cookie_jar(self.service, self.profile)
                 credential = self.get_credentials(self.service, self.profile)
@@ -1090,7 +1092,7 @@ class dl:
                     )
                 raise
 
-        with console.status("Fetching Title Metadata...", spinner="dots"):
+        with console.status("Fetching Remote Title Metadata..." if self.is_remote else "Fetching Title Metadata...", spinner="dots"):
             try:
                 titles = service.get_titles_cached()
                 if not titles:
@@ -1370,7 +1372,8 @@ class dl:
                 console.log("Skipped chapters as --no-chapters was used...")
                 title.tracks.chapters = []
 
-            with console.status("Getting tracks...", spinner="dots"):
+            tracks_label = "Getting Remote Tracks..." if self.is_remote else "Getting Tracks..."
+            with console.status(tracks_label, spinner="dots"):
                 try:
                     title.tracks.add(service.get_tracks(title), warn_only=True)
                     title.tracks.chapters = service.get_chapters(title)
