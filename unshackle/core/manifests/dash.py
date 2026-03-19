@@ -305,10 +305,23 @@ class DASH:
             or (existing_drm and not any(isinstance(drm, Widevine) for drm in existing_drm))
         )
 
+        pre_existing_keys = {}
+        if existing_drm:
+            for drm_obj in existing_drm:
+                if hasattr(drm_obj, "content_keys") and drm_obj.content_keys:
+                    pre_existing_keys.update(drm_obj.content_keys)
+
         if should_override_drm:
             track.drm = manifest_drm
         else:
             track.drm = existing_drm
+
+        if pre_existing_keys and track.drm:
+            for drm_obj in track.drm:
+                if hasattr(drm_obj, "content_keys"):
+                    for kid, key in pre_existing_keys.items():
+                        if kid not in drm_obj.content_keys:
+                            drm_obj.content_keys[kid] = key
 
         manifest_base_url = manifest.findtext("BaseURL")
         if not manifest_base_url:

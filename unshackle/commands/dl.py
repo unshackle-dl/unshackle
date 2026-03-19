@@ -1956,6 +1956,9 @@ class dl:
                             )
                             self.cdm = quality_based_cdm
 
+            if hasattr(service, "resolve_server_keys"):
+                service.resolve_server_keys(title)
+
             dl_start_time = time.time()
 
             try:
@@ -2632,6 +2635,9 @@ class dl:
                     if kid not in drm.content_keys and cdm_only:
                         need_license = True
 
+                if need_license and all(kid in drm.content_keys for kid in all_kids):
+                    need_license = False
+
                 if need_license and not vaults_only:
                     from_vaults = drm.content_keys.copy()
 
@@ -2653,21 +2659,24 @@ class dl:
                         else:
                             drm.get_content_keys(cdm=self.cdm, licence=licence, certificate=certificate)
                     except Exception as e:
-                        if isinstance(e, (Widevine.Exceptions.EmptyLicense, Widevine.Exceptions.CEKNotFound)):
-                            msg = str(e)
+                        if drm.content_keys:
+                            self.log.debug(f"License call failed but keys already in content_keys: {e}")
                         else:
-                            msg = f"An exception occurred in the Service's license function: {e}"
-                        cek_tree.add(f"[logging.level.error]{msg}")
-                        if not pre_existing_tree:
-                            table.add_row(cek_tree)
-                        if self.debug_logger:
-                            self.debug_logger.log_error(
-                                "get_license",
-                                e,
-                                service=self.service,
-                                context={"track": str(track), "exception_type": type(e).__name__},
-                            )
-                        raise e
+                            if isinstance(e, (Widevine.Exceptions.EmptyLicense, Widevine.Exceptions.CEKNotFound)):
+                                msg = str(e)
+                            else:
+                                msg = f"An exception occurred in the Service's license function: {e}"
+                            cek_tree.add(f"[logging.level.error]{msg}")
+                            if not pre_existing_tree:
+                                table.add_row(cek_tree)
+                            if self.debug_logger:
+                                self.debug_logger.log_error(
+                                    "get_license",
+                                    e,
+                                    service=self.service,
+                                    context={"track": str(track), "exception_type": type(e).__name__},
+                                )
+                            raise e
 
                     if self.debug_logger:
                         self.debug_logger.log(
@@ -2817,31 +2826,37 @@ class dl:
                     if kid not in drm.content_keys and cdm_only:
                         need_license = True
 
+                if need_license and all(kid in drm.content_keys for kid in all_kids):
+                    need_license = False
+
                 if need_license and not vaults_only:
                     from_vaults = drm.content_keys.copy()
 
                     try:
                         drm.get_content_keys(cdm=self.cdm, licence=licence, certificate=certificate)
                     except Exception as e:
-                        if isinstance(e, (PlayReady.Exceptions.EmptyLicense, PlayReady.Exceptions.CEKNotFound)):
-                            msg = str(e)
+                        if drm.content_keys:
+                            self.log.debug(f"License call failed but keys already in content_keys: {e}")
                         else:
-                            msg = f"An exception occurred in the Service's license function: {e}"
-                        cek_tree.add(f"[logging.level.error]{msg}")
-                        if not pre_existing_tree:
-                            table.add_row(cek_tree)
-                        if self.debug_logger:
-                            self.debug_logger.log_error(
-                                "get_license_playready",
-                                e,
-                                service=self.service,
-                                context={
-                                    "track": str(track),
-                                    "exception_type": type(e).__name__,
-                                    "drm_type": "PlayReady",
-                                },
-                            )
-                        raise e
+                            if isinstance(e, (PlayReady.Exceptions.EmptyLicense, PlayReady.Exceptions.CEKNotFound)):
+                                msg = str(e)
+                            else:
+                                msg = f"An exception occurred in the Service's license function: {e}"
+                            cek_tree.add(f"[logging.level.error]{msg}")
+                            if not pre_existing_tree:
+                                table.add_row(cek_tree)
+                            if self.debug_logger:
+                                self.debug_logger.log_error(
+                                    "get_license_playready",
+                                    e,
+                                    service=self.service,
+                                    context={
+                                        "track": str(track),
+                                        "exception_type": type(e).__name__,
+                                        "drm_type": "PlayReady",
+                                    },
+                                )
+                            raise e
 
                     for kid_, key in drm.content_keys.items():
                         is_track_kid_marker = ["", "*"][kid_ == track_kid]

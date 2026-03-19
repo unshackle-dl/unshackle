@@ -204,6 +204,61 @@ def serialize_title(title: Title_T) -> Dict[str, Any]:
     return result
 
 
+def _extract_manifests(tracks) -> List[Dict[str, Any]]:
+    """Extract manifest data from tracks for client-side re-parsing.
+
+    Serializes DASH and ISM manifest XML as base64 strings so the client
+    can reconstruct track.data locally. HLS tracks download directly from
+    their URL so no manifest serialization is needed.
+    """
+    import base64
+
+    from lxml import etree
+
+    seen: set[str] = set()
+    manifests: List[Dict[str, Any]] = []
+
+    for track in list(tracks.videos) + list(tracks.audio) + list(tracks.subtitles):
+        manifest_url = str(track.url) if track.url else None
+        if not manifest_url or manifest_url in seen:
+            continue
+
+        if track.data.get("dash") and track.data["dash"].get("manifest"):
+            seen.add(manifest_url)
+            xml_bytes = etree.tostring(track.data["dash"]["manifest"], xml_declaration=True, encoding="UTF-8")
+            manifests.append(
+                {
+                    "type": "dash",
+                    "url": manifest_url,
+                    "data": base64.b64encode(xml_bytes).decode("ascii"),
+                }
+            )
+        elif track.data.get("hls"):
+            seen.add(manifest_url)
+            # m3u8 master playlist — serialize as text
+            hls_obj = track.data["hls"].get("playlist") or track.data["hls"].get("media")
+            if hls_obj and hasattr(hls_obj, "uri"):
+                manifests.append(
+                    {
+                        "type": "hls",
+                        "url": manifest_url,
+                        "data": base64.b64encode(manifest_url.encode()).decode("ascii"),
+                    }
+                )
+        elif track.data.get("ism") and track.data["ism"].get("manifest"):
+            seen.add(manifest_url)
+            xml_bytes = etree.tostring(track.data["ism"]["manifest"], xml_declaration=True, encoding="UTF-8")
+            manifests.append(
+                {
+                    "type": "ism",
+                    "url": manifest_url,
+                    "data": base64.b64encode(xml_bytes).decode("ascii"),
+                }
+            )
+
+    return manifests
+
+
 def serialize_drm(drm_list) -> Optional[List[Dict[str, Any]]]:
     """Serialize DRM objects to JSON-serializable list."""
     if not drm_list:
@@ -230,6 +285,7 @@ def serialize_drm(drm_list) -> Optional[List[Dict[str, Any]]]:
                 elif hasattr(pssh_obj, "__bytes__"):
                     # Convert to base64
                     import base64
+
                     drm_info["pssh"] = base64.b64encode(bytes(pssh_obj)).decode()
                 elif hasattr(pssh_obj, "to_base64"):
                     drm_info["pssh"] = pssh_obj.to_base64()
@@ -468,13 +524,15 @@ async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = 
     results = []
     try:
         for result in service_instance.search():
-            results.append({
-                "id": result.id,
-                "title": result.title,
-                "description": result.description,
-                "label": result.label,
-                "url": result.url,
-            })
+            results.append(
+                {
+                    "id": result.id,
+                    "title": result.title,
+                    "description": result.description,
+                    "label": result.label,
+                    "url": result.url,
+                }
+            )
     except NotImplementedError:
         raise APIError(
             APIErrorCode.SERVICE_ERROR,
@@ -583,7 +641,11 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
             for param in service_module.cli.params:
                 if hasattr(param, "name") and param.name not in service_kwargs:
                     # Add default value if parameter is not already provided
-                    if hasattr(param, "default") and param.default is not None and not isinstance(param.default, enum.Enum):
+                    if (
+                        hasattr(param, "default")
+                        and param.default is not None
+                        and not isinstance(param.default, enum.Enum)
+                    ):
                         service_kwargs[param.name] = param.default
 
         # Handle required parameters that don't have click defaults
@@ -731,7 +793,11 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
             for param in service_module.cli.params:
                 if hasattr(param, "name") and param.name not in service_kwargs:
                     # Add default value if parameter is not already provided
-                    if hasattr(param, "default") and param.default is not None and not isinstance(param.default, enum.Enum):
+                    if (
+                        hasattr(param, "default")
+                        and param.default is not None
+                        and not isinstance(param.default, enum.Enum)
+                    ):
                         service_kwargs[param.name] = param.default
 
         # Handle required parameters that don't have click defaults
@@ -920,7 +986,21 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
             return f"Invalid vcodec: {', '.join(invalid)}. Must be one of: {', '.join(valid_vcodecs)}"
 
     if "acodec" in data and data["acodec"]:
-        valid_acodecs = ["AAC", "AC3", "EC3", "EAC3", "DD", "DD+", "AC4", "OPUS", "FLAC", "ALAC", "VORBIS", "OGG", "DTS"]
+        valid_acodecs = [
+            "AAC",
+            "AC3",
+            "EC3",
+            "EAC3",
+            "DD",
+            "DD+",
+            "AC4",
+            "OPUS",
+            "FLAC",
+            "ALAC",
+            "VORBIS",
+            "OGG",
+            "DTS",
+        ]
         if isinstance(data["acodec"], str):
             acodec_values = [v.strip() for v in data["acodec"].split(",") if v.strip()]
         elif isinstance(data["acodec"], list):
@@ -1035,7 +1115,12 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
         # Extract default values from the service's click command
         if hasattr(service_module, "cli") and hasattr(service_module.cli, "params"):
             for param in service_module.cli.params:
-                if hasattr(param, "name") and hasattr(param, "default") and param.default is not None and not isinstance(param.default, enum.Enum):
+                if (
+                    hasattr(param, "name")
+                    and hasattr(param, "default")
+                    and param.default is not None
+                    and not isinstance(param.default, enum.Enum)
+                ):
                     # Store service-specific defaults (e.g., drm_system, hydrate_track, profile for NF)
                     service_specific_defaults[param.name] = param.default
 
@@ -1257,8 +1342,16 @@ def _create_service_instance(
 
     for key, value in data.items():
         if key not in [
-            "service", "title_id", "profile", "season", "episode", "wanted",
-            "proxy", "no_proxy", "credentials", "cookies",
+            "service",
+            "title_id",
+            "profile",
+            "season",
+            "episode",
+            "wanted",
+            "proxy",
+            "no_proxy",
+            "credentials",
+            "cookies",
         ]:
             service_kwargs[key] = value
 
@@ -1308,6 +1401,7 @@ def _create_service_instance(
             cookies.load(ignore_discard=True, ignore_expires=True)
         finally:
             import os
+
             os.unlink(tmp_path)
     else:
         cookies = dl.get_cookie_jar(normalized_service, profile)
@@ -1360,6 +1454,25 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
                     details={"proxy": data.get("proxy"), "service": normalized_service},
                 )
 
+        client_region = data.get("client_region")
+        if not proxy_param and not no_proxy and client_region and proxy_providers:
+            try:
+                from unshackle.core.utilities import get_cached_ip_info
+
+                server_ip_info = get_cached_ip_info(None)
+                server_region = server_ip_info.get("country", "").lower() if server_ip_info else None
+            except Exception:
+                server_region = None
+
+            if server_region and server_region == client_region.lower():
+                log.info(f"Server already in client region '{client_region}', no proxy needed")
+            else:
+                try:
+                    proxy_param = resolve_proxy(client_region, proxy_providers)
+                    log.info(f"Using server proxy for client region '{client_region}'")
+                except ValueError:
+                    log.debug(f"No server proxy available for client region '{client_region}'")
+
         import hashlib
         import uuid as uuid_mod
 
@@ -1372,7 +1485,12 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
         session_cache_tag = f"_sessions/{api_key_hash}/{session_id}/{normalized_service}"
 
         service_instance, cookies, credential = _create_service_instance(
-            normalized_service, title_id, data, proxy_param, proxy_providers, profile,
+            normalized_service,
+            title_id,
+            data,
+            proxy_param,
+            proxy_providers,
+            profile,
         )
 
         service_instance.cache = Cacher(session_cache_tag)
@@ -1388,14 +1506,18 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
 
         store = get_session_store()
         session = await store.create(
-            normalized_service, service_instance, session_id=session_id,
+            normalized_service,
+            service_instance,
+            session_id=session_id,
         )
         session.cache_tag = session_cache_tag
 
-        return web.json_response({
-            "session_id": session.session_id,
-            "service": normalized_service,
-        })
+        return web.json_response(
+            {
+                "session_id": session.session_id,
+                "service": normalized_service,
+            }
+        )
 
     except APIError:
         raise
@@ -1409,8 +1531,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
         )
 
 
-async def session_titles_handler(session_id: str,
-                                 request: Optional[web.Request] = None) -> web.Response:
+async def session_titles_handler(session_id: str, request: Optional[web.Request] = None) -> web.Response:
     """Get titles for the authenticated session.
 
     Called after session/create. This is separate from auth so that
@@ -1444,10 +1565,12 @@ async def session_titles_handler(session_id: str,
             session.title_map[tid] = t
             serialized_titles.append(serialize_title(t))
 
-        return web.json_response({
-            "session_id": session_id,
-            "titles": serialized_titles,
-        })
+        return web.json_response(
+            {
+                "session_id": session_id,
+                "titles": serialized_titles,
+            }
+        )
 
     except Exception as e:
         log.exception("Error getting titles")
@@ -1459,8 +1582,9 @@ async def session_titles_handler(session_id: str,
         )
 
 
-async def session_tracks_handler(data: Dict[str, Any], session_id: str,
-                                 request: Optional[web.Request] = None) -> web.Response:
+async def session_tracks_handler(
+    data: Dict[str, Any], session_id: str, request: Optional[web.Request] = None
+) -> web.Response:
     """Get tracks and chapters for a specific title in the session.
 
     Called per-title by the client after session/create returns titles.
@@ -1514,21 +1638,61 @@ async def session_tracks_handler(data: Dict[str, Any], session_id: str,
         video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
         audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
 
-        return web.json_response({
-            "title": serialize_title(title),
-            "video": [serialize_video_track(t, include_url=True) for t in video_tracks],
-            "audio": [serialize_audio_track(t, include_url=True) for t in audio_tracks],
-            "subtitles": [serialize_subtitle_track(t, include_url=True) for t in tracks.subtitles],
-            "chapters": [
-                {"timestamp": ch.timestamp, "name": ch.name}
-                for ch in session.chapters_by_title.get(str(title_id), [])
-            ],
-            "attachments": [
-                {"url": a.url, "name": a.name, "mime_type": a.mime_type, "description": a.description}
-                for a in tracks.attachments
-                if hasattr(a, "url") and a.url
-            ],
-        })
+        manifests = _extract_manifests(tracks)
+
+        svc_session = session.service_instance.session
+        session_headers = dict(svc_session.headers) if hasattr(svc_session, "headers") else {}
+        session_cookies = {}
+        if hasattr(svc_session, "cookies"):
+            for cookie in svc_session.cookies:
+                if hasattr(cookie, "name") and hasattr(cookie, "value"):
+                    session_cookies[cookie.name] = cookie.value
+
+        from unshackle.core.config import config as app_config
+
+        api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
+        user_cfg = app_config.serve.get("users", {}).get(api_key, {})
+        has_wv = bool(user_cfg.get("devices"))
+        has_pr = bool(user_cfg.get("playready_devices"))
+        track_has_wv = any(
+            d.__class__.__name__ == "Widevine" for t in list(tracks.videos) + list(tracks.audio) if t.drm for d in t.drm
+        )
+        track_has_pr = any(
+            d.__class__.__name__ == "PlayReady"
+            for t in list(tracks.videos) + list(tracks.audio)
+            if t.drm
+            for d in t.drm
+        )
+        if track_has_pr and has_pr:
+            server_cdm_type = "playready"
+        elif track_has_wv and has_wv:
+            server_cdm_type = "widevine"
+        elif has_wv:
+            server_cdm_type = "widevine"
+        else:
+            server_cdm_type = "playready"
+
+        return web.json_response(
+            {
+                "title": serialize_title(title),
+                "video": [serialize_video_track(t, include_url=True) for t in video_tracks],
+                "audio": [serialize_audio_track(t, include_url=True) for t in audio_tracks],
+                "subtitles": [serialize_subtitle_track(t, include_url=True) for t in tracks.subtitles],
+                "chapters": [
+                    {"timestamp": ch.timestamp, "name": ch.name}
+                    for ch in session.chapters_by_title.get(str(title_id), [])
+                ],
+                "attachments": [
+                    {"url": a.url, "name": a.name, "mime_type": a.mime_type, "description": a.description}
+                    for a in tracks.attachments
+                    if hasattr(a, "url") and a.url
+                ],
+                "manifests": manifests,
+                "session_headers": session_headers,
+                "session_cookies": session_cookies,
+                "server_cdm_type": server_cdm_type,
+            }
+        )
 
     except Exception as e:
         log.exception(f"Error getting tracks for title {title_id}")
@@ -1540,8 +1704,9 @@ async def session_tracks_handler(data: Dict[str, Any], session_id: str,
         )
 
 
-async def session_segments_handler(data: Dict[str, Any], session_id: str,
-                                   request: Optional[web.Request] = None) -> web.Response:
+async def session_segments_handler(
+    data: Dict[str, Any], session_id: str, request: Optional[web.Request] = None
+) -> web.Response:
     """Resolve segment URLs for selected tracks.
 
     The client calls this after selecting which tracks to download.
@@ -1613,6 +1778,7 @@ async def session_segments_handler(data: Dict[str, Any], session_id: str,
                         for k, v in val.items():
                             try:
                                 import json
+
                                 json.dumps(v)
                                 serializable[k] = v
                             except (TypeError, ValueError):
@@ -1621,6 +1787,7 @@ async def session_segments_handler(data: Dict[str, Any], session_id: str,
                     else:
                         try:
                             import json
+
                             json.dumps(val)
                             track_data[key] = val
                         except (TypeError, ValueError):
@@ -1645,14 +1812,17 @@ async def session_segments_handler(data: Dict[str, Any], session_id: str,
         )
 
 
-async def session_license_handler(data: Dict[str, Any], session_id: str,
-                                  request: Optional[web.Request] = None) -> web.Response:
-    """Proxy a DRM license challenge through the authenticated service.
+async def session_license_handler(
+    data: Dict[str, Any], session_id: str, request: Optional[web.Request] = None
+) -> web.Response:
+    """Handle DRM licensing in proxy or server_cdm mode.
 
-    The client generates a CDM challenge locally, sends it here, and the server
-    calls the service's get_widevine_license/get_playready_license method using
-    the authenticated session. Returns the raw license response for the client
-    to process with their local CDM.
+    Proxy mode (default): forwards client CDM challenge to the service's
+    license endpoint, returns raw license bytes for client-side parsing.
+
+    Server-CDM mode (mode="server_cdm"): server uses its own CDM to generate
+    the challenge, obtain the license, and extract KID:KEY pairs. Supports
+    batch (track_ids list) and single-track requests.
     """
     import base64
 
@@ -1668,13 +1838,98 @@ async def session_license_handler(data: Dict[str, Any], session_id: str,
         )
 
     track_id = data.get("track_id")
+    track_ids = data.get("track_ids")
     challenge_b64 = data.get("challenge")
     drm_type = data.get("drm_type", "widevine")
+    mode = data.get("mode", "proxy")
+
+    if mode == "server_cdm" and track_ids:
+        import base64
+
+        from unshackle.core.config import config as app_config
+
+        api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
+        user_config = app_config.serve.get("users", {}).get(api_key, {})
+        service = session.service_instance
+
+        all_keys: Dict[str, Dict[str, str]] = {}
+        seen_pssh: set[str] = set()
+
+        for tid in track_ids:
+            track = session.tracks.get(tid)
+            if not track:
+                continue
+
+            # If track has no DRM yet, extract it from manifest ContentProtection
+            if not track.drm and track.data.get("dash"):
+                from unshackle.core.manifests import DASH as DASHManifest
+
+                rep = track.data["dash"].get("representation")
+                ada = track.data["dash"].get("adaptation_set")
+                if rep is not None and ada is not None:
+                    track.drm = DASHManifest.get_drm(
+                        rep.findall("ContentProtection") + ada.findall("ContentProtection")
+                    )
+
+            if not track.drm:
+                continue
+
+            title = None
+            for t_id, tracks_dict in session.tracks_by_title.items():
+                if tid in tracks_dict:
+                    title = session.title_map.get(t_id)
+                    break
+            if title is None and session.title_map:
+                title = next(iter(session.title_map.values()))
+
+            has_wv_device = bool(user_config.get("devices"))
+            has_pr_device = bool(user_config.get("playready_devices"))
+            pssh_str = None
+            track_drm_type = None
+
+            if has_wv_device:
+                for drm_obj in track.drm:
+                    if drm_obj.__class__.__name__ == "Widevine" and hasattr(drm_obj, "_pssh") and drm_obj._pssh:
+                        pssh_str = drm_obj._pssh.dumps() if hasattr(drm_obj._pssh, "dumps") else None
+                        track_drm_type = "widevine"
+                        break
+            if not pssh_str and has_pr_device:
+                for drm_obj in track.drm:
+                    if drm_obj.__class__.__name__ == "PlayReady" and hasattr(drm_obj, "data"):
+                        pssh_str = drm_obj.data.get("pssh_b64")
+                        track_drm_type = "playready"
+                        break
+
+            if not pssh_str or pssh_str in seen_pssh:
+                if pssh_str in seen_pssh:
+                    for prev_tid, prev_keys in all_keys.items():
+                        if prev_keys:
+                            all_keys[tid] = prev_keys
+                            break
+                continue
+            seen_pssh.add(pssh_str)
+
+            if not track_drm_type:
+                continue
+
+            try:
+                single_data = {
+                    "track_id": tid,
+                    "drm_type": track_drm_type,
+                    "mode": "server_cdm",
+                    "pssh": pssh_str,
+                }
+                single_resp = await session_license_handler(single_data, session_id, request)
+                resp_json = __import__("json").loads(single_resp.body)
+                if resp_json.get("keys"):
+                    all_keys[tid] = resp_json["keys"]
+            except Exception as e:
+                log.warning(f"Failed to resolve keys for track {tid[:12]}: {e}")
+
+        return web.json_response({"keys": all_keys})
 
     if not track_id:
         raise APIError(APIErrorCode.INVALID_INPUT, "Missing required parameter: track_id")
-    if not challenge_b64:
-        raise APIError(APIErrorCode.INVALID_INPUT, "Missing required parameter: challenge")
 
     track = session.tracks.get(track_id)
     if not track:
@@ -1685,8 +1940,6 @@ async def session_license_handler(data: Dict[str, Any], session_id: str,
         )
 
     try:
-        challenge_bytes = base64.b64decode(challenge_b64)
-
         title = None
         for tid, tracks_dict in session.tracks_by_title.items():
             if track_id in tracks_dict:
@@ -1708,6 +1961,7 @@ async def session_license_handler(data: Dict[str, Any], session_id: str,
                 from pyplayready.system.pssh import PSSH as PlayReadyPSSH
 
                 from unshackle.core.drm import PlayReady
+
                 pr_pssh = PlayReadyPSSH(base64.b64decode(pssh_b64))
                 pr_drm = PlayReady(pssh=pr_pssh, pssh_b64=pssh_b64)
                 track.drm.append(pr_drm)
@@ -1715,17 +1969,221 @@ async def session_license_handler(data: Dict[str, Any], session_id: str,
                 from pywidevine.pssh import PSSH as WidevinePSSH
 
                 from unshackle.core.drm import Widevine
+
                 wv_pssh = WidevinePSSH(pssh_b64)
                 wv_drm = Widevine(pssh=wv_pssh)
                 track.drm.append(wv_drm)
 
+        if mode == "server_cdm":
+            if not track.drm and track.data.get("dash"):
+                from unshackle.core.manifests import DASH as DASHManifest
+
+                rep = track.data["dash"].get("representation")
+                ada = track.data["dash"].get("adaptation_set")
+                if rep is not None and ada is not None:
+                    track.drm = DASHManifest.get_drm(
+                        rep.findall("ContentProtection") + ada.findall("ContentProtection")
+                    )
+
+            if not pssh_b64 and track.drm:
+                for drm_obj in track.drm:
+                    drm_class = drm_obj.__class__.__name__
+                    if drm_class == "Widevine" and hasattr(drm_obj, "_pssh") and drm_obj._pssh:
+                        if hasattr(drm_obj._pssh, "dumps"):
+                            pssh_b64 = drm_obj._pssh.dumps()
+                            if drm_type == "widevine":
+                                break
+                    elif drm_class == "PlayReady":
+                        if hasattr(drm_obj, "data") and drm_obj.data.get("pssh_b64"):
+                            pssh_b64 = drm_obj.data["pssh_b64"]
+                            if drm_type == "playready":
+                                break
+
+            if not pssh_b64:
+                raise APIError(APIErrorCode.INVALID_INPUT, "No PSSH available for server_cdm licensing")
+
+            from unshackle.core.config import config as app_config
+
+            api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
+            user_config = app_config.serve.get("users", {}).get(api_key, {})
+
+            if drm_type == "playready":
+                from pyplayready.cdm import Cdm as PlayReadyCdm
+                from pyplayready.device import Device as PlayReadyDevice
+                from pyplayready.remote.remotecdm import RemoteCdm as PlayReadyRemoteCdm
+
+                device_name = (user_config.get("playready_devices") or [None])[0]
+                if not device_name:
+                    raise APIError(APIErrorCode.INVALID_INPUT, "No PlayReady device configured for this API key")
+
+                cdm_api = next((x.copy() for x in app_config.remote_cdm if x.get("name") == device_name), None)
+                if cdm_api:
+                    cdm_type_api = cdm_api.get("type")
+                    if cdm_type_api == "decrypt_labs":
+                        from unshackle.core.cdm import DecryptLabsRemoteCDM
+                        del cdm_api["name"]
+                        del cdm_api["type"]
+                        if "secret" not in cdm_api or not cdm_api["secret"]:
+                            if app_config.decrypt_labs_api_key:
+                                cdm_api["secret"] = app_config.decrypt_labs_api_key
+                        cdm = DecryptLabsRemoteCDM(service_name=service.__class__.__name__, **cdm_api)
+                    elif cdm_type_api == "custom_api":
+                        from unshackle.core.cdm import CustomRemoteCDM
+                        del cdm_api["name"]
+                        del cdm_api["type"]
+                        cdm = CustomRemoteCDM(service_name=service.__class__.__name__, **cdm_api)
+                    else:
+                        device_type = cdm_api.get("Device Type", cdm_api.get("device_type", ""))
+                        if str(device_type).upper() == "PLAYREADY":
+                            cdm = PlayReadyRemoteCdm(
+                                security_level=cdm_api.get("Security Level", cdm_api.get("security_level", 3000)),
+                                host=cdm_api.get("Host", cdm_api.get("host")),
+                                secret=cdm_api.get("Secret", cdm_api.get("secret")),
+                                device_name=cdm_api.get("Device Name", cdm_api.get("device_name")),
+                            )
+                        else:
+                            raise APIError(
+                                APIErrorCode.INVALID_INPUT,
+                                f"CDM '{device_name}' is not a PlayReady device",
+                            )
+                else:
+                    prd_path = app_config.directories.prds / f"{device_name}.prd"
+                    if not prd_path.exists():
+                        prd_path = app_config.directories.wvds / f"{device_name}.prd"
+                    if not prd_path.exists():
+                        raise APIError(
+                            APIErrorCode.INVALID_INPUT,
+                            f"PlayReady device '{device_name}' not found",
+                        )
+                    cdm = PlayReadyCdm.from_device(PlayReadyDevice.load(prd_path))
+
+                pr_pssh = PlayReadyPSSH(base64.b64decode(pssh_b64))
+                wrm_header = pr_pssh.wrm_headers[0]
+                session_id_cdm = cdm.open()
+                try:
+                    challenge = cdm.get_license_challenge(session_id_cdm, wrm_header)
+                    license_response = service.get_playready_license(
+                        challenge=challenge,
+                        title=title,
+                        track=track,
+                    )
+                    if isinstance(license_response, bytes):
+                        license_str = license_response.decode(errors="ignore")
+                    else:
+                        license_str = str(license_response)
+                    if "<License>" not in license_str:
+                        try:
+                            license_str = base64.b64decode(license_str + "===").decode()
+                        except Exception:
+                            pass
+                    cdm.parse_license(session_id_cdm, license_str)
+                    keys = {}
+                    for key in cdm.get_keys(session_id_cdm):
+                        kid = getattr(key, "key_id", None) or getattr(key, "kid", None)
+                        key_val = getattr(key, "key", None)
+                        if kid and key_val:
+                            kid_hex = kid.hex if hasattr(kid, "hex") else str(kid).replace("-", "")
+                            key_hex = key_val.hex() if hasattr(key_val, "hex") else str(key_val)
+                            keys[kid_hex] = key_hex
+                finally:
+                    cdm.close(session_id_cdm)
+
+            elif drm_type == "widevine":
+                from pywidevine.cdm import Cdm as WidevineCdm
+                from pywidevine.device import Device as WidevineDevice
+                from pywidevine.pssh import PSSH as WvPSSH
+                from pywidevine.remotecdm import RemoteCdm as WidevineRemoteCdm
+
+                device_name = (user_config.get("devices") or [None])[0]
+                if not device_name:
+                    raise APIError(APIErrorCode.INVALID_INPUT, "No Widevine device configured for this API key")
+
+                cdm_api = next((x.copy() for x in app_config.remote_cdm if x.get("name") == device_name), None)
+                if cdm_api:
+                    cdm_type_api = cdm_api.get("type")
+                    if cdm_type_api == "decrypt_labs":
+                        from unshackle.core.cdm import DecryptLabsRemoteCDM
+                        del cdm_api["name"]
+                        del cdm_api["type"]
+                        if "secret" not in cdm_api or not cdm_api["secret"]:
+                            if app_config.decrypt_labs_api_key:
+                                cdm_api["secret"] = app_config.decrypt_labs_api_key
+                        cdm = DecryptLabsRemoteCDM(service_name=service.__class__.__name__, **cdm_api)
+                    elif cdm_type_api == "custom_api":
+                        from unshackle.core.cdm import CustomRemoteCDM
+                        del cdm_api["name"]
+                        del cdm_api["type"]
+                        cdm = CustomRemoteCDM(service_name=service.__class__.__name__, **cdm_api)
+                    else:
+                        cdm = WidevineRemoteCdm(
+                            device_type=cdm_api.get("Device Type", cdm_api.get("device_type", "")),
+                            system_id=cdm_api.get("System ID", cdm_api.get("system_id", "")),
+                            security_level=cdm_api.get("Security Level", cdm_api.get("security_level", 3)),
+                            host=cdm_api.get("Host", cdm_api.get("host")),
+                            secret=cdm_api.get("Secret", cdm_api.get("secret")),
+                            device_name=cdm_api.get("Device Name", cdm_api.get("device_name")),
+                        )
+                else:
+                    wvd_path = app_config.directories.wvds / f"{device_name}.wvd"
+                    if not wvd_path.exists():
+                        raise APIError(
+                            APIErrorCode.INVALID_INPUT,
+                            f"Widevine device '{device_name}' not found",
+                        )
+                    cdm = WidevineCdm.from_device(WidevineDevice.load(wvd_path))
+
+                wv_pssh = WvPSSH(pssh_b64)
+                session_id_cdm = cdm.open()
+                try:
+                    if hasattr(cdm, "service_certificate_challenge"):
+                        try:
+                            cert = service.get_widevine_service_certificate(
+                                challenge=cdm.service_certificate_challenge,
+                                title=title,
+                                track=track,
+                            )
+                            if cert and hasattr(cdm, "set_service_certificate"):
+                                cdm.set_service_certificate(session_id_cdm, cert)
+                        except Exception:
+                            pass
+
+                    challenge = cdm.get_license_challenge(session_id_cdm, wv_pssh)
+                    license_response = service.get_widevine_license(
+                        challenge=challenge,
+                        title=title,
+                        track=track,
+                    )
+                    cdm.parse_license(session_id_cdm, license_response)
+                    keys = {key.kid.hex: key.key.hex() for key in cdm.get_keys(session_id_cdm, "CONTENT")}
+                finally:
+                    cdm.close(session_id_cdm)
+            else:
+                raise APIError(
+                    APIErrorCode.INVALID_PARAMETERS,
+                    f"Unsupported DRM type for server_cdm: {drm_type}",
+                )
+
+            if not keys:
+                raise APIError(APIErrorCode.NO_CONTENT, "Server CDM returned no content keys")
+
+            log.info(f"Server CDM resolved {len(keys)} key(s) for track {track_id[:12]}")
+            return web.json_response({"keys": keys})
+
+        if not challenge_b64:
+            raise APIError(APIErrorCode.INVALID_INPUT, "Missing required parameter: challenge")
+        challenge_bytes = base64.b64decode(challenge_b64)
+
         if drm_type == "widevine":
             license_response = service.get_widevine_license(
-                challenge=challenge_bytes, title=title, track=track,
+                challenge=challenge_bytes,
+                title=title,
+                track=track,
             )
         elif drm_type == "playready":
             license_response = service.get_playready_license(
-                challenge=challenge_bytes, title=title, track=track,
+                challenge=challenge_bytes,
+                title=title,
+                track=track,
             )
         else:
             raise APIError(
@@ -1738,9 +2196,11 @@ async def session_license_handler(data: Dict[str, Any], session_id: str,
         if isinstance(license_response, str):
             license_response = license_response.encode("utf-8")
 
-        return web.json_response({
-            "license": base64.b64encode(license_response).decode("ascii"),
-        })
+        return web.json_response(
+            {
+                "license": base64.b64encode(license_response).decode("ascii"),
+            }
+        )
 
     except APIError:
         raise
@@ -1775,18 +2235,21 @@ async def session_info_handler(session_id: str, request: Optional[web.Request] =
         )
 
     from datetime import datetime
+
     now = datetime.now(timezone.utc)
     elapsed = (now - session.last_accessed).total_seconds()
     expires_in = max(0, store._ttl - int(elapsed))
 
-    return web.json_response({
-        "session_id": session.session_id,
-        "service": session.service_tag,
-        "valid": True,
-        "expires_in": expires_in,
-        "track_count": len(session.tracks),
-        "title_count": len(session.title_map),
-    })
+    return web.json_response(
+        {
+            "session_id": session.session_id,
+            "service": session.service_tag,
+            "valid": True,
+            "expires_in": expires_in,
+            "track_count": len(session.tracks),
+            "title_count": len(session.title_map),
+        }
+    )
 
 
 async def session_delete_handler(session_id: str, request: Optional[web.Request] = None) -> web.Response:
