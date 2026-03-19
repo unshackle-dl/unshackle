@@ -442,8 +442,22 @@ subtitle:
   sidecar_format: srt
 
 # Configuration for pywidevine and pyplayready's serve functionality
+# Also used for remote services (unshackle serve)
 serve:
   api_secret: "your-secret-key-here"
+
+  # Compression level for API payloads (manifests, cache, cookies)
+  # 0=off, 1=fast, 6=balanced, 9=max compression (default: 1)
+  compression_level: 1
+
+  # Session inactivity timeout in seconds (default: 300 = 5 minutes)
+  # Sessions are automatically deleted after this many seconds of inactivity
+  # Each API request resets the timer
+  session_ttl: 300
+
+  # Maximum concurrent sessions before oldest is evicted (default: 100)
+  max_sessions: 100
+
   users:
     secret_key_for_user:
       devices:  # Widevine devices (WVDs) this user can access
@@ -455,6 +469,42 @@ serve:
   #   - '/path/to/device.wvd'
   # playready_devices:  # PlayReady device paths (auto-populated from directories.prds)
   #   - '/path/to/device.prd'
+
+# Remote Services Configuration
+# Connect to a remote unshackle server (unshackle serve) to use its services
+# without needing the service code locally. Use with: unshackle dl --remote
+# If multiple servers are configured, specify which with: --server <name>
+remote_services:
+  # Server name (used with --server flag if multiple configured)
+  my-server:
+    url: "http://192.168.1.100:8786"
+    api_key: "your-secret-key-here"
+
+    # Server-CDM mode: server handles all DRM licensing using its own CDM devices
+    # When false (default), client uses its own CDM and proxies license requests through the server
+    server_cdm: false
+
+    # Per-service overrides for remote services
+    # Override downloader, decryption tool, or CDM settings per service on the client
+    services:
+      # Example: Use n_m3u8dl_re for HLS services, mp4decrypt for specific services
+      # EXAMPLE_SERVICE:
+      #   downloader: n_m3u8dl_re  # Override client downloader (requests, aria2c, n_m3u8dl_re, curl_impersonate)
+      #   decryption: mp4decrypt   # Override decryption tool (shaka, mp4decrypt)
+
+  # Example: Multiple servers
+  # us-server:
+  #   url: "https://us.example.com:8786"
+  #   api_key: "us-api-key"
+  #   server_cdm: true
+  #   services:
+  #     EXAMPLE:
+  #       downloader: n_m3u8dl_re
+  #       decryption: mp4decrypt
+  # eu-server:
+  #   url: "https://eu.example.com:8786"
+  #   api_key: "eu-api-key"
+  #   server_cdm: false
 
 # Configuration data for each Service
 services:

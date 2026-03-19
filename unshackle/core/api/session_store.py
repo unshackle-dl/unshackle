@@ -31,6 +31,7 @@ class SessionEntry:
     tracks: Dict[str, Track] = field(default_factory=dict)  # track_id -> Track object
     tracks_by_title: Dict[str, Dict[str, Track]] = field(default_factory=dict)  # title_key -> {track_id -> Track}
     chapters_by_title: Dict[str, List[Any]] = field(default_factory=dict)  # title_key -> [Chapter]
+    creator_ip: Optional[str] = None
     cache_tag: Optional[str] = None  # per-session cache directory tag
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     last_accessed: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -51,7 +52,7 @@ class SessionStore:
     @property
     def _ttl(self) -> int:
         """Session TTL in seconds from config."""
-        return config.serve.get("session_ttl", 900)  # 15 min default
+        return config.serve.get("session_ttl", 300)  # 5 min default
 
     @property
     def _max_sessions(self) -> int:

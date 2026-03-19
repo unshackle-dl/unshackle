@@ -1383,6 +1383,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
             service_instance,
             session_id=session_id,
         )
+        session.creator_ip = request.remote if request else None
         session.cache_tag = session_cache_tag
 
         return web.json_response(
@@ -1411,15 +1412,7 @@ async def session_titles_handler(session_id: str, request: Optional[web.Request]
     interactive auth flows (OTP, captcha) can complete before titles
     are fetched.
     """
-    from unshackle.core.api.session_store import get_session_store
-
-    store = get_session_store()
-    session = await store.get(session_id)
-    if not session:
-        raise APIError(
-            APIErrorCode.SESSION_NOT_FOUND,
-            f"Session not found: {session_id}",
-        )
+    session = await _get_validated_session(session_id, request)
 
     try:
         service_instance = session.service_instance
@@ -1464,15 +1457,7 @@ async def session_tracks_handler(
     This keeps auth separate from track fetching, allowing interactive
     auth flows (OTP, captcha) before any tracks are requested.
     """
-    from unshackle.core.api.session_store import get_session_store
-
-    store = get_session_store()
-    session = await store.get(session_id)
-    if not session:
-        raise APIError(
-            APIErrorCode.SESSION_NOT_FOUND,
-            f"Session not found: {session_id}",
-        )
+    session = await _get_validated_session(session_id, request)
 
     title_id = data.get("title_id")
     if not title_id:
@@ -1586,16 +1571,7 @@ async def session_segments_handler(
     Returns segment URLs, init data, DRM info, and any headers/cookies
     needed for CDN download.
     """
-    from unshackle.core.api.session_store import get_session_store
-
-    store = get_session_store()
-    session = await store.get(session_id)
-    if not session:
-        raise APIError(
-            APIErrorCode.SESSION_NOT_FOUND,
-            f"Session not found or expired: {session_id}",
-            details={"session_id": session_id},
-        )
+    session = await _get_validated_session(session_id, request)
 
     track_ids = data.get("track_ids", [])
     if not track_ids:
@@ -1683,6 +1659,26 @@ async def session_segments_handler(
             context={"operation": "session_segments", "session_id": session_id},
             debug_mode=debug_mode,
         )
+
+
+async def _get_validated_session(session_id: str, request: Optional[web.Request]) -> Any:
+    """Fetch a session and verify the requesting IP matches the creator."""
+    from unshackle.core.api.session_store import get_session_store
+
+    store = get_session_store()
+    session = await store.get(session_id)
+    if not session:
+        raise APIError(
+            APIErrorCode.SESSION_NOT_FOUND,
+            f"Session not found or expired: {session_id}",
+            details={"session_id": session_id},
+        )
+    if session.creator_ip and request and request.remote != session.creator_ip:
+        raise APIError(
+            APIErrorCode.FORBIDDEN,
+            "Session access denied",
+        )
+    return session
 
 
 def _resolve_handler_proxy(
@@ -1902,16 +1898,7 @@ async def session_license_handler(
     """
     import base64
 
-    from unshackle.core.api.session_store import get_session_store
-
-    store = get_session_store()
-    session = await store.get(session_id)
-    if not session:
-        raise APIError(
-            APIErrorCode.SESSION_NOT_FOUND,
-            f"Session not found or expired: {session_id}",
-            details={"session_id": session_id},
-        )
+    session = await _get_validated_session(session_id, request)
 
     track_id = data.get("track_id")
     track_ids = data.get("track_ids")
@@ -2037,31 +2024,16 @@ async def session_license_handler(
 
 async def session_info_handler(session_id: str, request: Optional[web.Request] = None) -> web.Response:
     """Check session validity and get session info."""
-    from datetime import timezone
+    session = await _get_validated_session(session_id, request)
 
     from unshackle.core.api.session_store import get_session_store
-
-    store = get_session_store()
-    session = await store.get(session_id)
-    if not session:
-        raise APIError(
-            APIErrorCode.SESSION_NOT_FOUND,
-            f"Session not found or expired: {session_id}",
-            details={"session_id": session_id},
-        )
-
-    from datetime import datetime
-
-    now = datetime.now(timezone.utc)
-    elapsed = (now - session.last_accessed).total_seconds()
-    expires_in = max(0, store._ttl - int(elapsed))
 
     return web.json_response(
         {
             "session_id": session.session_id,
             "service": session.service_tag,
             "valid": True,
-            "expires_in": expires_in,
+            "expires_in": get_session_store()._ttl,
             "track_count": len(session.tracks),
             "title_count": len(session.title_map),
         }
@@ -2075,14 +2047,8 @@ async def session_delete_handler(session_id: str, request: Optional[web.Request]
     from unshackle.core.api.session_store import get_session_store
     from unshackle.core.config import config as app_config
 
+    session = await _get_validated_session(session_id, request)
     store = get_session_store()
-    session = await store.get(session_id)
-    if not session:
-        raise APIError(
-            APIErrorCode.SESSION_NOT_FOUND,
-            f"Session not found: {session_id}",
-            details={"session_id": session_id},
-        )
 
     cache_tag = session.cache_tag
     await store.delete(session_id)
