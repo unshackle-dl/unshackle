@@ -25,22 +25,28 @@ _ALIASES = {tag: getattr(module, "ALIASES") for tag, module in _MODULES.items()}
 class Services(click.MultiCommand):
     """Lazy-loaded command group of project services."""
 
+    _remote_services_cache: list[dict] | None = None
+
     # Click-specific methods
 
     def list_commands(self, ctx: click.Context) -> list[str]:
         """Returns a list of all available Services as command names for Click.
 
-        In remote mode, also includes service tags from remote_services config
-        so the user can use services that aren't installed locally.
+        In remote mode, fetches the service list from the remote server
+        so the user sees exactly what's available remotely.
         """
-        tags = Services.get_tags()
         remote = ctx.params.get("remote") or (ctx.parent and ctx.parent.params.get("remote"))
         if remote:
+            remote_services = Services._fetch_remote_services(ctx)
+            if remote_services is not None:
+                return [s["tag"] for s in remote_services]
+            tags = Services.get_tags()
             for svc_cfg in config.remote_services.values():
                 for remote_tag in svc_cfg.get("services", {}).keys():
                     if remote_tag not in tags:
                         tags.append(remote_tag)
-        return tags
+            return tags
+        return Services.get_tags()
 
     def get_command(self, ctx: click.Context, name: str) -> click.Command:
         """Load the Service and return the Click CLI method."""
@@ -48,7 +54,7 @@ class Services(click.MultiCommand):
 
         remote = ctx.params.get("remote") or (ctx.parent and ctx.parent.params.get("remote"))
         if remote:
-            return Services._make_remote_command(tag)
+            return Services._make_remote_command(tag, ctx)
 
         try:
             service = Services.load(tag)
@@ -66,20 +72,68 @@ class Services(click.MultiCommand):
         raise click.ClickException(f"Service '{tag}' has no 'cli' method configured.")
 
     @staticmethod
-    def _make_remote_command(tag: str) -> click.Command:
-        """Create a synthetic Click command for a remote service."""
+    def _fetch_remote_services(ctx: click.Context) -> list[dict] | None:
+        """Fetch the service list from the remote server (cached per process)."""
+        if Services._remote_services_cache is not None:
+            return Services._remote_services_cache
+        try:
+            from unshackle.core.remote_service import RemoteClient, resolve_server
 
-        @click.command(name=tag)
+            server_name = ctx.params.get("server")
+            server_url, api_key, _ = resolve_server(server_name)
+            client = RemoteClient(server_url, api_key)
+            result = client.get("/api/services")
+            Services._remote_services_cache = result.get("services", [])
+            return Services._remote_services_cache
+        except Exception:
+            return None
+
+    @staticmethod
+    def _make_remote_command(tag: str, ctx: click.Context) -> click.Command:
+        """Create a Click command for a remote service with server-provided options."""
+        svc_info = Services._fetch_remote_service_info(tag, ctx)
+        short_help = svc_info.get("url") if svc_info else None
+        cli_params = svc_info.get("cli_params") if svc_info else None
+
+        @click.command(name=tag, short_help=short_help)
         @click.argument("title", type=str)
         @click.pass_context
-        def remote_cli(ctx: click.Context, title: str) -> object:
+        def remote_cli(ctx: click.Context, title: str, **kwargs: object) -> object:
             from unshackle.core.remote_service import RemoteService, resolve_server
 
             server_name = ctx.parent.params.get("server") if ctx.parent else None
             server_url, api_key, services_config = resolve_server(server_name)
             return RemoteService(ctx, tag, title, server_url, api_key, services_config)
 
+        if cli_params:
+            for param in cli_params:
+                if param.get("kind") == "option":
+                    opts = param.get("opts", [f"--{param['name']}"])
+                    kwargs: dict = {}
+                    if param.get("is_flag"):
+                        kwargs["is_flag"] = True
+                        kwargs["default"] = param.get("default", False)
+                    else:
+                        kwargs["default"] = param.get("default")
+                        kwargs["type"] = str
+                    if param.get("help"):
+                        kwargs["help"] = param["help"]
+                    remote_cli = click.option(*opts, **kwargs)(remote_cli)
+
         return remote_cli
+
+    @staticmethod
+    def _fetch_remote_service_info(tag: str, ctx: click.Context) -> dict | None:
+        """Fetch service info for a specific service from the remote server."""
+        try:
+            services = Services._fetch_remote_services(ctx)
+            if services:
+                for svc in services:
+                    if svc.get("tag") == tag:
+                        return svc
+        except Exception:
+            pass
+        return None
 
     # Methods intended to be used anywhere
 

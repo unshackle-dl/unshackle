@@ -516,12 +516,14 @@ class dl:
         "--remote",
         is_flag=True,
         default=False,
+        is_eager=True,
         help="Use a remote unshackle server instead of local service code.",
     )
     @click.option(
         "--server",
         type=str,
         default=None,
+        is_eager=True,
         help="Name of the remote server from remote_services config (if multiple configured).",
     )
     @click.pass_context

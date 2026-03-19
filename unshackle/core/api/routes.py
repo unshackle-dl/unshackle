@@ -1,6 +1,7 @@
 import logging
 import re
 
+import click
 from aiohttp import web
 from aiohttp_swagger3 import SwaggerDocs, SwaggerInfo, SwaggerUiSettings
 
@@ -186,6 +187,32 @@ async def services(request: web.Request) -> web.Response:
 
                 if hasattr(service_module, "cli") and hasattr(service_module.cli, "short_help"):
                     service_data["url"] = service_module.cli.short_help
+
+                if hasattr(service_module, "cli") and hasattr(service_module.cli, "params"):
+                    cli_params = []
+                    for param in service_module.cli.params:
+                        param_info: dict = {"name": getattr(param, "name", None)}
+                        if isinstance(param, click.Argument):
+                            param_info["kind"] = "argument"
+                            param_info["required"] = param.required
+                        else:
+                            param_info["kind"] = "option"
+                            param_info["opts"] = list(param.opts) if hasattr(param, "opts") else []
+                            param_info["is_flag"] = getattr(param, "is_flag", False)
+                            default = param.default
+                            if default is None:
+                                pass
+                            elif callable(default) or type(default).__name__ == "Sentinel":
+                                default = None
+                            elif hasattr(default, "name"):
+                                default = default.name
+                            elif not isinstance(default, (str, int, float, bool, list)):
+                                default = str(default)
+                            param_info["default"] = default
+                            param_info["help"] = getattr(param, "help", None)
+                            param_info["type"] = param.type.name if hasattr(param.type, "name") else str(param.type)
+                        cli_params.append(param_info)
+                    service_data["cli_params"] = cli_params
 
                 if service_module.__doc__:
                     service_data["help"] = service_module.__doc__.strip()
