@@ -62,9 +62,9 @@ Example mapping:
 
 ```yaml
 downloader:
-  NF: requests
-  AMZN: n_m3u8dl_re
-  DSNP: n_m3u8dl_re
+  EXAMPLE: requests
+  EXAMPLE2: n_m3u8dl_re
+  EXAMPLE3: n_m3u8dl_re
   default: requests
 ```
 
@@ -131,11 +131,11 @@ downloads: 4
 workers: 16
 ```
 
-to set `--bitrate=CVBR` for the AMZN service,
+to set `--bitrate=CVBR` for a specific service,
 
 ```yaml
 lang: de
-AMZN:
+EXAMPLE:
   bitrate: CVBR
 ```
 
@@ -229,9 +229,9 @@ dl:
   lang: en
   downloads: 4
   workers: 16
-  AMZN:
+  EXAMPLE:
     bitrate: CVBR
-  NF:
+  EXAMPLE2:
     worst: true
     quality: 1080
 ```
@@ -307,8 +307,8 @@ Example mapping:
 
 ```yaml
 decryption:
-  ATVP: mp4decrypt
-  AMZN: shaka
+  EXAMPLE: mp4decrypt
+  EXAMPLE2: shaka
   default: shaka
 ```
 

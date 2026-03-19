@@ -56,10 +56,10 @@ output_template:
 ```
 
 Example outputs:
-- Scene movies: `The.Matrix.1999.1080p.NF.WEB-DL.DDP5.1.H.264-EXAMPLE`
-- Scene movies (REPACK): `Dune.2021.REPACK.2160p.HBO.WEB-DL.DDP5.1.H.265-EXAMPLE`
-- Scene series: `Breaking.Bad.2008.S01E01.Pilot.1080p.NF.WEB-DL.DDP5.1.H.264-EXAMPLE`
-- Plex movies: `The Matrix (1999) 1080p`
+- Scene movies: `Example.Movie.2024.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG`
+- Scene movies (REPACK): `Example.Movie.2024.REPACK.2160p.EXAMPLE.WEB-DL.DDP5.1.H.265-TAG`
+- Scene series: `Example.Show.2024.S01E01.Pilot.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG`
+- Plex movies: `Example Movie (2024) 1080p`
 
 ---
 
@@ -106,10 +106,10 @@ output_template:
 ```
 
 Example outputs:
-- Danish audio: `Show.S01E01.DANiSH.1080p.NF.WEB-DL.DDP5.1.H.264-TAG`
-- English audio + multiple Nordic subs: `Show.S01E01.NORDiC.1080p.NF.WEB-DL.DDP5.1.H.264-TAG`
-- English audio + Danish subs only: `Show.S01E01.DKsubs.1080p.NF.WEB-DL.DDP5.1.H.264-TAG`
-- No matching languages: `Show.S01E01.1080p.NF.WEB-DL.DDP5.1.H.264-TAG`
+- Danish audio: `Example.Show.S01E01.DANiSH.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG`
+- English audio + multiple Nordic subs: `Example.Show.S01E01.NORDiC.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG`
+- English audio + Danish subs only: `Example.Show.S01E01.DKsubs.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG`
+- No matching languages: `Example.Show.S01E01.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG`
 
 ### Example: Other regional tags
 

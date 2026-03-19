@@ -247,7 +247,7 @@ async def search(request: web.Request) -> web.Response:
             properties:
               service:
                 type: string
-                description: Service tag (e.g., NF, AMZN, ATV)
+                description: Service tag
               query:
                 type: string
                 description: Search query string

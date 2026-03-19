@@ -72,7 +72,7 @@ Search for titles from a streaming service.
 **Required parameters:**
 | Parameter | Type | Description |
 | --- | --- | --- |
-| `service` | string | Service tag (e.g., `NF`, `AMZN`, `ATV`) |
+| `service` | string | Service tag |
 | `query` | string | Search query |
 
 **Optional parameters:**
@@ -85,18 +85,18 @@ Search for titles from a streaming service.
 ```bash
 curl -X POST http://localhost:8786/api/search \
   -H "Content-Type: application/json" \
-  -d '{"service": "ATV", "query": "hijack"}'
+  -d '{"service": "EXAMPLE", "query": "example show"}'
 ```
 
 ```json
 {
   "results": [
     {
-      "id": "umc.cmc.1dg08zn0g3zx52hs8npoj5qe3",
-      "title": "Hijack",
+      "id": "abc123def456",
+      "title": "Example Show",
       "description": null,
       "label": "TV Show",
-      "url": "https://tv.apple.com/us/show/hijack/umc.cmc.1dg08zn0g3zx52hs8npoj5qe3"
+      "url": "https://example.com/show/abc123def456"
     }
   ],
   "count": 1
@@ -118,7 +118,7 @@ Get available titles (seasons/episodes/movies) for a service and title ID.
 ```bash
 curl -X POST http://localhost:8786/api/list-titles \
   -H "Content-Type: application/json" \
-  -d '{"service": "ATV", "title_id": "umc.cmc.1dg08zn0g3zx52hs8npoj5qe3"}'
+  -d '{"service": "EXAMPLE", "title_id": "abc123def456"}'
 ```
 
 ```json
@@ -126,12 +126,12 @@ curl -X POST http://localhost:8786/api/list-titles \
   "titles": [
     {
       "type": "episode",
-      "name": "Final Call",
-      "series_title": "Hijack",
+      "name": "Pilot",
+      "series_title": "Example Show",
       "season": 1,
       "number": 1,
-      "year": 2023,
-      "id": "umc.cmc.4levibvvz01hl4zsm0jdk5v2p"
+      "year": 2024,
+      "id": "abc123def789"
     }
   ]
 }
@@ -161,8 +161,8 @@ Get video, audio, and subtitle tracks for a title.
 curl -X POST http://localhost:8786/api/list-tracks \
   -H "Content-Type: application/json" \
   -d '{
-    "service": "ATV",
-    "title_id": "umc.cmc.1dg08zn0g3zx52hs8npoj5qe3",
+    "service": "EXAMPLE",
+    "title_id": "abc123def456",
     "wanted": ["S01E01"]
   }'
 ```
@@ -261,8 +261,8 @@ Start a download job. Returns immediately with a job ID (HTTP 202).
 curl -X POST http://localhost:8786/api/download \
   -H "Content-Type: application/json" \
   -d '{
-    "service": "ATV",
-    "title_id": "umc.cmc.1dg08zn0g3zx52hs8npoj5qe3",
+    "service": "EXAMPLE",
+    "title_id": "abc123def456",
     "wanted": ["S01E01"],
     "quality": [1080, 2160],
     "vcodec": ["H265"],
@@ -303,7 +303,7 @@ curl http://localhost:8786/api/download/jobs
 curl "http://localhost:8786/api/download/jobs?status=completed"
 
 # Filter by service
-curl "http://localhost:8786/api/download/jobs?service=ATV"
+curl "http://localhost:8786/api/download/jobs?service=EXAMPLE"
 ```
 
 ---
@@ -321,8 +321,8 @@ curl http://localhost:8786/api/download/jobs/504db959-80b0-446c-a764-7924b761d61
   "job_id": "504db959-80b0-446c-a764-7924b761d613",
   "status": "completed",
   "created_time": "2026-02-27T18:00:00.000000",
-  "service": "ATV",
-  "title_id": "umc.cmc.1dg08zn0g3zx52hs8npoj5qe3",
+  "service": "EXAMPLE",
+  "title_id": "abc123def456",
   "progress": 100.0,
   "parameters": { ... },
   "started_time": "2026-02-27T18:00:01.000000",

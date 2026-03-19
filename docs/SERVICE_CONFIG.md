@@ -17,7 +17,7 @@ a dictionary.
 For example,
 
 ```yaml
-NOW:
+EXAMPLE:
   client:
     auth_scheme: MESSO
     # ... more sensitive data
@@ -55,20 +55,20 @@ Specify login credentials to use for each Service, and optionally per-profile.
 For example,
 
 ```yaml
-ALL4: jane@gmail.com:LoremIpsum100 # directly
-AMZN: # or per-profile, optionally with a default
+EXAMPLE: jane@example.tld:LoremIpsum100 # directly
+EXAMPLE2: # or per-profile, optionally with a default
   default: jane@example.tld:LoremIpsum99 # <-- used by default if -p/--profile is not used
-  james: james@gmail.com:TheFriend97
+  james: james@example.tld:TheFriend97
   john: john@example.tld:LoremIpsum98
-NF: # the `default` key is not necessary, but no credential will be used by default
-  john: john@gmail.com:TheGuyWhoPaysForTheNetflix69420
+EXAMPLE3: # the `default` key is not necessary, but no credential will be used by default
+  john: john@example.tld:SecretPassword123
 ```
 
-The value should be in string form, i.e. `john@gmail.com:password123` or `john:password123`.
+The value should be in string form, i.e. `john@example.tld:password123` or `john:password123`.
 Any arbitrary values can be used on the left (username/password/phone) and right (password/secret).
-You can also specify these in list form, i.e., `["john@gmail.com", ":PasswordWithAColon"]`.
+You can also specify these in list form, i.e., `["john@example.tld", ":PasswordWithAColon"]`.
 
-If you specify multiple credentials with keys like the `AMZN` and `NF` example above, then you should
+If you specify multiple credentials with keys like the `EXAMPLE2` and `EXAMPLE3` example above, then you should
 use a `default` key or no credential will be loaded automatically unless you use `-p/--profile`. You
 do not have to use a `default` key at all.
 

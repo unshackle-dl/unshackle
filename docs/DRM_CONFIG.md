@@ -12,8 +12,8 @@ for a matching file.
 For example,
 
 ```yaml
-AMZN: chromecdm_903_l3
-NF: nexus_6_l1
+EXAMPLE: chromecdm_903_l3
+EXAMPLE2: nexus_6_l1
 ```
 
 You may also specify this device based on the profile used.
@@ -21,9 +21,9 @@ You may also specify this device based on the profile used.
 For example,
 
 ```yaml
-AMZN: chromecdm_903_l3
-NF: nexus_6_l1
-DSNP:
+EXAMPLE: chromecdm_903_l3
+EXAMPLE2: nexus_6_l1
+EXAMPLE3:
   john_sd: chromecdm_903_l3
   jane_uhd: nexus_5_l1
 ```
@@ -35,8 +35,8 @@ For example, the following has the same result as the previous example, as well 
 services and profiles being pre-defined to use `chromecdm_903_l3`.
 
 ```yaml
-NF: nexus_6_l1
-DSNP:
+EXAMPLE2: nexus_6_l1
+EXAMPLE3:
   jane_uhd: nexus_5_l1
 default: chromecdm_903_l3
 ```
@@ -56,12 +56,12 @@ EXAMPLE:
 You can mix profiles and quality thresholds in the same service:
 
 ```yaml
-NETFLIX:
-  john: netflix_l3_profile       # Profile-based selection
-  "<=720": netflix_mobile_l3     # Quality-based selection
-  "1080": netflix_standard_l3    # Exact match for 1080p
-  ">=1440": netflix_premium_l1   # Quality-based selection
-  default: netflix_standard_l3   # Fallback
+EXAMPLE:
+  john: example_l3_profile       # Profile-based selection
+  "<=720": example_mobile_l3     # Quality-based selection
+  "1080": example_standard_l3    # Exact match for 1080p
+  ">=1440": example_premium_l1   # Quality-based selection
+  default: example_standard_l3   # Fallback
 ```
 
 ---
@@ -311,8 +311,8 @@ Or configure per-service with a `DEFAULT` fallback:
 ```yaml
 decryption:
   DEFAULT: shaka
-  AMZN: mp4decrypt
-  NF: shaka
+  EXAMPLE: mp4decrypt
+  EXAMPLE2: shaka
 ```
 
 Service keys are case-insensitive (normalized to uppercase internally).
