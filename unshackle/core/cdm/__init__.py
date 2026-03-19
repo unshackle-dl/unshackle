@@ -15,6 +15,7 @@ __all__ = [
     "DecryptLabsRemoteCDM",
     "CustomRemoteCDM",
     "MonaLisaCDM",
+    "load_cdm",
     "is_remote_cdm",
     "is_local_cdm",
     "cdm_location",
@@ -36,6 +37,10 @@ def __getattr__(name: str) -> Any:
         from .monalisa import MonaLisaCDM
 
         return MonaLisaCDM
+    if name == "load_cdm":
+        from .loader import load_cdm
+
+        return load_cdm
 
     if name in {
         "is_remote_cdm",

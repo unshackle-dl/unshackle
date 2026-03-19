@@ -24,15 +24,8 @@ from uuid import UUID
 import click
 import jsonpickle
 import yaml
-from construct import ConstError
 from langcodes import Language
 from pymediainfo import MediaInfo
-from pyplayready.cdm import Cdm as PlayReadyCdm
-from pyplayready.device import Device as PlayReadyDevice
-from pyplayready.remote.remotecdm import RemoteCdm as PlayReadyRemoteCdm
-from pywidevine.cdm import Cdm as WidevineCdm
-from pywidevine.device import Device
-from pywidevine.remotecdm import RemoteCdm
 from rich.console import Group
 from rich.live import Live
 from rich.padding import Padding
@@ -44,7 +37,7 @@ from rich.text import Text
 from rich.tree import Tree
 
 from unshackle.core import binaries, providers
-from unshackle.core.cdm import CustomRemoteCDM, DecryptLabsRemoteCDM
+from unshackle.core.cdm import DecryptLabsRemoteCDM
 from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 from unshackle.core.config import config
 from unshackle.core.console import console
@@ -3077,70 +3070,6 @@ class dl:
                 if not cdm_name:
                     return None
 
-        cdm_api = next(iter(x.copy() for x in config.remote_cdm if x["name"] == cdm_name), None)
-        if cdm_api:
-            cdm_type = cdm_api.get("type")
+        from unshackle.core.cdm import load_cdm
 
-            if cdm_type == "decrypt_labs":
-                del cdm_api["name"]
-                del cdm_api["type"]
-
-                if "secret" not in cdm_api or not cdm_api["secret"]:
-                    if config.decrypt_labs_api_key:
-                        cdm_api["secret"] = config.decrypt_labs_api_key
-                    else:
-                        raise ValueError(
-                            f"No secret provided for DecryptLabs CDM '{cdm_name}' and no global "
-                            "decrypt_labs_api_key configured"
-                        )
-
-                # All DecryptLabs CDMs use DecryptLabsRemoteCDM
-                return DecryptLabsRemoteCDM(service_name=service, vaults=self.vaults, **cdm_api)
-
-            elif cdm_type == "custom_api":
-                del cdm_api["name"]
-                del cdm_api["type"]
-
-                # All Custom API CDMs use CustomRemoteCDM
-                return CustomRemoteCDM(service_name=service, vaults=self.vaults, **cdm_api)
-
-            else:
-                device_type = cdm_api.get("Device Type", cdm_api.get("device_type", ""))
-                if str(device_type).upper() == "PLAYREADY":
-                    return PlayReadyRemoteCdm(
-                        security_level=cdm_api.get("Security Level", cdm_api.get("security_level", 3000)),
-                        host=cdm_api.get("Host", cdm_api.get("host")),
-                        secret=cdm_api.get("Secret", cdm_api.get("secret")),
-                        device_name=cdm_api.get("Device Name", cdm_api.get("device_name")),
-                    )
-                else:
-                    return RemoteCdm(
-                        device_type=cdm_api.get("Device Type", cdm_api.get("device_type", "")),
-                        system_id=cdm_api.get("System ID", cdm_api.get("system_id", "")),
-                        security_level=cdm_api.get("Security Level", cdm_api.get("security_level", 3000)),
-                        host=cdm_api.get("Host", cdm_api.get("host")),
-                        secret=cdm_api.get("Secret", cdm_api.get("secret")),
-                        device_name=cdm_api.get("Device Name", cdm_api.get("device_name")),
-                    )
-
-        prd_path = config.directories.prds / f"{cdm_name}.prd"
-        if not prd_path.is_file():
-            prd_path = config.directories.wvds / f"{cdm_name}.prd"
-        if prd_path.is_file():
-            device = PlayReadyDevice.load(prd_path)
-            return PlayReadyCdm.from_device(device)
-
-        cdm_path = config.directories.wvds / f"{cdm_name}.wvd"
-        if not cdm_path.is_file():
-            raise ValueError(f"{cdm_name} does not exist or is not a file")
-
-        try:
-            device = Device.load(cdm_path)
-        except ConstError as e:
-            if "expected 2 but parsed 1" in str(e):
-                raise ValueError(
-                    f"{cdm_name}.wvd seems to be a v1 WVD file, use `pywidevine migrate --help` to migrate it to v2."
-                )
-            raise ValueError(f"{cdm_name}.wvd is an invalid or corrupt Widevine Device file, {e}")
-
-        return WidevineCdm.from_device(device)
+        return load_cdm(cdm_name, service_name=service, vaults=self.vaults)

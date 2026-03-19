@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import base64
 import logging
-import re
 from enum import Enum
 from http.cookiejar import CookieJar
 from typing import Any, Dict, Optional, Union
@@ -94,7 +93,6 @@ def _deserialize_video(data: Dict[str, Any]) -> Video:
         fps=data.get("fps"),
         id_=data.get("id"),
     )
-    v.data["remote"] = True
     return v
 
 
@@ -110,7 +108,6 @@ def _deserialize_audio(data: Dict[str, Any]) -> Audio:
         descriptive=data.get("descriptive", False),
         id_=data.get("id"),
     )
-    a.data["remote"] = True
     return a
 
 
@@ -210,46 +207,30 @@ def _resolve_manifest_data(tracks: Tracks, manifests: list, session: Any) -> Non
                 from unshackle.core.manifests import DASH
 
                 xml_tree = etree.fromstring(raw)
-                dash = DASH(xml_tree, m_url)
                 fallback_lang = next(
                     (t.language for t in all_tracks if t.language and str(t.language) != "und"),
                     None,
                 )
-                local_tracks = dash.to_tracks(language=fallback_lang)
-                local_all = list(local_tracks.videos) + list(local_tracks.audio) + list(local_tracks.subtitles)
-
-                for remote_track in all_tracks:
-                    if remote_track.data.get("dash"):
-                        continue
-                    matched = _match_track(remote_track, local_all)
-                    if matched and matched.data.get("dash"):
-                        remote_track.data.update(matched.data)
-                        remote_track.descriptor = matched.descriptor
-                        if matched.drm and not remote_track.drm:
-                            remote_track.drm = matched.drm
-
-            elif m_type == "hls":
-                pass
-
+                local_tracks = DASH(xml_tree, m_url).to_tracks(language=fallback_lang)
             elif m_type == "ism":
                 from lxml import etree
 
                 from unshackle.core.manifests import ISM
 
-                xml_el = etree.fromstring(raw)
-                ism = ISM(xml_el, m_url)
-                local_tracks = ism.to_tracks()
-                local_all = list(local_tracks.videos) + list(local_tracks.audio) + list(local_tracks.subtitles)
+                local_tracks = ISM(etree.fromstring(raw), m_url).to_tracks()
+            else:
+                continue
 
-                for remote_track in all_tracks:
-                    if remote_track.data.get("ism"):
-                        continue
-                    matched = _match_track(remote_track, local_all)
-                    if matched and matched.data.get("ism"):
-                        remote_track.data.update(matched.data)
-                        remote_track.descriptor = matched.descriptor
-                        if matched.drm and not remote_track.drm:
-                            remote_track.drm = matched.drm
+            local_all = list(local_tracks.videos) + list(local_tracks.audio) + list(local_tracks.subtitles)
+            for remote_track in all_tracks:
+                if remote_track.data.get(m_type):
+                    continue
+                matched = _match_track(remote_track, local_all)
+                if matched and matched.data.get(m_type):
+                    remote_track.data.update(matched.data)
+                    remote_track.descriptor = matched.descriptor
+                    if matched.drm and not remote_track.drm:
+                        remote_track.drm = matched.drm
 
         except Exception as e:
             log_m.warning("Failed to re-parse %s manifest from %s: %s", m_type, m_url, e)
@@ -358,44 +339,14 @@ def _load_cookies_for_transport(service_tag: str, profile: Optional[str]) -> Opt
 def _resolve_proxy(proxy_arg: Optional[str]) -> Optional[str]:
     if not proxy_arg:
         return None
-    if re.match(r"^(https?://|socks)", proxy_arg):
-        return proxy_arg
 
-    from unshackle.core.proxies.basic import Basic
-    from unshackle.core.proxies.nordvpn import NordVPN
-    from unshackle.core.proxies.surfsharkvpn import SurfsharkVPN
+    from unshackle.core.proxies.resolve import initialize_proxy_providers, resolve_proxy
 
-    providers: list = []
-    proxy_config = config.proxy_providers
-    if proxy_config.get("basic"):
-        providers.append(Basic(**proxy_config["basic"]))
-    if proxy_config.get("nordvpn"):
-        providers.append(NordVPN(**proxy_config["nordvpn"]))
-    if proxy_config.get("surfsharkvpn"):
-        providers.append(SurfsharkVPN(**proxy_config["surfsharkvpn"]))
-
-    requested_provider = None
-    query = proxy_arg
-    if re.match(r"^[a-z]+:.+$", proxy_arg, re.IGNORECASE):
-        requested_provider, query = proxy_arg.split(":", maxsplit=1)
-
-    if requested_provider:
-        provider = next(
-            (x for x in providers if x.__class__.__name__.lower() == requested_provider.lower()),
-            None,
-        )
-        if not provider:
-            raise click.ClickException(f"Proxy provider '{requested_provider}' not found.")
-        proxy_uri = provider.get_proxy(query)
-        if not proxy_uri:
-            raise click.ClickException(f"Proxy provider {requested_provider} had no proxy for {query}")
-        return proxy_uri
-
-    for provider in providers:
-        proxy_uri = provider.get_proxy(query)
-        if proxy_uri:
-            return proxy_uri
-    raise click.ClickException(f"No proxy provider had a proxy for {proxy_arg}")
+    try:
+        providers = initialize_proxy_providers()
+        return resolve_proxy(proxy_arg, providers)
+    except ValueError as e:
+        raise click.ClickException(str(e))
 
 
 class RemoteService:
