@@ -290,6 +290,19 @@ class Widevine:
             key_hex = key if isinstance(key, str) else key.hex()
             key_args.extend(["--key", f"{kid_hex}:{key_hex}"])
 
+        # Some services use a blank/zero default KID in the tenc box,
+        # but the real KID for the license server. Add zero-KID fallback entries so
+        # mp4decrypt can match when the file's default KID is all zeros.
+        zero_kid = "00" * 16
+        existing_kids = {
+            kid.hex if hasattr(kid, "hex") else str(kid).replace("-", "")
+            for kid in self.content_keys
+        }
+        if zero_kid not in existing_kids:
+            for key in self.content_keys.values():
+                key_hex = key if isinstance(key, str) else key.hex()
+                key_args.extend(["--key", f"{zero_kid}:{key_hex}"])
+
         cmd = [
             str(binaries.Mp4decrypt),
             "--show-progress",

@@ -483,6 +483,8 @@ class HLS:
             final_save_path = HLS._finalize_n_m3u8dl_re_output(track=track, save_dir=save_dir, save_path=save_path)
             progress(downloaded="Downloaded")
             track.path = final_save_path
+            if session_drm:
+                track.drm = None
             events.emit(events.Types.TRACK_DOWNLOADED, track=track)
             return
 
@@ -787,6 +789,10 @@ class HLS:
         progress(downloaded="Downloaded")
 
         track.path = save_path
+
+        if session_drm:
+            track.drm = None
+
         events.emit(events.Types.TRACK_DOWNLOADED, track=track)
 
     @staticmethod
