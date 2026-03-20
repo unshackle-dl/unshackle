@@ -57,7 +57,7 @@ class Audio(Track):
         @staticmethod
         def from_netflix_profile(profile: str) -> Audio.Codec:
             profile = profile.lower().strip()
-            if profile.startswith("heaac"):
+            if profile.startswith("heaac") or profile.startswith("xheaac"):
                 return Audio.Codec.AAC
             if profile.startswith("dd-"):
                 return Audio.Codec.AC3
