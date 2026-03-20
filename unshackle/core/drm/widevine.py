@@ -53,6 +53,8 @@ class Widevine:
             self._kid = kid
             if pssh.key_ids and all(k in self.PLACEHOLDER_KIDS for k in pssh.key_ids):
                 pssh.set_key_ids([kid])
+            elif kid not in (pssh.key_ids or []):
+                pssh.set_key_ids([*(pssh.key_ids or []), kid])
 
         self._pssh = pssh
 
