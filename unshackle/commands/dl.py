@@ -723,9 +723,6 @@ class dl:
                     pass
             merge_dict(config.services.get(self.service), self.service_config)
 
-        if getattr(config, "downloader_map", None):
-            config.downloader = config.downloader_map.get(self.service, config.downloader)
-
         if getattr(config, "decryption_map", None):
             config.decryption = config.decryption_map.get(self.service, config.decryption)
 

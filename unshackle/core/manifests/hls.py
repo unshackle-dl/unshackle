@@ -30,7 +30,6 @@ from requests import Session
 from unshackle.core import binaries
 from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
-from unshackle.core.downloaders import requests as requests_downloader
 from unshackle.core.drm import DRM_T, ClearKey, MonaLisa, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
@@ -391,9 +390,6 @@ class HLS:
         progress(total=total_segments)
 
         downloader = track.downloader
-        if downloader.__name__ == "aria2c" and any(x.byterange for x in master.segments if x not in unwanted_segments):
-            downloader = requests_downloader
-            log.warning("Falling back to the requests downloader as aria2(c) doesn't support the Range header")
 
         urls: list[dict[str, Any]] = []
         segment_durations: list[int] = []
@@ -422,7 +418,6 @@ class HLS:
 
         segment_save_dir = save_dir / "segments"
 
-        skip_merge = False
         downloader_args = dict(
             urls=urls,
             output_dir=segment_save_dir,
@@ -431,21 +426,8 @@ class HLS:
             cookies=session.cookies,
             proxy=proxy,
             max_workers=max_workers,
+            session=session,
         )
-
-        if downloader.__name__ == "n_m3u8dl_re":
-            skip_merge = True
-            # session_drm already has correct content_keys from initial licensing above
-            n_m3u8dl_content_keys = session_drm.content_keys if session_drm else None
-
-            downloader_args.update(
-                {
-                    "output_dir": save_dir,
-                    "filename": track.id,
-                    "track": track,
-                    "content_keys": n_m3u8dl_content_keys,
-                }
-            )
 
         debug_logger = get_debug_logger()
         if debug_logger:
@@ -457,10 +439,8 @@ class HLS:
                     "track_id": getattr(track, "id", None),
                     "track_type": track.__class__.__name__,
                     "total_segments": total_segments,
-                    "downloader": downloader.__name__,
                     "has_drm": bool(session_drm),
                     "drm_type": session_drm.__class__.__name__ if session_drm else None,
-                    "skip_merge": skip_merge,
                     "save_path": str(save_path),
                 },
             )
@@ -474,17 +454,6 @@ class HLS:
                 if downloaded and downloaded.endswith("/s"):
                     status_update["downloaded"] = f"HLS {downloaded}"
                 progress(**status_update)
-
-        # see https://github.com/devine-dl/devine/issues/71
-        for control_file in segment_save_dir.glob("*.aria2__temp"):
-            control_file.unlink()
-
-        if skip_merge:
-            final_save_path = HLS._finalize_n_m3u8dl_re_output(track=track, save_dir=save_dir, save_path=save_path)
-            progress(downloaded="Downloaded")
-            track.path = final_save_path
-            events.emit(events.Types.TRACK_DOWNLOADED, track=track)
-            return
 
         progress(total=total_segments, completed=0, downloaded="Merging")
 
@@ -736,9 +705,8 @@ class HLS:
                     "save_dir_exists": save_dir.exists(),
                     "segments_found": len(segments_to_merge),
                     "segment_files": [f.name for f in segments_to_merge[:10]],  # Limit to first 10
-                    "downloader": downloader.__name__,
-                    "skip_merge": skip_merge,
-                },
+                    "downloader": "requests",
+                                    },
             )
 
         if not segments_to_merge:
@@ -755,9 +723,8 @@ class HLS:
                         "save_dir": str(save_dir),
                         "save_dir_exists": save_dir.exists(),
                         "directory_contents": [str(p) for p in all_contents],
-                        "downloader": downloader.__name__,
-                        "skip_merge": skip_merge,
-                    },
+                        "downloader": "requests",
+                                            },
                 )
             raise FileNotFoundError(error_msg)
 

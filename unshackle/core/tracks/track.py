@@ -21,7 +21,7 @@ from unshackle.core import binaries
 from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY
-from unshackle.core.downloaders import aria2c, curl_impersonate, n_m3u8dl_re, requests
+from unshackle.core.downloaders import requests
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.utilities import get_boxes, try_ensure_utf8
@@ -88,12 +88,7 @@ class Track:
                 raise TypeError(f"Expected drm to be an iterable, not {type(drm)}")
 
         if downloader is None:
-            downloader = {
-                "aria2c": aria2c,
-                "curl_impersonate": curl_impersonate,
-                "requests": requests,
-                "n_m3u8dl_re": n_m3u8dl_re,
-            }[config.downloader]
+            downloader = requests
 
         self.path: Optional[Path] = None
         self.url = url
@@ -211,23 +206,13 @@ class Track:
         if track_type == "Subtitle":
             save_path = save_path.with_suffix(f".{self.codec.extension}")
 
-        if self.downloader.__name__ == "n_m3u8dl_re" and (
-            self.descriptor == self.Descriptor.URL
-            or track_type in ("Subtitle", "Attachment")
-        ):
-            self.downloader = requests
-
         if self.descriptor != self.Descriptor.URL:
             save_dir = save_path.with_name(save_path.name + "_segments")
         else:
             save_dir = save_path.parent
 
         def cleanup():
-            # track file (e.g., "foo.mp4")
             save_path.unlink(missing_ok=True)
-            # aria2c control file (e.g., "foo.mp4.aria2" or "foo.mp4.aria2__temp")
-            save_path.with_suffix(f"{save_path.suffix}.aria2").unlink(missing_ok=True)
-            save_path.with_suffix(f"{save_path.suffix}.aria2__temp").unlink(missing_ok=True)
             if save_dir.exists() and save_dir.name.endswith("_segments"):
                 shutil.rmtree(save_dir)
 
@@ -328,10 +313,6 @@ class Track:
 
                     if DOWNLOAD_LICENCE_ONLY.is_set():
                         progress(downloaded="[yellow]SKIPPED")
-                    elif track_type != "Subtitle" and self.downloader.__name__ == "n_m3u8dl_re":
-                        progress(downloaded="[red]FAILED")
-                        error = f"[N_m3u8DL-RE]: {self.descriptor} is currently not supported"
-                        raise ValueError(error)
                     else:
                         for status_update in self.downloader(
                             urls=self.url,
@@ -341,6 +322,7 @@ class Track:
                             cookies=session.cookies,
                             proxy=proxy,
                             max_workers=max_workers,
+                            session=session,
                         ):
                             file_downloaded = status_update.get("file_downloaded")
                             if not file_downloaded:

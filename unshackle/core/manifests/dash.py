@@ -7,7 +7,7 @@ import math
 import re
 import shutil
 import sys
-from copy import copy, deepcopy
+from copy import copy
 from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
@@ -18,7 +18,6 @@ from zlib import crc32
 import requests
 from curl_cffi.requests import Session as CurlSession
 from langcodes import Language, tag_is_valid
-from lxml import etree
 from lxml.etree import Element, ElementTree
 from pyplayready.system.pssh import PSSH as PR_PSSH
 from pywidevine.cdm import Cdm as WidevineCdm
@@ -27,7 +26,6 @@ from requests import Session
 
 from unshackle.core.cdm.detect import is_playready_cdm
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
-from unshackle.core.downloaders import requests as requests_downloader
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
@@ -543,10 +541,6 @@ class DASH:
         progress(total=len(segments))
 
         downloader = track.downloader
-        if downloader.__name__ == "aria2c" and any(bytes_range is not None for url, bytes_range in segments):
-            # aria2(c) is shit and doesn't support the Range header, fallback to the requests downloader
-            downloader = requests_downloader
-            log.warning("Falling back to the requests downloader as aria2(c) doesn't support the Range header")
 
         downloader_args = dict(
             urls=[
@@ -559,38 +553,8 @@ class DASH:
             cookies=session.cookies,
             proxy=proxy,
             max_workers=max_workers,
+            session=session,
         )
-
-        skip_merge = False
-        if downloader.__name__ == "n_m3u8dl_re":
-            skip_merge = True
-
-            # When periods were filtered out during to_tracks(), n_m3u8dl_re will re-parse
-            # the raw MPD and download ALL periods (including ads/pre-rolls). Write a filtered
-            # MPD with the rejected periods removed so n_m3u8dl_re downloads the correct content.
-            filtered_period_ids = track.data.get("dash", {}).get("filtered_period_ids", [])
-            if filtered_period_ids:
-                filtered_manifest = deepcopy(manifest)
-                for child in list(filtered_manifest):
-                    if not hasattr(child.tag, "find"):
-                        continue
-                    if child.tag == "Period" and child.get("id") in filtered_period_ids:
-                        filtered_manifest.remove(child)
-
-                filtered_mpd_path = save_dir / f".{track.id}_filtered.mpd"
-                filtered_mpd_path.parent.mkdir(parents=True, exist_ok=True)
-                etree.ElementTree(filtered_manifest).write(
-                    str(filtered_mpd_path), xml_declaration=True, encoding="utf-8"
-                )
-                track.from_file = filtered_mpd_path
-
-            downloader_args.update(
-                {
-                    "filename": track.id,
-                    "track": track,
-                    "content_keys": drm.content_keys if drm else None,
-                }
-            )
 
         debug_logger = get_debug_logger()
         if debug_logger:
@@ -602,10 +566,8 @@ class DASH:
                     "track_id": getattr(track, "id", None),
                     "track_type": track.__class__.__name__,
                     "total_segments": len(segments),
-                    "downloader": downloader.__name__,
                     "has_drm": bool(track.drm),
                     "drm_types": [drm.__class__.__name__ for drm in (track.drm or [])],
-                    "skip_merge": skip_merge,
                     "save_path": str(save_path),
                     "has_init_data": bool(init_data),
                 },
@@ -621,15 +583,6 @@ class DASH:
                     status_update["downloaded"] = f"DASH {downloaded}"
                 progress(**status_update)
 
-        # Clean up filtered MPD temp file before enumerating segments
-        filtered_mpd_path = save_dir / f".{track.id}_filtered.mpd"
-        if filtered_mpd_path.exists():
-            filtered_mpd_path.unlink()
-
-        # see https://github.com/devine-dl/devine/issues/71
-        for control_file in save_dir.glob("*.aria2__temp"):
-            control_file.unlink()
-
         # Verify output directory exists and contains files
         if not save_dir.exists():
             error_msg = f"Output directory does not exist: {save_dir}"
@@ -643,9 +596,8 @@ class DASH:
                         "track_type": track.__class__.__name__,
                         "save_dir": str(save_dir),
                         "save_path": str(save_path),
-                        "downloader": downloader.__name__,
-                        "skip_merge": skip_merge,
-                    },
+                        "downloader": "requests",
+                                            },
                 )
             raise FileNotFoundError(error_msg)
 
@@ -663,9 +615,8 @@ class DASH:
                     "save_dir_exists": save_dir.exists(),
                     "segments_found": len(segments_to_merge),
                     "segment_files": [f.name for f in segments_to_merge[:10]],  # Limit to first 10
-                    "downloader": downloader.__name__,
-                    "skip_merge": skip_merge,
-                },
+                    "downloader": "requests",
+                                    },
             )
 
         if not segments_to_merge:
@@ -682,48 +633,39 @@ class DASH:
                         "track_type": track.__class__.__name__,
                         "save_dir": str(save_dir),
                         "directory_contents": [str(p) for p in all_contents],
-                        "downloader": downloader.__name__,
-                        "skip_merge": skip_merge,
-                    },
+                        "downloader": "requests",
+                                            },
                 )
             raise FileNotFoundError(error_msg)
 
-        if skip_merge:
-            # N_m3u8DL-RE handles merging and decryption internally
-            shutil.move(segments_to_merge[0], save_path)
-            if drm:
-                track.drm = None
-                events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=drm, segment=None)
-        else:
-            with open(save_path, "wb") as f:
-                if init_data:
-                    f.write(init_data)
-                if len(segments_to_merge) > 1:
-                    progress(downloaded="Merging", completed=0, total=len(segments_to_merge))
-                for segment_file in segments_to_merge:
-                    segment_data = segment_file.read_bytes()
-                    # TODO: fix encoding after decryption?
-                    if (
-                        not drm
-                        and isinstance(track, Subtitle)
-                        and track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML)
-                    ):
-                        segment_data = try_ensure_utf8(segment_data)
-                        segment_data = (
-                            segment_data.decode("utf8")
-                            .replace("&lrm;", html.unescape("&lrm;"))
-                            .replace("&rlm;", html.unescape("&rlm;"))
-                            .encode("utf8")
-                        )
-                    f.write(segment_data)
-                    f.flush()
-                    segment_file.unlink()
-                    progress(advance=1)
+        with open(save_path, "wb") as f:
+            if init_data:
+                f.write(init_data)
+            if len(segments_to_merge) > 1:
+                progress(downloaded="Merging", completed=0, total=len(segments_to_merge))
+            for segment_file in segments_to_merge:
+                segment_data = segment_file.read_bytes()
+                if (
+                    not drm
+                    and isinstance(track, Subtitle)
+                    and track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML)
+                ):
+                    segment_data = try_ensure_utf8(segment_data)
+                    segment_data = (
+                        segment_data.decode("utf8")
+                        .replace("&lrm;", html.unescape("&lrm;"))
+                        .replace("&rlm;", html.unescape("&rlm;"))
+                        .encode("utf8")
+                    )
+                f.write(segment_data)
+                f.flush()
+                segment_file.unlink()
+                progress(advance=1)
 
         track.path = save_path
         events.emit(events.Types.TRACK_DOWNLOADED, track=track)
 
-        if not skip_merge and drm:
+        if drm:
             progress(downloaded="Decrypting", completed=0, total=100)
             drm.decrypt(save_path)
             track.drm = None
