@@ -309,6 +309,20 @@ class dl:
         help="Audio Bitrate to download (in kbps), defaults to highest available.",
     )
     @click.option(
+        "-vb-range",
+        "--vbitrate-range",
+        type=str,
+        default=None,
+        help="Video Bitrate range in kbps (e.g., '6000-7000'). Selects the highest bitrate within the range.",
+    )
+    @click.option(
+        "-ab-range",
+        "--abitrate-range",
+        type=str,
+        default=None,
+        help="Audio Bitrate range in kbps (e.g., '128-256'). Selects the highest bitrate within the range.",
+    )
+    @click.option(
         "-r",
         "--range",
         "range_",
@@ -974,6 +988,8 @@ class dl:
         acodec: list[Audio.Codec],
         vbitrate: int,
         abitrate: int,
+        vbitrate_range: Optional[str],
+        abitrate_range: Optional[str],
         range_: list[Video.Range],
         channels: float,
         no_atmos: bool,
@@ -1021,6 +1037,39 @@ class dl:
 
         if skip_dl:
             DOWNLOAD_LICENCE_ONLY.set()
+
+        # Parse bitrate range options
+        vbitrate_min, vbitrate_max = None, None
+        if vbitrate_range:
+            if vbitrate and vbitrate_range:
+                self.log.error("Cannot use both --vbitrate and --vbitrate-range at the same time.")
+                sys.exit(1)
+            try:
+                parts = vbitrate_range.split("-")
+                if len(parts) != 2:
+                    raise ValueError
+                vbitrate_min, vbitrate_max = int(parts[0]), int(parts[1])
+                if vbitrate_min > vbitrate_max:
+                    vbitrate_min, vbitrate_max = vbitrate_max, vbitrate_min
+            except (ValueError, IndexError):
+                self.log.error("Invalid --vbitrate-range format. Use 'MIN-MAX' (e.g., '6000-7000').")
+                sys.exit(1)
+
+        abitrate_min, abitrate_max = None, None
+        if abitrate_range:
+            if abitrate and abitrate_range:
+                self.log.error("Cannot use both --abitrate and --abitrate-range at the same time.")
+                sys.exit(1)
+            try:
+                parts = abitrate_range.split("-")
+                if len(parts) != 2:
+                    raise ValueError
+                abitrate_min, abitrate_max = int(parts[0]), int(parts[1])
+                if abitrate_min > abitrate_max:
+                    abitrate_min, abitrate_max = abitrate_max, abitrate_min
+            except (ValueError, IndexError):
+                self.log.error("Invalid --abitrate-range format. Use 'MIN-MAX' (e.g., '128-256').")
+                sys.exit(1)
 
         if not acodec:
             acodec = []
@@ -1520,6 +1569,16 @@ class dl:
                                 self.log.error(f"There's no {vbitrate}kbps Video Track...")
                                 sys.exit(1)
 
+                    if vbitrate_min is not None and vbitrate_max is not None:
+                        title.tracks.select_video(
+                            lambda x: x.bitrate and vbitrate_min <= x.bitrate // 1000 <= vbitrate_max
+                        )
+                        if not title.tracks.videos:
+                            self.log.error(
+                                f"No Video Track in {vbitrate_min}-{vbitrate_max}kbps range..."
+                            )
+                            sys.exit(1)
+
                     video_languages = [lang for lang in (v_lang or lang) if lang != "best"]
                     if video_languages and "all" not in video_languages:
                         processed_video_lang = []
@@ -1771,6 +1830,15 @@ class dl:
                         title.tracks.select_audio(lambda x: x.bitrate and x.bitrate // 1000 == abitrate)
                         if not title.tracks.audio:
                             self.log.error(f"There's no {abitrate}kbps Audio Track...")
+                            sys.exit(1)
+                    if abitrate_min is not None and abitrate_max is not None:
+                        title.tracks.select_audio(
+                            lambda x: x.bitrate and abitrate_min <= x.bitrate // 1000 <= abitrate_max
+                        )
+                        if not title.tracks.audio:
+                            self.log.error(
+                                f"No Audio Track in {abitrate_min}-{abitrate_max}kbps range..."
+                            )
                             sys.exit(1)
                     audio_languages = a_lang or lang
                     if audio_languages:
