@@ -375,6 +375,7 @@ class RemoteService:
         server_url: str,
         api_key: str,
         services_config: dict,
+        service_params: Optional[Dict[str, Any]] = None,
     ) -> None:
         self.__class__.__name__ = service_tag
         console.print(Padding(Rule(f"[rule.text]Service: {service_tag} (Remote)"), (1, 2)))
@@ -383,6 +384,7 @@ class RemoteService:
         self.title_id = title_id
         self.client = RemoteClient(server_url, api_key)
         self.ctx = ctx
+        self._service_params = service_params or {}
         self.log = logging.getLogger(service_tag)
         self.credential: Optional[Credential] = None
         self.current_region: Optional[str] = None
@@ -482,6 +484,8 @@ class RemoteService:
             create_data["profile"] = profile
         if no_proxy:
             create_data["no_proxy"] = True
+        if self._service_params:
+            create_data.update(self._service_params)
 
         cache_data = self._load_cache_files()
         if cache_data:
@@ -569,15 +573,16 @@ class RemoteService:
 
                     from unshackle.core.drm import Widevine
 
+                    WIDEVINE_SYSTEM_ID = UUID("edef8ba9-79d6-4ace-a3c8-27dcd51d21ed")
                     first_kid = next(iter(track_keys))
-                    dummy_pssh = WvPSSH.new(key_ids=[UUID(hex=first_kid)])
+                    dummy_pssh = WvPSSH.new(system_id=WIDEVINE_SYSTEM_ID, key_ids=[UUID(hex=first_kid)])
                     drm_obj = Widevine(pssh=dummy_pssh, kid=first_kid)
                     for kid_hex, key_hex in track_keys.items():
                         drm_obj.content_keys[UUID(hex=kid_hex)] = key_hex
                     track.drm = [drm_obj]
             key_count = sum(len(v) for v in keys_by_track.values())
             if key_count:
-                self.log.info(f"Server CDM resolved {key_count} key(s) for {len(keys_by_track)} track(s)")
+                self.log.debug(f"Server CDM resolved {key_count} key(s) for {len(keys_by_track)} track(s)")
         except Exception as e:
             self.log.warning("Failed to resolve server CDM keys: %s", e)
 

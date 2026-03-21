@@ -103,7 +103,8 @@ class Services(click.MultiCommand):
 
             server_name = ctx.parent.params.get("server") if ctx.parent else None
             server_url, api_key, services_config = resolve_server(server_name)
-            return RemoteService(ctx, tag, title, server_url, api_key, services_config)
+            service_params = {k: v for k, v in kwargs.items() if v is not None and v is not False}
+            return RemoteService(ctx, tag, title, server_url, api_key, services_config, service_params=service_params)
 
         if cli_params:
             for param in cli_params:

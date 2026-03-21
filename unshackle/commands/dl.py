@@ -2656,6 +2656,11 @@ class dl:
 
                 for kid in all_kids:
                     if kid in drm.content_keys:
+                        is_track_kid = ["", "*"][kid == track_kid]
+                        key = drm.content_keys[kid]
+                        label = f"[text2]{kid.hex}:{key}{is_track_kid}"
+                        if not any(f"{kid.hex}:{key}" in x.label for x in cek_tree.children):
+                            cek_tree.add(label)
                         continue
 
                     is_track_kid = ["", "*"][kid == track_kid]
@@ -2846,6 +2851,11 @@ class dl:
 
                 for kid in all_kids:
                     if kid in drm.content_keys:
+                        is_track_kid = ["", "*"][kid == track_kid]
+                        key = drm.content_keys[kid]
+                        label = f"[text2]{kid.hex}:{key}{is_track_kid}"
+                        if not any(f"{kid.hex}:{key}" in x.label for x in cek_tree.children):
+                            cek_tree.add(label)
                         continue
 
                     is_track_kid = ["", "*"][kid == track_kid]

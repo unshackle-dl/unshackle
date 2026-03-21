@@ -1241,22 +1241,14 @@ def _create_service_instance(
 
     service_kwargs: Dict[str, Any] = {"title": title_id}
 
-    for key, value in data.items():
-        if key not in [
-            "service",
-            "title_id",
-            "profile",
-            "season",
-            "episode",
-            "wanted",
-            "proxy",
-            "no_proxy",
-            "credentials",
-            "cookies",
-        ]:
-            service_kwargs[key] = value
+    transport_keys = {"service", "title_id", "season", "episode", "wanted", "proxy", "no_proxy", "credentials", "cookies",
+                      "cache", "client_region", "no_proxy"}
 
     service_init_params = inspect.signature(service_module.__init__).parameters
+
+    for key, value in data.items():
+        if key not in transport_keys and key in service_init_params:
+            service_kwargs[key] = value
 
     if hasattr(service_module, "cli") and hasattr(service_module.cli, "params"):
         for param in service_module.cli.params:
@@ -1271,6 +1263,8 @@ def _create_service_instance(
                     service_kwargs[param_name] = None
                 elif param_name == "movie":
                     service_kwargs[param_name] = False
+                elif param_name == "profile":
+                    service_kwargs[param_name] = profile
                 else:
                     log.warning(f"Unknown required parameter '{param_name}' for service {normalized_service}")
 
@@ -1771,8 +1765,23 @@ def _ensure_track_drm(track: Any) -> None:
             )
 
 
-def _resolve_device_name(user_config: dict, drm_type: str) -> str:
-    """Get the configured device name for a DRM type from user config."""
+def _resolve_device_name(user_config: dict, drm_type: str, service_tag: str = "") -> str:
+    """Get the CDM device name, checking service-specific config.cdm first.
+
+    Resolution order:
+    1. config.cdm[service_tag] (service-specific CDM mapping)
+    2. serve.users.{key}.devices / playready_devices (user device list)
+    """
+    from unshackle.core.config import config as app_config
+
+    cdm_name = app_config.cdm.get(service_tag) if service_tag else None
+    if isinstance(cdm_name, dict):
+        drm_key = {"widevine": "widevine", "playready": "playready"}.get(drm_type)
+        lower_keys = {k.lower(): v for k, v in cdm_name.items()}
+        cdm_name = lower_keys.get(drm_key) or lower_keys.get("default") or app_config.cdm.get("default")
+    if cdm_name and isinstance(cdm_name, str):
+        return cdm_name
+
     if drm_type == "playready":
         device_name = (user_config.get("playready_devices") or [None])[0]
         if not device_name:
@@ -1782,6 +1791,49 @@ def _resolve_device_name(user_config: dict, drm_type: str) -> str:
         if not device_name:
             raise APIError(APIErrorCode.INVALID_INPUT, "No Widevine device configured for this API key")
     return device_name
+
+
+def _check_vaults(kids: list, service_name: str) -> Optional[Dict[str, str]]:
+    """Check server vaults for existing keys matching all KIDs.
+
+    Returns a KID:KEY dict if ALL KIDs are found, None otherwise.
+    """
+    from uuid import UUID
+
+    from unshackle.core.vaults import Vaults
+
+    try:
+        vaults = Vaults(service_name)
+        keys: Dict[str, str] = {}
+        for kid in kids:
+            kid_uuid = kid if isinstance(kid, UUID) else UUID(hex=str(kid))
+            content_key, vault_used = vaults.get_key(kid_uuid)
+            if content_key:
+                keys[kid_uuid.hex] = content_key
+            else:
+                return None
+        if keys:
+            log.info(f"Vault hit: {len(keys)} key(s) from server vaults, skipping CDM")
+            return keys
+    except Exception:
+        pass
+    return None
+
+
+def _cache_to_vaults(keys: Dict[str, str], service_name: str) -> None:
+    """Cache newly obtained keys to server vaults."""
+    from uuid import UUID
+
+    from unshackle.core.vaults import Vaults
+
+    try:
+        vaults = Vaults(service_name)
+        key_map = {UUID(hex=kid): key for kid, key in keys.items()}
+        cached = vaults.add_keys(key_map)
+        if cached:
+            log.info(f"Cached {cached} key(s) to server vaults")
+    except Exception:
+        pass
 
 
 def _handle_single_server_cdm(
@@ -1807,8 +1859,6 @@ def _handle_single_server_cdm(
 
     api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
     user_config = app_config.serve.get("users", {}).get(api_key, {})
-    device_name = _resolve_device_name(user_config, drm_type)
-    cdm = load_cdm(device_name, service_name=service.__class__.__name__)
 
     if drm_type == "playready":
         from pyplayready.system.pssh import PSSH as PlayReadyPSSH
@@ -1817,6 +1867,13 @@ def _handle_single_server_cdm(
 
         pr_pssh = PlayReadyPSSH(base64.b64decode(pssh_b64))
         pr_drm = PlayReady(pssh=pr_pssh, pssh_b64=pssh_b64)
+
+        vault_keys = _check_vaults(pr_drm.kids, service.__class__.__name__)
+        if vault_keys:
+            return vault_keys
+
+        device_name = _resolve_device_name(user_config, drm_type, service.__class__.__name__)
+        cdm = load_cdm(device_name, service_name=service.__class__.__name__)
         pr_drm.get_content_keys(
             cdm=cdm,
             certificate=lambda challenge, **_: None,
@@ -1830,7 +1887,15 @@ def _handle_single_server_cdm(
 
         from unshackle.core.drm import Widevine
 
-        wv_drm = Widevine(pssh=WvPSSH(pssh_b64))
+        wv_pssh = WvPSSH(pssh_b64)
+        wv_drm = Widevine(pssh=wv_pssh)
+
+        vault_keys = _check_vaults(wv_drm.kids, service.__class__.__name__)
+        if vault_keys:
+            return vault_keys
+
+        device_name = _resolve_device_name(user_config, drm_type, service.__class__.__name__)
+        cdm = load_cdm(device_name, service_name=service.__class__.__name__)
         wv_drm.get_content_keys(
             cdm=cdm,
             certificate=lambda challenge, **_: service.get_widevine_service_certificate(
@@ -1850,6 +1915,7 @@ def _handle_single_server_cdm(
     if not keys:
         raise APIError(APIErrorCode.NO_CONTENT, "Server CDM returned no content keys")
 
+    _cache_to_vaults(keys, service.__class__.__name__)
     return keys
 
 
@@ -1956,6 +2022,8 @@ async def session_license_handler(
                 keys = _handle_single_server_cdm(service, title, track, pssh_str, track_drm_type, request)
                 if keys:
                     all_keys[tid] = keys
+            except SystemExit:
+                log.warning(f"Service exited while resolving keys for track {tid[:12]}, skipping")
             except Exception as e:
                 log.warning(f"Failed to resolve keys for track {tid[:12]}: {e}")
 
@@ -2007,6 +2075,8 @@ async def session_license_handler(
 
     except APIError:
         raise
+    except SystemExit:
+        raise APIError(APIErrorCode.SERVICE_ERROR, "Service exited during license request")
     except Exception as e:
         log.exception(f"Error proxying license for track {track_id}")
         debug_mode = request.app.get("debug_api", False) if request else False
