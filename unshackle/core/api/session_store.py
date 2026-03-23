@@ -4,6 +4,7 @@ Maintains authenticated service instances between API calls so that
 a client can authenticate once and then make multiple requests (list tracks,
 resolve segments, proxy license) using the same session.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -13,6 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from unshackle.core.api.input_bridge import AuthStatus, InputBridge
 from unshackle.core.config import config
 from unshackle.core.tracks import Track
 
@@ -33,6 +35,9 @@ class SessionEntry:
     chapters_by_title: Dict[str, List[Any]] = field(default_factory=dict)  # title_key -> [Chapter]
     creator_ip: Optional[str] = None
     cache_tag: Optional[str] = None  # per-session cache directory tag
+    input_bridge: Optional[InputBridge] = None
+    auth_status: AuthStatus = AuthStatus.AUTHENTICATED
+    auth_error: Optional[str] = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     last_accessed: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -89,12 +94,12 @@ class SessionStore:
             if entry is None:
                 return None
 
-            # Check expiration
-            elapsed = (datetime.now(timezone.utc) - entry.last_accessed).total_seconds()
-            if elapsed > self._ttl:
-                log.info(f"Session {session_id} expired (elapsed={elapsed:.0f}s, ttl={self._ttl}s)")
-                del self._sessions[session_id]
-                return None
+            if entry.auth_status not in (AuthStatus.AUTHENTICATING, AuthStatus.PENDING_INPUT):
+                elapsed = (datetime.now(timezone.utc) - entry.last_accessed).total_seconds()
+                if elapsed > self._ttl:
+                    log.info(f"Session {session_id} expired (elapsed={elapsed:.0f}s, ttl={self._ttl}s)")
+                    del self._sessions[session_id]
+                    return None
 
             entry.touch()
             return entry
@@ -102,8 +107,11 @@ class SessionStore:
     async def delete(self, session_id: str) -> bool:
         """Delete a session. Returns True if it existed."""
         async with self._lock:
-            if session_id in self._sessions:
-                del self._sessions[session_id]
+            entry = self._sessions.pop(session_id, None)
+            if entry:
+                if entry.input_bridge:
+                    entry.input_bridge.cancel()
+                self._cleanup_cache_dir(entry.cache_tag)
                 log.info(f"Deleted session {session_id}")
                 return True
             return False
@@ -112,12 +120,19 @@ class SessionStore:
         """Remove all expired sessions. Returns count of removed sessions."""
         async with self._lock:
             now = datetime.now(timezone.utc)
-            expired = [
-                sid for sid, entry in self._sessions.items()
-                if (now - entry.last_accessed).total_seconds() > self._ttl
-            ]
+            expired = []
+            for sid, entry in self._sessions.items():
+                elapsed = (now - entry.last_accessed).total_seconds()
+                if entry.auth_status in (AuthStatus.AUTHENTICATING, AuthStatus.PENDING_INPUT):
+                    if elapsed > 600:
+                        expired.append(sid)
+                elif elapsed > self._ttl:
+                    expired.append(sid)
             for sid in expired:
-                del self._sessions[sid]
+                entry = self._sessions.pop(sid)
+                if entry.input_bridge:
+                    entry.input_bridge.cancel()
+                self._cleanup_cache_dir(entry.cache_tag)
             if expired:
                 log.info(f"Cleaned up {len(expired)} expired sessions")
             return len(expired)
@@ -143,6 +158,38 @@ class SessionStore:
         if self._cleanup_task is not None:
             self._cleanup_task.cancel()
             self._cleanup_task = None
+
+    async def cancel_all_bridges(self) -> None:
+        """Cancel all active input bridges (called on server shutdown)."""
+        async with self._lock:
+            for entry in self._sessions.values():
+                if entry.input_bridge:
+                    entry.input_bridge.cancel()
+            count = len(self._sessions)
+        if count:
+            log.info(f"Cancelled bridges for {count} active session(s)")
+
+    @staticmethod
+    def _cleanup_cache_dir(cache_tag: Optional[str]) -> None:
+        """Remove session cache directory and empty parents."""
+        if not cache_tag:
+            return
+        import shutil
+
+        cache_dir = config.directories.cache / cache_tag
+        if cache_dir.is_dir():
+            try:
+                shutil.rmtree(cache_dir)
+            except Exception as e:
+                log.warning(f"Failed to remove session cache {cache_dir}: {e}")
+        for parent in cache_dir.parents:
+            if parent == config.directories.cache:
+                break
+            try:
+                if parent.is_dir() and not any(parent.iterdir()):
+                    parent.rmdir()
+            except Exception:
+                break
 
     @property
     def session_count(self) -> int:

@@ -1033,6 +1033,8 @@ class dl:
     ) -> None:
         self.tmdb_searched = False
         self.search_source = None
+        self.server_cdm = getattr(service, "_server_cdm", False)
+        self._remote_service = service if self.server_cdm else None
         start_time = time.time()
 
         if skip_dl:
@@ -2601,29 +2603,73 @@ class dl:
         if not drm:
             return
 
+        server_cdm = getattr(self, "server_cdm", False)
+
+        if server_cdm:
+            if not drm.content_keys:
+                self.log.warning("Server CDM did not resolve any keys for this track")
+                return
+            svc = getattr(self, "_remote_service", None)
+            server_drm_type = getattr(svc, "_server_cdm_type", None) if svc else None
+            drm_name = {"widevine": "Widevine", "playready": "PlayReady"}.get(server_drm_type or "", drm.__class__.__name__)
+            with self.DRM_TABLE_LOCK:
+                pssh_str = ""
+                expected_class = "PlayReady" if server_drm_type == "playready" else "Widevine"
+                matching_drm = next(
+                    (d for d in (track.drm or []) if d.__class__.__name__ == expected_class),
+                    drm,
+                )
+                if hasattr(matching_drm, "pssh") and matching_drm.pssh:
+                    if hasattr(matching_drm.pssh, "dumps"):
+                        pssh_str = self.truncate_pssh_for_display(matching_drm.pssh.dumps(), drm_name)
+                    elif hasattr(matching_drm, "data") and matching_drm.data.get("pssh_b64"):
+                        pssh_str = self.truncate_pssh_for_display(matching_drm.data["pssh_b64"], drm_name)
+                if pssh_str:
+                    cek_tree = Tree(Text.assemble((drm_name, "cyan"), (f"({pssh_str})", "text"), overflow="fold"))
+                else:
+                    cek_tree = Tree(Text.assemble((drm_name, "cyan"), overflow="fold"))
+                all_kids = list(getattr(drm, "kids", []))
+                if track_kid and track_kid not in all_kids:
+                    all_kids.append(track_kid)
+                for kid in all_kids:
+                    if kid in drm.content_keys:
+                        is_track_kid = ["", "*"][kid == track_kid]
+                        key = drm.content_keys[kid]
+                        cek_tree.add(f"[text2]{kid.hex}:{key}{is_track_kid}")
+                for kid, key in drm.content_keys.items():
+                    if kid not in all_kids:
+                        cek_tree.add(f"[text2]{kid.hex}:{key}")
+                if not any(
+                    isinstance(x, Tree) and x.label == cek_tree.label
+                    for x in table.columns[0].cells
+                ):
+                    table.add_row(cek_tree)
+            return
+
         track_quality = None
         if isinstance(track, Video) and track.height:
             track_quality = track.height
 
-        if isinstance(drm, Widevine):
-            if not is_widevine_cdm(self.cdm):
-                widevine_cdm = self.get_cdm(self.service, self.profile, drm="widevine", quality=track_quality)
-                if widevine_cdm:
-                    if track_quality:
-                        self.log.info(f"Switching to Widevine CDM for Widevine {track_quality}p content")
-                    else:
-                        self.log.info("Switching to Widevine CDM for Widevine content")
-                    self.cdm = widevine_cdm
+        if not server_cdm:
+            if isinstance(drm, Widevine):
+                if not is_widevine_cdm(self.cdm):
+                    widevine_cdm = self.get_cdm(self.service, self.profile, drm="widevine", quality=track_quality)
+                    if widevine_cdm:
+                        if track_quality:
+                            self.log.info(f"Switching to Widevine CDM for Widevine {track_quality}p content")
+                        else:
+                            self.log.info("Switching to Widevine CDM for Widevine content")
+                        self.cdm = widevine_cdm
 
-        elif isinstance(drm, PlayReady):
-            if not is_playready_cdm(self.cdm):
-                playready_cdm = self.get_cdm(self.service, self.profile, drm="playready", quality=track_quality)
-                if playready_cdm:
-                    if track_quality:
-                        self.log.info(f"Switching to PlayReady CDM for PlayReady {track_quality}p content")
-                    else:
-                        self.log.info("Switching to PlayReady CDM for PlayReady content")
-                    self.cdm = playready_cdm
+            elif isinstance(drm, PlayReady):
+                if not is_playready_cdm(self.cdm):
+                    playready_cdm = self.get_cdm(self.service, self.profile, drm="playready", quality=track_quality)
+                    if playready_cdm:
+                        if track_quality:
+                            self.log.info(f"Switching to PlayReady CDM for PlayReady {track_quality}p content")
+                        else:
+                            self.log.info("Switching to PlayReady CDM for PlayReady content")
+                        self.cdm = playready_cdm
 
         if isinstance(drm, Widevine):
             if self.debug_logger:

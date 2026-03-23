@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import time
 from enum import Enum
 from http.cookiejar import CookieJar
 from typing import Any, Dict, Optional, Union
@@ -55,7 +56,14 @@ class RemoteClient:
 
     def _request(self, method: str, endpoint: str, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         url = f"{self.server_url}{endpoint}"
-        resp = getattr(self.session, method)(url, json=data, timeout=120 if method == "post" else 30)
+        try:
+            resp = getattr(self.session, method)(url, json=data, timeout=120 if method == "post" else 30)
+        except requests.ConnectionError:
+            log.error(f"Could not connect to remote server at {self.server_url}. Is it running? (unshackle serve)")
+            raise SystemExit(1)
+        except requests.Timeout:
+            log.error(f"Request to remote server timed out: {endpoint}")
+            raise SystemExit(1)
         result = resp.json()
         if resp.status_code >= 400:
             error_msg = result.get("message", resp.text)
@@ -487,12 +495,55 @@ class RemoteService:
         if self._service_params:
             create_data.update(self._service_params)
 
+        cdm = self.ctx.obj.cdm if self.ctx.obj else None
+        if cdm is not None:
+            from unshackle.core.cdm.detect import is_playready_cdm
+
+            create_data["cdm_type"] = "playready" if is_playready_cdm(cdm) else "widevine"
+
         cache_data = self._load_cache_files()
         if cache_data:
             create_data["cache"] = cache_data
 
         result = self.client.post("/api/session/create", create_data)
         self._session_id = result["session_id"]
+
+        status = result.get("status", "authenticated")
+        if status == "authenticating":
+            self._poll_auth_completion()
+
+    def _poll_auth_completion(self, poll_interval: float = 2.0, timeout: float = 600.0) -> None:
+        """Poll the server until authentication completes, handling interactive prompts.
+
+        When the server needs user input (OTP, device code, PIN), it returns
+        ``pending_input`` with a prompt. We display it locally, collect the
+        response, and POST it back. The server resumes its auth flow.
+        """
+        deadline = time.monotonic() + timeout
+
+        while time.monotonic() < deadline:
+            resp = self.client.get(f"/api/session/{self._session_id}/prompt")
+            status = resp.get("status")
+
+            if status == "authenticated":
+                return
+
+            if status == "failed":
+                error = resp.get("error", "Authentication failed on server")
+                raise click.ClickException(f"Remote auth failed: {error}")
+
+            if status == "pending_input":
+                prompt = resp.get("prompt", "Enter input: ")
+                user_response = click.prompt(prompt.rstrip("\n "), default="", show_default=False)
+                self.client.post(
+                    f"/api/session/{self._session_id}/prompt",
+                    {"response": user_response},
+                )
+                continue
+
+            time.sleep(poll_interval)
+
+        raise click.ClickException("Remote authentication timed out")
 
     def get_titles(self) -> Titles_T:
         if self._titles is not None:
@@ -547,44 +598,86 @@ class RemoteService:
             return
 
         drm_type = getattr(self, "_server_cdm_type", "widevine")
+        self.log.debug(f"Requesting server CDM keys (server_cdm_type={drm_type})")
 
         try:
-            resp = self.client.post(
-                f"/api/session/{self._session_id}/license",
-                {
-                    "track_ids": track_ids,
-                    "mode": "server_cdm",
-                    "drm_type": drm_type,
-                },
-            )
+            with console.status("Retrieving Remote License...", spinner="dots"):
+                resp = self.client.post(
+                    f"/api/session/{self._session_id}/license",
+                    {
+                        "track_ids": track_ids,
+                        "mode": "server_cdm",
+                        "drm_type": drm_type,
+                    },
+                )
             keys_by_track = resp.get("keys", {})
+            server_drm_type = resp.get("drm_type", drm_type)
+            self._server_cdm_type = server_drm_type
+            self.log.debug(f"Server responded with drm_type={server_drm_type}, keys for {len(keys_by_track)} track(s)")
 
             for track in title.tracks:
                 track_keys = keys_by_track.get(str(track.id), {})
                 if not track_keys:
                     continue
-                if track.drm:
-                    for drm_obj in track.drm:
-                        if hasattr(drm_obj, "content_keys"):
-                            for kid_hex, key_hex in track_keys.items():
-                                drm_obj.content_keys[UUID(hex=kid_hex)] = key_hex
-                else:
-                    from pywidevine.pssh import PSSH as WvPSSH
 
-                    from unshackle.core.drm import Widevine
-
-                    WIDEVINE_SYSTEM_ID = UUID("edef8ba9-79d6-4ace-a3c8-27dcd51d21ed")
-                    first_kid = next(iter(track_keys))
-                    dummy_pssh = WvPSSH.new(system_id=WIDEVINE_SYSTEM_ID, key_ids=[UUID(hex=first_kid)])
-                    drm_obj = Widevine(pssh=dummy_pssh, kid=first_kid)
-                    for kid_hex, key_hex in track_keys.items():
-                        drm_obj.content_keys[UUID(hex=kid_hex)] = key_hex
-                    track.drm = [drm_obj]
+                kid_list = list(track_keys.keys())
+                drm_obj = self._create_drm_stub(server_drm_type, kid_list)
+                for kid_hex, key_hex in track_keys.items():
+                    drm_obj.content_keys[UUID(hex=kid_hex)] = key_hex
+                track.drm = [drm_obj]
+                self.log.debug(
+                    f"Track {track.id}: set DRM to {drm_obj.__class__.__name__} with {len(track_keys)} key(s)"
+                )
             key_count = sum(len(v) for v in keys_by_track.values())
             if key_count:
-                self.log.debug(f"Server CDM resolved {key_count} key(s) for {len(keys_by_track)} track(s)")
+                self.log.debug(f"Server CDM resolved {key_count} key(s) using {server_drm_type.upper()}")
         except Exception as e:
             self.log.warning("Failed to resolve server CDM keys: %s", e)
+
+    @staticmethod
+    def _create_drm_stub(drm_type: str, kid_hexes: list[str]) -> Any:
+        """Create a DRM object stub matching the type the server actually used.
+
+        For server_cdm mode, this is only used for display — keys are already
+        resolved. We build a minimal DRM object that holds content_keys.
+        """
+        from uuid import UUID
+
+        if drm_type == "playready":
+            import base64 as b64
+            import struct
+
+            from pyplayready.system.pssh import PSSH as PlayReadyPSSH
+
+            from unshackle.core.drm import PlayReady
+
+            kid_uuids = [UUID(hex=k) for k in kid_hexes]
+            kid_b64 = b64.b64encode(kid_uuids[0].bytes_le).decode()
+            wrm_xml = (
+                '<WRMHEADER xmlns="http://schemas.microsoft.com/DRM/2007/03/PlayReadyHeader" version="4.0.0.0">'
+                f"<DATA><PROTECTINFO><KEYLEN>16</KEYLEN><ALGID>AESCTR</ALGID></PROTECTINFO>"
+                f"<KID>{kid_b64}</KID></DATA></WRMHEADER>"
+            )
+            wrm_bytes = wrm_xml.encode("utf-16-le")
+            record_length = len(wrm_bytes)
+            obj_length = 4 + 2 + 2 + 2 + record_length
+            pr_obj = struct.pack("<IHH", obj_length, 1, 1) + struct.pack("<H", record_length) + wrm_bytes
+            pr_pssh = PlayReadyPSSH(pr_obj)
+            pssh_b64 = b64.b64encode(pr_obj).decode("ascii")
+            drm = PlayReady(pssh=pr_pssh, pssh_b64=pssh_b64)
+            for kid_uuid in kid_uuids:
+                if kid_uuid not in drm.kids:
+                    drm.kids.append(kid_uuid)
+            return drm
+        else:
+            from pywidevine.pssh import PSSH as WvPSSH
+
+            from unshackle.core.drm import Widevine
+
+            kid_uuids = [UUID(hex=k) for k in kid_hexes]
+            WIDEVINE_SYSTEM_ID = UUID("edef8ba9-79d6-4ace-a3c8-27dcd51d21ed")
+            dummy_pssh = WvPSSH.new(system_id=WIDEVINE_SYSTEM_ID, key_ids=kid_uuids)
+            return Widevine(pssh=dummy_pssh, kid=kid_hexes[0])
 
     def get_chapters(self, title: Title_T) -> Chapters:
         title_id = str(title.id)
@@ -691,10 +784,35 @@ class RemoteService:
     def close(self) -> None:
         if self._session_id:
             try:
-                self.client.delete(f"/api/session/{self._session_id}")
+                result = self.client.delete(f"/api/session/{self._session_id}")
+                self._save_returned_cache(result.get("cache", {}))
             except Exception as e:
                 self.log.warning(f"Failed to clean up remote session: {e}")
             self._session_id = None
+
+    def _save_returned_cache(self, cache_data: Dict[str, str]) -> None:
+        """Save cache files returned by the server to the local cache directory.
+
+        The server returns updated cache files (e.g. refreshed tokens) on
+        session close. Writing them locally means the next remote session
+        can forward them back, skipping interactive auth.
+        """
+        if not cache_data:
+            return
+
+        import zlib
+
+        cache_dir = config.directories.cache / self.service_tag
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+        for key, content in cache_data.items():
+            try:
+                decompressed = zlib.decompress(base64.b64decode(content))
+                (cache_dir / key).with_suffix(".json").write_bytes(decompressed)
+            except Exception as e:
+                self.log.warning(f"Failed to save returned cache file '{key}': {e}")
+
+        self.log.info(f"Saved {len(cache_data)} cache file(s) from server")
 
     def _load_cache_files(self) -> Dict[str, str]:
         import zlib

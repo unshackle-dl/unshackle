@@ -1,3 +1,4 @@
+import asyncio
 import enum
 import logging
 from typing import Any, Dict, List, Optional
@@ -5,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from aiohttp import web
 
 from unshackle.core.api.errors import APIError, APIErrorCode, handle_api_exception
+from unshackle.core.api.input_bridge import AuthStatus, InputBridge
 from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP
 from unshackle.core.proxies.resolve import initialize_proxy_providers, resolve_proxy
 from unshackle.core.services import Services
@@ -60,7 +62,6 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "no_cache": False,
     "reset_cache": False,
 }
-
 
 
 def validate_service(service_tag: str) -> Optional[str]:
@@ -1227,7 +1228,9 @@ def _create_service_instance(
         pass
 
     ctx = click.Context(dummy_service)
-    ctx.obj = ContextData(config=service_config, cdm=None, proxy_providers=proxy_providers, profile=profile)
+    cdm = _resolve_server_cdm(normalized_service, profile, data.get("cdm_type"))
+
+    ctx.obj = ContextData(config=service_config, cdm=cdm, proxy_providers=proxy_providers, profile=profile)
     ctx.params = {"proxy": proxy_param, "no_proxy": data.get("no_proxy", False)}
 
     service_module = Services.load(normalized_service)
@@ -1241,8 +1244,21 @@ def _create_service_instance(
 
     service_kwargs: Dict[str, Any] = {"title": title_id}
 
-    transport_keys = {"service", "title_id", "season", "episode", "wanted", "proxy", "no_proxy", "credentials", "cookies",
-                      "cache", "client_region", "no_proxy"}
+    transport_keys = {
+        "service",
+        "title_id",
+        "season",
+        "episode",
+        "wanted",
+        "proxy",
+        "no_proxy",
+        "credentials",
+        "cookies",
+        "cache",
+        "client_region",
+        "no_proxy",
+        "cdm_type",
+    }
 
     service_init_params = inspect.signature(service_module.__init__).parameters
 
@@ -1369,7 +1385,8 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
                 decompressed = zlib.decompress(base64.b64decode(content)).decode("utf-8")
                 (cache_dir / key).with_suffix(".json").write_text(decompressed, encoding="utf-8")
 
-        service_instance.authenticate(cookies, credential)
+        bridge = InputBridge()
+        service_instance._input_bridge = bridge
 
         store = get_session_store()
         session = await store.create(
@@ -1379,11 +1396,28 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
         )
         session.creator_ip = request.remote if request else None
         session.cache_tag = session_cache_tag
+        session.input_bridge = bridge
+        session.auth_status = AuthStatus.AUTHENTICATING
+
+        async def _run_auth() -> None:
+            try:
+                await asyncio.to_thread(service_instance.authenticate, cookies, credential)
+                session.auth_status = AuthStatus.AUTHENTICATED
+                bridge.status = AuthStatus.AUTHENTICATED
+            except Exception as e:
+                log.exception("Auth failed for session %s", session_id)
+                session.auth_status = AuthStatus.FAILED
+                session.auth_error = str(e)
+                bridge.status = AuthStatus.FAILED
+                bridge.error = str(e)
+
+        asyncio.create_task(_run_auth())
 
         return web.json_response(
             {
                 "session_id": session.session_id,
                 "service": normalized_service,
+                "status": "authenticating",
             }
         )
 
@@ -1407,6 +1441,7 @@ async def session_titles_handler(session_id: str, request: Optional[web.Request]
     are fetched.
     """
     session = await _get_validated_session(session_id, request)
+    _require_authenticated(session)
 
     try:
         service_instance = session.service_instance
@@ -1452,6 +1487,7 @@ async def session_tracks_handler(
     auth flows (OTP, captcha) before any tracks are requested.
     """
     session = await _get_validated_session(session_id, request)
+    _require_authenticated(session)
 
     title_id = data.get("title_id")
     if not title_id:
@@ -1506,6 +1542,10 @@ async def session_tracks_handler(
         user_cfg = app_config.serve.get("users", {}).get(api_key, {})
         has_wv = bool(user_cfg.get("devices"))
         has_pr = bool(user_cfg.get("playready_devices"))
+
+        service_tag = session.service_tag
+        config_cdm_type = _detect_cdm_type_for_service(service_tag, app_config)
+
         track_has_wv = any(
             d.__class__.__name__ == "Widevine" for t in list(tracks.videos) + list(tracks.audio) if t.drm for d in t.drm
         )
@@ -1515,7 +1555,10 @@ async def session_tracks_handler(
             if t.drm
             for d in t.drm
         )
-        if track_has_pr and has_pr:
+
+        if config_cdm_type:
+            server_cdm_type = config_cdm_type
+        elif track_has_pr and has_pr:
             server_cdm_type = "playready"
         elif track_has_wv and has_wv:
             server_cdm_type = "widevine"
@@ -1655,6 +1698,147 @@ async def session_segments_handler(
         )
 
 
+class _CdmTypeStub:
+    """Lightweight CDM stub so ``is_playready_cdm()`` can detect CDM type.
+
+    Used on the server when the client sends ``cdm_type`` but the server
+    does not need a full CDM (e.g. for cache key / device selection only).
+    """
+
+    def __init__(self, cdm_type: str) -> None:
+        self.is_playready = cdm_type == "playready"
+
+
+def _resolve_server_cdm(service: str, profile: Optional[str], cdm_type: Optional[str]) -> Optional[Any]:
+    """Resolve CDM for the server context.
+
+    Checks the server's own CDM config (``config.cdm[service]``) to
+    determine the CDM type without loading the full CDM object. This
+    ensures that when ``server_cdm: true`` is used, the server's CDM
+    determines device selection (e.g. PlayReady vs Widevine for AMZN).
+
+    Falls back to a lightweight stub from *cdm_type* only if no server
+    CDM is configured for the service.
+    """
+    from unshackle.core.config import config as app_config
+
+    cdm_name = app_config.cdm.get(service)
+    if cdm_name:
+        if isinstance(cdm_name, dict):
+            lower_keys = {k.lower(): v for k, v in cdm_name.items()}
+            if {"widevine", "playready"} & lower_keys.keys():
+                cdm_name = lower_keys.get("playready") or lower_keys.get("widevine")
+            else:
+                cdm_name = cdm_name.get("default") or next(iter(cdm_name.values()), None)
+
+        if cdm_name and isinstance(cdm_name, str):
+            detected_type = _detect_cdm_type(cdm_name, app_config)
+            if detected_type:
+                return _CdmTypeStub(detected_type)
+
+    if cdm_type:
+        return _CdmTypeStub(cdm_type)
+    return None
+
+
+def _detect_cdm_type_for_service(service: str, app_config: Any) -> Optional[str]:
+    """Detect the CDM type configured for a service in config.cdm."""
+    cdm_name = app_config.cdm.get(service)
+    if not cdm_name:
+        return None
+    if isinstance(cdm_name, dict):
+        lower_keys = {k.lower(): v for k, v in cdm_name.items()}
+        if {"widevine", "playready"} & lower_keys.keys():
+            return "playready" if "playready" in lower_keys else "widevine"
+        cdm_name = cdm_name.get("default") or next(iter(cdm_name.values()), None)
+    if cdm_name and isinstance(cdm_name, str):
+        return _detect_cdm_type(cdm_name, app_config)
+    return None
+
+
+def _detect_cdm_type(cdm_name: str, app_config: Any) -> Optional[str]:
+    """Detect CDM type (playready/widevine) from config without loading it.
+
+    Checks remote_cdm entries and local file extensions to determine the type.
+    """
+    for entry in getattr(app_config, "remote_cdm", []) or []:
+        if entry.get("name") == cdm_name:
+            device_type = str(entry.get("device_type", entry.get("Device Type", ""))).upper()
+            return "playready" if device_type == "PLAYREADY" else "widevine"
+
+    prd_path = app_config.directories.prds / f"{cdm_name}.prd"
+    if not prd_path.is_file():
+        prd_path = app_config.directories.wvds / f"{cdm_name}.prd"
+    if prd_path.is_file():
+        return "playready"
+
+    wvd_path = app_config.directories.wvds / f"{cdm_name}.wvd"
+    if wvd_path.is_file():
+        return "widevine"
+
+    return None
+
+
+def _require_authenticated(session: Any) -> None:
+    """Raise if the session has not finished authenticating."""
+    if session.auth_status == AuthStatus.FAILED:
+        raise APIError(
+            APIErrorCode.AUTH_FAILED,
+            f"Authentication failed: {session.auth_error or 'unknown error'}",
+        )
+    if session.auth_status in (AuthStatus.AUTHENTICATING, AuthStatus.PENDING_INPUT):
+        raise APIError(
+            APIErrorCode.INVALID_INPUT,
+            f"Session authentication not complete (status: {session.auth_status.value})",
+            details={"auth_status": session.auth_status.value},
+        )
+
+
+async def session_prompt_get_handler(session_id: str, request: Optional[web.Request] = None) -> web.Response:
+    """Poll for pending interactive prompts during authentication.
+
+    Returns the current auth status and any pending prompt that the
+    remote client should display to the user.
+    """
+    session = await _get_validated_session(session_id, request)
+
+    if session.auth_status == AuthStatus.AUTHENTICATED:
+        return web.json_response({"status": "authenticated"})
+
+    if session.auth_status == AuthStatus.FAILED:
+        return web.json_response({"status": "failed", "error": session.auth_error or "unknown error"})
+
+    bridge = session.input_bridge
+    if bridge:
+        prompt = bridge.get_pending_prompt()
+        if prompt:
+            return web.json_response({"status": "pending_input", "prompt": prompt})
+
+    return web.json_response({"status": "authenticating"})
+
+
+async def session_prompt_post_handler(
+    data: Dict[str, Any], session_id: str, request: Optional[web.Request] = None
+) -> web.Response:
+    """Submit a response to a pending interactive prompt.
+
+    The remote client calls this after collecting user input (OTP code,
+    PIN, or device-code confirmation) to unblock the server auth thread.
+    """
+    session = await _get_validated_session(session_id, request)
+
+    response_text = data.get("response")
+    if response_text is None:
+        raise APIError(APIErrorCode.INVALID_INPUT, "Missing required field: response")
+
+    bridge = session.input_bridge
+    if bridge is None or bridge.status != AuthStatus.PENDING_INPUT:
+        raise APIError(APIErrorCode.INVALID_INPUT, "No prompt pending for this session")
+
+    bridge.submit_response(str(response_text))
+    return web.json_response({"status": "accepted"})
+
+
 async def _get_validated_session(session_id: str, request: Optional[web.Request]) -> Any:
     """Fetch a session and verify the requesting IP matches the creator."""
     from unshackle.core.api.session_store import get_session_store
@@ -1675,9 +1859,7 @@ async def _get_validated_session(session_id: str, request: Optional[web.Request]
     return session
 
 
-def _resolve_handler_proxy(
-    data: Dict[str, Any], normalized_service: str
-) -> tuple[Optional[str], list]:
+def _resolve_handler_proxy(data: Dict[str, Any], normalized_service: str) -> tuple[Optional[str], list]:
     """Resolve proxy and initialize providers from API request data.
 
     Handles explicit proxy param, provider:country format, and
@@ -1753,16 +1935,56 @@ def _extract_pssh_from_track(track: Any, drm_type: str) -> Optional[str]:
 
 
 def _ensure_track_drm(track: Any) -> None:
-    """Extract DRM from manifest ContentProtection if track has none."""
-    if not track.drm and track.data.get("dash"):
+    """Extract DRM from manifest data if track has none.
+
+    Supports DASH (ContentProtection elements), HLS (EXT-X-KEY from
+    playlist fetch), and ISM (ProtectionHeader elements).
+    """
+    if track.drm:
+        return
+
+    # DASH: extract from ContentProtection elements
+    if track.data.get("dash"):
         from unshackle.core.manifests import DASH as DASHManifest
 
         rep = track.data["dash"].get("representation")
         ada = track.data["dash"].get("adaptation_set")
         if rep is not None and ada is not None:
-            track.drm = DASHManifest.get_drm(
-                rep.findall("ContentProtection") + ada.findall("ContentProtection")
-            )
+            track.drm = DASHManifest.get_drm(rep.findall("ContentProtection") + ada.findall("ContentProtection"))
+            if track.drm:
+                return
+
+    # HLS: fetch playlist and extract DRM from EXT-X-KEY
+    if track.data.get("hls") and track.url:
+        try:
+            import m3u8
+
+            from unshackle.core.drm import PlayReady, Widevine
+            from unshackle.core.manifests import HLS
+
+            playlist = m3u8.load(track.url)
+            keys = [k for k in (playlist.keys or []) + (playlist.session_keys or []) if k is not None]
+            for key in keys:
+                try:
+                    drm = HLS.get_drm(key)
+                    if isinstance(drm, (Widevine, PlayReady)):
+                        track.drm = [drm]
+                        return
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+    # ISM: extract from ProtectionHeader elements
+    if track.data.get("ism"):
+        try:
+            from unshackle.core.manifests import ISM as ISMManifest
+
+            stream_index = track.data["ism"].get("stream_index")
+            if stream_index is not None:
+                track.drm = ISMManifest.get_drm(stream_index)
+        except Exception:
+            pass
 
 
 def _resolve_device_name(user_config: dict, drm_type: str, service_tag: str = "") -> str:
@@ -1793,6 +2015,23 @@ def _resolve_device_name(user_config: dict, drm_type: str, service_tag: str = ""
     return device_name
 
 
+def _load_server_vaults(service_name: str) -> Any:
+    """Load server vaults from config.key_vaults."""
+    from unshackle.core.config import config as app_config
+    from unshackle.core.vaults import Vaults
+
+    vaults = Vaults(service_name)
+    for vault_config in app_config.key_vaults:
+        cfg = vault_config.copy()
+        vault_type = cfg.pop("type", None)
+        if vault_type:
+            try:
+                vaults.load(vault_type, **cfg)
+            except Exception as e:
+                log.warning(f"Could not load vault '{vault_type}': {e}")
+    return vaults
+
+
 def _check_vaults(kids: list, service_name: str) -> Optional[Dict[str, str]]:
     """Check server vaults for existing keys matching all KIDs.
 
@@ -1800,10 +2039,10 @@ def _check_vaults(kids: list, service_name: str) -> Optional[Dict[str, str]]:
     """
     from uuid import UUID
 
-    from unshackle.core.vaults import Vaults
-
     try:
-        vaults = Vaults(service_name)
+        vaults = _load_server_vaults(service_name)
+        if not vaults.vaults:
+            return None
         keys: Dict[str, str] = {}
         for kid in kids:
             kid_uuid = kid if isinstance(kid, UUID) else UUID(hex=str(kid))
@@ -1824,16 +2063,17 @@ def _cache_to_vaults(keys: Dict[str, str], service_name: str) -> None:
     """Cache newly obtained keys to server vaults."""
     from uuid import UUID
 
-    from unshackle.core.vaults import Vaults
-
     try:
-        vaults = Vaults(service_name)
+        vaults = _load_server_vaults(service_name)
+        if not vaults.vaults:
+            return
+
         key_map = {UUID(hex=kid): key for kid, key in keys.items()}
         cached = vaults.add_keys(key_map)
         if cached:
-            log.info(f"Cached {cached} key(s) to server vaults")
-    except Exception:
-        pass
+            log.info(f"Cached {cached} key(s) to {cached} server vault(s)")
+    except Exception as e:
+        log.warning(f"Failed to cache keys to vaults: {e}")
 
 
 def _handle_single_server_cdm(
@@ -1877,9 +2117,7 @@ def _handle_single_server_cdm(
         pr_drm.get_content_keys(
             cdm=cdm,
             certificate=lambda challenge, **_: None,
-            licence=lambda challenge, **_: service.get_playready_license(
-                challenge=challenge, title=title, track=track
-            ),
+            licence=lambda challenge, **_: service.get_playready_license(challenge=challenge, title=title, track=track),
         )
         keys = {kid.hex: key for kid, key in pr_drm.content_keys.items()}
     elif drm_type == "widevine":
@@ -1901,9 +2139,7 @@ def _handle_single_server_cdm(
             certificate=lambda challenge, **_: service.get_widevine_service_certificate(
                 challenge=challenge, title=title, track=track
             ),
-            licence=lambda challenge, **_: service.get_widevine_license(
-                challenge=challenge, title=title, track=track
-            ),
+            licence=lambda challenge, **_: service.get_widevine_license(challenge=challenge, title=title, track=track),
         )
         keys = {kid.hex: key for kid, key in wv_drm.content_keys.items()}
     else:
@@ -1981,8 +2217,12 @@ async def session_license_handler(
         has_wv_device = bool(user_config.get("devices"))
         has_pr_device = bool(user_config.get("playready_devices"))
 
+        service_tag = session.service_tag
+        config_cdm_type = _detect_cdm_type_for_service(service_tag, app_config)
+
         all_keys: Dict[str, Dict[str, str]] = {}
         seen_pssh: set[str] = set()
+        actual_drm_type: Optional[str] = None
 
         for tid in track_ids:
             track = session.tracks.get(tid)
@@ -1995,17 +2235,33 @@ async def session_license_handler(
 
             title = _find_title_for_track(tid, session)
 
-            # Detect DRM type and extract PSSH based on available devices
             track_drm_type = None
             pssh_str = None
-            if has_wv_device:
-                pssh_str = _extract_pssh_from_track(track, "widevine")
-                if pssh_str:
-                    track_drm_type = "widevine"
-            if not pssh_str and has_pr_device:
+            if config_cdm_type == "playready":
                 pssh_str = _extract_pssh_from_track(track, "playready")
                 if pssh_str:
                     track_drm_type = "playready"
+                if not pssh_str:
+                    pssh_str = _extract_pssh_from_track(track, "widevine")
+                    if pssh_str:
+                        track_drm_type = "widevine"
+            elif config_cdm_type == "widevine":
+                pssh_str = _extract_pssh_from_track(track, "widevine")
+                if pssh_str:
+                    track_drm_type = "widevine"
+                if not pssh_str:
+                    pssh_str = _extract_pssh_from_track(track, "playready")
+                    if pssh_str:
+                        track_drm_type = "playready"
+            else:
+                if has_wv_device:
+                    pssh_str = _extract_pssh_from_track(track, "widevine")
+                    if pssh_str:
+                        track_drm_type = "widevine"
+                if not pssh_str and has_pr_device:
+                    pssh_str = _extract_pssh_from_track(track, "playready")
+                    if pssh_str:
+                        track_drm_type = "playready"
 
             if not pssh_str or not track_drm_type:
                 continue
@@ -2022,12 +2278,17 @@ async def session_license_handler(
                 keys = _handle_single_server_cdm(service, title, track, pssh_str, track_drm_type, request)
                 if keys:
                     all_keys[tid] = keys
+                    if track_drm_type:
+                        actual_drm_type = track_drm_type
             except SystemExit:
                 log.warning(f"Service exited while resolving keys for track {tid[:12]}, skipping")
             except Exception as e:
                 log.warning(f"Failed to resolve keys for track {tid[:12]}: {e}")
 
-        return web.json_response({"keys": all_keys})
+        response: Dict[str, Any] = {"keys": all_keys}
+        if actual_drm_type:
+            response["drm_type"] = actual_drm_type
+        return web.json_response(response)
 
     if not track_id:
         raise APIError(APIErrorCode.INVALID_INPUT, "Missing required parameter: track_id")
@@ -2111,8 +2372,9 @@ async def session_info_handler(session_id: str, request: Optional[web.Request] =
 
 
 async def session_delete_handler(session_id: str, request: Optional[web.Request] = None) -> web.Response:
-    """Delete a session and clean up client-sent data from the server."""
-    import shutil
+    """Delete a session, return updated cache files, and clean up server-side data."""
+    import base64
+    import zlib
 
     from unshackle.core.api.session_store import get_session_store
     from unshackle.core.config import config as app_config
@@ -2120,18 +2382,24 @@ async def session_delete_handler(session_id: str, request: Optional[web.Request]
     session = await _get_validated_session(session_id, request)
     store = get_session_store()
 
-    cache_tag = session.cache_tag
-    await store.delete(session_id)
+    if session.input_bridge:
+        session.input_bridge.cancel()
 
+    cache_tag = session.cache_tag
+    cache_data: Dict[str, str] = {}
     if cache_tag:
         cache_dir = app_config.directories.cache / cache_tag
         if cache_dir.is_dir():
-            shutil.rmtree(cache_dir, ignore_errors=True)
-        # Clean up empty parent directories (session_id, api_key_hash, _sessions)
-        for parent in cache_dir.parents:
-            if parent == app_config.directories.cache:
-                break
-            if parent.is_dir() and not any(parent.iterdir()):
-                parent.rmdir()
+            for f in cache_dir.glob("*.json"):
+                if not f.stem.startswith("titles_"):
+                    try:
+                        cache_data[f.stem] = base64.b64encode(zlib.compress(f.read_bytes())).decode("ascii")
+                    except Exception:
+                        pass
 
-    return web.json_response({"status": "ok"})
+    await store.delete(session_id)
+
+    response: Dict[str, Any] = {"status": "ok"}
+    if cache_data:
+        response["cache"] = cache_data
+    return web.json_response(response)

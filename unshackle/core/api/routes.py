@@ -10,7 +10,8 @@ from unshackle.core.api.errors import APIError, APIErrorCode, build_error_respon
 from unshackle.core.api.handlers import (cancel_download_job_handler, download_handler, get_download_job_handler,
                                          list_download_jobs_handler, list_titles_handler, list_tracks_handler,
                                          search_handler, session_create_handler, session_delete_handler,
-                                         session_info_handler, session_license_handler, session_segments_handler,
+                                         session_info_handler, session_license_handler, session_prompt_get_handler,
+                                         session_prompt_post_handler, session_segments_handler,
                                          session_titles_handler, session_tracks_handler)
 from unshackle.core.services import Services
 from unshackle.core.update_checker import UpdateChecker
@@ -921,7 +922,9 @@ async def session_create(request: web.Request) -> web.Response:
         return build_error_response(e, request.app.get("debug_api", False))
     except Exception as e:
         log.exception("Error in session create")
-        return handle_api_exception(e, context={"operation": "session_create"}, debug_mode=request.app.get("debug_api", False))
+        return handle_api_exception(
+            e, context={"operation": "session_create"}, debug_mode=request.app.get("debug_api", False)
+        )
 
 
 async def session_titles(request: web.Request) -> web.Response:
@@ -949,7 +952,9 @@ async def session_titles(request: web.Request) -> web.Response:
         return build_error_response(e, request.app.get("debug_api", False))
     except Exception as e:
         log.exception("Error in session titles")
-        return handle_api_exception(e, context={"operation": "session_titles"}, debug_mode=request.app.get("debug_api", False))
+        return handle_api_exception(
+            e, context={"operation": "session_titles"}, debug_mode=request.app.get("debug_api", False)
+        )
 
 
 async def session_tracks(request: web.Request) -> web.Response:
@@ -996,7 +1001,9 @@ async def session_tracks(request: web.Request) -> web.Response:
         return build_error_response(e, request.app.get("debug_api", False))
     except Exception as e:
         log.exception("Error in session tracks")
-        return handle_api_exception(e, context={"operation": "session_tracks"}, debug_mode=request.app.get("debug_api", False))
+        return handle_api_exception(
+            e, context={"operation": "session_tracks"}, debug_mode=request.app.get("debug_api", False)
+        )
 
 
 async def session_segments(request: web.Request) -> web.Response:
@@ -1045,7 +1052,9 @@ async def session_segments(request: web.Request) -> web.Response:
         return build_error_response(e, request.app.get("debug_api", False))
     except Exception as e:
         log.exception("Error in session segments")
-        return handle_api_exception(e, context={"operation": "session_segments"}, debug_mode=request.app.get("debug_api", False))
+        return handle_api_exception(
+            e, context={"operation": "session_segments"}, debug_mode=request.app.get("debug_api", False)
+        )
 
 
 async def session_license(request: web.Request) -> web.Response:
@@ -1100,7 +1109,9 @@ async def session_license(request: web.Request) -> web.Response:
         return build_error_response(e, request.app.get("debug_api", False))
     except Exception as e:
         log.exception("Error in session license")
-        return handle_api_exception(e, context={"operation": "session_license"}, debug_mode=request.app.get("debug_api", False))
+        return handle_api_exception(
+            e, context={"operation": "session_license"}, debug_mode=request.app.get("debug_api", False)
+        )
 
 
 async def session_info(request: web.Request) -> web.Response:
@@ -1153,8 +1164,131 @@ async def session_delete(request: web.Request) -> web.Response:
         return build_error_response(e, request.app.get("debug_api", False))
 
 
-def setup_routes(app: web.Application) -> None:
-    """Setup all API routes."""
+async def session_prompt_get(request: web.Request) -> web.Response:
+    """
+    Poll for pending interactive prompts during authentication.
+    ---
+    summary: Get auth prompt
+    description: Poll for pending interactive prompts (OTP, device code, PIN) during session authentication
+    parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Auth status and optional prompt
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [authenticating, pending_input, authenticated, failed]
+                prompt:
+                  type: string
+                  description: Prompt to display to the user (only when status is pending_input)
+                error:
+                  type: string
+                  description: Error message (only when status is failed)
+      '404':
+        description: Session not found
+    """
+    session_id = request.match_info["session_id"]
+    try:
+        return await session_prompt_get_handler(session_id, request)
+    except APIError as e:
+        return build_error_response(e, request.app.get("debug_api", False))
+    except Exception as e:
+        log.exception("Error in session prompt get")
+        return handle_api_exception(
+            e, context={"operation": "session_prompt_get"}, debug_mode=request.app.get("debug_api", False)
+        )
+
+
+async def session_prompt_submit(request: web.Request) -> web.Response:
+    """
+    Submit a response to a pending interactive prompt.
+    ---
+    summary: Submit prompt response
+    description: Submit user input (OTP code, PIN, device code confirmation) to unblock server authentication
+    parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - response
+            properties:
+              response:
+                type: string
+                description: User's response to the prompt
+    responses:
+      '200':
+        description: Response accepted
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  example: accepted
+      '400':
+        description: No prompt pending or invalid request
+      '404':
+        description: Session not found
+    """
+    session_id = request.match_info["session_id"]
+    try:
+        data = await request.json()
+    except Exception as e:
+        return build_error_response(
+            APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}),
+            request.app.get("debug_api", False),
+        )
+    try:
+        return await session_prompt_post_handler(data, session_id, request)
+    except APIError as e:
+        return build_error_response(e, request.app.get("debug_api", False))
+    except Exception as e:
+        log.exception("Error in session prompt submit")
+        return handle_api_exception(
+            e, context={"operation": "session_prompt_submit"}, debug_mode=request.app.get("debug_api", False)
+        )
+
+
+def _setup_remote_session_routes(app: web.Application) -> None:
+    """Setup remote-DL session endpoints only."""
+    app.router.add_get("/api/health", health)
+    app.router.add_get("/api/services", services)
+    app.router.add_post("/api/search", search)
+    app.router.add_post("/api/session/create", session_create)
+    app.router.add_get("/api/session/{session_id}/titles", session_titles)
+    app.router.add_post("/api/session/{session_id}/tracks", session_tracks)
+    app.router.add_post("/api/session/{session_id}/segments", session_segments)
+    app.router.add_post("/api/session/{session_id}/license", session_license)
+    app.router.add_get("/api/session/{session_id}/prompt", session_prompt_get)
+    app.router.add_post("/api/session/{session_id}/prompt", session_prompt_submit)
+    app.router.add_get("/api/session/{session_id}", session_info)
+    app.router.add_delete("/api/session/{session_id}", session_delete)
+
+
+def setup_routes(app: web.Application, remote_only: bool = False) -> None:
+    """Setup API routes. When remote_only=True, only expose remote session endpoints."""
+    if remote_only:
+        _setup_remote_session_routes(app)
+        return
+
     app.router.add_get("/api/health", health)
     app.router.add_get("/api/services", services)
     app.router.add_post("/api/search", search)
@@ -1171,6 +1305,8 @@ def setup_routes(app: web.Application) -> None:
     app.router.add_post("/api/session/{session_id}/tracks", session_tracks)
     app.router.add_post("/api/session/{session_id}/segments", session_segments)
     app.router.add_post("/api/session/{session_id}/license", session_license)
+    app.router.add_get("/api/session/{session_id}/prompt", session_prompt_get)
+    app.router.add_post("/api/session/{session_id}/prompt", session_prompt_submit)
     app.router.add_get("/api/session/{session_id}", session_info)
     app.router.add_delete("/api/session/{session_id}", session_delete)
 
@@ -1205,6 +1341,8 @@ def setup_swagger(app: web.Application) -> None:
             web.post("/api/session/{session_id}/tracks", session_tracks),
             web.post("/api/session/{session_id}/segments", session_segments),
             web.post("/api/session/{session_id}/license", session_license),
+            web.get("/api/session/{session_id}/prompt", session_prompt_get),
+            web.post("/api/session/{session_id}/prompt", session_prompt_submit),
             web.get("/api/session/{session_id}", session_info),
             web.delete("/api/session/{session_id}", session_delete),
         ]

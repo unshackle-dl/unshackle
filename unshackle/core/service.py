@@ -5,8 +5,11 @@ from collections.abc import Callable, Generator
 from dataclasses import dataclass, field
 from http.cookiejar import CookieJar
 from pathlib import Path
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 from urllib.parse import urlparse, urlunparse
+
+if TYPE_CHECKING:
+    from unshackle.core.api.input_bridge import InputBridge
 
 import click
 import m3u8
@@ -101,11 +104,13 @@ class Service(metaclass=ABCMeta):
         self.session = self.get_session()
         self.cache = Cacher(self.__class__.__name__)
         self.title_cache = TitleCacher(self.__class__.__name__)
+        self.cache_dir = config.directories.cache / self.__class__.__name__
 
         # Store context for cache control flags and credential
         self.ctx = ctx
         self.credential = None  # Will be set in authenticate()
         self.current_region = None  # Will be set based on proxy/geolocation
+        self._input_bridge: Optional[InputBridge] = None
 
         # Set track request from CLI params - services can read/override in their __init__
         vcodec = ctx.parent.params.get("vcodec") if ctx.parent else None
@@ -289,9 +294,7 @@ class Service(metaclass=ABCMeta):
                     except (ValueError, SystemExit) as e:
                         if self.track_request.best_available:
                             codec_name = codec_val.name if codec_val else "default"
-                            self.log.warning(
-                                f" - {range_val.name}/{codec_name} not available, skipping ({e})"
-                            )
+                            self.log.warning(f" - {range_val.name}/{codec_name} not available, skipping ({e})")
                             continue
                         raise
                     if first:
@@ -349,6 +352,17 @@ class Service(metaclass=ABCMeta):
         # Store credential for cache key generation
         self.credential = credential
 
+    def request_input(self, prompt: str) -> str:
+        """Request interactive input from the user.
+
+        When running locally (CLI), falls back to ``input()``.
+        When running in serve mode with an :class:`InputBridge` attached,
+        delegates to the bridge which relays the prompt to the remote client.
+        """
+        if self._input_bridge is not None:
+            return self._input_bridge.request_input(prompt)
+        return input(prompt)
+
     def search(self) -> Generator[SearchResult, None, None]:
         """
         Search by query for titles from the Service.
@@ -394,7 +408,9 @@ class Service(metaclass=ABCMeta):
             Decode the data, return as is to reduce unnecessary computations.
         """
 
-    def get_playready_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> Optional[Union[bytes, str]]:
+    def get_playready_license(
+        self, *, challenge: bytes, title: Title_T, track: AnyTrack
+    ) -> Optional[Union[bytes, str]]:
         """
         Get a PlayReady License message by sending a License Request (challenge).
 

@@ -339,6 +339,11 @@ class HLS:
                 media_drm = HLS.get_drm(media_playlist_key, session)
                 if isinstance(media_drm, (Widevine, PlayReady)):
                     track_kid = HLS.get_track_kid_from_init(master, track, session) or media_drm.kid
+                    # Preserve pre-existing keys (e.g. from server_cdm)
+                    if track.drm:
+                        for existing_drm in track.drm:
+                            if hasattr(existing_drm, "content_keys") and existing_drm.content_keys:
+                                media_drm.content_keys.update(existing_drm.content_keys)
                     track.drm = [media_drm]
                     try:
                         if not license_widevine:

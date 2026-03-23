@@ -36,6 +36,12 @@ from unshackle.core.constants import context_settings
     default=False,
     help="Enable debug logging for API operations.",
 )
+@click.option(
+    "--remote-only",
+    is_flag=True,
+    default=False,
+    help="Only expose remote service session endpoints (health, services, search, session).",
+)
 def serve(
     host: str,
     port: int,
@@ -46,6 +52,7 @@ def serve(
     no_key: bool,
     debug_api: bool,
     debug: bool,
+    remote_only: bool,
 ) -> None:
     """
     Serve your Local Widevine and PlayReady Devices and REST API for Remote Access.
@@ -130,6 +137,10 @@ def serve(
                 return web.json_response({"status": 401, "message": "Secret Key is Invalid."}, status=401)
             return await handler(request)
 
+        remote_only = remote_only or config.serve.get("remote_only", False)
+        if remote_only:
+            api_only = True
+
         if api_only:
             log.info("Starting REST API server (pywidevine/pyplayready CDM disabled)")
             if no_key:
@@ -148,15 +159,19 @@ def serve(
                 await session_store.start_cleanup_loop()
 
             async def stop_session_cleanup(_app: web.Application) -> None:
+                await session_store.cancel_all_bridges()
                 await session_store.stop_cleanup_loop()
 
             app.on_startup.append(start_session_cleanup)
             app.on_cleanup.append(stop_session_cleanup)
 
-            setup_routes(app)
-            setup_swagger(app)
-            log.info(f"REST API endpoints available at http://{host}:{port}/api/")
-            log.info(f"Swagger UI available at http://{host}:{port}/api/docs/")
+            setup_routes(app, remote_only=remote_only)
+            if not remote_only:
+                setup_swagger(app)
+                log.info(f"REST API endpoints available at http://{host}:{port}/api/")
+                log.info(f"Swagger UI available at http://{host}:{port}/api/docs/")
+            else:
+                log.info(f"Remote service endpoints available at http://{host}:{port}/api/session/")
             log.info("(Press CTRL+C to quit)")
             web.run_app(app, host=host, port=port, print=None)
         else:
@@ -228,6 +243,7 @@ def serve(
                 await session_store.start_cleanup_loop()
 
             async def stop_session_cleanup(_app: web.Application) -> None:
+                await session_store.cancel_all_bridges()
                 await session_store.stop_cleanup_loop()
 
             app.on_startup.append(start_session_cleanup)
@@ -275,13 +291,16 @@ def serve(
             elif serve_playready:
                 log.info("No PlayReady devices found, skipping PlayReady CDM endpoints")
 
-            setup_routes(app)
-            setup_swagger(app)
+            setup_routes(app, remote_only=remote_only)
 
             if serve_widevine:
                 log.info(f"Widevine CDM endpoints available at http://{host}:{port}/{{device}}/open")
-            log.info(f"REST API endpoints available at http://{host}:{port}/api/")
-            log.info(f"Swagger UI available at http://{host}:{port}/api/docs/")
+            if remote_only:
+                log.info(f"Remote service endpoints available at http://{host}:{port}/api/session/")
+            else:
+                setup_swagger(app)
+                log.info(f"REST API endpoints available at http://{host}:{port}/api/")
+                log.info(f"Swagger UI available at http://{host}:{port}/api/docs/")
             log.info("(Press CTRL+C to quit)")
             web.run_app(app, host=host, port=port, print=None)
     finally:
