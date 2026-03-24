@@ -138,7 +138,6 @@ def download(
                         chunks = stream.stream()
                     elif use_raw:
                         # requests.Session: raw socket read — 30-35% faster than iter_content
-                        stream.raw.decode_content = False
                         _read = stream.raw.read
 
                         def _chunks() -> Generator[bytes, None, None]:
