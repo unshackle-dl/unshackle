@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import re
 import subprocess
+import warnings
 from collections import defaultdict
 from enum import Enum
 from functools import partial
@@ -17,8 +18,11 @@ from construct import Container
 from pycaption import Caption, CaptionList, CaptionNode, WebVTTReader
 from pycaption.geometry import Layout
 from pymp4.parser import MP4
-from subby import CommonIssuesFixer, SAMIConverter, SDHStripper, WebVTTConverter, WVTTConverter
 from subtitle_filter import Subtitles
+
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=SyntaxWarning, module=r"tinycss(\..*)?$")
+    from subby import CommonIssuesFixer, SAMIConverter, SDHStripper, WebVTTConverter, WVTTConverter
 
 from unshackle.core import binaries
 from unshackle.core.config import config

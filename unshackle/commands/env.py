@@ -70,6 +70,7 @@ def check() -> None:
         },
         # Downloaders
         {"name": "aria2c", "binary": binaries.Aria2, "required": False, "desc": "Multi-thread DL", "cat": "Download"},
+        {"name": "Surge", "binary": binaries.Surge, "required": False, "desc": "Headless DL API", "cat": "Download"},
         {
             "name": "N_m3u8DL-RE",
             "binary": binaries.N_m3u8DL_RE,

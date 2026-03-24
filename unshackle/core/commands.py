@@ -8,8 +8,23 @@ from unshackle.core.utilities import import_module_by_path
 _COMMANDS = sorted(
     (path for path in config.directories.commands.glob("*.py") if path.stem.lower() != "__init__"), key=lambda x: x.stem
 )
+_COMMAND_PATHS = {path.stem: path for path in _COMMANDS}
+_MODULES = {}
 
-_MODULES = {path.stem: getattr(import_module_by_path(path), path.stem) for path in _COMMANDS}
+
+def _load_command(name: str):
+    """Import and cache a command module the first time it is requested."""
+    module = _MODULES.get(name)
+    if module:
+        return module
+
+    path = _COMMAND_PATHS.get(name)
+    if not path:
+        return None
+
+    module = getattr(import_module_by_path(path), path.stem)
+    _MODULES[name] = module
+    return module
 
 
 class Commands(click.MultiCommand):
@@ -21,7 +36,7 @@ class Commands(click.MultiCommand):
 
     def get_command(self, ctx: click.Context, name: str) -> Optional[click.Command]:
         """Load the command code and return the main click command function."""
-        module = _MODULES.get(name)
+        module = _load_command(name)
         if not module:
             raise click.ClickException(f"Unable to find command by the name '{name}'")
 

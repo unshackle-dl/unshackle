@@ -42,6 +42,7 @@ class Config:
     def __init__(self, **kwargs: Any):
         self.dl: dict = kwargs.get("dl") or {}
         self.aria2c: dict = kwargs.get("aria2c") or {}
+        self.surge: dict = kwargs.get("surge") or {}
         self.n_m3u8dl_re: dict = kwargs.get("n_m3u8dl_re") or {}
         self.cdm: dict = kwargs.get("cdm") or {}
         self.chapter_fallback_name: str = kwargs.get("chapter_fallback_name") or ""

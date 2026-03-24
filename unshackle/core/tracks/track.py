@@ -21,7 +21,7 @@ from unshackle.core import binaries
 from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY
-from unshackle.core.downloaders import aria2c, curl_impersonate, n_m3u8dl_re, requests
+from unshackle.core.downloaders import aria2c, curl_impersonate, n_m3u8dl_re, requests, surge
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.utilities import get_boxes, try_ensure_utf8
@@ -90,6 +90,7 @@ class Track:
         if downloader is None:
             downloader = {
                 "aria2c": aria2c,
+                "surge": surge,
                 "curl_impersonate": curl_impersonate,
                 "requests": requests,
                 "n_m3u8dl_re": n_m3u8dl_re,
@@ -225,6 +226,8 @@ class Track:
         def cleanup():
             # track file (e.g., "foo.mp4")
             save_path.unlink(missing_ok=True)
+            # surge partial file (e.g., "foo.mp4.surge")
+            save_path.with_name(f"{save_path.name}.surge").unlink(missing_ok=True)
             # aria2c control file (e.g., "foo.mp4.aria2" or "foo.mp4.aria2__temp")
             save_path.with_suffix(f"{save_path.suffix}.aria2").unlink(missing_ok=True)
             save_path.with_suffix(f"{save_path.suffix}.aria2__temp").unlink(missing_ok=True)
@@ -333,6 +336,7 @@ class Track:
                         error = f"[N_m3u8DL-RE]: {self.descriptor} is currently not supported"
                         raise ValueError(error)
                     else:
+                        actual_download_path = None
                         for status_update in self.downloader(
                             urls=self.url,
                             output_dir=save_path.parent,
@@ -343,13 +347,16 @@ class Track:
                             max_workers=max_workers,
                         ):
                             file_downloaded = status_update.get("file_downloaded")
-                            if not file_downloaded:
+                            if file_downloaded:
+                                actual_download_path = Path(file_downloaded)
+                            else:
                                 progress(**status_update)
 
                         # see https://github.com/devine-dl/devine/issues/71
+                        save_path.with_name(f"{save_path.name}.surge").unlink(missing_ok=True)
                         save_path.with_suffix(f"{save_path.suffix}.aria2__temp").unlink(missing_ok=True)
 
-                        self.path = save_path
+                        self.path = actual_download_path or save_path
                         events.emit(events.Types.TRACK_DOWNLOADED, track=self)
 
                         if drm:

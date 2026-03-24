@@ -25,6 +25,41 @@ This document covers configuration options related to downloading and processing
 
 ---
 
+## surge (dict)
+
+Configuration for the Surge downloader. unshackle starts an isolated `surge server`
+instance in the background and sends downloads to its local HTTP API.
+
+- `max_connections_per_host`
+  Maximum concurrent connections allowed to one host. Default: `max_workers`
+- `max_concurrent_downloads`
+  Maximum downloads Surge should run at once. Default: `max_workers`
+- `user_agent`
+  Optional fallback User-Agent for the managed Surge server. Default: `""`
+  Note: Per-request headers from unshackle still take precedence.
+- `proxy_url`
+  Optional fallback proxy URI for the managed Surge server. Default: `""`
+  Note: CLI/service/session proxy settings override this value when present.
+- `sequential_download`
+  Download pieces in order instead of aggressively parallelizing. Default: `false`
+- `min_chunk_size`
+  Minimum chunk size in bytes. Default: `2097152` (2 MiB)
+- `worker_buffer_size`
+  Per-worker buffer size in bytes. Default: `524288` (512 KiB)
+
+For example,
+
+```yaml
+surge:
+  max_connections_per_host: 16
+  max_concurrent_downloads: 8
+  sequential_download: false
+  min_chunk_size: 2097152
+  worker_buffer_size: 524288
+```
+
+---
+
 ## curl_impersonate (dict)
 
 - `browser` - The Browser to impersonate as. A list of available Browsers and Versions are listed here:
@@ -51,10 +86,13 @@ Options:
 
 - `requests` (default) - <https://github.com/psf/requests>
 - `aria2c` - <https://github.com/aria2/aria2>
+- `surge` - <https://github.com/surge-downloader/Surge>
 - `curl_impersonate` - <https://github.com/yifeikong/curl-impersonate> (via <https://github.com/yifeikong/curl_cffi>)
 - `n_m3u8dl_re` - <https://github.com/nilaoda/N_m3u8DL-RE>
 
 Note that aria2c can reach the highest speeds as it utilizes threading and more connections than the other downloaders. However, aria2c can also be one of the more unstable downloaders. It will work one day, then not another day. It also does not support HTTP(S) proxies natively (non-HTTP proxies are bridged via pproxy).
+
+Note that `surge` is managed in headless server mode by unshackle. It works well for direct URL downloads and segment-based manifest downloads, but it does not replace `n_m3u8dl_re`'s whole-manifest handling.
 
 Note that `n_m3u8dl_re` will automatically fall back to `requests` for track types it does not support, specifically: direct URL downloads, Subtitle tracks, and Attachment tracks.
 

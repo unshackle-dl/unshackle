@@ -46,6 +46,7 @@ ShakaPackager = find(
     f"packager-{__shaka_platform}-x64",
 )
 Aria2 = find("aria2c", "aria2")
+Surge = find("surge")
 CCExtractor = find("ccextractor", "ccextractorwin", "ccextractorwinfull")
 HolaProxy = find("hola-proxy")
 MPV = find("mpv")
@@ -67,6 +68,7 @@ __all__ = (
     "SubtitleEdit",
     "ShakaPackager",
     "Aria2",
+    "Surge",
     "CCExtractor",
     "HolaProxy",
     "MPV",
