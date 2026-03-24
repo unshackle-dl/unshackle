@@ -16,7 +16,6 @@ from uuid import UUID
 from zlib import crc32
 
 import requests
-from curl_cffi.requests import Session as CurlSession
 from langcodes import Language, tag_is_valid
 from lxml.etree import Element, ElementTree
 from pyplayready.system.pssh import PSSH as PR_PSSH
@@ -28,6 +27,7 @@ from unshackle.core.cdm.detect import is_playready_cdm
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
 from unshackle.core.events import events
+from unshackle.core.session import RnetSession
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.utilities import get_debug_logger, is_close_match, try_ensure_utf8
 from unshackle.core.utils.xml import load_xml
@@ -49,7 +49,7 @@ class DASH:
         self.url = url
 
     @classmethod
-    def from_url(cls, url: str, session: Optional[Union[Session, CurlSession]] = None, **args: Any) -> DASH:
+    def from_url(cls, url: str, session: Optional[Union[Session, RnetSession]] = None, **args: Any) -> DASH:
         if not url:
             raise requests.URLRequired("DASH manifest URL must be provided for relative path computations.")
         if not isinstance(url, str):
@@ -57,8 +57,8 @@ class DASH:
 
         if not session:
             session = Session()
-        elif not isinstance(session, (Session, CurlSession)):
-            raise TypeError(f"Expected session to be a {Session} or {CurlSession}, not {session!r}")
+        elif not isinstance(session, (Session, RnetSession)):
+            raise TypeError(f"Expected session to be a {Session} or {RnetSession}, not {session!r}")
 
         res = session.get(url, **args)
         if res.url != url:
@@ -264,8 +264,8 @@ class DASH:
     ):
         if not session:
             session = Session()
-        elif not isinstance(session, (Session, CurlSession)):
-            raise TypeError(f"Expected session to be a {Session} or {CurlSession}, not {session!r}")
+        elif not isinstance(session, (Session, RnetSession)):
+            raise TypeError(f"Expected session to be a {Session} or {RnetSession}, not {session!r}")
 
         if proxy:
             session.proxies.update({"all": proxy})
@@ -589,7 +589,7 @@ class DASH:
         manifest: ElementTree,
         track: AnyTrack,
         track_url: str,
-        session: Union[Session, CurlSession],
+        session: Union[Session, RnetSession],
     ) -> tuple[
         Optional[bytes],
         list[tuple[str, Optional[str]]],

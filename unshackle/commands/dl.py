@@ -2190,6 +2190,8 @@ class dl:
                         BarColumn(),
                         "•",
                         TimeRemainingColumn(compact=True, elapsed_when_finished=True),
+                        "•",
+                        TextColumn("{task.fields[downloaded]}"),
                         console=console,
                     )
 
@@ -2215,7 +2217,7 @@ class dl:
 
                     def enqueue_mux_tasks(task_description: str, base_tracks: Tracks) -> None:
                         if merge_audio or not base_tracks.audio:
-                            task_id = progress.add_task(f"{task_description}...", total=None, start=False)
+                            task_id = progress.add_task(f"{task_description}...", total=None, start=False, downloaded="")
                             multiplex_tasks.append((task_id, base_tracks, None))
                             return
 
@@ -2228,7 +2230,7 @@ class dl:
                             if audio_codec:
                                 description = f"{task_description} {audio_codec.name}"
 
-                            task_id = progress.add_task(f"{description}...", total=None, start=False)
+                            task_id = progress.add_task(f"{description}...", total=None, start=False, downloaded="")
                             task_tracks = clone_tracks_for_audio(base_tracks, codec_audio_tracks)
                             multiplex_tasks.append((task_id, task_tracks, audio_codec))
 

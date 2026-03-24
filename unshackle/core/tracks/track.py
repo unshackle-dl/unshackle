@@ -13,7 +13,6 @@ from typing import Any, Callable, Iterable, Optional, Union
 from uuid import UUID
 from zlib import crc32
 
-from curl_cffi.requests import Session as CurlSession
 from langcodes import Language
 from requests import Session
 
@@ -24,6 +23,7 @@ from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY
 from unshackle.core.downloaders import requests
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
 from unshackle.core.events import events
+from unshackle.core.session import RnetSession
 from unshackle.core.utilities import get_boxes, try_ensure_utf8
 from unshackle.core.utils.subprocess import ffprobe
 
@@ -326,6 +326,9 @@ class Track:
                         ):
                             file_downloaded = status_update.get("file_downloaded")
                             if not file_downloaded:
+                                downloaded = status_update.get("downloaded")
+                                if downloaded and downloaded.endswith("/s"):
+                                    status_update["downloaded"] = f"URL {downloaded}"
                                 progress(**status_update)
 
                         # see https://github.com/devine-dl/devine/issues/71
@@ -584,8 +587,8 @@ class Track:
             raise TypeError(f"Expected url to be a {str}, not {type(url)}")
         if not isinstance(byte_range, (str, type(None))):
             raise TypeError(f"Expected byte_range to be a {str}, not {type(byte_range)}")
-        if not isinstance(session, (Session, CurlSession, type(None))):
-            raise TypeError(f"Expected session to be a {Session} or {CurlSession}, not {type(session)}")
+        if not isinstance(session, (Session, RnetSession, type(None))):
+            raise TypeError(f"Expected session to be a {Session} or {RnetSession}, not {type(session)}")
 
         if not url:
             if self.descriptor != self.Descriptor.URL:
@@ -623,10 +626,11 @@ class Track:
             init_data = res.content
         else:
             init_data = None
-            with session.get(url, stream=True) as s:
-                for chunk in s.iter_content(content_length):
-                    init_data = chunk
-                    break
+            s = session.get(url, stream=True)
+            for chunk in s.iter_content(content_length):
+                init_data = chunk
+                break
+            s.close()
             if not init_data:
                 raise ValueError(f"Failed to read {content_length} bytes from the track URI.")
 

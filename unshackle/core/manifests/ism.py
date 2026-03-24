@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any, Callable, Optional, Union
 
 import requests
-from curl_cffi.requests import Session as CurlSession
 from langcodes import Language, tag_is_valid
 from lxml.etree import Element
 from pyplayready.system.pssh import PSSH as PR_PSSH
@@ -19,6 +18,7 @@ from requests import Session
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
 from unshackle.core.events import events
+from unshackle.core.session import RnetSession
 from unshackle.core.tracks import Audio, Subtitle, Track, Tracks, Video
 from unshackle.core.utilities import get_debug_logger, try_ensure_utf8
 from unshackle.core.utils.xml import load_xml
@@ -34,13 +34,13 @@ class ISM:
         self.url = url
 
     @classmethod
-    def from_url(cls, url: str, session: Optional[Union[Session, CurlSession]] = None, **kwargs: Any) -> "ISM":
+    def from_url(cls, url: str, session: Optional[Union[Session, RnetSession]] = None, **kwargs: Any) -> "ISM":
         if not url:
             raise requests.URLRequired("ISM manifest URL must be provided")
         if not session:
             session = Session()
-        elif not isinstance(session, (Session, CurlSession)):
-            raise TypeError(f"Expected session to be a {Session} or {CurlSession}, not {session!r}")
+        elif not isinstance(session, (Session, RnetSession)):
+            raise TypeError(f"Expected session to be a {Session} or {RnetSession}, not {session!r}")
         res = session.get(url, **kwargs)
         if res.url != url:
             url = res.url

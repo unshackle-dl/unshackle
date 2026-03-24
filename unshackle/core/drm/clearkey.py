@@ -8,9 +8,10 @@ from urllib.parse import urljoin
 
 from Cryptodome.Cipher import AES
 from Cryptodome.Util.Padding import unpad
-from curl_cffi.requests import Session as CurlSession
 from m3u8.model import Key
 from requests import Session
+
+from unshackle.core.session import RnetSession
 
 
 class ClearKey:
@@ -70,8 +71,8 @@ class ClearKey:
         """
         if not isinstance(m3u_key, Key):
             raise ValueError(f"Provided M3U Key is in an unexpected type {m3u_key!r}")
-        if not isinstance(session, (Session, CurlSession, type(None))):
-            raise TypeError(f"Expected session to be a {Session} or {CurlSession}, not a {type(session)}")
+        if not isinstance(session, (Session, RnetSession, type(None))):
+            raise TypeError(f"Expected session to be a {Session} or {RnetSession}, not a {type(session)}")
 
         if not m3u_key.method.startswith("AES"):
             raise ValueError(f"Provided M3U Key is not an AES Clear Key, {m3u_key.method}")
