@@ -276,6 +276,25 @@ class Widevine:
             key_hex = key if isinstance(key, str) else key.hex()
             key_args.extend(["--key", f"{kid_hex}:{key_hex}"])
 
+        # Also pass keys by track ID as fallback for CBCS content where the
+        # tenc box may have an all-zeros default_KID (common with HLS/FairPlay),
+        # causing mp4decrypt to fail matching KID-based keys silently.
+        if self.content_keys:
+            first_key = next(iter(self.content_keys.values()))
+            first_key_hex = first_key if isinstance(first_key, str) else first_key.hex()
+            try:
+                with open(path, "rb") as f:
+                    header = f.read(200_000)
+                tenc_idx = header.find(b"tenc")
+                if tenc_idx >= 0:
+                    tenc_data = header[tenc_idx + 4:]  # after box type
+                    version = tenc_data[0]
+                    default_kid = tenc_data[8:24] if version >= 1 else tenc_data[6:22]
+                    if default_kid == b"\x00" * 16:
+                        key_args.extend(["--key", f"1:{first_key_hex}"])
+            except OSError:
+                pass
+
         cmd = [
             str(binaries.Mp4decrypt),
             "--show-progress",
