@@ -1758,7 +1758,7 @@ requires-dist = [
     { name = "pycountry", specifier = ">=24.6.1" },
     { name = "pycryptodomex", specifier = ">=3.20.0,<4" },
     { name = "pyexecjs", specifier = ">=1.5.1,<2" },
-    { name = "pyjwt", specifier = ">=2.8.0,<3" },
+    { name = "pyjwt", specifier = ">=2.12.0,<3" },
     { name = "pymediainfo", specifier = ">=6.1.0,<8" },
     { name = "pymp4", specifier = ">=1.4.0,<2" },
     { name = "pymysql", specifier = ">=1.1.0,<2" },
