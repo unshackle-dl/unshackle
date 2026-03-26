@@ -100,19 +100,31 @@ class Episode(Title):
 
     def get_filename(self, media_info: MediaInfo, folder: bool = False, show_service: bool = True) -> str:
         if folder:
+            if config.folder_template:
+                formatter = TemplateFormatter(config.folder_template)
+                context = self._build_template_context(media_info, show_service)
+                context['season'] = f"S{self.season:02}"
+
+                folder_name = formatter.format(context)
+
+                if '.' in config.folder_template and ' ' not in config.folder_template:
+                    return sanitize_filename(folder_name, ".")
+                else:
+                    return sanitize_filename(folder_name, " ")
+
             series_template = config.output_template.get("series")
             if series_template:
-                folder_template = series_template
-                folder_template = re.sub(r'\{episode\}', '', folder_template)
-                folder_template = re.sub(r'\{episode_name\?\}', '', folder_template)
-                folder_template = re.sub(r'\{episode_name\}', '', folder_template)
-                folder_template = re.sub(r'\{season_episode\}', '{season}', folder_template)
+                derived_template = series_template
+                derived_template = re.sub(r'\{episode\}', '', derived_template)
+                derived_template = re.sub(r'\{episode_name\?\}', '', derived_template)
+                derived_template = re.sub(r'\{episode_name\}', '', derived_template)
+                derived_template = re.sub(r'\{season_episode\}', '{season}', derived_template)
 
-                folder_template = re.sub(r'\.{2,}', '.', folder_template)
-                folder_template = re.sub(r'\s{2,}', ' ', folder_template)
-                folder_template = re.sub(r'^[\.\s]+|[\.\s]+$', '', folder_template)
+                derived_template = re.sub(r'\.{2,}', '.', derived_template)
+                derived_template = re.sub(r'\s{2,}', ' ', derived_template)
+                derived_template = re.sub(r'^[\.\s]+|[\.\s]+$', '', derived_template)
 
-                formatter = TemplateFormatter(folder_template)
+                formatter = TemplateFormatter(derived_template)
                 context = self._build_template_context(media_info, show_service)
                 context['season'] = f"S{self.season:02}"
 

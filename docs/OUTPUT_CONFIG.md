@@ -61,6 +61,32 @@ Example outputs:
 - Scene series: `Example.Show.2024.S01E01.Pilot.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG`
 - Plex movies: `Example Movie (2024) 1080p`
 
+### folder (optional)
+
+Controls the folder name for downloaded content. Uses the same template variables as the file templates above.
+
+If not configured, the default folder naming is used:
+- Movies: `Title (Year)`
+- Series: Derived from the `series` template with episode-specific variables removed
+- Songs: `Artist - Album (Year)`
+
+```yaml
+output_template:
+  movies: '{title}.{year}.{repack?}.{edition?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}'
+  series: '{title}.{year?}.{season_episode}.{episode_name?}.{repack?}.{edition?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}'
+  songs: '{track_number}.{title}.{repack?}.{edition?}.{source?}.WEB-DL.{audio_full}.{atmos?}-{tag}'
+
+  # Scene-style folder
+  folder: '{title}.{year?}.{repack?}.{edition?}.{lang_tag?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}'
+
+  # Plex-friendly folder
+  # folder: '{title} ({year?})'
+```
+
+Example outputs:
+- Scene folder: `Example.Show.2024.S01.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG/`
+- Plex folder: `Example Show (2024)/`
+
 ---
 
 ---

@@ -59,6 +59,14 @@ class Movie(Title):
 
     def get_filename(self, media_info: MediaInfo, folder: bool = False, show_service: bool = True) -> str:
         if folder:
+            if config.folder_template:
+                formatter = TemplateFormatter(config.folder_template)
+                context = self._build_template_context(media_info, show_service)
+                folder_name = formatter.format(context)
+                if '.' in config.folder_template and ' ' not in config.folder_template:
+                    return sanitize_filename(folder_name, ".")
+                else:
+                    return sanitize_filename(folder_name, " ")
             name = f"{self.name}"
             if self.year:
                 name += f" ({self.year})"

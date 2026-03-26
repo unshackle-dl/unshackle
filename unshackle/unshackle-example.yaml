@@ -52,6 +52,17 @@ output_template:
   # Custom scene-style with specific elements
   # movies: '{title}.{year}.{quality}.{hdr?}.{source}.WEB-DL.{audio_full}.{video}-{tag}'
   # series: '{title}.{year?}.{season_episode}.{episode_name?}.{quality}.{hdr?}.{source}.WEB-DL.{audio_full}.{atmos?}.{video}-{tag}'
+  #
+  # Folder naming (optional). Controls the folder name for downloaded content.
+  # If not configured, series folders are derived from the series template (minus episode info),
+  # movie folders use "{title} ({year})", and song folders use "{artist} - {album} ({year})".
+  # Uses the same template variables as the file templates above.
+  #
+  # Scene-style folder:
+  # folder: '{title}.{year?}.{repack?}.{edition?}.{lang_tag?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}'
+  #
+  # Plex-friendly folder:
+  # folder: '{title} ({year?})'
 
 # Language-based tagging for output filenames
 # Automatically adds language identifiers (e.g., DANiSH, NORDiC, DKsubs) based on

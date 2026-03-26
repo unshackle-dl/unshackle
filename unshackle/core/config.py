@@ -99,6 +99,7 @@ class Config:
 
         self.language_tags: dict = kwargs.get("language_tags") or {}
         self.output_template: dict = kwargs.get("output_template") or {}
+        self.folder_template: str = self.output_template.pop("folder", "") or ""
 
         if kwargs.get("scene_naming") is not None:
             raise SystemExit(
@@ -161,7 +162,11 @@ class Config:
 
         unsafe_chars = r'[<>:"/\\|?*]'
 
-        for template_type, template_str in self.output_template.items():
+        all_templates = dict(self.output_template)
+        if self.folder_template:
+            all_templates["folder"] = self.folder_template
+
+        for template_type, template_str in all_templates.items():
             if not isinstance(template_str, str):
                 warnings.warn(f"Template '{template_type}' must be a string, got {type(template_str).__name__}")
                 continue
