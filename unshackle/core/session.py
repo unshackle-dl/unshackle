@@ -480,6 +480,16 @@ class RnetSession:
         # Remove kwargs rnet doesn't understand
         kwargs.pop("stream", None)  # rnet responses are always lazy
 
+        # Translate requests-compatible 'data' kwarg to rnet equivalents
+        data = kwargs.pop("data", None)
+        if data is not None:
+            if isinstance(data, dict):
+                kwargs["form"] = list(data.items())
+            elif isinstance(data, (str, bytes)):
+                kwargs["body"] = data
+            else:
+                kwargs["body"] = data
+
         # Resolve method enum
         rnet_method = _METHOD_MAP.get(method_upper)
         if rnet_method is None:
