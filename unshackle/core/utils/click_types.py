@@ -360,9 +360,32 @@ class MultipleChoice(click.Choice):
         return super(self).shell_complete(ctx, param, incomplete)
 
 
+class SlowDelayRange(click.ParamType):
+    """Parses a delay range string like '20-40' into a tuple of (min, max) seconds."""
+
+    name = "delay_range"
+
+    def convert(self, value: Any, param: Optional[click.Parameter], ctx: Optional[click.Context]) -> tuple[int, int]:
+        if isinstance(value, tuple):
+            return value
+
+        match = re.match(r"^(\d+)-(\d+)$", str(value))
+        if not match:
+            self.fail(f"'{value}' is not a valid range. Use format: MIN-MAX (e.g., 20-40)", param, ctx)
+
+        low, high = int(match.group(1)), int(match.group(2))
+        if low < 20:
+            self.fail(f"Minimum delay must be at least 20 seconds, got {low}", param, ctx)
+        if low > high:
+            self.fail(f"Min ({low}) cannot be greater than max ({high})", param, ctx)
+
+        return (low, high)
+
+
 SEASON_RANGE = SeasonRange()
 LANGUAGE_RANGE = LanguageRange()
 QUALITY_LIST = QualityList()
 AUDIO_CODEC_LIST = AudioCodecList(Audio.Codec)
+SLOW_DELAY_RANGE = SlowDelayRange()
 
 # VIDEO_CODEC_CHOICE will be created dynamically when imported

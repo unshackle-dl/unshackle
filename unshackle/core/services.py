@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import click
@@ -28,6 +29,23 @@ class Services(click.MultiCommand):
     _remote_services_cache: list[dict] | None = None
 
     # Click-specific methods
+
+    def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
+        """Preprocess --slow to support optional range value before Click parses args."""
+        processed = []
+        i = 0
+        while i < len(args):
+            if args[i] == "--slow":
+                if i + 1 < len(args) and re.match(r"^\d+-\d+$", args[i + 1]):
+                    processed.append(f"--slow={args[i + 1]}")
+                    i += 2
+                else:
+                    processed.append("--slow=60-120")
+                    i += 1
+            else:
+                processed.append(args[i])
+                i += 1
+        return super().parse_args(ctx, processed)
 
     def list_commands(self, ctx: click.Context) -> list[str]:
         """Returns a list of all available Services as command names for Click.

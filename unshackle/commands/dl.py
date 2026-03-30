@@ -58,7 +58,7 @@ from unshackle.core.utilities import (find_font_with_fallbacks, get_debug_logger
                                       is_close_match, suggest_font_packages, time_elapsed_since)
 from unshackle.core.utils import tags
 from unshackle.core.utils.click_types import (AUDIO_CODEC_LIST, LANGUAGE_RANGE, QUALITY_LIST, SEASON_RANGE,
-                                              ContextData, MultipleChoice, MultipleVideoCodecChoice,
+                                              SLOW_DELAY_RANGE, ContextData, MultipleChoice, MultipleVideoCodecChoice,
                                               SubtitleCodecChoice)
 from unshackle.core.utils.collections import merge_dict
 from unshackle.core.utils.selector import select_multiple
@@ -460,10 +460,11 @@ class dl:
     @click.option("-ad", "--audio-description", is_flag=True, default=False, help="Download audio description tracks.")
     @click.option(
         "--slow",
-        is_flag=True,
-        default=False,
-        help="Add a 60-120 second delay between each Title download to act more like a real device. "
-        "This is recommended if you are downloading high-risk titles or streams.",
+        type=SLOW_DELAY_RANGE,
+        default=None,
+        help="Add a delay between each Title download to act more like a real device. "
+        "Use --slow for a 60-120s delay, or --slow MIN-MAX (e.g., --slow 20-40) for a custom range. "
+        "Minimum delay is 20 seconds.",
     )
     @click.option(
         "--list",
@@ -1017,7 +1018,7 @@ class dl:
         no_chapters: bool,
         no_video: bool,
         audio_description: bool,
-        slow: bool,
+        slow: Optional[tuple[int, int]],
         list_: bool,
         list_titles: bool,
         skip_dl: bool,
@@ -1393,7 +1394,7 @@ class dl:
                 )
 
             if slow and i != 0:
-                delay = random.randint(60, 120)
+                delay = random.randint(slow[0], slow[1])
                 with console.status(f"Delaying by {delay} seconds..."):
                     time.sleep(delay)
 

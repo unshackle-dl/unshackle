@@ -44,7 +44,7 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "no_chapters": False,
     "no_video": False,
     "audio_description": False,
-    "slow": False,
+    "slow": None,
     "split_audio": None,
     "skip_dl": False,
     "export": None,
