@@ -1561,6 +1561,9 @@ class dl:
                             missing_ranges = [r for r in range_ if not any(x.range == r for x in title.tracks.videos)]
                             for color_range in missing_ranges:
                                 self.log.warning(f"Skipping {color_range.name} video tracks as none are available.")
+                            if not title.tracks.videos:
+                                self.log.error(f"There's no {', '.join(r.name for r in range_)} Video Track...")
+                                sys.exit(1)
 
                     if vbitrate:
                         if any(r == Video.Range.HYBRID for r in range_):

@@ -68,7 +68,8 @@ class RemoteClient:
         if resp.status_code >= 400:
             error_msg = result.get("message", resp.text)
             error_code = result.get("error_code", "UNKNOWN")
-            raise click.ClickException(f"Server error [{error_code}]: {error_msg}")
+            log.error(f"Server error [{error_code}]: {error_msg}")
+            raise SystemExit(1)
         return result
 
     def post(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -492,6 +493,20 @@ class RemoteService:
             create_data["profile"] = profile
         if no_proxy:
             create_data["no_proxy"] = True
+        # Forward track selection params so the server fetches the right manifests
+        if self.ctx.parent:
+            range_ = self.ctx.parent.params.get("range_")
+            if range_:
+                create_data["range_"] = [r.name for r in range_]
+            vcodec = self.ctx.parent.params.get("vcodec")
+            if vcodec:
+                create_data["vcodec"] = [c.name for c in vcodec]
+            quality = self.ctx.parent.params.get("quality")
+            if quality:
+                create_data["quality"] = list(quality)
+            if self.ctx.parent.params.get("best_available"):
+                create_data["best_available"] = True
+
         if self._service_params:
             create_data.update(self._service_params)
 
@@ -530,7 +545,8 @@ class RemoteService:
 
             if status == "failed":
                 error = resp.get("error", "Authentication failed on server")
-                raise click.ClickException(f"Remote auth failed: {error}")
+                log.error(f"Remote auth failed: {error}")
+                raise SystemExit(1)
 
             if status == "pending_input":
                 prompt = resp.get("prompt", "Enter input: ")
@@ -543,7 +559,8 @@ class RemoteService:
 
             time.sleep(poll_interval)
 
-        raise click.ClickException("Remote authentication timed out")
+        log.error("Remote authentication timed out")
+        raise SystemExit(1)
 
     def get_titles(self) -> Titles_T:
         if self._titles is not None:

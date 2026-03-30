@@ -1231,7 +1231,39 @@ def _create_service_instance(
     cdm = _resolve_server_cdm(normalized_service, profile, data.get("cdm_type"))
 
     ctx.obj = ContextData(config=service_config, cdm=cdm, proxy_providers=proxy_providers, profile=profile)
-    ctx.params = {"proxy": proxy_param, "no_proxy": data.get("no_proxy", False)}
+    # Reconstruct track selection params from client data
+    from unshackle.core.tracks import Video
+
+    range_names = data.get("range_")
+    range_values = None
+    if range_names:
+        range_values = []
+        for name in range_names:
+            try:
+                range_values.append(Video.Range[name])
+            except KeyError:
+                pass
+        range_values = range_values or None
+
+    vcodec_names = data.get("vcodec")
+    vcodec_values = None
+    if vcodec_names:
+        vcodec_values = []
+        for name in vcodec_names:
+            try:
+                vcodec_values.append(Video.Codec[name])
+            except KeyError:
+                pass
+        vcodec_values = vcodec_values or None
+
+    ctx.params = {
+        "proxy": proxy_param,
+        "no_proxy": data.get("no_proxy", False),
+        "range_": range_values,
+        "vcodec": vcodec_values,
+        "quality": data.get("quality"),
+        "best_available": data.get("best_available", False),
+    }
 
     service_module = Services.load(normalized_service)
 
@@ -1258,6 +1290,10 @@ def _create_service_instance(
         "client_region",
         "no_proxy",
         "cdm_type",
+        "range_",
+        "vcodec",
+        "quality",
+        "best_available",
     }
 
     service_init_params = inspect.signature(service_module.__init__).parameters
