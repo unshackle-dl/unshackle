@@ -29,7 +29,7 @@ async def cors_middleware(request: web.Request, handler):
     # Add CORS headers
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-API-Key, Authorization"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Secret-Key, Authorization"
     response.headers["Access-Control-Max-Age"] = "3600"
 
     return response

@@ -108,14 +108,8 @@ class Config:
                 "See unshackle-example.yaml for examples."
             )
 
-        if not self.output_template:
-            raise SystemExit(
-                "ERROR: No 'output_template' configured in your unshackle.yaml.\n"
-                "Please add an 'output_template' section with movies, series, and songs templates.\n"
-                "See unshackle-example.yaml for examples."
-            )
-
-        self._validate_output_templates()
+        if self.output_template:
+            self._validate_output_templates()
 
         self.unicode_filenames: bool = kwargs.get("unicode_filenames", False)
 

@@ -567,6 +567,13 @@ class dl:
 
         self.log = logging.getLogger("download")
 
+        if not config.output_template:
+            raise click.ClickException(
+                "No 'output_template' configured in your unshackle.yaml.\n"
+                "Please add an 'output_template' section with movies, series, and songs templates.\n"
+                "See unshackle-example.yaml for examples."
+            )
+
         self.service = Services.get_tag(ctx.invoked_subcommand)
         service_dl_config = config.services.get(self.service, {}).get("dl", {})
         if service_dl_config:

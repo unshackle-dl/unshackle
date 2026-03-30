@@ -130,6 +130,8 @@ def serve(
         @web.middleware
         async def api_key_authentication(request: web.Request, handler) -> web.Response:
             """Authenticate API requests using X-Secret-Key header."""
+            if request.path == "/api/health":
+                return await handler(request)
             secret_key = request.headers.get("X-Secret-Key")
             if not secret_key:
                 return web.json_response({"status": 401, "message": "Secret Key is Empty."}, status=401)
