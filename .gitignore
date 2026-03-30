@@ -19,6 +19,8 @@ device_cert
 device_client_id_blob
 device_private_key
 device_vmp_blob
+unshackle/binaries/*
+!unshackle/binaries/placehere.txt
 unshackle/cache/
 unshackle/cookies/
 unshackle/certs/
