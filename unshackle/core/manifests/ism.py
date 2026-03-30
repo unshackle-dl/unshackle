@@ -3,14 +3,12 @@ from __future__ import annotations
 import base64
 import hashlib
 import html
-import shutil
 import urllib.parse
 from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
 
 import requests
-from curl_cffi.requests import Session as CurlSession
 from langcodes import Language, tag_is_valid
 from lxml.etree import Element
 from pyplayready.system.pssh import PSSH as PR_PSSH
@@ -20,6 +18,7 @@ from requests import Session
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
 from unshackle.core.events import events
+from unshackle.core.session import RnetSession
 from unshackle.core.tracks import Audio, Subtitle, Track, Tracks, Video
 from unshackle.core.utilities import get_debug_logger, try_ensure_utf8
 from unshackle.core.utils.xml import load_xml
@@ -35,13 +34,13 @@ class ISM:
         self.url = url
 
     @classmethod
-    def from_url(cls, url: str, session: Optional[Union[Session, CurlSession]] = None, **kwargs: Any) -> "ISM":
+    def from_url(cls, url: str, session: Optional[Union[Session, RnetSession]] = None, **kwargs: Any) -> "ISM":
         if not url:
             raise requests.URLRequired("ISM manifest URL must be provided")
         if not session:
             session = Session()
-        elif not isinstance(session, (Session, CurlSession)):
-            raise TypeError(f"Expected session to be a {Session} or {CurlSession}, not {session!r}")
+        elif not isinstance(session, (Session, RnetSession)):
+            raise TypeError(f"Expected session to be a {Session} or {RnetSession}, not {session!r}")
         res = session.get(url, **kwargs)
         if res.url != url:
             url = res.url
@@ -269,7 +268,6 @@ class ISM:
         progress(total=len(segments))
 
         downloader = track.downloader
-        skip_merge = False
         downloader_args = dict(
             urls=[{"url": url} for url in segments],
             output_dir=save_dir,
@@ -278,17 +276,8 @@ class ISM:
             cookies=session.cookies,
             proxy=proxy,
             max_workers=max_workers,
+            session=session,
         )
-
-        if downloader.__name__ == "n_m3u8dl_re":
-            skip_merge = True
-            downloader_args.update(
-                {
-                    "filename": track.id,
-                    "track": track,
-                    "content_keys": session_drm.content_keys if session_drm else None,
-                }
-            )
 
         debug_logger = get_debug_logger()
         if debug_logger:
@@ -300,11 +289,10 @@ class ISM:
                     "track_id": getattr(track, "id", None),
                     "track_type": track.__class__.__name__,
                     "total_segments": len(segments),
-                    "downloader": downloader.__name__,
+                    "downloader": "requests",
                     "has_drm": bool(session_drm),
                     "drm_type": session_drm.__class__.__name__ if session_drm else None,
-                    "skip_merge": skip_merge,
-                    "save_path": str(save_path),
+                                        "save_path": str(save_path),
                 },
             )
 
@@ -317,9 +305,6 @@ class ISM:
                 if downloaded and downloaded.endswith("/s"):
                     status_update["downloaded"] = f"ISM {downloaded}"
                 progress(**status_update)
-
-        for control_file in save_dir.glob("*.aria2__temp"):
-            control_file.unlink()
 
         # Verify output directory exists and contains files
         if not save_dir.exists():
@@ -334,9 +319,8 @@ class ISM:
                         "track_type": track.__class__.__name__,
                         "save_dir": str(save_dir),
                         "save_path": str(save_path),
-                        "downloader": downloader.__name__,
-                        "skip_merge": skip_merge,
-                    },
+                        "downloader": "requests",
+                                            },
                 )
             raise FileNotFoundError(error_msg)
 
@@ -354,9 +338,8 @@ class ISM:
                     "save_dir_exists": save_dir.exists(),
                     "segments_found": len(segments_to_merge),
                     "segment_files": [f.name for f in segments_to_merge[:10]],  # Limit to first 10
-                    "downloader": downloader.__name__,
-                    "skip_merge": skip_merge,
-                },
+                    "downloader": "requests",
+                                    },
             )
 
         if not segments_to_merge:
@@ -372,39 +355,35 @@ class ISM:
                         "track_type": track.__class__.__name__,
                         "save_dir": str(save_dir),
                         "directory_contents": [str(p) for p in all_contents],
-                        "downloader": downloader.__name__,
-                        "skip_merge": skip_merge,
-                    },
+                        "downloader": "requests",
+                                            },
                 )
             raise FileNotFoundError(error_msg)
 
-        if skip_merge:
-            shutil.move(segments_to_merge[0], save_path)
-        else:
-            with open(save_path, "wb") as f:
-                for segment_file in segments_to_merge:
-                    segment_data = segment_file.read_bytes()
-                    if (
-                        not session_drm
-                        and isinstance(track, Subtitle)
-                        and track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML)
-                    ):
-                        segment_data = try_ensure_utf8(segment_data)
-                        segment_data = (
-                            segment_data.decode("utf8")
-                            .replace("&lrm;", html.unescape("&lrm;"))
-                            .replace("&rlm;", html.unescape("&rlm;"))
-                            .encode("utf8")
-                        )
-                    f.write(segment_data)
-                    f.flush()
-                    segment_file.unlink()
-                    progress(advance=1)
+        with open(save_path, "wb") as f:
+            for segment_file in segments_to_merge:
+                segment_data = segment_file.read_bytes()
+                if (
+                    not session_drm
+                    and isinstance(track, Subtitle)
+                    and track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML)
+                ):
+                    segment_data = try_ensure_utf8(segment_data)
+                    segment_data = (
+                        segment_data.decode("utf8")
+                        .replace("&lrm;", html.unescape("&lrm;"))
+                        .replace("&rlm;", html.unescape("&rlm;"))
+                        .encode("utf8")
+                    )
+                f.write(segment_data)
+                f.flush()
+                segment_file.unlink()
+                progress(advance=1)
 
         track.path = save_path
         events.emit(events.Types.TRACK_DOWNLOADED, track=track)
 
-        if not skip_merge and session_drm:
+        if session_drm:
             progress(downloaded="Decrypting", completed=0, total=100)
             session_drm.decrypt(save_path)
             track.drm = None

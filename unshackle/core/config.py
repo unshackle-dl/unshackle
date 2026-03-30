@@ -41,8 +41,6 @@ class Config:
 
     def __init__(self, **kwargs: Any):
         self.dl: dict = kwargs.get("dl") or {}
-        self.aria2c: dict = kwargs.get("aria2c") or {}
-        self.n_m3u8dl_re: dict = kwargs.get("n_m3u8dl_re") or {}
         self.cdm: dict = kwargs.get("cdm") or {}
         self.chapter_fallback_name: str = kwargs.get("chapter_fallback_name") or ""
         self.curl_impersonate: dict = kwargs.get("curl_impersonate") or {}
@@ -60,13 +58,13 @@ class Config:
             else:
                 setattr(self.directories, name, Path(path).expanduser())
 
-        downloader_cfg = kwargs.get("downloader") or "requests"
-        if isinstance(downloader_cfg, dict):
-            self.downloader_map = {k.upper(): v for k, v in downloader_cfg.items()}
-            self.downloader = self.downloader_map.get("DEFAULT", "requests")
-        else:
-            self.downloader_map = {}
-            self.downloader = downloader_cfg
+        downloader_cfg = kwargs.get("downloader")
+        if downloader_cfg and downloader_cfg != "requests":
+            warnings.warn(
+                f"downloader '{downloader_cfg}' is deprecated. The unified requests downloader is now used.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
         self.filenames = self._Filenames()
         for name, filename in (kwargs.get("filenames") or {}).items():

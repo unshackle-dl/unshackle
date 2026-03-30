@@ -17,8 +17,6 @@ from zlib import crc32
 
 import m3u8
 import requests
-from curl_cffi.requests import Response as CurlResponse
-from curl_cffi.requests import Session as CurlSession
 from langcodes import Language, tag_is_valid
 from m3u8 import M3U8
 from pyplayready.cdm import Cdm as PlayReadyCdm
@@ -30,15 +28,15 @@ from requests import Session
 from unshackle.core import binaries
 from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
-from unshackle.core.downloaders import requests as requests_downloader
 from unshackle.core.drm import DRM_T, ClearKey, MonaLisa, PlayReady, Widevine
 from unshackle.core.events import events
+from unshackle.core.session import RnetResponse, RnetSession
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.utilities import get_debug_logger, get_extension, is_close_match, try_ensure_utf8
 
 
 class HLS:
-    def __init__(self, manifest: M3U8, session: Optional[Union[Session, CurlSession]] = None):
+    def __init__(self, manifest: M3U8, session: Optional[Union[Session, RnetSession]] = None):
         if not manifest:
             raise ValueError("HLS manifest must be provided.")
         if not isinstance(manifest, M3U8):
@@ -50,7 +48,7 @@ class HLS:
         self.session = session or Session()
 
     @classmethod
-    def from_url(cls, url: str, session: Optional[Union[Session, CurlSession]] = None, **args: Any) -> HLS:
+    def from_url(cls, url: str, session: Optional[Union[Session, RnetSession]] = None, **args: Any) -> HLS:
         if not url:
             raise requests.URLRequired("HLS manifest URL must be provided.")
         if not isinstance(url, str):
@@ -58,22 +56,22 @@ class HLS:
 
         if not session:
             session = Session()
-        elif not isinstance(session, (Session, CurlSession)):
-            raise TypeError(f"Expected session to be a {Session} or {CurlSession}, not {session!r}")
+        elif not isinstance(session, (Session, RnetSession)):
+            raise TypeError(f"Expected session to be a {Session} or {RnetSession}, not {session!r}")
 
         res = session.get(url, **args)
 
-        # Handle requests and curl_cffi response objects
+        # Handle requests and rnet response objects
         if isinstance(res, requests.Response):
             if not res.ok:
                 raise requests.ConnectionError("Failed to request the M3U(8) document.", response=res)
             content = res.text
-        elif isinstance(res, CurlResponse):
+        elif isinstance(res, RnetResponse):
             if not res.ok:
                 raise requests.ConnectionError("Failed to request the M3U(8) document.", response=res)
             content = res.text
         else:
-            raise TypeError(f"Expected response to be a requests.Response or curl_cffi.Response, not {type(res)}")
+            raise TypeError(f"Expected response to be a requests.Response or rnet.Response, not {type(res)}")
 
         master = m3u8.loads(content, uri=url)
 
@@ -473,7 +471,7 @@ class HLS:
         save_path: Path,
         save_dir: Path,
         progress: partial,
-        session: Optional[Union[Session, CurlSession]] = None,
+        session: Optional[Union[Session, RnetSession]] = None,
         proxy: Optional[str] = None,
         max_workers: Optional[int] = None,
         license_widevine: Optional[Callable] = None,
@@ -482,8 +480,8 @@ class HLS:
     ) -> None:
         if not session:
             session = Session()
-        elif not isinstance(session, (Session, CurlSession)):
-            raise TypeError(f"Expected session to be a {Session} or {CurlSession}, not {session!r}")
+        elif not isinstance(session, (Session, RnetSession)):
+            raise TypeError(f"Expected session to be a {Session} or {RnetSession}, not {session!r}")
 
         if proxy:
             # Handle proxies differently based on session type
@@ -497,14 +495,14 @@ class HLS:
         else:
             # Get the playlist text and handle both session types
             response = session.get(track.url)
-            if isinstance(response, requests.Response) or isinstance(response, CurlResponse):
+            if isinstance(response, requests.Response) or isinstance(response, RnetResponse):
                 if not response.ok:
                     log.error(f"Failed to request the invariant M3U8 playlist: {response.status_code}")
                     sys.exit(1)
                 playlist_text = response.text
             else:
                 raise TypeError(
-                    f"Expected response to be a requests.Response or curl_cffi.Response, not {type(response)}"
+                    f"Expected response to be a requests.Response or rnet.Response, not {type(response)}"
                 )
 
             master = m3u8.loads(playlist_text, uri=track.url)
@@ -587,9 +585,6 @@ class HLS:
         progress(total=total_segments)
 
         downloader = track.downloader
-        if downloader.__name__ == "aria2c" and any(x.byterange for x in master.segments if x not in unwanted_segments):
-            downloader = requests_downloader
-            log.warning("Falling back to the requests downloader as aria2(c) doesn't support the Range header")
 
         urls: list[dict[str, Any]] = []
         segment_durations: list[int] = []
@@ -618,7 +613,6 @@ class HLS:
 
         segment_save_dir = save_dir / "segments"
 
-        skip_merge = False
         downloader_args = dict(
             urls=urls,
             output_dir=segment_save_dir,
@@ -627,21 +621,8 @@ class HLS:
             cookies=session.cookies,
             proxy=proxy,
             max_workers=max_workers,
+            session=session,
         )
-
-        if downloader.__name__ == "n_m3u8dl_re":
-            skip_merge = True
-            # session_drm already has correct content_keys from initial licensing above
-            n_m3u8dl_content_keys = session_drm.content_keys if session_drm else None
-
-            downloader_args.update(
-                {
-                    "output_dir": save_dir,
-                    "filename": track.id,
-                    "track": track,
-                    "content_keys": n_m3u8dl_content_keys,
-                }
-            )
 
         debug_logger = get_debug_logger()
         if debug_logger:
@@ -653,10 +634,8 @@ class HLS:
                     "track_id": getattr(track, "id", None),
                     "track_type": track.__class__.__name__,
                     "total_segments": total_segments,
-                    "downloader": downloader.__name__,
                     "has_drm": bool(session_drm),
                     "drm_type": session_drm.__class__.__name__ if session_drm else None,
-                    "skip_merge": skip_merge,
                     "save_path": str(save_path),
                 },
             )
@@ -674,15 +653,6 @@ class HLS:
         # see https://github.com/devine-dl/devine/issues/71
         for control_file in segment_save_dir.glob("*.aria2__temp"):
             control_file.unlink()
-
-        if skip_merge:
-            final_save_path = HLS._finalize_n_m3u8dl_re_output(track=track, save_dir=save_dir, save_path=save_path)
-            progress(downloaded="Downloaded")
-            track.path = final_save_path
-            if session_drm:
-                track.drm = None
-            events.emit(events.Types.TRACK_DOWNLOADED, track=track)
-            return
 
         progress(total=total_segments, completed=0, downloaded="Merging")
 
@@ -842,12 +812,12 @@ class HLS:
                     )
 
                     # Check response based on session type
-                    if isinstance(res, requests.Response) or isinstance(res, CurlResponse):
+                    if isinstance(res, requests.Response) or isinstance(res, RnetResponse):
                         res.raise_for_status()
                         init_content = res.content
                     else:
                         raise TypeError(
-                            f"Expected response to be requests.Response or curl_cffi.Response, not {type(res)}"
+                            f"Expected response to be requests.Response or rnet.Response, not {type(res)}"
                         )
 
                     map_data = (segment.init_section, init_content)
@@ -934,9 +904,8 @@ class HLS:
                     "save_dir_exists": save_dir.exists(),
                     "segments_found": len(segments_to_merge),
                     "segment_files": [f.name for f in segments_to_merge[:10]],  # Limit to first 10
-                    "downloader": downloader.__name__,
-                    "skip_merge": skip_merge,
-                },
+                    "downloader": "requests",
+                                    },
             )
 
         if not segments_to_merge:
@@ -953,9 +922,8 @@ class HLS:
                         "save_dir": str(save_dir),
                         "save_dir_exists": save_dir.exists(),
                         "directory_contents": [str(p) for p in all_contents],
-                        "downloader": downloader.__name__,
-                        "skip_merge": skip_merge,
-                    },
+                        "downloader": "requests",
+                                            },
                 )
             raise FileNotFoundError(error_msg)
 
@@ -1067,7 +1035,7 @@ class HLS:
 
     @staticmethod
     def parse_session_data_keys(
-        manifest: M3U8, session: Optional[Union[Session, CurlSession]] = None
+        manifest: M3U8, session: Optional[Union[Session, RnetSession]] = None
     ) -> list[m3u8.model.Key]:
         """Parse `com.apple.hls.keys` session data and return Key objects."""
         keys: list[m3u8.model.Key] = []
@@ -1142,7 +1110,7 @@ class HLS:
     def get_track_kid_from_init(
         master: M3U8,
         track: AnyTrack,
-        session: Union[Session, CurlSession],
+        session: Union[Session, RnetSession],
     ) -> Optional[UUID]:
         """
         Extract the track's Key ID from its init segment (EXT-X-MAP).
@@ -1209,7 +1177,7 @@ class HLS:
     @staticmethod
     def get_drm(
         key: Union[m3u8.model.SessionKey, m3u8.model.Key],
-        session: Optional[Union[Session, CurlSession]] = None,
+        session: Optional[Union[Session, RnetSession]] = None,
     ) -> DRM_T:
         """
         Convert HLS EXT-X-KEY data to an initialized DRM object.
@@ -1221,8 +1189,8 @@ class HLS:
 
         Raises a NotImplementedError if the key system is not supported.
         """
-        if not isinstance(session, (Session, CurlSession, type(None))):
-            raise TypeError(f"Expected session to be a {Session} or {CurlSession}, not {type(session)}")
+        if not isinstance(session, (Session, RnetSession, type(None))):
+            raise TypeError(f"Expected session to be a {Session} or {RnetSession}, not {type(session)}")
         if not session:
             session = Session()
 

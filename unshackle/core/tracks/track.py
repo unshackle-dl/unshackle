@@ -13,7 +13,6 @@ from typing import Any, Callable, Iterable, Optional, Union
 from uuid import UUID
 from zlib import crc32
 
-from curl_cffi.requests import Session as CurlSession
 from langcodes import Language
 from requests import Session
 
@@ -21,9 +20,10 @@ from unshackle.core import binaries
 from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY
-from unshackle.core.downloaders import aria2c, curl_impersonate, n_m3u8dl_re, requests
+from unshackle.core.downloaders import requests
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
 from unshackle.core.events import events
+from unshackle.core.session import RnetSession
 from unshackle.core.utilities import get_boxes, try_ensure_utf8
 from unshackle.core.utils.subprocess import ffprobe
 
@@ -88,12 +88,7 @@ class Track:
                 raise TypeError(f"Expected drm to be an iterable, not {type(drm)}")
 
         if downloader is None:
-            downloader = {
-                "aria2c": aria2c,
-                "curl_impersonate": curl_impersonate,
-                "requests": requests,
-                "n_m3u8dl_re": n_m3u8dl_re,
-            }[config.downloader]
+            downloader = requests
 
         self.path: Optional[Path] = None
         self.url = url
@@ -211,23 +206,13 @@ class Track:
         if track_type == "Subtitle":
             save_path = save_path.with_suffix(f".{self.codec.extension}")
 
-        if self.downloader.__name__ == "n_m3u8dl_re" and (
-            self.descriptor == self.Descriptor.URL
-            or track_type in ("Subtitle", "Attachment")
-        ):
-            self.downloader = requests
-
         if self.descriptor != self.Descriptor.URL:
             save_dir = save_path.with_name(save_path.name + "_segments")
         else:
             save_dir = save_path.parent
 
         def cleanup():
-            # track file (e.g., "foo.mp4")
             save_path.unlink(missing_ok=True)
-            # aria2c control file (e.g., "foo.mp4.aria2" or "foo.mp4.aria2__temp")
-            save_path.with_suffix(f"{save_path.suffix}.aria2").unlink(missing_ok=True)
-            save_path.with_suffix(f"{save_path.suffix}.aria2__temp").unlink(missing_ok=True)
             if save_dir.exists() and save_dir.name.endswith("_segments"):
                 shutil.rmtree(save_dir)
 
@@ -328,10 +313,6 @@ class Track:
 
                     if DOWNLOAD_LICENCE_ONLY.is_set():
                         progress(downloaded="[yellow]SKIPPED")
-                    elif track_type != "Subtitle" and self.downloader.__name__ == "n_m3u8dl_re":
-                        progress(downloaded="[red]FAILED")
-                        error = f"[N_m3u8DL-RE]: {self.descriptor} is currently not supported"
-                        raise ValueError(error)
                     else:
                         for status_update in self.downloader(
                             urls=self.url,
@@ -341,9 +322,13 @@ class Track:
                             cookies=session.cookies,
                             proxy=proxy,
                             max_workers=max_workers,
+                            session=session,
                         ):
                             file_downloaded = status_update.get("file_downloaded")
                             if not file_downloaded:
+                                downloaded = status_update.get("downloaded")
+                                if downloaded and downloaded.endswith("/s"):
+                                    status_update["downloaded"] = f"URL {downloaded}"
                                 progress(**status_update)
 
                         # see https://github.com/devine-dl/devine/issues/71
@@ -602,8 +587,8 @@ class Track:
             raise TypeError(f"Expected url to be a {str}, not {type(url)}")
         if not isinstance(byte_range, (str, type(None))):
             raise TypeError(f"Expected byte_range to be a {str}, not {type(byte_range)}")
-        if not isinstance(session, (Session, CurlSession, type(None))):
-            raise TypeError(f"Expected session to be a {Session} or {CurlSession}, not {type(session)}")
+        if not isinstance(session, (Session, RnetSession, type(None))):
+            raise TypeError(f"Expected session to be a {Session} or {RnetSession}, not {type(session)}")
 
         if not url:
             if self.descriptor != self.Descriptor.URL:
@@ -641,10 +626,11 @@ class Track:
             init_data = res.content
         else:
             init_data = None
-            with session.get(url, stream=True) as s:
-                for chunk in s.iter_content(content_length):
-                    init_data = chunk
-                    break
+            s = session.get(url, stream=True)
+            for chunk in s.iter_content(content_length):
+                init_data = chunk
+                break
+            s.close()
             if not init_data:
                 raise ValueError(f"Failed to read {content_length} bytes from the track URI.")
 
