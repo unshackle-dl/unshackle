@@ -648,21 +648,80 @@ class Hybrid:
                 success=True,
             )
 
+    def _probe_hdr_metadata(self):
+        """Extract mastering display and content light level metadata from the HDR10 stream via ffprobe.
+
+        Returns (max_mdl, min_mdl, max_cll, max_fall) in dovi_tool level6 units:
+        - max_mdl: nits (integer)
+        - min_mdl: 0.0001 nit units (integer)
+        - max_cll / max_fall: nits (integer)
+        """
+        ffprobe_bin = str(FFProbe) if FFProbe else "ffprobe"
+        result = subprocess.run(
+            [
+                ffprobe_bin,
+                "-v", "error",
+                "-select_streams", "v:0",
+                "-show_entries", "stream_side_data=max_luminance,min_luminance,max_content,max_average",
+                "-of", "json",
+                str(config.directories.temp / "HDR10.hevc"),
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        max_mdl = 1000
+        min_mdl = 1
+        max_cll = 0
+        max_fall = 0
+
+        if result.returncode == 0 and result.stdout:
+            try:
+                probe = json.loads(result.stdout)
+                for stream in probe.get("streams", []):
+                    for sd in stream.get("side_data_list", []):
+                        if "max_luminance" in sd:
+                            num, den = sd["max_luminance"].split("/")
+                            max_mdl = int(int(num) / int(den))
+                        if "min_luminance" in sd:
+                            num, den = sd["min_luminance"].split("/")
+                            min_mdl = int(int(num) / int(den) * 10000)
+                        if "max_content" in sd:
+                            max_cll = int(sd["max_content"])
+                        if "max_average" in sd:
+                            max_fall = int(sd["max_average"])
+            except (json.JSONDecodeError, KeyError, ValueError, ZeroDivisionError):
+                pass
+
+        if self.debug_logger:
+            self.debug_logger.log(
+                level="DEBUG",
+                operation="hybrid_probe_hdr_metadata",
+                message="Probed HDR metadata from source stream",
+                context={"max_mdl": max_mdl, "min_mdl": min_mdl, "max_cll": max_cll, "max_fall": max_fall},
+            )
+
+        return max_mdl, min_mdl, max_cll, max_fall
+
     def convert_hdr10plus_to_dv(self):
         """Convert HDR10+ metadata to Dolby Vision RPU"""
         if os.path.isfile(config.directories.temp / "RPU.bin"):
             return
 
         with console.status("Converting HDR10+ metadata to Dolby Vision...", spinner="dots"):
+            # Extract actual HDR metadata from the source stream
+            max_mdl, min_mdl, max_cll, max_fall = self._probe_hdr_metadata()
+
             # First create the extra metadata JSON for dovi_tool
             extra_metadata = {
                 "cm_version": "V29",
                 "length": 0,  # dovi_tool will figure this out
                 "level6": {
-                    "max_display_mastering_luminance": 1000,
-                    "min_display_mastering_luminance": 1,
-                    "max_content_light_level": 0,
-                    "max_frame_average_light_level": 0,
+                    "max_display_mastering_luminance": max_mdl,
+                    "min_display_mastering_luminance": min_mdl,
+                    "max_content_light_level": max_cll,
+                    "max_frame_average_light_level": max_fall,
                 },
             }
 
