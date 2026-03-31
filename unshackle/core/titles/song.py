@@ -1,3 +1,4 @@
+import re
 from abc import ABC
 from typing import Any, Iterable, Optional, Union
 
@@ -98,10 +99,10 @@ class Song(Title):
                 formatter = TemplateFormatter(config.folder_template)
                 context = self._build_template_context(media_info, show_service)
                 folder_name = formatter.format(context)
-                if '.' in config.folder_template and ' ' not in config.folder_template:
-                    return sanitize_filename(folder_name, ".")
-                else:
-                    return sanitize_filename(folder_name, " ")
+
+                separators = re.sub(r'\{[^}]*\}', '', config.folder_template)
+                spacer = "." if "." in separators and " " not in separators else " "
+                return sanitize_filename(folder_name, spacer)
             name = f"{self.artist} - {self.album}"
             if self.year:
                 name += f" ({self.year})"

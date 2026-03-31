@@ -107,10 +107,9 @@ class Episode(Title):
 
                 folder_name = formatter.format(context)
 
-                if '.' in config.folder_template and ' ' not in config.folder_template:
-                    return sanitize_filename(folder_name, ".")
-                else:
-                    return sanitize_filename(folder_name, " ")
+                separators = re.sub(r'\{[^}]*\}', '', config.folder_template)
+                spacer = "." if "." in separators and " " not in separators else " "
+                return sanitize_filename(folder_name, spacer)
 
             series_template = config.output_template.get("series")
             if series_template:
@@ -130,10 +129,9 @@ class Episode(Title):
 
                 folder_name = formatter.format(context)
 
-                if '.' in series_template and ' ' not in series_template:
-                    return sanitize_filename(folder_name, ".")
-                else:
-                    return sanitize_filename(folder_name, " ")
+                separators = re.sub(r'\{[^}]*\}', '', derived_template)
+                spacer = "." if "." in separators and " " not in separators else " "
+                return sanitize_filename(folder_name, spacer)
             else:
                 name = f"{self.title}"
                 if self.year:
