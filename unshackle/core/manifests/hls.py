@@ -259,7 +259,7 @@ class HLS:
 
     @staticmethod
     def _probe_ts_info(
-        variant_url: str, session: Optional[Union[Session, CurlSession]] = None
+        variant_url: str, session: Optional[Union[Session, RnetSession]] = None
     ) -> Optional[tuple[int, int, Video.Codec]]:
         """Probe the first TS segment of a variant playlist to extract resolution and codec."""
         if not session:

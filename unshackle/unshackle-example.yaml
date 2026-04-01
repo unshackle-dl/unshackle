@@ -469,6 +469,12 @@ serve:
   # Maximum concurrent sessions before oldest is evicted (default: 100)
   max_sessions: 100
 
+  # Global service allowlist (optional)
+  # Only these services will be exposed on the API. If omitted, all services are available.
+  # services:
+  #   - SERVICE_TAG_1
+  #   - SERVICE_TAG_2
+
   users:
     secret_key_for_user:
       devices:  # Widevine devices (WVDs) this user can access
@@ -476,6 +482,12 @@ serve:
       playready_devices:  # PlayReady devices (PRDs) this user can access
         - playready_device_sl3000
       username: user
+      # Per-user service allowlist (optional)
+      # Restricts this user to only the listed services. If omitted, user can access
+      # all globally-allowed services. Effective access is the intersection of global
+      # and per-user allowlists.
+      # services:
+      #   - SERVICE_TAG_1
   # devices:  # Widevine device paths (auto-populated from directories.wvds)
   #   - '/path/to/device.wvd'
   # playready_devices:  # PlayReady device paths (auto-populated from directories.prds)

@@ -7,6 +7,7 @@ from aiohttp import web
 
 from unshackle.core.api.errors import APIError, APIErrorCode, handle_api_exception
 from unshackle.core.api.input_bridge import AuthStatus, InputBridge
+from unshackle.core.config import config
 from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP
 from unshackle.core.proxies.resolve import initialize_proxy_providers, resolve_proxy
 from unshackle.core.services import Services
@@ -64,12 +65,47 @@ DEFAULT_DOWNLOAD_PARAMS = {
 }
 
 
-def validate_service(service_tag: str) -> Optional[str]:
-    """Validate and normalize service tag."""
+def get_allowed_services(request: Optional[web.Request] = None) -> Optional[List[str]]:
+    """Get effective service allowlist considering global + per-key config.
+
+    Returns None if all services are allowed.
+    """
+    global_allowed = config.serve.get("services")
+    global_set: Optional[set[str]] = None
+    if global_allowed:
+        global_set = {Services.get_tag(s) for s in global_allowed}
+
+    key_set: Optional[set[str]] = None
+    if request:
+        secret_key = request.headers.get("X-Secret-Key")
+        if secret_key:
+            users = config.serve.get("users", {})
+            user_config = users.get(secret_key, {})
+            user_services = user_config.get("services")
+            if user_services:
+                key_set = {Services.get_tag(s) for s in user_services}
+
+    if global_set and key_set:
+        result = global_set & key_set
+    elif global_set:
+        result = global_set
+    elif key_set:
+        result = key_set
+    else:
+        return None
+
+    return list(result)
+
+
+def validate_service(service_tag: str, request: Optional[web.Request] = None) -> Optional[str]:
+    """Validate, normalize, and check allowlist for service tag."""
     try:
         normalized = Services.get_tag(service_tag)
         service_path = Services.get_path(normalized)
         if not service_path.exists():
+            return None
+        allowed = get_allowed_services(request)
+        if allowed is not None and normalized not in allowed:
             return None
         return normalized
     except Exception:
@@ -341,6 +377,14 @@ async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = 
             details={"service": service_tag},
         )
 
+    allowed = get_allowed_services(request)
+    if allowed is not None and normalized_service not in allowed:
+        raise APIError(
+            APIErrorCode.INVALID_SERVICE,
+            f"Service '{service_tag}' not found",
+            details={"service": service_tag},
+        )
+
     profile = data.get("profile")
     proxy_param = data.get("proxy")
     no_proxy = data.get("no_proxy", False)
@@ -465,7 +509,7 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
             details={"missing_parameter": "title_id"},
         )
 
-    normalized_service = validate_service(service_tag)
+    normalized_service = validate_service(service_tag, request)
     if not normalized_service:
         raise APIError(
             APIErrorCode.INVALID_SERVICE,
@@ -617,7 +661,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
             details={"missing_parameter": "title_id"},
         )
 
-    normalized_service = validate_service(service_tag)
+    normalized_service = validate_service(service_tag, request)
     if not normalized_service:
         raise APIError(
             APIErrorCode.INVALID_SERVICE,
@@ -993,7 +1037,7 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
             details={"missing_parameter": "title_id"},
         )
 
-    normalized_service = validate_service(service_tag)
+    normalized_service = validate_service(service_tag, request)
     if not normalized_service:
         raise APIError(
             APIErrorCode.INVALID_SERVICE,
@@ -1377,7 +1421,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
     if not title_id:
         raise APIError(APIErrorCode.INVALID_INPUT, "Missing required parameter: title_id")
 
-    normalized_service = validate_service(service_tag)
+    normalized_service = validate_service(service_tag, request)
     if not normalized_service:
         raise APIError(
             APIErrorCode.INVALID_SERVICE,

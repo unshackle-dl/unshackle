@@ -143,6 +143,16 @@ def serve(
         if remote_only:
             api_only = True
 
+        global_services = config.serve.get("services")
+        if global_services:
+            log.info(f"Global service allowlist: {', '.join(global_services)}")
+        users = config.serve.get("users", {})
+        for user_key, user_cfg in (users.items() if isinstance(users, dict) else []):
+            user_services = user_cfg.get("services") if isinstance(user_cfg, dict) else None
+            if user_services:
+                username = user_cfg.get("username", user_key[:8] + "...")
+                log.info(f"User '{username}' restricted to services: {', '.join(user_services)}")
+
         if api_only:
             log.info("Starting REST API server (pywidevine/pyplayready CDM disabled)")
             if no_key:
