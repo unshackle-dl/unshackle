@@ -45,6 +45,7 @@ class Track:
         name: Optional[str] = None,
         drm: Optional[Iterable[DRM_T]] = None,
         edition: Optional[str] = None,
+        session: Optional[Session] = None,
         downloader: Optional[Callable] = None,
         downloader_args: Optional[dict] = None,
         from_file: Optional[Path] = None,
@@ -104,6 +105,7 @@ class Track:
         self.name = name
         self.drm = drm
         self.edition: list[str] = [edition] if isinstance(edition, str) else (edition or [])
+        self.session = session or None
         self.downloader = downloader
         self.downloader_args = downloader_args
         self.from_file = from_file

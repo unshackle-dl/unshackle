@@ -1948,7 +1948,7 @@ class dl:
                             (
                                 pool.submit(
                                     track.download,
-                                    session=service.session,
+                                    session= track.session or service.session,
                                     prepare_drm=partial(
                                         partial(self.prepare_drm, table=download_table),
                                         track=track,
