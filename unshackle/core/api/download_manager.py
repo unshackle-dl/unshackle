@@ -141,8 +141,8 @@ def _perform_download(
         sub_map.update({c.value.upper(): c for c in Subtitle.Codec})
         params["sub_format"] = sub_map.get(sub_format_raw.upper())
 
-    if params.get("export") and isinstance(params["export"], str):
-        params["export"] = Path(params["export"])
+    if params.get("export"):
+        params["export"] = bool(params["export"])
 
     # Load service configuration
     service_config_path = Services.get_path(service) / config.filenames.config

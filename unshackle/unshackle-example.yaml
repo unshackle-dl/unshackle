@@ -163,6 +163,7 @@ directories:
   temp: Temp
   wvds: WVDs
   prds: PRDs
+  exports: Exports # JSON export output from --export flag
   # Additional directories that can be configured:
   # commands: Commands
   services:

@@ -247,10 +247,10 @@ Start a download job. Returns immediately with a job ID (HTTP 202).
 | `no_proxy` | boolean | `false` | Disable all proxy use |
 | `workers` | int | `null` | Max threads per track download |
 | `downloads` | int | `1` | Concurrent track downloads |
-| `slow` | boolean | `false` | Add 60-120s delay between titles |
+| `slow` | string | `null` | Add delay between titles. `true` for 60-120s, or `MIN-MAX` (e.g. `20-40`) |
 | `best_available` | boolean | `false` | Continue if requested quality unavailable |
 | `skip_dl` | boolean | `false` | Skip download, only get decryption keys |
-| `export` | string | `null` | Export keys to JSON file path |
+| `export` | boolean | `false` | Export manifest, track URLs, keys, and subtitles to JSON in the exports directory |
 | `cdm_only` | boolean | `null` | Only use CDM (`true`) or only vaults (`false`) |
 | `no_cache` | boolean | `false` | Bypass title cache |
 | `reset_cache` | boolean | `false` | Clear title cache before fetching |

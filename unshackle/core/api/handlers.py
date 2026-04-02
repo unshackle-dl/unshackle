@@ -48,7 +48,7 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "slow": None,
     "split_audio": None,
     "skip_dl": False,
-    "export": None,
+    "export": False,
     "cdm_only": None,
     "no_proxy": False,
     "no_folder": False,
