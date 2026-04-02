@@ -223,6 +223,10 @@ cython_debug/
 .github/copilot-instructions.md
 CLAUDE.md
 
+# CodeQL local analysis
+.codeql-db/
+.codeql-results/
+
 # Ruff stuff:
 .ruff_cache/
 
