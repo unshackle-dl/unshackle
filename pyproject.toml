@@ -57,7 +57,7 @@ dependencies = [
     "pyplayready>=0.8.3,<0.9",
     "cryptography>=45.0.0,<47",
     "subby",
-    "aiohttp>=3.13.3,<4",
+    "aiohttp>=3.13.4,<4",
     "aiohttp-swagger3>=0.9.0,<1",
     "pysubs2>=1.7.0,<2",
     "PyExecJS>=1.5.1,<2",
