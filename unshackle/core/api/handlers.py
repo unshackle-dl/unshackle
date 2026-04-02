@@ -16,6 +16,12 @@ from unshackle.core.tracks import Audio, Subtitle, Video
 
 log = logging.getLogger("api")
 
+
+def _sanitize_log(value: object) -> str:
+    """Sanitize a value for safe logging by removing newlines and control characters."""
+    return str(value).replace("\n", "").replace("\r", "").replace("\x00", "")
+
+
 DEFAULT_DOWNLOAD_PARAMS = {
     "profile": None,
     "quality": [],
@@ -606,7 +612,7 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
                         service_kwargs[param_name] = False
                     else:
                         # Log warning for unknown required parameters
-                        log.warning(f"Unknown required parameter '{param_name}' for service {normalized_service}")
+                        log.warning(f"Unknown required parameter '{_sanitize_log(param_name)}' for service {_sanitize_log(normalized_service)}")
 
         # Filter out any parameters that the service doesn't accept
         filtered_kwargs = {}
@@ -758,7 +764,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                         service_kwargs[param_name] = False
                     else:
                         # Log warning for unknown required parameters
-                        log.warning(f"Unknown required parameter '{param_name}' for service {normalized_service}")
+                        log.warning(f"Unknown required parameter '{_sanitize_log(param_name)}' for service {_sanitize_log(normalized_service)}")
 
         # Filter out any parameters that the service doesn't accept
         filtered_kwargs = {}
@@ -1184,7 +1190,7 @@ async def get_download_job_handler(job_id: str, request: Optional[web.Request] =
     except APIError:
         raise
     except Exception as e:
-        log.exception(f"Error getting download job {job_id}")
+        log.exception(f"Error getting download job {_sanitize_log(job_id)}")
         debug_mode = request.app.get("debug_api", False) if request else False
         return handle_api_exception(
             e,
@@ -1221,7 +1227,7 @@ async def cancel_download_job_handler(job_id: str, request: Optional[web.Request
     except APIError:
         raise
     except Exception as e:
-        log.exception(f"Error cancelling download job {job_id}")
+        log.exception(f"Error cancelling download job {_sanitize_log(job_id)}")
         debug_mode = request.app.get("debug_api", False) if request else False
         return handle_api_exception(
             e,
@@ -1670,7 +1676,7 @@ async def session_tracks_handler(
         )
 
     except Exception as e:
-        log.exception(f"Error getting tracks for title {title_id}")
+        log.exception(f"Error getting tracks for title {_sanitize_log(title_id)}")
         debug_mode = request.app.get("debug_api", False) if request else False
         return handle_api_exception(
             e,

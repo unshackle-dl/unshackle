@@ -16,6 +16,11 @@ from typing import Any, Callable, Dict, List, Optional
 log = logging.getLogger("download_manager")
 
 
+def _sanitize_log(value: object) -> str:
+    """Sanitize a value for safe logging by removing newlines and control characters."""
+    return str(value).replace("\n", "").replace("\r", "").replace("\x00", "")
+
+
 class JobStatus(Enum):
     QUEUED = "queued"
     DOWNLOADING = "downloading"
@@ -361,7 +366,7 @@ class DownloadQueueManager:
         self._jobs[job_id] = job
         self._job_queue.put_nowait(job)
 
-        log.info(f"Created download job {job_id} for {service}:{title_id}")
+        log.info(f"Created download job {job_id} for {_sanitize_log(service)}:{_sanitize_log(title_id)}")
         return job
 
     def get_job(self, job_id: str) -> Optional[DownloadJob]:
@@ -381,27 +386,27 @@ class DownloadQueueManager:
         if job.status == JobStatus.QUEUED:
             job.status = JobStatus.CANCELLED
             job.cancel_event.set()  # Signal cancellation
-            log.info(f"Cancelled queued job {job_id}")
+            log.info(f"Cancelled queued job {_sanitize_log(job_id)}")
             return True
         elif job.status == JobStatus.DOWNLOADING:
             # Set the cancellation event first - this will be checked by the download thread
             job.cancel_event.set()
             job.status = JobStatus.CANCELLED
-            log.info(f"Signaled cancellation for downloading job {job_id}")
+            log.info(f"Signaled cancellation for downloading job {_sanitize_log(job_id)}")
 
             # Cancel the active download task
             task = self._active_downloads.get(job_id)
             if task:
                 task.cancel()
-                log.info(f"Cancelled download task for job {job_id}")
+                log.info(f"Cancelled download task for job {_sanitize_log(job_id)}")
 
             process = self._download_processes.get(job_id)
             if process:
                 try:
                     process.terminate()
-                    log.info(f"Terminated worker process for job {job_id}")
+                    log.info(f"Terminated worker process for job {_sanitize_log(job_id)}")
                 except ProcessLookupError:
-                    log.debug(f"Worker process for job {job_id} already exited")
+                    log.debug(f"Worker process for job {_sanitize_log(job_id)} already exited")
 
             return True
 
