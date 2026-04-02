@@ -482,7 +482,12 @@ class dl:
     @click.option(
         "--skip-dl", is_flag=True, default=False, help="Skip downloading while still retrieving the decryption keys."
     )
-    @click.option("--export", type=Path, help="Export Decryption Keys as you obtain them to a JSON file.")
+    @click.option(
+        "--export",
+        is_flag=True,
+        default=False,
+        help="Export track info and decryption keys to a JSON file in the exports directory.",
+    )
     @click.option(
         "--cdm-only/--vaults-only",
         is_flag=True,
@@ -546,6 +551,7 @@ class dl:
         return dl(ctx, **kwargs)
 
     DRM_TABLE_LOCK = Lock()
+    EXPORT_LOCK = Lock()
 
     def __init__(
         self,
@@ -1022,7 +1028,7 @@ class dl:
         list_: bool,
         list_titles: bool,
         skip_dl: bool,
-        export: Optional[Path],
+        export: bool,
         cdm_only: Optional[bool],
         no_proxy: bool,
         no_folder: bool,
@@ -1044,6 +1050,12 @@ class dl:
 
         if skip_dl:
             DOWNLOAD_LICENCE_ONLY.set()
+
+        if export:
+            config.directories.exports.mkdir(parents=True, exist_ok=True)
+            export_path = config.directories.exports / f"export_{self.service}_{int(time.time())}.json"
+        else:
+            export_path = None
 
         # Parse bitrate range options
         vbitrate_min, vbitrate_max = None, None
@@ -1998,7 +2010,7 @@ class dl:
                         kept_tracks.extend(title.tracks.chapters)
                     kept_tracks.extend(title.tracks.attachments)
 
-                    title.tracks = Tracks(kept_tracks)
+                    title.tracks = Tracks(kept_tracks, manifest_url=title.tracks.manifest_url)
 
             selected_tracks, tracks_progress_callables = title.tracks.tree(add_progress=True)
 
@@ -2063,7 +2075,7 @@ class dl:
                                         ),
                                         cdm_only=cdm_only,
                                         vaults_only=vaults_only,
-                                        export=export,
+                                        export=export_path,
                                     ),
                                     cdm=self.cdm,
                                     max_workers=workers,
@@ -2593,6 +2605,55 @@ class dl:
 
         console.print(Padding(f"Processed all titles in [progress.elapsed]{dl_time}", (0, 5, 1, 5)))
 
+    def _write_export(self, export: Path, title: Title_T, track: AnyTrack, drm: Any) -> None:
+        """Write decryption keys and track info to the export JSON file."""
+        with self.EXPORT_LOCK:
+            keys = {}
+            if export.is_file():
+                keys = jsonpickle.loads(export.read_text(encoding="utf8")) or {}
+            if str(title) not in keys:
+                keys[str(title)] = {}
+
+            title_data = keys[str(title)]
+
+            if title.tracks.manifest_url and "manifest" not in title_data:
+                title_data["manifest"] = title.tracks.manifest_url
+
+            if isinstance(track, Video):
+                section = "video"
+            elif isinstance(track, Audio):
+                section = "audio"
+            else:
+                section = "other"
+
+            if section not in title_data:
+                title_data[section] = {}
+            if str(track) not in title_data[section]:
+                title_data[section][str(track)] = {}
+
+            track_data = title_data[section][str(track)]
+            track_data["url"] = track.url
+            track_data["descriptor"] = track.descriptor.name
+
+            if "keys" not in track_data:
+                track_data["keys"] = {}
+            for kid, key in drm.content_keys.items():
+                track_data["keys"][kid.hex] = key
+
+            if "subtitles" not in title_data:
+                subs = {}
+                for sub in title.tracks.subtitles:
+                    subs[str(sub)] = {"url": sub.url}
+                if subs:
+                    title_data["subtitles"] = subs
+
+            section_order = ["manifest", "video", "audio", "subtitles", "other"]
+            keys[str(title)] = {
+                k: title_data[k] for k in section_order if k in title_data
+            }
+
+            export.write_text(jsonpickle.dumps(keys, indent=4), encoding="utf8")
+
     def prepare_drm(
         self,
         drm: DRM_T,
@@ -2851,24 +2912,7 @@ class dl:
                     table.add_row(cek_tree)
 
                 if export:
-                    keys = {}
-                    if export.is_file():
-                        keys = jsonpickle.loads(export.read_text(encoding="utf8")) or {}
-                    if str(title) not in keys:
-                        keys[str(title)] = {}
-                    if str(track) not in keys[str(title)]:
-                        keys[str(title)][str(track)] = {}
-
-                    track_data = keys[str(title)][str(track)]
-                    track_data["url"] = track.url
-                    track_data["descriptor"] = track.descriptor.name
-
-                    if "keys" not in track_data:
-                        track_data["keys"] = {}
-                    for kid, key in drm.content_keys.items():
-                        track_data["keys"][kid.hex] = key
-
-                    export.write_text(jsonpickle.dumps(keys, indent=4), encoding="utf8")
+                    self._write_export(export, title, track, drm)
 
         elif isinstance(drm, PlayReady):
             if self.debug_logger:
@@ -3016,24 +3060,7 @@ class dl:
                     table.add_row(cek_tree)
 
                 if export:
-                    keys = {}
-                    if export.is_file():
-                        keys = jsonpickle.loads(export.read_text(encoding="utf8")) or {}
-                    if str(title) not in keys:
-                        keys[str(title)] = {}
-                    if str(track) not in keys[str(title)]:
-                        keys[str(title)][str(track)] = {}
-
-                    track_data = keys[str(title)][str(track)]
-                    track_data["url"] = track.url
-                    track_data["descriptor"] = track.descriptor.name
-
-                    if "keys" not in track_data:
-                        track_data["keys"] = {}
-                    for kid, key in drm.content_keys.items():
-                        track_data["keys"][kid.hex] = key
-
-                    export.write_text(jsonpickle.dumps(keys, indent=4), encoding="utf8")
+                    self._write_export(export, title, track, drm)
 
         elif isinstance(drm, MonaLisa):
             with self.DRM_TABLE_LOCK:

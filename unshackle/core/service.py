@@ -276,6 +276,8 @@ class Service(metaclass=ABCMeta):
                         raise
                     if first:
                         all_tracks.add(hdr_tracks, warn_only=True)
+                        if hdr_tracks.manifest_url and not all_tracks.manifest_url:
+                            all_tracks.manifest_url = hdr_tracks.manifest_url
                         first = False
                     else:
                         for video in hdr_tracks.videos:
@@ -299,6 +301,8 @@ class Service(metaclass=ABCMeta):
                         raise
                     if first:
                         all_tracks.add(tracks, warn_only=True)
+                        if tracks.manifest_url and not all_tracks.manifest_url:
+                            all_tracks.manifest_url = tracks.manifest_url
                         first = False
                     else:
                         for video in tracks.videos:

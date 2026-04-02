@@ -247,6 +247,7 @@ class DASH:
             # only get tracks from the first main-content period
             break
 
+        tracks.manifest_url = self.url
         return tracks
 
     @staticmethod

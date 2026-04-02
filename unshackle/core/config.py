@@ -26,6 +26,7 @@ class Config:
         cache = data / "cache"
         cookies = data / "cookies"
         logs = data / "logs"
+        exports = data / "exports"
         wvds = data / "WVDs"
         prds = data / "PRDs"
         dcsl = data / "DCSL"

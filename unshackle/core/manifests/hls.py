@@ -36,7 +36,9 @@ from unshackle.core.utilities import get_debug_logger, get_extension, is_close_m
 
 
 class HLS:
-    def __init__(self, manifest: M3U8, session: Optional[Union[Session, RnetSession]] = None):
+    def __init__(
+        self, manifest: M3U8, session: Optional[Union[Session, RnetSession]] = None, url: Optional[str] = None
+    ):
         if not manifest:
             raise ValueError("HLS manifest must be provided.")
         if not isinstance(manifest, M3U8):
@@ -46,6 +48,7 @@ class HLS:
 
         self.manifest = manifest
         self.session = session or Session()
+        self.url = url
 
     @classmethod
     def from_url(cls, url: str, session: Optional[Union[Session, RnetSession]] = None, **args: Any) -> HLS:
@@ -75,7 +78,7 @@ class HLS:
 
         master = m3u8.loads(content, uri=url)
 
-        return cls(master, session)
+        return cls(master, session, url=url)
 
     @classmethod
     def from_text(cls, text: str, url: str) -> HLS:
@@ -255,6 +258,8 @@ class HLS:
             except Exception:
                 pass
 
+        if self.url:
+            tracks.manifest_url = self.url
         return tracks
 
     @staticmethod

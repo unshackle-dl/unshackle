@@ -39,12 +39,14 @@ class Tracks:
         *args: Union[
             Tracks, Sequence[Union[AnyTrack, Chapter, Chapters, Attachment]], Track, Chapter, Chapters, Attachment
         ],
+        manifest_url: Optional[str] = None,
     ):
         self.videos: list[Video] = []
         self.audio: list[Audio] = []
         self.subtitles: list[Subtitle] = []
         self.chapters = Chapters()
         self.attachments: list[Attachment] = []
+        self.manifest_url: Optional[str] = manifest_url
 
         if args:
             self.add(args)
@@ -195,6 +197,8 @@ class Tracks:
     ) -> None:
         """Add a provided track to its appropriate array and ensuring it's not a duplicate."""
         if isinstance(tracks, Tracks):
+            if tracks.manifest_url and not self.manifest_url:
+                self.manifest_url = tracks.manifest_url
             tracks = [*list(tracks), *tracks.chapters, *tracks.attachments]
 
         duplicates = 0
@@ -301,6 +305,16 @@ class Tracks:
 
     def select_subtitles(self, x: Callable[[Subtitle], bool]) -> None:
         self.subtitles = list(filter(x, self.subtitles))
+
+    def filter(self, predicate: Callable[[AnyTrack], bool]) -> Tracks:
+        """Return a new Tracks with tracks filtered by predicate, preserving metadata."""
+        new_tracks = Tracks(manifest_url=self.manifest_url)
+        new_tracks.videos = [t for t in self.videos if predicate(t)]
+        new_tracks.audio = [t for t in self.audio if predicate(t)]
+        new_tracks.subtitles = [t for t in self.subtitles if predicate(t)]
+        new_tracks.chapters = self.chapters
+        new_tracks.attachments = list(self.attachments)
+        return new_tracks
 
     def select_hybrid(self, tracks, quality):
         # Prefer HDR10+ over HDR10 as the base layer (preserves dynamic metadata)

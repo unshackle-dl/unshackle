@@ -219,6 +219,7 @@ class ISM:
                             data=data,
                         )
                     )
+        tracks.manifest_url = self.url
         return tracks
 
     @staticmethod
