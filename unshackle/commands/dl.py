@@ -1601,7 +1601,9 @@ class dl:
                             )
                             sys.exit(1)
 
-                    video_languages = [lang for lang in (v_lang or lang) if lang != "best"]
+                    effective_video_lang = v_lang or lang
+                    video_languages = [lang for lang in effective_video_lang if lang != "best"]
+                    video_multi_lang = "best" in effective_video_lang or "all" in effective_video_lang or len(video_languages) > 1
                     if video_languages and "all" not in video_languages:
                         processed_video_lang = []
                         for language in video_languages:
@@ -1711,8 +1713,15 @@ class dl:
                         # For non-hybrid ranges, apply Cartesian product selection
                         non_hybrid_selected: list[Video] = []
                         if non_hybrid_ranges and non_hybrid_tracks:
-                            for resolution, color_range, codec in product(
-                                quality or [None], non_hybrid_ranges, vcodec or [None]
+                            # Include language dimension when multiple video languages were requested
+                            if video_multi_lang:
+                                non_hybrid_langs = list(
+                                    dict.fromkeys(str(v.language) for v in non_hybrid_tracks)
+                                )
+                            else:
+                                non_hybrid_langs = [None]
+                            for resolution, color_range, codec, vlang in product(
+                                quality or [None], non_hybrid_ranges, vcodec or [None], non_hybrid_langs
                             ):
                                 candidates = [
                                     t
@@ -1724,6 +1733,7 @@ class dl:
                                     )
                                     and (not color_range or t.range == color_range)
                                     and (not codec or t.codec == codec)
+                                    and (vlang is None or str(t.language) == vlang)
                                 ]
                                 match = candidates[-1] if worst and candidates else next(iter(candidates), None)
                                 if match and match not in non_hybrid_selected:
@@ -1732,8 +1742,14 @@ class dl:
                         title.tracks.videos = hybrid_selected + non_hybrid_selected
                     else:
                         selected_videos: list[Video] = []
-                        for resolution, color_range, codec in product(
-                            quality or [None], range_ or [None], vcodec or [None]
+                        if video_multi_lang:
+                            unique_video_langs = list(
+                                dict.fromkeys(str(v.language) for v in title.tracks.videos)
+                            )
+                        else:
+                            unique_video_langs = [None]
+                        for resolution, color_range, codec, vlang in product(
+                            quality or [None], range_ or [None], vcodec or [None], unique_video_langs
                         ):
                             candidates = [
                                 t
@@ -1745,6 +1761,7 @@ class dl:
                                 )
                                 and (not color_range or t.range == color_range)
                                 and (not codec or t.codec == codec)
+                                and (vlang is None or str(t.language) == vlang)
                             ]
                             match = candidates[-1] if worst and candidates else next(iter(candidates), None)
                             if match and match not in selected_videos:
