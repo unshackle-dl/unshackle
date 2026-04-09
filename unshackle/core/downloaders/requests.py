@@ -20,8 +20,8 @@ RETRY_WAIT = 2
 PROGRESS_WINDOW = 2
 
 # Adaptive chunk sizing — benchmarked optimal range
-MIN_CHUNK = 524_288      # 512KB
-MAX_CHUNK = 4_194_304    # 4MB
+MIN_CHUNK = 524_288  # 512KB
+MAX_CHUNK = 4_194_304  # 4MB
 DEFAULT_CHUNK = 524_288  # 512KB
 SPEED_ROLLING_WINDOW = 10  # seconds of history to keep for speed calculation
 
@@ -41,6 +41,7 @@ def _is_requests_session(session: Any) -> bool:
 def _is_rnet_session(session: Any) -> bool:
     """Check if the session is an RnetSession (uses resp.stream())."""
     from unshackle.core.session import RnetSession
+
     return isinstance(session, RnetSession)
 
 

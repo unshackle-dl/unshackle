@@ -293,7 +293,7 @@ class ISM:
                     "downloader": "requests",
                     "has_drm": bool(session_drm),
                     "drm_type": session_drm.__class__.__name__ if session_drm else None,
-                                        "save_path": str(save_path),
+                    "save_path": str(save_path),
                 },
             )
 
@@ -321,7 +321,7 @@ class ISM:
                         "save_dir": str(save_dir),
                         "save_path": str(save_path),
                         "downloader": "requests",
-                                            },
+                    },
                 )
             raise FileNotFoundError(error_msg)
 
@@ -340,7 +340,7 @@ class ISM:
                     "segments_found": len(segments_to_merge),
                     "segment_files": [f.name for f in segments_to_merge[:10]],  # Limit to first 10
                     "downloader": "requests",
-                                    },
+                },
             )
 
         if not segments_to_merge:
@@ -357,7 +357,7 @@ class ISM:
                         "save_dir": str(save_dir),
                         "directory_contents": [str(p) for p in all_contents],
                         "downloader": "requests",
-                                            },
+                    },
                 )
             raise FileNotFoundError(error_msg)
 

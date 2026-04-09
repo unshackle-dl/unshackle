@@ -147,7 +147,7 @@ def serve(
         if global_services:
             log.info(f"Global service allowlist: {', '.join(global_services)}")
         users = config.serve.get("users", {})
-        for user_key, user_cfg in (users.items() if isinstance(users, dict) else []):
+        for user_key, user_cfg in users.items() if isinstance(users, dict) else []:
             user_services = user_cfg.get("services") if isinstance(user_cfg, dict) else None
             if user_services:
                 username = user_cfg.get("username", user_key[:8] + "...")
@@ -165,6 +165,7 @@ def serve(
 
             # Start session cleanup loop for remote-dl sessions
             from unshackle.core.api.session_store import get_session_store
+
             session_store = get_session_store()
 
             async def start_session_cleanup(_app: web.Application) -> None:
@@ -233,9 +234,13 @@ def serve(
 
                     if serve_playready_flag and request.path.startswith("/playready"):
                         from pyplayready import __version__ as pyplayready_version
-                        response.headers["Server"] = f"https://git.gay/ready-dl/pyplayready serve v{pyplayready_version}"
+
+                        response.headers["Server"] = (
+                            f"https://git.gay/ready-dl/pyplayready serve v{pyplayready_version}"
+                        )
 
                     return response
+
                 return serve_authentication
 
             if no_key:
@@ -249,6 +254,7 @@ def serve(
 
             # Start session cleanup loop for remote-dl sessions
             from unshackle.core.api.session_store import get_session_store
+
             session_store = get_session_store()
 
             async def start_session_cleanup(_app: web.Application) -> None:
@@ -292,6 +298,7 @@ def serve(
 
                 async def playready_ping(_: web.Request) -> web.Response:
                     from pyplayready import __version__ as pyplayready_version
+
                     response = web.json_response({"message": "OK"})
                     response.headers["Server"] = f"https://git.gay/ready-dl/pyplayready serve v{pyplayready_version}"
                     return response

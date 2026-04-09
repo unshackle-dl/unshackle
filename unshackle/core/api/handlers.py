@@ -612,7 +612,9 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
                         service_kwargs[param_name] = False
                     else:
                         # Log warning for unknown required parameters
-                        log.warning(f"Unknown required parameter '{_sanitize_log(param_name)}' for service {_sanitize_log(normalized_service)}")
+                        log.warning(
+                            f"Unknown required parameter '{_sanitize_log(param_name)}' for service {_sanitize_log(normalized_service)}"
+                        )
 
         # Filter out any parameters that the service doesn't accept
         filtered_kwargs = {}
@@ -764,7 +766,9 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                         service_kwargs[param_name] = False
                     else:
                         # Log warning for unknown required parameters
-                        log.warning(f"Unknown required parameter '{_sanitize_log(param_name)}' for service {_sanitize_log(normalized_service)}")
+                        log.warning(
+                            f"Unknown required parameter '{_sanitize_log(param_name)}' for service {_sanitize_log(normalized_service)}"
+                        )
 
         # Filter out any parameters that the service doesn't accept
         filtered_kwargs = {}

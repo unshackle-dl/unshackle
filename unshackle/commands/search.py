@@ -86,7 +86,9 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
                 # requesting proxy from a specific proxy provider
                 requested_provider, proxy = proxy.split(":", maxsplit=1)
             # Match simple region codes (us, ca, uk1) or provider:region format (nordvpn:ca, windscribe:us)
-            if re.match(r"^[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE) or re.match(r"^[a-z]+:[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE):
+            if re.match(r"^[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE) or re.match(
+                r"^[a-z]+:[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE
+            ):
                 proxy = proxy.lower()
                 with console.status(f"Getting a Proxy to {proxy}...", spinner="dots"):
                     if requested_provider:

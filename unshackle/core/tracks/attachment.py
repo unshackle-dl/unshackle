@@ -86,9 +86,7 @@ class Attachment:
                     raise ValueError(f"Failed to download attachment from URL: {e}")
 
         if path is not None and not isinstance(path, (str, Path)):
-            raise ValueError(
-                f"Invalid attachment path type: expected str or Path, got {type(path).__name__}."
-            )
+            raise ValueError(f"Invalid attachment path type: expected str or Path, got {type(path).__name__}.")
 
         if path is not None:
             path = Path(path)

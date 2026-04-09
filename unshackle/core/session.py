@@ -41,6 +41,7 @@ def _resolve_impersonate(browser: str) -> rnet.Impersonate:
         f"See rnet.Impersonate for all available presets."
     )
 
+
 # Map string method names to rnet.Method enum
 _METHOD_MAP: dict[str, rnet.Method] = {
     "GET": rnet.Method.GET,
@@ -167,6 +168,7 @@ class RnetResponse:
 
     def json(self, **kwargs: Any) -> Any:
         import json as _json
+
         return _json.loads(self.content)
 
     def raise_for_status(self) -> None:
@@ -319,8 +321,9 @@ class RnetCookieAdapter(MutableMapping):
             self._flat[name] = value
             self._set_cookie_on_client("https://localhost", name, value)
 
-    def get(self, name: str, default: Optional[str] = None, domain: Optional[str] = None,
-            path: Optional[str] = None) -> Optional[str]:
+    def get(
+        self, name: str, default: Optional[str] = None, domain: Optional[str] = None, path: Optional[str] = None
+    ) -> Optional[str]:
         if domain and domain in self._cookies:
             return self._cookies[domain].get(name, default)
         return self._flat.get(name, default)
@@ -364,8 +367,7 @@ class RnetCookieAdapter(MutableMapping):
             return dict(self._cookies.get(domain, {}))
         return dict(self._flat)
 
-    def clear(self, domain: Optional[str] = None, path: Optional[str] = None,
-              name: Optional[str] = None) -> None:
+    def clear(self, domain: Optional[str] = None, path: Optional[str] = None, name: Optional[str] = None) -> None:
         """Remove cookies (requests RequestsCookieJar compat).
 
         - ``clear()`` removes all cookies.
@@ -527,7 +529,9 @@ class RnetSession:
             return url
         parsed = urlparse(url)
         separator = "&" if parsed.query else ""
-        query = parsed.query + separator + urlencode(params, doseq=True) if parsed.query else urlencode(params, doseq=True)
+        query = (
+            parsed.query + separator + urlencode(params, doseq=True) if parsed.query else urlencode(params, doseq=True)
+        )
         return urlunparse(parsed._replace(query=query))
 
     def get_sleep_time(self, response: Optional[RnetResponse], attempt: int) -> Optional[float]:

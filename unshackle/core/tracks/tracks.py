@@ -322,9 +322,7 @@ class Tracks:
         base_tracks = []
         for range_type in base_ranges:
             base_tracks = [
-                v
-                for v in tracks
-                if v.range == range_type and (v.height in quality or int(v.width * 9 / 16) in quality)
+                v for v in tracks if v.range == range_type and (v.height in quality or int(v.width * 9 / 16) in quality)
             ]
             if base_tracks:
                 break

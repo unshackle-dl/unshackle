@@ -179,9 +179,9 @@ class PlayReady:
             pssh_boxes.extend(
                 Box.parse(base64.b64decode(x.uri.split(",")[-1]))
                 for x in (master.session_keys or master.keys)
-                if x and x.keyformat and x.keyformat.lower() in {
-                    f"urn:uuid:{PSSH.SYSTEM_ID}", "com.microsoft.playready"
-                }
+                if x
+                and x.keyformat
+                and x.keyformat.lower() in {f"urn:uuid:{PSSH.SYSTEM_ID}", "com.microsoft.playready"}
             )
 
         init_data = track.get_init_segment(session=session)
@@ -360,10 +360,7 @@ class PlayReady:
         # but the real KID for the license server. Add zero-KID fallback entries so
         # mp4decrypt can match when the file's default KID is all zeros.
         zero_kid = "00" * 16
-        existing_kids = {
-            kid.hex if hasattr(kid, "hex") else str(kid).replace("-", "")
-            for kid in self.content_keys
-        }
+        existing_kids = {kid.hex if hasattr(kid, "hex") else str(kid).replace("-", "") for kid in self.content_keys}
         if zero_kid not in existing_kids:
             for key in self.content_keys.values():
                 key_hex = key if isinstance(key, str) else key.hex()
@@ -378,7 +375,7 @@ class PlayReady:
         ]
 
         try:
-            subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
+            subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
         except subprocess.CalledProcessError as e:
             error_msg = e.stderr if e.stderr else f"mp4decrypt failed with exit code {e.returncode}"
             raise subprocess.CalledProcessError(e.returncode, cmd, output=e.stdout, stderr=error_msg)

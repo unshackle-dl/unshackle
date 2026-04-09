@@ -103,33 +103,33 @@ class Episode(Title):
             if config.folder_template:
                 formatter = TemplateFormatter(config.folder_template)
                 context = self._build_template_context(media_info, show_service)
-                context['season'] = f"S{self.season:02}"
+                context["season"] = f"S{self.season:02}"
 
                 folder_name = formatter.format(context)
 
-                separators = re.sub(r'\{[^}]*\}', '', config.folder_template)
+                separators = re.sub(r"\{[^}]*\}", "", config.folder_template)
                 spacer = "." if "." in separators and " " not in separators else " "
                 return sanitize_filename(folder_name, spacer)
 
             series_template = config.output_template.get("series")
             if series_template:
                 derived_template = series_template
-                derived_template = re.sub(r'\{episode\}', '', derived_template)
-                derived_template = re.sub(r'\{episode_name\?\}', '', derived_template)
-                derived_template = re.sub(r'\{episode_name\}', '', derived_template)
-                derived_template = re.sub(r'\{season_episode\}', '{season}', derived_template)
+                derived_template = re.sub(r"\{episode\}", "", derived_template)
+                derived_template = re.sub(r"\{episode_name\?\}", "", derived_template)
+                derived_template = re.sub(r"\{episode_name\}", "", derived_template)
+                derived_template = re.sub(r"\{season_episode\}", "{season}", derived_template)
 
-                derived_template = re.sub(r'\.{2,}', '.', derived_template)
-                derived_template = re.sub(r'\s{2,}', ' ', derived_template)
-                derived_template = re.sub(r'^[\.\s]+|[\.\s]+$', '', derived_template)
+                derived_template = re.sub(r"\.{2,}", ".", derived_template)
+                derived_template = re.sub(r"\s{2,}", " ", derived_template)
+                derived_template = re.sub(r"^[\.\s]+|[\.\s]+$", "", derived_template)
 
                 formatter = TemplateFormatter(derived_template)
                 context = self._build_template_context(media_info, show_service)
-                context['season'] = f"S{self.season:02}"
+                context["season"] = f"S{self.season:02}"
 
                 folder_name = formatter.format(context)
 
-                separators = re.sub(r'\{[^}]*\}', '', derived_template)
+                separators = re.sub(r"\{[^}]*\}", "", derived_template)
                 spacer = "." if "." in separators and " " not in separators else " "
                 return sanitize_filename(folder_name, spacer)
             else:

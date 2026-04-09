@@ -1137,7 +1137,10 @@ class dl:
                 },
             )
 
-        with console.status("Authenticating with Remote Service..." if self.is_remote else "Authenticating with Service...", spinner="dots"):
+        with console.status(
+            "Authenticating with Remote Service..." if self.is_remote else "Authenticating with Service...",
+            spinner="dots",
+        ):
             try:
                 cookies = self.get_cookie_jar(self.service, self.profile)
                 credential = self.get_credentials(self.service, self.profile)
@@ -1162,7 +1165,9 @@ class dl:
                     )
                 raise
 
-        with console.status("Fetching Remote Title Metadata..." if self.is_remote else "Fetching Title Metadata...", spinner="dots"):
+        with console.status(
+            "Fetching Remote Title Metadata..." if self.is_remote else "Fetching Title Metadata...", spinner="dots"
+        ):
             try:
                 titles = service.get_titles_cached()
                 if not titles:
@@ -1513,9 +1518,9 @@ class dl:
                         title.tracks.add(non_sdh_sub)
                         events.subscribe(
                             events.Types.TRACK_MULTIPLEX,
-                            lambda track, sub_id=non_sdh_sub.id: (track.strip_hearing_impaired())
-                            if track.id == sub_id
-                            else None,
+                            lambda track, sub_id=non_sdh_sub.id: (
+                                (track.strip_hearing_impaired()) if track.id == sub_id else None
+                            ),
                         )
 
             with console.status("Sorting tracks by language and bitrate...", spinner="dots"):
@@ -1596,14 +1601,14 @@ class dl:
                             lambda x: x.bitrate and vbitrate_min <= x.bitrate // 1000 <= vbitrate_max
                         )
                         if not title.tracks.videos:
-                            self.log.error(
-                                f"No Video Track in {vbitrate_min}-{vbitrate_max}kbps range..."
-                            )
+                            self.log.error(f"No Video Track in {vbitrate_min}-{vbitrate_max}kbps range...")
                             sys.exit(1)
 
                     effective_video_lang = v_lang or lang
                     video_languages = [lang for lang in effective_video_lang if lang != "best"]
-                    video_multi_lang = "best" in effective_video_lang or "all" in effective_video_lang or len(video_languages) > 1
+                    video_multi_lang = (
+                        "best" in effective_video_lang or "all" in effective_video_lang or len(video_languages) > 1
+                    )
                     if video_languages and "all" not in video_languages:
                         processed_video_lang = []
                         for language in video_languages:
@@ -1715,9 +1720,7 @@ class dl:
                         if non_hybrid_ranges and non_hybrid_tracks:
                             # Include language dimension when multiple video languages were requested
                             if video_multi_lang:
-                                non_hybrid_langs = list(
-                                    dict.fromkeys(str(v.language) for v in non_hybrid_tracks)
-                                )
+                                non_hybrid_langs = list(dict.fromkeys(str(v.language) for v in non_hybrid_tracks))
                             else:
                                 non_hybrid_langs = [None]
                             for resolution, color_range, codec, vlang in product(
@@ -1743,9 +1746,7 @@ class dl:
                     else:
                         selected_videos: list[Video] = []
                         if video_multi_lang:
-                            unique_video_langs = list(
-                                dict.fromkeys(str(v.language) for v in title.tracks.videos)
-                            )
+                            unique_video_langs = list(dict.fromkeys(str(v.language) for v in title.tracks.videos))
                         else:
                             unique_video_langs = [None]
                         for resolution, color_range, codec, vlang in product(
@@ -1754,11 +1755,7 @@ class dl:
                             candidates = [
                                 t
                                 for t in title.tracks.videos
-                                if (
-                                    not resolution
-                                    or t.height == resolution
-                                    or int(t.width * (9 / 16)) == resolution
-                                )
+                                if (not resolution or t.height == resolution or int(t.width * (9 / 16)) == resolution)
                                 and (not color_range or t.range == color_range)
                                 and (not codec or t.codec == codec)
                                 and (vlang is None or str(t.language) == vlang)
@@ -1875,9 +1872,7 @@ class dl:
                             lambda x: x.bitrate and abitrate_min <= x.bitrate // 1000 <= abitrate_max
                         )
                         if not title.tracks.audio:
-                            self.log.error(
-                                f"No Audio Track in {abitrate_min}-{abitrate_max}kbps range..."
-                            )
+                            self.log.error(f"No Audio Track in {abitrate_min}-{abitrate_max}kbps range...")
                             sys.exit(1)
                     audio_languages = a_lang or lang
                     if audio_languages:
@@ -2259,13 +2254,9 @@ class dl:
                                 if cc:
                                     cc.cc = True
                                     title.tracks.add(cc)
-                                    self.log.info(
-                                        f"Extracted a Closed Caption from Video track {video_track_n + 1}"
-                                    )
+                                    self.log.info(f"Extracted a Closed Caption from Video track {video_track_n + 1}")
                                 else:
-                                    self.log.info(
-                                        f"No Closed Captions were found in Video track {video_track_n + 1}"
-                                    )
+                                    self.log.info(f"No Closed Captions were found in Video track {video_track_n + 1}")
                             except EnvironmentError:
                                 self.log.error(
                                     "Cannot extract Closed Captions as the ccextractor executable was not found..."
@@ -2327,7 +2318,9 @@ class dl:
 
                     def enqueue_mux_tasks(task_description: str, base_tracks: Tracks) -> None:
                         if merge_audio or not base_tracks.audio:
-                            task_id = progress.add_task(f"{task_description}...", total=None, start=False, downloaded="")
+                            task_id = progress.add_task(
+                                f"{task_description}...", total=None, start=False, downloaded=""
+                            )
                             multiplex_tasks.append((task_id, base_tracks, None))
                             return
 
@@ -2665,9 +2658,7 @@ class dl:
                     title_data["subtitles"] = subs
 
             section_order = ["manifest", "video", "audio", "subtitles", "other"]
-            keys[str(title)] = {
-                k: title_data[k] for k in section_order if k in title_data
-            }
+            keys[str(title)] = {k: title_data[k] for k in section_order if k in title_data}
 
             export.write_text(jsonpickle.dumps(keys, indent=4), encoding="utf8")
 
@@ -2699,7 +2690,9 @@ class dl:
                 return
             svc = getattr(self, "_remote_service", None)
             server_drm_type = getattr(svc, "_server_cdm_type", None) if svc else None
-            drm_name = {"widevine": "Widevine", "playready": "PlayReady"}.get(server_drm_type or "", drm.__class__.__name__)
+            drm_name = {"widevine": "Widevine", "playready": "PlayReady"}.get(
+                server_drm_type or "", drm.__class__.__name__
+            )
             with self.DRM_TABLE_LOCK:
                 pssh_str = ""
                 expected_class = "PlayReady" if server_drm_type == "playready" else "Widevine"
@@ -2727,10 +2720,7 @@ class dl:
                 for kid, key in drm.content_keys.items():
                     if kid not in all_kids:
                         cek_tree.add(f"[text2]{kid.hex}:{key}")
-                if not any(
-                    isinstance(x, Tree) and x.label == cek_tree.label
-                    for x in table.columns[0].cells
-                ):
+                if not any(isinstance(x, Tree) and x.label == cek_tree.label for x in table.columns[0].cells):
                     table.add_row(cek_tree)
             return
 

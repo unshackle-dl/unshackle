@@ -116,12 +116,14 @@ class HLS:
         cc_by_group_id: dict[str, list[dict[str, Any]]] = {}
         for media in self.manifest.media:
             if media.type == "CLOSED-CAPTIONS":
-                cc_by_group_id.setdefault(media.group_id, []).append({
-                    "language": media.language,
-                    "name": media.name,
-                    "instream_id": media.instream_id,
-                    "characteristics": media.characteristics,
-                })
+                cc_by_group_id.setdefault(media.group_id, []).append(
+                    {
+                        "language": media.language,
+                        "name": media.name,
+                        "instream_id": media.instream_id,
+                        "characteristics": media.characteristics,
+                    }
+                )
         tracks = Tracks()
 
         for playlist in self.manifest.playlists:
@@ -313,8 +315,8 @@ class HLS:
         # H.264: NAL type 7 (SPS), identified by byte & 0x1F == 7
         # H.265: NAL type 33 (SPS), identified by (byte >> 1) & 0x3F == 33
         for i in range(len(data) - 4):
-            start3 = data[i:i + 3] == b"\x00\x00\x01"
-            start4 = data[i:i + 4] == b"\x00\x00\x00\x01"
+            start3 = data[i : i + 3] == b"\x00\x00\x01"
+            start4 = data[i : i + 4] == b"\x00\x00\x00\x01"
             if not start3 and not start4:
                 continue
             offset = i + (4 if start4 else 3)
@@ -327,7 +329,7 @@ class HLS:
 
             # H.264 SPS (NAL type 7)
             if h264_type == 7:
-                sps = data[offset:offset + 64]
+                sps = data[offset : offset + 64]
                 if len(sps) < 5:
                     continue
                 try:
@@ -385,7 +387,7 @@ class HLS:
 
             # H.265 SPS (NAL type 33)
             elif h265_type == 33:
-                sps = data[offset:offset + 128]
+                sps = data[offset : offset + 128]
                 if len(sps) < 10:
                     continue
                 try:
@@ -506,9 +508,7 @@ class HLS:
                     sys.exit(1)
                 playlist_text = response.text
             else:
-                raise TypeError(
-                    f"Expected response to be a requests.Response or rnet.Response, not {type(response)}"
-                )
+                raise TypeError(f"Expected response to be a requests.Response or rnet.Response, not {type(response)}")
 
             master = m3u8.loads(playlist_text, uri=track.url)
 
@@ -821,9 +821,7 @@ class HLS:
                         res.raise_for_status()
                         init_content = res.content
                     else:
-                        raise TypeError(
-                            f"Expected response to be requests.Response or rnet.Response, not {type(res)}"
-                        )
+                        raise TypeError(f"Expected response to be requests.Response or rnet.Response, not {type(res)}")
 
                     map_data = (segment.init_section, init_content)
 
@@ -910,7 +908,7 @@ class HLS:
                     "segments_found": len(segments_to_merge),
                     "segment_files": [f.name for f in segments_to_merge[:10]],  # Limit to first 10
                     "downloader": "requests",
-                                    },
+                },
             )
 
         if not segments_to_merge:
@@ -928,7 +926,7 @@ class HLS:
                         "save_dir_exists": save_dir.exists(),
                         "directory_contents": [str(p) for p in all_contents],
                         "downloader": "requests",
-                                            },
+                    },
                 )
             raise FileNotFoundError(error_msg)
 

@@ -100,7 +100,7 @@ class Song(Title):
                 context = self._build_template_context(media_info, show_service)
                 folder_name = formatter.format(context)
 
-                separators = re.sub(r'\{[^}]*\}', '', config.folder_template)
+                separators = re.sub(r"\{[^}]*\}", "", config.folder_template)
                 spacer = "." if "." in separators and " " not in separators else " "
                 return sanitize_filename(folder_name, spacer)
             name = f"{self.artist} - {self.album}"

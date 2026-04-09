@@ -113,9 +113,7 @@ class Hybrid:
 
         # Edit L6 with actual luminance values from RPU, then L5 active area
         self.level_6()
-        base_video = next(
-            (v for v in videos if v.range in (Video.Range.HDR10, Video.Range.HDR10P)), None
-        )
+        base_video = next((v for v in videos if v.range in (Video.Range.HDR10, Video.Range.HDR10P)), None)
         if base_video and base_video.path:
             self.level_5(base_video.path)
 
@@ -423,7 +421,10 @@ class Hybrid:
                     level="ERROR",
                     operation="hybrid_level5",
                     message="Failed editing RPU Level 5 values",
-                    context={"returncode": result.returncode, "stderr": (result.stderr or b"").decode(errors="replace")},
+                    context={
+                        "returncode": result.returncode,
+                        "stderr": (result.stderr or b"").decode(errors="replace"),
+                    },
                 )
             Path.unlink(config.directories.temp / "RPU_L5.bin", missing_ok=True)
             raise ValueError("Failed editing RPU Level 5 values")
@@ -433,7 +434,10 @@ class Hybrid:
                 level="DEBUG",
                 operation="hybrid_level5",
                 message="Edited RPU Level 5 active area",
-                context={"crop": {"left": left, "right": right, "top": top, "bottom": bottom}, "samples": len(crop_results)},
+                context={
+                    "crop": {"left": left, "right": right, "top": top, "bottom": bottom},
+                    "samples": len(crop_results),
+                },
                 success=True,
             )
         self.rpu_file = "RPU_L5.bin"
@@ -524,7 +528,10 @@ class Hybrid:
                     level="ERROR",
                     operation="hybrid_level6",
                     message="Failed editing RPU Level 6 values",
-                    context={"returncode": result.returncode, "stderr": (result.stderr or b"").decode(errors="replace")},
+                    context={
+                        "returncode": result.returncode,
+                        "stderr": (result.stderr or b"").decode(errors="replace"),
+                    },
                 )
             Path.unlink(config.directories.temp / "RPU_L6.bin", missing_ok=True)
             raise ValueError("Failed editing RPU Level 6 values")
@@ -587,7 +594,12 @@ class Hybrid:
                 level="DEBUG",
                 operation="hybrid_inject_rpu",
                 message=f"Injected Dolby Vision metadata into {self.hdr_type} stream",
-                context={"hdr_type": self.hdr_type, "rpu_file": self.rpu_file, "output": self.hevc_file, "drop_hdr10plus": self.hdr10plus_to_dv},
+                context={
+                    "hdr_type": self.hdr_type,
+                    "rpu_file": self.rpu_file,
+                    "output": self.hevc_file,
+                    "drop_hdr10plus": self.hdr10plus_to_dv,
+                },
                 success=True,
             )
 
@@ -660,10 +672,14 @@ class Hybrid:
         result = subprocess.run(
             [
                 ffprobe_bin,
-                "-v", "error",
-                "-select_streams", "v:0",
-                "-show_entries", "stream_side_data=max_luminance,min_luminance,max_content,max_average",
-                "-of", "json",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream_side_data=max_luminance,min_luminance,max_content,max_average",
+                "-of",
+                "json",
                 str(config.directories.temp / "HDR10.hevc"),
             ],
             stdout=subprocess.PIPE,

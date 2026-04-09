@@ -486,7 +486,7 @@ class DASH:
                         "save_dir": str(save_dir),
                         "save_path": str(save_path),
                         "downloader": "requests",
-                                            },
+                    },
                 )
             raise FileNotFoundError(error_msg)
 
@@ -505,7 +505,7 @@ class DASH:
                     "segments_found": len(segments_to_merge),
                     "segment_files": [f.name for f in segments_to_merge[:10]],  # Limit to first 10
                     "downloader": "requests",
-                                    },
+                },
             )
 
         if not segments_to_merge:
@@ -523,7 +523,7 @@ class DASH:
                         "save_dir": str(save_dir),
                         "directory_contents": [str(p) for p in all_contents],
                         "downloader": "requests",
-                                            },
+                    },
                 )
             raise FileNotFoundError(error_msg)
 
@@ -577,8 +577,8 @@ class DASH:
         # Find the sidx box in the data
         offset = 0
         while offset < len(data) - 8:
-            box_size = struct.unpack(">I", data[offset:offset + 4])[0]
-            if box_size < 8 or data[offset + 4:offset + 8] != b"sidx":
+            box_size = struct.unpack(">I", data[offset : offset + 4])[0]
+            if box_size < 8 or data[offset + 4 : offset + 8] != b"sidx":
                 offset += max(box_size, 8)
                 continue
 
@@ -589,14 +589,14 @@ class DASH:
             pos += 4  # timescale
 
             if version == 0:
-                first_offset = struct.unpack(">I", data[pos + 4:pos + 8])[0]
+                first_offset = struct.unpack(">I", data[pos + 4 : pos + 8])[0]
                 pos += 8
             else:
-                first_offset = struct.unpack(">Q", data[pos + 8:pos + 16])[0]
+                first_offset = struct.unpack(">Q", data[pos + 8 : pos + 16])[0]
                 pos += 16
 
             pos += 2  # reserved
-            reference_count = struct.unpack(">H", data[pos:pos + 2])[0]
+            reference_count = struct.unpack(">H", data[pos : pos + 2])[0]
             pos += 2
 
             idx_end = int(index_range.split("-")[1])
@@ -604,7 +604,7 @@ class DASH:
             segments = []
 
             for _ in range(reference_count):
-                ref_size = struct.unpack(">I", data[pos:pos + 4])[0] & 0x7FFFFFFF
+                ref_size = struct.unpack(">I", data[pos : pos + 4])[0] & 0x7FFFFFFF
                 pos += 12  # ref_info + subseg_duration + SAP fields
                 seg_end = current_offset + ref_size - 1
                 segments.append(f"{current_offset}-{seg_end}")

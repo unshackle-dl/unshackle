@@ -83,7 +83,7 @@ class WindscribeVPN(Proxy):
             if not hostname:
                 return None
 
-        hostname = hostname.split(':')[0]
+        hostname = hostname.split(":")[0]
         return f"https://{self.username}:{self.password}@{hostname}:443"
 
     def get_specific_server(self, country_code: str, server_num: str) -> Optional[str]:

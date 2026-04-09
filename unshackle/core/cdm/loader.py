@@ -60,8 +60,7 @@ def _load_remote_cdm(
                 cdm_api["secret"] = config.decrypt_labs_api_key
             else:
                 raise ValueError(
-                    f"No secret provided for DecryptLabs CDM '{cdm_name}' and no global "
-                    "decrypt_labs_api_key configured"
+                    f"No secret provided for DecryptLabs CDM '{cdm_name}' and no global decrypt_labs_api_key configured"
                 )
 
         return DecryptLabsRemoteCDM(service_name=service_name, vaults=vaults, **cdm_api)
