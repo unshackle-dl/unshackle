@@ -29,6 +29,8 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "acodec": None,
     "vbitrate": None,
     "abitrate": None,
+    "vbitrate_range": None,
+    "abitrate_range": None,
     "range": ["SDR"],
     "channels": None,
     "no_atmos": False,
@@ -62,6 +64,7 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "no_mux": False,
     "workers": None,
     "downloads": 1,
+    "worst": False,
     "best_available": False,
     "repack": False,
     "imdb_id": None,
@@ -980,6 +983,14 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
     if "abitrate" in data and data["abitrate"] is not None:
         if not isinstance(data["abitrate"], int) or data["abitrate"] <= 0:
             return "abitrate must be a positive integer"
+
+    if "vbitrate_range" in data and data["vbitrate_range"] is not None:
+        if not isinstance(data["vbitrate_range"], str) or "-" not in data["vbitrate_range"]:
+            return "vbitrate_range must be a string in 'MIN-MAX' format (e.g., '6000-7000')"
+
+    if "abitrate_range" in data and data["abitrate_range"] is not None:
+        if not isinstance(data["abitrate_range"], str) or "-" not in data["abitrate_range"]:
+            return "abitrate_range must be a string in 'MIN-MAX' format (e.g., '128-256')"
 
     if "channels" in data and data["channels"] is not None:
         if not isinstance(data["channels"], (int, float)) or data["channels"] <= 0:

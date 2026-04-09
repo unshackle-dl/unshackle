@@ -573,6 +573,7 @@ class dl:
             raise ValueError("A subcommand to invoke was not specified, the main code cannot continue.")
 
         self.log = logging.getLogger("download")
+        self.completed_files: list[Path] = []
 
         if not config.output_template:
             raise click.ClickException(
@@ -2559,6 +2560,7 @@ class dl:
                             final_path = final_dir / f"{base_filename}{track_path.suffix}"
 
                         shutil.move(track_path, final_path)
+                        self.completed_files.append(final_path)
                         self.log.debug(f"Saved: {final_path.name}")
                 else:
                     # Handle muxed files
@@ -2596,6 +2598,7 @@ class dl:
                                 final_path.unlink()
                             shutil.move(muxed_path, final_path)
                         used_final_paths.add(final_path)
+                        self.completed_files.append(final_path)
                         tags.tag_file(final_path, title, self.tmdb_id, self.imdb_id)
 
                 title_dl_time = time_elapsed_since(dl_start_time)

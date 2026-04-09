@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import sys
 import tempfile
 import threading
@@ -149,6 +150,20 @@ def _perform_download(
     if params.get("export"):
         params["export"] = bool(params["export"])
 
+    # Convert wanted episode strings to internal "SxE" format
+    # Accepts: "S01E01", "S01-S03", "s1e1", "1x1", or already-parsed format
+    wanted_raw = params.get("wanted")
+    if wanted_raw:
+        from unshackle.core.utils.click_types import SeasonRange
+
+        if isinstance(wanted_raw, str):
+            wanted_raw = [wanted_raw]
+        # Only convert if not already in internal "SxE" format
+        needs_conversion = any(not re.match(r"^\d+x\d+$", w) for w in wanted_raw)
+        if needs_conversion:
+            season_range = SeasonRange()
+            params["wanted"] = season_range.parse_tokens(*wanted_raw)
+
     # Load service configuration
     service_config_path = Services.get_path(service) / config.filenames.config
     if service_config_path.exists():
@@ -271,6 +286,8 @@ def _perform_download(
                 acodec=params.get("acodec"),
                 vbitrate=params.get("vbitrate"),
                 abitrate=params.get("abitrate"),
+                vbitrate_range=params.get("vbitrate_range"),
+                abitrate_range=params.get("abitrate_range"),
                 range_=params.get("range", ["SDR"]),
                 channels=params.get("channels"),
                 no_atmos=params.get("no_atmos", False),
@@ -306,6 +323,7 @@ def _perform_download(
                 no_mux=params.get("no_mux", False),
                 workers=params.get("workers"),
                 downloads=params.get("downloads", 1),
+                worst=params.get("worst", False),
                 best_available=params.get("best_available", False),
                 split_audio=params.get("split_audio"),
             )
@@ -327,9 +345,10 @@ def _perform_download(
         log.error(f"Stderr: {stderr_str}")
         raise
 
-    log.info(f"Download completed for job {job_id}, files in {original_download_dir}")
+    output_files = [str(p) for p in dl_instance.completed_files]
+    log.info(f"Download completed for job {job_id}, {len(output_files)} file(s) in {original_download_dir}")
 
-    return []
+    return output_files
 
 
 class DownloadQueueManager:
