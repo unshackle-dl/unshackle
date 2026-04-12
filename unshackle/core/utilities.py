@@ -516,10 +516,10 @@ def try_ensure_utf8(data: bytes) -> bytes:
                 # last ditch effort to detect encoding
                 detection_result = chardet.detect(data)
                 if not detection_result["encoding"]:
-                    return data
-                return data.decode(detection_result["encoding"]).encode("utf8")
-            except UnicodeDecodeError:
-                return data
+                    return data.decode("utf-8", errors="replace").encode("utf-8")
+                return data.decode(detection_result["encoding"], errors="replace").encode("utf8")
+            except (UnicodeDecodeError, LookupError):
+                return data.decode("utf-8", errors="replace").encode("utf-8")
 
 
 def get_free_port() -> int:

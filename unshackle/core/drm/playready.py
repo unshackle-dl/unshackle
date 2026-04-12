@@ -421,7 +421,9 @@ class PlayReady:
                 [binaries.ShakaPackager, *arguments],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
-                universal_newlines=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
             )
 
             stream_skipped = False
