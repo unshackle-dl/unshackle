@@ -2113,24 +2113,15 @@ class dl:
             except Exception as e:  # noqa
                 error_messages = [
                     ":x: Download Failed...",
+                    f"   {type(e).__name__}: {e}",
                 ]
-                if isinstance(e, EnvironmentError):
-                    error_messages.append(f"   {e}")
-                if isinstance(e, ValueError):
-                    error_messages.append(f"   {e}")
-                if isinstance(e, (AttributeError, TypeError)):
-                    console.print_exception()
-                else:
-                    error_messages.append(
-                        "   An unexpected error occurred in one of the download workers.",
-                    )
-                    if hasattr(e, "returncode"):
-                        error_messages.append(f"   Binary call failed, Process exit code: {e.returncode}")
-                    error_messages.append("   See the error trace above for more information.")
-                    if isinstance(e, subprocess.CalledProcessError):
-                        # CalledProcessError already lists the exception trace
-                        console.print_exception()
+                if hasattr(e, "returncode"):
+                    error_messages.append(f"   Binary call failed, Process exit code: {e.returncode}")
+                error_messages.append(
+                    "   An unexpected error occurred in one of the download workers.",
+                )
                 console.print(Padding(Group(*error_messages), (1, 5)))
+                console.print_exception()
 
                 if self.debug_logger:
                     self.debug_logger.log_error(
