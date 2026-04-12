@@ -84,17 +84,21 @@ def download(
 
     save_dir.mkdir(parents=True, exist_ok=True)
 
-    if control_file.exists():
-        save_path.unlink(missing_ok=True)
+    resume_offset = 0
+    if control_file.exists() and save_path.exists():
+        resume_offset = save_path.stat().st_size
+    elif control_file.exists():
         control_file.unlink()
     elif save_path.exists():
         yield dict(file_downloaded=save_path, written=save_path.stat().st_size)
+        return
 
     control_file.write_bytes(b"")
     _time = time.time
     use_raw = _is_requests_session(session)
 
     attempts = 1
+    completed = False
     try:
         while True:
             written = 0
@@ -102,10 +106,19 @@ def download(
 
             try:
                 use_rnet = _is_rnet_session(session)
-                stream = session.get(url, stream=True, **kwargs)
+
+                request_kwargs = dict(kwargs)
+                if resume_offset > 0:
+                    req_headers = dict(request_kwargs.get("headers", {}) or {})
+                    req_headers["Range"] = f"bytes={resume_offset}-"
+                    request_kwargs["headers"] = req_headers
+
+                stream = session.get(url, stream=True, **request_kwargs)
                 stream.raise_for_status()
 
-                # Determine content length and adaptive chunk size
+                resumed = resume_offset > 0 and stream.status_code == 206
+                if resume_offset > 0 and not resumed:
+                    resume_offset = 0
                 if use_rnet:
                     content_length = stream.content_length or 0
                 else:
@@ -117,28 +130,27 @@ def download(
                         content_length = 0
 
                 chunk_size = _adaptive_chunk_size(content_length)
+                total_size = (resume_offset + content_length) if resumed and content_length > 0 else content_length
 
                 if not segmented:
-                    if content_length > 0:
-                        yield dict(total=content_length)
+                    if total_size > 0:
+                        yield dict(total=total_size)
                     else:
                         yield dict(total=None)
+                    if resumed and resume_offset > 0:
+                        yield dict(advance=resume_offset)
 
-                # Pre-allocate file when size is known (helps filesystem allocate contiguous blocks)
-                with open(save_path, "wb", buffering=1_048_576) as f:
-                    if content_length > 0:
+                file_mode = "ab" if resumed else "wb"
+                with open(save_path, file_mode, buffering=1_048_576) as f:
+                    if not resumed and content_length > 0:
                         f.truncate(content_length)
                         f.seek(0)
 
-                    # Cache f.write for hot loop
                     _write = f.write
 
-                    # Build chunk iterator based on session type
                     if use_rnet:
-                        # rnet: native Rust streaming — 3.5x faster than curl_cffi (benchmarked)
                         chunks = stream.stream()
                     elif use_raw:
-                        # requests.Session: raw socket read — 30-35% faster than iter_content
                         _read = stream.raw.read
 
                         def _chunks() -> Generator[bytes, None, None]:
@@ -151,14 +163,13 @@ def download(
 
                         chunks = _chunks()
                     else:
-                        # Fallback: iter_content
+
                         def _chunks_iter() -> Generator[bytes, None, None]:
                             yield from stream.iter_content(chunk_size=chunk_size)
                             stream.close()
 
                         chunks = _chunks_iter()
 
-                    # Unified write + progress loop
                     _data_accumulated = 0
                     _bytes_since_yield = 0
                     for chunk in chunks:
@@ -181,30 +192,31 @@ def download(
                                 last_speed_refresh = now
                                 _data_accumulated = 0
 
-                    # Flush any remaining bytes
                     if not segmented and _bytes_since_yield > 0:
                         yield dict(advance=_bytes_since_yield)
 
-                    # Truncate to actual written size in case pre-allocation overshot
-                    if content_length > 0 and written != content_length:
+                    if not resumed and content_length > 0 and written != content_length:
                         f.truncate(written)
 
                 if not segmented and content_length and written < content_length:
                     raise IOError(f"Failed to read {content_length} bytes from the track URI.")
 
-                yield dict(file_downloaded=save_path, written=written)
+                yield dict(file_downloaded=save_path, written=resume_offset + written)
 
                 if segmented:
                     yield dict(advance=1)
+                completed = True
                 break
-            except Exception as e:
-                save_path.unlink(missing_ok=True)
+            except Exception:
                 if DOWNLOAD_CANCELLED.is_set() or attempts == MAX_ATTEMPTS:
-                    raise e
+                    return
+                if save_path.exists():
+                    resume_offset = save_path.stat().st_size
                 time.sleep(RETRY_WAIT)
                 attempts += 1
     finally:
-        control_file.unlink()
+        if completed:
+            control_file.unlink(missing_ok=True)
 
 
 def requests(
