@@ -33,13 +33,16 @@ def apply_tags(path: Path, tags: dict[str, str]) -> None:
         f.write("\n".join(xml_lines))
         tmp_path = Path(f.name)
     try:
-        subprocess.run(
+        result = subprocess.run(
             [str(binaries.Mkvpropedit), str(path), "--tags", f"global:{tmp_path}"],
             check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
         )
-        log.debug("Tags applied via mkvpropedit")
+        if result.returncode != 0:
+            log.warning("mkvpropedit failed (exit %d): %s", result.returncode, result.stderr.strip())
+        else:
+            log.debug("Tags applied via mkvpropedit")
     finally:
         tmp_path.unlink(missing_ok=True)
 
@@ -92,43 +95,46 @@ def tag_file(
     standard_tags: dict[str, str] = {}
 
     if config.tag_imdb_tmdb:
-        providers = get_available_providers()
-        if not providers:
-            log.debug("No metadata providers available; skipping tag lookup")
-            apply_tags(path, custom_tags)
-            return
+        try:
+            providers = get_available_providers()
+            if not providers:
+                log.debug("No metadata providers available; skipping tag lookup")
+                apply_tags(path, custom_tags)
+                return
 
-        result: Optional[MetadataResult] = None
+            result: Optional[MetadataResult] = None
 
-        # Direct ID lookup path
-        if imdb_id:
-            imdbapi = get_provider("imdbapi")
-            if imdbapi:
-                result = imdbapi.get_by_id(imdb_id, kind)
-                if result:
-                    result.external_ids.imdb_id = imdb_id
-                    enrich_ids(result)
-        elif tmdb_id is not None:
-            tmdb = get_provider("tmdb")
-            if tmdb:
-                result = tmdb.get_by_id(tmdb_id, kind)
-                if result:
-                    ext = tmdb.get_external_ids(tmdb_id, kind)
-                    result.external_ids = ext
-        else:
-            # Search across providers in priority order
-            result = search_metadata(name, year, kind)
+            # Direct ID lookup path
+            if imdb_id:
+                imdbapi = get_provider("imdbapi")
+                if imdbapi:
+                    result = imdbapi.get_by_id(imdb_id, kind)
+                    if result:
+                        result.external_ids.imdb_id = imdb_id
+                        enrich_ids(result)
+            elif tmdb_id is not None:
+                tmdb = get_provider("tmdb")
+                if tmdb:
+                    result = tmdb.get_by_id(tmdb_id, kind)
+                    if result:
+                        ext = tmdb.get_external_ids(tmdb_id, kind)
+                        result.external_ids = ext
+            else:
+                # Search across providers in priority order
+                result = search_metadata(name, year, kind)
 
-        # If we got a TMDB ID from search but no full external IDs, fetch them
-        if result and result.external_ids.tmdb_id and not result.external_ids.imdb_id:
-            ext = fetch_external_ids(result.external_ids.tmdb_id, kind)
-            if ext.imdb_id:
-                result.external_ids.imdb_id = ext.imdb_id
-            if ext.tvdb_id:
-                result.external_ids.tvdb_id = ext.tvdb_id
+            # If we got a TMDB ID from search but no full external IDs, fetch them
+            if result and result.external_ids.tmdb_id and not result.external_ids.imdb_id:
+                ext = fetch_external_ids(result.external_ids.tmdb_id, kind)
+                if ext.imdb_id:
+                    result.external_ids.imdb_id = ext.imdb_id
+                if ext.tvdb_id:
+                    result.external_ids.tvdb_id = ext.tvdb_id
 
-        if result and result.external_ids:
-            standard_tags = _build_tags_from_ids(result.external_ids, kind)
+            if result and result.external_ids:
+                standard_tags = _build_tags_from_ids(result.external_ids, kind)
+        except Exception as e:
+            log.warning("Metadata lookup failed, applying custom tags only: %s", e)
 
     apply_tags(path, {**custom_tags, **standard_tags})
 
