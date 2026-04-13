@@ -6,7 +6,6 @@ import logging
 import math
 import re
 import shutil
-import struct
 import sys
 from copy import copy
 from functools import partial
@@ -572,49 +571,6 @@ class DASH:
         progress(downloaded="Downloaded")
 
     @staticmethod
-    def _parse_sidx(data: bytes, index_range: str) -> list[str]:
-        """Parse a SIDX box to extract per-segment byte ranges."""
-        # Find the sidx box in the data
-        offset = 0
-        while offset < len(data) - 8:
-            box_size = struct.unpack(">I", data[offset : offset + 4])[0]
-            if box_size < 8 or data[offset + 4 : offset + 8] != b"sidx":
-                offset += max(box_size, 8)
-                continue
-
-            pos = offset + 8
-            version = data[pos]
-            pos += 4  # version + flags
-            pos += 4  # reference_ID
-            pos += 4  # timescale
-
-            if version == 0:
-                first_offset = struct.unpack(">I", data[pos + 4 : pos + 8])[0]
-                pos += 8
-            else:
-                first_offset = struct.unpack(">Q", data[pos + 8 : pos + 16])[0]
-                pos += 16
-
-            pos += 2  # reserved
-            reference_count = struct.unpack(">H", data[pos : pos + 2])[0]
-            pos += 2
-
-            idx_end = int(index_range.split("-")[1])
-            current_offset = idx_end + 1 + first_offset
-            segments = []
-
-            for _ in range(reference_count):
-                ref_size = struct.unpack(">I", data[pos : pos + 4])[0] & 0x7FFFFFFF
-                pos += 12  # ref_info + subseg_duration + SAP fields
-                seg_end = current_offset + ref_size - 1
-                segments.append(f"{current_offset}-{seg_end}")
-                current_offset = seg_end + 1
-
-            return segments
-
-        return []
-
-    @staticmethod
     def _is_content_period(period: Element, filtered_period_ids: list[str]) -> bool:
         """Check if a period is a valid content period (not an ad, not filtered, not trick mode)."""
         period_id = period.get("id")
@@ -814,19 +770,7 @@ class DASH:
                 if total_size:
                     media_range = f"{len(init_data)}-{total_size}"
 
-            # Parse SIDX box from indexRange to get per-segment byte ranges
-            index_range = segment_base.get("indexRange")
-            if index_range:
-                sidx_res = session.get(url=rep_base_url, headers={"Range": f"bytes={index_range}"})
-                sidx_res.raise_for_status()
-                sidx_segments = DASH._parse_sidx(sidx_res.content, index_range)
-                if sidx_segments:
-                    for seg_range in sidx_segments:
-                        segments.append((rep_base_url, seg_range))
-                else:
-                    segments.append((rep_base_url, media_range))
-            else:
-                segments.append((rep_base_url, media_range))
+            segments.append((rep_base_url, media_range))
         elif rep_base_url:
             segments.append((rep_base_url, None))
 
