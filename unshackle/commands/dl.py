@@ -349,21 +349,21 @@ class dl:
         "--select-titles",
         is_flag=True,
         default=False,
-        help="Interactively select downloads from a list. Only use with Series to select Episodes",
+        help="Interactively select downloads from a list. Only use with Series to select Episodes.",
     )
     @click.option(
         "-w",
         "--wanted",
         type=SEASON_RANGE,
         default=None,
-        help="Wanted episodes, e.g. `S01-S05,S07`, `S01E01-S02E03`, `S02-S02E03`, e.t.c, defaults to all.",
+        help="Wanted episodes, e.g. `S01-S05,S07`, `S01E01-S02E03`, `S02-S02E03`, etc., defaults to all.",
     )
     @click.option(
         "-l",
         "--lang",
         type=LANGUAGE_RANGE,
         default="orig",
-        help="Language wanted for Video and Audio. Use 'orig' to select the original language, e.g. 'orig,en' for both original and English.",
+        help="Language(s) wanted for Video and Audio (comma-separated). Use 'orig' to select the original language, e.g. 'orig,en' for both original and English.",
     )
     @click.option(
         "--latest-episode",
@@ -376,7 +376,7 @@ class dl:
         "--v-lang",
         type=LANGUAGE_RANGE,
         default=[],
-        help="Language wanted for Video, you would use this if the video language doesn't match the audio.",
+        help="Language wanted for Video. You would use this if the video language doesn't match the audio.",
     )
     @click.option(
         "-al",
@@ -403,7 +403,7 @@ class dl:
         "--proxy",
         type=str,
         default=None,
-        help="Proxy URI to use. If a 2-letter country is provided, it will try get a proxy from the config.",
+        help="Proxy URI to use. If a 2-letter country is provided, it will try to get a proxy from the config.",
     )
     @click.option(
         "--tag", type=str, default=None, help="Set the Group Tag to be used, overriding the one in config if any."
@@ -445,10 +445,10 @@ class dl:
     @click.option("-V", "--video-only", is_flag=True, default=False, help="Only download video tracks.")
     @click.option("-A", "--audio-only", is_flag=True, default=False, help="Only download audio tracks.")
     @click.option("-S", "--subs-only", is_flag=True, default=False, help="Only download subtitle tracks.")
-    @click.option("-C", "--chapters-only", is_flag=True, default=False, help="Only download chapters.")
+    @click.option("-C", "--chapters-only", is_flag=True, default=False, help="Only download chapter markers.")
     @click.option("-ns", "--no-subs", is_flag=True, default=False, help="Do not download subtitle tracks.")
     @click.option("-na", "--no-audio", is_flag=True, default=False, help="Do not download audio tracks.")
-    @click.option("-nc", "--no-chapters", is_flag=True, default=False, help="Do not download chapters tracks.")
+    @click.option("-nc", "--no-chapters", is_flag=True, default=False, help="Do not download chapter markers.")
     @click.option("-nv", "--no-video", is_flag=True, default=False, help="Do not download video tracks.")
     @click.option("-ad", "--audio-description", is_flag=True, default=False, help="Download audio description tracks.")
     @click.option(
