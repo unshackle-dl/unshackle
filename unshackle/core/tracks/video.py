@@ -126,27 +126,48 @@ class Video(Track):
                 Reserved = 0
                 BT_709 = 1
                 Unspecified = 2
+                BT_470_M = 4
                 BT_601_625 = 5
                 BT_601_525 = 6
+                SMPTE_240M = 7
+                Generic_Film = 8
                 BT_2020_and_2100 = 9
+                SMPTE_ST_428_1 = 10
+                SMPTE_RP_431_2 = 11  # P3DCI
                 SMPTE_ST_2113_and_EG_4321 = 12  # P3D65
+                EBU_Tech_3213_E = 22
 
             class Transfer(Enum):
                 Reserved = 0
                 BT_709 = 1
                 Unspecified = 2
+                BT_470_M = 4
                 BT_601 = 6
+                SMPTE_240M = 7
+                Linear = 8
+                Log_100 = 9
+                Log_316 = 10
+                IEC_61966_2_4 = 11
+                BT_1361 = 12
+                IEC_61966_2_1 = 13  # sRGB / sYCC
                 BT_2020 = 14
                 BT_2100 = 15
                 BT_2100_PQ = 16
+                SMPTE_ST_428_1 = 17
                 BT_2100_HLG = 18
 
             class Matrix(Enum):
                 RGB = 0
                 YCbCr_BT_709 = 1
+                Unspecified = 2
+                YCbCr_FCC_73_682 = 4
                 YCbCr_BT_601_625 = 5
                 YCbCr_BT_601_525 = 6
+                SMPTE_240M = 7
+                YCgCo = 8
                 YCbCr_BT_2020_and_2100 = 9  # YCbCr BT.2100 shares the same CP
+                YCbCr_BT_2020_CL = 10
+                YCbCr_SMPTE_ST_2085 = 11
                 ICtCp_BT_2100 = 14
 
             if transfer == 5:
@@ -155,9 +176,15 @@ class Video(Track):
                 # The codebase is currently agnostic to either, so a manual conversion to 6 is done.
                 transfer = 6
 
-            primaries = Primaries(primaries)
-            transfer = Transfer(transfer)
-            matrix = Matrix(matrix)
+            def _safe(enum_cls, value):
+                try:
+                    return enum_cls(value)
+                except ValueError:
+                    return enum_cls(2)  # Unspecified for unknown/private-use codes
+
+            primaries = _safe(Primaries, primaries)
+            transfer = _safe(Transfer, transfer)
+            matrix = _safe(Matrix, matrix)
 
             # primaries and matrix does not strictly correlate to a range
 
