@@ -586,6 +586,9 @@ class RnetSession:
 
         # Skip retry for non-allowed methods
         if method_upper not in self.allowed_methods:
+            if "headers" in kwargs and kwargs["headers"] is not None:
+                kwargs["headers"] = dict(kwargs["headers"])
+
             raw_resp = client.request(rnet_method, url, **kwargs)
             return RnetResponse(raw_resp)
 
@@ -594,6 +597,9 @@ class RnetSession:
 
         for attempt in range(self.max_retries + 1):
             try:
+                if "headers" in kwargs and kwargs["headers"] is not None:
+                    kwargs["headers"] = dict(kwargs["headers"])
+
                 raw_resp = client.request(rnet_method, url, **kwargs)
                 response = RnetResponse(raw_resp)
                 if response.status_code not in self.status_forcelist:
