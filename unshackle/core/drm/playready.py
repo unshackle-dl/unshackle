@@ -295,7 +295,10 @@ class PlayReady:
 
             if challenge:
                 try:
-                    license_res = licence(challenge=challenge)
+                    try:
+                        license_res = licence(challenge=challenge, pssh_b64=self.pssh_b64)
+                    except TypeError:
+                        license_res = licence(challenge=challenge)
                     if isinstance(license_res, bytes):
                         license_str = license_res.decode(errors="ignore")
                     else:
