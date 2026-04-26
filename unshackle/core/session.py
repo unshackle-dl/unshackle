@@ -584,6 +584,10 @@ class RnetSession:
         if rnet_method is None:
             raise ValueError(f"Unsupported HTTP method: {method}")
 
+        # Convert headers to standard dict once to resolve PyO3 CaseInsensitiveDict rejection.
+        if kwargs.get("headers") is not None:
+            kwargs["headers"] = dict(kwargs["headers"])
+
         # Skip retry for non-allowed methods
         if method_upper not in self.allowed_methods:
             raw_resp = client.request(rnet_method, url, **kwargs)
