@@ -205,7 +205,11 @@ class Widevine:
                 if hasattr(cdm, "has_cached_keys") and cdm.has_cached_keys(session_id):
                     pass
                 else:
-                    cdm.parse_license(session_id, licence(challenge=challenge))
+                    try:
+                        license_res = licence(challenge=challenge, pssh=self.pssh)
+                    except TypeError:
+                        license_res = licence(challenge=challenge)
+                    cdm.parse_license(session_id, license_res)
 
                 self.content_keys = {key.kid: key.key.hex() for key in cdm.get_keys(session_id, "CONTENT")}
                 if not self.content_keys:
