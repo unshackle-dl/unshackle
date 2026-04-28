@@ -858,6 +858,14 @@ class HLS:
                             DOWNLOAD_CANCELLED.set()  # skip pending track downloads
                             progress(downloaded="[red]FAILED")
                             raise
+                    if (
+                        encryption_data
+                        and isinstance(drm, (Widevine, PlayReady))
+                        and isinstance(encryption_data[1], type(drm))
+                        and getattr(encryption_data[1], "content_keys", None)
+                    ):
+                        for prev_kid, prev_key in encryption_data[1].content_keys.items():
+                            drm.content_keys.setdefault(prev_kid, prev_key)
                     encryption_data = (key, drm)
 
             if DOWNLOAD_LICENCE_ONLY.is_set():
