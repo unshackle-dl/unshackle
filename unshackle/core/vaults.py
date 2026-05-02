@@ -1,3 +1,4 @@
+import logging
 from typing import Any, Iterator, Optional, Union
 from uuid import UUID
 
@@ -18,6 +19,7 @@ class Vaults:
     def __init__(self, service: Optional[str] = None):
         self.service = service or ""
         self.vaults = []
+        self.log = logging.getLogger("vaults")
 
     def __iter__(self) -> Iterator[Vault]:
         return iter(self.vaults)
@@ -48,9 +50,15 @@ class Vaults:
     def get_key(self, kid: Union[UUID, str]) -> tuple[Optional[str], Optional[Vault]]:
         """Get Key from the first Vault it can by KID (Key ID) and Service."""
         for vault in self.vaults:
-            key = vault.get_key(kid, self.service)
-            if key and key.count("0") != len(key):
-                return key, vault
+            try:
+                key = vault.get_key(kid, self.service)
+                if key and key.count("0") != len(key):
+                    return key, vault
+            except (PermissionError, NotImplementedError):
+                pass
+            except Exception:
+                self.log.warning(f"Failed to get key from Vault '{vault.name}'")
+                continue
         return None, None
 
     def add_key(self, kid: Union[UUID, str], key: str, excluding: Optional[Vault] = None) -> int:
@@ -62,6 +70,8 @@ class Vaults:
                     success += vault.add_key(self.service, kid, key)
                 except (PermissionError, NotImplementedError):
                     pass
+                except Exception:
+                    self.log.warning(f"Failed to add key to Vault '{vault.name}'")
         return success
 
     def add_keys(self, kid_keys: dict[Union[UUID, str], str]) -> int:
@@ -74,12 +84,10 @@ class Vaults:
         for vault in self.vaults:
             if not vault.no_push:
                 try:
-                    # Count each vault that successfully processes the keys (whether new or existing)
                     vault.add_keys(self.service, kid_keys)
                     success += 1
                 except (PermissionError, NotImplementedError):
                     pass
+                except Exception:
+                    self.log.warning(f"Failed to add keys to Vault '{vault.name}'")
         return success
-
-
-__all__ = ("Vaults",)
