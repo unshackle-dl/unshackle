@@ -67,6 +67,8 @@ dependencies = [
     "animeapi-py>=0.6.0",
     "rnet>=2.4.2",
     "bandit>=1.9.4",
+    "jsonpath-ng>=1.8.0",
+    "mutagen>=1.47.0,<2",
 ]
 
 [project.urls]

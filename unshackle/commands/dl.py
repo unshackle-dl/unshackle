@@ -45,11 +45,21 @@ from unshackle.core.constants import DOWNLOAD_LICENCE_ONLY, AnyTrack, context_se
 from unshackle.core.credential import Credential
 from unshackle.core.drm import DRM_T, MonaLisa, PlayReady, Widevine
 from unshackle.core.events import events
+from unshackle.core.music import (
+    MusicAudioIntegrityError,
+    MusicMetadataResult,
+    MusicPlanner,
+    MusicRenderer,
+    file_md5,
+    verify_music_audio,
+    write_music_manifest,
+    write_music_metadata,
+)
 from unshackle.core.proxies import Basic, Gluetun, Hola, NordVPN, SurfsharkVPN, WindscribeVPN
 from unshackle.core.service import Service
 from unshackle.core.services import Services
 from unshackle.core.title_cacher import get_account_hash
-from unshackle.core.titles import Movie, Movies, Series, Song, Title_T
+from unshackle.core.titles import Movie, Movies, Music, Series, Song, Title_T
 from unshackle.core.titles.episode import Episode
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
@@ -584,7 +594,7 @@ class dl:
         if not config.output_template:
             raise click.ClickException(
                 "No 'output_template' configured in your unshackle.yaml.\n"
-                "Please add an 'output_template' section with movies, series, and songs templates.\n"
+                "Please add an 'output_template' section with movies, series, and songs/music templates.\n"
                 "See unshackle-example.yaml for examples."
             )
 
@@ -1146,7 +1156,7 @@ class dl:
             )
 
         with console.status(
-            "Authenticating with Remote Service..." if self.is_remote else "Authenticating with Service...",
+            "Preparing Remote Service Session..." if self.is_remote else "Preparing Service Session...",
             spinner="dots",
         ):
             try:
@@ -1261,10 +1271,42 @@ class dl:
                     if enrich_year and not titles.year:
                         titles.year = enrich_year
 
-        console.print(Padding(Rule(f"[rule.text]{titles.__class__.__name__}: {titles}"), (1, 2)))
+        music_mode = isinstance(titles, Music)
+        music_collection_mode = isinstance(titles, list) and bool(titles) and all(
+            isinstance(title, Music) for title in titles
+        )
+        music_titles = list(titles) if music_collection_mode else ([titles] if music_mode else [])
+        music_plans = {}
 
-        console.print(Padding(titles.tree(verbose=list_titles), (0, 5)))
+        if music_titles:
+            music_renderer = MusicRenderer()
+            if music_collection_mode:
+                collection_label_getter = getattr(service, "get_music_collection_label", None)
+                collection_label = (
+                    collection_label_getter(music_titles)
+                    if callable(collection_label_getter)
+                    else f"Music Collection ({len(music_titles)} Releases)"
+                )
+                if collection_label:
+                    console.print(Padding(Rule(f"[rule.text]🎼 {collection_label}"), (1, 2)))
+            if list_:
+                for music_title in music_titles:
+                    music_kind = MusicRenderer.display_kind(getattr(music_title, "kind", "") or "album")
+                    music_icon = "📀" if music_kind.lower() == "album" else "🎵"
+                    console.print(Padding(Rule(f"[rule.text]{music_icon} {music_kind}: {music_title}"), (1, 2)))
+                    current_plan = MusicPlanner(service).build(music_title)
+                    music_plans[id(music_title)] = current_plan
+                    music_renderable = music_renderer.render_plan(current_plan, verbose=True)
+                    if music_renderable:
+                        console.print(Padding(music_renderable, (0, 5)))
+        else:
+            console.print(Padding(Rule(f"[rule.text]{titles.__class__.__name__}: {titles}"), (1, 2)))
+            console.print(Padding(titles.tree(verbose=list_titles), (0, 5)))
+
         if list_titles:
+            return
+
+        if music_titles and list_:
             return
 
         # Enables manual selection for Series when --select-titles is set
@@ -1357,6 +1399,432 @@ class dl:
             latest_episode_id = f"{latest_ep.season}x{latest_ep.number}"
             self.log.info(f"Latest episode mode: Selecting S{latest_ep.season:02}E{latest_ep.number:02}")
 
+        music_group_download = (
+            bool(music_titles)
+            and getattr(service, "GROUP_AUDIO_DOWNLOADS", False)
+            and not no_mux
+            and not video_only
+            and not subs_only
+            and not chapters_only
+            and not no_audio
+        )
+        if music_group_download:
+            def download_music_title(titles: Music, plan: Any) -> bool:
+                music_items: list[tuple[Song, Audio, Callable[..., None]]] = []
+                music_song_plans = {
+                    id(song_plan.song): song_plan
+                    for disc in plan.discs
+                    for song_plan in disc.songs
+                }
+                music_renderer = MusicRenderer()
+                music_start_time = time.time()
+
+                music_kind = MusicRenderer.display_kind(getattr(titles, "kind", "") or "album")
+                music_icon = "📀" if music_kind.lower() == "album" else "🎵"
+                console.print(Padding(Rule(f"[rule.text]{music_icon} {music_kind}: {titles}"), (1, 2)))
+                music_header = music_renderer.render_plan_header(plan)
+                if music_header:
+                    console.print(Padding(music_header, (0, 5)))
+
+                def music_track_count(count: int) -> str:
+                    return f"{count} track{'s' if count != 1 else ''}"
+
+                def format_elapsed_seconds(elapsed: float) -> str:
+                    elapsed_int = int(elapsed)
+                    minutes, seconds = divmod(elapsed_int, 60)
+                    hours, minutes = divmod(minutes, 60)
+                    value = f"{minutes:d}m{seconds:d}s"
+                    return f"{hours:d}h{value}" if hours else value
+
+                def select_music_audio(song: Song) -> None:
+                    if not audio_description:
+                        song.tracks.select_audio(lambda x: not x.descriptive)
+                    if acodec:
+                        song.tracks.select_audio(lambda x: x.codec in acodec)
+                        if not song.tracks.audio:
+                            codec_names = ", ".join(c.name for c in acodec)
+                            self.log.error(f"No audio tracks matching codecs for {song.name}: {codec_names}")
+                            sys.exit(1)
+                    if channels:
+                        song.tracks.select_audio(lambda x: math.ceil(x.channels) == math.ceil(channels))
+                        if not song.tracks.audio:
+                            self.log.error(f"There's no {channels} Audio Track for {song.name}...")
+                            sys.exit(1)
+                    if no_atmos:
+                        song.tracks.audio = [x for x in song.tracks.audio if not x.atmos]
+                        if not song.tracks.audio:
+                            self.log.error(f"No non-Atmos audio tracks available for {song.name}...")
+                            sys.exit(1)
+                    if abitrate:
+                        song.tracks.select_audio(lambda x: x.bitrate and x.bitrate // 1000 == abitrate)
+                        if not song.tracks.audio:
+                            self.log.error(f"There's no {abitrate}kbps Audio Track for {song.name}...")
+                            sys.exit(1)
+                    if abitrate_min is not None and abitrate_max is not None:
+                        song.tracks.select_audio(
+                            lambda x: x.bitrate and abitrate_min <= x.bitrate // 1000 <= abitrate_max
+                        )
+                        if not song.tracks.audio:
+                            self.log.error(
+                                f"No Audio Track in {abitrate_min}-{abitrate_max}kbps range for {song.name}..."
+                            )
+                            sys.exit(1)
+
+                    audio_languages = a_lang or lang
+                    if audio_languages:
+                        processed_lang = []
+                        for language in audio_languages:
+                            if language == "orig":
+                                if song.language:
+                                    orig_lang = str(song.language) if hasattr(song.language, "__str__") else song.language
+                                    if orig_lang not in processed_lang:
+                                        processed_lang.append(orig_lang)
+                                else:
+                                    self.log.warning("Original language not available for music track, skipping 'orig'")
+                            elif language not in processed_lang:
+                                processed_lang.append(language)
+
+                        if "best" not in processed_lang and "all" not in processed_lang:
+                            song.tracks.audio = song.tracks.by_language(
+                                song.tracks.audio,
+                                processed_lang,
+                                per_language=1,
+                                exact_match=exact_lang,
+                            )
+                            if not song.tracks.audio:
+                                self.log.error(f"There's no {processed_lang} Audio Track for {song.name}...")
+                                sys.exit(1)
+
+                self.log.debug("Getting Tracks")
+                tracks_label = "Getting Remote Tracks..." if self.is_remote else "Getting Tracks..."
+                with console.status(tracks_label, spinner="dots"):
+                    for song in titles:
+                        events.reset()
+                        events.subscribe(events.Types.SEGMENT_DOWNLOADED, service.on_segment_downloaded)
+                        events.subscribe(events.Types.TRACK_DOWNLOADED, service.on_track_downloaded)
+                        events.subscribe(events.Types.TRACK_DECRYPTED, service.on_track_decrypted)
+                        events.subscribe(events.Types.TRACK_REPACKED, service.on_track_repacked)
+                        events.subscribe(events.Types.TRACK_MULTIPLEX, service.on_track_multiplex)
+
+                        song.tracks.add(service.get_tracks(song), warn_only=True)
+                        song.tracks.chapters = service.get_chapters(song)
+                        song.tracks.sort_audio(by_language=a_lang or lang)
+                        select_music_audio(song)
+                        if not song.tracks.audio:
+                            self.log.error(f"No audio tracks returned for {song.name}.")
+                            sys.exit(1)
+
+                music_tree = Tree(
+                    f"💽 [repr.number]{len(titles)}[/] {'Track' if len(titles) == 1 else 'Tracks'}",
+                    guide_style="bright_black",
+                )
+                for song in titles:
+                    track = song.tracks.audio[0]
+                    progress = Progress(
+                        SpinnerColumn(finished_text=""),
+                        BarColumn(),
+                        " | ",
+                        TimeRemainingColumn(compact=True, elapsed_when_finished=True),
+                        " | ",
+                        TextColumn("[progress.data.speed]{task.fields[downloaded]}"),
+                        console=console,
+                        speed_estimate_period=10,
+                    )
+                    task = progress.add_task("", downloaded="-")
+                    state = {"total": 100.0}
+
+                    def update_track_progress(
+                        task_id: int = task,
+                        _state: dict[str, float] = state,
+                        _progress: Progress = progress,
+                        **kwargs,
+                    ) -> None:
+                        if "total" in kwargs and kwargs["total"] is not None:
+                            _state["total"] = kwargs["total"]
+
+                        downloaded_state = kwargs.get("downloaded")
+                        if downloaded_state in {"Downloaded", "Decrypted", "[yellow]SKIPPED"}:
+                            kwargs["completed"] = _state["total"]
+                        _progress.update(task_id=task_id, **kwargs)
+
+                    track_table = Table.grid()
+                    track_table.add_row(music_renderer._song_line(song, titles))
+                    song_plan = music_song_plans.get(id(song))
+                    if song_plan and song_plan.selected:
+                        track_table.add_row(music_renderer._option_line(song_plan.selected), style="text2")
+                    else:
+                        track_table.add_row(str(track)[6:], style="text2")
+                    track_table.add_row(progress)
+                    music_tree.add(track_table, guide_style="bright_black")
+                    music_items.append((song, track, update_track_progress))
+
+                download_table = Table.grid()
+                download_table.add_row(music_tree)
+
+                try:
+                    with Live(Padding(download_table, (1, 5)), console=console, refresh_per_second=5):
+                        with ThreadPoolExecutor(downloads) as pool:
+                            download_futures = [
+                                pool.submit(
+                                    track.download,
+                                    session=track.session or service.session,
+                                    no_proxy_download=no_proxy_download,
+                                    prepare_drm=partial(
+                                        partial(self.prepare_drm, table=download_table),
+                                        track=track,
+                                        title=song,
+                                        certificate=partial(
+                                            service.get_widevine_service_certificate,
+                                            title=song,
+                                            track=track,
+                                        ),
+                                        licence=partial(
+                                            service.get_playready_license
+                                            if is_playready_cdm(self.cdm)
+                                            else service.get_widevine_license,
+                                            title=song,
+                                            track=track,
+                                        ),
+                                        cdm_only=cdm_only,
+                                        vaults_only=vaults_only,
+                                        export=export_path,
+                                    ),
+                                    cdm=self.cdm,
+                                    max_workers=workers,
+                                    progress=progress_call,
+                                )
+                                for song, track, progress_call in music_items
+                            ]
+                            for download in futures.as_completed(download_futures):
+                                download.result()
+                except KeyboardInterrupt:
+                    console.print(Padding(":x: Download Cancelled...", (0, 5, 1, 5)))
+                    return
+                except Exception as e:  # noqa
+                    console.print(
+                        Padding(
+                            Group(
+                                ":x: Download Failed...",
+                                f"   {type(e).__name__}: {e}",
+                                "   An unexpected error occurred in one of the download workers.",
+                            ),
+                            (1, 5),
+                        )
+                    )
+                    console.print_exception()
+                    return
+
+                if skip_dl:
+                    console.log("Skipped downloads as --skip-dl was used...")
+                else:
+                    dl_time = time_elapsed_since(music_start_time)
+                    console.print(Padding(f"📥 Track downloads finished in [progress.elapsed]{dl_time}[/]", (0, 5)))
+
+                    integrity_results = {}
+                    media_infos = {}
+                    integrity_start = time.time()
+                    try:
+                        with console.status("Verifying audio integrity...", spinner="dots"):
+                            for song, track, _ in music_items:
+                                if not track.path or not track.path.exists():
+                                    continue
+                                if track.needs_repack:
+                                    track.repackage()
+                                    events.emit(events.Types.TRACK_REPACKED, track=track)
+
+                                media_info = MediaInfo.parse(track.path)
+                                media_infos[id(track)] = media_info
+                                integrity_results[id(track)] = verify_music_audio(
+                                    track.path,
+                                    song=song,
+                                    track=track,
+                                    media_info=media_info,
+                                )
+                    except MusicAudioIntegrityError as error:
+                        console.print(Padding(f"❌ Audio integrity failed: {error}", (0, 5, 1, 5)))
+                        return
+                    integrity_time = format_elapsed_seconds(time.time() - integrity_start)
+
+                    source_md5 = {}
+                    md5_elapsed = 0.0
+                    md5_start = time.time()
+                    with console.status("Recording MD5 checksums...", spinner="dots"):
+                        for _, track, _ in music_items:
+                            if track.path and track.path.exists():
+                                source_md5[id(track)] = file_md5(track.path)
+                    md5_elapsed += time.time() - md5_start
+
+                    metadata_results = {}
+                    final_paths = {}
+                    final_md5 = {}
+                    manifest_records = []
+                    metadata_start = time.time()
+                    metadata_warning = ""
+                    used_final_paths: set[Path] = set()
+                    with console.status("Writing music metadata...", spinner="dots"):
+                        for song, track, _ in music_items:
+                            if not track.path or not track.path.exists():
+                                continue
+
+                            media_info = media_infos.get(id(track)) or MediaInfo.parse(track.path)
+                            final_dir = self.output_dir or config.directories.downloads
+                            final_filename = song.get_filename(media_info, show_service=not no_source)
+                            if not no_folder:
+                                final_dir /= song.get_filename(media_info, show_service=not no_source, folder=True)
+
+                            final_dir.mkdir(parents=True, exist_ok=True)
+                            final_path = final_dir / f"{final_filename}{track.path.suffix}"
+                            sep = config.get_template_separator("songs")
+                            if final_path in used_final_paths:
+                                index = 2
+                                while final_path in used_final_paths:
+                                    final_path = final_dir / f"{final_filename.rstrip()}{sep}{index}{track.path.suffix}"
+                                    index += 1
+
+                            try:
+                                os.replace(track.path, final_path)
+                            except OSError:
+                                if final_path.exists():
+                                    final_path.unlink()
+                                shutil.move(track.path, final_path)
+                            used_final_paths.add(final_path)
+                            final_paths[id(track)] = final_path
+                            self.completed_files.append(final_path)
+
+                            try:
+                                metadata_results[id(track)] = write_music_metadata(
+                                    final_path,
+                                    song,
+                                    session=service.session,
+                                    source_md5=source_md5.get(id(track), ""),
+                                )
+                            except Exception as error:
+                                metadata_warning = f"{type(error).__name__}: {error}"
+                                self.log.warning(f"Music metadata failed for {song.name}: {metadata_warning}")
+                                metadata_results[id(track)] = MusicMetadataResult(skipped=True, reason=metadata_warning)
+                    metadata_time = format_elapsed_seconds(time.time() - metadata_start)
+
+                    final_md5_start = time.time()
+                    with console.status("Recording final MD5 checksums...", spinner="dots"):
+                        for _, track, _ in music_items:
+                            final_path = final_paths.get(id(track))
+                            if final_path and final_path.exists():
+                                final_md5[id(track)] = file_md5(final_path)
+                    md5_elapsed += time.time() - final_md5_start
+                    md5_time = format_elapsed_seconds(md5_elapsed)
+
+                    for song, track, _ in music_items:
+                        final_path = final_paths.get(id(track))
+                        if not final_path:
+                            continue
+                        integrity_result = integrity_results.get(id(track))
+                        metadata_result = metadata_results.get(id(track), MusicMetadataResult(skipped=True, reason="not processed"))
+                        manifest_records.append(
+                            {
+                                "track_number": song.track,
+                                "disc_number": song.disc,
+                                "title": song.name,
+                                "artist": song.artist,
+                                "album": song.album,
+                                "file": str(final_path),
+                                "source_md5": source_md5.get(id(track), ""),
+                                "final_md5": final_md5.get(id(track), ""),
+                                "integrity": integrity_result.to_dict() if integrity_result else {},
+                                "metadata": metadata_result.to_dict(),
+                            }
+                        )
+
+                    if final_paths:
+                        manifest_slug = ".".join(
+                            part
+                            for part in re.sub(
+                                r"[^A-Za-z0-9._-]+",
+                                ".",
+                                ".".join(
+                                    str(part or "")
+                                    for part in (
+                                        self.service,
+                                        getattr(titles, "artist", ""),
+                                        getattr(titles, "title", ""),
+                                        getattr(titles, "year", ""),
+                                        int(time.time()),
+                                    )
+                                ),
+                            )
+                            .strip(".")
+                            .split(".")
+                            if part
+                        )
+                        try:
+                            write_music_manifest(
+                                config.directories.logs / "music" / f"{manifest_slug or 'music'}.json",
+                                release={
+                                    "kind": getattr(titles, "kind", ""),
+                                    "title": getattr(titles, "title", ""),
+                                    "artist": getattr(titles, "artist", ""),
+                                    "year": getattr(titles, "year", None),
+                                    "service": self.service,
+                                },
+                                tracks=manifest_records,
+                            )
+                        except Exception as error:
+                            self.log.warning(f"Music manifest write failed: {error}")
+
+                    album_time = time_elapsed_since(music_start_time)
+                    release_label = MusicRenderer.display_kind(getattr(titles, "kind", "") or "music")
+
+                    integrity_count = len(integrity_results)
+                    md5_count = len(final_md5)
+                    metadata_written_count = sum(1 for result in metadata_results.values() if result.written)
+                    console.print(
+                        Padding(
+                            f"🧪 Audio integrity verified for {music_track_count(integrity_count)} in [progress.elapsed]{integrity_time}[/]",
+                            (0, 5),
+                        )
+                    )
+                    console.print(
+                        Padding(
+                            f"🧬 MD5 checksum recorded for {music_track_count(md5_count)} in [progress.elapsed]{md5_time}[/]",
+                            (0, 5),
+                        )
+                    )
+                    if metadata_written_count:
+                        console.print(
+                            Padding(
+                                f"🏷️ Metadata written for {music_track_count(metadata_written_count)} in [progress.elapsed]{metadata_time}[/]",
+                                (0, 5),
+                            )
+                        )
+                    else:
+                        reason = metadata_warning or next(
+                            (result.reason for result in metadata_results.values() if result.reason),
+                            "install mutagen to write music tags",
+                        )
+                        console.print(Padding(f"⚠️ Metadata skipped: {reason}", (0, 5)))
+                    console.print(Padding(f"🎉 {release_label} downloaded in [progress.elapsed]{album_time}[/]!", (0, 5, 1, 5)))
+
+                return True
+
+            for music_title in music_titles:
+                current_plan = music_plans.get(id(music_title)) or MusicPlanner(service).build(music_title)
+                if not download_music_title(music_title, current_plan):
+                    return
+
+            if not hasattr(service, "close"):
+                cookie_file = self.get_cookie_path(self.service, self.profile)
+                if cookie_file:
+                    self.save_cookies(cookie_file, service.session.cookies)
+
+            if hasattr(service, "close"):
+                service.close()
+
+            dl_time = time_elapsed_since(start_time)
+            console.print(Padding(f"🏁 Processed all titles in [progress.elapsed]{dl_time}", (0, 5, 1, 5)))
+            return
+
+        if music_collection_mode:
+            raise click.ClickException("Music collections require grouped audio downloads.")
+
         for i, title in enumerate(titles):
             if isinstance(title, Episode) and latest_episode and latest_episode_id:
                 # If --latest-episode is set, only process the latest episode
@@ -1365,7 +1833,12 @@ class dl:
             elif isinstance(title, Episode) and wanted and f"{title.season}x{title.number}" not in wanted:
                 continue
 
-            console.print(Padding(Rule(f"[rule.text]{title}"), (1, 2)))
+            title_rule = (
+                f"Track {title.track:02}: {title.name}"
+                if music_mode and isinstance(title, Song)
+                else str(title)
+            )
+            console.print(Padding(Rule(f"[rule.text]{title_rule}"), (1, 2)))
             temp_font_files = []
 
             if isinstance(title, Episode) and not self.tmdb_searched:
@@ -2604,8 +3077,12 @@ class dl:
                         tags.tag_file(final_path, title, self.tmdb_id, self.imdb_id)
 
                 title_dl_time = time_elapsed_since(dl_start_time)
+                downloaded_label = "Track" if music_mode and isinstance(title, Song) else "Title"
                 console.print(
-                    Padding(f":tada: Title downloaded in [progress.elapsed]{title_dl_time}[/]!", (0, 5, 1, 5))
+                    Padding(
+                        f":tada: {downloaded_label} downloaded in [progress.elapsed]{title_dl_time}[/]!",
+                        (0, 5, 1, 5),
+                    )
                 )
 
             if not hasattr(service, "close"):
