@@ -221,6 +221,41 @@ async def services(request: web.Request) -> web.Response:
                 if service_module.__doc__:
                     service_data["help"] = service_module.__doc__.strip()
 
+                # Capability flags, derived from which Service hooks the service overrides.
+                from unshackle.core.service import Service as _BaseService
+
+                service_data["needs_auth"] = (
+                    getattr(service_module, "authenticate", None) is not _BaseService.authenticate
+                )
+                service_data["has_search"] = getattr(service_module, "search", None) is not _BaseService.search
+                service_data["has_drm"] = (
+                    getattr(service_module, "get_widevine_license", None) is not _BaseService.get_widevine_license
+                    or getattr(service_module, "get_playready_license", None) is not _BaseService.get_playready_license
+                )
+
+                # Prefer the service's explicit AUTH_METHODS; otherwise infer from authenticate().
+                methods = []
+                if service_data["needs_auth"]:
+                    declared = getattr(service_module, "AUTH_METHODS", None)
+                    if declared:
+                        methods = list(declared)
+                    else:
+                        try:
+                            import inspect as _inspect
+
+                            src_lines = _inspect.getsource(service_module.authenticate).splitlines()
+                            start = next((i + 1 for i, ln in enumerate(src_lines) if ln.rstrip().endswith(":")), 1)
+                            body = "\n".join(src_lines[start:])
+                            if "cookies" in body:
+                                methods.append("cookies")
+                            if "credential" in body:
+                                methods.append("credentials")
+                        except (OSError, TypeError):
+                            pass
+                        if not methods:
+                            methods = ["cookies"]
+                service_data["auth_methods"] = methods
+
             except Exception as e:
                 log.warning(f"Could not load details for service {tag}: {e}")
 
@@ -630,8 +665,10 @@ async def download(request: web.Request) -> web.Response:
                 type: boolean
                 description: Download audio description tracks (default - false)
               slow:
-                type: boolean
-                description: Add 60-120s delay between downloads (default - false)
+                oneOf:
+                  - type: boolean
+                  - type: string
+                description: Add randomized delay between downloads. `true` for default 60-120s, or `"MIN-MAX"` string (e.g., `"20-40"`). Min must be >= 20 (default - null)
               split_audio:
                 type: boolean
                 description: Create separate output files per audio codec instead of merging all audio (default - null)
@@ -650,6 +687,9 @@ async def download(request: web.Request) -> web.Response:
               no_proxy:
                 type: boolean
                 description: Force disable all proxy use (default - false)
+              no_proxy_download:
+                type: boolean
+                description: Bypass proxy for segment downloads only. Manifest, license, and auth still use proxy (default - false)
               tag:
                 type: string
                 description: Set the group tag to be used (default - None)
@@ -680,6 +720,9 @@ async def download(request: web.Request) -> web.Response:
               best_available:
                 type: boolean
                 description: Continue with best available if requested quality unavailable (default - false)
+              worst:
+                type: boolean
+                description: Select the lowest bitrate track within the specified quality. Requires `quality` (default - false)
               repack:
                 type: boolean
                 description: Add REPACK tag to the output filename (default - false)

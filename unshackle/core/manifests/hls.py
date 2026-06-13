@@ -5,9 +5,11 @@ import html
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
+import time
 from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
@@ -32,12 +34,20 @@ from unshackle.core.drm import DRM_T, ClearKey, MonaLisa, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.session import RnetResponse, RnetSession
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
-from unshackle.core.utilities import get_debug_logger, get_extension, is_close_match, try_ensure_utf8
+from unshackle.core.utilities import get_extension, is_close_match, log_event, try_ensure_utf8
+from unshackle.core.utils.redact import safe_display_url
+from unshackle.core.utils.subprocess import log_tool_run
 
 
 class HLS:
+    SUPP_CODECS_RE = re.compile(r'SUPPLEMENTAL-CODECS="([^"]+)"', re.IGNORECASE)
+
     def __init__(
-        self, manifest: M3U8, session: Optional[Union[Session, RnetSession]] = None, url: Optional[str] = None
+        self,
+        manifest: M3U8,
+        session: Optional[Union[Session, RnetSession]] = None,
+        url: Optional[str] = None,
+        raw_text: Optional[str] = None,
     ):
         if not manifest:
             raise ValueError("HLS manifest must be provided.")
@@ -49,6 +59,7 @@ class HLS:
         self.manifest = manifest
         self.session = session or Session()
         self.url = url
+        self.raw_text = raw_text
 
     @classmethod
     def from_url(cls, url: str, session: Optional[Union[Session, RnetSession]] = None, **args: Any) -> HLS:
@@ -78,7 +89,14 @@ class HLS:
 
         master = m3u8.loads(content, uri=url)
 
-        return cls(master, session, url=url)
+        log_event(
+            "manifest_hls_fetch",
+            level="DEBUG",
+            message=f"Fetched HLS manifest ({len(content)} bytes)",
+            context={"url": safe_display_url(url), "size": len(content)},
+        )
+
+        return cls(master, session, url=url, raw_text=content)
 
     @classmethod
     def from_text(cls, text: str, url: str) -> HLS:
@@ -94,7 +112,31 @@ class HLS:
 
         master = m3u8.loads(text, uri=url)
 
-        return cls(master)
+        return cls(master, raw_text=text)
+
+    def supplemental_codecs_by_uri(self) -> dict[str, str]:
+        """Map each variant URI to its SUPPLEMENTAL-CODECS value.
+
+        python-m3u8 drops this attribute, so we re-parse the raw text to recover it for
+        Dolby Vision composite detection (dvh1.08.x advertised only in SUPPLEMENTAL-CODECS
+        while primary CODECS stays plain hvc1).
+        """
+        if not self.raw_text:
+            return {}
+        out: dict[str, str] = {}
+        lines = self.raw_text.splitlines()
+        for i, line in enumerate(lines):
+            if not line.startswith("#EXT-X-STREAM-INF"):
+                continue
+            supp_match = self.SUPP_CODECS_RE.search(line)
+            if not supp_match:
+                continue
+            for j in range(i + 1, len(lines)):
+                uri = lines[j].strip()
+                if uri and not uri.startswith("#"):
+                    out[uri] = supp_match.group(1)
+                    break
+        return out
 
     def to_tracks(self, language: Union[str, Language]) -> Tracks:
         """
@@ -126,6 +168,9 @@ class HLS:
                 )
         tracks = Tracks()
 
+        supplemental_codecs = self.supplemental_codecs_by_uri()
+        dv_supp_prefixes = ("dva1", "dvav", "dvhe", "dvh1")
+
         for playlist in self.manifest.playlists:
             audio_group = playlist.stream_info.audio
             audio_codec: Optional[Audio.Codec] = None
@@ -146,6 +191,26 @@ class HLS:
             else:
                 primary_track_type = Video
 
+            primary_codecs = (playlist.stream_info.codecs or "").lower()
+            primary_has_dv = any(codec.split(".")[0] in dv_supp_prefixes for codec in primary_codecs.split(","))
+
+            supp_codecs_str = supplemental_codecs.get(playlist.uri, "")
+            supp_dv_codec: Optional[str] = None
+            for codec in supp_codecs_str.lower().split(","):
+                token = codec.strip().split("/")[0]
+                if token.split(".")[0] in dv_supp_prefixes:
+                    supp_dv_codec = token
+                    break
+
+            video_range = (
+                Video.Range.DV if primary_has_dv else Video.Range.from_m3u_range_tag(playlist.stream_info.video_range)
+            )
+            # DV-composite track: primary codec is plain HEVC but SUPPLEMENTAL-CODECS advertises
+            # a DV codec. Range stays whatever VIDEO-RANGE signaled (HDR10/HLG/SDR); DVFixup will
+            # restore DV signaling post-download. Services that know their encoder embeds HDR10+
+            # SEI must override `range` themselves (see services/ATV).
+            dv_compatible_bitstream = primary_track_type is Video and not primary_has_dv and supp_dv_codec is not None
+
             tracks.add(
                 primary_track_type(
                     id_=hex(crc32(str(playlist).encode()))[2:],
@@ -164,18 +229,14 @@ class HLS:
                     # video track args
                     **(
                         dict(
-                            range_=Video.Range.DV
-                            if any(
-                                codec.split(".")[0] in ("dva1", "dvav", "dvhe", "dvh1")
-                                for codec in (playlist.stream_info.codecs or "").lower().split(",")
-                            )
-                            else Video.Range.from_m3u_range_tag(playlist.stream_info.video_range),
+                            range_=video_range,
                             width=playlist.stream_info.resolution[0] if playlist.stream_info.resolution else None,
                             height=playlist.stream_info.resolution[1] if playlist.stream_info.resolution else None,
                             fps=playlist.stream_info.frame_rate,
                             closed_captions=cc_by_group_id.get(
                                 (playlist.stream_info.closed_captions or "").strip('"'), []
                             ),
+                            dv_compatible_bitstream=dv_compatible_bitstream,
                         )
                         if primary_track_type is Video
                         else {}
@@ -262,6 +323,22 @@ class HLS:
 
         if self.url:
             tracks.manifest_url = self.url
+
+        log_event(
+            "manifest_hls_parse",
+            level="INFO",
+            message=(
+                f"Parsed HLS manifest: {len(tracks.videos)} video, "
+                f"{len(tracks.audio)} audio, {len(tracks.subtitles)} subtitle track(s)"
+            ),
+            context={
+                "videos": len(tracks.videos),
+                "audio": len(tracks.audio),
+                "subtitles": len(tracks.subtitles),
+                "ranges": sorted({str(v.range) for v in tracks.videos}),
+                "vcodecs": sorted({str(v.codec) for v in tracks.videos}),
+            },
+        )
         return tracks
 
     @staticmethod
@@ -440,39 +517,6 @@ class HLS:
         return None
 
     @staticmethod
-    def _finalize_n_m3u8dl_re_output(*, track: AnyTrack, save_dir: Path, save_path: Path) -> Path:
-        """
-        Finalize output from N_m3u8DL-RE.
-
-        We call N_m3u8DL-RE with `--save-name track.id`, so the final file should be `{track.id}.*` under `save_dir`.
-        This moves that output to `save_path` (preserving the real suffix) and, for subtitles, updates `track.codec`
-        to match the produced file extension.
-        """
-        matches = [p for p in save_dir.rglob(f"{track.id}.*") if p.is_file()]
-        if not matches:
-            raise FileNotFoundError(f"No output files produced by N_m3u8DL-RE for save-name={track.id} in: {save_dir}")
-
-        primary = max(matches, key=lambda p: p.stat().st_size)
-
-        final_save_path = save_path.with_suffix(primary.suffix) if primary.suffix else save_path
-
-        final_save_path.parent.mkdir(parents=True, exist_ok=True)
-        if primary.absolute() != final_save_path.absolute():
-            final_save_path.unlink(missing_ok=True)
-            shutil.move(str(primary), str(final_save_path))
-
-        if isinstance(track, Subtitle):
-            ext = final_save_path.suffix.lower().lstrip(".")
-            try:
-                track.codec = Subtitle.Codec.from_mime(ext)
-            except ValueError:
-                pass
-
-        shutil.rmtree(save_dir, ignore_errors=True)
-
-        return final_save_path
-
-    @staticmethod
     def download_track(
         track: AnyTrack,
         save_path: Path,
@@ -552,14 +596,23 @@ class HLS:
                         DOWNLOAD_CANCELLED.set()  # skip pending track downloads
                         progress(downloaded="[red]FAILED")
                         raise
+                elif isinstance(media_drm, ClearKey):
+                    # AES-128 (ClearKey) needs no license server - the key is already fetched.
+                    # Without this branch session_drm stayed None and segments were never
+                    # decrypted (they were merged still-encrypted, producing a broken file).
+                    track.drm = [media_drm]
+                    session_drm = media_drm
+                    initial_drm_key = media_playlist_key
+                    initial_drm_licensed = True
 
         # Fall back to session DRM if media playlist has no matching keys
         if not initial_drm_licensed and session_drm and isinstance(session_drm, (Widevine, PlayReady)):
             try:
                 if not license_widevine:
                     raise ValueError("license_widevine func must be supplied to use DRM")
+                track_kid = HLS.get_track_kid_from_init(master, track, session) or session_drm.kid
                 progress(downloaded="LICENSING")
-                license_widevine(session_drm)
+                license_widevine(session_drm, track_kid=track_kid)
                 progress(downloaded="[yellow]LICENSED")
             except Exception:  # noqa
                 DOWNLOAD_CANCELLED.set()  # skip pending track downloads
@@ -629,21 +682,19 @@ class HLS:
             session=session,
         )
 
-        debug_logger = get_debug_logger()
-        if debug_logger:
-            debug_logger.log(
-                level="DEBUG",
-                operation="manifest_hls_download_start",
-                message="Starting HLS manifest download",
-                context={
-                    "track_id": getattr(track, "id", None),
-                    "track_type": track.__class__.__name__,
-                    "total_segments": total_segments,
-                    "has_drm": bool(session_drm),
-                    "drm_type": session_drm.__class__.__name__ if session_drm else None,
-                    "save_path": str(save_path),
-                },
-            )
+        log_event(
+            "manifest_hls_download_start",
+            level="DEBUG",
+            message="Starting HLS manifest download",
+            context={
+                "track_id": getattr(track, "id", None),
+                "track_type": track.__class__.__name__,
+                "total_segments": total_segments,
+                "has_drm": bool(session_drm),
+                "drm_type": session_drm.__class__.__name__ if session_drm else None,
+                "save_path": str(save_path),
+            },
+        )
 
         for status_update in downloader(**downloader_args):
             file_downloaded = status_update.get("file_downloaded")
@@ -663,6 +714,9 @@ class HLS:
         name_len = len(str(total_segments))
         discon_i = 0
         range_offset = 0
+        # First segment's Media Sequence Number - used as the AES-128 IV when EXT-X-KEY has
+        # no explicit IV (RFC 8216 §5.2), where each segment's IV is its sequence number.
+        media_sequence_start = getattr(master, "media_sequence", None) or 0
         map_data: Optional[tuple[m3u8.model.InitializationSection, bytes]] = None
         if session_drm:
             encryption_data: Optional[tuple[Optional[m3u8.Key], DRM_T]] = (initial_drm_key, session_drm)
@@ -741,7 +795,14 @@ class HLS:
                 else:
                     # with other drm we must decrypt separately and then merge them
                     # for aes this is because each segment likely has 16-byte padding
+                    key_obj = encryption_data[0]
+                    # AES-128 with no explicit IV: each segment's IV is its media sequence
+                    # number (RFC 8216 §5.2). Without this the engine used a zero IV and the
+                    # output decrypted to garbage.
+                    seq_iv = isinstance(drm, ClearKey) and not (key_obj and key_obj.iv)
                     for file in files:
+                        if seq_iv and file.stem.isdigit():
+                            drm.iv = (media_sequence_start + int(file.stem)).to_bytes(16, "big")
                         drm.decrypt(file)
                     merge(to=merged_path, via=files, delete=True, include_map_data=True)
 
@@ -902,39 +963,37 @@ class HLS:
         # finally merge all the discontinuity save files together to the final path
         segments_to_merge = find_segments_recursively(save_dir)
 
-        if debug_logger:
-            debug_logger.log(
-                level="DEBUG",
-                operation="manifest_hls_download_complete",
-                message="HLS download complete, preparing to merge",
+        log_event(
+            "manifest_hls_download_complete",
+            level="DEBUG",
+            message="HLS download complete, preparing to merge",
+            context={
+                "track_id": getattr(track, "id", None),
+                "track_type": track.__class__.__name__,
+                "save_dir": str(save_dir),
+                "save_dir_exists": save_dir.exists(),
+                "segments_found": len(segments_to_merge),
+                "segment_files": [f.name for f in segments_to_merge[:10]],  # Limit to first 10
+                "downloader": "requests",
+            },
+        )
+
+        if not segments_to_merge:
+            error_msg = f"No segment files found in output directory: {save_dir}"
+            all_contents = list(save_dir.iterdir()) if save_dir.exists() else []
+            log_event(
+                "manifest_hls_download_no_segments",
+                level="ERROR",
+                message=error_msg,
                 context={
                     "track_id": getattr(track, "id", None),
                     "track_type": track.__class__.__name__,
                     "save_dir": str(save_dir),
                     "save_dir_exists": save_dir.exists(),
-                    "segments_found": len(segments_to_merge),
-                    "segment_files": [f.name for f in segments_to_merge[:10]],  # Limit to first 10
+                    "directory_contents": [str(p) for p in all_contents],
                     "downloader": "requests",
                 },
             )
-
-        if not segments_to_merge:
-            error_msg = f"No segment files found in output directory: {save_dir}"
-            if debug_logger:
-                all_contents = list(save_dir.iterdir()) if save_dir.exists() else []
-                debug_logger.log(
-                    level="ERROR",
-                    operation="manifest_hls_download_no_segments",
-                    message=error_msg,
-                    context={
-                        "track_id": getattr(track, "id", None),
-                        "track_type": track.__class__.__name__,
-                        "save_dir": str(save_dir),
-                        "save_dir_exists": save_dir.exists(),
-                        "directory_contents": [str(p) for p in all_contents],
-                        "downloader": "requests",
-                    },
-                )
             raise FileNotFoundError(error_msg)
 
         if len(segments_to_merge) == 1:
@@ -1002,6 +1061,7 @@ class HLS:
                 demuxer_file = save_path.parent / f"ffmpeg_concat_demuxer_{save_path.stem}.txt"
                 demuxer_file.write_text("\n".join([f"file '{segment.absolute()}'" for segment in segments]))
 
+                concat_start = time.monotonic()
                 subprocess.check_call(
                     [
                         binaries.FFMPEG,
@@ -1024,6 +1084,14 @@ class HLS:
                 )
                 demuxer_file.unlink(missing_ok=True)
                 cleanup_segments_and_dirs()
+                log_tool_run(
+                    "ffmpeg concat segments",
+                    "ffmpeg",
+                    0,
+                    duration_ms=round((time.monotonic() - concat_start) * 1000, 1),
+                    segments=len(segments),
+                    output_size=save_path.stat().st_size if save_path.exists() else 0,
+                )
                 return save_path.stat().st_size
 
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:

@@ -153,8 +153,16 @@ providers:
 
 ### Specific Server Selection
 
-Use `--proxy gluetun:nordvpn:us1239` for specific server selection. Unshackle builds the hostname
-automatically based on the provider (e.g., `us1239.nordvpn.com` for NordVPN).
+Use a `<country><number>` region (e.g. `us1239`) to target a specific server. Unshackle builds the
+hostname automatically per provider:
+
+| Provider | Hostname format |
+|----------|-----------------|
+| NordVPN | `us1239.nordvpn.com` |
+| Surfshark | `us-1239.prod.surfshark.com` |
+| ExpressVPN | `us-1239.expressvpn.com` |
+| CyberGhost | `us-s1239.cg-dialup.net` |
+| Other | `us1239` (passed as-is to `SERVER_HOSTNAMES`) |
 
 ### Extra Environment Variables
 
@@ -187,12 +195,14 @@ proxy_providers:
 
 ## Features
 
-- **Container Reuse**: First request takes 10-30s; subsequent requests are instant. Containers from other sessions are also detected and reused.
-- **IP Verification**: Automatically verifies VPN exit IP matches requested region (configurable via `verify_ip`)
-- **Concurrent Sessions**: Multiple downloads share the same container
-- **Specific Servers**: Use `--proxy gluetun:nordvpn:us1239` for specific server selection
-- **Automatic Image Pull**: The Gluetun Docker image (`qmcgaw/gluetun:latest`) is pulled automatically on first use
-- **Secure Credentials**: Credentials are passed via temporary env files (mode 0600) rather than command-line arguments
+- **Container Reuse**: First request takes 10-30s; subsequent requests are instant. Containers created by other unshackle processes are auto-detected via `docker inspect` and reused.
+- **Ready Detection**: Waits up to 60s for both the HTTP proxy to listen (`[http proxy] listening`) and the VPN tunnel to come up (`initialization sequence completed` or `public ip address is`) before returning the proxy URI. Bails early on `fatal` or `invalid credentials` log lines.
+- **IP Verification**: When `verify_ip: true` (default), looks up the exit IP via `ipinfo.io` through the proxy and compares country code to the requested region. Retries 3 times with exponential backoff (1s, 2s, 4s).
+- **Concurrent Sessions**: Multiple downloads share the same container; ports are allocated thread-safely starting at `base_port`.
+- **Specific Servers**: Use `--proxy gluetun:nordvpn:us1239` for specific server selection (see table above).
+- **Automatic Image Pull**: The Gluetun Docker image (`qmcgaw/gluetun:latest`) is pulled automatically on first use (5 min timeout).
+- **Secure Credentials**: Credentials are passed via temporary env files (mode 0600), then zero-overwritten and unlinked after `docker run`. They never appear in process listings.
+- **Auto Cleanup**: Containers are removed via `atexit` (Ctrl+C still works normally). Disable with `auto_cleanup: false` to leave them stopped instead.
 
 ## Container Management
 

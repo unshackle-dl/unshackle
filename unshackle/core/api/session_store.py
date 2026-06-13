@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from unshackle.core.api.input_bridge import AuthStatus, InputBridge
+from unshackle.core.api.sanitize import sanitize_log
 from unshackle.core.config import config
 from unshackle.core.tracks import Track
 
@@ -84,7 +85,7 @@ class SessionStore:
                 service_instance=service_instance,
             )
             self._sessions[session_id] = entry
-            log.info(f"Created session {session_id} for service {service_tag}")
+            log.info(f"Created session {sanitize_log(session_id)} for service {sanitize_log(service_tag)}")
             return entry
 
     async def get(self, session_id: str) -> Optional[SessionEntry]:
@@ -97,7 +98,9 @@ class SessionStore:
             if entry.auth_status not in (AuthStatus.AUTHENTICATING, AuthStatus.PENDING_INPUT):
                 elapsed = (datetime.now(timezone.utc) - entry.last_accessed).total_seconds()
                 if elapsed > self._ttl:
-                    log.info(f"Session {session_id} expired (elapsed={elapsed:.0f}s, ttl={self._ttl}s)")
+                    log.info(
+                        f"Session {sanitize_log(session_id)} expired (elapsed={elapsed:.0f}s, ttl={self._ttl}s)"
+                    )
                     del self._sessions[session_id]
                     return None
 
@@ -112,7 +115,7 @@ class SessionStore:
                 if entry.input_bridge:
                     entry.input_bridge.cancel()
                 self._cleanup_cache_dir(entry.cache_tag)
-                log.info(f"Deleted session {session_id}")
+                log.info(f"Deleted session {sanitize_log(session_id)}")
                 return True
             return False
 

@@ -38,7 +38,7 @@ This is **required** in your `unshackle.yaml` — a warning is shown if not conf
 Available variables: `{title}`, `{year}`, `{season}`, `{episode}`, `{season_episode}`, `{episode_name}`,
 `{quality}`, `{resolution}`, `{source}`, `{audio}`, `{audio_channels}`, `{audio_full}`,
 `{video}`, `{hdr}`, `{hfr}`, `{atmos}`, `{dual}`, `{multi}`, `{tag}`, `{edition}`, `{repack}`,
-`{lang_tag}`
+`{lang_tag}`, `{track_number}`, `{artist}`, `{album}`, `{disc}`
 
 Add `?` suffix to make a variable conditional (omitted when empty): `{year?}`, `{hdr?}`, `{repack?}`
 
@@ -70,17 +70,26 @@ If not configured, the default folder naming is used:
 - Series: Derived from the `series` template with episode-specific variables removed
 - Songs: `Artist - Album (Year)`
 
+`folder` accepts either a single string (applies to all title kinds) or a mapping with per-kind
+templates keyed by `movies`, `series`, and/or `songs`. Unknown keys are warned about and ignored.
+
 ```yaml
 output_template:
   movies: '{title}.{year}.{repack?}.{edition?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}'
   series: '{title}.{year?}.{season_episode}.{episode_name?}.{repack?}.{edition?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}'
   songs: '{track_number}.{title}.{repack?}.{edition?}.{source?}.WEB-DL.{audio_full}.{atmos?}-{tag}'
 
-  # Scene-style folder
+  # Scene-style folder (single template, applies to all kinds)
   folder: '{title}.{year?}.{repack?}.{edition?}.{lang_tag?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}'
 
   # Plex-friendly folder
   # folder: '{title} ({year?})'
+
+  # Per-kind folder templates
+  # folder:
+  #   movies: '{title} ({year})'
+  #   series: '{title} ({year?})'
+  #   songs: '{artist} - {album} ({year?})'
 ```
 
 Example outputs:
@@ -195,6 +204,32 @@ Enable/disable tagging downloaded files with IMDB/TMDB/TVDB identifiers (when av
   Note: The `--split-audio` CLI flag overrides this setting. When `--split-audio` is passed,
   `merge_audio` is effectively set to `false` for that run.
 
+- `default_language` (dict)
+  Override which track is flagged as the default in the muxed MKV, regardless
+  of the title's original language. Useful when you always want your player to
+  open on a specific language (e.g. always default to Polish audio even on
+  English originals). Only affects the MKV `--default-track` flag — track
+  selection (`-l`, `--alang`, etc.) is unchanged. All keys are optional; each
+  track type falls back to its previous default rule when the configured
+  language isn't present in the manifest.
+
+  - `audio`: BCP-47 tag (e.g. `pl`, `en`, `pt-BR`). Wins over `is_original_lang`.
+    The `--original-flag` continues to mark the true original-audio track.
+  - `video`: BCP-47 tag. Wins over the title-language / first-track rule.
+  - `subtitle`: BCP-47 tag. Wins over the "forced sub matching audio" rule.
+
+  Languages are matched with the same close-match logic used elsewhere
+  (`pt` matches `pt-BR`, etc.). Supports per-service overrides like the rest
+  of `muxing`.
+
+  ```yaml
+  muxing:
+    default_language:
+      audio: pl
+      video: pl
+      subtitle: pl
+  ```
+
 ---
 
 ## chapter_fallback_name (str)
@@ -230,6 +265,7 @@ The following directories are available and may be overridden,
 - `cache` - Expiring data like Authorization tokens, or other misc data.
 - `cookies` - Expiring Cookie data.
 - `logs` - Logs.
+- `exports` - JSON sidecar exports written when `--export` is used on `dl`.
 - `wvds` - Widevine Devices.
 - `prds` - PlayReady Devices.
 - `dcsl` - Device Certificate Status List.

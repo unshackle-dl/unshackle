@@ -138,8 +138,8 @@ All requests will use these unless changed explicitly or implicitly via a Server
 These should be sane defaults and anything that would only be useful for some Services should not
 be put here.
 
-Avoid headers like 'Accept-Encoding' as that would be a compatibility header that curl_cffi will
-set for you.
+Avoid headers like 'Accept-Encoding' as that would be a compatibility header that the underlying
+HTTP backend (rnet) will set for you as part of its browser impersonation profile.
 
 I recommend using,
 
@@ -147,5 +147,32 @@ I recommend using,
 Accept-Language: "en-US,en;q=0.8"
 User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 ```
+
+---
+
+## HTTP Session Backend
+
+unshackle uses [`rnet`](https://github.com/0x676e67/rnet) (Rust + BoringSSL) for HTTP with TLS
+fingerprinting. `RnetSession` is a drop-in `requests.Session` replacement and is what
+`self.session` exposes to services. It supports:
+
+- Browser/app impersonation via named `rnet.Impersonate` presets (Chrome, Edge, Firefox, Safari,
+  OkHttp, etc.) — picks JA3, ALPN, HTTP/2 SETTINGS and header order to match the chosen client.
+- Native rnet proxy support (HTTP, HTTPS, SOCKS5) — used by all proxy providers below.
+- Cookie-jar and `requests`-style `data=` / `json=` / `headers=` kwargs for compatibility.
+
+The legacy `curl_cffi` backend has been removed. The config key is still spelled
+`curl_impersonate` for backward compatibility, but its value now selects an rnet preset.
+
+### curl_impersonate (dict)
+
+```yaml
+curl_impersonate:
+  browser: Chrome131   # exact rnet.Impersonate preset name
+```
+
+`browser` must be an exact `rnet.Impersonate` preset name (e.g. `Chrome131`, `Chrome124`,
+`Edge101`, `Firefox133`, `Safari18`, `OkHttp4_12`). See the rnet README for the full list.
+Default when unset: `Chrome131`.
 
 ---

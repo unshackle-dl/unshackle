@@ -71,6 +71,7 @@ class Config:
         for name, filename in (kwargs.get("filenames") or {}).items():
             setattr(self.filenames, name, filename)
 
+        self.audio: dict = kwargs.get("audio") or {}
         self.headers: dict = kwargs.get("headers") or {}
         self.key_vaults: list[dict[str, Any]] = kwargs.get("key_vaults", [])
         self.muxing: dict = kwargs.get("muxing") or {}
@@ -125,6 +126,7 @@ class Config:
 
         self.debug: bool = kwargs.get("debug", False)
         self.debug_keys: bool = kwargs.get("debug_keys", False)
+        self.debug_requests: bool = kwargs.get("debug_requests", False)
 
     def _validate_output_templates(self) -> None:
         """Validate output template configurations and warn about potential issues."""

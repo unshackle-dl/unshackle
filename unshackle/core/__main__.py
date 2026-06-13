@@ -44,6 +44,10 @@ def main(version: bool, debug: bool) -> None:
     if debug_logging_enabled:
         init_debug_logger(enabled=True)
 
+    if debug and not config.debug_requests:
+        for noisy in ("urllib3", "urllib3.connectionpool", "requests", "rnet", "httpx", "httpcore", "hpack", "h2"):
+            logging.getLogger(noisy).setLevel(logging.WARNING)
+
     urllib3.disable_warnings(InsecureRequestWarning)
 
     traceback.install(console=console, width=80, suppress=[click])

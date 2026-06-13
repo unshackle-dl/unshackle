@@ -1,0 +1,72 @@
+name: Version Bump
+
+on:
+  schedule:
+    - cron: "0 8 * * *"  # daily 08:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: version-bump
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: Install git-cliff
+        uses: taiki-e/install-action@v2
+        with:
+          tool: git-cliff
+
+      - name: Compute next version
+        id: bump
+        run: |
+          CURRENT=$(grep -m1 '^version' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          NEXT=$(git cliff --bumped-version)
+          echo "Current version: $CURRENT, bumped version: $NEXT"
+
+          if [ "$NEXT" = "$CURRENT" ]; then
+            echo "No releasable commits since $CURRENT, skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "version=$NEXT" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update version files
+        if: steps.bump.outputs.skip == 'false'
+        run: |
+          V=${{ steps.bump.outputs.version }}
+          sed -i "s/^version = \".*\"/version = \"$V\"/" pyproject.toml
+          sed -i "s/^__version__ = \".*\"/__version__ = \"$V\"/" unshackle/core/__init__.py
+
+      - name: Install uv
+        if: steps.bump.outputs.skip == 'false'
+        uses: astral-sh/setup-uv@v4
+
+      - name: Update uv.lock
+        if: steps.bump.outputs.skip == 'false'
+        run: uv lock
+
+      - name: Prepend changelog entry
+        if: steps.bump.outputs.skip == 'false'
+        run: git cliff --unreleased --tag ${{ steps.bump.outputs.version }} --prepend CHANGELOG.md
+
+      - name: Commit, tag, and push
+        if: steps.bump.outputs.skip == 'false'
+        run: |
+          V=${{ steps.bump.outputs.version }}
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml unshackle/core/__init__.py uv.lock CHANGELOG.md
+          git commit -m "chore(release): bump version to $V"
+          git tag "$V"
+          git push origin dev "$V"

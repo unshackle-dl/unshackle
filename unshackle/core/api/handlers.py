@@ -7,6 +7,7 @@ from aiohttp import web
 
 from unshackle.core.api.errors import APIError, APIErrorCode, handle_api_exception
 from unshackle.core.api.input_bridge import AuthStatus, InputBridge
+from unshackle.core.api.sanitize import sanitize_log
 from unshackle.core.config import config
 from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP
 from unshackle.core.proxies.resolve import initialize_proxy_providers, resolve_proxy
@@ -15,11 +16,6 @@ from unshackle.core.titles import Episode, Movie, Title_T
 from unshackle.core.tracks import Audio, Subtitle, Video
 
 log = logging.getLogger("api")
-
-
-def _sanitize_log(value: object) -> str:
-    """Sanitize a value for safe logging by removing newlines and control characters."""
-    return str(value).replace("\n", "").replace("\r", "").replace("\x00", "")
 
 
 DEFAULT_DOWNLOAD_PARAMS = {
@@ -58,7 +54,9 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "skip_dl": False,
     "export": False,
     "cdm_only": None,
+    "proxy": None,
     "no_proxy": False,
+    "no_proxy_download": False,
     "no_folder": False,
     "no_source": False,
     "no_mux": False,
@@ -67,11 +65,139 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "worst": False,
     "best_available": False,
     "repack": False,
+    "tag": None,
+    "tmdb_id": None,
     "imdb_id": None,
+    "animeapi_id": None,
+    "enrich": False,
     "output_dir": None,
     "no_cache": False,
     "reset_cache": False,
 }
+
+
+# Keys that are part of the API transport envelope, not service.cli options.
+# Used by instantiate_service to avoid passing them as kwargs to a service.
+LIST_HANDLER_TRANSPORT_KEYS = {
+    "service",
+    "title_id",
+    "profile",
+    "season",
+    "episode",
+    "wanted",
+    "proxy",
+    "no_proxy",
+    "query",
+}
+
+
+def load_full_cdm(service: str, profile: Optional[str], cdm_type: Optional[str] = None) -> Optional[Any]:
+    """Load a real CDM object for the given service.
+
+    Services often touch ``ctx.obj.cdm.security_level`` / ``.device_type`` / ``.system_id``
+    inside ``__init__``, so the lightweight ``_resolve_server_cdm`` stub is not enough
+    for list_titles / list_tracks / search. Mirrors ``dl.get_cdm`` selection logic but
+    skips the quality-tier shortcuts (no track context yet) and falls back to the stub
+    if no device is configured or loading fails.
+    """
+    from unshackle.core.cdm import load_cdm
+    from unshackle.core.config import config as app_config
+
+    cdm_name = app_config.cdm.get(service) or app_config.cdm.get("default")
+    if isinstance(cdm_name, dict):
+        lower_keys = {k.lower(): v for k, v in cdm_name.items()}
+        if {"widevine", "playready"} & lower_keys.keys():
+            drm_key = None
+            if cdm_type:
+                drm_key = {"wv": "widevine", "widevine": "widevine", "pr": "playready", "playready": "playready"}.get(
+                    cdm_type.lower()
+                )
+            cdm_name = lower_keys.get(drm_key or "widevine") or lower_keys.get("playready")
+        else:
+            cdm_name = cdm_name.get(profile) or cdm_name.get("default") or app_config.cdm.get("default")
+
+    if not cdm_name or not isinstance(cdm_name, str):
+        return _resolve_server_cdm(service, profile, cdm_type)
+
+    try:
+        return load_cdm(cdm_name, service_name=service)
+    except Exception as exc:  # noqa: BLE001 - fall back to stub on load failure
+        log.warning(
+            f"load_cdm({sanitize_log(cdm_name)!r}) failed for {sanitize_log(service)}: {exc}; using lightweight stub"
+        )
+        return _resolve_server_cdm(service, profile, cdm_type)
+
+
+def load_service_yaml(normalized_service: str) -> dict:
+    """Load a service's config.yaml and merge it with the global override block."""
+    import yaml
+
+    from unshackle.core.utils.collections import merge_dict
+
+    service_config_path = Services.get_path(normalized_service) / config.filenames.config
+    if service_config_path.exists():
+        service_config = yaml.safe_load(service_config_path.read_text(encoding="utf8")) or {}
+    else:
+        service_config = {}
+    merge_dict(config.services.get(normalized_service), service_config)
+    return service_config
+
+
+def build_parent_ctx(
+    profile: Optional[str],
+    cdm: Any,
+    proxy_param: Optional[str],
+    no_proxy: bool,
+    proxy_providers: list,
+    service_config: dict,
+    extra_params: Optional[Dict[str, Any]] = None,
+) -> Any:
+    """Build a parent click Context for invoking a service.cli via ctx.invoke().
+
+    The service's CLI callback uses ``ctx.parent.params`` (proxy, range_, vcodec, etc.)
+    and ``ctx.obj`` (ContextData). Both flow through Click's parent chain.
+    """
+    import click
+
+    from unshackle.core.utils.click_types import ContextData
+
+    @click.command()
+    @click.pass_context
+    def dummy(ctx: click.Context) -> None:
+        pass
+
+    parent = click.Context(dummy)
+    parent.obj = ContextData(config=service_config, cdm=cdm, proxy_providers=proxy_providers, profile=profile)
+    params = {"proxy": proxy_param, "no_proxy": no_proxy}
+    if extra_params:
+        params.update(extra_params)
+    parent.params = params
+    return parent
+
+
+def instantiate_service(
+    parent_ctx: Any,
+    service_module: Any,
+    title: str,
+    data: Optional[Dict[str, Any]] = None,
+    transport_keys: Optional[set] = None,
+) -> Any:
+    """Instantiate a service by invoking its click cli through Click.
+
+    Click fills option defaults via ``param.get_default()`` and runs type coercion,
+    so we no longer have to inspect ``__init__`` or stitch defaults by hand. Extra
+    kwargs are pulled from ``data`` when the key matches a cli option name and is
+    not in the transport-key blocklist.
+    """
+    cli_params = getattr(getattr(service_module, "cli", None), "params", []) or []
+    cli_param_names = {p.name for p in cli_params if hasattr(p, "name") and p.name}
+    transport_keys = transport_keys or set()
+    extras: Dict[str, Any] = {}
+    if data:
+        for k, v in data.items():
+            if k in cli_param_names and k not in transport_keys and k != "title":
+                extras[k] = v
+    return parent_ctx.invoke(service_module.cli, title=title, **extras)
 
 
 def get_allowed_services(request: Optional[web.Request] = None) -> Optional[List[str]]:
@@ -285,7 +411,7 @@ def serialize_video_track(track: Video, include_url: bool = False) -> Dict[str, 
     codec_name = track.codec.name if hasattr(track.codec, "name") else str(track.codec)
     range_name = track.range.name if hasattr(track.range, "name") else str(track.range)
 
-    # Get descriptor for N_m3u8DL-RE compatibility (HLS, DASH, URL, etc.)
+    # Serialize the manifest descriptor (HLS, DASH, URL, etc.)
     descriptor_name = None
     if hasattr(track, "descriptor") and track.descriptor:
         descriptor_name = track.descriptor.name if hasattr(track.descriptor, "name") else str(track.descriptor)
@@ -314,7 +440,7 @@ def serialize_audio_track(track: Audio, include_url: bool = False) -> Dict[str, 
     """Convert audio track to JSON-serializable dict."""
     codec_name = track.codec.name if hasattr(track.codec, "name") else str(track.codec)
 
-    # Get descriptor for N_m3u8DL-RE compatibility
+    # Serialize the manifest descriptor (HLS, DASH, URL, etc.)
     descriptor_name = None
     if hasattr(track, "descriptor") and track.descriptor:
         descriptor_name = track.descriptor.name if hasattr(track.descriptor, "name") else str(track.descriptor)
@@ -359,16 +485,7 @@ def serialize_subtitle_track(track: Subtitle, include_url: bool = False) -> Dict
 
 async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
     """Handle search request."""
-    import inspect
-
-    import click
-    import yaml
-
     from unshackle.commands.dl import dl
-    from unshackle.core.config import config
-    from unshackle.core.services import Services
-    from unshackle.core.utils.click_types import ContextData
-    from unshackle.core.utils.collections import merge_dict
 
     service_tag = data.get("service")
     query = data.get("query")
@@ -398,12 +515,7 @@ async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = 
     proxy_param = data.get("proxy")
     no_proxy = data.get("no_proxy", False)
 
-    service_config_path = Services.get_path(normalized_service) / config.filenames.config
-    if service_config_path.exists():
-        service_config = yaml.safe_load(service_config_path.read_text(encoding="utf8"))
-    else:
-        service_config = {}
-    merge_dict(config.services.get(normalized_service), service_config)
+    service_config = load_service_yaml(normalized_service)
 
     proxy_providers = []
     if not no_proxy:
@@ -420,49 +532,12 @@ async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = 
                 details={"proxy": proxy_param, "service": normalized_service},
             )
 
-    @click.command()
-    @click.pass_context
-    def dummy_service(ctx: click.Context) -> None:
-        pass
-
-    ctx = click.Context(dummy_service)
-    ctx.obj = ContextData(config=service_config, cdm=None, proxy_providers=proxy_providers, profile=profile)
-    ctx.params = {"proxy": proxy_param, "no_proxy": no_proxy}
-
+    cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"))
+    parent_ctx = build_parent_ctx(profile, cdm, proxy_param, no_proxy, proxy_providers, service_config)
     service_module = Services.load(normalized_service)
 
-    dummy_service.name = normalized_service
-    ctx.invoked_subcommand = normalized_service
-
-    service_ctx = click.Context(dummy_service, parent=ctx)
-    service_ctx.obj = ctx.obj
-
-    service_init_params = inspect.signature(service_module.__init__).parameters
-    service_kwargs = {"title": query}
-
-    # Extract default values from the click command
-    if hasattr(service_module, "cli") and hasattr(service_module.cli, "params"):
-        for param in service_module.cli.params:
-            if hasattr(param, "name") and param.name not in service_kwargs:
-                if hasattr(param, "default") and param.default is not None and not isinstance(param.default, enum.Enum):
-                    service_kwargs[param.name] = param.default
-
-    for param_name, param_info in service_init_params.items():
-        if param_name not in service_kwargs and param_name not in ["self", "ctx"]:
-            if param_info.default is inspect.Parameter.empty:
-                if param_name == "meta_lang":
-                    service_kwargs[param_name] = None
-                elif param_name == "movie":
-                    service_kwargs[param_name] = False
-                else:
-                    service_kwargs[param_name] = None
-
-    # Filter to only accepted params
-    accepted_params = set(service_init_params.keys()) - {"self", "ctx"}
-    service_kwargs = {k: v for k, v in service_kwargs.items() if k in accepted_params}
-
     try:
-        service_instance = service_module(service_ctx, **service_kwargs)
+        service_instance = instantiate_service(parent_ctx, service_module, query)
     except Exception as exc:
         raise APIError(
             APIErrorCode.SERVICE_ERROR,
@@ -527,29 +602,10 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
         )
 
     try:
-        import inspect
-
-        import click
-        import yaml
-
         from unshackle.commands.dl import dl
-        from unshackle.core.config import config
-        from unshackle.core.utils.click_types import ContextData
-        from unshackle.core.utils.collections import merge_dict
 
-        service_config_path = Services.get_path(normalized_service) / config.filenames.config
-        if service_config_path.exists():
-            service_config = yaml.safe_load(service_config_path.read_text(encoding="utf8"))
-        else:
-            service_config = {}
-        merge_dict(config.services.get(normalized_service), service_config)
+        service_config = load_service_yaml(normalized_service)
 
-        @click.command()
-        @click.pass_context
-        def dummy_service(ctx: click.Context) -> None:
-            pass
-
-        # Handle proxy configuration
         proxy_param = data.get("proxy")
         no_proxy = data.get("no_proxy", False)
         proxy_providers = []
@@ -568,64 +624,10 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
                     details={"proxy": proxy_param, "service": normalized_service},
                 )
 
-        ctx = click.Context(dummy_service)
-        ctx.obj = ContextData(config=service_config, cdm=None, proxy_providers=proxy_providers, profile=profile)
-        ctx.params = {"proxy": proxy_param, "no_proxy": no_proxy}
-
+        cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"))
+        parent_ctx = build_parent_ctx(profile, cdm, proxy_param, no_proxy, proxy_providers, service_config)
         service_module = Services.load(normalized_service)
-
-        dummy_service.name = normalized_service
-        dummy_service.params = [click.Argument([title_id], type=str)]
-        ctx.invoked_subcommand = normalized_service
-
-        service_ctx = click.Context(dummy_service, parent=ctx)
-        service_ctx.obj = ctx.obj
-
-        service_kwargs = {"title": title_id}
-
-        # Add additional parameters from request data
-        for key, value in data.items():
-            if key not in ["service", "title_id", "profile", "season", "episode", "wanted", "proxy", "no_proxy"]:
-                service_kwargs[key] = value
-
-        # Get service parameter info and click command defaults
-        service_init_params = inspect.signature(service_module.__init__).parameters
-
-        # Extract default values from the click command
-        if hasattr(service_module, "cli") and hasattr(service_module.cli, "params"):
-            for param in service_module.cli.params:
-                if hasattr(param, "name") and param.name not in service_kwargs:
-                    # Add default value if parameter is not already provided
-                    if (
-                        hasattr(param, "default")
-                        and param.default is not None
-                        and not isinstance(param.default, enum.Enum)
-                    ):
-                        service_kwargs[param.name] = param.default
-
-        # Handle required parameters that don't have click defaults
-        for param_name, param_info in service_init_params.items():
-            if param_name not in service_kwargs and param_name not in ["self", "ctx"]:
-                # Check if parameter is required (no default value in signature)
-                if param_info.default is inspect.Parameter.empty:
-                    # Provide sensible defaults for common required parameters
-                    if param_name == "meta_lang":
-                        service_kwargs[param_name] = None
-                    elif param_name == "movie":
-                        service_kwargs[param_name] = False
-                    else:
-                        # Log warning for unknown required parameters
-                        log.warning(
-                            f"Unknown required parameter '{_sanitize_log(param_name)}' for service {_sanitize_log(normalized_service)}"
-                        )
-
-        # Filter out any parameters that the service doesn't accept
-        filtered_kwargs = {}
-        for key, value in service_kwargs.items():
-            if key in service_init_params:
-                filtered_kwargs[key] = value
-
-        service_instance = service_module(service_ctx, **filtered_kwargs)
+        service_instance = instantiate_service(parent_ctx, service_module, title_id, data, LIST_HANDLER_TRANSPORT_KEYS)
 
         cookies = dl.get_cookie_jar(normalized_service, profile)
         credential = dl.get_credentials(normalized_service, profile)
@@ -642,7 +644,7 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
 
     except APIError:
         raise
-    except Exception as e:
+    except (Exception, SystemExit) as e:
         log.exception("Error listing titles")
         debug_mode = request.app.get("debug_api", False) if request else False
         return handle_api_exception(
@@ -681,29 +683,10 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
         )
 
     try:
-        import inspect
-
-        import click
-        import yaml
-
         from unshackle.commands.dl import dl
-        from unshackle.core.config import config
-        from unshackle.core.utils.click_types import ContextData
-        from unshackle.core.utils.collections import merge_dict
 
-        service_config_path = Services.get_path(normalized_service) / config.filenames.config
-        if service_config_path.exists():
-            service_config = yaml.safe_load(service_config_path.read_text(encoding="utf8"))
-        else:
-            service_config = {}
-        merge_dict(config.services.get(normalized_service), service_config)
+        service_config = load_service_yaml(normalized_service)
 
-        @click.command()
-        @click.pass_context
-        def dummy_service(ctx: click.Context) -> None:
-            pass
-
-        # Handle proxy configuration
         proxy_param = data.get("proxy")
         no_proxy = data.get("no_proxy", False)
         proxy_providers = []
@@ -722,64 +705,10 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                     details={"proxy": proxy_param, "service": normalized_service},
                 )
 
-        ctx = click.Context(dummy_service)
-        ctx.obj = ContextData(config=service_config, cdm=None, proxy_providers=proxy_providers, profile=profile)
-        ctx.params = {"proxy": proxy_param, "no_proxy": no_proxy}
-
+        cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"))
+        parent_ctx = build_parent_ctx(profile, cdm, proxy_param, no_proxy, proxy_providers, service_config)
         service_module = Services.load(normalized_service)
-
-        dummy_service.name = normalized_service
-        dummy_service.params = [click.Argument([title_id], type=str)]
-        ctx.invoked_subcommand = normalized_service
-
-        service_ctx = click.Context(dummy_service, parent=ctx)
-        service_ctx.obj = ctx.obj
-
-        service_kwargs = {"title": title_id}
-
-        # Add additional parameters from request data
-        for key, value in data.items():
-            if key not in ["service", "title_id", "profile", "season", "episode", "wanted", "proxy", "no_proxy"]:
-                service_kwargs[key] = value
-
-        # Get service parameter info and click command defaults
-        service_init_params = inspect.signature(service_module.__init__).parameters
-
-        # Extract default values from the click command
-        if hasattr(service_module, "cli") and hasattr(service_module.cli, "params"):
-            for param in service_module.cli.params:
-                if hasattr(param, "name") and param.name not in service_kwargs:
-                    # Add default value if parameter is not already provided
-                    if (
-                        hasattr(param, "default")
-                        and param.default is not None
-                        and not isinstance(param.default, enum.Enum)
-                    ):
-                        service_kwargs[param.name] = param.default
-
-        # Handle required parameters that don't have click defaults
-        for param_name, param_info in service_init_params.items():
-            if param_name not in service_kwargs and param_name not in ["self", "ctx"]:
-                # Check if parameter is required (no default value in signature)
-                if param_info.default is inspect.Parameter.empty:
-                    # Provide sensible defaults for common required parameters
-                    if param_name == "meta_lang":
-                        service_kwargs[param_name] = None
-                    elif param_name == "movie":
-                        service_kwargs[param_name] = False
-                    else:
-                        # Log warning for unknown required parameters
-                        log.warning(
-                            f"Unknown required parameter '{_sanitize_log(param_name)}' for service {_sanitize_log(normalized_service)}"
-                        )
-
-        # Filter out any parameters that the service doesn't accept
-        filtered_kwargs = {}
-        for key, value in service_kwargs.items():
-            if key in service_init_params:
-                filtered_kwargs[key] = value
-
-        service_instance = service_module(service_ctx, **filtered_kwargs)
+        service_instance = instantiate_service(parent_ctx, service_module, title_id, data, LIST_HANDLER_TRANSPORT_KEYS)
 
         cookies = dl.get_cookie_jar(normalized_service, profile)
         credential = dl.get_credentials(normalized_service, profile)
@@ -804,8 +733,10 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                         wanted = season_range.parse_tokens(*wanted_param)
                     else:
                         wanted = season_range.parse_tokens(wanted_param)
-                    log.debug(f"Parsed wanted '{wanted_param}' into {len(wanted)} episodes: {wanted[:10]}...")
-                except Exception as e:
+                    log.debug(
+                        f"Parsed wanted '{sanitize_log(wanted_param)}' into {len(wanted)} episodes: {wanted[:10]}..."
+                    )
+                except (Exception, SystemExit) as e:
                     raise APIError(
                         APIErrorCode.INVALID_PARAMETERS,
                         f"Invalid wanted parameter: {e}",
@@ -869,7 +800,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                             failed_episodes.append(f"S{title.season}E{title.number:02d}")
                             log.debug(f"Episode {title.season}x{title.number} not available, skipping")
                             continue
-                        except Exception as e:
+                        except (Exception, SystemExit) as e:
                             # Handle other errors gracefully
                             failed_episodes.append(f"S{title.season}E{title.number:02d}")
                             log.debug(f"Error getting tracks for {title.season}x{title.number}: {e}")
@@ -914,7 +845,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
 
     except APIError:
         raise
-    except Exception as e:
+    except (Exception, SystemExit) as e:
         log.exception("Error listing tracks")
         debug_mode = request.app.get("debug_api", False) if request else False
         return handle_api_exception(
@@ -1026,13 +957,13 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
         return "Cannot use both s_lang and require_subs"
 
     if "range" in data and data["range"]:
-        valid_ranges = ["SDR", "HDR10", "HDR10+", "DV", "HLG"]
-        if isinstance(data["range"], list):
-            for r in data["range"]:
-                if r.upper() not in valid_ranges:
-                    return f"Invalid range value: {r}. Must be one of: {', '.join(valid_ranges)}"
-        elif data["range"].upper() not in valid_ranges:
-            return f"Invalid range value: {data['range']}. Must be one of: {', '.join(valid_ranges)}"
+        # "HDR10P" is the canonical range value ("+" is awkward in scripts); "HDR10+" stays valid.
+        valid_ranges = ["SDR", "HDR10", "HDR10P", "DV", "HLG", "HYBRID"]
+        accepted = {*valid_ranges, "HDR10+"}
+        values = data["range"] if isinstance(data["range"], list) else [data["range"]]
+        for r in values:
+            if r.upper() not in accepted:
+                return f"Invalid range value: {r}. Must be one of: {', '.join(valid_ranges)}"
 
     return None
 
@@ -1074,20 +1005,44 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
             details={"service": normalized_service, "title_id": title_id},
         )
 
+    # A per-request `cdm` selects a server-side device, so it is gated here rather than honoured
+    # blindly. `serve.cdm_overrides` opts in: a list permits only those device names, or `true`
+    # permits any (for a single trusted client). Unset/false rejects every override.
+    requested_cdm = data.get("cdm")
+    if requested_cdm:
+        allowed = (config.serve or {}).get("cdm_overrides")
+        permitted = allowed is True or (
+            isinstance(allowed, (list, tuple, set)) and requested_cdm in allowed
+        )
+        if not permitted:
+            raise APIError(
+                APIErrorCode.FORBIDDEN,
+                "The requested CDM is not permitted for API downloads.",
+                details={"cdm": requested_cdm},
+            )
+
+    # A per-request `credential` (or `credentials` map) authenticates the job with client-supplied
+    # secrets instead of the server-side credentials. Gate it behind `serve.allow_job_credentials`
+    # (default off) so a default deployment stays locked to its own credentials; mirrors the CDM gate.
+    if data.get("credential") or data.get("credentials"):
+        if not (config.serve or {}).get("allow_job_credentials"):
+            raise APIError(
+                APIErrorCode.FORBIDDEN,
+                "Per-request credentials are not permitted for API downloads.",
+            )
+
     try:
         # Load service module to extract service-specific parameter defaults
         service_module = Services.load(normalized_service)
         service_specific_defaults = {}
 
-        # Extract default values from the service's click command
+        # Extract default values from the service's click command.
+        # Skip None defaults here: this dict overlays into job params; injecting
+        # None for keys like `profile` would clobber serve-config overrides.
+        # Missing required __init__ params are handled in download_manager._perform_download.
         if hasattr(service_module, "cli") and hasattr(service_module.cli, "params"):
             for param in service_module.cli.params:
-                if (
-                    hasattr(param, "name")
-                    and hasattr(param, "default")
-                    and param.default is not None
-                    and not isinstance(param.default, enum.Enum)
-                ):
+                if hasattr(param, "name") and param.default is not None and not isinstance(param.default, enum.Enum):
                     # Store service-specific defaults (e.g., drm_system, hydrate_track, profile for NF)
                     service_specific_defaults[param.name] = param.default
 
@@ -1097,8 +1052,17 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
 
         # Create download job with filtered parameters (exclude service and title_id as they're already passed)
         filtered_params = {k: v for k, v in data.items() if k not in ["service", "title_id"]}
-        # Merge defaults with provided parameters (user params override service defaults, which override global defaults)
-        params_with_defaults = {**DEFAULT_DOWNLOAD_PARAMS, **service_specific_defaults, **filtered_params}
+        # Overlay any dl-relevant keys from `serve:` config (e.g. downloads, workers) so the API
+        # respects server-side defaults without each client having to send them.
+        serve_overrides = {
+            k: v for k, v in (config.serve or {}).items() if k in DEFAULT_DOWNLOAD_PARAMS and v is not None
+        }
+        params_with_defaults = {
+            **DEFAULT_DOWNLOAD_PARAMS,
+            **serve_overrides,
+            **service_specific_defaults,
+            **filtered_params,
+        }
         job = manager.create_job(normalized_service, title_id, **params_with_defaults)
 
         return web.json_response(
@@ -1107,7 +1071,7 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
 
     except APIError:
         raise
-    except Exception as e:
+    except (Exception, SystemExit) as e:
         log.exception("Error creating download job")
         debug_mode = request.app.get("debug_api", False) if request else False
         return handle_api_exception(
@@ -1175,7 +1139,7 @@ async def list_download_jobs_handler(data: Dict[str, Any], request: Optional[web
 
     except APIError:
         raise
-    except Exception as e:
+    except (Exception, SystemExit) as e:
         log.exception("Error listing download jobs")
         debug_mode = request.app.get("debug_api", False) if request else False
         return handle_api_exception(
@@ -1204,8 +1168,8 @@ async def get_download_job_handler(job_id: str, request: Optional[web.Request] =
 
     except APIError:
         raise
-    except Exception as e:
-        log.exception(f"Error getting download job {_sanitize_log(job_id)}")
+    except (Exception, SystemExit) as e:
+        log.exception(f"Error getting download job {sanitize_log(job_id)}")
         debug_mode = request.app.get("debug_api", False) if request else False
         return handle_api_exception(
             e,
@@ -1241,8 +1205,8 @@ async def cancel_download_job_handler(job_id: str, request: Optional[web.Request
 
     except APIError:
         raise
-    except Exception as e:
-        log.exception(f"Error cancelling download job {_sanitize_log(job_id)}")
+    except (Exception, SystemExit) as e:
+        log.exception(f"Error cancelling download job {sanitize_log(job_id)}")
         debug_mode = request.app.get("debug_api", False) if request else False
         return handle_api_exception(
             e,
@@ -1254,6 +1218,26 @@ async def cancel_download_job_handler(job_id: str, request: Optional[web.Request
 # ---------------------------------------------------------------------------
 # Remote-DL Session Handlers
 # ---------------------------------------------------------------------------
+
+
+SESSION_TRANSPORT_KEYS = {
+    "service",
+    "title_id",
+    "season",
+    "episode",
+    "wanted",
+    "proxy",
+    "no_proxy",
+    "credentials",
+    "cookies",
+    "cache",
+    "client_region",
+    "cdm_type",
+    "range_",
+    "vcodec",
+    "quality",
+    "best_available",
+}
 
 
 def _create_service_instance(
@@ -1269,38 +1253,17 @@ def _create_service_instance(
     Supports client-sent credentials/cookies (for remote-dl) with fallback
     to server-local config (for backward compatibility).
     """
-    import inspect
-
-    import click
-    import yaml
-
     from unshackle.commands.dl import dl
-    from unshackle.core.config import config
     from unshackle.core.credential import Credential
-    from unshackle.core.utils.click_types import ContextData
-    from unshackle.core.utils.collections import merge_dict
-
-    service_config_path = Services.get_path(normalized_service) / config.filenames.config
-    if service_config_path.exists():
-        service_config = yaml.safe_load(service_config_path.read_text(encoding="utf8"))
-    else:
-        service_config = {}
-    merge_dict(config.services.get(normalized_service), service_config)
-
-    @click.command()
-    @click.pass_context
-    def dummy_service(ctx: click.Context) -> None:
-        pass
-
-    ctx = click.Context(dummy_service)
-    cdm = _resolve_server_cdm(normalized_service, profile, data.get("cdm_type"))
-
-    ctx.obj = ContextData(config=service_config, cdm=cdm, proxy_providers=proxy_providers, profile=profile)
-    # Reconstruct track selection params from client data
     from unshackle.core.tracks import Video
 
+    service_config = load_service_yaml(normalized_service)
+    cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"))
+
+    # Reconstruct enum track-selection params from client data so service code that reads
+    # ctx.parent.params (Service.__init__ proxy/range/vcodec/best_available block) sees enums.
     range_names = data.get("range_")
-    range_values = None
+    range_values: Optional[list] = None
     if range_names:
         range_values = []
         for name in range_names:
@@ -1311,7 +1274,7 @@ def _create_service_instance(
         range_values = range_values or None
 
     vcodec_names = data.get("vcodec")
-    vcodec_values = None
+    vcodec_values: Optional[list] = None
     if vcodec_names:
         vcodec_values = []
         for name in vcodec_names:
@@ -1321,72 +1284,25 @@ def _create_service_instance(
                 pass
         vcodec_values = vcodec_values or None
 
-    ctx.params = {
-        "proxy": proxy_param,
-        "no_proxy": data.get("no_proxy", False),
+    extra_params = {
         "range_": range_values,
         "vcodec": vcodec_values,
         "quality": data.get("quality"),
         "best_available": data.get("best_available", False),
     }
 
+    parent_ctx = build_parent_ctx(
+        profile,
+        cdm,
+        proxy_param,
+        data.get("no_proxy", False),
+        proxy_providers,
+        service_config,
+        extra_params=extra_params,
+    )
+
     service_module = Services.load(normalized_service)
-
-    dummy_service.name = normalized_service
-    dummy_service.params = [click.Argument([title_id], type=str)]
-    ctx.invoked_subcommand = normalized_service
-
-    service_ctx = click.Context(dummy_service, parent=ctx)
-    service_ctx.obj = ctx.obj
-
-    service_kwargs: Dict[str, Any] = {"title": title_id}
-
-    transport_keys = {
-        "service",
-        "title_id",
-        "season",
-        "episode",
-        "wanted",
-        "proxy",
-        "no_proxy",
-        "credentials",
-        "cookies",
-        "cache",
-        "client_region",
-        "no_proxy",
-        "cdm_type",
-        "range_",
-        "vcodec",
-        "quality",
-        "best_available",
-    }
-
-    service_init_params = inspect.signature(service_module.__init__).parameters
-
-    for key, value in data.items():
-        if key not in transport_keys and key in service_init_params:
-            service_kwargs[key] = value
-
-    if hasattr(service_module, "cli") and hasattr(service_module.cli, "params"):
-        for param in service_module.cli.params:
-            if hasattr(param, "name") and param.name not in service_kwargs:
-                if hasattr(param, "default") and param.default is not None and not isinstance(param.default, enum.Enum):
-                    service_kwargs[param.name] = param.default
-
-    for param_name, param_info in service_init_params.items():
-        if param_name not in service_kwargs and param_name not in ["self", "ctx"]:
-            if param_info.default is inspect.Parameter.empty:
-                if param_name == "meta_lang":
-                    service_kwargs[param_name] = None
-                elif param_name == "movie":
-                    service_kwargs[param_name] = False
-                elif param_name == "profile":
-                    service_kwargs[param_name] = profile
-                else:
-                    log.warning(f"Unknown required parameter '{param_name}' for service {normalized_service}")
-
-    filtered_kwargs = {k: v for k, v in service_kwargs.items() if k in service_init_params}
-    service_instance = service_module(service_ctx, **filtered_kwargs)
+    service_instance = instantiate_service(parent_ctx, service_module, title_id, data, SESSION_TRANSPORT_KEYS)
 
     # Resolve credentials: client-sent > server-local
     cred_data = data.get("credentials")
@@ -1505,7 +1421,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
                 await asyncio.to_thread(service_instance.authenticate, cookies, credential)
                 session.auth_status = AuthStatus.AUTHENTICATED
                 bridge.status = AuthStatus.AUTHENTICATED
-            except Exception as e:
+            except (Exception, SystemExit) as e:
                 log.exception("Auth failed for session %s", session_id)
                 session.auth_status = AuthStatus.FAILED
                 session.auth_error = str(e)
@@ -1524,7 +1440,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
 
     except APIError:
         raise
-    except Exception as e:
+    except (Exception, SystemExit) as e:
         log.exception("Error creating session")
         debug_mode = request.app.get("debug_api", False) if request else False
         return handle_api_exception(
@@ -1568,7 +1484,7 @@ async def session_titles_handler(session_id: str, request: Optional[web.Request]
             }
         )
 
-    except Exception as e:
+    except (Exception, SystemExit) as e:
         log.exception("Error getting titles")
         debug_mode = request.app.get("debug_api", False) if request else False
         return handle_api_exception(
@@ -1690,8 +1606,8 @@ async def session_tracks_handler(
             }
         )
 
-    except Exception as e:
-        log.exception(f"Error getting tracks for title {_sanitize_log(title_id)}")
+    except (Exception, SystemExit) as e:
+        log.exception(f"Error getting tracks for title {sanitize_log(title_id)}")
         debug_mode = request.app.get("debug_api", False) if request else False
         return handle_api_exception(
             e,
@@ -1789,7 +1705,7 @@ async def session_segments_handler(
 
     except APIError:
         raise
-    except Exception as e:
+    except (Exception, SystemExit) as e:
         log.exception("Error resolving segments")
         debug_mode = request.app.get("debug_api", False) if request else False
         return handle_api_exception(
@@ -1994,13 +1910,13 @@ def _resolve_handler_proxy(data: Dict[str, Any], normalized_service: str) -> tup
             server_region = None
 
         if server_region and server_region == client_region.lower():
-            log.info(f"Server already in client region '{client_region}', no proxy needed")
+            log.info(f"Server already in client region '{sanitize_log(client_region)}', no proxy needed")
         else:
             try:
                 proxy_param = resolve_proxy(client_region, proxy_providers)
-                log.info(f"Using server proxy for client region '{client_region}'")
+                log.info(f"Using server proxy for client region '{sanitize_log(client_region)}'")
             except ValueError:
-                log.debug(f"No server proxy available for client region '{client_region}'")
+                log.debug(f"No server proxy available for client region '{sanitize_log(client_region)}'")
 
     return proxy_param, proxy_providers
 
@@ -2119,16 +2035,17 @@ def _resolve_device_name(user_config: dict, drm_type: str, service_tag: str = ""
 def _load_server_vaults(service_name: str) -> Any:
     """Load server vaults from config.key_vaults."""
     from unshackle.core.config import config as app_config
+    from unshackle.core.services import Services
     from unshackle.core.vaults import Vaults
 
-    vaults = Vaults(service_name)
+    vaults = Vaults(Services.get_vault_tag(service_name))
     for vault_config in app_config.key_vaults:
         cfg = vault_config.copy()
         vault_type = cfg.pop("type", None)
         if vault_type:
             try:
                 vaults.load(vault_type, **cfg)
-            except Exception as e:
+            except (Exception, SystemExit) as e:
                 log.warning(f"Could not load vault '{vault_type}': {e}")
     return vaults
 
@@ -2173,7 +2090,7 @@ def _cache_to_vaults(keys: Dict[str, str], service_name: str) -> None:
         cached = vaults.add_keys(key_map)
         if cached:
             log.info(f"Cached {cached} key(s) to {cached} server vault(s)")
-    except Exception as e:
+    except (Exception, SystemExit) as e:
         log.warning(f"Failed to cache keys to vaults: {e}")
 
 
@@ -2382,9 +2299,9 @@ async def session_license_handler(
                     if track_drm_type:
                         actual_drm_type = track_drm_type
             except SystemExit:
-                log.warning(f"Service exited while resolving keys for track {tid[:12]}, skipping")
-            except Exception as e:
-                log.warning(f"Failed to resolve keys for track {tid[:12]}: {e}")
+                log.warning(f"Service exited while resolving keys for track {sanitize_log(tid[:12])}, skipping")
+            except (Exception, SystemExit) as e:
+                log.warning(f"Failed to resolve keys for track {sanitize_log(tid[:12])}: {e}")
 
         response: Dict[str, Any] = {"keys": all_keys}
         if actual_drm_type:
@@ -2430,7 +2347,7 @@ async def session_license_handler(
 
         if mode == "server_cdm":
             keys = _handle_single_server_cdm(service, title, track, pssh_b64, drm_type, request)
-            log.info(f"Server CDM resolved {len(keys)} key(s) for track {track_id[:12]}")
+            log.info(f"Server CDM resolved {len(keys)} key(s) for track {sanitize_log(track_id[:12])}")
             return web.json_response({"keys": keys})
 
         return _handle_proxy_license(service, title, track, challenge_b64, drm_type)
@@ -2439,8 +2356,8 @@ async def session_license_handler(
         raise
     except SystemExit:
         raise APIError(APIErrorCode.SERVICE_ERROR, "Service exited during license request")
-    except Exception as e:
-        log.exception(f"Error proxying license for track {track_id}")
+    except (Exception, SystemExit) as e:
+        log.exception(f"Error proxying license for track {sanitize_log(track_id)}")
         debug_mode = request.app.get("debug_api", False) if request else False
         return handle_api_exception(
             e,

@@ -523,15 +523,24 @@ class RnetSession:
             self.cookies._flush_to_client()
         return self._client
 
-    def _build_url(self, url: str, params: Optional[dict] = None) -> str:
-        """URL-encode params dict into the URL (rnet ignores params kwarg)."""
+    def _build_url(self, url: str, params: Optional[Any] = None) -> str:
+        """Encode params into the URL (rnet ignores the params kwarg).
+
+        Accepts the same shapes as requests: a mapping, a sequence of pairs, or a
+        pre-built query string/bytes. A string is appended verbatim (already encoded);
+        urlencode() would raise TypeError on it.
+        """
         if not params:
             return url
+        if isinstance(params, bytes):
+            extra = params.decode("utf-8")
+        elif isinstance(params, str):
+            extra = params
+        else:
+            extra = urlencode(params, doseq=True)
         parsed = urlparse(url)
         separator = "&" if parsed.query else ""
-        query = (
-            parsed.query + separator + urlencode(params, doseq=True) if parsed.query else urlencode(params, doseq=True)
-        )
+        query = parsed.query + separator + extra if parsed.query else extra
         return urlunparse(parsed._replace(query=query))
 
     def get_sleep_time(self, response: Optional[RnetResponse], attempt: int) -> Optional[float]:

@@ -160,7 +160,7 @@ class Series(SortedKeyList, ABC):
         sum(seasons.values())
         season_breakdown = ", ".join(f"S{season}({count})" for season, count in sorted(seasons.items()))
         tree = Tree(
-            f"{num_seasons} seasons, {season_breakdown}",
+            f"{num_seasons} season{'s'[:num_seasons^1]}, {season_breakdown}",
             guide_style="bright_black",
         )
         if verbose:

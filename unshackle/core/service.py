@@ -1,4 +1,3 @@
-import base64
 import logging
 from abc import ABCMeta, abstractmethod
 from collections.abc import Callable, Generator
@@ -17,6 +16,7 @@ import requests
 from requests.adapters import HTTPAdapter, Retry
 from rich.padding import Padding
 from rich.rule import Rule
+from rich.text import Text
 
 from unshackle.core.cacher import Cacher
 from unshackle.core.config import config
@@ -26,7 +26,7 @@ from unshackle.core.credential import Credential
 from unshackle.core.drm import DRM_T
 from unshackle.core.search_result import SearchResult
 from unshackle.core.title_cacher import TitleCacher, get_account_hash, get_region_from_proxy
-from unshackle.core.titles import Title_T, Titles_T
+from unshackle.core.titles import Title_T, Titles_T, remap_titles
 from unshackle.core.tracks import Chapters, Tracks
 from unshackle.core.tracks.video import Video
 from unshackle.core.utils.ip_info import get_ip_info
@@ -93,6 +93,11 @@ class Service(metaclass=ABCMeta):
     # Abstract class variables
     ALIASES: tuple[str, ...] = ()  # list of aliases for the service; alternatives to the service tag.
     GEOFENCE: tuple[str, ...] = ()  # list of ip regions required to use the service. empty list == no specific region.
+    # vault namespace override; when set, key vault read/write uses this tag instead of the service's own.
+    VAULT_TAG: Optional[str] = None
+    # Auth methods the service accepts ("cookies"/"credentials"); when None the REST /services
+    # endpoint infers them from authenticate().
+    AUTH_METHODS: Optional[tuple[str, ...]] = None
 
     def __init__(self, ctx: click.Context):
         console.print(Padding(Rule(f"[rule.text]Service: {self.__class__.__name__}"), (1, 2)))
@@ -212,15 +217,10 @@ class Service(metaclass=ABCMeta):
 
             if proxy:
                 self.session.proxies.update({"all": proxy})
-                proxy_parse = urlparse(proxy)
-                if proxy_parse.username and proxy_parse.password:
-                    self.session.headers.update(
-                        {
-                            "Proxy-Authorization": base64.b64encode(
-                                f"{proxy_parse.username}:{proxy_parse.password}".encode("utf8")
-                            ).decode()
-                        }
-                    )
+                # Don't set Proxy-Authorization manually: both rnet (Proxy.all) and
+                # requests authenticate from the credentials embedded in the proxy URL.
+                # A manual header here was malformed (no "Basic " scheme) and broke
+                # plaintext-http forward-proxy requests with HTTP 407.
                 # Always verify proxy IP - proxies can change exit nodes
                 try:
                     proxy_ip_info = get_ip_info(self.session)
@@ -359,13 +359,16 @@ class Service(metaclass=ABCMeta):
     def request_input(self, prompt: str) -> str:
         """Request interactive input from the user.
 
-        When running locally (CLI), falls back to ``input()``.
+        When running locally (CLI), prompts via the shared rich console so the
+        prompt renders correctly alongside Live progress / log handlers.
         When running in serve mode with an :class:`InputBridge` attached,
         delegates to the bridge which relays the prompt to the remote client.
         """
         if self._input_bridge is not None:
             return self._input_bridge.request_input(prompt)
-        return input(prompt)
+        indent = " " * 5
+        padded = indent + prompt.replace("\n", "\n" + indent)
+        return console.input(Text(padded, style="text"))
 
     def search(self) -> Generator[SearchResult, None, None]:
         """
@@ -435,6 +438,27 @@ class Service(metaclass=ABCMeta):
         # Delegates license handling to the Widevine license method by default if a service-specific PlayReady implementation is not provided.
         return self.get_widevine_license(challenge=challenge, title=title, track=track)
 
+    def get_clearkey_license(
+        self, *, challenge: bytes, title: Title_T, track: AnyTrack
+    ) -> Optional[Union[bytes, str, dict]]:
+        """
+        Get a W3C ClearKey License (JWK Set) by sending a License Request (challenge).
+
+        Used for DASH `org.w3.clearkey` content. No CDM is involved: the challenge is
+        the W3C EME JSON license request, e.g. ``{"kids": ["<base64url>"], "type": "temporary"}``,
+        and the license is a JWK Set, e.g. ``{"keys": [{"kty": "oct", "k": "...", "kid": "..."}]}``.
+
+        :param challenge: The JSON license request bytes to POST to the license server.
+        :param title: The current `Title` from get_titles that is being executed. This is provided in
+            case it has data needed to be used, e.g. for a HTTP request.
+        :param track: The current `Track` needing decryption. Provided for same reason as `title`.
+        :return: The JWK Set license as a dict, JSON str, or raw bytes. Return None (the default)
+            to let the framework POST the challenge to the manifest-provided Laurl, if any.
+            Services with no license server can instead pre-populate the DRM object's
+            `content_keys` in get_tracks.
+        """
+        return None
+
     # Required Abstract functions
     # The following functions *must* be implemented by the Service.
     # The functions will be executed in shown order.
@@ -478,7 +502,7 @@ class Service(metaclass=ABCMeta):
             else:
                 # If we can't determine title_id, just call get_titles directly
                 self.log.debug("Cannot determine title_id for caching, bypassing cache")
-                return self.get_titles()
+                return self.apply_title_map(self.get_titles())
 
         # Get cache control flags from context
         no_cache = False
@@ -491,7 +515,7 @@ class Service(metaclass=ABCMeta):
         account_hash = get_account_hash(self.credential)
 
         # Use title cache to get titles with fallback support
-        return self.title_cache.get_cached_titles(
+        titles = self.title_cache.get_cached_titles(
             title_id=str(title_id),
             fetch_function=self.get_titles,
             region=self.current_region,
@@ -499,6 +523,17 @@ class Service(metaclass=ABCMeta):
             no_cache=no_cache,
             reset_cache=reset_cache,
         )
+        return self.apply_title_map(titles)
+
+    def apply_title_map(self, titles: Titles_T) -> Titles_T:
+        """
+        Rewrite service-provided titles using the per-service ``title_map`` config.
+
+        ``title_map`` lives under ``services.<TAG>`` in unshackle.yaml. Applied after the
+        title cache so config edits take effect without a cache reset, and before any
+        ``--enrich`` override so enrich wins. See ``remap_titles`` for the match rules.
+        """
+        return remap_titles(titles, (self.config or {}).get("title_map") or {})
 
     @abstractmethod
     def get_tracks(self, title: Title_T) -> Tracks:

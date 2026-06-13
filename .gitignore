@@ -13,6 +13,9 @@ update_check.json
 *.pem
 *.bin
 *.db
+*.db-shm
+*.db-wal
+*.db-journal
 *.ttf
 *.otf
 device_cert
@@ -21,6 +24,8 @@ device_private_key
 device_vmp_blob
 unshackle/binaries/*
 !unshackle/binaries/placehere.txt
+# test fixtures (binary subtitle samples) must be tracked despite the *.mp4 rule above
+!tests/tracks/fixtures/*.mp4
 unshackle/cache/
 unshackle/cookies/
 unshackle/certs/
@@ -30,6 +35,7 @@ temp/
 logs/
 services/
 /.[^/]*/
+!/.github/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -223,6 +229,7 @@ cython_debug/
 .github/copilot-instructions.md
 CLAUDE.md
 AGENTS.md
+graphify-out/
 
 # CodeQL local analysis
 .codeql-db/
@@ -245,3 +252,6 @@ AGENTS.md
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Test fixtures with private/local content (services, IDs, credentials)
+tests/remote/e2e/fixtures/fixtures.yaml

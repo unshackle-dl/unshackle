@@ -125,6 +125,10 @@ class Attachment:
     def __str__(self) -> str:
         return " | ".join(filter(bool, ["ATT", self.name, self.mime_type, self.description]))
 
+    def to_dict(self) -> dict[str, Optional[str]]:
+        """Serialise a URL-backed attachment for export/import."""
+        return {"url": self.url, "name": self.name, "mime_type": self.mime_type, "description": self.description}
+
     @property
     def id(self) -> str:
         """Compute an ID from the attachment data."""

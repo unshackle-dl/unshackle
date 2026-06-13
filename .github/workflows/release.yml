@@ -23,15 +23,17 @@ jobs:
 
       - name: Check for major/minor version bump
         id: version_check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           NEW_VERSION=$(grep -m1 '^version' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
           echo "Detected version in pyproject.toml: $NEW_VERSION"
 
-          LATEST_TAG=$(git tag --list | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
-          echo "Latest git tag: $LATEST_TAG"
+          LATEST_TAG=$(gh release list --limit 1 --json tagName -q '.[0].tagName' || true)
+          echo "Latest GitHub release: $LATEST_TAG"
 
           if [ -z "$LATEST_TAG" ]; then
-            echo "No previous tag found, treating as new release"
+            echo "No previous release found, treating as new release"
             echo "should_release=true" >> "$GITHUB_OUTPUT"
             echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
             exit 0

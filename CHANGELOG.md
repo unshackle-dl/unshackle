@@ -6,6 +6,67 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 This changelog is automatically generated using [git-cliff](https://git-cliff.org).
 
+## [5.1.0] - 2026-05-29
+
+### Features
+
+- *ip-info*: Consolidate IP lookup, add ipinfo.io token support
+- *dl*: Cache content keys in-memory to skip duplicate license requests
+- *mux*: Add muxing.default_language to override default track per type
+- *hls*: Detect DV-composite tracks and restore signaling post-mux
+- *video*: Normalize SPS VUI to match manifest-derived range
+- *api*: Sync /api/download with dl CLI flags and add serve.* defaults
+- *vaults*: Tolerate vault failures during key get/add
+- *tracks*: Configurable audio codec priority for tie-breaking
+- *dl*: Live countdown for --slow delay
+- *dl*: Gate s_lang/a_lang miss behind --best-available
+- *dl*: Add real bitrate probing (-rvb/-rab)
+- *import*: Reconstruct downloads from an --export sidecar
+- *naming*: Per-service title_map remapping
+- *import*: Include cover-art attachments in --export/--import
+
+### Bug Fixes
+
+- *manifests*: Clean stale .!dev resume markers before merge
+- *sanitize*: Preserve parentheses, strip unidecode bracket artifacts
+- *tracks*: Honor --worst in hybrid range selection
+- *dl*: Re-pick DV/HDR10 when HYBRID falls back under best_available
+- *proxies/nordvpn*: Use *.proxy.nordvpn.com for HTTPS proxy
+- *template_formatter*: Preserve dash separator around empty conditional
+- *dl*: Prefer Atmos in -l best/all language selection
+- *title*: Detect Atmos across all audio tracks for filename template
+- *title*: Use original-language audio for filename metadata
+- *service*: Render request_input prompt via rich console
+- *titles*: Normalize odd resolutions in filename quality token
+- *api*: Propagate Click default=None through service instantiation
+- *api*: Load real CDM for service init in list/session/download flows
+- *vaults*: Enable WAL on SQLite vault to fix concurrent locks
+- *hybrid*: Correct static L6 source and reset stale L5 active area
+- *cli*: Report broken command/service loads once and cleanly
+- *hls*: Resolve per-rendition KID in no-EXT-X-KEY fallback
+- *dash*: Inherit SegmentTemplate attributes across AdaptationSet/Representation
+- *dl*: Mux all requested ranges and select highest DV alongside hybrid
+- *session*: Proxy auth on http targets and string params support
+
+### Documentation
+
+- Update docs to match current codebase
+- *output*: Document muxing.default_language override
+- Simplify README with demo and requirements
+
+### Changes
+
+- *routes, subtitle, track*: Improve code readability by formatting list structures
+- *hybrid*: Extract dovi_tool and run_step helpers
+- *ip_info*: Simplify lookup and trim cache
+- *example*: Showcase full unshackle feature surface
+- *dl*: Declare hybrid_base_only flag and extract standalone mux helper
+- Remove dead aria2c and n_m3u8dl_re downloader code
+
+### Maintenance
+
+- *pre-commit*: Update hook versions in .pre-commit-config.yaml
+
 ## [5.0.0] - 2026-05-04
 
 ### Features
@@ -624,21 +685,22 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - Reorganize Planned Features section in README for clarity
 - Improve track selection logic in dl.py
 
-[5.0.0]: https://github.com/unshackle-dl/unshackle-dev/compare/4.0.0..5.0.0
-[4.0.0]: https://github.com/unshackle-dl/unshackle-dev/compare/3.0.0..4.0.0
-[3.0.0]: https://github.com/unshackle-dl/unshackle-dev/compare/2.3.0..3.0.0
-[2.3.0]: https://github.com/unshackle-dl/unshackle-dev/compare/2.2.0..2.3.0
-[2.2.0]: https://github.com/unshackle-dl/unshackle-dev/compare/2.1.0..2.2.0
-[2.1.0]: https://github.com/unshackle-dl/unshackle-dev/compare/2.0.0..2.1.0
-[2.0.0]: https://github.com/unshackle-dl/unshackle-dev/compare/1.4.8..2.0.0
-[1.4.8]: https://github.com/unshackle-dl/unshackle-dev/compare/1.4.7..1.4.8
-[1.4.7]: https://github.com/unshackle-dl/unshackle-dev/compare/1.4.6..1.4.7
-[1.4.6]: https://github.com/unshackle-dl/unshackle-dev/compare/1.4.5..1.4.6
-[1.4.5]: https://github.com/unshackle-dl/unshackle-dev/compare/1.4.4..1.4.5
-[1.4.4]: https://github.com/unshackle-dl/unshackle-dev/compare/1.4.2..1.4.4
-[1.4.2]: https://github.com/unshackle-dl/unshackle-dev/compare/1.4.1..1.4.2
-[1.4.1]: https://github.com/unshackle-dl/unshackle-dev/compare/1.4.0..1.4.1
-[1.4.0]: https://github.com/unshackle-dl/unshackle-dev/compare/1.3.0..1.4.0
-[1.3.0]: https://github.com/unshackle-dl/unshackle-dev/compare/1.2.0..1.3.0
-[1.2.0]: https://github.com/unshackle-dl/unshackle-dev/compare/1.1.0..1.2.0
-[1.1.0]: https://github.com/unshackle-dl/unshackle-dev/compare/1.0.1..1.1.0
+[unreleased]: https://github.com/unshackle-dl/unshackle/compare/5.0.0..HEAD
+[5.0.0]: https://github.com/unshackle-dl/unshackle/compare/4.0.0..5.0.0
+[4.0.0]: https://github.com/unshackle-dl/unshackle/compare/3.0.0..4.0.0
+[3.0.0]: https://github.com/unshackle-dl/unshackle/compare/2.3.0..3.0.0
+[2.3.0]: https://github.com/unshackle-dl/unshackle/compare/2.2.0..2.3.0
+[2.2.0]: https://github.com/unshackle-dl/unshackle/compare/2.1.0..2.2.0
+[2.1.0]: https://github.com/unshackle-dl/unshackle/compare/2.0.0..2.1.0
+[2.0.0]: https://github.com/unshackle-dl/unshackle/compare/1.4.8..2.0.0
+[1.4.8]: https://github.com/unshackle-dl/unshackle/compare/1.4.7..1.4.8
+[1.4.7]: https://github.com/unshackle-dl/unshackle/compare/1.4.6..1.4.7
+[1.4.6]: https://github.com/unshackle-dl/unshackle/compare/1.4.5..1.4.6
+[1.4.5]: https://github.com/unshackle-dl/unshackle/compare/1.4.4..1.4.5
+[1.4.4]: https://github.com/unshackle-dl/unshackle/compare/1.4.2..1.4.4
+[1.4.2]: https://github.com/unshackle-dl/unshackle/compare/1.4.1..1.4.2
+[1.4.1]: https://github.com/unshackle-dl/unshackle/compare/1.4.0..1.4.1
+[1.4.0]: https://github.com/unshackle-dl/unshackle/compare/1.3.0..1.4.0
+[1.3.0]: https://github.com/unshackle-dl/unshackle/compare/1.2.0..1.3.0
+[1.2.0]: https://github.com/unshackle-dl/unshackle/compare/1.1.0..1.2.0
+[1.1.0]: https://github.com/unshackle-dl/unshackle/compare/1.0.1..1.1.0

@@ -2,103 +2,28 @@
 
 This document covers configuration options related to downloading and processing media content.
 
-## aria2c (dict)
+## downloader
 
-- `max_concurrent_downloads`
-  Maximum number of parallel downloads. Default: `min(32,(cpu_count+4))`
-  Note: Overrides the `max_workers` parameter of the aria2(c) downloader function.
-- `max_connection_per_server`
-  Maximum number of connections to one server for each download. Default: `1`
-- `split`
-  Split a file into N chunks and download each chunk on its own connection. Default: `5`
-- `file_allocation`
-  Specify file allocation method. Default: `"prealloc"`
+unshackle ships a single unified downloader at `unshackle/core/downloaders/requests.py`. The legacy
+`aria2c`, `curl_impersonate`, and `n_m3u8dl_re` backends have been removed; their config blocks no
+longer have any effect.
 
-  - `"none"` doesn't pre-allocate file space.
-  - `"prealloc"` pre-allocates file space before download begins. This may take some time depending on the size of the
-    file.
-  - `"falloc"` is your best choice if you are using newer file systems such as ext4 (with extents support), btrfs, xfs
-    or NTFS (MinGW build only). It allocates large(few GiB) files almost instantly. Don't use falloc with legacy file
-    systems such as ext3 and FAT32 because it takes almost same time as prealloc, and it blocks aria2 entirely until
-    allocation finishes. falloc may not be available if your system doesn't have posix_fallocate(3) function.
-  - `"trunc"` uses ftruncate(2) system call or platform-specific counterpart to truncate a file to a specified length.
+The unified downloader:
 
----
+- Works with both a standard `requests.Session` and `RnetSession` (rnet/BoringSSL TLS impersonation,
+  which replaces the previous `curl_cffi` backend). When a service exposes its own session via
+  `self.session`, TLS fingerprinting is preserved on every segment.
+- Uses adaptive chunk sizing between **512 KB and 4 MB**, picked from the response `Content-Length`.
+- Spawns **up to `min(16, cpu_count + 4)` worker threads** by default for segmented downloads
+  (override via `--workers` / `dl.workers`).
+- Resumes interrupted downloads via HTTP `Range` requests (a sibling `<file>.!dev` control file
+  marks an in-progress download).
+- Has a single-URL fast path: if the server supports byte ranges and the file is at least 64 MB,
+  the file is split into 16 MB parts and downloaded in parallel into a pre-allocated file.
+- Is selected per-track via `track.downloader`, which defaults to this unified `requests` downloader.
 
-## curl_impersonate (dict)
-
-- `browser` - The Browser to impersonate as. A list of available Browsers and Versions are listed here:
-  <https://github.com/yifeikong/curl_cffi#sessions>
-
-  Default: `"chrome124"`
-
-For example,
-
-```yaml
-curl_impersonate:
-  browser: "chrome120"
-```
-
----
-
-## downloader (str | dict)
-
-Choose what software to use to download data throughout unshackle where needed.
-You may provide a single downloader globally or a mapping of service tags to
-downloaders.
-
-Options:
-
-- `requests` (default) - <https://github.com/psf/requests>
-- `aria2c` - <https://github.com/aria2/aria2>
-- `curl_impersonate` - <https://github.com/yifeikong/curl-impersonate> (via <https://github.com/yifeikong/curl_cffi>)
-- `n_m3u8dl_re` - <https://github.com/nilaoda/N_m3u8DL-RE>
-
-Note that aria2c can reach the highest speeds as it utilizes threading and more connections than the other downloaders. However, aria2c can also be one of the more unstable downloaders. It will work one day, then not another day. It also does not support HTTP(S) proxies natively (non-HTTP proxies are bridged via pproxy).
-
-Note that `n_m3u8dl_re` will automatically fall back to `requests` for track types it does not support, specifically: direct URL downloads, Subtitle tracks, and Attachment tracks.
-
-Example mapping:
-
-```yaml
-downloader:
-  EXAMPLE: requests
-  EXAMPLE2: n_m3u8dl_re
-  EXAMPLE3: n_m3u8dl_re
-  default: requests
-```
-
-The `default` entry is optional. If omitted, `requests` will be used for services not listed.
-
----
-
-## n_m3u8dl_re (dict)
-
-Configuration for N_m3u8DL-RE downloader. This downloader supports HLS, DASH, and ISM (Smooth Streaming) manifests.
-It will automatically fall back to the `requests` downloader for unsupported track types (direct URLs, subtitles, attachments).
-
-- `thread_count`
-  Number of threads to use for downloading. Default: Uses the same value as max_workers from the command
-  (which defaults to `min(32,(cpu_count+4))`).
-- `ad_keyword`
-  Keyword to identify and potentially skip advertisement segments. Default: `None`
-- `use_proxy`
-  Whether to use proxy when downloading. Default: `true`
-- `retry_count`
-  Number of times to retry failed downloads. Default: `10`
-
-N_m3u8DL-RE also respects the `decryption` config setting. When content keys are provided, it will use
-the configured decryption engine (`shaka` or `mp4decrypt`) and automatically locate the corresponding binary.
-
-For example,
-
-```yaml
-n_m3u8dl_re:
-  thread_count: 16
-  ad_keyword: "advertisement"
-  use_proxy: true
-  retry_count: 10
-```
+There is no `downloader:` config key to set anymore. Setting one to a legacy value will emit a
+`DeprecationWarning` and otherwise be ignored.
 
 ---
 
@@ -107,8 +32,9 @@ n_m3u8dl_re:
 Pre-define default options and switches of the `dl` command.
 The values will be ignored if explicitly set in the CLI call.
 
-The Key must be the same value Python click would resolve it to as an argument.
-E.g., `@click.option("-r", "--range", "range_", type=...` actually resolves as `range_` variable.
+The Key is the option name with dashes as underscores (`--v-lang` -> `v_lang`). `range` and `list`
+work as-is; their internal Python names (`range_`, `list_`, suffixed to avoid the builtins) are
+also accepted.
 
 For example to set the default primary language to download to German,
 
@@ -159,7 +85,11 @@ to a CLI option on the `dl` command. CLI arguments always take priority over con
 | `acodec` | str or list | any | Audio codec(s): `AAC`, `AC3`, `EC3`, `AC4`, `OPUS`, `FLAC`, `ALAC`, `DTS` |
 | `vbitrate` | int | highest | Video bitrate in kbps |
 | `abitrate` | int | highest | Audio bitrate in kbps |
-| `range_` | str or list | `SDR` | Color range(s): `SDR`, `HDR10`, `HDR10+`, `HLG`, `DV`, `HYBRID` |
+| `vbitrate_range` | str | none | Video bitrate window in kbps, format `MIN-MAX` (e.g., `6000-7000`) |
+| `abitrate_range` | str | none | Audio bitrate window in kbps, format `MIN-MAX` |
+| `real_video_bitrate` | bool | `false` | Probe actual media size to compute true video bitrates, overriding the manifest's declared value (`-rvb`). See [Real bitrate probing](#real-bitrate-probing) |
+| `real_audio_bitrate` | bool | `false` | Same as above for audio tracks (`-rab`). Slower than video (more renditions) |
+| `range` (or `range_`) | str or list | `SDR` | Color range(s): `SDR`, `HDR10`, `HDR10+`, `HLG`, `DV`, `HYBRID` |
 | `channels` | float | any | Audio channels (e.g., `5.1`, `7.1`) |
 | `worst` | bool | `false` | Select the lowest bitrate track within the specified quality. Requires `quality` |
 | `best_available` | bool | `false` | Continue if requested quality is unavailable |
@@ -175,6 +105,7 @@ to a CLI option on the `dl` command. CLI arguments always take priority over con
 | `require_subs` | list | `[]` | Required subtitle languages (skip title if missing) |
 | `forced_subs` | bool | `false` | Include forced subtitle tracks |
 | `exact_lang` | bool | `false` | Exact language matching (no regional variants) |
+| `latest_episode` | bool | `false` | Download only the single most recent episode of a series |
 
 **Track selection:**
 
@@ -202,6 +133,7 @@ to a CLI option on the `dl` command. CLI arguments always take priority over con
 | `no_source` | bool | `false` | Remove source tag from filename |
 | `no_mux` | bool | `false` | Do not mux tracks into a container file |
 | `split_audio` | bool | `false` | Create separate output files per audio codec |
+| `export` | bool | `false` | Write a JSON sidecar with manifest URLs, subtitles, per-track KID:KEY, codec/track info |
 
 **Metadata enrichment:**
 
@@ -217,24 +149,95 @@ to a CLI option on the `dl` command. CLI arguments always take priority over con
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | `downloads` | int | `1` | Concurrent track downloads |
-| `workers` | int | auto | Max threads per track download |
-| `slow` | bool | `false` | Add 60-120s delay between titles |
+| `workers` | int | `min(16, cpu_count + 4)` | Max threads per track download (segments / ranged parts) |
+| `slow` | bool or `MIN-MAX` | `false` | Randomized delay between titles. `true` uses 60-120s; pass `MIN-MAX` (e.g., `20-40`) for a custom range |
+| `no_proxy_download` | bool | `false` | Bypass proxy for segment downloads only. Manifest, license, and auth still use proxy |
 | `skip_dl` | bool | `false` | Skip download, only get decryption keys |
 | `cdm_only` | bool | `null` | Only use CDM (`true`) or only vaults (`false`) |
 
-You can also set per-service `dl` overrides (see [Service Integration & Authentication Configuration](SERVICE_CONFIG.md)):
+### Real bitrate probing
+
+Some services declare inaccurate `bandwidth`/`BANDWIDTH` in their manifests — often
+a peak or nominal figure that is far from the real average. Because `track.bitrate`
+drives the track listing, sorting, and `--vbitrate` / `--vbitrate-range` selection,
+a wrong value picks the wrong track.
+
+`-rvb` / `--real-video-bitrate` (and `-rab` / `--real-audio-bitrate` for audio)
+probe the actual media size and overwrite `track.bitrate` with the measured value
+(`bytes * 8 / duration`) before listing and selection. So `-rvb --list` shows the
+true numbers, and `-rvb --vbitrate-range 6000-7000` selects against them. Without
+the flag, behaviour is unchanged (the manifest value is used).
+
+How it works:
+
+- **Single-file tracks** (one whole file per rendition — e.g. DASH `SegmentBase`
+  or services that collapse to a `BaseURL`) are measured **exactly**: the whole
+  file size over the track duration.
+- **Multi-segment tracks** (most HLS) are a **sampled estimate** — a spread of
+  segments is probed and extrapolated, typically within a few percent. Segment
+  bytes include container overhead, so MPEG-TS HLS reads a few percent above the
+  demuxed stream (this is the real *delivered* size).
+- Only the top renditions per quality tier are probed (video grouped by
+  codec + range, audio by codec + channels + language), in parallel, then extended
+  downward only as far as needed to keep ranking correct. This keeps the pass fast
+  even when a service exposes dozens of renditions.
+- Tracks whose duration cannot be determined fall back to `ffprobe`; probe failures
+  are non-fatal and leave the manifest bitrate in place.
+
+Per-track before→after values are logged at debug level (run with `-d`); the
+corrected values always appear in the Available Tracks panel.
+
+You can also set per-service `dl` overrides under the `services` section (see
+[Service Integration & Authentication Configuration](SERVICE_CONFIG.md)). Per-service values beat the
+global `dl:` section; explicit CLI arguments beat both:
 
 ```yaml
 dl:
   lang: en
   downloads: 4
   workers: 16
+
+services:
   EXAMPLE:
-    bitrate: CVBR
-  EXAMPLE2:
-    worst: true
-    quality: 1080
+    dl:
+      v_lang: [en]
+      quality: 1080
 ```
+
+---
+
+## audio (dict)
+
+Configuration for audio track selection.
+
+- `codec_priority`
+  Optional list of audio codec names defining the preferred order when multiple audio
+  tracks share the same bitrate and language. Listed codecs are ranked in the order given.
+  Codecs not in the list retain their bitrate-based ordering and are placed after all
+  listed codecs (i.e. soft priority — nothing is dropped).
+
+  Atmos tracks still take precedence over codec priority, and audio description tracks
+  are still moved to the end.
+
+  Valid codec names: `AAC`, `AC3`, `EC3`, `AC4`, `OPUS`, `OGG`, `DTS`, `ALAC`, `FLAC`.
+
+For example,
+
+```yaml
+audio:
+  codec_priority: [FLAC, ALAC, AC4, EC3, DTS, AC3, OPUS, AAC, OGG]
+```
+
+Or to only prefer a subset (e.g. surround codecs first, everything else falls back to
+bitrate order):
+
+```yaml
+audio:
+  codec_priority: [EC3, DTS, AC3, AAC]
+```
+
+When unset, audio tracks are sorted by bitrate alone (with Atmos/descriptive rules still
+applied).
 
 ---
 

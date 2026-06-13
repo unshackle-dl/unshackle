@@ -8,102 +8,49 @@
     </a>
 </p>
 
-## What is unshackle?
+<p align="center">
+  <a href="#install">Install</a> &nbsp;·&nbsp;
+  <a href="https://github.com/unshackle-dl/unshackle/wiki">Wiki</a> &nbsp;·&nbsp;
+  <a href="docs/">Docs</a> &nbsp;·&nbsp;
+  <a href="https://discord.gg/mHYyPaCbFK">Discord</a>
+</p>
 
-unshackle is a fork of [Devine](https://github.com/devine-dl/devine/), a powerful archival tool for downloading movies, TV shows, and music from streaming services. Built with a focus on modularity and extensibility, it provides a robust framework for content acquisition with support for DRM-protected content.
+---
 
-## Key Features
+A modular archival tool for movies, TV, and music. Fork of [Devine](https://github.com/devine-dl/devine/) with DASH/HLS/ISM parsing, Widevine & PlayReady DRM, and a REST API.
 
-- 🚀 **Easy Installation** - Simple UV installation
-- 🎥 **Multi-Media Support** - Movies, TV episodes, and music
-- 🛠️ **Built-in Parsers** - DASH/HLS and ISM manifest support
-- 🔒 **DRM Support** - Widevine and PlayReady integration
-- 🌈 **HDR10+DV Hybrid** - Hybrid Dolby Vision injection via [dovi_tool](https://github.com/quietvoid/dovi_tool)
-- 💾 **Flexible Storage** - Local and remote key vaults
-- 👥 **Multi-Profile Auth** - Support for cookies and credentials
-- 🤖 **Smart Naming** - Automatic P2P-style filename structure
-- ⚙️ **Configurable** - YAML-based configuration
-- ❤️ **Open Source** - Fully open-source with community contributions welcome
+<p align="center">
+  <a href="https://asciinema.org/a/ldMiqYFFTgPAOxW7">
+    <img src="https://asciinema.org/a/ldMiqYFFTgPAOxW7.svg" alt="unshackle demo" width="700">
+  </a>
+</p>
 
-## Quick Start
-
-### Installation
-
-This installs the latest version directly from the GitHub repository:
+## Install
 
 ```shell
-git clone https://github.com/unshackle-dl/unshackle.git
-cd unshackle
-uv sync
-uv run unshackle --help
-```
-
-### Install unshackle as a global (per-user) tool
-
-```bash
 uv tool install git+https://github.com/unshackle-dl/unshackle.git
-# Then run:
-uvx unshackle --help   # or just `unshackle` once PATH updated
+unshackle --help
 ```
 
-> [!NOTE]
-> After installation, you may need to add the installation path to your PATH environment variable if prompted.
+> [!TIP]
+> Prefer `uv run unshackle ...` inside a clone to keep the virtual environment active.
 
-> **Recommended:** Use `uv run unshackle` instead of direct command execution to ensure proper virtual environment activation.
+### Requirements
 
-## Planned Features
+External tools on your `PATH` (recommended versions):
 
-- 🖥️ **Web UI Access & Control** - Manage and control unshackle from a modern web interface.
-- 🔄 **Sonarr/Radarr Interactivity** - Direct integration for automated personal downloads.
-- ⚙️ **Better ISM Support** - Improve on ISM support for multiple services
-- 🔉 **ATMOS** - Better Atmos Support/Selection
-- 🎵 **Music** - Cleanup Audio Tagging using the [tags.py](unshackle/core/utils/tags.py) for artist/track name etc.
+- [Python](https://www.python.org/) - 3.10 - 3.12
+- [uv](https://docs.astral.sh/uv/) - ≥ 0.5
+- [FFmpeg](https://ffmpeg.org/) - ≥ 6.0
+- [MKVToolNix](https://mkvtoolnix.download/) - ≥ 80
+- [shaka-packager](https://github.com/shaka-project/shaka-packager/releases/tag/v2.6.1) - 2.6.1
+- [Bento4](https://github.com/axiomatic-systems/Bento4) - ≥ 1.6.0-639
+- [dovi_tool](https://github.com/quietvoid/dovi_tool) - ≥ 2.1
 
-### Basic Usage
+Optional:
 
-```shell
-# Check available commands
-uv run unshackle --help
+- [SubtitleEdit](https://github.com/SubtitleEdit/subtitleedit/releases) - ≥ 5.0 (`SeConv` CLI)
 
-# Configure your settings
-git clone https://github.com/unshackle-dl/unshackle.git
-cd unshackle
-uv sync
-uv run unshackle --help
+## License
 
-# Download content (requires configured services)
-uv run unshackle dl SERVICE_NAME CONTENT_ID
-```
-
-## Documentation
-
-For comprehensive setup guides, configuration options, and advanced usage:
-
-📖 **[Visit our WIKI](https://github.com/unshackle-dl/unshackle/wiki)**
-
-The WIKI contains detailed information on:
-
-- Service configuration
-- DRM configuration
-- Advanced features and troubleshooting
-
-For guidance on creating services, see our [WIKI documentation](https://github.com/unshackle-dl/unshackle/wiki).
-
-## End User License Agreement
-
-unshackle and it's community pages should be treated with the same kindness as other projects.
-Please refrain from spam or asking for questions that infringe upon a Service's End User License Agreement.
-
-1. Do not use unshackle for any purposes of which you do not have the rights to do so.
-2. Do not share or request infringing content; this includes widevine Provision Keys, Content Encryption Keys,
-   or Service API Calls or Code.
-3. The Core codebase is meant to stay Free and Open-Source while the Service code should be kept private.
-4. Do not sell any part of this project, neither alone nor as part of a bundle.
-   If you paid for this software or received it as part of a bundle following payment, you should demand your money
-   back immediately.
-5. Be kind to one another and do not single anyone out.
-
-## Licensing
-
-This software is licensed under the terms of [GNU General Public License, Version 3.0](LICENSE).  
-You can find a copy of the license in the LICENSE file in the root folder.
+[GPL-3.0](LICENSE). Do not use unshackle for content you lack the rights to. Keep the core free and open; keep service code private. Be kind.

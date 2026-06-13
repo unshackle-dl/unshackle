@@ -25,14 +25,23 @@ from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
-from unshackle.core.titles import Title_T, Titles_T
+from unshackle.core.titles import Title_T, Titles_T, remap_titles
 from unshackle.core.titles.episode import Episode, Series
 from unshackle.core.titles.movie import Movie, Movies
 from unshackle.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.track import Track
+from unshackle.core.utils.redact import redact_text, safe_display_url
 
 log = logging.getLogger("remote_service")
+
+SENSITIVE_DATA_KEYS = ("credential", "credentials", "password", "token", "api_key")
+
+
+def redact_secrets(text: str, data: Optional[Dict[str, Any]] = None) -> str:
+    """Mask URL userinfo and any request-payload secrets before the text is logged."""
+    secrets = [v for k in SENSITIVE_DATA_KEYS if isinstance(v := (data or {}).get(k), str) and v]
+    return redact_text(text, secrets) or ""
 
 
 class RemoteClient:
@@ -59,14 +68,15 @@ class RemoteClient:
         try:
             resp = getattr(self.session, method)(url, json=data, timeout=120 if method == "post" else 30)
         except requests.ConnectionError:
-            log.error(f"Could not connect to remote server at {self.server_url}. Is it running? (unshackle serve)")
+            server_url = safe_display_url(self.server_url)
+            log.error(f"Could not connect to remote server at {server_url}. Is it running? (unshackle serve)")
             raise SystemExit(1)
         except requests.Timeout:
             log.error(f"Request to remote server timed out: {endpoint}")
             raise SystemExit(1)
         result = resp.json()
         if resp.status_code >= 400:
-            error_msg = result.get("message", resp.text)
+            error_msg = redact_secrets(str(result.get("message", resp.text)), data)
             error_code = result.get("error_code", "UNKNOWN")
             log.error(f"Server error [{error_code}]: {error_msg}")
             raise SystemExit(1)
@@ -573,7 +583,13 @@ class RemoteService:
         return self._titles
 
     def get_titles_cached(self, title_id: str = None) -> Titles_T:
-        return self.get_titles()
+        """Apply the client's local title_map to titles fetched from the remote server.
+
+        Lets users rename titles for remote services they don't have installed locally.
+        The server sends raw titles; the client's own ``services.<TAG>.title_map`` wins.
+        """
+        title_map = (config.services.get(self.service_tag) or {}).get("title_map") or {}
+        return remap_titles(self.get_titles(), title_map)
 
     def get_tracks(self, title: Title_T) -> Tracks:
         title_id = str(title.id)

@@ -13,7 +13,7 @@ import requests
 
 from unshackle.core import binaries
 from unshackle.core.proxies.proxy import Proxy
-from unshackle.core.utilities import get_country_code, get_country_name, get_debug_logger
+from unshackle.core.utilities import get_country_code, get_country_name, get_debug_logger, log_event
 from unshackle.core.utils.ip_info import get_ip_info
 
 # Global registry for cleanup on exit
@@ -223,20 +223,18 @@ class Gluetun(Proxy):
             _gluetun_instances.append(self)
 
         # Log initialization
-        debug_logger = get_debug_logger()
-        if debug_logger:
-            debug_logger.log(
-                level="INFO",
-                operation="gluetun_init",
-                message=f"Gluetun proxy provider initialized with {len(self.providers)} provider(s)",
-                context={
-                    "providers": list(self.providers.keys()),
-                    "base_port": base_port,
-                    "auto_cleanup": auto_cleanup,
-                    "verify_ip": verify_ip,
-                    "container_prefix": container_prefix,
-                },
-            )
+        log_event(
+            "gluetun_init",
+            level="INFO",
+            message=f"Gluetun proxy provider initialized with {len(self.providers)} provider(s)",
+            context={
+                "providers": list(self.providers.keys()),
+                "base_port": base_port,
+                "auto_cleanup": auto_cleanup,
+                "verify_ip": verify_ip,
+                "container_prefix": container_prefix,
+            },
+        )
 
     def __repr__(self) -> str:
         provider_count = len(self.providers)
@@ -269,24 +267,21 @@ class Gluetun(Proxy):
         query_key = f"{provider_name}:{region}"
         container_name = f"{self.container_prefix}-{provider_name}-{region}"
 
-        debug_logger = get_debug_logger()
-
         # Check if container already exists (in memory OR in Docker)
         # This handles multiple concurrent Unshackle sessions
         if query_key in self.active_containers:
             container = self.active_containers[query_key]
             if self._is_container_running(container["container_name"]):
-                if debug_logger:
-                    debug_logger.log(
-                        level="DEBUG",
-                        operation="gluetun_container_reuse",
-                        message=f"Reusing existing container (in-memory): {query_key}",
-                        context={
-                            "query_key": query_key,
-                            "container_name": container["container_name"],
-                            "port": container["port"],
-                        },
-                    )
+                log_event(
+                    "gluetun_container_reuse",
+                    level="DEBUG",
+                    message=f"Reusing existing container (in-memory): {query_key}",
+                    context={
+                        "query_key": query_key,
+                        "container_name": container["container_name"],
+                        "port": container["port"],
+                    },
+                )
                 # Re-verify if needed
                 if self.verify_ip:
                     self._verify_container(query_key)
@@ -297,17 +292,16 @@ class Gluetun(Proxy):
             if existing_info:
                 # Container exists in Docker, reuse it
                 self.active_containers[query_key] = existing_info
-                if debug_logger:
-                    debug_logger.log(
-                        level="INFO",
-                        operation="gluetun_container_reuse_docker",
-                        message=f"Reusing existing Docker container: {query_key}",
-                        context={
-                            "query_key": query_key,
-                            "container_name": container_name,
-                            "port": existing_info["port"],
-                        },
-                    )
+                log_event(
+                    "gluetun_container_reuse_docker",
+                    level="INFO",
+                    message=f"Reusing existing Docker container: {query_key}",
+                    context={
+                        "query_key": query_key,
+                        "container_name": container_name,
+                        "port": existing_info["port"],
+                    },
+                )
                 # Re-verify if needed
                 if self.verify_ip:
                     self._verify_container(query_key)
@@ -411,13 +405,12 @@ class Gluetun(Proxy):
 
     def cleanup(self):
         """Stop and remove all managed Gluetun containers."""
-        debug_logger = get_debug_logger()
         container_count = len(self.active_containers)
 
-        if container_count > 0 and debug_logger:
-            debug_logger.log(
+        if container_count > 0:
+            log_event(
+                "gluetun_cleanup_start",
                 level="DEBUG",
-                operation="gluetun_cleanup_start",
                 message=f"Cleaning up {container_count} Gluetun container(s)",
                 context={
                     "container_count": container_count,
@@ -429,23 +422,22 @@ class Gluetun(Proxy):
             container_name = container_info["container_name"]
             self._remove_container(container_name)
 
-            if debug_logger:
-                debug_logger.log(
-                    level="DEBUG",
-                    operation="gluetun_container_removed",
-                    message=f"Removed Gluetun container: {container_name}",
-                    context={
-                        "query_key": query_key,
-                        "container_name": container_name,
-                    },
-                )
+            log_event(
+                "gluetun_container_removed",
+                level="DEBUG",
+                message=f"Removed Gluetun container: {container_name}",
+                context={
+                    "query_key": query_key,
+                    "container_name": container_name,
+                },
+            )
 
         self.active_containers.clear()
 
-        if container_count > 0 and debug_logger:
-            debug_logger.log(
+        if container_count > 0:
+            log_event(
+                "gluetun_cleanup_complete",
                 level="INFO",
-                operation="gluetun_cleanup_complete",
                 message=f"Cleanup complete: removed {container_count} container(s)",
                 context={"container_count": container_count},
                 success=True,
@@ -654,34 +646,31 @@ class Gluetun(Proxy):
         hostname: Optional[str] = None,
     ):
         """Create and start a Gluetun Docker container."""
-        debug_logger = get_debug_logger()
         start_time = time.time()
 
-        if debug_logger:
-            debug_logger.log(
-                level="DEBUG",
-                operation="gluetun_container_create_start",
-                message=f"Creating Gluetun container: {container_name}",
-                context={
-                    "container_name": container_name,
-                    "port": port,
-                    "provider": provider_name,
-                    "country": country,
-                    "city": city,
-                    "hostname": hostname,
-                },
-            )
+        log_event(
+            "gluetun_container_create_start",
+            level="DEBUG",
+            message=f"Creating Gluetun container: {container_name}",
+            context={
+                "container_name": container_name,
+                "port": port,
+                "provider": provider_name,
+                "country": country,
+                "city": city,
+                "hostname": hostname,
+            },
+        )
 
         # Ensure the Gluetun image is available (pulls if needed)
         gluetun_image = "qmcgaw/gluetun:latest"
         if not self._ensure_image_available(gluetun_image):
-            if debug_logger:
-                debug_logger.log(
-                    level="ERROR",
-                    operation="gluetun_image_pull_failed",
-                    message=f"Failed to pull Docker image: {gluetun_image}",
-                    success=False,
-                )
+            log_event(
+                "gluetun_image_pull_failed",
+                level="ERROR",
+                message=f"Failed to pull Docker image: {gluetun_image}",
+                success=False,
+            )
             raise RuntimeError(f"Failed to ensure Gluetun Docker image '{gluetun_image}' is available")
 
         vpn_type = provider_config.get("vpn_type", "wireguard").lower()
@@ -752,7 +741,7 @@ class Gluetun(Proxy):
         env_vars.update(extra_env)
 
         # Debug log environment variables (redact sensitive values)
-        if debug_logger:
+        if debug_logger := get_debug_logger():
             redact_markers = ("KEY", "PASSWORD", "PASS", "TOKEN", "SECRET", "USER")
             safe_env = {k: ("***" if any(m in k for m in redact_markers) else v) for k, v in env_vars.items()}
             debug_logger.log(
@@ -821,54 +810,50 @@ class Gluetun(Proxy):
                     errors="replace",
                 )
             except subprocess.TimeoutExpired:
-                if debug_logger:
-                    debug_logger.log(
-                        level="ERROR",
-                        operation="gluetun_container_create_timeout",
-                        message=f"Docker run timed out for {container_name}",
-                        context={"container_name": container_name},
-                        success=False,
-                        duration_ms=(time.time() - start_time) * 1000,
-                    )
+                log_event(
+                    "gluetun_container_create_timeout",
+                    level="ERROR",
+                    message=f"Docker run timed out for {container_name}",
+                    context={"container_name": container_name},
+                    success=False,
+                    duration_ms=(time.time() - start_time) * 1000,
+                )
                 raise RuntimeError("Docker run command timed out")
 
             if result.returncode != 0:
                 error_msg = result.stderr or "unknown error"
-                if debug_logger:
-                    debug_logger.log(
-                        level="ERROR",
-                        operation="gluetun_container_create_failed",
-                        message=f"Docker run failed for {container_name}",
-                        context={
-                            "container_name": container_name,
-                            "return_code": result.returncode,
-                            "stderr": error_msg,
-                        },
-                        success=False,
-                        duration_ms=(time.time() - start_time) * 1000,
-                    )
+                log_event(
+                    "gluetun_container_create_failed",
+                    level="ERROR",
+                    message=f"Docker run failed for {container_name}",
+                    context={
+                        "container_name": container_name,
+                        "return_code": result.returncode,
+                        "stderr": error_msg,
+                    },
+                    success=False,
+                    duration_ms=(time.time() - start_time) * 1000,
+                )
                 raise RuntimeError(f"Docker run failed: {error_msg}")
 
             # Log successful container creation
-            if debug_logger:
-                duration_ms = (time.time() - start_time) * 1000
-                debug_logger.log(
-                    level="INFO",
-                    operation="gluetun_container_created",
-                    message=f"Gluetun container created: {container_name}",
-                    context={
-                        "container_name": container_name,
-                        "port": port,
-                        "provider": provider_name,
-                        "vpn_type": vpn_type,
-                        "country": country,
-                        "city": city,
-                        "hostname": hostname,
-                        "container_id": result.stdout.strip()[:12] if result.stdout else None,
-                    },
-                    success=True,
-                    duration_ms=duration_ms,
-                )
+            log_event(
+                "gluetun_container_created",
+                level="INFO",
+                message=f"Gluetun container created: {container_name}",
+                context={
+                    "container_name": container_name,
+                    "port": port,
+                    "provider": provider_name,
+                    "vpn_type": vpn_type,
+                    "country": country,
+                    "city": city,
+                    "hostname": hostname,
+                    "container_id": result.stdout.strip()[:12] if result.stdout else None,
+                },
+                success=True,
+                duration_ms=(time.time() - start_time) * 1000,
+            )
         finally:
             if env_file_path:
                 # Best-effort "secure delete": overwrite then unlink (not guaranteed on all filesystems).
@@ -1011,17 +996,15 @@ class Gluetun(Proxy):
         Returns:
             True if container is ready, False if it failed or timed out
         """
-        debug_logger = get_debug_logger()
         start_time = time.time()
         last_error = None
 
-        if debug_logger:
-            debug_logger.log(
-                level="DEBUG",
-                operation="gluetun_container_wait_start",
-                message=f"Waiting for container to be ready: {container_name}",
-                context={"container_name": container_name, "timeout": timeout},
-            )
+        log_event(
+            "gluetun_container_wait_start",
+            level="DEBUG",
+            message=f"Waiting for container to be ready: {container_name}",
+            context={"container_name": container_name, "timeout": timeout},
+        )
 
         while time.time() - start_time < timeout:
             try:
@@ -1059,19 +1042,18 @@ class Gluetun(Proxy):
                         # Give a brief moment for the proxy to fully initialize
                         time.sleep(1)
                         duration_ms = (time.time() - start_time) * 1000
-                        if debug_logger:
-                            debug_logger.log(
-                                level="INFO",
-                                operation="gluetun_container_ready",
-                                message=f"Gluetun container is ready: {container_name}",
-                                context={
-                                    "container_name": container_name,
-                                    "proxy_ready": proxy_ready,
-                                    "vpn_ready": vpn_ready,
-                                },
-                                success=True,
-                                duration_ms=duration_ms,
-                            )
+                        log_event(
+                            "gluetun_container_ready",
+                            level="INFO",
+                            message=f"Gluetun container is ready: {container_name}",
+                            context={
+                                "container_name": container_name,
+                                "proxy_ready": proxy_ready,
+                                "vpn_ready": vpn_ready,
+                            },
+                            success=True,
+                            duration_ms=duration_ms,
+                        )
                         return True
 
                     # Check for fatal errors that indicate VPN connection failure
@@ -1106,19 +1088,18 @@ class Gluetun(Proxy):
 
         # Log timeout/failure
         duration_ms = (time.time() - start_time) * 1000
-        if debug_logger:
-            debug_logger.log(
-                level="ERROR",
-                operation="gluetun_container_wait_timeout",
-                message=f"Gluetun container failed to become ready: {container_name}",
-                context={
-                    "container_name": container_name,
-                    "timeout": timeout,
-                    "last_error": last_error,
-                },
-                success=False,
-                duration_ms=duration_ms,
-            )
+        log_event(
+            "gluetun_container_wait_timeout",
+            level="ERROR",
+            message=f"Gluetun container failed to become ready: {container_name}",
+            context={
+                "container_name": container_name,
+                "timeout": timeout,
+                "last_error": last_error,
+            },
+            success=False,
+            duration_ms=duration_ms,
+        )
         return False
 
     def _get_container_exit_info(self, container_name: str) -> Optional[dict]:
@@ -1170,7 +1151,6 @@ class Gluetun(Proxy):
         Raises:
             RuntimeError: If verification fails after all retries
         """
-        debug_logger = get_debug_logger()
         start_time = time.time()
 
         if query_key not in self.active_containers:
@@ -1180,18 +1160,17 @@ class Gluetun(Proxy):
         proxy_url = self._build_proxy_uri(container["port"])
         expected_country = container.get("country", "").upper()
 
-        if debug_logger:
-            debug_logger.log(
-                level="DEBUG",
-                operation="gluetun_verify_start",
-                message=f"Verifying VPN IP for: {query_key}",
-                context={
-                    "query_key": query_key,
-                    "container_name": container.get("container_name"),
-                    "expected_country": expected_country,
-                    "max_retries": max_retries,
-                },
-            )
+        log_event(
+            "gluetun_verify_start",
+            level="DEBUG",
+            message=f"Verifying VPN IP for: {query_key}",
+            context={
+                "query_key": query_key,
+                "container_name": container.get("container_name"),
+                "expected_country": expected_country,
+                "max_retries": max_retries,
+            },
+        )
 
         last_error = None
 
@@ -1219,22 +1198,21 @@ class Gluetun(Proxy):
 
                             if actual_country != expected_code:
                                 duration_ms = (time.time() - start_time) * 1000
-                                if debug_logger:
-                                    debug_logger.log(
-                                        level="ERROR",
-                                        operation="gluetun_verify_mismatch",
-                                        message=f"Region mismatch for {query_key}",
-                                        context={
-                                            "query_key": query_key,
-                                            "expected_country": expected_code,
-                                            "actual_country": actual_country,
-                                            "ip": ip_info.get("ip"),
-                                            "city": ip_info.get("city"),
-                                            "org": ip_info.get("org"),
-                                        },
-                                        success=False,
-                                        duration_ms=duration_ms,
-                                    )
+                                log_event(
+                                    "gluetun_verify_mismatch",
+                                    level="ERROR",
+                                    message=f"Region mismatch for {query_key}",
+                                    context={
+                                        "query_key": query_key,
+                                        "expected_country": expected_code,
+                                        "actual_country": actual_country,
+                                        "ip": ip_info.get("ip"),
+                                        "city": ip_info.get("city"),
+                                        "org": ip_info.get("org"),
+                                    },
+                                    success=False,
+                                    duration_ms=duration_ms,
+                                )
                                 raise RuntimeError(
                                     f"Region mismatch for {container['provider']}:{container['region']}: "
                                     f"Expected '{expected_code}' but got '{actual_country}' "
@@ -1249,22 +1227,21 @@ class Gluetun(Proxy):
                             self.active_containers[query_key]["ip_org"] = ip_info.get("org")
 
                         duration_ms = (time.time() - start_time) * 1000
-                        if debug_logger:
-                            debug_logger.log(
-                                level="INFO",
-                                operation="gluetun_verify_success",
-                                message=f"VPN IP verified for: {query_key}",
-                                context={
-                                    "query_key": query_key,
-                                    "ip": ip_info.get("ip"),
-                                    "country": actual_country,
-                                    "city": ip_info.get("city"),
-                                    "org": ip_info.get("org"),
-                                    "attempts": attempt + 1,
-                                },
-                                success=True,
-                                duration_ms=duration_ms,
-                            )
+                        log_event(
+                            "gluetun_verify_success",
+                            level="INFO",
+                            message=f"VPN IP verified for: {query_key}",
+                            context={
+                                "query_key": query_key,
+                                "ip": ip_info.get("ip"),
+                                "country": actual_country,
+                                "city": ip_info.get("city"),
+                                "org": ip_info.get("org"),
+                                "attempts": attempt + 1,
+                            },
+                            success=True,
+                            duration_ms=duration_ms,
+                        )
                         return
 
                     # ip_info was None, retry
@@ -1274,17 +1251,16 @@ class Gluetun(Proxy):
                     raise  # Re-raise region mismatch errors immediately
                 except Exception as e:
                     last_error = str(e)
-                    if debug_logger:
-                        debug_logger.log(
-                            level="DEBUG",
-                            operation="gluetun_verify_retry",
-                            message=f"Verification attempt {attempt + 1} failed, retrying",
-                            context={
-                                "query_key": query_key,
-                                "attempt": attempt + 1,
-                                "error": last_error,
-                            },
-                        )
+                    log_event(
+                        "gluetun_verify_retry",
+                        level="DEBUG",
+                        message=f"Verification attempt {attempt + 1} failed, retrying",
+                        context={
+                            "query_key": query_key,
+                            "attempt": attempt + 1,
+                            "error": last_error,
+                        },
+                    )
 
                 # Wait before retry (exponential backoff)
                 if attempt < max_retries - 1:
@@ -1298,19 +1274,18 @@ class Gluetun(Proxy):
 
         # All retries exhausted
         duration_ms = (time.time() - start_time) * 1000
-        if debug_logger:
-            debug_logger.log(
-                level="ERROR",
-                operation="gluetun_verify_failed",
-                message=f"VPN verification failed after {max_retries} attempts",
-                context={
-                    "query_key": query_key,
-                    "max_retries": max_retries,
-                    "last_error": last_error,
-                },
-                success=False,
-                duration_ms=duration_ms,
-            )
+        log_event(
+            "gluetun_verify_failed",
+            level="ERROR",
+            message=f"VPN verification failed after {max_retries} attempts",
+            context={
+                "query_key": query_key,
+                "max_retries": max_retries,
+                "last_error": last_error,
+            },
+            success=False,
+            duration_ms=duration_ms,
+        )
         raise RuntimeError(
             f"Failed to verify VPN IP for {container['provider']}:{container['region']} "
             f"after {max_retries} attempts. Last error: {last_error}"

@@ -64,7 +64,7 @@ class NordVPN(Proxy):
 
         if re.match(r"^[a-z]{2}\d+$", query):
             # country and nordvpn server id, e.g., us1, fr1234
-            hostname = f"{query}.nordvpn.com"
+            hostname = f"{query}.proxy.nordvpn.com"
         else:
             if query.isdigit():
                 # country id
@@ -86,7 +86,7 @@ class NordVPN(Proxy):
 
             if server_mapping:
                 # country was set to a specific server ID in config
-                hostname = f"{country['code'].lower()}{server_mapping}.nordvpn.com"
+                hostname = f"{country['code'].lower()}{server_mapping}.proxy.nordvpn.com"
             else:
                 # get the recommended server ID
                 recommended_servers = self.get_recommended_servers(country["id"])
@@ -112,6 +112,9 @@ class NordVPN(Proxy):
         if hostname.startswith("gb"):
             # NordVPN uses the alpha2 of 'GB' in API responses, but 'UK' in the hostname
             hostname = f"gb{hostname[2:]}"
+
+        if hostname.endswith(".nordvpn.com") and not hostname.endswith(".proxy.nordvpn.com"):
+            hostname = hostname[: -len(".nordvpn.com")] + ".proxy.nordvpn.com"
 
         return f"https://{self.username}:{self.password}@{hostname}:89"
 

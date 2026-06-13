@@ -344,6 +344,34 @@ that use MonaLisa handle ticket/key retrieval and CDM initialization internally.
 
 ---
 
+## ClearKey DRM
+
+Two distinct ClearKey mechanisms are supported; neither needs a CDM device or any DRM config:
+
+### HLS AES-128 ClearKey
+
+The key is fetched from (or near) the M3U8 `EXT-X-KEY` URI and segments are decrypted with
+pure-Python AES-CBC. Fully automatic — nothing to configure.
+
+### DASH ClearKey (`org.w3.clearkey`)
+
+W3C EME ClearKey for DASH CENC content. The DASH parser recognises the clearkey
+ContentProtection scheme (`urn:uuid:e2719d58-a985-b3c9-781a-b030af78d30e`), takes the KID from
+`cenc:default_KID`, and reads the license server URL from the manifest's `<Laurl>` element when
+present.
+
+License flow: the W3C JSON license request (`{"kids": [...], "type": "temporary"}`) is POSTed to
+the license server, which returns the content key as a JWK Set. Keys land in the same vault and
+`--export` paths as Widevine/PlayReady, and decryption uses the same shaka-packager/mp4decrypt
+CENC backends (`decryption` config option applies).
+
+Service integration (simplest first):
+1. Manifest carries a `<Laurl>` — works with zero service code.
+2. Custom endpoint/headers — service overrides `get_clearkey_license`.
+3. Bespoke key delivery — service pre-populates the DRM object's keys in `get_tracks`.
+
+---
+
 ## key_vaults (list\[dict])
 
 Key Vaults store your obtained Content Encryption Keys (CEKs) and Key IDs per-service.

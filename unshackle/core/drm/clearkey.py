@@ -12,6 +12,7 @@ from m3u8.model import Key
 from requests import Session
 
 from unshackle.core.session import RnetSession
+from unshackle.core.utilities import log_event
 
 
 class ClearKey:
@@ -43,6 +44,14 @@ class ClearKey:
         """Decrypt a Track with AES Clear Key DRM."""
         if not path or not path.exists():
             raise ValueError("Tried to decrypt a file that does not exist.")
+
+        log_event(
+            "drm_decrypt",
+            level="DEBUG",
+            message=f"Decrypting {path.name} with AES-CBC",
+            drm_type="ClearKey",
+            file=path.name,
+        )
 
         decrypted = AES.new(self.key, AES.MODE_CBC, self.iv).decrypt(path.read_bytes())
 
@@ -94,6 +103,13 @@ class ClearKey:
             key = data
         else:
             url = urljoin(m3u_key.base_uri, m3u_key.uri)
+            log_event(
+                "drm_key_fetch",
+                level="DEBUG",
+                message="Fetching ClearKey from M3U key URI",
+                drm_type="ClearKey",
+                request={"url": url},
+            )
             res = session.get(url)
             res.raise_for_status()
             if not res.content:

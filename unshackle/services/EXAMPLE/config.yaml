@@ -1,12 +1,40 @@
+# Reference config for the EXAMPLE showcase service.
+# Access in code as self.config["endpoints"]["..."] — never hardcode URLs.
+
 endpoints:
   login: https://api.domain.com/v1/login
+  refresh: https://api.domain.com/v1/token/refresh
+  search: https://api.domain.com/v1/search
   metadata: https://api.domain.com/v1/metadata/{title_id}.json
   streams: https://api.domain.com/v1/streams
-  playready_license: https://api.domain.com/v1/license/playready
+  playback: https://api.domain.com/v1/playback/{title_id}   # HLS alternate
   widevine_license: https://api.domain.com/v1/license/widevine
+  playready_license: https://api.domain.com/v1/license/playready
+  clearkey_license: https://api.domain.com/v1/license/clearkey   # DASH org.w3.clearkey (omit to use manifest Laurl)
 
+# Base64 Widevine service certificate (enables privacy-mode license requests).
+certificate: null
+
+# Per-device client profiles, selected via -d/--device (click.Choice in cli()).
 client:
   android_tv:
     user_agent: USER_AGENT
     license_user_agent: LICENSE_USER_AGENT
-    type: DATA
+    type: DASH
+  web:
+    user_agent: USER_AGENT
+    license_user_agent: LICENSE_USER_AGENT
+    type: DASH
+  # Auto-selected when a PlayReady CDM is detected (see __init__ is_playready_cdm).
+  playready_tv:
+    user_agent: USER_AGENT
+    license_user_agent: LICENSE_USER_AGENT
+    type: DASH
+  ios:
+    user_agent: USER_AGENT
+    license_user_agent: LICENSE_USER_AGENT
+    type: HLS
+
+# Optional: title_map remaps API titles to canonical filename titles (per-service, #106).
+# title_map:
+#   "Show (US)": "Show"

@@ -37,7 +37,8 @@ def find(*names: str) -> Optional[Path]:
 FFMPEG = find("ffmpeg")
 FFProbe = find("ffprobe")
 FFPlay = find("ffplay")
-SubtitleEdit = find("SubtitleEdit")
+# seconv = SubtitleEdit 5+ CLI (the 5.0 GUI has no batch mode); SubtitleEdit = 4.x
+SubtitleEdit = find("seconv", "SubtitleEdit")
 ShakaPackager = find(
     "shaka-packager",
     "packager",
@@ -45,12 +46,10 @@ ShakaPackager = find(
     f"packager-{__shaka_platform}-arm64",
     f"packager-{__shaka_platform}-x64",
 )
-Aria2 = find("aria2c", "aria2")
 CCExtractor = find("ccextractor", "ccextractorwin", "ccextractorwinfull")
 HolaProxy = find("hola-proxy")
 MPV = find("mpv")
 Caddy = find("caddy")
-N_m3u8DL_RE = find("N_m3u8DL-RE", "n-m3u8dl-re")
 MKVToolNix = find("mkvmerge")
 Mkvpropedit = find("mkvpropedit")
 DoviTool = find("dovi_tool")
@@ -66,12 +65,10 @@ __all__ = (
     "FFPlay",
     "SubtitleEdit",
     "ShakaPackager",
-    "Aria2",
     "CCExtractor",
     "HolaProxy",
     "MPV",
     "Caddy",
-    "N_m3u8DL_RE",
     "MKVToolNix",
     "Mkvpropedit",
     "DoviTool",

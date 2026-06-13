@@ -73,7 +73,9 @@ class TemplateFormatter:
                             has_left = s[0] in ".- "
                             has_right = s[-1] in ".- "
                             if has_left and has_right:
-                                return s[0]  # keep left separator
+                                if s[-1] == "-":
+                                    return s[-1]
+                                return s[0]
                             return ""
 
                         result = re.sub(

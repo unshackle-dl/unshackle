@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from typing import Optional
 from xml.sax.saxutils import escape
@@ -14,6 +15,7 @@ from unshackle.core.providers import (ExternalIds, MetadataResult, enrich_ids, f
 from unshackle.core.titles.episode import Episode
 from unshackle.core.titles.movie import Movie
 from unshackle.core.titles.title import Title
+from unshackle.core.utils.subprocess import log_tool_run
 
 log = logging.getLogger("TAGS")
 
@@ -33,11 +35,20 @@ def apply_tags(path: Path, tags: dict[str, str]) -> None:
         f.write("\n".join(xml_lines))
         tmp_path = Path(f.name)
     try:
+        tag_start = time.monotonic()
         result = subprocess.run(
             [str(binaries.Mkvpropedit), str(path), "--tags", f"global:{tmp_path}"],
             check=False,
             capture_output=True,
             text=True,
+        )
+        log_tool_run(
+            "mkvpropedit tags",
+            "mkvpropedit",
+            result.returncode,
+            duration_ms=round((time.monotonic() - tag_start) * 1000, 1),
+            file=Path(path).name,
+            tag_count=len(tags),
         )
         if result.returncode != 0:
             log.warning("mkvpropedit failed (exit %d): %s", result.returncode, result.stderr.strip())

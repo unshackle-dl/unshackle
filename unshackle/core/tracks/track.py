@@ -21,10 +21,10 @@ from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY
 from unshackle.core.downloaders import requests
-from unshackle.core.drm import DRM_T, PlayReady, Widevine
+from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.session import RnetSession
-from unshackle.core.utilities import get_boxes, try_ensure_utf8
+from unshackle.core.utilities import get_boxes, log_event, try_ensure_utf8
 from unshackle.core.utils.subprocess import ffprobe
 
 
@@ -335,6 +335,13 @@ class Track:
                             progress(downloaded="LICENSING")
                             prepare_drm(drm, track_kid=track_kid)
                             progress(downloaded="[yellow]LICENSED")
+                        elif isinstance(drm, ClearKeyCENC):
+                            # license and grab content keys (no CDM involved)
+                            if not prepare_drm:
+                                raise ValueError("prepare_drm func must be supplied to use ClearKey DRM")
+                            progress(downloaded="LICENSING")
+                            prepare_drm(drm, track_kid=track_kid)
+                            progress(downloaded="[yellow]LICENSED")
                     else:
                         drm = None
 
@@ -438,6 +445,57 @@ class Track:
 
         self.path = target
         return target
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialise the track for export/import (identity/URL/descriptor/language).
+
+        DRM is not serialised here; the export writer attaches the licensed DRM + keys.
+        Subclasses add their own codec/quality fields.
+        """
+        data: dict[str, Any] = {
+            "type": self.__class__.__name__,
+            "id": self.id,
+            "url": self.url,
+            "language": str(self.language),
+            "is_original_lang": self.is_original_lang,
+            "descriptor": self.descriptor.name,
+            "needs_repack": self.needs_repack,
+            "name": self.name,
+            "edition": self.edition,
+        }
+        return data
+
+    @staticmethod
+    def base_kwargs_from_dict(data: dict[str, Any]) -> dict[str, Any]:
+        """Build the shared Track constructor kwargs from a ``to_dict()`` payload.
+
+        DRM is not reconstructed here — ``to_dict`` does not serialise it, and the import
+        flow attaches the licensed DRM + content keys separately.
+        """
+        return {
+            "url": data["url"],
+            "language": data.get("language") or "und",
+            "is_original_lang": data.get("is_original_lang", False),
+            "descriptor": Track.Descriptor[data.get("descriptor", "URL")],
+            "needs_repack": data.get("needs_repack", False),
+            "name": data.get("name"),
+            "edition": data.get("edition") or None,
+            "id_": data.get("id"),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Track":
+        """Reconstruct the correct Track subclass from a ``to_dict()`` payload."""
+        from unshackle.core.tracks.audio import Audio
+        from unshackle.core.tracks.subtitle import Subtitle
+        from unshackle.core.tracks.video import Video
+
+        track_type = data.get("type")
+        builders = {"Video": Video, "Audio": Audio, "Subtitle": Subtitle}
+        builder = builders.get(track_type)
+        if builder is None:
+            raise ValueError(f"Cannot reconstruct unsupported track type: {track_type!r}")
+        return builder.from_dict(data)
 
     def get_track_name(self) -> Optional[str]:
         """Get the Track Name."""
@@ -715,6 +773,13 @@ class Track:
                 stderr=subprocess.PIPE,
             )
 
+        log_event(
+            "repackage",
+            level="DEBUG",
+            message=f"Repackaging {self.__class__.__name__} {original_path.name} with ffmpeg",
+            context={"track_type": self.__class__.__name__, "id": self.id, "file": original_path.name},
+        )
+
         try:
             _ffmpeg()
         except subprocess.CalledProcessError as e:
@@ -726,6 +791,18 @@ class Track:
 
         original_path.unlink()
         self.path = output_path
+
+        log_event(
+            "repackage_complete",
+            level="DEBUG",
+            message=f"Repackaged {self.__class__.__name__} -> {output_path.name}",
+            context={
+                "track_type": self.__class__.__name__,
+                "id": self.id,
+                "output": output_path.name,
+                "output_size": output_path.stat().st_size if output_path.exists() else 0,
+            },
+        )
 
 
 __all__ = ("Track",)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import re
 import subprocess
+import time
 from collections import defaultdict
 from enum import Enum
 from functools import partial
@@ -11,19 +12,19 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Union
 
 import pycaption
-import pysubs2
 import requests
 from construct import Container
 from pycaption import Caption, CaptionList, CaptionNode, WebVTTReader
 from pycaption.geometry import Layout
 from pymp4.parser import MP4
-from subby import CommonIssuesFixer, SAMIConverter, SDHStripper, WebVTTConverter, WVTTConverter
+from subby import CommonIssuesFixer, SAMIConverter, SDHStripper
 from subtitle_filter import Subtitles
 
 from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.tracks.track import Track
 from unshackle.core.utilities import try_ensure_utf8
+from unshackle.core.utils.subprocess import log_tool_run
 from unshackle.core.utils.webvtt import merge_segmented_webvtt
 
 # silence srt library INFO logging
@@ -194,6 +195,29 @@ class Subtitle(Track):
         # TODO: Migrate to new event observer system
         # Called after Track has been converted to another format
         self.OnConverted: Optional[Callable[[Subtitle.Codec], None]] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        data = super().to_dict()
+        data.update(
+            {
+                "codec": self.codec.name if self.codec else None,
+                "cc": self.cc,
+                "sdh": self.sdh,
+                "forced": self.forced,
+            }
+        )
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Subtitle:
+        kwargs = Track.base_kwargs_from_dict(data)
+        return cls(
+            **kwargs,
+            codec=Subtitle.Codec[data["codec"]] if data.get("codec") else None,
+            cc=data.get("cc", False),
+            sdh=data.get("sdh", False),
+            forced=data.get("forced", False),
+        )
 
     def __str__(self) -> str:
         return " | ".join(
@@ -577,306 +601,73 @@ class Subtitle(Track):
 
         return "\n".join(sanitized_lines)
 
-    def convert_with_subby(self, codec: Subtitle.Codec) -> Path:
+    def convert(self, codec: Subtitle.Codec, *, forced: bool = False) -> Path:
         """
-        Convert subtitle using subby library for better format support and processing.
+        Convert this Subtitle to another format.
 
-        This method leverages subby's advanced subtitle processing capabilities
-        including better WebVTT handling, SDH stripping, and common issue fixing.
+        Backend selection is data-driven (see ``tracks/subtitle_convert.py``): the best
+        available backend that supports source->target is used, falling back through the
+        capability chain on failure. The backend can be pinned via the ``conversion_method``
+        config key (``auto`` | ``subby`` | ``pysubs2`` | ``subtitleedit`` | ``pycaption``),
+        or nudged per-service via ``preferred_conversion_method``; an explicit config value
+        always wins.
+
+        ``forced`` marks an explicit user request (``--sub-format``). Lossy downconverts of
+        styled formats (SSA/ASS -> SRT) are skipped unless ``forced`` is True.
         """
+        from unshackle.core.tracks.subtitle_convert import run_conversion
 
         if not self.path or not self.path.exists():
             raise ValueError("You must download the subtitle track first.")
 
-        if self.codec == codec:
-            return self.path
+        method = (
+            config.subtitle.get("conversion_method") or getattr(self, "preferred_conversion_method", None) or "auto"
+        )
+        pin = None if method == "auto" else method
+        return run_conversion(self, codec, pin=pin, forced=forced)
 
-        output_path = self.path.with_suffix(f".{codec.value.lower()}")
-        original_path = self.path
-
-        try:
-            # Convert to SRT using subby first
-            srt_subtitles = None
-
-            if self.codec == Subtitle.Codec.WebVTT:
-                converter = WebVTTConverter()
-                srt_subtitles = converter.from_file(self.path)
-            if self.codec == Subtitle.Codec.fVTT:
-                converter = WVTTConverter()
-                srt_subtitles = converter.from_file(self.path)
-            elif self.codec == Subtitle.Codec.SAMI:
-                converter = SAMIConverter()
-                srt_subtitles = converter.from_file(self.path)
-
-            if srt_subtitles is not None:
-                # Apply common fixes
-                fixer = CommonIssuesFixer()
-                fixed_srt, _ = fixer.from_srt(srt_subtitles)
-
-                # If target is SRT, we're done
-                if codec == Subtitle.Codec.SubRip:
-                    fixed_srt.save(output_path, encoding="utf8")
-                else:
-                    # Convert from SRT to target format using existing pycaption logic
-                    temp_srt_path = self.path.with_suffix(".temp.srt")
-                    fixed_srt.save(temp_srt_path, encoding="utf8")
-
-                    # Parse the SRT and convert to target format
-                    caption_set = self.parse(temp_srt_path.read_bytes(), Subtitle.Codec.SubRip)
-                    self.merge_same_cues(caption_set)
-
-                    writer = {
-                        Subtitle.Codec.TimedTextMarkupLang: pycaption.DFXPWriter,
-                        Subtitle.Codec.WebVTT: pycaption.WebVTTWriter,
-                    }.get(codec)
-
-                    if writer:
-                        subtitle_text = writer().write(caption_set)
-                        output_path.write_text(subtitle_text, encoding="utf8")
-                    else:
-                        # Fall back to existing conversion method
-                        temp_srt_path.unlink()
-                        return self._convert_standard(codec)
-
-                    temp_srt_path.unlink()
-
-                if original_path.exists() and original_path != output_path:
-                    original_path.unlink()
-
-                self.path = output_path
-                self.codec = codec
-
-                if callable(self.OnConverted):
-                    self.OnConverted(codec)
-
-                return output_path
-            else:
-                # Fall back to existing conversion method
-                return self._convert_standard(codec)
-
-        except Exception:
-            # Fall back to existing conversion method on any error
-            return self._convert_standard(codec)
-
-    def convert_with_pysubs2(self, codec: Subtitle.Codec) -> Path:
+    @staticmethod
+    def extract_fonts(text: str) -> set[str]:
         """
-        Convert subtitle using pysubs2 library for broad format support.
+        Font names referenced by an ASS/SSA subtitle.
 
-        pysubs2 is a pure-Python library supporting SubRip (SRT), SubStation Alpha
-        (SSA/ASS), WebVTT, TTML, SAMI, MicroDVD, MPL2, and TMP formats.
+        Covers both sources that need attaching for correct rendering:
+        - the ``Fontname`` column of every ``Style:`` line in ``[V4+ Styles]``/``[V4 Styles]``
+          (column located from the section's ``Format:`` line, not assumed by index), and
+        - inline ``\\fn`` font overrides inside ``Dialogue`` override blocks.
+
+        Leading ``@`` (vertical-writing prefix) is stripped and names are de-duplicated
+        case-insensitively, preferring a mixed-case spelling over an all-lowercase one.
         """
-        if not self.path or not self.path.exists():
-            raise ValueError("You must download the subtitle track first.")
+        names: set[str] = set()
+        name_index = 1  # ASS default Style order: Name, Fontname, ...
+        in_styles = False
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("["):
+                in_styles = stripped.lower() in ("[v4+ styles]", "[v4 styles]")
+                continue
+            if not in_styles:
+                continue
+            if stripped.lower().startswith("format:"):
+                columns = [c.strip().lower() for c in stripped.split(":", 1)[1].split(",")]
+                if "fontname" in columns:
+                    name_index = columns.index("fontname")
+            elif stripped.lower().startswith("style:"):
+                fields = stripped.split(":", 1)[1].split(",")
+                if len(fields) > name_index:
+                    names.add(fields[name_index].strip())
 
-        if self.codec == codec:
-            return self.path
+        names.update(match.strip() for match in re.findall(r"\\fn([^\\}]+)", text))
 
-        output_path = self.path.with_suffix(f".{codec.value.lower()}")
-        original_path = self.path
-
-        codec_to_pysubs2_format = {
-            Subtitle.Codec.SubRip: "srt",
-            Subtitle.Codec.SubStationAlpha: "ssa",
-            Subtitle.Codec.SubStationAlphav4: "ass",
-            Subtitle.Codec.WebVTT: "vtt",
-            Subtitle.Codec.TimedTextMarkupLang: "ttml",
-            Subtitle.Codec.SAMI: "sami",
-            Subtitle.Codec.MicroDVD: "microdvd",
-            Subtitle.Codec.MPL2: "mpl2",
-            Subtitle.Codec.TMP: "tmp",
-        }
-
-        pysubs2_output_format = codec_to_pysubs2_format.get(codec)
-        if pysubs2_output_format is None:
-            return self._convert_standard(codec)
-
-        try:
-            subs = pysubs2.load(str(self.path), encoding="utf-8")
-
-            subs.save(str(output_path), format_=pysubs2_output_format, encoding="utf-8")
-
-            if original_path.exists() and original_path != output_path:
-                original_path.unlink()
-
-            self.path = output_path
-            self.codec = codec
-
-            if callable(self.OnConverted):
-                self.OnConverted(codec)
-
-            return output_path
-
-        except Exception:
-            return self._convert_standard(codec)
-
-    def convert(self, codec: Subtitle.Codec) -> Path:
-        """
-        Convert this Subtitle to another Format.
-
-        The conversion method is determined by the 'conversion_method' setting in config:
-        - 'auto' (default): Uses subby for WebVTT/fVTT/SAMI; for SSA/ASS/MicroDVD/MPL2/TMP
-          uses SubtitleEdit if available, otherwise pysubs2; standard for others
-        - 'subby': Always uses subby with CommonIssuesFixer
-        - 'subtitleedit': Uses SubtitleEdit when available, falls back to pycaption
-        - 'pycaption': Uses only pycaption library
-        - 'pysubs2': Uses pysubs2 library
-        """
-        # Check configuration for conversion method
-        conversion_method = config.subtitle.get("conversion_method", "auto")
-
-        if conversion_method == "subby":
-            return self.convert_with_subby(codec)
-        elif conversion_method == "subtitleedit":
-            return self._convert_standard(codec)
-        elif conversion_method == "pycaption":
-            return self._convert_pycaption_only(codec)
-        elif conversion_method == "pysubs2":
-            return self.convert_with_pysubs2(codec)
-        elif conversion_method == "auto":
-            if self.codec in (Subtitle.Codec.WebVTT, Subtitle.Codec.fVTT, Subtitle.Codec.SAMI):
-                return self.convert_with_subby(codec)
-            elif self.codec in (
-                Subtitle.Codec.SubStationAlpha,
-                Subtitle.Codec.SubStationAlphav4,
-                Subtitle.Codec.MicroDVD,
-                Subtitle.Codec.MPL2,
-                Subtitle.Codec.TMP,
-            ):
-                if binaries.SubtitleEdit:
-                    return self._convert_standard(codec)
-                else:
-                    return self.convert_with_pysubs2(codec)
-            else:
-                return self._convert_standard(codec)
-        else:
-            return self._convert_standard(codec)
-
-    def _convert_pycaption_only(self, codec: Subtitle.Codec) -> Path:
-        """
-        Convert subtitle using only pycaption library (no SubtitleEdit, no subby).
-
-        This is the original conversion method that only uses pycaption.
-        """
-        if not self.path or not self.path.exists():
-            raise ValueError("You must download the subtitle track first.")
-
-        if self.codec == codec:
-            return self.path
-
-        output_path = self.path.with_suffix(f".{codec.value.lower()}")
-        original_path = self.path
-
-        # Use only pycaption for conversion
-        writer = {
-            Subtitle.Codec.SubRip: pycaption.SRTWriter,
-            Subtitle.Codec.TimedTextMarkupLang: pycaption.DFXPWriter,
-            Subtitle.Codec.WebVTT: pycaption.WebVTTWriter,
-        }.get(codec)
-
-        if writer is None:
-            raise NotImplementedError(f"Cannot convert {self.codec.name} to {codec.name} using pycaption only.")
-
-        caption_set = self.parse(self.path.read_bytes(), self.codec)
-        Subtitle.merge_same_cues(caption_set)
-        if codec == Subtitle.Codec.WebVTT:
-            Subtitle.filter_unwanted_cues(caption_set)
-        subtitle_text = writer().write(caption_set)
-
-        output_path.write_text(subtitle_text, encoding="utf8")
-
-        if original_path.exists() and original_path != output_path:
-            original_path.unlink()
-
-        self.path = output_path
-        self.codec = codec
-
-        if callable(self.OnConverted):
-            self.OnConverted(codec)
-
-        return output_path
-
-    def _convert_standard(self, codec: Subtitle.Codec) -> Path:
-        """
-        Convert this Subtitle to another Format.
-
-        The file path location of the Subtitle data will be kept at the same
-        location but the file extension will be changed appropriately.
-
-        Supported formats:
-        - SubRip - SubtitleEdit or pycaption.SRTWriter
-        - TimedTextMarkupLang - SubtitleEdit or pycaption.DFXPWriter
-        - WebVTT - SubtitleEdit or pycaption.WebVTTWriter
-        - SubStationAlphav4 - SubtitleEdit
-        - SAMI - subby.SAMIConverter (when available)
-        - fTTML* - custom code using some pycaption functions
-        - fVTT* - custom code using some pycaption functions
-        *: Can read from format, but cannot convert to format
-
-        Note: It currently prioritizes using SubtitleEdit over PyCaption as
-        I have personally noticed more oddities with PyCaption parsing over
-        SubtitleEdit. Especially when working with TTML/DFXP where it would
-        often have timecodes and stuff mixed in/duplicated.
-
-        Returns the new file path of the Subtitle.
-        """
-        if not self.path or not self.path.exists():
-            raise ValueError("You must download the subtitle track first.")
-
-        if self.codec == codec:
-            return self.path
-
-        output_path = self.path.with_suffix(f".{codec.value.lower()}")
-        original_path = self.path
-
-        if binaries.SubtitleEdit and self.codec not in (Subtitle.Codec.fTTML, Subtitle.Codec.fVTT):
-            sub_edit_format = {
-                Subtitle.Codec.SubRip: "subrip",
-                Subtitle.Codec.SubStationAlpha: "substationalpha",
-                Subtitle.Codec.SubStationAlphav4: "advancedsubstationalpha",
-                Subtitle.Codec.TimedTextMarkupLang: "timedtext1.0",
-                Subtitle.Codec.WebVTT: "webvtt",
-                Subtitle.Codec.SAMI: "sami",
-                Subtitle.Codec.MicroDVD: "microdvd",
-            }.get(codec, codec.name.lower())
-            sub_edit_args = [
-                str(binaries.SubtitleEdit),
-                "/convert",
-                str(self.path),
-                sub_edit_format,
-                f"/outputfilename:{output_path.name}",
-                "/encoding:utf8",
-            ]
-            if codec == Subtitle.Codec.SubRip:
-                sub_edit_args.append("/ConvertColorsToDialog")
-            subprocess.run(sub_edit_args, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        else:
-            writer = {
-                # pycaption generally only supports these subtitle formats
-                Subtitle.Codec.SubRip: pycaption.SRTWriter,
-                Subtitle.Codec.TimedTextMarkupLang: pycaption.DFXPWriter,
-                Subtitle.Codec.WebVTT: pycaption.WebVTTWriter,
-            }.get(codec)
-            if writer is None:
-                raise NotImplementedError(f"Cannot yet convert {self.codec.name} to {codec.name}.")
-
-            caption_set = self.parse(self.path.read_bytes(), self.codec)
-            Subtitle.merge_same_cues(caption_set)
-            if codec == Subtitle.Codec.WebVTT:
-                Subtitle.filter_unwanted_cues(caption_set)
-            subtitle_text = writer().write(caption_set)
-
-            output_path.write_text(subtitle_text, encoding="utf8")
-
-        if original_path.exists() and original_path != output_path:
-            original_path.unlink()
-
-        self.path = output_path
-        self.codec = codec
-
-        if callable(self.OnConverted):
-            self.OnConverted(codec)
-
-        return output_path
+        canonical: dict[str, str] = {}
+        for name in (raw.lstrip("@").strip() for raw in names):
+            if not name:
+                continue
+            key = name.lower()
+            if key not in canonical or (name != name.lower() and canonical[key] == canonical[key].lower()):
+                canonical[key] = name
+        return set(canonical.values())
 
     @staticmethod
     def parse(data: bytes, codec: Subtitle.Codec) -> pycaption.CaptionSet:
@@ -1244,28 +1035,24 @@ class Subtitle(Track):
         )
 
         if binaries.SubtitleEdit and use_subtitleedit:
-            output_format = {
-                Subtitle.Codec.SubRip: "subrip",
-                Subtitle.Codec.SubStationAlpha: "substationalpha",
-                Subtitle.Codec.SubStationAlphav4: "advancedsubstationalpha",
-                Subtitle.Codec.TimedTextMarkupLang: "timedtext1.0",
-                Subtitle.Codec.WebVTT: "webvtt",
-                Subtitle.Codec.SAMI: "sami",
-                Subtitle.Codec.MicroDVD: "microdvd",
-            }.get(self.codec, self.codec.name.lower())
+            from unshackle.core.tracks.subtitle_convert import SUBTITLE_EDIT_FORMATS, subtitleedit_args
+
+            output_format = SUBTITLE_EDIT_FORMATS.get(self.codec, self.codec.name.lower())
+            se_start = time.monotonic()
             subprocess.run(
-                [
-                    str(binaries.SubtitleEdit),
-                    "/convert",
-                    str(self.path),
-                    output_format,
-                    "/encoding:utf8",
-                    "/overwrite",
-                    "/RemoveTextForHI",
-                ],
+                subtitleedit_args(
+                    binaries.SubtitleEdit, self.path, output_format, output_folder=self.path.parent, remove_hi=True
+                ),
                 check=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+            )
+            log_tool_run(
+                "SubtitleEdit strip SDH",
+                "SubtitleEdit",
+                0,
+                duration_ms=round((time.monotonic() - se_start) * 1000, 1),
+                format=output_format,
             )
         else:
             if config.subtitle.get("convert_before_strip", True) and self.codec != Subtitle.Codec.SubRip:
@@ -1307,29 +1094,25 @@ class Subtitle(Track):
         if not binaries.SubtitleEdit:
             raise EnvironmentError("SubtitleEdit executable not found...")
 
-        output_format = {
-            Subtitle.Codec.SubRip: "subrip",
-            Subtitle.Codec.SubStationAlpha: "substationalpha",
-            Subtitle.Codec.SubStationAlphav4: "advancedsubstationalpha",
-            Subtitle.Codec.TimedTextMarkupLang: "timedtext1.0",
-            Subtitle.Codec.WebVTT: "webvtt",
-            Subtitle.Codec.SAMI: "sami",
-            Subtitle.Codec.MicroDVD: "microdvd",
-        }.get(self.codec, self.codec.name.lower())
+        from unshackle.core.tracks.subtitle_convert import SUBTITLE_EDIT_FORMATS, subtitleedit_args
 
+        output_format = SUBTITLE_EDIT_FORMATS.get(self.codec, self.codec.name.lower())
+
+        se_start = time.monotonic()
         subprocess.run(
-            [
-                str(binaries.SubtitleEdit),
-                "/convert",
-                str(self.path),
-                output_format,
-                "/ReverseRtlStartEnd",
-                "/encoding:utf8",
-                "/overwrite",
-            ],
+            subtitleedit_args(
+                binaries.SubtitleEdit, self.path, output_format, output_folder=self.path.parent, reverse_rtl=True
+            ),
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+        )
+        log_tool_run(
+            "SubtitleEdit reverse RTL",
+            "SubtitleEdit",
+            0,
+            duration_ms=round((time.monotonic() - se_start) * 1000, 1),
+            format=output_format,
         )
 
 

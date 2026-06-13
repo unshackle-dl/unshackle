@@ -61,7 +61,21 @@ class Title:
         returned dict with their specific fields (e.g., season/episode).
         """
         primary_video_track = next(iter(media_info.video_tracks), None)
-        primary_audio_track = next(iter(media_info.audio_tracks), None)
+        original_lang_tag = (
+            str(self.language).split("-")[0].lower() if self.language else ""
+        )
+        primary_audio_track = None
+        if original_lang_tag:
+            primary_audio_track = next(
+                (
+                    t
+                    for t in media_info.audio_tracks
+                    if t.language and t.language.split("-")[0].lower() == original_lang_tag
+                ),
+                None,
+            )
+        if primary_audio_track is None:
+            primary_audio_track = next(iter(media_info.audio_tracks), None)
         unique_audio_languages = len({x.language.split("-")[0] for x in media_info.audio_tracks if x.language})
 
         context: dict[str, Any] = {
@@ -99,7 +113,20 @@ class Title:
                         aspect_ratio.append(1)
                     ratio = aspect_ratio[0] / aspect_ratio[1]
                     if ratio not in (16 / 9, 4 / 3, 9 / 16, 3 / 4):
+                        if abs(width - 3840) <= 50:
+                            width = 3840
+                        elif abs(width - 2560) <= 50:
+                            width = 2560
+                        elif abs(width - 1920) <= 50 or abs(width - 1620) <= 50:
+                            width = 1920
+                        elif abs(width - 1280) <= 50 or abs(width - 1080) <= 50:
+                            width = 1280
+
                         resolution = int(max(width, primary_video_track.height) * (9 / 16))
+
+                        track_height = primary_video_track.height
+                        if abs(resolution - track_height) <= 10 or track_height in (2160, 1440, 1080, 720, 480):
+                            resolution = track_height
             except Exception:
                 pass
 
@@ -143,14 +170,16 @@ class Title:
                 channel_count = primary_audio_track.channel_s or primary_audio_track.channels or 0
                 channels = float(channel_count)
 
-            features = primary_audio_track.format_additionalfeatures or ""
+            has_atmos = any(
+                "JOC" in (t.format_additionalfeatures or "") or t.joc for t in media_info.audio_tracks
+            )
 
             context.update(
                 {
                     "audio": AUDIO_CODEC_MAP.get(codec, codec),
                     "audio_channels": f"{channels:.1f}",
                     "audio_full": f"{AUDIO_CODEC_MAP.get(codec, codec)}{channels:.1f}",
-                    "atmos": "Atmos" if ("JOC" in features or primary_audio_track.joc) else "",
+                    "atmos": "Atmos" if has_atmos else "",
                 }
             )
 

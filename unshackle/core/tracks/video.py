@@ -4,6 +4,7 @@ import logging
 import math
 import re
 import subprocess
+import time
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional, Union
@@ -14,7 +15,8 @@ from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.tracks.subtitle import Subtitle
 from unshackle.core.tracks.track import Track
-from unshackle.core.utilities import FPS, get_boxes
+from unshackle.core.utilities import FPS, get_boxes, log_event
+from unshackle.core.utils.subprocess import log_tool_run
 
 
 class Video(Track):
@@ -228,6 +230,7 @@ class Video(Track):
         fps: Optional[Union[str, int, float]] = None,
         scan_type: Optional[Video.ScanType] = None,
         closed_captions: Optional[list[dict[str, Any]]] = None,
+        dv_compatible_bitstream: bool = False,
         **kwargs: Any,
     ) -> None:
         """
@@ -294,6 +297,39 @@ class Video(Track):
         self.scan_type = scan_type
         self.closed_captions: list[dict[str, Any]] = closed_captions or []
         self.needs_duration_fix = False
+        self.dv_compatible_bitstream = dv_compatible_bitstream
+        self.hybrid_base_only = False
+
+    def to_dict(self) -> dict[str, Any]:
+        data = super().to_dict()
+        data.update(
+            {
+                "codec": self.codec.name if self.codec else None,
+                "range": self.range.name if self.range else None,
+                "bitrate": self.bitrate,
+                "width": self.width,
+                "height": self.height,
+                "fps": str(self.fps) if self.fps else None,
+                "scan_type": self.scan_type.name if self.scan_type else None,
+                "dv_compatible_bitstream": self.dv_compatible_bitstream,
+            }
+        )
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Video:
+        kwargs = Track.base_kwargs_from_dict(data)
+        return cls(
+            **kwargs,
+            codec=Video.Codec[data["codec"]] if data.get("codec") else None,
+            range_=Video.Range[data["range"]] if data.get("range") else None,
+            bitrate=data.get("bitrate"),
+            width=data.get("width"),
+            height=data.get("height"),
+            fps=data.get("fps"),
+            scan_type=Video.ScanType[data["scan_type"]] if data.get("scan_type") else None,
+            dv_compatible_bitstream=data.get("dv_compatible_bitstream", False),
+        )
 
     def __str__(self) -> str:
         return " | ".join(
@@ -345,6 +381,7 @@ class Video(Track):
         original_path = self.path
         output_path = original_path.with_stem(f"{original_path.stem}_{['limited', 'full'][range_]}_range")
 
+        range_start = time.monotonic()
         subprocess.run(
             [
                 binaries.FFMPEG,
@@ -361,9 +398,90 @@ class Video(Track):
             ],
             check=True,
         )
+        log_tool_run(
+            "ffmpeg change range",
+            "ffmpeg",
+            0,
+            duration_ms=round((time.monotonic() - range_start) * 1000, 1),
+            codec=str(self.codec),
+            full_range=bool(range_),
+        )
 
         self.path = output_path
         original_path.unlink()
+
+    def normalize_vui(self) -> bool:
+        """Rewrite SPS VUI colour metadata to match ``self.range``.
+
+        Some services ship HDR10/HLG bitstreams with stale BT.709 VUI, which makes
+        downstream tools mis-classify the file. The manifest-derived range is the
+        source of truth. Skips SDR, DV, and HYBRID. Returns True if the bitstream
+        was rewritten.
+        """
+        if not self.path or not self.path.exists():
+            return False
+        if self.codec not in (Video.Codec.AVC, Video.Codec.HEVC):
+            return False
+        if self.range in (Video.Range.SDR, Video.Range.DV, Video.Range.HYBRID):
+            return False
+
+        vui = {
+            Video.Range.HDR10: (9, 16, 9),
+            Video.Range.HDR10P: (9, 16, 9),
+            Video.Range.HLG: (9, 18, 9),
+        }.get(self.range)
+        if not vui:
+            return False
+
+        if not binaries.FFMPEG:
+            raise EnvironmentError('FFmpeg executable "ffmpeg" was not found but is required for this call.')
+
+        primaries, transfer, matrix = vui
+        filter_key = {Video.Codec.AVC: "h264_metadata", Video.Codec.HEVC: "hevc_metadata"}[self.codec]
+        bsf = (
+            f"{filter_key}=colour_primaries={primaries}"
+            f":transfer_characteristics={transfer}"
+            f":matrix_coefficients={matrix}"
+        )
+
+        original_path = self.path
+        output_path = original_path.with_stem(f"{original_path.stem}_vui")
+        try:
+            subprocess.run(
+                [
+                    binaries.FFMPEG,
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-i",
+                    str(original_path),
+                    "-codec",
+                    "copy",
+                    "-bsf:v",
+                    bsf,
+                    str(output_path),
+                ],
+                check=True,
+            )
+        except subprocess.CalledProcessError:
+            output_path.unlink(missing_ok=True)
+            return False
+
+        self.path = output_path
+        original_path.unlink()
+
+        log_event(
+            "normalize_vui",
+            level="DEBUG",
+            message=f"Rewrote {self.codec} VUI colour metadata to match {self.range}",
+            context={
+                "codec": str(self.codec),
+                "range": str(self.range),
+                "vui": {"primaries": primaries, "transfer": transfer, "matrix": matrix},
+                "id": self.id,
+            },
+        )
+        return True
 
     def ccextractor(
         self, track_id: Any, out_path: Union[Path, str], language: Language, original: bool = False
@@ -378,6 +496,7 @@ class Video(Track):
         out_path = Path(out_path)
 
         def _run_ccextractor() -> bool:
+            cc_start = time.monotonic()
             try:
                 subprocess.run(
                     [binaries.CCExtractor, "-trim", "-nobom", "-noru", "-ru1", "-o", out_path, self.path],
@@ -387,8 +506,21 @@ class Video(Track):
                 )
             except subprocess.CalledProcessError as e:
                 out_path.unlink(missing_ok=True)
+                log_tool_run(
+                    "ccextractor",
+                    "ccextractor",
+                    e.returncode,
+                    duration_ms=round((time.monotonic() - cc_start) * 1000, 1),
+                )
                 if e.returncode != 10:  # 10 = No captions found
                     raise
+                return out_path.exists()
+            log_tool_run(
+                "ccextractor",
+                "ccextractor",
+                0,
+                duration_ms=round((time.monotonic() - cc_start) * 1000, 1),
+            )
             return out_path.exists()
 
         # Try on the original file first (preserves container-level CC data like c608 boxes),
@@ -483,6 +615,7 @@ class Video(Track):
 
         original_path = self.path
         cleaned_path = original_path.with_suffix(f".cleaned{original_path.suffix}")
+        eia_start = time.monotonic()
         subprocess.run(
             [
                 binaries.FFMPEG,
@@ -502,6 +635,12 @@ class Video(Track):
                 str(cleaned_path),
             ],
             check=True,
+        )
+        log_tool_run(
+            "ffmpeg remove EIA-CC",
+            "ffmpeg",
+            0,
+            duration_ms=round((time.monotonic() - eia_start) * 1000, 1),
         )
 
         log.info(" + Removed")

@@ -68,15 +68,6 @@ def check() -> None:
             "desc": "HDR10+ metadata",
             "cat": "HDR",
         },
-        # Downloaders
-        {"name": "aria2c", "binary": binaries.Aria2, "required": False, "desc": "Multi-thread DL", "cat": "Download"},
-        {
-            "name": "N_m3u8DL-RE",
-            "binary": binaries.N_m3u8DL_RE,
-            "required": False,
-            "desc": "HLS/DASH/ISM",
-            "cat": "Download",
-        },
         # Subtitle Tools
         {
             "name": "SubtitleEdit",

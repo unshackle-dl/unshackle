@@ -26,11 +26,22 @@ EXAMPLE:
 ### Per-Service Configuration Overrides
 
 You can override many global configuration options on a per-service basis by nesting them under the
-service tag in the `services` section. Supported override keys include: `dl`, `aria2c`, `n_m3u8dl_re`,
-`curl_impersonate`, `subtitle`, `muxing`, `headers`, and more.
+service tag in the `services` section. Supported override keys include: `dl`, `subtitle`, `muxing`,
+`headers`, `proxy_map`, `title_map`, and more.
 
 Overrides are merged with global config (not replaced) -- only specified keys are overridden, others
-use global defaults. CLI arguments always take priority over service-specific config.
+use global defaults.
+
+Any `dl` command option can be overridden per service. Use the option name with dashes as underscores
+(`--v-lang` -> `v_lang`). `range` and `list` work as-is; their internal Python names (`range_`,
+`list_`, suffixed to avoid the builtins) are also accepted.
+
+Precedence (highest first):
+
+1. Explicit CLI arguments / environment variables (e.g. `--v-lang en`)
+2. Per-service config (`services.<TAG>.dl`)
+3. Global `dl:` config
+4. Built-in option defaults
 
 For example,
 
@@ -39,12 +50,75 @@ services:
   RATE_LIMITED_SERVICE:
     dl:
       downloads: 2       # Limit concurrent track downloads
-      workers: 4          # Reduce workers to avoid rate limits
-    n_m3u8dl_re:
-      thread_count: 4     # Very low thread count
-    aria2c:
-      max_concurrent_downloads: 1
+      workers: 4         # Reduce workers to avoid rate limits
+    headers:
+      User-Agent: "..."  # Service-specific UA override
 ```
+
+Note: unshackle uses a single unified `requests`-based downloader. The legacy `aria2c`,
+`n_m3u8dl_re`, and `curl_impersonate` override sections have been removed.
+
+### title_map (dict)
+
+Rewrites service-provided titles before naming and output. Some services name a title differently
+from how you want it stored, which can break library matching (e.g. a regional variant reusing the
+international name). Keys are the exact title string the service returns; values are the desired
+output title.
+
+```yaml
+services:
+  EXAMPLE:
+    title_map:
+      Service Title: Desired Title
+```
+
+Episodes are matched on their show title, Movies and Songs on their name. The remap is applied
+after the title cache (so edits take effect without a cache reset) and before any `--enrich`
+override (so an explicit enrich still wins).
+
+It applies on the local `dl` path, the `import` command, and the remote client (`dl --remote`).
+For remote services the **client's** `title_map` is applied to the titles returned by the server,
+so you can rename titles for services you don't have installed locally. The server sends raw
+titles and does not remap, leaving the final name fully under the client's control.
+
+### Service Class Conventions
+
+Each service directory under `unshackle/services/` exports a class extending
+`unshackle.core.service.Service`. The class name must match the directory name (the service tag).
+
+Key class variables (defined on `Service` or by service-level idiom):
+
+- `ALIASES: tuple[str, ...]` — alternative tags accepted on the CLI. Empty by default.
+- `GEOFENCE: tuple[str, ...]` — ISO country codes the service is available in. Empty == no geofence.
+- `TITLE_RE: str` — regex (with named groups, e.g. `(?P<id>...)`, `(?P<type>...)`) used by the
+  service to parse the CLI title argument. Service-level idiom, not declared on the base class.
+- `NO_SUBTITLES: bool` — service-level idiom indicating the service has no subtitle tracks.
+
+`self.*` helpers available after `super().__init__(ctx)`:
+
+- `self.session` — pre-configured HTTP session (`requests.Session`, or `RnetSession` when TLS
+  impersonation is active). Cookies, headers, proxies pre-applied.
+- `self.config` — merged service config (per-service `config.yaml` plus the `services.<TAG>` block
+  from `unshackle.yaml`).
+- `self.log` — `logging.Logger` named for the service class.
+- `self.cache` — generic `Cacher` for arbitrary key/value persistence.
+- `self.title_cache` — specialized `TitleCacher` for title metadata.
+- `self.track_request` — `TrackRequest` built from CLI flags. Fields: `codecs: list[Video.Codec]`,
+  `ranges: list[Video.Range]` (defaults to `[SDR]`), `best_available: bool`. Services may
+  read or rewrite these (e.g. force HEVC for HDR ranges).
+- `self.credential` — set during `authenticate()`; `None` if cookies-only.
+- `self.current_region` — lowercase ISO country code from proxy/geolocation, or `None`.
+- `self.request_input(prompt: str) -> str` — interactive prompt. Falls through to `input()`
+  locally; under `serve`, the attached `InputBridge` relays the prompt to the remote client.
+
+Driving CLI flags (parsed into `self.track_request`):
+
+- `-v` / `--vcodec` — comma-separated `Video.Codec` list (e.g. `H264,H265`).
+- `-a` / `--acodec` — comma-separated audio codec list.
+- `-r` / `--range` — comma-separated `Video.Range` list (`SDR`, `HDR10`, `HDR10+`, `DV`,
+  `HYBRID`). Defaults to `[SDR]`.
+- `-q` / `--quality` — resolution list.
+- `--vbitrate-range` / `--abitrate-range` — `MIN-MAX` kbps windows.
 
 ---
 

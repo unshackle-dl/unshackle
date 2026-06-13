@@ -1,9 +1,13 @@
+import logging
+import time
 from typing import Any, Iterator, Optional, Union
 from uuid import UUID
 
 from unshackle.core.config import config
-from unshackle.core.utilities import import_module_by_path
+from unshackle.core.utilities import get_debug_logger, import_module_by_path
 from unshackle.core.vault import Vault
+
+log = logging.getLogger(__name__)
 
 _VAULTS = sorted(
     (path for path in config.directories.vaults.glob("*.py") if path.stem.lower() != "__init__"), key=lambda x: x.stem
@@ -47,21 +51,56 @@ class Vaults:
 
     def get_key(self, kid: Union[UUID, str]) -> tuple[Optional[str], Optional[Vault]]:
         """Get Key from the first Vault it can by KID (Key ID) and Service."""
+        dl = get_debug_logger()
         for vault in self.vaults:
-            key = vault.get_key(kid, self.service)
-            if key and key.count("0") != len(key):
+            start = time.monotonic()
+            try:
+                key = vault.get_key(kid, self.service)
+            except (PermissionError, NotImplementedError):
+                continue
+            except Exception as e:
+                log.warning(f"Failed to get key from Vault '{vault.name}': {e}")
+                if dl:
+                    dl.log_vault_query(
+                        vault.name,
+                        "get_key",
+                        kid=str(kid),
+                        reachable=False,
+                        error=e,
+                        duration_ms=round((time.monotonic() - start) * 1000, 1),
+                    )
+                continue
+            found = bool(key and key.count("0") != len(key))
+            if dl:
+                dl.log_vault_query(
+                    vault.name,
+                    "get_key",
+                    kid=str(kid),
+                    key_found=found,
+                    reachable=True,
+                    duration_ms=round((time.monotonic() - start) * 1000, 1),
+                )
+            if found:
                 return key, vault
         return None, None
 
     def add_key(self, kid: Union[UUID, str], key: str, excluding: Optional[Vault] = None) -> int:
         """Add a KID:KEY to all Vaults, optionally with an exclusion."""
+        dl = get_debug_logger()
         success = 0
         for vault in self.vaults:
             if vault != excluding and not vault.no_push:
                 try:
-                    success += vault.add_key(self.service, kid, key)
+                    added = vault.add_key(self.service, kid, key)
+                    success += added
+                    if dl:
+                        dl.log_vault_query(vault.name, "add_key", kid=str(kid), success=bool(added))
                 except (PermissionError, NotImplementedError):
                     pass
+                except Exception as e:
+                    log.warning(f"Failed to add key to Vault '{vault.name}': {e}")
+                    if dl:
+                        dl.log_vault_query(vault.name, "add_key", kid=str(kid), success=False, error=e)
         return success
 
     def add_keys(self, kid_keys: dict[Union[UUID, str], str]) -> int:
@@ -79,6 +118,8 @@ class Vaults:
                     success += 1
                 except (PermissionError, NotImplementedError):
                     pass
+                except Exception as e:
+                    log.warning(f"Failed to add keys to Vault '{vault.name}': {e}")
         return success
 
 
