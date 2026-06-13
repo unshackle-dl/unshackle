@@ -46,7 +46,7 @@ from unshackle.core.config import config, resolve_cdm_name, resolve_decryption
 from unshackle.core.console import console
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack, context_settings
 from unshackle.core.credential import Credential
-from unshackle.core.drm import DRM_T, ClearKeyCENC, MonaLisa, PlayReady, Widevine
+from unshackle.core.drm import DRM_T, ClearKeyCENC, FairPlay, MonaLisa, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.music import (MusicAudioIntegrityError, MusicMetadataResult, MusicPlanner, MusicRenderer,
                                   file_md5, verify_music_audio, write_music_manifest, write_music_metadata)
@@ -2839,6 +2839,11 @@ class dl:
                                     title=title,
                                     track=track,
                                 ),
+                                fairplay_licence=partial(
+                                    service.get_fairplay_license,
+                                    title=title,
+                                    track=track,
+                                ),
                                 clearkey_licence=partial(
                                     service.get_clearkey_license,
                                     title=title,
@@ -3559,6 +3564,7 @@ class dl:
         title: Title_T,
         certificate: Callable,
         licence: Callable,
+        fairplay_licence: Optional[Callable] = None,
         clearkey_licence: Optional[Callable] = None,
         track_kid: Optional[UUID] = None,
         table: Table = None,
@@ -3960,8 +3966,12 @@ class dl:
                 if need_license and not vaults_only:
                     from_vaults = drm.content_keys.copy()
 
+                    # FairPlay tracks are licensed through the PlayReady CDM but route their
+                    # license request to the service's get_fairplay_license.
+                    pr_licence = fairplay_licence if (fairplay_licence and isinstance(drm, FairPlay)) else licence
+
                     try:
-                        drm.get_content_keys(cdm=self.cdm, licence=licence, certificate=certificate)
+                        drm.get_content_keys(cdm=self.cdm, licence=pr_licence, certificate=certificate)
                     except Exception as e:
                         if drm.content_keys:
                             self.log.debug(f"License call failed but keys already in content_keys: {e}")

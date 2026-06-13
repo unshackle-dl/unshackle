@@ -4,11 +4,13 @@ from uuid import UUID
 
 from unshackle.core.drm.clearkey import ClearKey
 from unshackle.core.drm.clearkey_cenc import ClearKeyCENC
+from unshackle.core.drm.fairplay import FairPlay
 from unshackle.core.drm.monalisa import MonaLisa
 from unshackle.core.drm.playready import PlayReady
 from unshackle.core.drm.widevine import Widevine
 
-DRM_T = Union[ClearKey, ClearKeyCENC, Widevine, PlayReady, MonaLisa]
+# FairPlay is a PlayReady subclass; listed for explicit isinstance/type use.
+DRM_T = Union[ClearKey, ClearKeyCENC, Widevine, PlayReady, FairPlay, MonaLisa]
 
 
 def drm_from_dict(data: dict[str, Any]) -> Union[Widevine, PlayReady, ClearKeyCENC]:
@@ -44,4 +46,4 @@ def drm_from_dict(data: dict[str, Any]) -> Union[Widevine, PlayReady, ClearKeyCE
     return drm
 
 
-__all__ = ("ClearKey", "ClearKeyCENC", "Widevine", "PlayReady", "MonaLisa", "DRM_T", "drm_from_dict")
+__all__ = ("ClearKey", "ClearKeyCENC", "Widevine", "PlayReady", "FairPlay", "MonaLisa", "DRM_T", "drm_from_dict")

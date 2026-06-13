@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import shutil
+import struct
 import subprocess
 import textwrap
 import time
@@ -23,6 +24,42 @@ from unshackle.core.console import console
 from unshackle.core.constants import AnyTrack
 from unshackle.core.utilities import get_boxes, log_event
 from unshackle.core.utils.subprocess import ffprobe
+
+# CENC/CBC scheme -> PlayReady ALGID (AESCTR for ctr schemes, AESCBC for cbc schemes).
+PR_SCHEME_ALGID = {"cenc": "AESCTR", "cens": "AESCTR", "cbc1": "AESCBC", "cbcs": "AESCBC"}
+
+
+def build_pr_header_from_kid(kid: UUID, scheme: str = "cenc", version: str = "4.0") -> str:
+    """Synthesize a base64 PlayReady Object from a bare KID.
+
+    For FairPlay/cbcs HLS streams that carry a content KID but no PlayReady or
+    Widevine PSSH, this lets us request a PlayReady license keyed on that KID.
+
+    ``scheme`` selects the ALGID (cbcs -> AESCBC). ``version`` selects the WRMHEADER
+    layout: 4.0 uses a bare ``<KID>``, 4.3 uses the ``<KIDS><KID ALGID VALUE>`` form
+    used for cbcs content.
+    """
+    algid = PR_SCHEME_ALGID.get(scheme.lower())
+    if not algid:
+        raise ValueError(f"Unsupported encryption scheme for PlayReady: {scheme}")
+    if algid == "AESCBC" and version < "4.3":
+        raise ValueError("AESCBC (cbcs) requires PlayReady WRMHEADER 4.3 or higher")
+
+    # PlayReady stores the KID as a little-endian GUID; UUID.bytes_le applies that byte order.
+    xml_kid = base64.b64encode(kid.bytes_le).decode()
+    if version == "4.0":
+        protect_info = f"<KEYLEN>16</KEYLEN><ALGID>{algid}</ALGID></PROTECTINFO><KID>{xml_kid}</KID>"
+    else:
+        protect_info = f'<KIDS><KID ALGID="{algid}" VALUE="{xml_kid}"></KID></KIDS></PROTECTINFO>'
+    header_xml = (
+        f'<WRMHEADER xmlns="http://schemas.microsoft.com/DRM/2007/03/PlayReadyHeader" version="{version}.0.0">'
+        f"<DATA><PROTECTINFO>{protect_info}</DATA></WRMHEADER>"
+    )
+    header_utf16 = header_xml.encode("utf-16-le")
+    # PlayReady Object: one WRMHEADER record (type 1) behind the PRO length+count prefix.
+    rm_record = struct.pack("<HH", 1, len(header_utf16)) + header_utf16
+    pro = struct.pack("<IH", len(rm_record) + 6, 1) + rm_record
+    return base64.b64encode(pro).decode()
 
 
 class PlayReady:
@@ -197,16 +234,22 @@ class PlayReady:
             pssh_boxes.extend(list(get_boxes(init_data, b"pssh")))
             tenc_boxes.extend(list(get_boxes(init_data, b"tenc")))
 
-        pssh = next((b for b in pssh_boxes if b.system_ID == PSSH.SYSTEM_ID), None)
-        if not pssh:
-            raise PlayReady.Exceptions.PSSHNotFound("PSSH was not found in track data.")
-
         tenc = next(iter(tenc_boxes), None)
         if not kid and tenc and tenc.key_ID.int != 0:
             kid = tenc.key_ID
 
-        pssh_bytes = Box.build(pssh)
-        return cls(pssh=PSSH(pssh_bytes), kid=kid, pssh_b64=base64.b64encode(pssh_bytes).decode())
+        pssh = next((b for b in pssh_boxes if b.system_ID == PSSH.SYSTEM_ID), None)
+        if pssh:
+            pssh_bytes = Box.build(pssh)
+            return cls(pssh=PSSH(pssh_bytes), kid=kid, pssh_b64=base64.b64encode(pssh_bytes).decode())
+
+        # FairPlay/cbcs: no PSSH of any DRM system, but a tenc KID is present — synthesize a
+        # PlayReady header from it. Gated on zero pssh boxes so Widevine-bearing tracks fall through.
+        if not pssh_boxes and kid:
+            pssh_b64 = build_pr_header_from_kid(kid)
+            return cls(pssh=PSSH(pssh_b64), kid=kid, pssh_b64=pssh_b64)
+
+        raise PlayReady.Exceptions.PSSHNotFound("PSSH was not found in track data.")
 
     @classmethod
     def from_init_data(cls, init_data: bytes) -> PlayReady:
@@ -226,16 +269,22 @@ class PlayReady:
                 if enc_key_id:
                     kid = UUID(bytes=base64.b64decode(enc_key_id))
 
-        pssh = next((b for b in pssh_boxes if b.system_ID == PSSH.SYSTEM_ID), None)
-        if not pssh:
-            raise PlayReady.Exceptions.PSSHNotFound("PSSH was not found in track data.")
-
         tenc = next(iter(tenc_boxes), None)
         if not kid and tenc and tenc.key_ID.int != 0:
             kid = tenc.key_ID
 
-        pssh_bytes = Box.build(pssh)
-        return cls(pssh=PSSH(pssh_bytes), kid=kid, pssh_b64=base64.b64encode(pssh_bytes).decode())
+        pssh = next((b for b in pssh_boxes if b.system_ID == PSSH.SYSTEM_ID), None)
+        if pssh:
+            pssh_bytes = Box.build(pssh)
+            return cls(pssh=PSSH(pssh_bytes), kid=kid, pssh_b64=base64.b64encode(pssh_bytes).decode())
+
+        # FairPlay/cbcs: no PSSH of any DRM system, but a tenc KID is present — synthesize a
+        # PlayReady header from it. Gated on zero pssh boxes so Widevine-bearing tracks fall through.
+        if not pssh_boxes and kid:
+            pssh_b64 = build_pr_header_from_kid(kid)
+            return cls(pssh=PSSH(pssh_b64), kid=kid, pssh_b64=pssh_b64)
+
+        raise PlayReady.Exceptions.PSSHNotFound("PSSH was not found in track data.")
 
     @property
     def pssh(self) -> PSSH:

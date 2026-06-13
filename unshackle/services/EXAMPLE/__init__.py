@@ -10,11 +10,14 @@ from http.cookiejar import CookieJar
 from typing import Any, Optional, Union
 
 import click
+import m3u8  # used by get_track_drm() to read the FairPlay skd key from a media playlist
 from langcodes import Language
 
 from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
+from unshackle.core.drm import FairPlay  # FairPlay->PlayReady bridge, see get_track_drm()
+from unshackle.core.drm.fairplay import fairplay_kid_from_skd
 from unshackle.core.manifests import DASH  # also: HLS, ISM - see get_tracks() alternates
 from unshackle.core.search_result import SearchResult
 from unshackle.core.service import Service
@@ -62,6 +65,8 @@ class EXAMPLE(Service):
         get_widevine_*        service cert + license (per-segment PSSH via `track`)
         get_playready_license PlayReady challenge POST
         get_clearkey_license  DASH org.w3.clearkey JWK Set POST (Laurl fallback)
+        get_track_drm         FairPlay->PlayReady bridge: skd KID -> FairPlay DRM
+        get_fairplay_license  license a FairPlay-bridged track (PlayReady challenge)
     """
 
     # ALIASES: extra CLI tags that resolve to this service (e.g. `dl EX ...`).
@@ -497,6 +502,47 @@ class EXAMPLE(Service):
         response = self.session.post(url=license_url, data=challenge)
         response.raise_for_status()
         return response.json()
+
+    def get_track_drm(self, track: AnyTrack) -> Optional[list]:
+        # FairPlay -> PlayReady bridge (HLS only). FairPlay HLS (SAMPLE-AES / cbcs) ships a
+        # content KID in its `skd://` EXT-X-KEY but no PlayReady/Widevine PSSH. We derive
+        # that KID, synthesize a PlayReady header from it (FairPlay.from_kid) and license it
+        # through a PlayReady CDM. This only yields keys when the backend is multi-DRM (the
+        # same content key is licensable via PlayReady) - a FairPlay-only backend cannot be
+        # bridged. The framework calls this hook during DRM loading for tracks flagged
+        # needs_drm_loading; return None to fall back to the normal manifest-PSSH path.
+        if not is_playready_cdm(self.cdm):
+            return None  # bridge needs a PlayReady CDM to build the challenge
+
+        playlist = m3u8.loads(self.session.get(track.url).text, track.url)
+        skd = next(
+            (k.uri for k in (playlist.keys or []) if k and k.keyformat == "com.apple.streamingkeydelivery"),
+            None,
+        )
+        if not skd:
+            return None
+        # Generic extractor handles GUID / ?KID= / 32-hex skd forms. If your service encodes
+        # the KID differently, parse the UUID yourself and call FairPlay.from_kid(kid) directly.
+        kid = fairplay_kid_from_skd(skd)
+        if not kid:
+            return None
+        return [FairPlay.from_kid(kid)]
+
+    def get_fairplay_license(
+        self, *, challenge: bytes, title: Title_T, track: AnyTrack
+    ) -> Optional[Union[bytes, str]]:
+        # `challenge` is a PlayReady challenge built from the synthesized header. The base
+        # class defaults to get_playready_license, which is correct when one endpoint serves
+        # both FairPlay and PlayReady. Override (like this) only when the FairPlay license
+        # request needs a different endpoint, headers, or body from the PlayReady one.
+        license_url = self.config["endpoints"].get("fairplay_license") or self.config["endpoints"].get(
+            "playready_license"
+        )
+        if not license_url:
+            raise ValueError("FairPlay/PlayReady license endpoint not configured")
+        response = self.session.post(url=license_url, data=challenge)
+        response.raise_for_status()
+        return response.content
 
     # For HLS AES-128 ClearKey or unencrypted content there is no license callback;
     # the key comes from the manifest or a side endpoint and is attached to the
