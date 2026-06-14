@@ -70,14 +70,18 @@ output_template:
   # folder: '{title} ({year?})'
   #
   # Per-title-type folder templates (optional). Override folder naming separately for
-  # movies, series, and songs. Useful when music libraries need artist/album-style folders
+  # movies, series, and albums. Useful when music libraries need artist/album-style folders
   # while movies/series follow a different scheme. Any kind omitted falls back to the
   # default for that title type.
+  #
+  # For music: "songs" (above) names each track file, while "albums" (below) names the
+  # album folder the tracks are saved into. Album folder vars: {album_artist}, {album},
+  # {artist}, {year}, {genre}, {label}, {release_type}, {track_total}, {disc_total}.
   #
   # folder:
   #   movies: '{title} ({year})'
   #   series: '{title} ({year?})'
-  #   songs: '{artist}/{album} ({year?})'
+  #   albums: '{album_artist} - {album} ({year?})'
 
 # Language-based tagging for output filenames
 # Automatically adds language identifiers (e.g., DANiSH, NORDiC, DKsubs) based on

@@ -1405,12 +1405,11 @@ class dl:
                     else f"Music Collection ({len(music_titles)} Releases)"
                 )
                 if collection_label:
-                    console.print(Padding(Rule(f"[rule.text]🎼 {collection_label}"), (1, 2)))
+                    console.print(Padding(Rule(f"[rule.text]{collection_label}"), (1, 2)))
             if list_:
                 for music_title in music_titles:
                     music_kind = MusicRenderer.display_kind(getattr(music_title, "kind", "") or "album")
-                    music_icon = "📀" if music_kind.lower() == "album" else "🎵"
-                    console.print(Padding(Rule(f"[rule.text]{music_icon} {music_kind}: {music_title}"), (1, 2)))
+                    console.print(Padding(Rule(f"[rule.text]{music_kind}: {music_title}"), (1, 2)))
                     current_plan = MusicPlanner(service).build(music_title)
                     music_plans[id(music_title)] = current_plan
                     music_renderable = music_renderer.render_plan(current_plan, verbose=True)
@@ -1537,8 +1536,7 @@ class dl:
                 music_start_time = time.time()
 
                 music_kind = MusicRenderer.display_kind(getattr(titles, "kind", "") or "album")
-                music_icon = "📀" if music_kind.lower() == "album" else "🎵"
-                console.print(Padding(Rule(f"[rule.text]{music_icon} {music_kind}: {titles}"), (1, 2)))
+                console.print(Padding(Rule(f"[rule.text]{music_kind}: {titles}"), (1, 2)))
                 music_header = music_renderer.render_plan_header(plan)
                 if music_header:
                     console.print(Padding(music_header, (0, 5)))
@@ -1632,7 +1630,7 @@ class dl:
                             sys.exit(1)
 
                 music_tree = Tree(
-                    f"💽 [repr.number]{len(titles)}[/] {'Track' if len(titles) == 1 else 'Tracks'}",
+                    f"[repr.number]{len(titles)}[/] {'Track' if len(titles) == 1 else 'Tracks'}",
                     guide_style="bright_black",
                 )
                 for song in titles:
@@ -1735,7 +1733,7 @@ class dl:
                     console.log("Skipped downloads as --skip-dl was used...")
                 else:
                     dl_time = time_elapsed_since(music_start_time)
-                    console.print(Padding(f"📥 Track downloads finished in [progress.elapsed]{dl_time}[/]", (0, 5)))
+                    console.print(Padding(f"Track downloads finished in [progress.elapsed]{dl_time}[/]", (0, 5)))
 
                     integrity_results = {}
                     media_infos = {}
@@ -1758,7 +1756,7 @@ class dl:
                                     media_info=media_info,
                                 )
                     except MusicAudioIntegrityError as error:
-                        console.print(Padding(f"❌ Audio integrity failed: {error}", (0, 5, 1, 5)))
+                        console.print(Padding(f"Audio integrity failed: {error}", (0, 5, 1, 5)))
                         return
                     integrity_time = format_elapsed_seconds(time.time() - integrity_start)
 
@@ -1895,20 +1893,20 @@ class dl:
                     metadata_written_count = sum(1 for result in metadata_results.values() if result.written)
                     console.print(
                         Padding(
-                            f"🧪 Audio integrity verified for {music_track_count(integrity_count)} in [progress.elapsed]{integrity_time}[/]",
+                            f"Audio integrity verified for {music_track_count(integrity_count)} in [progress.elapsed]{integrity_time}[/]",
                             (0, 5),
                         )
                     )
                     console.print(
                         Padding(
-                            f"🧬 MD5 checksum recorded for {music_track_count(md5_count)} in [progress.elapsed]{md5_time}[/]",
+                            f"MD5 checksum recorded for {music_track_count(md5_count)} in [progress.elapsed]{md5_time}[/]",
                             (0, 5),
                         )
                     )
                     if metadata_written_count:
                         console.print(
                             Padding(
-                                f"🏷️ Metadata written for {music_track_count(metadata_written_count)} in [progress.elapsed]{metadata_time}[/]",
+                                f"Metadata written for {music_track_count(metadata_written_count)} in [progress.elapsed]{metadata_time}[/]",
                                 (0, 5),
                             )
                         )
@@ -1917,8 +1915,8 @@ class dl:
                             (result.reason for result in metadata_results.values() if result.reason),
                             "install mutagen to write music tags",
                         )
-                        console.print(Padding(f"⚠️ Metadata skipped: {reason}", (0, 5)))
-                    console.print(Padding(f"🎉 {release_label} downloaded in [progress.elapsed]{album_time}[/]!", (0, 5, 1, 5)))
+                        console.print(Padding(f"Metadata skipped: {reason}", (0, 5)))
+                    console.print(Padding(f"{release_label} downloaded in [progress.elapsed]{album_time}[/]!", (0, 5, 1, 5)))
 
                 return True
 
@@ -1936,7 +1934,7 @@ class dl:
                 service.close()
 
             dl_time = time_elapsed_since(start_time)
-            console.print(Padding(f"🏁 Processed all titles in [progress.elapsed]{dl_time}", (0, 5, 1, 5)))
+            console.print(Padding(f"Processed all titles in [progress.elapsed]{dl_time}", (0, 5, 1, 5)))
             return
 
         if music_collection_mode:

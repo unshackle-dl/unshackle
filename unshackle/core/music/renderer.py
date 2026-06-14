@@ -10,7 +10,7 @@ from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
 
-from unshackle.core.music.models import MusicDownloadPlan, MusicSongPlan, MusicTrackOption
+from unshackle.core.music.models import MusicDownloadPlan, MusicTrackOption
 from unshackle.core.titles.music import Music, Song
 
 
@@ -97,7 +97,7 @@ class MusicRenderer:
     def render_tracks(self, music: Music, *, verbose: bool = False) -> Panel:
         total = len(music)
         track_label = "Track" if total == 1 else "Tracks"
-        tree = Tree(f"💽 [repr.number]{total}[/] {track_label}", guide_style="bright_black")
+        tree = Tree(f"[repr.number]{total}[/] {track_label}", guide_style="bright_black")
 
         visible_songs = list(music)
         if not verbose and len(visible_songs) > self.COMPACT_TRACK_LIMIT:
@@ -157,7 +157,7 @@ class MusicRenderer:
         songs = [song_plan for disc in plan.discs for song_plan in disc.songs]
         total = len(songs)
         track_label = "Track" if total == 1 else "Tracks"
-        tree = Tree(f"💽 [repr.number]{total}[/] {track_label}", guide_style="bright_black")
+        tree = Tree(f"[repr.number]{total}[/] {track_label}", guide_style="bright_black")
 
         visible_songs = songs
         if not verbose and len(visible_songs) > self.COMPACT_TRACK_LIMIT:

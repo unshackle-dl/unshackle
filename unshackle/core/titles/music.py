@@ -166,7 +166,9 @@ class Song(Title):
 
     def get_filename(self, media_info: MediaInfo, folder: bool = False, show_service: bool = True) -> str:
         if folder:
-            template = config.get_folder_template("songs")
+            # Album folder name: prefer the dedicated "albums" template, fall back to the
+            # legacy "songs" folder template, then to "{artist} - {album} ({year})".
+            template = config.get_folder_template("albums") or config.get_folder_template("songs")
             if template:
                 formatter = TemplateFormatter(template)
                 context = self._build_template_context(media_info, show_service)
@@ -180,7 +182,8 @@ class Song(Title):
                 name += f" ({self.year})"
             return sanitize_filename(name, " ")
 
-        formatter = TemplateFormatter(config.get_output_template("songs"))
+        template = config.output_template.get("songs") or "{track_number}. {title}"
+        formatter = TemplateFormatter(template)
         context = self._build_template_context(media_info, show_service)
         return formatter.format(context)
 

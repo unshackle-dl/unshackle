@@ -146,8 +146,17 @@ class Config:
             "tag",
             "track_number",
             "artist",
+            "album_artist",
             "album",
             "disc",
+            "track_total",
+            "disc_total",
+            "release_type",
+            "genre",
+            "explicit",
+            "isrc",
+            "upc",
+            "label",
             "audio",
             "audio_channels",
             "audio_full",
@@ -168,8 +177,8 @@ class Config:
         if self.folder_template:
             all_templates["folder"] = self.folder_template
         for kind, tmpl in self.folder_templates.items():
-            if kind not in {"movies", "series", "songs"}:
-                warnings.warn(f"Unknown folder template kind '{kind}' (expected movies/series/songs)")
+            if kind not in {"movies", "series", "songs", "albums"}:
+                warnings.warn(f"Unknown folder template kind '{kind}' (expected movies/series/songs/albums)")
                 continue
             all_templates[f"folder.{kind}"] = tmpl
 
@@ -195,7 +204,7 @@ class Config:
     def get_folder_template(self, kind: str) -> str:
         """Resolve the folder template for the given title kind.
 
-        kind: one of "movies", "series", "songs".
+        kind: one of "movies", "series", "songs", "albums".
         Falls back to the legacy single-string folder template, then "".
         """
         if self.folder_templates:
