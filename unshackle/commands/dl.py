@@ -100,6 +100,22 @@ def normalize_dl_config(dl_config: dict[str, Any]) -> dict[str, Any]:
     return {DL_OPTION_ALIASES.get(key, key): value for key, value in dl_config.items()}
 
 
+def group_videos_by_variant(videos: list[Video], *, merge: bool) -> list[list[Video]]:
+    """Group video tracks for muxing.
+
+    When ``merge`` is True, tracks sharing ``(height, range, codec)`` are grouped into one
+    file so only language varies within a group; different resolutions, ranges and codecs
+    stay in separate groups (separate files). When False, each track is its own group
+    (one file per track, the default behaviour). Group order follows first-seen track order.
+    """
+    if not merge:
+        return [[video] for video in videos]
+    groups: dict[tuple[Any, ...], list[Video]] = {}
+    for video in videos:
+        groups.setdefault((video.height, video.range, video.codec), []).append(video)
+    return list(groups.values())
+
+
 def apply_service_dl_overrides(ctx: click.Context, service_dl_config: dict[str, Any], log: logging.Logger) -> None:
     """Apply ``services.<TAG>.dl`` config onto ``ctx.params``. Explicit CLI/env values win;
     defaults and global ``dl:`` default_map values are replaced."""
@@ -458,6 +474,13 @@ class dl:
         is_flag=True,
         default=None,
         help="Create separate output files per audio codec instead of merging all audio.",
+    )
+    @click.option(
+        "--merge-video",
+        "merge_video",
+        is_flag=True,
+        default=None,
+        help="Mux all selected video tracks into a single file instead of one file per track.",
     )
     @click.option(
         "--select-titles",
@@ -1187,6 +1210,7 @@ class dl:
         worst: bool,
         best_available: bool,
         split_audio: Optional[bool] = None,
+        merge_video: Optional[bool] = None,
         real_video_bitrate: bool = False,
         real_audio_bitrate: bool = False,
         progress_sink: Optional[Callable[[dict[str, Any]], None]] = None,
@@ -3076,6 +3100,9 @@ class dl:
                     # When we split audio (merge_audio=False), multiple outputs may exist per title, so suffix codec.
                     append_audio_codec_suffix = not merge_audio
 
+                    # Mux all selected video tracks into one file instead of one file per track.
+                    merge_video = merge_video if merge_video is not None else config.muxing.get("merge_video", False)
+
                     multiplex_tasks: list[tuple[TaskID, Tracks, Optional[Audio.Codec]]] = []
                     # Track hybrid-processing outputs explicitly so we can always clean them up,
                     # even if muxing fails early (e.g. SystemExit) before the normal delete loop.
@@ -3111,22 +3138,25 @@ class dl:
                             task_tracks = clone_tracks_for_audio(base_tracks, codec_audio_tracks)
                             multiplex_tasks.append((task_id, task_tracks, audio_codec))
 
-                    def mux_video_standalone(video_track: Optional[Video]) -> None:
-                        if video_track and video_track.dv_compatible_bitstream:
-                            apply_dv_fixup(video_track)
+                    def mux_video_group(video_tracks: list[Optional[Video]]) -> None:
+                        for video_track in video_tracks:
+                            if video_track and video_track.dv_compatible_bitstream:
+                                apply_dv_fixup(video_track)
 
                         task_description = "Multiplexing"
-                        if video_track:
+                        # All tracks in a merged group share height/range/codec, so describe from the first.
+                        head = next((v for v in video_tracks if v), None)
+                        if head:
                             if len(quality) > 1:
-                                task_description += f" {video_track.height}p"
+                                task_description += f" {head.height}p"
                             if len(range_) > 1:
-                                task_description += f" {video_track.range.name}"
+                                task_description += f" {head.range.name}"
                             if len(vcodec) > 1:
-                                task_description += f" {video_track.codec.name}"
+                                task_description += f" {head.codec.name}"
 
                         task_tracks = Tracks(title.tracks) + title.tracks.chapters + title.tracks.attachments
-                        if video_track:
-                            task_tracks.videos = [video_track]
+                        if head:
+                            task_tracks.videos = [v for v in video_tracks if v]
 
                         enqueue_mux_tasks(task_description, task_tracks)
 
@@ -3186,16 +3216,18 @@ class dl:
                                 enqueue_mux_tasks(task_description, task_tracks)
 
                         # Mux every requested range standalone, skipping the ingredient-only DV.
-                        for video_track in original_videos:
-                            if video_track.hybrid_base_only:
-                                continue
-                            mux_video_standalone(video_track)
+                        # merge_video collapses only language variants (same height/range/codec).
+                        standalone_videos = [v for v in original_videos if not v.hybrid_base_only]
+                        for group in group_videos_by_variant(standalone_videos, merge=merge_video):
+                            mux_video_group(group)
 
                         console.print()
                     else:
-                        # Normal mode: process each video track separately
-                        for video_track in title.tracks.videos or [None]:
-                            mux_video_standalone(video_track)
+                        # Normal mode: one file per video track, unless merge_video groups
+                        # same-(height, range, codec) language variants into one file.
+                        groups = group_videos_by_variant(title.tracks.videos, merge=merge_video)
+                        for group in groups or [[None]]:
+                            mux_video_group(group)
 
                     if progress_sink:
                         progress_sink(

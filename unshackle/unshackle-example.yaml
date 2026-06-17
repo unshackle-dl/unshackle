@@ -158,6 +158,14 @@ muxing:
   #   false: Separate MKV per (quality, audio_codec) combination
   #     Example: Title.1080p.AAC.mkv, Title.1080p.EC3.mkv
   merge_audio: true
+  # merge_video: Merge video language variants into one file
+  #   false (default): One file per video track
+  #   true: Group videos by (resolution, range, codec) and merge each group into one
+  #         MKV - so only language varies within a file. Different resolutions, ranges
+  #         (SDR/HDR10/DV/...) and codecs (H264/H265) still produce separate files.
+  #         Example: -r HYBRID,DV,HDR10,SDR yields one file per range, not one mega-file.
+  #   The --merge-video CLI flag overrides this.
+  merge_video: false
   # default_language: Override which track is flagged as the default in the muxed MKV.
   #   audio:  BCP-47 tag of the preferred default audio track (e.g. pl, en, pt-BR).
   #           Wins over the title's original_language. Falls back to is_original_lang
@@ -675,9 +683,10 @@ services:
       User-Agent: "Service-specific user agent string"
       Accept-Language: "en-US,en;q=0.9"
 
-    # Override muxing options
+    # Override muxing options (always merge this service's video tracks into one file)
     muxing:
       set_title: true
+      merge_video: true
 
     # Remap service-provided titles before naming/output
     # Keyed by the exact title the service returns -> desired output title.

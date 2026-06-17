@@ -204,6 +204,23 @@ Enable/disable tagging downloaded files with IMDB/TMDB/TVDB identifiers (when av
   Note: The `--split-audio` CLI flag overrides this setting. When `--split-audio` is passed,
   `merge_audio` is effectively set to `false` for that run.
 
+- `merge_video`
+  Merge video **language variants** into one file. Default: `false`
+  - `false`: One MKV per video track (the default behaviour).
+  - `true`: Group the selected video tracks by `(resolution, range, codec)` and merge
+    each group into one MKV, so only language varies within a file. The player switches
+    between the language tracks. No re-encode, no concatenation.
+
+  Only the language dimension is collapsed. Different **resolutions**, **ranges**
+  (SDR/HDR10/HDR10+/DV/HYBRID) and **codecs** (H264/H265) always stay in separate files.
+  For example, `-r HYBRID,DV,HDR10,SDR --merge-video` produces one file per range (never a
+  single combined file), while a title offering English + French video of the same
+  resolution/range/codec produces one file containing both video tracks.
+
+  Note: The `--merge-video` CLI flag overrides this setting. Can be set per service under
+  `services.<TAG>.muxing.merge_video`. Change `group_videos_by_variant` in
+  `unshackle/commands/dl.py` to adjust the grouping.
+
 - `default_language` (dict)
   Override which track is flagged as the default in the muxed MKV, regardless
   of the title's original language. Useful when you always want your player to
