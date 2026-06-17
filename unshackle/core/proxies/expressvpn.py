@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import logging
+import os
 import random
 import re
 import secrets
@@ -113,16 +114,21 @@ class ExpressVPN(Proxy):
         self.cache_path = Path(cache_path).expanduser() if cache_path else self._default_cache_path()
 
     def __repr__(self) -> str:
-        try:
-            locations = self._get_locations()
-            countries = len({str(loc.get("country_code") or "").upper() for loc in locations if loc.get("country_code")})
+        if self._locations is not None:
+            locations = self._locations
+            countries = len({
+                str(loc.get("country_code") or "").upper()
+                for loc in locations if loc.get("country_code")
+            })
             servers = len(locations)
-            return f"{countries} Countr{'ies' if countries != 1 else 'y'} ({servers} Server{'s' if servers != 1 else ''})"
-        except Exception:
-            alias_count = len(self.region_map) + len(self.server_map)
-            if alias_count:
-                return f"{alias_count} Region Alias{'es' if alias_count != 1 else ''} (ExpressVPN HTTPS Proxy)"
-            return "ExpressVPN HTTPS Proxy"
+            return (
+                f"{countries} Countr{'ies' if countries != 1 else 'y'} "
+                f"({servers} Server{'s' if servers != 1 else ''})"
+            )
+        alias_count = len(self.region_map) + len(self.server_map)
+        if alias_count:
+            return f"{alias_count} Region Alias{'es' if alias_count != 1 else ''} (ExpressVPN HTTPS Proxy)"
+        return "ExpressVPN HTTPS Proxy"
 
     def get_proxy(self, query: str) -> Optional[str]:
         query = query.strip().lower()
@@ -299,12 +305,18 @@ class ExpressVPN(Proxy):
         """Match a short city query against a list of locations.
 
         Matching strategies (in priority order):
-        1. First-letter abbreviation: "ny" matches "New York"
-        2. Prefix match on slugified city name: "mia" matches "miami"
-        3. Substring match on slugified city name: "york" matches "new-york"
+        1. First-letter abbreviation: ``"ny"`` matches ``"New York"``
+        2. Exact slug match: ``"miami"`` matches ``"miami"``
+        3. Prefix match on slug: ``"mia"`` matches ``"miami"``
+        4. Substring match on slug: ``"york"`` matches ``"new-york"``
+
+        Returns the first match from the highest-priority non-empty bucket.
         """
         city_query = city_query.strip().lower()
-        candidates: list[dict] = []
+        abbreviation_hits: list[dict] = []
+        exact_hits: list[dict] = []
+        prefix_hits: list[dict] = []
+        substring_hits: list[dict] = []
 
         for loc in locations:
             full_name = str(loc.get("name") or "")
@@ -316,29 +328,28 @@ class ExpressVPN(Proxy):
             city_slug = _slugify(city_part)
 
             # Strategy 1: first-letter abbreviation
-            # "New York" -> "ny", "Los Angeles" -> "la", "San Francisco" -> "sf"
             words = re.findall(r"[a-zA-Z]+", city_part)
             abbreviation = "".join(w[0] for w in words).lower() if words else ""
-
             if city_query == abbreviation:
-                candidates.append(loc)
+                abbreviation_hits.append(loc)
                 continue
 
             # Strategy 2: exact slug match
             if city_query == city_slug:
-                candidates.append(loc)
+                exact_hits.append(loc)
                 continue
 
             # Strategy 3: prefix match on slug
             if city_slug.startswith(city_query):
-                candidates.append(loc)
+                prefix_hits.append(loc)
                 continue
 
             # Strategy 4: substring match on slug
             if city_query in city_slug:
-                candidates.append(loc)
-                continue
+                substring_hits.append(loc)
 
+        # Return the first match from the highest-priority non-empty bucket
+        candidates = abbreviation_hits or exact_hits or prefix_hits or substring_hits
         if not candidates:
             log.warning("ExpressVPN: no city matched '%s' in available locations", city_query)
             return None
@@ -347,7 +358,6 @@ class ExpressVPN(Proxy):
             names = [c.get("name") for c in candidates]
             log.debug("ExpressVPN: city '%s' matched %d locations: %s", city_query, len(candidates), names)
 
-        # Return first match (priority order is maintained by iteration)
         return candidates[0]
 
     def _resolve_location_by_slug(self, query: str) -> Optional[dict]:
@@ -538,8 +548,12 @@ class ExpressVPN(Proxy):
             log.error("ExpressVPN: KEYCLOAK_IDENTITY or KEYCLOAK_SESSION is missing from %s", self.cookie_path)
             return None
 
-        verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("utf-8").rstrip("=")
-        challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("utf-8")).digest()).decode("utf-8").rstrip("=")
+        verifier = base64.urlsafe_b64encode(
+            secrets.token_bytes(32)
+        ).decode("utf-8").rstrip("=")
+        challenge = base64.urlsafe_b64encode(
+            hashlib.sha256(verifier.encode("utf-8")).digest()
+        ).decode("utf-8").rstrip("=")
         auth_cookies = requests.cookies.RequestsCookieJar()
         auth_cookies.set("KEYCLOAK_IDENTITY", keycloak_identity, domain="auth.expressvpn.com")
         auth_cookies.set("KEYCLOAK_SESSION", keycloak_session, domain="auth.expressvpn.com")
@@ -556,7 +570,6 @@ class ExpressVPN(Proxy):
                 "scope": "profile offline_access",
                 "code_challenge": challenge,
                 "code_challenge_method": "S256",
-                "state": f"unshackle_state_{int(time.time())}",
                 "ui_locales": "en",
             },
             headers=self._browser_headers(),
@@ -638,7 +651,8 @@ class ExpressVPN(Proxy):
             headers=self._api_headers(auth_token),
             json={},
         )
-        connection_token = response.json().get("connection_token") or response.json().get("token")
+        body = response.json()
+        connection_token = body.get("connection_token") or body.get("token")
         if connection_token:
             tokens["connection_token"] = connection_token
             self._save_cached_tokens(tokens)
@@ -698,8 +712,8 @@ class ExpressVPN(Proxy):
         self._tokens = tokens.copy()
         try:
             self.cache_path.parent.mkdir(parents=True, exist_ok=True)
-            self.cache_path.write_text(json.dumps({k: v for k, v in tokens.items() if v}, indent=2), encoding="utf-8")
-            _chmod_private(self.cache_path)
+            payload = json.dumps({k: v for k, v in tokens.items() if v}, indent=2)
+            _write_private(self.cache_path, payload)
         except OSError as error:
             log.error("ExpressVPN: failed to save token cache %s: %s", self.cache_path, error)
 
@@ -769,28 +783,31 @@ class ExpressVPN(Proxy):
     def _is_jwt_expired(self, token: str) -> bool:
         expires_at = self._decode_jwt_payload(token).get("exp")
         if not expires_at:
+            # Tokens without ``exp`` are treated as non-expiring.  Keycloak
+            # access/refresh tokens always carry ``exp``; proprietary SRT/
+            # connection tokens may omit it — they are refreshed via the
+            # normal SRT → connection_token flow anyway.
             return False
         return time.time() >= (int(expires_at) - 300)
 
     def _default_cookie_path(self) -> Path:
+        cookies_dir = Path(config.directories.cookies)
         for folder in ("vpn", "vpns"):
-            cwd_path = Path(f"cookies/{folder}/expressvpn.txt")
-            if cwd_path.is_file():
-                return cwd_path
-            config_path = Path(config.directories.cookies) / folder / "expressvpn.txt"
-            if config_path.is_file():
-                return config_path
-        return Path(config.directories.cookies) / "vpn" / "expressvpn.txt"
+            candidate = cookies_dir / folder / "expressvpn.txt"
+            if candidate.is_file():
+                return candidate
+        return cookies_dir / "vpn" / "expressvpn.txt"
 
     def _default_cache_path(self) -> Path:
+        cache_dir = Path(config.directories.cache)
         for folder in ("vpn", "vpns"):
-            cwd_path = Path(f"cache/global/{folder}_expressvpn_tokens.json")
-            if cwd_path.is_file():
-                return cwd_path
-        cwd_path = Path("cache/global/expressvpn_tokens.json")
-        if cwd_path.is_file():
-            return cwd_path
-        return Path(config.directories.cache) / "global" / "expressvpn_tokens.json"
+            candidate = cache_dir / "global" / f"{folder}_expressvpn_tokens.json"
+            if candidate.is_file():
+                return candidate
+        candidate = cache_dir / "global" / "expressvpn_tokens.json"
+        if candidate.is_file():
+            return candidate
+        return cache_dir / "global" / "expressvpn_tokens.json"
 
     def close(self) -> None:
         pass
@@ -806,8 +823,23 @@ def _slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
 
 
-def _chmod_private(path: Path) -> None:
-    try:
-        path.chmod(0o600)
-    except OSError:
-        pass
+def _write_private(path: Path, content: str) -> None:
+    """Write *content* to *path* with owner-only permissions (0600).
+
+    Opens with ``os.open`` so the file is **created** at 0600 — no window
+    where it is world-readable.  On Windows ``os.fchmod`` is unavailable,
+    so we fall back to ``path.chmod`` after close.
+    """
+    if hasattr(os, "fchmod"):
+        fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            os.fchmod(fd, 0o600)
+            os.write(fd, content.encode("utf-8"))
+        finally:
+            os.close(fd)
+    else:
+        path.write_text(content, encoding="utf-8")
+        try:
+            path.chmod(0o600)
+        except OSError:
+            pass
