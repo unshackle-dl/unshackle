@@ -19,6 +19,7 @@ def initialize_proxy_providers() -> List[Any]:
         from unshackle.core import binaries
         from unshackle.core.config import config as main_config
         from unshackle.core.proxies.basic import Basic
+        from unshackle.core.proxies.expressvpn import ExpressVPN
         from unshackle.core.proxies.hola import Hola
         from unshackle.core.proxies.nordvpn import NordVPN
         from unshackle.core.proxies.surfsharkvpn import SurfsharkVPN
@@ -27,6 +28,8 @@ def initialize_proxy_providers() -> List[Any]:
 
         if proxy_config.get("basic"):
             proxy_providers.append(Basic(**proxy_config["basic"]))
+        if proxy_config.get("expressvpn"):
+            proxy_providers.append(ExpressVPN(**proxy_config["expressvpn"]))
         if proxy_config.get("nordvpn"):
             proxy_providers.append(NordVPN(**proxy_config["nordvpn"]))
         if proxy_config.get("surfsharkvpn"):

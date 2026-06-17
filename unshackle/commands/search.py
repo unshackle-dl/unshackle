@@ -16,7 +16,7 @@ from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import context_settings
-from unshackle.core.proxies import Basic, Gluetun, Hola, NordVPN, SurfsharkVPN, WindscribeVPN
+from unshackle.core.proxies import Basic, ExpressVPN, Gluetun, Hola, NordVPN, SurfsharkVPN, WindscribeVPN
 from unshackle.core.service import Service
 from unshackle.core.services import Services
 from unshackle.core.utils.click_types import ContextData
@@ -67,6 +67,8 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
         with console.status("Loading Proxy Providers...", spinner="dots"):
             if config.proxy_providers.get("basic"):
                 proxy_providers.append(Basic(**config.proxy_providers["basic"]))
+            if config.proxy_providers.get("expressvpn"):
+                proxy_providers.append(ExpressVPN(**config.proxy_providers["expressvpn"]))
             if config.proxy_providers.get("nordvpn"):
                 proxy_providers.append(NordVPN(**config.proxy_providers["nordvpn"]))
             if config.proxy_providers.get("surfsharkvpn"):
@@ -86,8 +88,8 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
                 # requesting proxy from a specific proxy provider
                 requested_provider, proxy = proxy.split(":", maxsplit=1)
             # Match simple region codes (us, ca, uk1) or provider:region format (nordvpn:ca, windscribe:us)
-            if re.match(r"^[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE) or re.match(
-                r"^[a-z]+:[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE
+            if re.match(r"^[a-z]{2}(?:[-][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE) or re.match(
+                r"^[a-z]+:[a-z]{2}(?:[-][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE
             ):
                 proxy = proxy.lower()
                 with console.status(f"Getting a Proxy to {proxy}...", spinner="dots"):
@@ -103,13 +105,25 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
                             log.error(f"The proxy provider {requested_provider} had no proxy for {proxy}")
                             sys.exit(1)
                         proxy = ctx.params["proxy"] = proxy_uri
-                        log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+                        display = None
+                        if hasattr(proxy_provider, "last_connection_display"):
+                            display = proxy_provider.last_connection_display()
+                        if display:
+                            log.info(f"Using {proxy_provider.__class__.__name__} Proxy {display}")
+                        else:
+                            log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
                     else:
                         for proxy_provider in proxy_providers:
                             proxy_uri = proxy_provider.get_proxy(proxy)
                             if proxy_uri:
                                 proxy = ctx.params["proxy"] = proxy_uri
-                                log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+                                display = None
+                                if hasattr(proxy_provider, "last_connection_display"):
+                                    display = proxy_provider.last_connection_display()
+                                if display:
+                                    log.info(f"Using {proxy_provider.__class__.__name__} Proxy {display}")
+                                else:
+                                    log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
                                 break
             else:
                 log.info(f"Using explicit Proxy: {proxy}")

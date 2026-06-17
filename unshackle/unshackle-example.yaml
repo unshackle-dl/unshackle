@@ -804,6 +804,27 @@ proxy_providers:
     # Example: --proxy gluetun:nordvpn:us1239 connects to us1239.nordvpn.com
     # Supported providers: nordvpn, surfshark, expressvpn, cyberghost
 
+  # ExpressVPN HTTPS Proxy Provider
+  # Uses browser extension proxy flow with OAuth token authentication.
+  # Requires exported browser cookies from auth.expressvpn.com (Keycloak session).
+  # Cookie file: cookies/vpn/expressvpn.txt (or cookies/vpns/expressvpn.txt)
+  # Token cache: cache/global/expressvpn_tokens.json (auto-managed)
+  #
+  # Query formats:
+  #   --proxy expressvpn:us              → random US location (smart connection)
+  #   --proxy expressvpn:us-ny           → specific city (New York)
+  #   --proxy expressvpn:us-ny-2         → pinned server #2 in New York
+  #   --proxy expressvpn:mx             → random Mexico location
+  #   --proxy expressvpn:es-madrid      → specific city (Madrid)
+  #
+  # expressvpn:
+  #   region_map:
+  #     us: "ny"           # Default to New York when --proxy expressvpn:us
+  #     gb: "london"       # Default to London when --proxy expressvpn:gb
+  #     es: "madrid"       # Default to Madrid when --proxy expressvpn:es
+  #     mx:                # Smart connection (random MX location) when --proxy expressvpn:mx
+  #     de: "frankfurt"    # Default to Frankfurt when --proxy expressvpn:de
+
   basic:
     GB:
       - "socks5://username:password@bhx.socks.ipvanish.com:1080" # 1 (Birmingham)
