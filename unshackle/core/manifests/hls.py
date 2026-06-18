@@ -29,13 +29,17 @@ from requests import Session
 from unshackle.core import binaries
 from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
-from unshackle.core.drm import DRM_T, ClearKey, MonaLisa, PlayReady, Widevine
+from unshackle.core.drm import DRM_T, ClearKey, FairPlay, MonaLisa, PlayReady, Widevine
+from unshackle.core.drm.fairplay import fairplay_kid_from_skd
 from unshackle.core.events import events
 from unshackle.core.session import RnetResponse, RnetSession
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video
 from unshackle.core.utilities import get_extension, is_close_match, log_event, try_ensure_utf8
 from unshackle.core.utils.redact import safe_display_url
 from unshackle.core.utils.subprocess import log_tool_run
+
+# FairPlay HLS (cbcs) EXT-X-KEY keyformat; bridged to PlayReady (see drm/fairplay.py).
+FAIRPLAY_KEYFORMAT = "com.apple.streamingkeydelivery"
 
 
 class HLS:
@@ -902,8 +906,16 @@ class HLS:
                 if key is None:
                     encryption_data = None
                 elif not encryption_data or encryption_data[0] != key:
-                    drm = HLS.get_drm(key, session)
-                    if isinstance(drm, (Widevine, PlayReady)):
+                    if (
+                        key.keyformat
+                        and key.keyformat.lower() == FAIRPLAY_KEYFORMAT
+                        and isinstance(session_drm, FairPlay)
+                    ):
+                        # Reuse already-licensed service FairPlay; skd KID encoding is service-specific.
+                        drm = session_drm
+                    else:
+                        drm = HLS.get_drm(key, session)
+                    if isinstance(drm, (Widevine, PlayReady)) and not getattr(drm, "content_keys", None):
                         try:
                             if map_data:
                                 track_kid = track.get_key_id(map_data[1])
@@ -1247,6 +1259,9 @@ class HLS:
                 "com.microsoft.playready",
             }:
                 return key
+            elif key.keyformat and key.keyformat.lower() == FAIRPLAY_KEYFORMAT:
+                # FairPlay (cbcs) bridged to PlayReady; key licensed via FairPlay DRM.
+                return key
             else:
                 unsupported_systems.append(key.method + (f" ({key.keyformat})" if key.keyformat else ""))
         else:
@@ -1287,6 +1302,13 @@ class HLS:
                 pssh=PR_PSSH(key.uri.split(",")[-1]),
                 pssh_b64=key.uri.split(",")[-1],
             )
+        elif key.keyformat and key.keyformat.lower() == FAIRPLAY_KEYFORMAT:
+            # FairPlay -> PlayReady: synthesize FairPlay DRM from the skd KID. Services whose skd
+            # KID isn't a plain GUID/hex should supply the DRM via get_track_drm instead.
+            kid = fairplay_kid_from_skd(key.uri)
+            if not kid:
+                raise NotImplementedError(f"Could not derive a FairPlay content KID from key: {key}")
+            drm = FairPlay.from_kid(kid)
         else:
             raise NotImplementedError(f"The key system is not supported: {key}")
 
