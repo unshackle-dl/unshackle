@@ -499,6 +499,29 @@ def serialize_subtitle_track(track: Subtitle, include_url: bool = False) -> Dict
     return result
 
 
+def _resolve_request_credential(data: Dict[str, Any], service: str, profile: Optional[str]):
+    """Credential for a search/list request. A client-sent credential is honoured only when
+    serve.allow_job_credentials is enabled (mirrors the download endpoint); otherwise the
+    server-local credential is used. Raises FORBIDDEN if a client sends credentials while the
+    gate is off, matching the download path so the two endpoints behave consistently."""
+    from unshackle.commands.dl import dl
+
+    cred_data = data.get("credentials")
+    cred_str = data.get("credential")
+    if cred_data or cred_str:
+        if not (config.serve or {}).get("allow_job_credentials"):
+            raise APIError(APIErrorCode.FORBIDDEN, "Per-request credentials are not permitted.")
+        from unshackle.core.credential import Credential
+
+        if isinstance(cred_data, dict) and cred_data.get("username") and cred_data.get("password"):
+            return Credential(
+                username=cred_data["username"], password=cred_data["password"], extra=cred_data.get("extra")
+            )
+        if isinstance(cred_str, str) and cred_str:
+            return Credential.loads(cred_str)
+    return dl.get_credentials(service, profile)
+
+
 async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
     """Handle search request."""
     from unshackle.commands.dl import dl
@@ -563,7 +586,7 @@ async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = 
 
     # Authenticate
     cookies = dl.get_cookie_jar(normalized_service, profile)
-    credential = dl.get_credentials(normalized_service, profile)
+    credential = _resolve_request_credential(data, normalized_service, profile)
     service_instance.authenticate(cookies, credential)
 
     # Search
@@ -646,7 +669,7 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
         service_instance = instantiate_service(parent_ctx, service_module, title_id, data, LIST_HANDLER_TRANSPORT_KEYS)
 
         cookies = dl.get_cookie_jar(normalized_service, profile)
-        credential = dl.get_credentials(normalized_service, profile)
+        credential = _resolve_request_credential(data, normalized_service, profile)
         service_instance.authenticate(cookies, credential)
 
         titles = service_instance.get_titles()
@@ -727,7 +750,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
         service_instance = instantiate_service(parent_ctx, service_module, title_id, data, LIST_HANDLER_TRANSPORT_KEYS)
 
         cookies = dl.get_cookie_jar(normalized_service, profile)
-        credential = dl.get_credentials(normalized_service, profile)
+        credential = _resolve_request_credential(data, normalized_service, profile)
         service_instance.authenticate(cookies, credential)
 
         titles = service_instance.get_titles()
