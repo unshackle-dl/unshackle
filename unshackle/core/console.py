@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 from types import ModuleType
-from typing import IO, Callable, Iterable, List, Literal, Mapping, Optional, Union
+from typing import IO, Callable, Iterable, List, Literal, Mapping, Optional, TextIO, Union
 
 from rich._log_render import FormatTimeCallable, LogRender
 from rich.console import Console, ConsoleRenderable, HighlighterType, RenderableType
@@ -282,6 +282,35 @@ class ComfyConsole(Console):
             return Live(padding, console=self, transient=True)
 
         return status_renderable
+
+    def input(
+        self,
+        prompt: TextType = "",
+        *,
+        markup: bool = True,
+        emoji: bool = True,
+        password: bool = False,
+        stream: Optional[TextIO] = None,
+    ) -> str:
+        """Displays a prompt and waits for input from the user, temporarily pausing any active Live displays."""
+        # Find active Live displays to prevent overlap / disappearing prompt.
+        # We copy the list because stop() will modify console._live_stack.
+        active_lives = list(self._live_stack)
+
+        for live in active_lives:
+            live.stop()
+
+        try:
+            return super().input(
+                prompt=prompt,
+                markup=markup,
+                emoji=emoji,
+                password=password,
+                stream=stream,
+            )
+        finally:
+            for live in reversed(active_lives):
+                live.start()
 
 
 catppuccin_mocha = {
