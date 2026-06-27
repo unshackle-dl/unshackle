@@ -381,6 +381,7 @@ class dl:
     @click.command(
         short_help="Download, Decrypt, and Mux tracks for titles from a Service.",
         cls=Services,
+        invoke_without_command=True,
         context_settings=dict(
             **context_settings, default_map=normalize_dl_config(config.dl), token_normalize_func=Services.get_tag
         ),
@@ -705,9 +706,71 @@ class dl:
         is_eager=True,
         help="Name of the remote server from remote_services config (if multiple configured).",
     )
+    @click.option(
+        "-i",
+        "--interactive",
+        is_flag=True,
+        default=False,
+        help="Enable interactive mode to select service, tracks, and parameters.",
+    )    
     @click.pass_context
-    def cli(ctx: click.Context, **kwargs: Any) -> dl:
-        return dl(ctx, **kwargs)
+    def cli(ctx: click.Context, **kwargs: Any) -> Any:
+        """Main entry point supporting both standard CLI subcommands and Interactive mode."""
+        
+        # Delegate standard subcommands to the 'dl' engine
+        if ctx.invoked_subcommand is not None:
+            return dl(ctx, **kwargs)
+
+        # Handle interactive mode
+        if kwargs.get("interactive"):
+            from unshackle.core.interactive import run_service_selector
+            from rich.prompt import Prompt
+            
+            selected_service = run_service_selector()
+            if not selected_service:
+                return
+
+            kwargs['tag'] = selected_service
+            dl(ctx, **kwargs)
+            
+            console.print(Padding(Rule(f"[rule.text]Enter URL or ID for {selected_service}"), (1, 2)))
+            content_id = Prompt.ask(f"   [bold cyan]URL/ID[/]").strip()
+            
+            if not content_id:
+                raise click.UsageError("Content ID/URL is required.")
+
+            # Load the service command and prompt for its specific options
+            service_cmd = Services.load(selected_service)
+            from unshackle.core.interactive import run_service_extra_options
+            service_kwargs = run_service_extra_options(service_cmd, ctx)
+
+            # Normalize interactive prompt outputs to match standard CLI types
+            for k, v in service_kwargs.items():
+                if isinstance(v, list):
+                    v = v[0] if v else None
+                if hasattr(v, 'value'):
+                    v = v.value
+                service_kwargs[k] = v
+
+            # Resolve the main argument name (typically the content URL/ID)
+            params = getattr(service_cmd.cli, "params", [])
+            arg_name = next((p.name for p in params if isinstance(p, click.Argument)), "title")
+            
+            # Sync context params so they are accessible during dl.result()
+            ctx.params.update(service_kwargs)
+            
+            result_service = ctx.invoke(service_cmd.cli, **{arg_name: content_id, **service_kwargs})
+            
+            if result_service is None:
+                import logging
+                logging.getLogger("download").error(f"Failed to initialize service: {selected_service}")
+                return
+
+            return result_service
+
+        # Show help if no subcommand or interactive flag was provided
+        click.echo(ctx.get_help())
+        ctx.exit()
 
     DRM_TABLE_LOCK = Lock()
     EXPORT_LOCK = Lock()
@@ -729,8 +792,9 @@ class dl:
         *_: Any,
         **__: Any,
     ):
-        if not ctx.invoked_subcommand:
-            raise ValueError("A subcommand to invoke was not specified, the main code cannot continue.")
+        sub_cmd = ctx.invoked_subcommand or tag
+        if not sub_cmd:
+            raise ValueError("A subcommand or tag to invoke was not specified, the main code cannot continue.")
 
         self.log = logging.getLogger("download")
         self.completed_files: list[Path] = []
@@ -749,7 +813,7 @@ class dl:
                 "See unshackle-example.yaml for examples."
             )
 
-        self.service = Services.get_tag(ctx.invoked_subcommand)
+        self.service = Services.get_tag(sub_cmd)
         self.vault_service = Services.get_vault_tag(self.service)
         apply_service_dl_overrides(ctx, config.services.get(self.service, {}).get("dl", {}), self.log)
 
@@ -1190,6 +1254,7 @@ class dl:
         no_video: bool,
         audio_description: bool,
         slow: Optional[tuple[int, int]],
+        interactive: bool,
         list_: bool,
         list_titles: bool,
         skip_dl: bool,
@@ -1368,6 +1433,55 @@ class dl:
                 self.debug_logger.log(
                     level="INFO", operation="get_titles", service=self.service, context={"titles": titles_info}
                 )
+
+        # Handle interactive parameter refinement
+        if interactive:
+            from unshackle.core.interactive import run_interactive_session
+            from unshackle.core.constants import DOWNLOAD_LICENCE_ONLY
+            
+            # Filter current local scope variables to pass as default session parameters
+            exclude = {'self', 'service', 'titles', 'start_time', 'ctx', 'log', 'exclude'}
+            current_params = {k: v for k, v in locals().items() if k not in exclude and not k.startswith('_')}
+
+            # Execute session selection
+            selections = run_interactive_session(service, titles, self.log, current_params)
+            
+            # Apply selection results to local configuration variables
+            quality = selections.get('quality', quality)
+            vcodec = selections.get('vcodec', vcodec)
+            acodec = selections.get('acodec', acodec)
+            range_ = selections.get('range_', range_)
+            a_lang = selections.get('a_lang', a_lang)
+            s_lang = selections.get('s_lang', s_lang)
+            vbitrate = selections.get('vbitrate', vbitrate)
+            abitrate = selections.get('abitrate', abitrate)
+            
+            no_mux = selections.get('no_mux', no_mux)
+            list_ = selections.get('list_', list_)
+            export = selections.get('export', export)
+            if export:
+                config.directories.exports.mkdir(parents=True, exist_ok=True)
+                export_path = config.directories.exports / f"export_{self.service}_{int(time.time())}.json"
+                self.export_service = service            
+            list_titles = selections.get('list_titles', list_titles)
+            forced_subs = selections.get('forced_subs', forced_subs)
+            audio_description = selections.get('audio_description', audio_description)
+            skip_dl = selections.get('skip_dl', skip_dl)
+            no_subs = selections.get('no_subs', no_subs)
+            latest_episode = selections.get('latest_episode', latest_episode)
+            worst = selections.get('v_mode', 'best') == 'worst'
+            select_titles = selections.get('select_titles', select_titles)
+
+            # Update licence-only state based on final selection
+            if skip_dl:
+                DOWNLOAD_LICENCE_ONLY.set()
+            else:
+                DOWNLOAD_LICENCE_ONLY.clear()
+
+            # Default language tracks to 'all' to bypass strict filtering
+            v_lang = ["all"]
+            if not a_lang:
+                a_lang = ["all"]
 
         title_cacher = service.title_cache if hasattr(service, "title_cache") else None
         cache_title_id = None

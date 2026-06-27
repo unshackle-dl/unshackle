@@ -69,6 +69,7 @@ class Config:
         self.credentials: dict = kwargs.get("credentials") or {}
         self.firefox_cookies: dict = kwargs.get("firefox_cookies") or {}
         self.subtitle: dict = kwargs.get("subtitle") or {}
+        self.interactive: dict = kwargs.get("interactive") or {}
 
         self.directories = self._Directories()
         for name, path in (kwargs.get("directories") or {}).items():
