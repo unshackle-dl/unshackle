@@ -22,6 +22,25 @@ from unshackle.core.utilities import is_close_match
 
 log = logging.getLogger(__name__)
 
+# Friendly aliases for the ``title_type`` condition, mapped to the canonical
+# value stored in the context (movie / series / music).
+_TITLE_TYPE_ALIASES = {
+    "movie": "movie",
+    "movies": "movie",
+    "film": "movie",
+    "series": "series",
+    "serie": "series",
+    "episode": "series",
+    "episodes": "series",
+    "show": "series",
+    "tv": "series",
+    "song": "music",
+    "songs": "music",
+    "music": "music",
+    "album": "music",
+    "track": "music",
+}
+
 # Context fields a rule may match directly. Values are compared
 # case-insensitively; a list value matches if ANY entry matches.
 _STRING_FIELDS = (
@@ -85,6 +104,12 @@ def _string_matches(expected: Any, actual: Any) -> bool:
     return any(str(item).lower() == actual_norm for item in _as_list(expected))
 
 
+def _canon_title_type(value: Any) -> str:
+    """Normalise a title-type value through its aliases (e.g. film -> movie)."""
+    norm = str(value or "").lower()
+    return _TITLE_TYPE_ALIASES.get(norm, norm)
+
+
 def _rule_matches(
     rule: dict[str, Any],
     context: dict[str, Any],
@@ -93,6 +118,13 @@ def _rule_matches(
 ) -> bool:
     """Check if all conditions in a rule are satisfied (AND logic)."""
     has_condition = False
+
+    expected_type = rule.get("title_type")
+    if expected_type is not None:
+        has_condition = True
+        actual_type = _canon_title_type(context.get("title_type", ""))
+        if not any(_canon_title_type(item) == actual_type for item in _as_list(expected_type)):
+            return False
 
     for field in _STRING_FIELDS:
         expected = rule.get(field)

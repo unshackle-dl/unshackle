@@ -78,7 +78,13 @@ class Title:
             primary_audio_track = next(iter(media_info.audio_tracks), None)
         unique_audio_languages = len({x.language.split("-")[0] for x in media_info.audio_tracks if x.language})
 
+        # Canonical title type (movie / series / music) for rule matching.
+        title_type = {"Movie": "movie", "Episode": "series", "Song": "music"}.get(
+            type(self).__name__, type(self).__name__.lower()
+        )
+
         context: dict[str, Any] = {
+            "title_type": title_type,
             "source": self.service.__name__ if show_service else "",
             "tag": config.tag or "",
             "repack": "REPACK" if getattr(config, "repack", False) else "",

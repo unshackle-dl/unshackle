@@ -251,6 +251,7 @@ in your `output_template` can be a condition.
 
 | Condition | Type | Description |
 |-----------|------|-------------|
+| `title_type` | string / list | Matches the media type: `movie`, `series`, or `music` (aliases: `film`, `episode`, `show`, `song`, `album`…) |
 | `lang_tag` | string / list | Matches the computed [`language_tags`](#language_tags-dict) value (e.g. `RUSSiAN`) |
 | `source` | string / list | Matches the service tag (e.g. `AMZN`) |
 | `hdr` | string / list | Matches the dynamic range tag (e.g. `DV`, `HDR10`, `HLG`) |
@@ -304,6 +305,25 @@ tag_overrides:
       audio_lang: ru
       tag: RUAMZN
 ```
+
+### Example: per media type
+
+```yaml
+tag_overrides:
+  rules:
+    # Russian-only movies first (most specific)
+    - title_type: movie
+      lang_tag: RUSSiAN
+      tag: RUMOVIES
+    # Then the broad per-type tags
+    - title_type: movie
+      tag: MOVGROUP
+    - title_type: series
+      tag: TVGROUP
+```
+
+> Order matters: place more specific rules (e.g. `title_type` + `lang_tag`) **before**
+> broader ones, since the first matching rule wins.
 
 ---
 
