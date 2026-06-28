@@ -233,6 +233,80 @@ language_tags:
 
 ---
 
+## tag_overrides (dict)
+
+Conditionally swaps the group `tag` (the `-{tag}` suffix produced by [`tag`](#tag-str))
+for a different value when a release matches a set of conditions. Useful when a subset of
+your releases should carry a different group name — for example tagging Russian-only
+releases, a specific service, or a given dynamic range with their own tag.
+
+Rules are evaluated in order; the first matching rule wins and its `tag` replaces the
+default group tag. All conditions within a single rule must match (AND logic). If no
+rule matches, the default `tag` is kept.
+
+Rules are evaluated against the **already-computed filename context**, so any value used
+in your `output_template` can be a condition.
+
+### Conditions
+
+| Condition | Type | Description |
+|-----------|------|-------------|
+| `lang_tag` | string / list | Matches the computed [`language_tags`](#language_tags-dict) value (e.g. `RUSSiAN`) |
+| `source` | string / list | Matches the service tag (e.g. `AMZN`) |
+| `hdr` | string / list | Matches the dynamic range tag (e.g. `DV`, `HDR10`, `HLG`) |
+| `video` | string / list | Matches the video codec tag (e.g. `H.265`) |
+| `quality` | string / list | Matches the quality tag (e.g. `2160p`) |
+| `resolution` | string / list | Matches the exact resolution (e.g. `1080`) |
+| `resolution_min` | int | Matches when resolution is at least this value |
+| `resolution_max` | int | Matches when resolution is at most this value |
+| `audio` | string / list | Matches the audio codec tag (e.g. `EAC3`) |
+| `atmos`, `dual`, `multi`, `edition`, `repack`, `hfr`, `audio_channels` | string / list | Match the corresponding context value |
+| `audio_lang` | string | Matches if any selected audio track has this language (fuzzy) |
+| `subs_lang` | string | Matches if any selected subtitle has this language (fuzzy) |
+| `audio_count_min` | int | Matches when there are at least this many distinct audio languages |
+
+String conditions are matched case-insensitively; a list matches if **any** entry matches.
+Language conditions (`audio_lang`, `subs_lang`) use fuzzy matching (e.g. `en` matches `en-US`).
+
+### Example: per-language group tag
+
+```yaml
+tag: "NOGRP"
+
+language_tags:
+  rules:
+    - audio: ru
+      tag: RUSSiAN
+
+tag_overrides:
+  rules:
+    # Russian-only releases ship under a different group name
+    - lang_tag: RUSSiAN
+      tag: RUGROUP
+```
+
+Example outputs:
+
+- Russian audio: `Example.Show.S01E01.RUSSiAN.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-RUGROUP`
+- Anything else: `Example.Show.S01E01.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-NOGRP`
+
+### Example: combining conditions
+
+```yaml
+tag_overrides:
+  rules:
+    # 4K Dolby Vision pulls from a dedicated tag
+    - resolution_min: 2160
+      hdr: DV
+      tag: UHDGROUP
+    # Amazon releases with Russian audio
+    - source: AMZN
+      audio_lang: ru
+      tag: RUAMZN
+```
+
+---
+
 ## unicode_filenames (bool)
 
 Allow Unicode characters in output filenames. When `false`, Unicode characters are transliterated

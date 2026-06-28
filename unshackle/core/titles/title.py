@@ -201,6 +201,16 @@ class Title:
             sub_langs = [s.language for s in self.tracks.subtitles]
             context["lang_tag"] = evaluate_language_tag(lang_tag_rules, audio_langs, sub_langs)
 
+        tag_override_rules = config.tag_overrides.get("rules") if config.tag_overrides else None
+        if tag_override_rules and self.tracks:
+            from unshackle.core.utils.tag_overrides import evaluate_tag_override
+
+            audio_langs = [a.language for a in self.tracks.audio]
+            sub_langs = [s.language for s in self.tracks.subtitles]
+            override = evaluate_tag_override(tag_override_rules, context, audio_langs, sub_langs)
+            if override:
+                context["tag"] = override
+
         return context
 
     @abstractmethod

@@ -117,6 +117,9 @@ class Config:
         self.redact_paths: bool = kwargs.get("redact_paths", True)
 
         self.language_tags: dict = kwargs.get("language_tags") or {}
+        # Conditionally swap the group tag (the `-{tag}` suffix) based on rules
+        # (e.g. RUSSiAN releases use a different group name). See tag_overrides docs.
+        self.tag_overrides: dict = kwargs.get("tag_overrides") or {}
         self.output_template: dict = kwargs.get("output_template") or {}
         folder_cfg = self.output_template.pop("folder", "")
         self.folder_template: str = ""

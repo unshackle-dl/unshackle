@@ -9,6 +9,14 @@
 # Group or username appended to download filenames after a dash.
 tag: "NOGRP"
 
+# Conditionally swap the group tag above for a different value based on rules
+# (e.g. lang_tag, source, hdr, resolution). First matching rule wins.
+# Full condition list and examples in docs/OUTPUT_CONFIG.md.
+# tag_overrides:
+#   rules:
+#     - lang_tag: RUSSiAN
+#       tag: RUGROUP
+
 # --- Output filename & folder templates --- docs/OUTPUT_CONFIG.md
 # Full variable list (35 vars incl. music) and all naming options are
 # documented in docs/OUTPUT_CONFIG.md. If omitted, scene-style defaults are
