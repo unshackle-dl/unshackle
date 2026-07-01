@@ -1289,7 +1289,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
 
         session_id = str(uuid_mod.uuid4())
         api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
-        api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:12]
+        api_key_hash = hashlib.pbkdf2_hmac("sha256", api_key.encode(), b"unshackle-session-ns", 100_000).hex()[:12]
         session_cache_tag = f"_sessions/{api_key_hash}/{session_id}/{normalized_service}"
 
         service_instance, cookies, credential = _create_service_instance(

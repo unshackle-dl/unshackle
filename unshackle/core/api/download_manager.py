@@ -195,7 +195,9 @@ def _perform_download(
     if job_credential:
         import hashlib
 
-        cred_hash = hashlib.sha256(job_credential.encode("utf-8")).hexdigest()[:12]
+        cred_hash = hashlib.pbkdf2_hmac("sha256", job_credential.encode("utf-8"), b"unshackle-job-ns", 100_000).hex()[
+            :12
+        ]
         config.directories.cache = config.directories.cache / "_jobs" / cred_hash
 
     # Convert string parameters to enums (API receives strings, dl.result() expects enums)
