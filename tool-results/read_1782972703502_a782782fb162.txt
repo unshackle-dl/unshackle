@@ -1,0 +1,1633 @@
+     1→"""V2Ray/Xray proxy provider.
+     2→
+     3→Spins up a local V2Ray (https://www.v2fly.org/) or Xray (https://xtls.github.io/) instance
+     4→with an ephemeral SOCKS5 / HTTP inbound on 127.0.0.1, then routes traffic through a
+     5→user-selected outbound (VMess, VLESS, Trojan, or Shadowsocks). Servers can be supplied as
+     6→inline URIs, a base64 subscription URL, or a pre-built V2Ray/Xray JSON config file.
+     7→
+     8→Query format (after the ``v2ray:`` prefix):
+     9→    v2ray:us                -- any server whose detected country is "US"
+    10→    v2ray:us:1              -- the first US server (1-indexed, like Basic)
+    11→    v2ray:tokyo             -- match a server by remark substring (case-insensitive)
+    12→    v2ray:us:tokyo          -- country + remark substring
+    13→
+    14→The provider follows the same lifecycle pattern as ``Gluetun``: each unique query gets its
+    15→own subprocess on a dedicated port, instances are reused for the rest of the process, and
+    16→everything is torn down via an ``atexit`` handler.
+    17→"""
+    18→
+    19→from __future__ import annotations
+    20→
+    21→import atexit
+    22→import base64
+    23→import json
+    24→import logging
+    25→import os
+    26→import re
+    27→import socket
+    28→import subprocess
+    29→import tempfile
+    30→import threading
+    31→import time
+    32→from dataclasses import dataclass, field
+    33→from pathlib import Path
+    34→from typing import Any, Optional
+    35→from urllib.parse import parse_qs, unquote, urlparse
+    36→
+    37→import requests
+    38→
+    39→from unshackle.core import binaries
+    40→from unshackle.core.proxies.proxy import Proxy
+    41→from unshackle.core.utilities import COUNTRY_CODE_ALIASES, get_country_code, get_country_name, log_event
+    42→from unshackle.core.utils.ip_info import get_ip_info
+    43→
+    44→log = logging.getLogger("proxies.v2ray")
+    45→
+    46→
+    47→def _normalise_country_code(code: str) -> Optional[str]:
+    48→    """Lowercase ISO 3166-1 alpha-2 code, applying the project's UK -> GB alias."""
+    49→    if not code:
+    50→        return None
+    51→    lowered = code.strip().lower()
+    52→    return COUNTRY_CODE_ALIASES.get(lowered, lowered)
+    53→
+    54→# Module-level registry so every V2Ray instance can be cleaned up on interpreter exit,
+    55→# mirroring the Gluetun pattern. Multiple Proxy providers may exist concurrently
+    56→# (e.g. one in the main process, one in a serve worker) so we keep them all here.
+    57→_v2ray_instances: list["V2Ray"] = []
+    58→_cleanup_lock = threading.Lock()
+    59→_cleanup_registered = False
+    60→
+    61→
+    62→def _cleanup_all_v2ray_processes() -> None:
+    63→    """Stop every spawned V2Ray/Xray subprocess on exit."""
+    64→    with _cleanup_lock:
+    65→        instances = list(_v2ray_instances)
+    66→        _v2ray_instances.clear()
+    67→    for instance in instances:
+    68→        try:
+    69→            instance.cleanup()
+    70→        except Exception:
+    71→            pass
+    72→
+    73→
+    74→def _register_cleanup() -> None:
+    75→    """Register the atexit handler exactly once."""
+    76→    global _cleanup_registered
+    77→    with _cleanup_lock:
+    78→        if not _cleanup_registered:
+    79→            atexit.register(_cleanup_all_v2ray_processes)
+    80→            _cleanup_registered = True
+    81→
+    82→
+    83→# ---------------------------------------------------------------------------
+    84→# Server model + URI parsing
+    85→# ---------------------------------------------------------------------------
+    86→
+    87→# Regex used to recover a country code from a remark/PS string. Handles flag-emoji
+    88→# prefixes (🇺🇸), parenthesised codes, and bare 2-letter prefixes like "US-...".
+    89→_FLAG_EMOJI_RE = re.compile(
+    90→    "[\U0001F1E6-\U0001F1FF]{2}"  # regional indicator pair (a flag)
+    91→)
+    92→_COUNTRY_HINT_RE = re.compile(
+    93→    r"(?:^|[\s\-\|_(\[])([A-Z]{2})(?:$|[\s\-\|_)\]])"
+    94→)
+    95→# Common human-readable country names that show up in subscription remarks.
+    96→_COUNTRY_NAME_PATTERNS = (
+    97→    "United States", "United Kingdom", "Canada", "Germany", "France",
+    98→    "Netherlands", "Japan", "Singapore", "Hong Kong", "South Korea",
+    99→    "Australia", "India", "Italy", "Spain", "Switzerland", "Sweden",
+   100→    "Norway", "Denmark", "Finland", "Austria", "Belgium", "Ireland",
+   101→    "Poland", "Portugal", "Czech Republic", "Romania", "Hungary",
+   102→    "Greece", "Turkey", "Russia", "Ukraine", "Brazil", "Mexico",
+   103→    "Argentina", "South Africa", "New Zealand", "Thailand", "Philippines",
+   104→    "Indonesia", "Malaysia", "Vietnam", "Taiwan", "United Arab Emirates",
+   105→    "Israel",
+   106→)
+   107→
+   108→
+   109→@dataclass
+   110→class V2RayServer:
+   111→    """A single parsed outbound server."""
+   112→
+   113→    protocol: str  # vmess | vless | trojan | shadowsocks
+   114→    address: str
+   115→    port: int
+   116→    remark: str = ""
+   117→    # Protocol-specific fields. Kept loose (dict) so we can serialise to V2Ray JSON
+   118→    # without having to model every protocol's quirks as a dataclass.
+   119→    settings: dict = field(default_factory=dict)
+   120→    # Network/stream settings (ws, tcp, grpc, h2, quic, httpupgrade)
+   121→    network: str = "tcp"
+   122→    stream: dict = field(default_factory=dict)
+   123→    # Detected ISO 3166-1 alpha-2 country code (lowercase) if any.
+   124→    country: Optional[str] = None
+   125→
+   126→    @property
+   127→    def label(self) -> str:
+   128→        """Short, human-readable identifier used for logs and __repr__."""
+   129→        return (self.remark or f"{self.protocol}-{self.address}:{self.port}").strip()
+   130→
+   131→
+   132→def _b64_decode_loose(payload: str) -> str:
+   133→    """Decode a base64 / base64url string, padding it leniently."""
+   134→    payload = payload.strip().replace("\n", "").replace("\r", "")
+   135→    # v2ray-style base64url (no padding) is common
+   136→    pad = "=" * (-len(payload) % 4)
+   137→    try:
+   138→        return base64.urlsafe_b64decode(payload + pad).decode("utf-8")
+   139→    except Exception:
+   140→        try:
+   141→            return base64.b64decode(payload + pad).decode("utf-8")
+   142→        except Exception as error:
+   143→            raise ValueError(f"Could not base64-decode payload ({len(payload)} chars): {error}")
+   144→
+   145→
+   146→def _detect_country(remark: str, server_name: str = "") -> Optional[str]:
+   147→    """Heuristically infer an ISO 3166-1 alpha-2 (lowercase) country code from a remark."""
+   148→    if not remark:
+   149→        remark = ""
+   150→    text = remark
+   151→
+   152→    # Strip flag emojis first so the surrounding text is easier to parse.
+   153→    text = _FLAG_EMOJI_RE.sub(" ", text)
+   154→
+   155→    # Explicit 2-letter hints like "(US)", "- US -", "US | Server 1"
+   156→    for match in _COUNTRY_HINT_RE.finditer(text):
+   157→        candidate = match.group(1).lower()
+   158→        # Filter out obvious false positives like "VR", "4K", "HD" by checking
+   159→        # that the alias-or-ISO map actually recognises the candidate.
+   160→        if get_country_name(candidate):
+   161→            return _normalise_country_code(candidate)
+   162→
+   163→    # Common full country names
+   164→    lowered = text.lower()
+   165→    for name in _COUNTRY_NAME_PATTERNS:
+   166→        if name.lower() in lowered:
+   167→            code = get_country_code(name)
+   168→            if code:
+   169→                return code.lower()
+   170→
+   171→    # UK is the most common non-ISO alias; normalise here so the rest of the
+   172→    # pipeline only has to reason about ISO codes.
+   173→    if re.search(r"\buk\b|united kingdom|\bgreat britain\b", lowered):
+   174→        return "gb"
+   175→
+   176→    # Last resort: TLD of the SNI / server hostname.
+   177→    if server_name:
+   178→        host = server_name.split(":")[0]
+   179→        tld = host.rsplit(".", 1)[-1].lower() if "." in host else ""
+   180→        if len(tld) == 2 and get_country_name(tld):
+   181→            return _normalise_country_code(tld)
+   182→
+   183→    return None
+   184→
+   185→
+   186→def _split_url_fragment(uri: str) -> tuple[str, str]:
+   187→    """Split a URI into (body, fragment) where fragment is URL-decoded."""
+   188→    if "#" in uri:
+   189→        body, frag = uri.split("#", 1)
+   190→        return body, unquote(frag)
+   191→    return uri, ""
+   192→
+   193→
+   194→def _parse_vmess(uri: str) -> Optional[V2RayServer]:
+   195→    """Parse a ``vmess://`` (V2Ray VMess) URI into a server record."""
+   196→    if not uri.startswith("vmess://"):
+   197→        return None
+   198→    payload = uri[len("vmess://"):]
+   199→    try:
+   200→        data = json.loads(_b64_decode_loose(payload))
+   201→    except (ValueError, json.JSONDecodeError) as error:
+   202→        log.debug("v2ray: skipping unparseable vmess URI: %s", error)
+   203→        return None
+   204→
+   205→    address = str(data.get("add") or "").strip()
+   206→    port_raw = data.get("port")
+   207→    if not address or not port_raw:
+   208→        return None
+   209→    try:
+   210→        port = int(port_raw)
+   211→    except (TypeError, ValueError):
+   212→        return None
+   213→
+   214→    network = str(data.get("net") or "tcp").lower()
+   215→    tls_setting = str(data.get("tls") or "").lower()
+   216→    security = "tls" if tls_setting in ("tls", "1", "true") else ("reality" if tls_setting == "reality" else "none")
+   217→
+   218→    stream: dict = {
+   219→        "security": security,
+   220→        "network": network,
+   221→    }
+   222→    if security == "tls":
+   223→        sni = str(data.get("sni") or data.get("host") or "").strip()
+   224→        if sni:
+   225→            stream["tlsSettings"] = {"serverName": sni, "allowInsecure": bool(data.get("verify_cert", False) is False)}
+   226→    if network in ("ws", "httpupgrade"):
+   227→        stream["wsSettings" if network == "ws" else "httpupgradeSettings"] = {
+   228→            "path": str(data.get("path") or "/"),
+   229→            "host": str(data.get("host") or ""),
+   230→        }
+   231→    elif network == "grpc":
+   232→        stream["grpcSettings"] = {"serviceName": str(data.get("path") or "")}
+   233→    elif network == "h2":
+   234→        stream["httpSettings"] = {
+   235→            "path": str(data.get("path") or "/"),
+   236→            "host": [str(data.get("host") or "")] if data.get("host") else [],
+   237→        }
+   238→
+   239→    remark = str(data.get("ps") or "")
+   240→    server_name = stream.get("tlsSettings", {}).get("serverName", "") if security == "tls" else ""
+   241→    return V2RayServer(
+   242→        protocol="vmess",
+   243→        address=address,
+   244→        port=port,
+   245→        remark=remark,
+   246→        settings={
+   247→            "id": str(data.get("id") or ""),
+   248→            "alterId": int(data.get("aid") or 0),
+   249→            "security": str(data.get("scy") or "auto"),
+   250→        },
+   251→        network=network,
+   252→        stream=stream,
+   253→        country=_detect_country(remark, server_name or address),
+   254→    )
+   255→
+   256→
+   257→def _parse_vless(uri: str) -> Optional[V2RayServer]:
+   258→    """Parse a ``vless://`` URI (VLESS, used heavily by Xray + XTLS)."""
+   259→    if not uri.startswith("vless://"):
+   260→        return None
+   261→    body, fragment = _split_url_fragment(uri[len("vless://"):])
+   262→    if "@" not in body:
+   263→        return None
+   264→    user_part, host_part = body.split("@", 1)
+   265→    uuid = unquote(user_part)
+   266→    if not uuid or not host_part:
+   267→        return None
+   268→
+   269→    parsed = urlparse(f"//{host_part}")
+   270→    address = parsed.hostname or ""
+   271→    if not address:
+   272→        return None
+   273→    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+   274→    query = parse_qs(parsed.query)
+   275→
+   276→    network = (query.get("type", ["tcp"])[0]).lower()
+   277→    security = (query.get("security", ["none"])[0]).lower()
+   278→
+   279→    stream: dict = {"security": security, "network": network}
+   280→    if security == "tls":
+   281→        sni = query.get("sni", [query.get("peer", [""])[0]])[0]
+   282→        alpn = query.get("alpn", [""])[0]
+   283→        fp = query.get("fp", [""])[0]
+   284→        tls_settings: dict = {"serverName": sni}
+   285→        if alpn:
+   286→            tls_settings["alpn"] = alpn.split(",")
+   287→        if fp:
+   288→            tls_settings["fingerprint"] = fp
+   289→        if query.get("allowInsecure", ["0"])[0] in ("1", "true"):
+   290→            tls_settings["allowInsecure"] = True
+   291→        stream["tlsSettings"] = tls_settings
+   292→    elif security == "reality":
+   293→        reality_settings: dict = {
+   294→            "serverName": query.get("sni", [""])[0],
+   295→            "publicKey": query.get("pbk", [""])[0],
+   296→            "shortId": query.get("sid", [""])[0],
+   297→            "fingerprint": query.get("fp", ["chrome"])[0],
+   298→        }
+   299→        if query.get("spiderX", [""])[0]:
+   300→            reality_settings["spiderX"] = query["spiderX"][0]
+   301→        stream["realitySettings"] = reality_settings
+   302→
+   303→    if network == "ws":
+   304→        stream["wsSettings"] = {
+   305→            "path": query.get("path", ["/"])[0],
+   306→            "host": query.get("host", [""])[0],
+   307→        }
+   308→    elif network == "grpc":
+   309→        stream["grpcSettings"] = {"serviceName": query.get("serviceName", [""])[0]}
+   310→    elif network == "tcp" and security == "tls":
+   311→        # Xray's "tcp+tls" with XTLS Vision / Flow
+   312→        flow = query.get("flow", [""])[0]
+   313→        if flow:
+   314→            stream["tcpSettings"] = {"header": {"type": "none"}}
+   315→    elif network == "httpupgrade":
+   316→        stream["httpupgradeSettings"] = {
+   317→            "path": query.get("path", ["/"])[0],
+   318→            "host": query.get("host", [""])[0],
+   319→        }
+   320→
+   321→    return V2RayServer(
+   322→        protocol="vless",
+   323→        address=address,
+   324→        port=port,
+   325→        remark=fragment,
+   326→        settings={
+   327→            "id": uuid,
+   328→            "encryption": query.get("encryption", ["none"])[0],
+   329→            "flow": query.get("flow", [""])[0] or None,
+   330→        },
+   331→        network=network,
+   332→        stream=stream,
+   333→        country=_detect_country(fragment, query.get("sni", [""])[0] or address),
+   334→    )
+   335→
+   336→
+   337→def _parse_trojan(uri: str) -> Optional[V2RayServer]:
+   338→    """Parse a ``trojan://`` URI."""
+   339→    if not uri.startswith("trojan://"):
+   340→        return None
+   341→    body, fragment = _split_url_fragment(uri[len("trojan://"):])
+   342→    if "@" not in body:
+   343→        return None
+   344→    password, host_part = body.split("@", 1)
+   345→    password = unquote(password)
+   346→    if not password or not host_part:
+   347→        return None
+   348→    parsed = urlparse(f"//{host_part}")
+   349→    address = parsed.hostname or ""
+   350→    if not address:
+   351→        return None
+   352→    port = parsed.port or 443
+   353→    query = parse_qs(parsed.query)
+   354→
+   355→    network = (query.get("type", ["tcp"])[0]).lower()
+   356→    security = (query.get("security", ["tls"])[0]).lower() or "tls"
+   357→
+   358→    stream: dict = {"security": security, "network": network}
+   359→    sni = query.get("sni", [query.get("peer", [""])[0]])[0]
+   360→    if security == "tls":
+   361→        tls_settings: dict = {"serverName": sni or address}
+   362→        if query.get("alpn", [""])[0]:
+   363→            tls_settings["alpn"] = query["alpn"][0].split(",")
+   364→        if query.get("allowInsecure", ["0"])[0] in ("1", "true"):
+   365→            tls_settings["allowInsecure"] = True
+   366→        stream["tlsSettings"] = tls_settings
+   367→    if network == "ws":
+   368→        stream["wsSettings"] = {
+   369→            "path": query.get("path", ["/"])[0],
+   370→            "host": query.get("host", [""])[0],
+   371→        }
+   372→    elif network == "grpc":
+   373→        stream["grpcSettings"] = {"serviceName": query.get("serviceName", [""])[0]}
+   374→
+   375→    return V2RayServer(
+   376→        protocol="trojan",
+   377→        address=address,
+   378→        port=port,
+   379→        remark=fragment,
+   380→        settings={"password": password},
+   381→        network=network,
+   382→        stream=stream,
+   383→        country=_detect_country(fragment, sni or address),
+   384→    )
+   385→
+   386→
+   387→def _parse_shadowsocks(uri: str) -> Optional[V2RayServer]:
+   388→    """Parse a ``ss://`` (Shadowsocks) URI in either the legacy or SIP002 form."""
+   389→    if not uri.startswith("ss://"):
+   390→        return None
+   391→    body, fragment = _split_url_fragment(uri[len("ss://"):])
+   392→
+   393→    method = password = ""
+   394→    address = port = None
+   395→
+   396→    if "@" in body:
+   397→        # SIP002 form: base64(method:password)@host:port  OR  method:password@host:port
+   398→        creds_part, host_part = body.split("@", 1)
+   399→        if ":" in creds_part and not creds_part.startswith("%2F"):
+   400→            # Plain-text creds (some servers ship this)
+   401→            method, password = creds_part.split(":", 1)
+   402→            method = unquote(method)
+   403→            password = unquote(password)
+   404→        else:
+   405→            try:
+   406→                decoded = _b64_decode_loose(creds_part)
+   407→                if ":" in decoded:
+   408→                    method, password = decoded.split(":", 1)
+   409→            except ValueError:
+   410→                return None
+   411→        parsed = urlparse(f"//{host_part}")
+   412→        address = parsed.hostname or ""
+   413→        port = parsed.port
+   414→    else:
+   415→        # Legacy form: ss://base64(method:password@host:port)
+   416→        try:
+   417→            decoded = _b64_decode_loose(body)
+   418→        except ValueError:
+   419→            return None
+   420→        if "@" not in decoded or ":" not in decoded:
+   421→            return None
+   422→        creds, host_port = decoded.rsplit("@", 1)
+   423→        if ":" not in creds or ":" not in host_port:
+   424→            return None
+   425→        method, password = creds.split(":", 1)
+   426→        host, port_str = host_port.rsplit(":", 1)
+   427→        address = host
+   428→        try:
+   429→            port = int(port_str)
+   430→        except ValueError:
+   431→            return None
+   432→
+   433→    if not address or not port or not method:
+   434→        return None
+   435→
+   436→    return V2RayServer(
+   437→        protocol="shadowsocks",
+   438→        address=address,
+   439→        port=port,
+   440→        remark=fragment,
+   441→        settings={"method": method, "password": password},
+   442→        network="tcp",
+   443→        stream={"security": "none", "network": "tcp"},
+   444→        country=_detect_country(fragment, address),
+   445→    )
+   446→
+   447→
+   448→_PROTOCOL_PARSERS = (
+   449→    _parse_vmess,
+   450→    _parse_vless,
+   451→    _parse_trojan,
+   452→    _parse_shadowsocks,
+   453→)
+   454→
+   455→# Schemes recognised as V2Ray-family URIs. Used by _is_v2ray_uri() to detect direct-URI
+   456→# queries on the CLI (e.g. ``--proxy v2ray:vmess://...``).
+   457→_V2RAY_URI_SCHEMES = ("vmess://", "vless://", "trojan://", "ss://")
+   458→
+   459→
+   460→def _is_v2ray_uri(text: str) -> bool:
+   461→    """Return True if ``text`` looks like a V2Ray-family URI (vmess/vless/trojan/ss).
+   462→
+   463→    Used by :meth:`V2Ray.get_proxy` to detect direct-URI queries — e.g.
+   464→    ``--proxy v2ray:vmess://...`` — and spawn a one-shot subprocess for that exact
+   465→    server, bypassing the country/remark selection logic.
+   466→    """
+   467→    if not text:
+   468→        return False
+   469→    text = text.strip()
+   470→    return any(text.startswith(scheme) for scheme in _V2RAY_URI_SCHEMES)
+   471→
+   472→
+   473→def parse_server_uri(uri: str) -> Optional[V2RayServer]:
+   474→    """Parse a single ``vmess://``, ``vless://``, ``trojan://``, or ``ss://`` URI.
+   475→
+   476→    Returns ``None`` (and logs a debug message) if the URI is not recognised or malformed.
+   477→    Exposed publicly so the test-suite can exercise each parser without going through the
+   478→    subscription/network layer.
+   479→    """
+   480→    uri = (uri or "").strip()
+   481→    if not uri:
+   482→        return None
+   483→    for parser in _PROTOCOL_PARSERS:
+   484→        try:
+   485→            server = parser(uri)
+   486→        except Exception as error:
+   487→            log.debug("v2ray: parser %s raised on %r: %s", parser.__name__, uri[:80], error)
+   488→            server = None
+   489→        if server is not None:
+   490→            return server
+   491→    log.debug("v2ray: no parser matched URI %r", uri[:80])
+   492→    return None
+   493→
+   494→
+   495→# ---------------------------------------------------------------------------
+   496→# Subscription + config-file loaders
+   497→# ---------------------------------------------------------------------------
+   498→
+   499→_SUBSCRIPTION_TIMEOUT = 20.0
+   500→_SUBSCRIPTION_HEADERS = {
+   501→    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+   502→    "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+   503→    "Accept": "*/*",
+   504→}
+   505→
+   506→
+   507→def fetch_subscription(url: str, *, timeout: float = _SUBSCRIPTION_TIMEOUT) -> list[V2RayServer]:
+   508→    """Fetch a base64/plain subscription URL and return the parsed server list.
+   509→
+   510→    Subscription endpoints customarily return either a base64 blob of newline-separated
+   511→    URIs or the URIs themselves (one per line). Both shapes are handled here, and any
+   512→    line that fails to parse is skipped with a debug log so a single bad entry never
+   513→    aborts the whole subscription.
+   514→    """
+   515→    response = requests.get(url, headers=_SUBSCRIPTION_HEADERS, timeout=timeout)
+   516→    response.raise_for_status()
+   517→    body = response.text.strip()
+   518→    if not body:
+   519→        return []
+   520→
+   521→    # If the body doesn't contain a recognised scheme, assume it's base64-encoded.
+   522→    if not re.search(r"(vmess|vless|trojan|ss)://", body, re.IGNORECASE):
+   523→        try:
+   524→            body = _b64_decode_loose(body)
+   525→        except ValueError as error:
+   526→            log.warning("v2ray: subscription %s looked base64 but could not be decoded: %s", url, error)
+   527→            return []
+   528→
+   529→    servers: list[V2RayServer] = []
+   530→    for raw_line in body.splitlines():
+   531→        line = raw_line.strip()
+   532→        if not line or line.startswith("#"):
+   533→            continue
+   534→        server = parse_server_uri(line)
+   535→        if server is not None:
+   536→            servers.append(server)
+   537→    log.info("v2ray: subscription %s yielded %d server(s)", url, len(servers))
+   538→    return servers
+   539→
+   540→
+   541→def load_config_file(path: Path) -> list[V2RayServer]:
+   542→    """Extract outbound servers from a pre-built V2Ray/Xray JSON config file.
+   543→
+   544→    The file is parsed for ``outbounds`` whose protocol is one of vmess/vless/trojan/
+   545→    shadowsocks. Each one is rebuilt as a :class:`V2RayServer` so it can take part in the
+   546→    same query/selection logic as subscription- or inline-defined servers.
+   547→    """
+   548→    try:
+   549→        data = json.loads(path.read_text(encoding="utf-8"))
+   550→    except (OSError, json.JSONDecodeError) as error:
+   551→        raise ValueError(f"v2ray: could not read config file {path}: {error}")
+   552→
+   553→    if "outbounds" not in data or not isinstance(data.get("outbounds"), list):
+   554→        raise ValueError(f"v2ray: config file {path} has no 'outbounds' list")
+   555→    outbounds = data["outbounds"]
+   556→
+   557→    servers: list[V2RayServer] = []
+   558→    for entry in outbounds:
+   559→        if not isinstance(entry, dict):
+   560→            continue
+   561→        protocol = str(entry.get("protocol") or "").lower()
+   562→        if protocol not in ("vmess", "vless", "trojan", "shadowsocks"):
+   563→            continue
+   564→        settings = entry.get("settings") or {}
+   565→        stream = entry.get("streamSettings") or {}
+   566→        servers_v2 = settings.get("vnext") or []
+   567→        servers_ss = settings.get("servers") or []
+   568→        if protocol in ("vmess", "vless") and servers_v2:
+   569→            target = servers_v2[0]
+   570→            address = str(target.get("address") or "")
+   571→            port = int(target.get("port") or 0)
+   572→            users = target.get("users") or [{}]
+   573→            user = users[0] if users else {}
+   574→            settings_flat: dict[str, Any] = {"id": str(user.get("id") or "")}
+   575→            if protocol == "vmess":
+   576→                settings_flat["alterId"] = int(user.get("alterId") or 0)
+   577→                settings_flat["security"] = str(user.get("security") or "auto")
+   578→            else:
+   579→                settings_flat["encryption"] = str(user.get("encryption") or "none")
+   580→                if user.get("flow"):
+   581→                    settings_flat["flow"] = str(user.get("flow"))
+   582→        elif protocol == "trojan" and servers_ss:
+   583→            target = servers_ss[0]
+   584→            address = str(target.get("address") or "")
+   585→            port = int(target.get("port") or 0)
+   586→            settings_flat = {"password": str(target.get("password") or "")}
+   587→        elif protocol == "shadowsocks" and servers_ss:
+   588→            target = servers_ss[0]
+   589→            address = str(target.get("address") or "")
+   590→            port = int(target.get("port") or 0)
+   591→            settings_flat = {
+   592→                "method": str(target.get("method") or ""),
+   593→                "password": str(target.get("password") or ""),
+   594→            }
+   595→        else:
+   596→            continue
+   597→
+   598→        if not address or not port:
+   599→            continue
+   600→        remark = str(entry.get("tag") or entry.get("remark") or "")
+   601→        sni = ""
+   602→        if isinstance(stream.get("tlsSettings"), dict):
+   603→            sni = str(stream["tlsSettings"].get("serverName") or "")
+   604→        elif isinstance(stream.get("realitySettings"), dict):
+   605→            sni = str(stream["realitySettings"].get("serverName") or "")
+   606→        servers.append(
+   607→            V2RayServer(
+   608→                protocol=protocol,
+   609→                address=address,
+   610→                port=port,
+   611→                remark=remark,
+   612→                settings=settings_flat,
+   613→                network=str(stream.get("network") or "tcp"),
+   614→                stream=stream or {"network": "tcp", "security": "none"},
+   615→                country=_detect_country(remark, sni or address),
+   616→            )
+   617→        )
+   618→
+   619→    log.info("v2ray: config file %s yielded %d server(s)", path, len(servers))
+   620→    return servers
+   621→
+   622→
+   623→# ---------------------------------------------------------------------------
+   624→# V2Ray config builder
+   625→# ---------------------------------------------------------------------------
+   626→
+   627→def build_outbound(server: V2RayServer, tag: str = "proxy") -> dict:
+   628→    """Build a single V2Ray/Xray outbound dict for the given server."""
+   629→    if server.protocol == "vmess":
+   630→        outbound = {
+   631→            "tag": tag,
+   632→            "protocol": "vmess",
+   633→            "settings": {
+   634→                "vnext": [
+   635→                    {
+   636→                        "address": server.address,
+   637→                        "port": server.port,
+   638→                        "users": [
+   639→                            {
+   640→                                "id": server.settings.get("id", ""),
+   641→                                "alterId": int(server.settings.get("alterId") or 0),
+   642→                                "security": server.settings.get("security", "auto"),
+   643→                            }
+   644→                        ],
+   645→                    }
+   646→                ]
+   647→            },
+   648→            "streamSettings": _normalise_stream(server),
+   649→        }
+   650→    elif server.protocol == "vless":
+   651→        user: dict = {"id": server.settings.get("id", ""), "encryption": server.settings.get("encryption", "none")}
+   652→        if server.settings.get("flow"):
+   653→            user["flow"] = server.settings["flow"]
+   654→        outbound = {
+   655→            "tag": tag,
+   656→            "protocol": "vless",
+   657→            "settings": {
+   658→                "vnext": [{"address": server.address, "port": server.port, "users": [user]}]
+   659→            },
+   660→            "streamSettings": _normalise_stream(server),
+   661→        }
+   662→    elif server.protocol == "trojan":
+   663→        outbound = {
+   664→            "tag": tag,
+   665→            "protocol": "trojan",
+   666→            "settings": {
+   667→                "servers": [
+   668→                    {
+   669→                        "address": server.address,
+   670→                        "port": server.port,
+   671→                        "password": server.settings.get("password", ""),
+   672→                    }
+   673→                ]
+   674→            },
+   675→            "streamSettings": _normalise_stream(server),
+   676→        }
+   677→    elif server.protocol == "shadowsocks":
+   678→        outbound = {
+   679→            "tag": tag,
+   680→            "protocol": "shadowsocks",
+   681→            "settings": {
+   682→                "servers": [
+   683→                    {
+   684→                        "address": server.address,
+   685→                        "port": server.port,
+   686→                        "method": server.settings.get("method", ""),
+   687→                        "password": server.settings.get("password", ""),
+   688→                    }
+   689→                ]
+   690→            },
+   691→            "streamSettings": _normalise_stream(server),
+   692→        }
+   693→    else:
+   694→        raise ValueError(f"Unsupported V2Ray protocol: {server.protocol!r}")
+   695→
+   696→    return outbound
+   697→
+   698→
+   699→def _normalise_stream(server: V2RayServer) -> dict:
+   700→    """Return a streamSettings dict suitable for the V2Ray/Xray JSON config."""
+   701→    stream = dict(server.stream or {})
+   702→    stream.setdefault("network", server.network or "tcp")
+   703→    stream.setdefault("security", "none")
+   704→    # V2Ray expects "tcpSettings" etc. for per-transport settings; we already store
+   705→    # them under those keys in the parser, so just copy through.
+   706→    return stream
+   707→
+   708→
+   709→def build_config(server: V2RayServer, *, socks_port: int, http_port: Optional[int] = None) -> dict:
+   710→    """Build the full V2Ray/Xray JSON config for a single outbound + local inbounds."""
+   711→    inbounds: list[dict] = [
+   712→        {
+   713→            "tag": "socks-in",
+   714→            "listen": "127.0.0.1",
+   715→            "port": socks_port,
+   716→            "protocol": "socks",
+   717→            "settings": {"auth": "noauth", "udp": True},
+   718→            "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+   719→        }
+   720→    ]
+   721→    if http_port:
+   722→        inbounds.append(
+   723→            {
+   724→                "tag": "http-in",
+   725→                "listen": "127.0.0.1",
+   726→                "port": http_port,
+   727→                "protocol": "http",
+   728→                "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+   729→            }
+   730→        )
+   731→
+   732→    return {
+   733→        "log": {"loglevel": "warning"},
+   734→        "inbounds": inbounds,
+   735→        "outbounds": [
+   736→            build_outbound(server, tag="proxy"),
+   737→            {"tag": "direct", "protocol": "freedom", "settings": {}},
+   738→            {"tag": "block", "protocol": "blackhole", "settings": {}},
+   739→        ],
+   740→        "routing": {
+   741→            "rules": [
+   742→                {"type": "field", "ip": ["geoip:private"], "outboundTag": "direct"},
+   743→            ]
+   744→        },
+   745→    }
+   746→
+   747→
+   748→# ---------------------------------------------------------------------------
+   749→# Provider
+   750→# ---------------------------------------------------------------------------
+   751→
+   752→
+   753→class V2Ray(Proxy):
+   754→    """V2Ray / Xray local proxy provider.
+   755→
+   756→    Servers may be provided in three ways (in priority order — first non-empty wins):
+   757→
+   758→    1. ``subscription_url`` (str or list[str]) — base64/plain subscription endpoint(s).
+   759→    2. ``config_path`` (str|Path) — a pre-built V2Ray/Xray JSON config file. Outbounds
+   760→       with a known protocol (vmess/vless/trojan/shadowsocks) are extracted and treated
+   761→       as selectable servers.
+   762→    3. ``servers`` (list[str|dict]) — inline list of URIs (``vmess://...`` etc.) or
+   763→       pre-parsed server dicts.
+   764→
+   765→    Optional ``server_map`` (dict[str, str]) lets the user override the country/alias
+   766→    used for selection: keys are matched (case-insensitive) against either an explicit
+   767→    alias or the server's remark substring, and the value replaces the query used to
+   768→    reach that server. This is handy when a subscription's remarks don't include a
+   769→    country code or use non-standard naming.
+   770→
+   771→    Query format (after the ``v2ray:`` prefix):
+   772→      - ``us``         any server detected as US
+   773→      - ``us:1``       first US server (1-indexed)
+   774→      - ``tokyo``      server whose remark contains "tokyo" (case-insensitive)
+   775→      - ``us:tokyo``   US server whose remark contains "tokyo"
+   776→
+   777→    The provider spawns the ``xray`` binary (preferred) or falls back to ``v2ray``. Each
+   778→    unique query gets its own subprocess on a dedicated local port; the SOCKS5 proxy URI
+   779→    is returned. Processes are reused for the rest of the process and cleaned up on exit.
+   780→    """
+   781→
+   782→    DEFAULT_VERIFY_IP = True
+   783→    DEFAULT_STARTUP_TIMEOUT = 30.0  # seconds
+   784→    DEFAULT_HEALTHCHECK_TIMEOUT = 5.0
+   785→
+   786→    def __init__(
+   787→        self,
+   788→        subscription_url: Optional[Any] = None,
+   789→        config_path: Optional[Any] = None,
+   790→        servers: Optional[list[Any]] = None,
+   791→        countries: Optional[dict[str, Any]] = None,
+   792→        server_map: Optional[dict[str, str]] = None,
+   793→        binary: Optional[Any] = None,
+   794→        bind_host: str = "127.0.0.1",
+   795→        base_port: int = 11080,
+   796→        proxy_scheme: str = "socks5",
+   797→        verify_ip: bool = DEFAULT_VERIFY_IP,
+   798→        startup_timeout: float = DEFAULT_STARTUP_TIMEOUT,
+   799→        auto_cleanup: bool = True,
+   800→        cache_path: Optional[Any] = None,
+   801→        **kwargs: Any,
+   802→    ):
+   803→        """Initialise the V2Ray provider.
+   804→
+   805→        Args:
+   806→            subscription_url: A single subscription URL or a list of URLs. Each is
+   807→                fetched once at init and the parsed servers are merged.
+   808→            config_path: Path to a V2Ray/Xray JSON config file. Outbounds with known
+   809→                protocols are extracted and added to the selectable server pool.
+   810→            servers: Inline list of ``vmess://``/``vless://``/``trojan://``/``ss://``
+   811→                URIs or pre-parsed server dicts (useful for tests / programmatic use).
+   812→            countries: ``basic``-style per-country assignment — a dict mapping a country
+   813→                code (or arbitrary alias) to a single URI string or a list of URI strings.
+   814→                Queries like ``v2ray:us`` then pick from the URIs assigned to ``us``
+   815→                (random pick by default; ``v2ray:us:2`` selects the second one). This is
+   816→                the simplest way to pin specific servers to specific regions without
+   817→                dealing with subscription URLs or remark substrings. URIs that fail to
+   818→                parse are skipped with a warning, so a single bad entry never aborts the
+   819→                whole map.
+   820→            server_map: Optional dict mapping a query alias (e.g. ``"stream-us"``) to
+   821→                either a country code, a remark substring, or a ``country:remark`` pair.
+   822→                Lets users give friendly names to specific servers.
+   823→            binary: Optional path to the V2Ray/Xray binary. Defaults to auto-discovery
+   824→                via :mod:`unshackle.core.binaries` (Xray preferred, v2ray fallback).
+   825→            bind_host: Host the local inbounds listen on (default ``127.0.0.1`` —
+   826→                proxies are never exposed publicly by default).
+   827→            base_port: First port to try when allocating local inbounds (default 11080).
+   828→                Each query gets ``base_port + N`` (SOCKS) and ``base_port + N + 1`` (HTTP)
+   829→                for its inbounds.
+   830→            proxy_scheme: Scheme used for the returned proxy URI. ``socks5`` (default)
+   831→                and ``socks5h`` are supported; ``http`` returns the HTTP inbound URI
+   832→                instead (requires the HTTP inbound to be enabled, which it is by default).
+   833→            verify_ip: When True (default), verify the exit IP / country of the spawned
+   834→                proxy via :func:`unshackle.core.utils.ip_info.get_ip_info` before
+   835→                returning it to the caller.
+   836→            startup_timeout: Seconds to wait for the V2Ray subprocess to start accepting
+   837→                connections (default 30s).
+   838→            auto_cleanup: When True (default), the subprocess is killed on object
+   839→                destruction / interpreter exit.
+   840→            cache_path: Optional path to cache the parsed subscription server list. The
+   841→                cache is invalidated whenever any subscription URL is re-fetched and the
+   842→                response changes; on a fetch failure the cached list is used as a
+   843→                fallback. Disabled by default.
+   844→        """
+   845→        # Resolve the binary first; the rest of init can proceed even without one (so
+   846→        # the constructor doesn't raise during config validation in tests), but
+   847→        # ``get_proxy`` will refuse to run without a usable binary.
+   848→        self.binary = self._resolve_binary(binary)
+   849→        self.bind_host = bind_host
+   850→        self.base_port = int(base_port)
+   851→        self.proxy_scheme = str(proxy_scheme or "socks5").lower()
+   852→        if self.proxy_scheme not in ("socks5", "socks5h", "http", "https"):
+   853→            raise ValueError(
+   854→                f"v2ray: proxy_scheme must be one of socks5/socks5h/http/https, got {self.proxy_scheme!r}"
+   855→            )
+   856→        self.verify_ip = bool(verify_ip)
+   857→        self.startup_timeout = float(startup_timeout)
+   858→        self.auto_cleanup = bool(auto_cleanup)
+   859→        self.cache_path = Path(cache_path).expanduser() if cache_path else None
+   860→
+   861→        self.server_map = self._normalise_server_map(server_map or {})
+   862→
+   863→        # Per-instance state
+   864→        self._port_lock = threading.Lock()
+   865→        self._servers: list[V2RayServer] = []
+   866→        self._country_servers: dict[str, list[V2RayServer]] = {}
+   867→        self._active: dict[str, dict] = {}  # query_key -> process info
+   868→
+   869→        # Load servers (priority: subscription > config_path > inline).
+   870→        self._servers = self._load_servers(subscription_url, config_path, servers)
+   871→
+   872→        # Load the per-country map (basic-style assignment). Done after the flat list so
+   873→        # the two can coexist: ``v2ray:us`` first checks the explicit country map, then
+   874→        # falls back to country-detection on the flat server list.
+   875→        self._country_servers = self._load_country_map(countries or {})
+   876→
+   877→        # Register for atexit cleanup (always, even if no servers loaded yet —
+   878→        # get_proxy may load more later via subscription refresh or direct URI queries).
+   879→        _register_cleanup()
+   880→        with _cleanup_lock:
+   881→            _v2ray_instances.append(self)
+   882→
+   883→        total_servers = len(self._servers) + sum(len(v) for v in self._country_servers.values())
+   884→        log_event(
+   885→            "v2ray_init",
+   886→            level="INFO",
+   887→            message=f"V2Ray proxy provider initialized with {total_servers} server(s)",
+   888→            context={
+   889→                "binary": str(self.binary) if self.binary else None,
+   890→                "bind_host": self.bind_host,
+   891→                "base_port": self.base_port,
+   892→                "proxy_scheme": self.proxy_scheme,
+   893→                "verify_ip": self.verify_ip,
+   894→                "server_count": len(self._servers),
+   895→                "country_server_count": total_servers - len(self._servers),
+   896→                "country_keys": list(self._country_servers.keys()),
+   897→            },
+   898→        )
+   899→
+   900→    # -- Proxy interface ---------------------------------------------------
+   901→
+   902→    def __repr__(self) -> str:
+   903→        flat_countries = {s.country for s in self._servers if s.country}
+   904→        mapped_countries = set(self._country_servers.keys())
+   905→        all_countries = flat_countries | mapped_countries
+   906→        total_servers = len(self._servers) + sum(len(v) for v in self._country_servers.values())
+   907→        countries = len(all_countries)
+   908→        return f"{countries} Countr{['ies', 'y'][countries == 1]} ({total_servers} Server{['s', ''][total_servers == 1]})"
+   909→
+   910→    def get_proxy(self, query: str) -> Optional[str]:
+   911→        """Resolve ``query`` to a local proxy URI backed by a V2Ray subprocess.
+   912→
+   913→        ``query`` may be:
+   914→
+   915→        - A direct V2Ray URI (``vmess://...``, ``vless://...``, ``trojan://...``,
+   916→          ``ss://...``) — a one-shot subprocess is spawned for that exact server.
+   917→          Useful for ad-hoc invocations like ``--proxy v2ray:vmess://...`` without
+   918→          any YAML configuration at all.
+   919→        - A country code, ``country:index``, ``country:remark``, remark substring, or
+   920→          ``server_map`` alias — resolved against the configured server pool
+   921→          (``countries`` map first, then the flat ``servers`` / ``subscription_url`` /
+   922→          ``config_path`` list).
+   923→        """
+   924→        if not self.binary:
+   925→            raise EnvironmentError(
+   926→                "V2Ray/Xray binary not found. Install xray (https://github.com/XTLS/Xray-core) "
+   927→                "or v2ray (https://github.com/v2fly/v2ray-core) and ensure it is on your PATH, "
+   928→                "or set proxy_providers.v2ray.binary in your config."
+   929→            )
+   930→
+   931→        raw_query = query or ""
+   932→        query_key = raw_query.strip().lower()
+   933→        if not query_key:
+   934→            raise ValueError("v2ray: empty query — supply a country code, alias, remark substring, or V2Ray URI")
+   935→
+   936→        # Direct-URI mode: the query is itself a vmess:// / vless:// / trojan:// / ss:// URI.
+   937→        # Parse it on the fly and spawn a one-shot subprocess. This works even when no
+   938→        # servers are configured in YAML — handy for ``--proxy v2ray:vmess://...``.
+   939→        if _is_v2ray_uri(raw_query):
+   940→            server = parse_server_uri(raw_query)
+   941→            if server is None:
+   942→                raise ValueError(
+   943→                    f"v2ray: query looked like a V2Ray URI but could not be parsed: {raw_query[:80]!r}"
+   944→                )
+   945→            return self._spawn_for_server(server, query_key)
+   946→
+   947→        # Country / remark / alias mode requires at least one preloaded server source.
+   948→        if not self._servers and not self._country_servers:
+   949→            raise ValueError(
+   950→                "V2Ray proxy provider has no servers configured. Provide subscription_url, "
+   951→                "config_path, servers, or countries under proxy_providers.v2ray — "
+   952→                "or pass a vmess:// / vless:// / trojan:// / ss:// URI directly on the CLI."
+   953→            )
+   954→
+   955→        # Reuse a running subprocess for the same query.
+   956→        if query_key in self._active and self._is_process_alive(self._active[query_key]):
+   957→            entry = self._active[query_key]
+   958→            if self.verify_ip and not entry.get("verified"):
+   959→                self._verify_proxy(query_key)
+   960→            return self._build_proxy_uri(entry["socks_port"], entry["http_port"])
+   961→
+   962→        server = self._select_server(query_key)
+   963→        if server is None:
+   964→            # No server matched — return None to indicate "accepted but unavailable" per Proxy contract.
+   965→            return None
+   966→
+   967→        return self._spawn_for_server(server, query_key)
+   968→
+   969→    def _spawn_for_server(self, server: V2RayServer, query_key: str) -> str:
+   970→        """Allocate ports, spawn the subprocess for ``server``, and return the proxy URI.
+   971→
+   972→        Used by both the country/remark selection path and the direct-URI path so the
+   973→        readiness / verify / cleanup behaviour is identical.
+   974→        """
+   975→        # Reuse an already-running subprocess for the same key (e.g. the same URI passed twice).
+   976→        if query_key in self._active and self._is_process_alive(self._active[query_key]):
+   977→            entry = self._active[query_key]
+   978→            if self.verify_ip and not entry.get("verified"):
+   979→                self._verify_proxy(query_key)
+   980→            return self._build_proxy_uri(entry["socks_port"], entry["http_port"])
+   981→
+   982→        socks_port, http_port = self._allocate_ports()
+   983→        config = build_config(server, socks_port=socks_port, http_port=http_port)
+   984→        process_info = self._spawn_process(config, socks_port, http_port, server)
+   985→        process_info["server"] = server
+   986→        process_info["query"] = query_key
+   987→        self._active[query_key] = process_info
+   988→
+   989→        # Wait for the SOCKS5 inbound to accept connections.
+   990→        if not self._wait_for_ready(socks_port, timeout=self.startup_timeout):
+   991→            self._kill_process(process_info)
+   992→            self._active.pop(query_key, None)
+   993→            raise RuntimeError(
+   994→                f"v2ray: subprocess did not become ready within {self.startup_timeout:.0f}s "
+   995→                f"(server={server.label}, port={socks_port})"
+   996→            )
+   997→
+   998→        if self.verify_ip:
+   999→            self._verify_proxy(query_key)
+  1000→
+  1001→        return self._build_proxy_uri(socks_port, http_port)
+  1002→
+  1003→    # -- Server selection --------------------------------------------------
+  1004→
+  1005→    def _select_server(self, query: str) -> Optional[V2RayServer]:
+  1006→        """Pick a server matching ``query`` (already lowercased)."""
+  1007→        # Apply server_map aliases first.
+  1008→        mapped = self.server_map.get(query)
+  1009→        if mapped:
+  1010→            query = mapped.lower()
+  1011→
+  1012→        # Split "head:tail" — head is a country code / alias, tail is an index or remark.
+  1013→        head = query
+  1014→        tail = ""
+  1015→        if ":" in query:
+  1016→            head, tail = query.split(":", 1)
+  1017→            head = head.strip()
+  1018→            tail = tail.strip()
+  1019→
+  1020→        index: Optional[int] = None
+  1021→        remark_query: Optional[str] = None
+  1022→        if tail:
+  1023→            if tail.isdigit():
+  1024→                index = int(tail)
+  1025→            else:
+  1026→                remark_query = tail
+  1027→        elif query.isdigit():
+  1028→            # No colon but all digits — treat as a global index into the flat list.
+  1029→            index = int(query)
+  1030→
+  1031→        # Normalise head to a country code if it looks like one.
+  1032→        country: Optional[str] = None
+  1033→        if head and not head.isdigit():
+  1034→            country = self._normalise_country(head)
+  1035→
+  1036→        # If head didn't parse as a country (e.g. "zz" or "tokyo"), treat the whole
+  1037→        # query as a remark substring for the flat-list fallback. This preserves the
+  1038→        # existing behaviour where unknown 2-letter codes return None instead of
+  1039→        # falling through to "return the first server in the flat list".
+  1040→        if head and country is None and remark_query is None and not index:
+  1041→            # Only set remark_query if head isn't a known countries-map key — otherwise
+  1042→            # the countries-map lookup below will handle it.
+  1043→            if head not in self._country_servers:
+  1044→                remark_query = query
+  1045→
+  1046→        # 1. Check the explicit ``countries`` map first (basic-style assignment). The map
+  1047→        # key may be either an ISO country code (e.g. "us") or an arbitrary alias (e.g.
+  1048→        # "stream-us"), so we look it up by every plausible form of the head.
+  1049→        lookup_keys: list[str] = []
+  1050→        if country:
+  1051→            lookup_keys.append(country)
+  1052→        if head:
+  1053→            lookup_keys.append(head)
+  1054→        if not head and query:
+  1055→            lookup_keys.append(query)
+  1056→        for key in lookup_keys:
+  1057→            mapped_pool = self._country_servers.get(key)
+  1058→            if mapped_pool:
+  1059→                # If a remark substring was given (e.g. "us:tokyo"), filter the pool by it.
+  1060→                pool = mapped_pool
+  1061→                if remark_query:
+  1062→                    pool = [s for s in pool if remark_query in (s.remark or "").lower()]
+  1063→                    if not pool:
+  1064→                        log.warning(
+  1065→                            "v2ray: countries[%s] has no server matching remark %r",
+  1066→                            key, remark_query,
+  1067→                        )
+  1068→                        return None
+  1069→                return self._pick_from_pool(pool, index, random_pick=True)
+  1070→
+  1071→        # 2. Fall back to the flat server list (subscription / config_path / servers).
+  1072→        pool = self._servers
+  1073→        if country:
+  1074→            pool = [s for s in pool if (s.country or "").lower() == country]
+  1075→        if remark_query:
+  1076→            pool = [s for s in pool if remark_query in (s.remark or "").lower()]
+  1077→
+  1078→        if not pool:
+  1079→            log.warning(
+  1080→                "v2ray: no server matched query %r (country=%s, remark=%s, index=%s)",
+  1081→                query, country, remark_query, index,
+  1082→            )
+  1083→            return None
+  1084→
+  1085→        # Flat-list fallback uses deterministic first-match (preserves existing behaviour
+  1086→        # for subscription / inline servers). The countries map uses random pick to match
+  1087→        # Basic's behaviour for multi-server lists.
+  1088→        return self._pick_from_pool(pool, index, random_pick=False)
+  1089→
+  1090→    @staticmethod
+  1091→    def _pick_from_pool(
+  1092→        pool: list[V2RayServer], index: Optional[int], *, random_pick: bool = False
+  1093→    ) -> Optional[V2RayServer]:
+  1094→        """Pick a server from ``pool``, honouring the 1-indexed ``index`` if set."""
+  1095→        if index is not None:
+  1096→            if index < 1 or index > len(pool):
+  1097→                log.warning("v2ray: index %d out of range for pool of %d server(s)", index, len(pool))
+  1098→                return None
+  1099→            return pool[index - 1]
+  1100→        if random_pick:
+  1101→            import random as _random
+  1102→            return _random.choice(pool)
+  1103→        return pool[0]
+  1104→
+  1105→    @staticmethod
+  1106→    def _looks_like_country(token: str) -> bool:
+  1107→        token = token.strip().lower()
+  1108→        if not token:
+  1109→            return False
+  1110→        if len(token) == 2:
+  1111→            # For 2-letter tokens use exact alpha-2 lookup only — pycountry's fuzzy
+  1112→            # search would happily map "zz" to "Italy", which is misleading here.
+  1113→            return bool(get_country_name(token))
+  1114→        # For longer tokens, allow fuzzy matching against full country names.
+  1115→        return bool(get_country_code(token))
+  1116→
+  1117→    @staticmethod
+  1118→    def _normalise_country(token: str) -> Optional[str]:
+  1119→        token = token.strip().lower()
+  1120→        if not token:
+  1121→            return None
+  1122→        if len(token) == 2:
+  1123→            # Exact alpha-2 only (with the project's UK -> GB alias applied).
+  1124→            return _normalise_country_code(token) if get_country_name(token) else None
+  1125→        code = get_country_code(token)
+  1126→        return code.lower() if code else None
+  1127→
+  1128→    @staticmethod
+  1129→    def _normalise_server_map(server_map: dict) -> dict[str, str]:
+  1130→        return {str(k).strip().lower(): str(v).strip() for k, v in server_map.items() if k and v}
+  1131→
+  1132→    # -- Server loading ----------------------------------------------------
+  1133→
+  1134→    def _load_servers(
+  1135→        self,
+  1136→        subscription_url: Optional[Any],
+  1137→        config_path: Optional[Any],
+  1138→        servers: Optional[list[Any]],
+  1139→    ) -> list[V2RayServer]:
+  1140→        loaded: list[V2RayServer] = []
+  1141→
+  1142→        # 1. Subscription URL(s)
+  1143→        urls: list[str] = []
+  1144→        if subscription_url:
+  1145→            if isinstance(subscription_url, (list, tuple)):
+  1146→                urls.extend(str(u) for u in subscription_url if u)
+  1147→            else:
+  1148→                urls.append(str(subscription_url))
+  1149→        for url in urls:
+  1150→            try:
+  1151→                loaded.extend(self._fetch_subscription_cached(url))
+  1152→            except Exception as error:
+  1153→                log.warning("v2ray: subscription %s failed: %s", url, error)
+  1154→
+  1155→        # 2. Config file
+  1156→        if config_path:
+  1157→            path = Path(config_path).expanduser()
+  1158→            if not path.is_file():
+  1159→                log.warning("v2ray: config_path %s does not exist", path)
+  1160→            else:
+  1161→                try:
+  1162→                    loaded.extend(load_config_file(path))
+  1163→                except Exception as error:
+  1164→                    log.warning("v2ray: config file %s failed: %s", path, error)
+  1165→
+  1166→        # 3. Inline servers
+  1167→        if servers:
+  1168→            for entry in servers:
+  1169→                if isinstance(entry, str):
+  1170→                    parsed = parse_server_uri(entry)
+  1171→                    if parsed is not None:
+  1172→                        loaded.append(parsed)
+  1173→                elif isinstance(entry, dict):
+  1174→                    # Accept a pre-parsed server dict (useful for tests / programmatic use).
+  1175→                    try:
+  1176→                        loaded.append(V2RayServer(**entry))
+  1177→                    except TypeError as error:
+  1178→                        log.warning("v2ray: skipping malformed inline server dict: %s", error)
+  1179→
+  1180→        # De-duplicate by (protocol, address, port) — many subscriptions list the same
+  1181→        # server under multiple remarks.
+  1182→        seen: set[tuple[str, str, int]] = set()
+  1183→        unique: list[V2RayServer] = []
+  1184→        for s in loaded:
+  1185→            key = (s.protocol, s.address.lower(), s.port)
+  1186→            if key in seen:
+  1187→                continue
+  1188→            seen.add(key)
+  1189→            unique.append(s)
+  1190→
+  1191→        return unique
+  1192→
+  1193→    def _fetch_subscription_cached(self, url: str) -> list[V2RayServer]:
+  1194→        """Fetch a subscription, optionally caching the parsed server list to disk."""
+  1195→        if not self.cache_path:
+  1196→            return fetch_subscription(url)
+  1197→
+  1198→        cache_key = f"sub:{url}"
+  1199→        cache = self._load_cache()
+  1200→        cached_entry = cache.get(cache_key)
+  1201→        try:
+  1202→            servers = fetch_subscription(url)
+  1203→        except Exception:
+  1204→            if cached_entry:
+  1205→                log.warning("v2ray: subscription %s failed, using cached copy", url)
+  1206→                return [V2RayServer(**s) for s in cached_entry.get("servers", [])]
+  1207→            raise
+  1208→        if servers:
+  1209→            cache[cache_key] = {
+  1210→                "servers": [
+  1211→                    {
+  1212→                        "protocol": s.protocol,
+  1213→                        "address": s.address,
+  1214→                        "port": s.port,
+  1215→                        "remark": s.remark,
+  1216→                        "settings": s.settings,
+  1217→                        "network": s.network,
+  1218→                        "stream": s.stream,
+  1219→                        "country": s.country,
+  1220→                    }
+  1221→                    for s in servers
+  1222→                ],
+  1223→                "updated_at": time.time(),
+  1224→            }
+  1225→            self._save_cache(cache)
+  1226→        return servers
+  1227→
+  1228→    def _load_cache(self) -> dict:
+  1229→        if not self.cache_path or not self.cache_path.is_file():
+  1230→            return {}
+  1231→        try:
+  1232→            return json.loads(self.cache_path.read_text(encoding="utf-8"))
+  1233→        except (OSError, json.JSONDecodeError) as error:
+  1234→            log.warning("v2ray: cache read failed (%s): %s", self.cache_path, error)
+  1235→            return {}
+  1236→
+  1237→    def _save_cache(self, cache: dict) -> None:
+  1238→        if not self.cache_path:
+  1239→            return
+  1240→        try:
+  1241→            self.cache_path.parent.mkdir(parents=True, exist_ok=True)
+  1242→            self.cache_path.write_text(json.dumps(cache, indent=2), encoding="utf-8")
+  1243→        except OSError as error:
+  1244→            log.warning("v2ray: cache write failed (%s): %s", self.cache_path, error)
+  1245→
+  1246→    def _load_country_map(self, countries: dict) -> dict[str, list[V2RayServer]]:
+  1247→        """Parse the ``basic``-style ``countries`` config map.
+  1248→
+  1249→        The input is a dict mapping a country code (or arbitrary alias) to either a
+  1250→        single URI string or a list of URI strings. Each URI is parsed via
+  1251→        :func:`parse_server_uri`; entries that fail to parse are skipped with a warning
+  1252→        so a single bad URI never aborts the whole map. The returned dict maps each
+  1253→        lowercased key to the list of successfully-parsed servers.
+  1254→
+  1255→        This mirrors :class:`unshackle.core.proxies.basic.Basic` — the user explicitly
+  1256→        asked for V2Ray to support the same per-country assignment pattern.
+  1257→        """
+  1258→        if not isinstance(countries, dict):
+  1259→            raise TypeError(
+  1260→                f"v2ray: 'countries' must be a dict mapping country code -> URI or list of URIs, "
+  1261→                f"got {type(countries).__name__}"
+  1262→            )
+  1263→
+  1264→        result: dict[str, list[V2RayServer]] = {}
+  1265→        for raw_key, raw_value in countries.items():
+  1266→            key = str(raw_key).strip().lower()
+  1267→            if not key:
+  1268→                continue
+  1269→
+  1270→            # Normalise the value to a list of URI strings.
+  1271→            if isinstance(raw_value, str):
+  1272→                uri_list: list[str] = [raw_value]
+  1273→            elif isinstance(raw_value, (list, tuple)):
+  1274→                uri_list = [str(v) for v in raw_value if v]
+  1275→            else:
+  1276→                log.warning(
+  1277→                    "v2ray: countries[%s] has unsupported value type %s — expected str or list, skipping",
+  1278→                    key, type(raw_value).__name__,
+  1279→                )
+  1280→                continue
+  1281→
+  1282→            servers: list[V2RayServer] = []
+  1283→            for uri in uri_list:
+  1284→                parsed = parse_server_uri(uri)
+  1285→                if parsed is None:
+  1286→                    log.warning("v2ray: countries[%s] could not parse URI %r — skipping", key, uri[:80])
+  1287→                    continue
+  1288→                # Force the server's country to match the map key, so the IP-verification
+  1289→                # step (when enabled) compares against the user's intent rather than the
+  1290→                # auto-detected country from the remark.
+  1291→                if key and get_country_name(key):
+  1292→                    parsed.country = _normalise_country_code(key)
+  1293→                servers.append(parsed)
+  1294→
+  1295→            if servers:
+  1296→                result[key] = servers
+  1297→            else:
+  1298→                log.warning("v2ray: countries[%s] produced zero valid servers", key)
+  1299→
+  1300→        return result
+  1301→
+  1302→    # -- Binary discovery --------------------------------------------------
+  1303→
+  1304→    @staticmethod
+  1305→    def _resolve_binary(explicit: Any) -> Optional[Path]:
+  1306→        if explicit:
+  1307→            path = Path(explicit).expanduser()
+  1308→            if not path.is_file():
+  1309→                raise FileNotFoundError(f"v2ray: configured binary not found at {path}")
+  1310→            return path
+  1311→        # Xray is the modern, fully-compatible fork; prefer it when both are installed.
+  1312→        return binaries.Xray or binaries.V2Ray
+  1313→
+  1314→    # -- Process management ------------------------------------------------
+  1315→
+  1316→    def _allocate_ports(self) -> tuple[int, int]:
+  1317→        """Pick the next free (socks_port, http_port) pair, thread-safely."""
+  1318→        with self._port_lock:
+  1319→            used = {info["socks_port"] for info in self._active.values()}
+  1320→            used |= {info["http_port"] for info in self._active.values() if info.get("http_port")}
+  1321→            socks_port = self.base_port
+  1322→            while socks_port in used or self._is_port_in_use(socks_port):
+  1323→                socks_port += 2  # leave room for the http inbound
+  1324→            http_port = socks_port + 1
+  1325→            while http_port in used or self._is_port_in_use(http_port):
+  1326→                http_port += 1
+  1327→                socks_port = http_port - 1
+  1328→                while socks_port in used or self._is_port_in_use(socks_port):
+  1329→                    socks_port += 2
+  1330→                    http_port = socks_port + 1
+  1331→            return socks_port, http_port
+  1332→
+  1333→    @staticmethod
+  1334→    def _is_port_in_use(port: int) -> bool:
+  1335→        try:
+  1336→            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+  1337→                s.bind(("127.0.0.1", port))
+  1338→        except OSError:
+  1339→            return True
+  1340→        return False
+  1341→
+  1342→    def _spawn_process(
+  1343→        self,
+  1344→        config: dict,
+  1345→        socks_port: int,
+  1346→        http_port: int,
+  1347→        server: V2RayServer,
+  1348→    ) -> dict:
+  1349→        """Write the config to a temp file and start the V2Ray/Xray subprocess."""
+  1350→        config_dir = Path(tempfile.gettempdir()) / "unshackle-v2ray"
+  1351→        config_dir.mkdir(parents=True, exist_ok=True)
+  1352→        config_path = config_dir / f"config-{socks_port}-{http_port}.json"
+  1353→
+  1354→        try:
+  1355→            # Best-effort: write with 0600 so other users on the box can't read credentials.
+  1356→            fd = os.open(str(config_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+  1357→            try:
+  1358→                if hasattr(os, "fchmod"):
+  1359→                    os.fchmod(fd, 0o600)
+  1360→                os.write(fd, json.dumps(config, indent=2).encode("utf-8"))
+  1361→            finally:
+  1362→                os.close(fd)
+  1363→        except OSError as error:
+  1364→            raise RuntimeError(f"v2ray: could not write config file {config_path}: {error}")
+  1365→
+  1366→        log.debug("v2ray: wrote config for %s to %s", server.label, config_path)
+  1367→        log_event(
+  1368→            "v2ray_spawn_start",
+  1369→            level="DEBUG",
+  1370→            message=f"Starting V2Ray subprocess for {server.label}",
+  1371→            context={
+  1372→                "binary": str(self.binary),
+  1373→                "config_path": str(config_path),
+  1374→                "socks_port": socks_port,
+  1375→                "http_port": http_port,
+  1376→                "server": server.label,
+  1377→                "protocol": server.protocol,
+  1378→                "address": server.address,
+  1379→                "port": server.port,
+  1380→                "country": server.country,
+  1381→            },
+  1382→        )
+  1383→
+  1384→        creationflags = 0
+  1385→        start_new_session = True
+  1386→        if os.name == "nt":
+  1387→            # Windows: CREATE_NO_WINDOW so a console doesn't pop up.
+  1388→            creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+  1389→            start_new_session = False
+  1390→
+  1391→        process = subprocess.Popen(
+  1392→            [str(self.binary), "run", "-c", str(config_path)],
+  1393→            stdin=subprocess.DEVNULL,
+  1394→            stdout=subprocess.PIPE,
+  1395→            stderr=subprocess.PIPE,
+  1396→            cwd=str(config_path.parent),
+  1397→            start_new_session=start_new_session,
+  1398→            creationflags=creationflags,
+  1399→            close_fds=True,
+  1400→        )
+  1401→
+  1402→        return {
+  1403→            "process": process,
+  1404→            "config_path": config_path,
+  1405→            "socks_port": socks_port,
+  1406→            "http_port": http_port,
+  1407→            "pid": process.pid,
+  1408→            "started_at": time.time(),
+  1409→            "verified": False,
+  1410→        }
+  1411→
+  1412→    @staticmethod
+  1413→    def _is_process_alive(info: dict) -> bool:
+  1414→        process: Optional[subprocess.Popen] = info.get("process")
+  1415→        if process is None:
+  1416→            return False
+  1417→        if process.poll() is not None:
+  1418→            return False
+  1419→        return True
+  1420→
+  1421→    def _wait_for_ready(self, socks_port: int, *, timeout: float) -> bool:
+  1422→        """Poll the SOCKS5 inbound until it accepts connections or timeout."""
+  1423→        deadline = time.monotonic() + timeout
+  1424→        last_error: Optional[str] = None
+  1425→        while time.monotonic() < deadline:
+  1426→            # If the process died, surface its stderr and bail out fast.
+  1427→            info = next((i for i in self._active.values() if i.get("socks_port") == socks_port), None)
+  1428→            if info and not self._is_process_alive(info):
+  1429→                stderr = self._read_stderr_tail(info, max_lines=20)
+  1430→                last_error = stderr or "process exited unexpectedly"
+  1431→                break
+  1432→            try:
+  1433→                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+  1434→                    s.settimeout(0.5)
+  1435→                    s.connect((self.bind_host, socks_port))
+  1436→                    return True
+  1437→            except OSError as error:
+  1438→                last_error = str(error)
+  1439→                time.sleep(0.2)
+  1440→        log.warning("v2ray: subprocess on port %d not ready after %.1fs: %s", socks_port, timeout, last_error)
+  1441→        return False
+  1442→
+  1443→    @staticmethod
+  1444→    def _read_stderr_tail(info: dict, *, max_lines: int = 30) -> str:
+  1445→        process: Optional[subprocess.Popen] = info.get("process")
+  1446→        if process is None or process.stderr is None:
+  1447→            return ""
+  1448→        try:
+  1449→            # Non-blocking-ish read: read what's already buffered.
+  1450→            import select as _select
+  1451→            readable, _, _ = _select.select([process.stderr], [], [], 0)
+  1452→            if not readable:
+  1453→                return ""
+  1454→            data = process.stderr.read1(8192) if hasattr(process.stderr, "read1") else b""
+  1455→            if not data:
+  1456→                return ""
+  1457→            text = data.decode("utf-8", errors="replace")
+  1458→            lines = text.splitlines()
+  1459→            return "\n".join(lines[-max_lines:])
+  1460→        except Exception:
+  1461→            return ""
+  1462→
+  1463→    def _verify_proxy(self, query_key: str, *, max_retries: int = 3) -> None:
+  1464→        """Confirm the spawned proxy exits in the expected country via get_ip_info."""
+  1465→        info = self._active.get(query_key)
+  1466→        if not info:
+  1467→            return
+  1468→        proxy_uri = self._build_proxy_uri(info["socks_port"], info["http_port"])
+  1469→        server: V2RayServer = info["server"]
+  1470→        expected_country = (server.country or "").upper()
+  1471→
+  1472→        session = requests.Session()
+  1473→        try:
+  1474→            session.proxies = {"http": proxy_uri, "https": proxy_uri}
+  1475→            last_error: Optional[str] = None
+  1476→            for attempt in range(max_retries):
+  1477→                try:
+  1478→                    ip_info = get_ip_info(session)
+  1479→                except Exception as error:
+  1480→                    last_error = str(error)
+  1481→                    ip_info = None
+  1482→
+  1483→                if ip_info:
+  1484→                    actual_country = (ip_info.get("country") or "").upper()
+  1485→                    info["verified"] = True
+  1486→                    info["public_ip"] = ip_info.get("ip")
+  1487→                    info["ip_country"] = actual_country
+  1488→                    info["ip_city"] = ip_info.get("city")
+  1489→                    info["ip_org"] = ip_info.get("org")
+  1490→
+  1491→                    log_event(
+  1492→                        "v2ray_verify_success",
+  1493→                        level="INFO",
+  1494→                        message=f"V2Ray proxy verified for {server.label}",
+  1495→                        context={
+  1496→                            "query": query_key,
+  1497→                            "server": server.label,
+  1498→                            "expected_country": expected_country or None,
+  1499→                            "actual_country": actual_country,
+  1500→                            "ip": ip_info.get("ip"),
+  1501→                            "city": ip_info.get("city"),
+  1502→                            "org": ip_info.get("org"),
+  1503→                            "attempts": attempt + 1,
+  1504→                        },
+  1505→                    )
+  1506→
+  1507→                    # If we have an expected country and it doesn't match, log a warning
+  1508→                    # but don't raise — the proxy may still be functional for the user's
+  1509→                    # purpose (e.g. CDN-based geofencing that doesn't strictly match the
+  1510→                    # exit IP's country).
+  1511→                    if expected_country and actual_country and actual_country != expected_country:
+  1512→                        log.warning(
+  1513→                            "v2ray: country mismatch for %s — expected %s, got %s (IP: %s). "
+  1514→                            "The proxy is still returned; check your subscription if this is unexpected.",
+  1515→                            server.label, expected_country, actual_country, ip_info.get("ip"),
+  1516→                        )
+  1517→                    return
+  1518→
+  1519→                if attempt < max_retries - 1:
+  1520→                    time.sleep(2 ** attempt)
+  1521→        finally:
+  1522→            try:
+  1523→                session.close()
+  1524→            except Exception:
+  1525→                pass
+  1526→
+  1527→        log_event(
+  1528→            "v2ray_verify_failed",
+  1529→            level="WARNING",
+  1530→            message=f"V2Ray IP verification failed for {server.label} after {max_retries} attempts",
+  1531→            context={
+  1532→                "query": query_key,
+  1533→                "server": server.label,
+  1534→                "max_retries": max_retries,
+  1535→                "last_error": last_error,
+  1536→            },
+  1537→        )
+  1538→        # Don't raise — verification is best-effort. The proxy may still work.
+  1539→
+  1540→    def _build_proxy_uri(self, socks_port: int, http_port: int) -> str:
+  1541→        """Build the proxy URI returned to the caller, based on ``proxy_scheme``."""
+  1542→        if self.proxy_scheme in ("http", "https"):
+  1543→            return f"{self.proxy_scheme}://{self.bind_host}:{http_port}"
+  1544→        return f"{self.proxy_scheme}://{self.bind_host}:{socks_port}"
+  1545→
+  1546→    def _kill_process(self, info: dict) -> None:
+  1547→        """Terminate the subprocess and clean up its config file."""
+  1548→        process: Optional[subprocess.Popen] = info.get("process")
+  1549→        if process and process.poll() is None:
+  1550→            try:
+  1551→                process.terminate()
+  1552→                try:
+  1553→                    process.wait(timeout=5)
+  1554→                except subprocess.TimeoutExpired:
+  1555→                    process.kill()
+  1556→                    process.wait(timeout=5)
+  1557→            except Exception as error:
+  1558→                log.debug("v2ray: error killing process %s: %s", info.get("pid"), error)
+  1559→
+  1560→        # Close stdout/stderr pipes so we don't leak FDs.
+  1561→        for stream_name in ("stdout", "stderr"):
+  1562→            stream = info.get(stream_name)
+  1563→            if stream:
+  1564→                try:
+  1565→                    stream.close()
+  1566→                except Exception:
+  1567→                    pass
+  1568→
+  1569→        config_path: Optional[Path] = info.get("config_path")
+  1570→        if config_path and config_path.is_file():
+  1571→            try:
+  1572→                # Best-effort secure delete: overwrite then unlink, like Gluetun does for
+  1573→                # its env files, since the config contains server credentials.
+  1574→                try:
+  1575→                    with open(config_path, "r+b") as f:
+  1576→                        f.seek(0, os.SEEK_END)
+  1577→                        length = f.tell()
+  1578→                        f.seek(0)
+  1579→                        if length > 0:
+  1580→                            f.write(b"\x00" * length)
+  1581→                            f.flush()
+  1582→                            os.fsync(f.fileno())
+  1583→                except Exception:
+  1584→                    pass
+  1585→                config_path.unlink()
+  1586→            except Exception:
+  1587→                pass
+  1588→
+  1589→    def cleanup(self) -> None:
+  1590→        """Stop every subprocess spawned by this provider instance."""
+  1591→        with self._port_lock:
+  1592→            items = list(self._active.items())
+  1593→            self._active.clear()
+  1594→        count = len(items)
+  1595→        for query_key, info in items:
+  1596→            self._kill_process(info)
+  1597→            log_event(
+  1598→                "v2ray_process_removed",
+  1599→                level="DEBUG",
+  1600→                message=f"Removed V2Ray subprocess for {query_key}",
+  1601→                context={"query": query_key, "pid": info.get("pid")},
+  1602→            )
+  1603→        if count:
+  1604→            log_event(
+  1605→                "v2ray_cleanup_complete",
+  1606→                level="INFO",
+  1607→                message=f"V2Ray cleanup complete: removed {count} subprocess(es)",
+  1608→                context={"count": count},
+  1609→            )
+  1610→
+  1611→    def __del__(self) -> None:
+  1612→        if getattr(self, "auto_cleanup", True):
+  1613→            try:
+  1614→                self.cleanup()
+  1615→            except Exception:
+  1616→                pass
+  1617→
+  1618→    # -- Introspection (used by tests + useful for debugging) --------------
+  1619→
+  1620→    @property
+  1621→    def servers(self) -> list[V2RayServer]:
+  1622→        """Read-only view of the flat server pool (subscription / config_path / servers)."""
+  1623→        return list(self._servers)
+  1624→
+  1625→    @property
+  1626→    def country_servers(self) -> dict[str, list[V2RayServer]]:
+  1627→        """Read-only view of the per-country server map (the ``countries:`` YAML block)."""
+  1628→        return {k: list(v) for k, v in self._country_servers.items()}
+  1629→
+  1630→    def get_connection_info(self, query: str) -> Optional[dict]:
+  1631→        """Return the connection info dict for a previously-resolved query, if any."""
+  1632→        return self._active.get((query or "").strip().lower())
+  1633→

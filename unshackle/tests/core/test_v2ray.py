@@ -268,9 +268,12 @@ def test_parse_trojan_default_port_is_443():
 
 
 def test_parse_trojan_ws_network():
-    uri = _make_trojan_uri(network="ws", sni="uk.example.com") + ""  # base uri already correct
-    # add path/host via query string
-    uri = uri.split("?")[0] + "?security=tls&type=ws&path=/trojan&host=uk.example.com&sni=uk.example.com#WS"
+    # Build a trojan URI with the WebSocket transport directly — _make_trojan_uri()
+    # doesn't expose the path/host query params, so construct the URI inline.
+    uri = (
+        "trojan://secretpass@1.2.3.4:443?"
+        "security=tls&type=ws&path=/trojan&host=uk.example.com&sni=uk.example.com#WS"
+    )
     server = parse_server_uri(uri)
     assert server is not None
     assert server.network == "ws"
@@ -826,12 +829,20 @@ def test_get_proxy_unknown_query_returns_none():
 
 
 def _patch_lifecycle(provider: V2Ray, *, alive: bool = True, ready: bool = True):
-    """Patch the subprocess lifecycle so get_proxy works without a real binary."""
+    """Patch the subprocess lifecycle so get_proxy works without a real binary.
+
+    Returns a 6-tuple of ``patch.object`` context managers (in a fixed order) that the
+    caller enters with a single ``with`` block. The order matches the production code
+    path: spawn -> wait_for_ready -> verify_proxy, plus _is_process_alive / _is_port_in_use
+    / _kill_process for the reuse / cleanup paths.
+    """
     process = _make_mock_process()
     if not alive:
         process.poll.return_value = 1
 
     def fake_spawn(config, socks_port, http_port, server):
+        # Mirror the dict shape returned by the real _spawn_process() — no extra keys,
+        # so tests that introspect the dict see exactly what production would produce.
         return {
             "process": process,
             "config_path": Path(f"/tmp/fake-{socks_port}.json"),
@@ -840,8 +851,6 @@ def _patch_lifecycle(provider: V2Ray, *, alive: bool = True, ready: bool = True)
             "pid": 12345,
             "started_at": 0.0,
             "verified": False,
-            "stdout": MagicMock(),
-            "stderr": MagicMock(),
         }
 
     return (
@@ -1001,24 +1010,15 @@ def test_v2ray_registered_in_resolve_initialize():
     import unshackle.core.proxies.v2ray as v2ray_module
     from unshackle.core.proxies import resolve
 
-    captured_kwargs: list = []
-
-    def fake_v2ray_init(**kwargs):
-        captured_kwargs.append(kwargs)
-        instance = MagicMock(name="V2Ray-instance")
-        instance.__class__.__name__ = "V2Ray"
-        return instance
-
     main_config = MagicMock()
     main_config.proxy_providers = {
         "v2ray": {"subscription_url": "https://sub.example/list"},
     }
-    with patch.object(v2ray_module, "V2Ray", side_effect=fake_v2ray_init) as V2RayMock, \
+    with patch.object(v2ray_module, "V2Ray", side_effect=lambda **kw: MagicMock(name="V2Ray", kwargs=kw)) as V2RayMock, \
          patch("unshackle.core.binaries.HolaProxy", None), \
          patch("unshackle.core.config.config", main_config):
-        # Force re-execution of the function-body imports by clearing them, then
-        # call initialize_proxy_providers. Easier: just call the function directly
-        # since the imports inside the body re-resolve at call time.
+        # initialize_proxy_providers() re-imports V2Ray from the module at call time,
+        # so the patch above is picked up automatically.
         resolve.initialize_proxy_providers()
 
     assert V2RayMock.called, "V2Ray constructor was never invoked"

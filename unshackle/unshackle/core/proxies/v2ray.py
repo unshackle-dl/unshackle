@@ -2,14 +2,25 @@
 
 Spins up a local V2Ray (https://www.v2fly.org/) or Xray (https://xtls.github.io/) instance
 with an ephemeral SOCKS5 / HTTP inbound on 127.0.0.1, then routes traffic through a
-user-selected outbound (VMess, VLESS, Trojan, or Shadowsocks). Servers can be supplied as
-inline URIs, a base64 subscription URL, or a pre-built V2Ray/Xray JSON config file.
+user-selected outbound (VMess, VLESS, Trojan, or Shadowsocks).
+
+Servers can be supplied in four ways (all can coexist):
+
+1. ``subscription_url`` — base64/plain subscription endpoint(s).
+2. ``config_path`` — a pre-built V2Ray/Xray JSON config file.
+3. ``servers`` — inline list of ``vmess://`` / ``vless://`` / ``trojan://`` / ``ss://`` URIs.
+4. ``countries`` — ``basic``-style per-country URI assignment.
+
+A V2Ray URI can also be passed directly on the CLI (``--proxy v2ray:vmess://...``) for
+one-shot use without any YAML configuration.
 
 Query format (after the ``v2ray:`` prefix):
-    v2ray:us                -- any server whose detected country is "US"
+    v2ray:us                -- any server assigned to / detected as US
     v2ray:us:1              -- the first US server (1-indexed, like Basic)
     v2ray:tokyo             -- match a server by remark substring (case-insensitive)
     v2ray:us:tokyo          -- country + remark substring
+    v2ray:stream-us         -- an alias from ``server_map`` or ``countries``
+    v2ray:vmess://...       -- spawn a one-shot subprocess for that exact URI
 
 The provider follows the same lifecycle pattern as ``Gluetun``: each unique query gets its
 own subprocess on a dedicated port, instances are reused for the rest of the process, and
@@ -23,7 +34,9 @@ import base64
 import json
 import logging
 import os
+import random
 import re
+import select
 import socket
 import subprocess
 import tempfile
@@ -753,14 +766,8 @@ def build_config(server: V2RayServer, *, socks_port: int, http_port: Optional[in
 class V2Ray(Proxy):
     """V2Ray / Xray local proxy provider.
 
-    Servers may be provided in three ways (in priority order — first non-empty wins):
-
-    1. ``subscription_url`` (str or list[str]) — base64/plain subscription endpoint(s).
-    2. ``config_path`` (str|Path) — a pre-built V2Ray/Xray JSON config file. Outbounds
-       with a known protocol (vmess/vless/trojan/shadowsocks) are extracted and treated
-       as selectable servers.
-    3. ``servers`` (list[str|dict]) — inline list of URIs (``vmess://...`` etc.) or
-       pre-parsed server dicts.
+    Servers may be provided in four ways (all can coexist — see the module docstring for
+    details): ``subscription_url``, ``config_path``, ``servers``, and ``countries``.
 
     Optional ``server_map`` (dict[str, str]) lets the user override the country/alias
     used for selection: keys are matched (case-insensitive) against either an explicit
@@ -769,10 +776,12 @@ class V2Ray(Proxy):
     country code or use non-standard naming.
 
     Query format (after the ``v2ray:`` prefix):
-      - ``us``         any server detected as US
+      - ``us``         any server assigned to / detected as US
       - ``us:1``       first US server (1-indexed)
       - ``tokyo``      server whose remark contains "tokyo" (case-insensitive)
       - ``us:tokyo``   US server whose remark contains "tokyo"
+      - ``stream-us``  an alias from ``server_map`` or ``countries``
+      - ``vmess://...`` spawn a one-shot subprocess for that exact URI
 
     The provider spawns the ``xray`` binary (preferred) or falls back to ``v2ray``. Each
     unique query gets its own subprocess on a dedicated local port; the SOCKS5 proxy URI
@@ -781,7 +790,6 @@ class V2Ray(Proxy):
 
     DEFAULT_VERIFY_IP = True
     DEFAULT_STARTUP_TIMEOUT = 30.0  # seconds
-    DEFAULT_HEALTHCHECK_TIMEOUT = 5.0
 
     def __init__(
         self,
@@ -1003,7 +1011,25 @@ class V2Ray(Proxy):
     # -- Server selection --------------------------------------------------
 
     def _select_server(self, query: str) -> Optional[V2RayServer]:
-        """Pick a server matching ``query`` (already lowercased)."""
+        """Pick a server matching ``query`` (already lowercased).
+
+        Selection order:
+
+        1. ``server_map`` alias (if the query matches a key).
+        2. The ``countries`` map — by ISO country code (normalised), then by the raw
+           head token (so arbitrary aliases like ``"stream-us"`` work).
+        3. The flat server list (``subscription_url`` / ``config_path`` / ``servers``),
+           filtered by country and/or remark substring.
+
+        Query grammar::
+
+            <country>              any server in that country
+            <country>:<index>      the Nth server in the country pool (1-indexed)
+            <country>:<remark>     country-filtered remark substring match
+            <remark>               remark substring match across all servers
+            <index>                the Nth server overall (1-indexed)
+            <alias>                a key from ``countries`` or ``server_map``
+        """
         # Apply server_map aliases first.
         mapped = self.server_map.get(query)
         if mapped:
@@ -1028,45 +1054,38 @@ class V2Ray(Proxy):
             # No colon but all digits — treat as a global index into the flat list.
             index = int(query)
 
-        # Normalise head to a country code if it looks like one.
+        # Normalise head to a country code if it parses as one.
         country: Optional[str] = None
         if head and not head.isdigit():
             country = self._normalise_country(head)
 
-        # If head didn't parse as a country (e.g. "zz" or "tokyo"), treat the whole
-        # query as a remark substring for the flat-list fallback. This preserves the
-        # existing behaviour where unknown 2-letter codes return None instead of
-        # falling through to "return the first server in the flat list".
-        if head and country is None and remark_query is None and not index:
-            # Only set remark_query if head isn't a known countries-map key — otherwise
-            # the countries-map lookup below will handle it.
+        # If head didn't parse as a country AND isn't a known countries-map alias, treat
+        # the whole query as a remark substring. This makes "tokyo" match a server whose
+        # remark contains "tokyo", while still returning None for unknown 2-letter codes
+        # like "zz" (instead of falling through to "return the first server in the list").
+        if head and country is None and remark_query is None and index is None:
             if head not in self._country_servers:
                 remark_query = query
 
         # 1. Check the explicit ``countries`` map first (basic-style assignment). The map
         # key may be either an ISO country code (e.g. "us") or an arbitrary alias (e.g.
         # "stream-us"), so we look it up by every plausible form of the head.
-        lookup_keys: list[str] = []
-        if country:
-            lookup_keys.append(country)
-        if head:
-            lookup_keys.append(head)
-        if not head and query:
-            lookup_keys.append(query)
-        for key in lookup_keys:
+        for key in self._country_lookup_keys(country, head, query):
             mapped_pool = self._country_servers.get(key)
-            if mapped_pool:
-                # If a remark substring was given (e.g. "us:tokyo"), filter the pool by it.
-                pool = mapped_pool
-                if remark_query:
-                    pool = [s for s in pool if remark_query in (s.remark or "").lower()]
-                    if not pool:
-                        log.warning(
-                            "v2ray: countries[%s] has no server matching remark %r",
-                            key, remark_query,
-                        )
-                        return None
-                return self._pick_from_pool(pool, index, random_pick=True)
+            if not mapped_pool:
+                continue
+            pool = mapped_pool
+            if remark_query:
+                pool = [s for s in pool if remark_query in (s.remark or "").lower()]
+                if not pool:
+                    log.warning(
+                        "v2ray: countries[%s] has no server matching remark %r",
+                        key, remark_query,
+                    )
+                    return None
+            # The countries map uses random pick to match Basic's behaviour for
+            # multi-server lists; the flat-list fallback below uses first-match.
+            return self._pick_from_pool(pool, index, random_pick=True)
 
         # 2. Fall back to the flat server list (subscription / config_path / servers).
         pool = self._servers
@@ -1082,45 +1101,53 @@ class V2Ray(Proxy):
             )
             return None
 
-        # Flat-list fallback uses deterministic first-match (preserves existing behaviour
-        # for subscription / inline servers). The countries map uses random pick to match
-        # Basic's behaviour for multi-server lists.
         return self._pick_from_pool(pool, index, random_pick=False)
+
+    @staticmethod
+    def _country_lookup_keys(country: Optional[str], head: str, query: str) -> list[str]:
+        """Build the ordered list of keys to try against the ``countries`` map."""
+        keys: list[str] = []
+        if country:
+            keys.append(country)
+        if head:
+            keys.append(head)
+        if not head and query:
+            keys.append(query)
+        return keys
 
     @staticmethod
     def _pick_from_pool(
         pool: list[V2RayServer], index: Optional[int], *, random_pick: bool = False
     ) -> Optional[V2RayServer]:
-        """Pick a server from ``pool``, honouring the 1-indexed ``index`` if set."""
+        """Pick a server from ``pool``, honouring the 1-indexed ``index`` if set.
+
+        When ``index`` is None and ``random_pick`` is True, a random server is chosen
+        (matching :class:`unshackle.core.proxies.basic.Basic`'s behaviour for multi-server
+        lists). Otherwise the first server is returned deterministically (preserving the
+        flat-list behaviour for subscription / inline servers).
+        """
         if index is not None:
             if index < 1 or index > len(pool):
                 log.warning("v2ray: index %d out of range for pool of %d server(s)", index, len(pool))
                 return None
             return pool[index - 1]
         if random_pick:
-            import random as _random
-            return _random.choice(pool)
+            return random.choice(pool)
         return pool[0]
 
     @staticmethod
-    def _looks_like_country(token: str) -> bool:
-        token = token.strip().lower()
-        if not token:
-            return False
-        if len(token) == 2:
-            # For 2-letter tokens use exact alpha-2 lookup only — pycountry's fuzzy
-            # search would happily map "zz" to "Italy", which is misleading here.
-            return bool(get_country_name(token))
-        # For longer tokens, allow fuzzy matching against full country names.
-        return bool(get_country_code(token))
-
-    @staticmethod
     def _normalise_country(token: str) -> Optional[str]:
+        """Normalise a country code or full name to a lowercase ISO 3166-1 alpha-2 code.
+
+        For 2-letter tokens, an exact alpha-2 lookup is used (with the project's UK -> GB
+        alias applied) — pycountry's fuzzy search would happily map ``"zz"`` to ``"Italy"``,
+        which is misleading. For longer tokens, fuzzy matching against full country names
+        is allowed.
+        """
         token = token.strip().lower()
         if not token:
             return None
         if len(token) == 2:
-            # Exact alpha-2 only (with the project's UK -> GB alias applied).
             return _normalise_country_code(token) if get_country_name(token) else None
         code = get_country_code(token)
         return code.lower() if code else None
@@ -1314,21 +1341,25 @@ class V2Ray(Proxy):
     # -- Process management ------------------------------------------------
 
     def _allocate_ports(self) -> tuple[int, int]:
-        """Pick the next free (socks_port, http_port) pair, thread-safely."""
+        """Pick the next free (socks_port, http_port) pair, thread-safely.
+
+        SOCKS ports are tried at ``base_port + 2N`` and the HTTP inbound at
+        ``base_port + 2N + 1``, so each subprocess gets a dedicated non-overlapping pair.
+        """
         with self._port_lock:
             used = {info["socks_port"] for info in self._active.values()}
             used |= {info["http_port"] for info in self._active.values() if info.get("http_port")}
             socks_port = self.base_port
-            while socks_port in used or self._is_port_in_use(socks_port):
-                socks_port += 2  # leave room for the http inbound
-            http_port = socks_port + 1
-            while http_port in used or self._is_port_in_use(http_port):
-                http_port += 1
-                socks_port = http_port - 1
+            while True:
+                # Find a free SOCKS port on an even stride.
                 while socks_port in used or self._is_port_in_use(socks_port):
                     socks_port += 2
-                    http_port = socks_port + 1
-            return socks_port, http_port
+                http_port = socks_port + 1
+                # If the HTTP port is taken, bump the SOCKS port and retry.
+                if http_port in used or self._is_port_in_use(http_port):
+                    socks_port += 2
+                    continue
+                return socks_port, http_port
 
     @staticmethod
     def _is_port_in_use(port: int) -> bool:
@@ -1442,13 +1473,17 @@ class V2Ray(Proxy):
 
     @staticmethod
     def _read_stderr_tail(info: dict, *, max_lines: int = 30) -> str:
+        """Best-effort non-blocking read of the subprocess's buffered stderr.
+
+        Returns the last ``max_lines`` lines (joined with newlines), or an empty string
+        if nothing is buffered or the read fails for any reason. Used only to surface a
+        hint when the subprocess fails to become ready — never on the hot path.
+        """
         process: Optional[subprocess.Popen] = info.get("process")
         if process is None or process.stderr is None:
             return ""
         try:
-            # Non-blocking-ish read: read what's already buffered.
-            import select as _select
-            readable, _, _ = _select.select([process.stderr], [], [], 0)
+            readable, _, _ = select.select([process.stderr], [], [], 0)
             if not readable:
                 return ""
             data = process.stderr.read1(8192) if hasattr(process.stderr, "read1") else b""
@@ -1544,7 +1579,11 @@ class V2Ray(Proxy):
         return f"{self.proxy_scheme}://{self.bind_host}:{socks_port}"
 
     def _kill_process(self, info: dict) -> None:
-        """Terminate the subprocess and clean up its config file."""
+        """Terminate the subprocess, close its stdout/stderr pipes, and unlink the config file.
+
+        The config file is overwritten with zeros before unlinking (best-effort, like
+        Gluetun's env-file handling) because it contains server credentials.
+        """
         process: Optional[subprocess.Popen] = info.get("process")
         if process and process.poll() is None:
             try:
@@ -1557,12 +1596,13 @@ class V2Ray(Proxy):
             except Exception as error:
                 log.debug("v2ray: error killing process %s: %s", info.get("pid"), error)
 
-        # Close stdout/stderr pipes so we don't leak FDs.
-        for stream_name in ("stdout", "stderr"):
-            stream = info.get(stream_name)
-            if stream:
+        # Close stdout/stderr pipes so we don't leak FDs. The pipe handles live on the
+        # Popen object (set via stdout=PIPE / stderr=PIPE in _spawn_process), not on the
+        # info dict.
+        for pipe in (process.stdout, process.stderr) if process else (None, None):
+            if pipe is not None:
                 try:
-                    stream.close()
+                    pipe.close()
                 except Exception:
                     pass
 

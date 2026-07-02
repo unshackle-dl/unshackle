@@ -66,3 +66,51 @@ Stage Summary:
   2. direct URI on CLI: `--proxy v2ray:vmess://...` (no YAML needed)
   3. existing flat-list / subscription / config_path modes (unchanged)
 - The resolve_proxy regex fix is a bonus bug-fix that was blocking ALL `v2ray:*` queries (not just the new modes)
+
+---
+Task ID: v2ray-cleanup-audit
+Agent: main
+Task: Full code audit of the V2Ray implementation against the rest of the unshackle codebase — remove all dead/duplicate code, fix inconsistencies, ensure the structure matches the existing proxy providers (NordVPN, Gluetun, ProtonVPN).
+
+Work Log:
+- Re-read proton.py, gluetun.py, nordvpn.py, surfsharkvpn.py, windscribevpn.py, basic.py, hola.py, resolve.py, proxy.py, binaries.py, ip_info.py, and the full v2ray.py + test_v2ray.py to internalize all patterns
+- Audited v2ray.py for issues; identified 8 concrete problems:
+  1. Stale module docstring — said "inline URIs, subscription URL, or config file" but the code now supports 4 sources + direct-URI CLI mode
+  2. Stale class docstring — said "three ways (in priority order — first non-empty wins)" but the implementation supports 4 coexisting sources
+  3. Dead constant `DEFAULT_HEALTHCHECK_TIMEOUT = 5.0` — never referenced anywhere
+  4. Dead method `_looks_like_country` — not called after the _select_server refactor
+  5. Local imports of `random` and `select` inside methods — every other module uses top-level imports
+  6. Convoluted `_allocate_ports` nested while loop — had a logic-bug risk and was hard to reason about
+  7. `_kill_process` pipe-closing loop was dead code — it read `info["stdout"]`/`info["stderr"]` keys that `_spawn_process` never stores; the real pipe handles live on `process.stdout`/`process.stderr`
+  8. `_select_server` had a subtle "If head didn't parse as a country" block with a misleading comment
+- Audited test_v2ray.py for issues; identified 3 problems:
+  1. `test_parse_trojan_ws_network` had a no-op `+ ""` and convoluted URI reconstruction
+  2. `_patch_lifecycle`'s `fake_spawn` returned stale `stdout`/`stderr` keys that don't exist in production
+  3. `test_v2ray_registered_in_resolve_initialize` had a misleading comment about "clearing" imports
+
+Fixes applied to v2ray.py:
+- Rewrote module docstring to list all 4 server sources + direct-URI CLI mode + all 6 query forms
+- Rewrote class docstring to match (4 sources, 6 query forms)
+- Removed dead `DEFAULT_HEALTHCHECK_TIMEOUT` constant
+- Removed dead `_looks_like_country` method (logic was already inlined into `_normalise_country`)
+- Moved `import random` and `import select` to the top of the module (matching every other proxy module)
+- Simplified `_allocate_ports` to a single clean while-loop with a clear SOCKS-port-then-HTTP-port stride
+- Fixed `_kill_process` to close the actual pipe handles on the `process` object (`process.stdout`/`process.stderr`) instead of the non-existent `info["stdout"]`/`info["stderr"]` keys
+- Rewrote `_select_server` with a proper docstring documenting the selection order and query grammar
+- Extracted `_country_lookup_keys` as a small named helper so the lookup-key construction is self-documenting
+- Updated `_pick_from_pool` docstring to explain the random_pick vs first-match semantics
+- Updated `_normalise_country` docstring to explain the 2-letter exact-match vs longer-token fuzzy-match split
+
+Fixes applied to test_v2ray.py:
+- Rewrote `test_parse_trojan_ws_network` to build the trojan+ws URI directly (no no-op `+ ""`, no string splitting)
+- Removed stale `stdout`/`stderr` keys from `_patch_lifecycle`'s `fake_spawn` return dict so it exactly mirrors production
+- Improved `_patch_lifecycle` docstring to document the 6-tuple order and the production code path it mirrors
+- Cleaned up `test_v2ray_registered_in_resolve_initialize` — replaced misleading "clearing imports" comment with an accurate one and simplified the mock setup
+
+Stage Summary:
+- All 554 tests pass (0 failures, 0 regressions)
+- ruff: All checks passed
+- isort: clean
+- mypy: 0 errors in my code (the 1 remaining error is pre-existing in binaries.py:31, unrelated to my changes — `shutil.which` returns `str | None` but the loop variable was typed as `Path`)
+- End-to-end sanity check confirms: imports work, V2Ray is a Proxy subclass, countries map works, direct-URI detection works, resolve_proxy routes `v2ray:us` / `v2ray:vmess://...` / `nordvpn:us` all correctly
+- Zero dead code, zero duplicate logic, zero stale comments — structure now matches the rest of the unshackle proxy providers
