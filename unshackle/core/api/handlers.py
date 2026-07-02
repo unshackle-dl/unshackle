@@ -1,6 +1,8 @@
 import asyncio
 import enum
 import logging
+import re
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
@@ -16,6 +18,7 @@ from unshackle.core.services import Services
 from unshackle.core.titles import Episode, Movie, Title_T
 from unshackle.core.tracks import Audio, Subtitle, Video
 from unshackle.core.utils.collections import ci_get
+from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE
 
 log = logging.getLogger("api")
 
@@ -893,6 +896,37 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+def enforce_download_gates(params: Dict[str, Any]) -> None:
+    """Enforce serve-config gates on per-job cdm overrides and client-supplied credentials.
+
+    A per-request `cdm` selects a server-side device, so it is gated here rather than honoured
+    blindly. `serve.cdm_overrides` opts in: a list permits only those device names, or `true`
+    permits any (for a single trusted client). Unset/false rejects every override.
+    A per-request `credential` (or `credentials` map) authenticates the job with client-supplied
+    secrets instead of the server-side credentials. Gate it behind `serve.allow_job_credentials`
+    (default off) so a default deployment stays locked to its own credentials; mirrors the CDM gate.
+    """
+    requested_cdm = params.get("cdm")
+    if requested_cdm:
+        allowed = (config.serve or {}).get("cdm_overrides")
+        permitted = allowed is True or (
+            isinstance(allowed, (list, tuple, set)) and requested_cdm in allowed
+        )
+        if not permitted:
+            raise APIError(
+                APIErrorCode.FORBIDDEN,
+                "The requested CDM is not permitted for API downloads.",
+                details={"cdm": requested_cdm},
+            )
+
+    if params.get("credential") or params.get("credentials"):
+        if not (config.serve or {}).get("allow_job_credentials"):
+            raise APIError(
+                APIErrorCode.FORBIDDEN,
+                "Per-request credentials are not permitted for API downloads.",
+            )
+
+
 async def download_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
     """Handle download request - create and queue a download job."""
     from unshackle.core.api.download_manager import get_download_manager
@@ -917,31 +951,7 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
             details={"service": normalized_service, "title_id": title_id},
         )
 
-    # A per-request `cdm` selects a server-side device, so it is gated here rather than honoured
-    # blindly. `serve.cdm_overrides` opts in: a list permits only those device names, or `true`
-    # permits any (for a single trusted client). Unset/false rejects every override.
-    requested_cdm = data.get("cdm")
-    if requested_cdm:
-        allowed = (config.serve or {}).get("cdm_overrides")
-        permitted = allowed is True or (
-            isinstance(allowed, (list, tuple, set)) and requested_cdm in allowed
-        )
-        if not permitted:
-            raise APIError(
-                APIErrorCode.FORBIDDEN,
-                "The requested CDM is not permitted for API downloads.",
-                details={"cdm": requested_cdm},
-            )
-
-    # A per-request `credential` (or `credentials` map) authenticates the job with client-supplied
-    # secrets instead of the server-side credentials. Gate it behind `serve.allow_job_credentials`
-    # (default off) so a default deployment stays locked to its own credentials; mirrors the CDM gate.
-    if data.get("credential") or data.get("credentials"):
-        if not (config.serve or {}).get("allow_job_credentials"):
-            raise APIError(
-                APIErrorCode.FORBIDDEN,
-                "Per-request credentials are not permitted for API downloads.",
-            )
+    enforce_download_gates(data)
 
     try:
         # Load service module to extract service-specific parameter defaults
@@ -1045,7 +1055,8 @@ async def list_download_jobs_handler(data: Dict[str, Any], request: Optional[web
 
         jobs = sorted(jobs, key=get_sort_key, reverse=reverse)
 
-        job_list = [job.to_dict(include_full_details=False) for job in jobs]
+        include_full = str(data.get("full") or "").lower() == "true"
+        job_list = [job.to_dict(include_full_details=include_full) for job in jobs]
 
         return web.json_response({"jobs": job_list})
 
@@ -1091,18 +1102,24 @@ async def get_download_job_handler(job_id: str, request: Optional[web.Request] =
 
 
 async def cancel_download_job_handler(job_id: str, request: Optional[web.Request] = None) -> web.Response:
-    """Handle cancel download job request."""
-    from unshackle.core.api.download_manager import get_download_manager
+    """Handle cancel/remove download job request."""
+    from unshackle.core.api.download_manager import TERMINAL_STATUSES, get_download_manager
 
     try:
         manager = get_download_manager()
 
-        if not manager.get_job(job_id):
+        job = manager.get_job(job_id)
+        if not job:
             raise APIError(
                 APIErrorCode.JOB_NOT_FOUND,
                 "Job not found",
                 details={"job_id": job_id},
             )
+
+        # Terminal jobs can't be cancelled; DELETE removes them from the manager instead.
+        if job.status in TERMINAL_STATUSES:
+            manager.remove_job(job_id)
+            return web.Response(status=204)
 
         success = manager.cancel_job(job_id)
 
@@ -1125,6 +1142,383 @@ async def cancel_download_job_handler(job_id: str, request: Optional[web.Request
             context={"operation": "cancel_download_job", "job_id": job_id},
             debug_mode=debug_mode,
         )
+
+
+async def clear_finished_download_jobs_handler(request: Optional[web.Request] = None) -> web.Response:
+    """Handle clear finished download jobs request."""
+    from unshackle.core.api.download_manager import get_download_manager
+
+    try:
+        manager = get_download_manager()
+        removed = manager.clear_finished_jobs()
+        return web.json_response({"removed": removed})
+
+    except APIError:
+        raise
+    except (Exception, SystemExit) as e:
+        log.exception("Error clearing finished download jobs")
+        debug_mode = request.app.get("debug_api", False) if request else False
+        return handle_api_exception(
+            e,
+            context={"operation": "clear_finished_download_jobs"},
+            debug_mode=debug_mode,
+        )
+
+
+async def retry_download_job_handler(job_id: str, request: Optional[web.Request] = None) -> web.Response:
+    """Handle retry download job request - enqueue a new job with the original's parameters."""
+    from unshackle.core.api.download_manager import TERMINAL_STATUSES, get_download_manager
+
+    try:
+        manager = get_download_manager()
+
+        job = manager.get_job(job_id)
+        if not job:
+            raise APIError(
+                APIErrorCode.JOB_NOT_FOUND,
+                "Job not found",
+                details={"job_id": job_id},
+            )
+
+        if job.status not in TERMINAL_STATUSES:
+            raise APIError(
+                APIErrorCode.CONFLICT,
+                "Only completed, failed, or cancelled jobs can be retried",
+                details={"job_id": job_id, "status": job.status.value},
+            )
+
+        # Re-apply creation-time gates so retry cannot bypass the caller's service allowlist
+        # or currently-disabled cdm_overrides / allow_job_credentials config.
+        if not validate_service(job.service, request):
+            raise APIError(
+                APIErrorCode.INVALID_SERVICE,
+                f"Invalid or unavailable service: {job.service}",
+                details={"service": job.service},
+            )
+        enforce_download_gates(job.parameters)
+
+        await manager.start_workers()
+
+        # Reuse the raw in-memory parameters; redaction only ever applies to serialized copies.
+        new_job = manager.create_job(job.service, job.title_id, **job.parameters)
+
+        return web.json_response(
+            {"job_id": new_job.job_id, "status": new_job.status.value, "created_time": new_job.created_time.isoformat()},
+            status=202,
+        )
+
+    except APIError:
+        raise
+    except (Exception, SystemExit) as e:
+        log.exception(f"Error retrying download job {sanitize_log(job_id)}")
+        debug_mode = request.app.get("debug_api", False) if request else False
+        return handle_api_exception(
+            e,
+            context={"operation": "retry_download_job", "job_id": job_id},
+            debug_mode=debug_mode,
+        )
+
+
+async def prioritize_download_job_handler(job_id: str, request: Optional[web.Request] = None) -> web.Response:
+    """Handle prioritize download job request - move a queued job to the front of the queue."""
+    from unshackle.core.api.download_manager import JobStatus, get_download_manager
+
+    try:
+        manager = get_download_manager()
+
+        job = manager.get_job(job_id)
+        if not job:
+            raise APIError(
+                APIErrorCode.JOB_NOT_FOUND,
+                "Job not found",
+                details={"job_id": job_id},
+            )
+
+        if job.status != JobStatus.QUEUED:
+            raise APIError(
+                APIErrorCode.CONFLICT,
+                "Only queued jobs can be prioritized",
+                details={"job_id": job_id, "status": job.status.value},
+            )
+
+        manager.prioritize_job(job_id)
+
+        return web.json_response({"job_id": job_id, "position": "front"})
+
+    except APIError:
+        raise
+    except (Exception, SystemExit) as e:
+        log.exception(f"Error prioritizing download job {sanitize_log(job_id)}")
+        debug_mode = request.app.get("debug_api", False) if request else False
+        return handle_api_exception(
+            e,
+            context={"operation": "prioritize_download_job", "job_id": job_id},
+            debug_mode=debug_mode,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Platform Handlers (profiles, config, history, maintenance)
+# ---------------------------------------------------------------------------
+
+
+_CONFIG_SECRET_KEY_RE = re.compile(r"secret|password|token|api_key|credential", re.IGNORECASE)
+
+
+def _redact_config(value: Any) -> Any:
+    """Recursively mask secret-looking keys and URL userinfo; stringify paths."""
+    if isinstance(value, dict):
+        return {
+            str(k): (REDACTED if v and _CONFIG_SECRET_KEY_RE.search(str(k)) else _redact_config(v))
+            for k, v in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_redact_config(v) for v in value]
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, str) and "@" in value:
+        return URL_USERINFO_RE.sub(f"{REDACTED}@", value)
+    return value
+
+
+async def profiles_handler(request: Optional[web.Request] = None) -> web.Response:
+    """Handle list credential profiles request."""
+    try:
+        allowed = get_allowed_services(request)
+        profiles: Dict[str, List[str]] = {}
+        for service, creds in (config.credentials or {}).items():
+            # a plain (non-dict) credential is unnamed; that service is omitted entirely
+            if not isinstance(creds, dict):
+                continue
+            try:
+                tag = Services.get_tag(service)
+            except Exception:
+                tag = service
+            if allowed is not None and tag not in allowed:
+                continue
+            profiles[tag] = sorted(str(name) for name in creds)
+        return web.json_response({"profiles": profiles})
+
+    except APIError:
+        raise
+    except (Exception, SystemExit) as e:
+        log.exception("Error listing profiles")
+        debug_mode = request.app.get("debug_api", False) if request else False
+        return handle_api_exception(e, context={"operation": "profiles"}, debug_mode=debug_mode)
+
+
+async def server_config_handler(request: Optional[web.Request] = None) -> web.Response:
+    """Handle read-only effective server config request (secrets redacted)."""
+    from unshackle.core.api.download_manager import get_download_manager
+
+    try:
+        manager = get_download_manager()
+        serve_cfg = config.serve or {}
+        allowed = get_allowed_services(request)
+        service_tags = Services.get_tags()
+        if allowed is not None:
+            service_tags = [t for t in service_tags if t in allowed]
+
+        payload = {
+            "dl": _redact_config(config.dl),
+            "serve": {
+                "max_concurrent_downloads": manager.max_concurrent_downloads,
+                "job_retention_hours": manager.job_retention_hours,
+                "history_limit": int(serve_cfg.get("history_limit", 100)),
+                "services": serve_cfg.get("services") or None,
+                "remote_only": bool(serve_cfg.get("remote_only", False)),
+                "cdm_overrides": _redact_config(serve_cfg.get("cdm_overrides")),
+                "allow_job_credentials": bool(serve_cfg.get("allow_job_credentials", False)),
+            },
+            "directories": {
+                "downloads": str(config.directories.downloads),
+                "temp": str(config.directories.temp),
+                "cache": str(config.directories.cache),
+            },
+            "services": service_tags,
+        }
+        return web.json_response({"config": payload})
+
+    except APIError:
+        raise
+    except (Exception, SystemExit) as e:
+        log.exception("Error building server config")
+        debug_mode = request.app.get("debug_api", False) if request else False
+        return handle_api_exception(e, context={"operation": "server_config"}, debug_mode=debug_mode)
+
+
+async def download_history_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
+    """Handle persisted download history request."""
+    from unshackle.core.api.download_manager import read_job_history
+
+    try:
+        limit = 100
+        limit_raw = data.get("limit")
+        if limit_raw is not None:
+            try:
+                limit = int(limit_raw)
+            except (TypeError, ValueError):
+                raise APIError(
+                    APIErrorCode.INVALID_PARAMETERS, "limit must be an integer", details={"limit": limit_raw}
+                )
+            if limit < 1:
+                raise APIError(APIErrorCode.INVALID_PARAMETERS, "limit must be >= 1", details={"limit": limit_raw})
+
+        allowed = get_allowed_services(request)
+        if allowed is None:
+            history = read_job_history(limit=limit, service=data.get("service"))
+        else:
+            # Read unbounded, drop entries outside the caller's allowlist, then apply limit.
+            allowed_upper = {a.upper() for a in allowed}
+            entries = read_job_history(limit=0, service=data.get("service"))
+            history = [e for e in entries if str(e.get("service") or "").upper() in allowed_upper][:limit]
+        return web.json_response({"history": history, "count": len(history)})
+
+    except APIError:
+        raise
+    except (Exception, SystemExit) as e:
+        log.exception("Error reading download history")
+        debug_mode = request.app.get("debug_api", False) if request else False
+        return handle_api_exception(e, context={"operation": "download_history"}, debug_mode=debug_mode)
+
+
+async def delete_history_handler(job_id: str, request: Optional[web.Request] = None) -> web.Response:
+    """Delete one persisted history entry by job_id."""
+    from unshackle.core.api.download_manager import delete_job_history
+
+    try:
+        allowed = get_allowed_services(request)
+        allowed_upper = {a.upper() for a in allowed} if allowed is not None else None
+        if not delete_job_history(job_id, allowed=allowed_upper):
+            raise APIError(APIErrorCode.NOT_FOUND, "History entry not found", details={"job_id": job_id})
+        return web.Response(status=204)
+
+    except APIError:
+        raise
+    except (Exception, SystemExit) as e:
+        log.exception("Error deleting download history")
+        debug_mode = request.app.get("debug_api", False) if request else False
+        return handle_api_exception(e, context={"operation": "delete_history"}, debug_mode=debug_mode)
+
+
+def _require_no_active_downloads(operation: str) -> None:
+    """Raise 409 CONFLICT if any job is currently downloading."""
+    from unshackle.core.api.download_manager import JobStatus, get_download_manager
+
+    active = [j.job_id for j in get_download_manager().list_jobs() if j.status == JobStatus.DOWNLOADING]
+    if active:
+        raise APIError(
+            APIErrorCode.CONFLICT,
+            f"Cannot {operation} while downloads are active",
+            details={"active_jobs": active},
+        )
+
+
+async def clear_cache_handler(request: Optional[web.Request] = None) -> web.Response:
+    """Handle clear cache directory request."""
+    from unshackle.commands.env import clear_directory
+
+    try:
+        _require_no_active_downloads("clear cache")
+        _, freed_bytes = await asyncio.to_thread(clear_directory, config.directories.cache)
+        return web.json_response({"cleared": True, "freed_bytes": freed_bytes})
+
+    except APIError:
+        raise
+    except (Exception, SystemExit) as e:
+        log.exception("Error clearing cache")
+        debug_mode = request.app.get("debug_api", False) if request else False
+        return handle_api_exception(e, context={"operation": "clear_cache"}, debug_mode=debug_mode)
+
+
+async def clear_temp_handler(request: Optional[web.Request] = None) -> web.Response:
+    """Handle clear temp directory request."""
+    from unshackle.commands.env import clear_directory
+
+    try:
+        _require_no_active_downloads("clear temp")
+        _, freed_bytes = await asyncio.to_thread(clear_directory, config.directories.temp)
+        return web.json_response({"cleared": True, "freed_bytes": freed_bytes})
+
+    except APIError:
+        raise
+    except (Exception, SystemExit) as e:
+        log.exception("Error clearing temp")
+        debug_mode = request.app.get("debug_api", False) if request else False
+        return handle_api_exception(e, context={"operation": "clear_temp"}, debug_mode=debug_mode)
+
+
+async def refresh_services_handler(request: Optional[web.Request] = None) -> web.Response:
+    """Handle refresh of service repos configured in directories.services."""
+    from unshackle.core.service_repo import is_repo_spec, refresh_repo
+
+    try:
+        entries = config.directories.services
+        if not isinstance(entries, list):
+            entries = [entries]
+        specs = [e for e in entries if isinstance(e, str) and is_repo_spec(e)]
+
+        repos = []
+        for spec in specs:
+            dest, changes = await asyncio.to_thread(refresh_repo, spec)
+            repos.append({"spec": spec, "updated": dest is not None, "changes": list(changes or [])})
+
+        return web.json_response({"refreshed": all(r["updated"] for r in repos), "repos": repos})
+
+    except APIError:
+        raise
+    except (Exception, SystemExit) as e:
+        log.exception("Error refreshing service repos")
+        debug_mode = request.app.get("debug_api", False) if request else False
+        return handle_api_exception(e, context={"operation": "refresh_services"}, debug_mode=debug_mode)
+
+
+_VERSION_RE = re.compile(r"\d+\.\d+(?:\.\d+)*")
+
+
+def _binary_version(path: Any) -> Optional[str]:
+    """Best-effort version probe of a binary; None when nothing parseable."""
+    import subprocess
+
+    for flag in ("--version", "-version"):
+        try:
+            proc = subprocess.run([str(path), flag], capture_output=True, text=True, timeout=5)
+        except (OSError, subprocess.SubprocessError, ValueError):
+            return None
+        match = _VERSION_RE.search(proc.stdout or "") or _VERSION_RE.search(proc.stderr or "")
+        if match:
+            return match.group(0)
+    return None
+
+
+async def env_check_handler(request: Optional[web.Request] = None) -> web.Response:
+    """Handle environment dependency check request."""
+    from unshackle.commands.env import get_dependencies
+
+    def _run_checks() -> List[Dict[str, Any]]:
+        checks = []
+        for dep in get_dependencies():
+            binary = dep["binary"]
+            checks.append(
+                {
+                    "name": dep["name"],
+                    "installed": binary is not None,
+                    "version": _binary_version(binary) if binary else None,
+                    "required": dep["required"],
+                }
+            )
+        return checks
+
+    try:
+        checks = await asyncio.to_thread(_run_checks)
+        return web.json_response({"checks": checks})
+
+    except APIError:
+        raise
+    except (Exception, SystemExit) as e:
+        log.exception("Error running env check")
+        debug_mode = request.app.get("debug_api", False) if request else False
+        return handle_api_exception(e, context={"operation": "env_check"}, debug_mode=debug_mode)
 
 
 # ---------------------------------------------------------------------------

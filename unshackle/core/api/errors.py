@@ -34,6 +34,8 @@ class APIErrorCode(str, Enum):
     SESSION_NOT_FOUND = "SESSION_NOT_FOUND"  # Remote-dl session doesn't exist or expired
     TRACK_NOT_FOUND = "TRACK_NOT_FOUND"  # Track ID not found in session
 
+    CONFLICT = "CONFLICT"  # Job/resource is in a state that disallows the action
+
     RATE_LIMITED = "RATE_LIMITED"  # Service rate limiting
 
     # Server errors (5xx)
@@ -93,6 +95,8 @@ class APIError(Exception):
             APIErrorCode.JOB_NOT_FOUND: 404,
             APIErrorCode.SESSION_NOT_FOUND: 404,
             APIErrorCode.TRACK_NOT_FOUND: 404,
+            # 409 Conflict
+            APIErrorCode.CONFLICT: 409,
             # 429 Too Many Requests
             APIErrorCode.RATE_LIMITED: 429,
             # 500 Internal Server Error

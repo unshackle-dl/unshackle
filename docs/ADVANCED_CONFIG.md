@@ -124,6 +124,17 @@ download_job_retention_hours: 48
 
 ---
 
+## serve.history_limit (int)
+
+How many terminal jobs to keep in the persistent history file (`api_history.jsonl`, stored under the cache directory so it stays out of the config/data tree). Older entries are dropped as new jobs finish. Set to `0` for unlimited. Default: `100`.
+
+```yaml
+serve:
+  history_limit: 250
+```
+
+---
+
 ## debug (bool)
 
 Enables comprehensive debug logging. Default: `false`

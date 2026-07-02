@@ -10,12 +10,17 @@ from aiohttp_swagger3 import SwaggerDocs, SwaggerInfo, SwaggerUiSettings
 
 from unshackle.core import __version__
 from unshackle.core.api.errors import APIError, APIErrorCode, build_error_response, handle_api_exception
-from unshackle.core.api.handlers import (cancel_download_job_handler, download_handler, get_allowed_services,
-                                         get_download_job_handler, list_download_jobs_handler, list_titles_handler,
-                                         list_tracks_handler, search_handler, session_create_handler,
-                                         session_delete_handler, session_info_handler, session_license_handler,
-                                         session_prompt_get_handler, session_prompt_post_handler,
-                                         session_segments_handler, session_titles_handler, session_tracks_handler)
+from unshackle.core.api.handlers import (cancel_download_job_handler, clear_cache_handler,
+                                         clear_finished_download_jobs_handler, clear_temp_handler,
+                                         delete_history_handler, download_handler, download_history_handler,
+                                         env_check_handler, get_allowed_services, get_download_job_handler,
+                                         list_download_jobs_handler, list_titles_handler, list_tracks_handler,
+                                         prioritize_download_job_handler, profiles_handler, refresh_services_handler,
+                                         retry_download_job_handler, search_handler, server_config_handler,
+                                         session_create_handler, session_delete_handler, session_info_handler,
+                                         session_license_handler, session_prompt_get_handler,
+                                         session_prompt_post_handler, session_segments_handler,
+                                         session_titles_handler, session_tracks_handler)
 from unshackle.core.services import Services
 from unshackle.core.update_checker import UpdateChecker
 
@@ -832,6 +837,14 @@ async def download_jobs(request: web.Request) -> web.Response:
           enum: [asc, desc]
           default: desc
         description: Sort order (ascending or descending)
+      - name: full
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: ["true", "false"]
+          default: "false"
+        description: When "true", include full job details (parameters, timestamps, output files, errors) per job
     responses:
       '200':
         description: List of download jobs
@@ -868,6 +881,7 @@ async def download_jobs(request: web.Request) -> web.Response:
         "service": request.query.get("service"),
         "sort_by": request.query.get("sort_by", "created_time"),
         "sort_order": request.query.get("sort_order", "desc"),
+        "full": request.query.get("full"),
     }
     return await list_download_jobs_handler(query_params, request)
 
@@ -900,10 +914,10 @@ async def download_job_detail(request: web.Request) -> web.Response:
 @api_handler
 async def cancel_download_job(request: web.Request) -> web.Response:
     """
-    Cancel download job.
+    Cancel or remove download job.
     ---
-    summary: Cancel download job
-    description: Cancel a queued or running download job
+    summary: Cancel or remove download job
+    description: Cancel a queued or running download job, or remove a completed/failed/cancelled job entirely
     parameters:
       - name: job_id
         in: path
@@ -913,6 +927,8 @@ async def cancel_download_job(request: web.Request) -> web.Response:
     responses:
       '200':
         description: Job cancelled successfully
+      '204':
+        description: Terminal job removed from the manager
       '400':
         description: Job cannot be cancelled
       '404':
@@ -922,6 +938,419 @@ async def cancel_download_job(request: web.Request) -> web.Response:
     """
     job_id = request.match_info["job_id"]
     return await cancel_download_job_handler(job_id, request)
+
+
+@api_handler
+async def clear_finished_download_jobs(request: web.Request) -> web.Response:
+    """
+    Clear finished download jobs.
+    ---
+    summary: Clear finished download jobs
+    description: Remove all completed, failed, and cancelled jobs from the manager
+    responses:
+      '200':
+        description: Finished jobs removed
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                removed:
+                  type: integer
+                  description: Number of jobs removed
+      '500':
+        description: Server error
+    """
+    return await clear_finished_download_jobs_handler(request)
+
+
+@api_handler
+async def retry_download_job(request: web.Request) -> web.Response:
+    """
+    Retry download job.
+    ---
+    summary: Retry download job
+    description: Enqueue a new job reusing a completed, failed, or cancelled job's service, title, and parameters
+    parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+    responses:
+      '202':
+        description: New job queued
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                job_id:
+                  type: string
+                status:
+                  type: string
+                created_time:
+                  type: string
+      '404':
+        description: Job not found
+      '409':
+        description: Job is not in a terminal state
+      '500':
+        description: Server error
+    """
+    job_id = request.match_info["job_id"]
+    return await retry_download_job_handler(job_id, request)
+
+
+@api_handler
+async def prioritize_download_job(request: web.Request) -> web.Response:
+    """
+    Prioritize download job.
+    ---
+    summary: Prioritize download job
+    description: Move a queued job to the front of the download queue
+    parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Job moved to front of queue
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                job_id:
+                  type: string
+                position:
+                  type: string
+                  example: front
+      '404':
+        description: Job not found
+      '409':
+        description: Job is not queued
+      '500':
+        description: Server error
+    """
+    job_id = request.match_info["job_id"]
+    return await prioritize_download_job_handler(job_id, request)
+
+
+@api_handler
+async def profiles(request: web.Request) -> web.Response:
+    """
+    List configured credential profiles per service.
+    ---
+    summary: List credential profiles
+    description: >
+      Enumerate named credential profiles configured per service (usable as the `profile`
+      parameter). Only services whose credentials are a mapping of profile-name to credential
+      are listed (including a `default` key if present); a service configured with a single
+      plain (unnamed) credential is omitted entirely. Filtered by the caller's service allowlist.
+    responses:
+      '200':
+        description: Profiles per service
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                profiles:
+                  type: object
+                  additionalProperties:
+                    type: array
+                    items:
+                      type: string
+      '500':
+        description: Server error
+    """
+    return await profiles_handler(request)
+
+
+@api_handler
+async def server_config(request: web.Request) -> web.Response:
+    """
+    Get the redacted effective server configuration.
+    ---
+    summary: Get server config
+    description: >
+      Read-only, redacted view of the effective server configuration for display in a UI
+      settings page. Secrets (api_secret, users, credentials, tokens) are never included;
+      secret-looking keys inside `dl` are masked.
+    responses:
+      '200':
+        description: Redacted server configuration
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                config:
+                  type: object
+                  properties:
+                    dl:
+                      type: object
+                      description: Default dl parameters from config (secret-looking keys masked)
+                    serve:
+                      type: object
+                      properties:
+                        max_concurrent_downloads:
+                          type: integer
+                        job_retention_hours:
+                          type: integer
+                        services:
+                          type: array
+                          items:
+                            type: string
+                          nullable: true
+                        remote_only:
+                          type: boolean
+                        cdm_overrides:
+                          nullable: true
+                          description: List of permitted CDM device names, true, or null
+                        allow_job_credentials:
+                          type: boolean
+                    directories:
+                      type: object
+                      properties:
+                        downloads:
+                          type: string
+                        temp:
+                          type: string
+                        cache:
+                          type: string
+                    services:
+                      type: array
+                      items:
+                        type: string
+                      description: Available service tags (allowlist-filtered)
+      '500':
+        description: Server error
+    """
+    return await server_config_handler(request)
+
+
+@api_handler
+async def download_history(request: web.Request) -> web.Response:
+    """
+    Get persistent download history.
+    ---
+    summary: Get download history
+    description: >
+      Read the persisted job history (jobs that reached a terminal state), newest first.
+      Corrupt lines in the history file are skipped; a missing file yields an empty list.
+    parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 100
+        description: Maximum number of entries to return
+      - name: service
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Filter entries by service tag (case-insensitive)
+    responses:
+      '200':
+        description: History entries, newest first
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                history:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      job_id:
+                        type: string
+                      service:
+                        type: string
+                      title_id:
+                        type: string
+                      title:
+                        type: string
+                        nullable: true
+                      status:
+                        type: string
+                        enum: [completed, failed, cancelled]
+                      created_time:
+                        type: string
+                      completed_time:
+                        type: string
+                        nullable: true
+                      output_files:
+                        type: array
+                        items:
+                          type: string
+                      error_message:
+                        type: string
+                        nullable: true
+                count:
+                  type: integer
+      '400':
+        description: Invalid query parameters
+      '500':
+        description: Server error
+    """
+    query_params = {"limit": request.query.get("limit"), "service": request.query.get("service")}
+    return await download_history_handler(query_params, request)
+
+
+@api_handler
+async def delete_history(request: web.Request) -> web.Response:
+    """
+    Delete a download history entry.
+    ---
+    summary: Delete download history entry
+    description: Remove a single persisted history entry by job_id.
+    parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+    responses:
+      '204':
+        description: History entry removed
+      '404':
+        description: History entry not found
+      '500':
+        description: Server error
+    """
+    return await delete_history_handler(request.match_info["job_id"], request)
+
+
+@api_handler
+async def maintenance_clear_cache(request: web.Request) -> web.Response:
+    """
+    Clear the cache directory.
+    ---
+    summary: Clear cache
+    description: Delete the contents of the cache directory (recreated empty). Freed size is best effort.
+    responses:
+      '200':
+        description: Cache cleared
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cleared:
+                  type: boolean
+                freed_bytes:
+                  type: integer
+      '500':
+        description: Server error
+    """
+    return await clear_cache_handler(request)
+
+
+@api_handler
+async def maintenance_clear_temp(request: web.Request) -> web.Response:
+    """
+    Clear the temp directory.
+    ---
+    summary: Clear temp
+    description: Delete the contents of the temp directory (recreated empty). Freed size is best effort.
+    responses:
+      '200':
+        description: Temp cleared
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cleared:
+                  type: boolean
+                freed_bytes:
+                  type: integer
+      '500':
+        description: Server error
+    """
+    return await clear_temp_handler(request)
+
+
+@api_handler
+async def maintenance_refresh_services(request: web.Request) -> web.Response:
+    """
+    Refresh configured service repos.
+    ---
+    summary: Refresh service repos
+    description: >
+      Force-sync (git pull) every service repo configured in directories.services.
+      `refreshed` is true when all repos synced (or none are configured); per-repo
+      results are listed under `repos`.
+    responses:
+      '200':
+        description: Refresh results
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshed:
+                  type: boolean
+                repos:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      spec:
+                        type: string
+                      updated:
+                        type: boolean
+                      changes:
+                        type: array
+                        items:
+                          type: string
+      '500':
+        description: Server error
+    """
+    return await refresh_services_handler(request)
+
+
+@api_handler
+async def env_check(request: web.Request) -> web.Response:
+    """
+    Check environment dependencies.
+    ---
+    summary: Environment check
+    description: Report install status of the binaries `env check` inspects, with best-effort versions.
+    responses:
+      '200':
+        description: Dependency check results
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                checks:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      installed:
+                        type: boolean
+                      version:
+                        type: string
+                        nullable: true
+                      required:
+                        type: boolean
+      '500':
+        description: Server error
+    """
+    return await env_check_handler(request)
 
 
 @api_handler
@@ -1325,8 +1754,19 @@ ROUTES: list[tuple[str, str, Handler, bool]] = [
     ("POST", "/api/list-tracks", list_tracks, False),
     ("POST", "/api/download", download, False),
     ("GET", "/api/download/jobs", download_jobs, False),
+    ("POST", "/api/download/jobs/clear-finished", clear_finished_download_jobs, False),
     ("GET", "/api/download/jobs/{job_id}", download_job_detail, False),
     ("DELETE", "/api/download/jobs/{job_id}", cancel_download_job, False),
+    ("POST", "/api/download/jobs/{job_id}/retry", retry_download_job, False),
+    ("POST", "/api/download/jobs/{job_id}/priority", prioritize_download_job, False),
+    ("GET", "/api/profiles", profiles, False),
+    ("GET", "/api/config", server_config, False),
+    ("GET", "/api/history", download_history, False),
+    ("DELETE", "/api/history/{job_id}", delete_history, False),
+    ("POST", "/api/maintenance/clear-cache", maintenance_clear_cache, False),
+    ("POST", "/api/maintenance/clear-temp", maintenance_clear_temp, False),
+    ("POST", "/api/maintenance/refresh-services", maintenance_refresh_services, False),
+    ("GET", "/api/env/check", env_check, False),
     ("POST", "/api/session/create", session_create, True),
     ("GET", "/api/session/{session_id}/titles", session_titles, True),
     ("POST", "/api/session/{session_id}/tracks", session_tracks, True),

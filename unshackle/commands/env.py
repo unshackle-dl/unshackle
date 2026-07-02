@@ -17,16 +17,9 @@ from unshackle.core.constants import context_settings
 from unshackle.core.services import Services
 
 
-@click.group(short_help="Manage and configure the project environment.", context_settings=context_settings)
-def env() -> None:
-    """Manage and configure the project environment."""
-
-
-@env.command()
-def check() -> None:
-    """Checks environment for the required dependencies."""
-    # Define all dependencies
-    all_deps = [
+def get_dependencies() -> list[dict]:
+    """Binary dependency inventory shared by `env check` and the API env check."""
+    return [
         # Core Media Tools
         {"name": "FFmpeg", "binary": binaries.FFMPEG, "required": True, "desc": "Media processing", "cat": "Core"},
         {"name": "FFprobe", "binary": binaries.FFProbe, "required": True, "desc": "Media analysis", "cat": "Core"},
@@ -98,6 +91,34 @@ def check() -> None:
         {"name": "Docker", "binary": binaries.Docker, "required": False, "desc": "Gluetun VPN", "cat": "Network"},
         {"name": "git", "binary": binaries.Git, "required": False, "desc": "Service repos", "cat": "Network"},
     ]
+
+
+def clear_directory(path: Path) -> tuple[int, int]:
+    """Delete a directory's contents, returning (files_removed, freed_bytes); recreates the dir."""
+    files_count = 0
+    freed_bytes = 0
+    if path.exists():
+        for entry in path.glob("**/*"):
+            if entry.is_file():
+                files_count += 1
+                try:
+                    freed_bytes += entry.stat().st_size
+                except OSError:
+                    pass
+        shutil.rmtree(path, ignore_errors=True)
+    path.mkdir(parents=True, exist_ok=True)
+    return files_count, freed_bytes
+
+
+@click.group(short_help="Manage and configure the project environment.", context_settings=context_settings)
+def env() -> None:
+    """Manage and configure the project environment."""
+
+
+@env.command()
+def check() -> None:
+    """Checks environment for the required dependencies."""
+    all_deps = get_dependencies()
 
     # Track overall status
     all_required_installed = True
@@ -214,12 +235,11 @@ def cache(service: Optional[str]) -> None:
     if service:
         cache_dir = cache_dir / Services.get_tag(service)
     log.info(f"Clearing cache directory: {cache_dir}")
-    files_count = len(list(cache_dir.glob("**/*")))
+    files_count, _ = clear_directory(cache_dir)
     if not files_count:
         log.info("No files to delete")
     else:
-        log.info(f"Deleting {files_count} files...")
-        shutil.rmtree(cache_dir)
+        log.info(f"Deleted {files_count} files")
         log.info("Cleared")
 
 
@@ -228,10 +248,9 @@ def temp() -> None:
     """Clear the environment temp directory."""
     log = logging.getLogger("env")
     log.info(f"Clearing temp directory: {config.directories.temp}")
-    files_count = len(list(config.directories.temp.glob("**/*")))
+    files_count, _ = clear_directory(config.directories.temp)
     if not files_count:
         log.info("No files to delete")
     else:
-        log.info(f"Deleting {files_count} files...")
-        shutil.rmtree(config.directories.temp)
+        log.info(f"Deleted {files_count} files")
         log.info("Cleared")

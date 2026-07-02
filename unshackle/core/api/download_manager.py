@@ -7,6 +7,7 @@ import sys
 import tempfile
 import threading
 import uuid
+from collections import deque
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -75,6 +76,10 @@ class JobStatus(Enum):
     CANCELLED = "cancelled"
 
 
+# Statuses a job can never leave; such jobs are safe to remove or retry.
+TERMINAL_STATUSES = (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED)
+
+
 @dataclass
 class DownloadJob:
     """Represents a download job with all its parameters and status."""
@@ -119,6 +124,9 @@ class DownloadJob:
     # Cancellation support
     cancel_event: threading.Event = field(default_factory=threading.Event)
 
+    # Guards against writing the same job to the persistent history file twice.
+    history_recorded: bool = False
+
     def to_dict(self, include_full_details: bool = False) -> Dict[str, Any]:
         """Convert job to dictionary for JSON response."""
         result = {
@@ -159,6 +167,125 @@ class DownloadJob:
             )
 
         return result
+
+
+def _history_path() -> Path:
+    """Path of the persistent job history file (under the cache dir, kept out of the config/data tree)."""
+    from unshackle.core.config import config
+
+    return config.directories.cache / "api_history.jsonl"
+
+
+def _history_limit() -> int:
+    """Max history entries to retain (serve.history_limit, default 100; <= 0 means unlimited)."""
+    from unshackle.core.config import config
+
+    try:
+        return int((config.serve or {}).get("history_limit", 100))
+    except (TypeError, ValueError):
+        return 100
+
+
+def record_job_history(job: DownloadJob) -> None:
+    """Append a terminal job's summary as one JSON line to the history file (best effort)."""
+    if job.history_recorded or job.status not in TERMINAL_STATUSES:
+        return
+    job.history_recorded = True
+    entry = {
+        "job_id": job.job_id,
+        "service": job.service,
+        "title_id": job.title_id,
+        "title": job.title,
+        "status": job.status.value,
+        "created_time": job.created_time.isoformat(),
+        "completed_time": job.completed_time.isoformat() if job.completed_time else None,
+        "output_files": job.output_files,
+        "parameters": _redact_parameters(job.parameters),
+        "error_message": _redact_text(job.error_message, job.parameters),
+    }
+    try:
+        path = _history_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        line = json.dumps(entry)
+        limit = _history_limit()
+        # Serialized on the manager's event loop, so read-append-trim doesn't race.
+        if limit > 0 and path.exists():
+            existing = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+            existing.append(line)
+            path.write_text("\n".join(existing[-limit:]) + "\n", encoding="utf-8")  # keep newest N
+        else:
+            with open(path, "a", encoding="utf-8") as handle:
+                handle.write(line + "\n")
+    except OSError as e:
+        log.warning(f"Could not write job history: {e}")
+
+
+def read_job_history(limit: int = 100, service: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Read persisted job history, newest first; corrupt lines are skipped, missing file = empty."""
+    path = _history_path()
+    if not path.exists():
+        return []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as e:
+        log.warning(f"Could not read job history: {e}")
+        return []
+    entries: List[Dict[str, Any]] = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(entry, dict):
+            continue
+        if service and str(entry.get("service") or "").upper() != service.upper():
+            continue
+        entries.append(entry)
+    entries.reverse()  # newest first
+    return entries[:limit] if limit and limit > 0 else entries
+
+
+def delete_job_history(job_id: str, allowed: Optional[set] = None) -> bool:
+    """Remove a history entry by job_id (rewriting the file). Returns True if one was deleted.
+
+    When `allowed` is given, an entry outside the caller's service allowlist is treated as
+    absent (returns False) so it can't be deleted by a restricted key.
+    """
+    path = _history_path()
+    if not path.exists():
+        return False
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as e:
+        log.warning(f"Could not read job history: {e}")
+        return False
+    kept: List[str] = []
+    deleted = False
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            entry = json.loads(stripped)
+        except json.JSONDecodeError:
+            kept.append(stripped)  # preserve corrupt lines untouched
+            continue
+        match = isinstance(entry, dict) and entry.get("job_id") == job_id
+        if match and (allowed is None or str(entry.get("service") or "").upper() in allowed):
+            deleted = True
+            continue
+        kept.append(stripped)
+    if not deleted:
+        return False
+    try:
+        path.write_text("\n".join(kept) + ("\n" if kept else ""), encoding="utf-8")
+    except OSError as e:
+        log.warning(f"Could not write job history: {e}")
+        return False
+    return True
 
 
 def to_enum(values: List[str], enum_cls: type[Enum]) -> List[Enum]:
@@ -471,6 +598,9 @@ class DownloadQueueManager:
 
         self._jobs: Dict[str, DownloadJob] = {}
         self._job_queue: asyncio.Queue = asyncio.Queue()
+        # asyncio.Queue has no reorder, so prioritized jobs go in a deque workers drain first.
+        self._priority_jobs: deque = deque()
+        self._promoted_ids: set = set()  # their stale FIFO-queue copies get skipped via this set
         self._active_downloads: Dict[str, asyncio.Task] = {}
         self._download_processes: Dict[str, asyncio.subprocess.Process] = {}
         self._job_temp_files: Dict[str, Dict[str, str]] = {}
@@ -516,6 +646,8 @@ class DownloadQueueManager:
         if job.status == JobStatus.QUEUED:
             job.status = JobStatus.CANCELLED
             job.cancel_event.set()  # Signal cancellation
+            job.completed_time = datetime.now()
+            record_job_history(job)  # queued jobs never reach a worker, so persist here
             log.info(f"Cancelled queued job {sanitize_log(job_id)}")
             return True
         elif job.status == JobStatus.DOWNLOADING:
@@ -541,6 +673,36 @@ class DownloadQueueManager:
             return True
 
         return False
+
+    def remove_job(self, job_id: str) -> bool:
+        """Remove a terminal (completed/failed/cancelled) job entirely."""
+        job = self._jobs.get(job_id)
+        if not job or job.status not in TERMINAL_STATUSES:
+            return False
+        del self._jobs[job_id]
+        log.info(f"Removed job {sanitize_log(job_id)}")
+        return True
+
+    def clear_finished_jobs(self) -> int:
+        """Remove all terminal (completed/failed/cancelled) jobs, returning the count removed."""
+        finished = [job_id for job_id, job in self._jobs.items() if job.status in TERMINAL_STATUSES]
+        for job_id in finished:
+            del self._jobs[job_id]
+        if finished:
+            log.info(f"Cleared {len(finished)} finished jobs")
+        return len(finished)
+
+    def prioritize_job(self, job_id: str) -> bool:
+        """Move a queued job to the front of the line."""
+        job = self._jobs.get(job_id)
+        if not job or job.status != JobStatus.QUEUED:
+            return False
+        if job in self._priority_jobs:
+            return True
+        self._priority_jobs.append(job)
+        self._promoted_ids.add(job_id)
+        log.info(f"Moved job {sanitize_log(job_id)} to front of queue")
+        return True
 
     def cleanup_old_jobs(self) -> int:
         """Remove jobs older than retention period."""
@@ -623,8 +785,15 @@ class DownloadQueueManager:
 
         while not self._shutdown_event.is_set():
             try:
-                # Wait for a job or shutdown signal
-                job = await asyncio.wait_for(self._job_queue.get(), timeout=1.0)
+                # Prioritized jobs run first; their stale copies still in the FIFO queue are skipped.
+                if self._priority_jobs:
+                    job = self._priority_jobs.popleft()
+                else:
+                    # Wait for a job or shutdown signal
+                    job = await asyncio.wait_for(self._job_queue.get(), timeout=1.0)
+                    if job.job_id in self._promoted_ids:
+                        self._promoted_ids.discard(job.job_id)
+                        continue
 
                 if job.status == JobStatus.CANCELLED:
                     continue
@@ -650,6 +819,7 @@ class DownloadQueueManager:
                     log.error(f"Job {job.job_id} failed: {e}")
                 finally:
                     job.completed_time = datetime.now()
+                    record_job_history(job)
                     if job.job_id in self._active_downloads:
                         del self._active_downloads[job.job_id]
 
