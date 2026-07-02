@@ -1032,6 +1032,56 @@ def test_kill_process_kills_when_terminate_hangs():
 
 
 # ---------------------------------------------------------------------------
+# Provider: last_connection_display (replaces get_connection_info)
+# ---------------------------------------------------------------------------
+
+
+def test_last_connection_display_returns_none_before_any_connection():
+    provider = V2Ray(servers=[])
+    assert provider.last_connection_display() is None
+
+
+def test_last_connection_display_shows_label_and_ip():
+    """After spawning, last_connection_display returns '(label) ip' for dl.py to print."""
+    provider = V2Ray(servers=[_make_vmess_uri(remark="🇺🇸 US - LA", address="1.1.1.1")])
+    provider.binary = Path("/fake/xray")
+    patches = _patch_lifecycle(provider)
+    with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
+        provider.get_proxy("us")
+    # Simulate IP verification having run (sets public_ip on the process info)
+    provider._last_connection["public_ip"] = "216.185.57.75"
+    display = provider.last_connection_display()
+    assert display is not None
+    assert "🇺🇸 US - LA" in display
+    assert "216.185.57.75" in display
+
+
+def test_last_connection_display_shows_label_without_ip():
+    """If IP verification hasn't run yet, just show the label."""
+    provider = V2Ray(servers=[_make_vmess_uri(remark="🇯🇵 JP", address="1.1.1.1")])
+    provider.binary = Path("/fake/xray")
+    patches = _patch_lifecycle(provider)
+    with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
+        provider.get_proxy("jp")
+    display = provider.last_connection_display()
+    assert display is not None
+    assert "🇯🇵 JP" in display
+    # No IP since verify wasn't called
+    assert "216.185" not in display
+
+
+def test_v2ray_does_not_implement_get_connection_info():
+    """V2Ray must NOT implement get_connection_info — dl.py would show 'VPN Connected'
+    which is misleading for a proxy. Instead it implements last_connection_display."""
+    provider = V2Ray(servers=[])
+    assert not hasattr(provider, "get_connection_info"), (
+        "V2Ray should not implement get_connection_info — it triggers the 'VPN Connected' "
+        "display path in dl.py, which is wrong for a proxy provider."
+    )
+    assert hasattr(provider, "last_connection_display")
+
+
+# ---------------------------------------------------------------------------
 # Provider: integration with resolve_proxy
 # ---------------------------------------------------------------------------
 

@@ -882,6 +882,7 @@ class V2Ray(Proxy):
         self._servers: list[V2RayServer] = []
         self._country_servers: dict[str, list[V2RayServer]] = {}
         self._active: dict[str, dict] = {}  # query_key -> process info
+        self._last_connection: Optional[dict] = None  # info about the most recent spawn
 
         # Load servers (priority: subscription > config_path > inline).
         self._servers = self._load_servers(subscription_url, config_path, servers)
@@ -1002,6 +1003,7 @@ class V2Ray(Proxy):
         process_info["server"] = server
         process_info["query"] = query_key
         self._active[query_key] = process_info
+        self._last_connection = process_info
 
         # Wait for the SOCKS5 inbound to accept connections.
         if not self._wait_for_ready(socks_port, timeout=self.startup_timeout):
@@ -1428,8 +1430,11 @@ class V2Ray(Proxy):
         creationflags = 0
         start_new_session = True
         if os.name == "nt":
-            # Windows: CREATE_NO_WINDOW so a console doesn't pop up.
-            creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            # Windows: CREATE_NO_WINDOW prevents a console popup. We deliberately do NOT
+            # use CREATE_NEW_PROCESS_GROUP — that would orphan the xray subprocess if the
+            # parent console is closed, because the child wouldn't receive the close event.
+            # Without it, the child dies alongside the parent when the console closes.
+            creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
             start_new_session = False
 
         process = subprocess.Popen(
@@ -1686,6 +1691,25 @@ class V2Ray(Proxy):
         """Read-only view of the per-country server map (the ``countries:`` YAML block)."""
         return {k: list(v) for k, v in self._country_servers.items()}
 
-    def get_connection_info(self, query: str) -> Optional[dict]:
-        """Return the connection info dict for a previously-resolved query, if any."""
-        return self._active.get((query or "").strip().lower())
+    def last_connection_display(self) -> Optional[str]:
+        """Return a short display string for the most recent connection.
+
+        Used by ``dl.py`` to show a human-readable summary instead of the raw proxy URI.
+        Format: ``(server_label) exit_ip`` — e.g. ``(🇺🇸 US - Los Angeles) 216.185.57.75``.
+        Returns None if no connection has been made yet, in which case the caller falls
+        back to printing the raw proxy URI.
+
+        This deliberately does NOT implement ``get_connection_info`` (which would make
+        ``dl.py`` print "VPN Connected: ..." — misleading for a proxy, not a VPN).
+        """
+        info = self._last_connection
+        if not info:
+            return None
+        server: Optional[V2RayServer] = info.get("server")
+        if not server:
+            return None
+        ip = info.get("public_ip", "")
+        label = server.label
+        if ip:
+            return f"({label}) {ip}"
+        return f"({label})"
