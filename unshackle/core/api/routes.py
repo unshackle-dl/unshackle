@@ -251,6 +251,9 @@ async def services(request: web.Request) -> web.Response:
                             param_info["default"] = default
                             param_info["help"] = getattr(param, "help", None)
                             param_info["type"] = param.type.name if hasattr(param.type, "name") else str(param.type)
+                            if isinstance(param.type, click.Choice):
+                                param_info["choices"] = list(param.type.choices)
+                            param_info["multiple"] = getattr(param, "multiple", False)
                         cli_params.append(param_info)
                     service_data["cli_params"] = cli_params
 
