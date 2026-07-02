@@ -1,0 +1,862 @@
+     1→"""Remote service adapter for unshackle.
+     2→
+     3→Implements the Service interface by proxying authenticate, get_titles,
+     4→get_tracks, get_chapters, and license methods to a remote unshackle server.
+     5→Everything else (track selection, download, decrypt, mux) runs locally.
+     6→"""
+     7→
+     8→from __future__ import annotations
+     9→
+    10→import base64
+    11→import logging
+    12→import time
+    13→from enum import Enum
+    14→from http.cookiejar import CookieJar
+    15→from typing import Any, Dict, Optional, Union
+    16→
+    17→import click
+    18→import requests
+    19→from langcodes import Language
+    20→from requests.adapters import HTTPAdapter, Retry
+    21→from rich.padding import Padding
+    22→from rich.rule import Rule
+    23→
+    24→from unshackle.core.config import config
+    25→from unshackle.core.console import console
+    26→from unshackle.core.constants import AnyTrack
+    27→from unshackle.core.credential import Credential
+    28→from unshackle.core.titles import Title_T, Titles_T, remap_titles
+    29→from unshackle.core.titles.episode import Episode, Series
+    30→from unshackle.core.titles.movie import Movie, Movies
+    31→from unshackle.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks, Video
+    32→from unshackle.core.tracks.attachment import Attachment
+    33→from unshackle.core.tracks.track import Track
+    34→from unshackle.core.utils.redact import redact_text, safe_display_url
+    35→
+    36→log = logging.getLogger("remote_service")
+    37→
+    38→SENSITIVE_DATA_KEYS = ("credential", "credentials", "password", "token", "api_key")
+    39→
+    40→
+    41→def redact_secrets(text: str, data: Optional[Dict[str, Any]] = None) -> str:
+    42→    """Mask URL userinfo and any request-payload secrets before the text is logged."""
+    43→    secrets = [v for k in SENSITIVE_DATA_KEYS if isinstance(v := (data or {}).get(k), str) and v]
+    44→    return redact_text(text, secrets) or ""
+    45→
+    46→
+    47→class RemoteClient:
+    48→    """HTTP client for the unshackle serve API."""
+    49→
+    50→    def __init__(self, server_url: str, api_key: str) -> None:
+    51→        self.server_url = server_url.rstrip("/")
+    52→        self.api_key = api_key
+    53→        self._session: Optional[requests.Session] = None
+    54→
+    55→    @property
+    56→    def session(self) -> requests.Session:
+    57→        if self._session is None:
+    58→            from unshackle.core import __version__
+    59→
+    60→            self._session = requests.Session()
+    61→            self._session.headers["User-Agent"] = f"unshackle/{__version__}"
+    62→            if self.api_key:
+    63→                self._session.headers["X-Secret-Key"] = self.api_key
+    64→        return self._session
+    65→
+    66→    def _request(self, method: str, endpoint: str, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    67→        url = f"{self.server_url}{endpoint}"
+    68→        try:
+    69→            resp = getattr(self.session, method)(url, json=data, timeout=120 if method == "post" else 30)
+    70→        except requests.ConnectionError:
+    71→            server_url = safe_display_url(self.server_url)
+    72→            log.error(f"Could not connect to remote server at {server_url}. Is it running? (unshackle serve)")
+    73→            raise SystemExit(1)
+    74→        except requests.Timeout:
+    75→            log.error(f"Request to remote server timed out: {endpoint}")
+    76→            raise SystemExit(1)
+    77→        result = resp.json()
+    78→        if resp.status_code >= 400:
+    79→            error_msg = redact_secrets(str(result.get("message", resp.text)), data)
+    80→            error_code = result.get("error_code", "UNKNOWN")
+    81→            log.error(f"Server error [{error_code}]: {error_msg}")
+    82→            raise SystemExit(1)
+    83→        return result
+    84→
+    85→    def post(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    86→        return self._request("post", endpoint, data)
+    87→
+    88→    def get(self, endpoint: str) -> Dict[str, Any]:
+    89→        return self._request("get", endpoint)
+    90→
+    91→    def delete(self, endpoint: str) -> Dict[str, Any]:
+    92→        return self._request("delete", endpoint)
+    93→
+    94→
+    95→def _enum_get(enum_cls: type[Enum], name: Optional[str], default: Any = None) -> Any:
+    96→    """Safely get an enum value by name."""
+    97→    if not name:
+    98→        return default
+    99→    try:
+   100→        return enum_cls[name]
+   101→    except KeyError:
+   102→        return default
+   103→
+   104→
+   105→def _deserialize_video(data: Dict[str, Any]) -> Video:
+   106→    v = Video(
+   107→        url=data.get("url") or "https://placeholder",
+   108→        language=Language.get(data.get("language") or "und"),
+   109→        descriptor=_enum_get(Track.Descriptor, data.get("descriptor"), Track.Descriptor.URL),
+   110→        codec=_enum_get(Video.Codec, data.get("codec")),
+   111→        range_=_enum_get(Video.Range, data.get("range"), Video.Range.SDR),
+   112→        bitrate=data["bitrate"] * 1000 if data.get("bitrate") else 0,
+   113→        width=data.get("width") or 0,
+   114→        height=data.get("height") or 0,
+   115→        fps=data.get("fps"),
+   116→        id_=data.get("id"),
+   117→    )
+   118→    return v
+   119→
+   120→
+   121→def _deserialize_audio(data: Dict[str, Any]) -> Audio:
+   122→    a = Audio(
+   123→        url=data.get("url") or "https://placeholder",
+   124→        language=Language.get(data.get("language") or "und"),
+   125→        descriptor=_enum_get(Track.Descriptor, data.get("descriptor"), Track.Descriptor.URL),
+   126→        codec=_enum_get(Audio.Codec, data.get("codec")),
+   127→        bitrate=data["bitrate"] * 1000 if data.get("bitrate") else 0,
+   128→        channels=data.get("channels"),
+   129→        joc=1 if data.get("atmos") else 0,
+   130→        descriptive=data.get("descriptive", False),
+   131→        id_=data.get("id"),
+   132→    )
+   133→    return a
+   134→
+   135→
+   136→def _deserialize_subtitle(data: Dict[str, Any]) -> Subtitle:
+   137→    return Subtitle(
+   138→        url=data.get("url") or "https://placeholder",
+   139→        language=Language.get(data.get("language") or "und"),
+   140→        descriptor=_enum_get(Track.Descriptor, data.get("descriptor"), Track.Descriptor.URL),
+   141→        codec=_enum_get(Subtitle.Codec, data.get("codec")),
+   142→        cc=data.get("cc", False),
+   143→        sdh=data.get("sdh", False),
+   144→        forced=data.get("forced", False),
+   145→        id_=data.get("id"),
+   146→    )
+   147→
+   148→
+   149→def _reconstruct_drm(drm_list: Optional[list]) -> list:
+   150→    """Reconstruct DRM objects from serialized API data."""
+   151→    if not drm_list:
+   152→        return []
+   153→    result = []
+   154→    for drm_info in drm_list:
+   155→        drm_type = drm_info.get("type", "")
+   156→        pssh_str = drm_info.get("pssh")
+   157→        if not pssh_str:
+   158→            continue
+   159→        try:
+   160→            if drm_type == "widevine":
+   161→                from pywidevine.pssh import PSSH as WidevinePSSH
+   162→
+   163→                from unshackle.core.drm import Widevine
+   164→
+   165→                wv_pssh = WidevinePSSH(pssh_str)
+   166→                result.append(Widevine(pssh=wv_pssh))
+   167→            elif drm_type == "playready":
+   168→                import base64 as b64
+   169→
+   170→                from pyplayready.system.pssh import PSSH as PlayReadyPSSH
+   171→
+   172→                from unshackle.core.drm import PlayReady
+   173→
+   174→                pr_pssh = PlayReadyPSSH(b64.b64decode(pssh_str))
+   175→                result.append(PlayReady(pssh=pr_pssh, pssh_b64=pssh_str))
+   176→        except Exception:
+   177→            continue
+   178→    return result
+   179→
+   180→
+   181→def _build_tracks(data: Dict[str, Any]) -> Tracks:
+   182→    tracks = Tracks()
+   183→    tracks.videos = [_deserialize_video(v) for v in data.get("video", [])]
+   184→    tracks.audio = [_deserialize_audio(a) for a in data.get("audio", [])]
+   185→    tracks.subtitles = [_deserialize_subtitle(s) for s in data.get("subtitles", [])]
+   186→
+   187→    for track_data, track_obj in [
+   188→        *zip(data.get("video", []), tracks.videos),
+   189→        *zip(data.get("audio", []), tracks.audio),
+   190→    ]:
+   191→        drm_objs = _reconstruct_drm(track_data.get("drm"))
+   192→        if drm_objs:
+   193→            track_obj.drm = drm_objs
+   194→    tracks.attachments = [
+   195→        Attachment(url=a["url"], name=a.get("name"), mime_type=a.get("mime_type"), description=a.get("description"))
+   196→        for a in data.get("attachments", [])
+   197→    ]
+   198→    return tracks
+   199→
+   200→
+   201→def _resolve_manifest_data(tracks: Tracks, manifests: list) -> None:
+   202→    """Re-parse serialized manifests and populate track.data for downloading.
+   203→
+   204→    The server serializes DASH and ISM manifest XML as zlib-compressed base64.
+   205→    We decode and decompress locally, re-parse with the appropriate manifest
+   206→    parser, then match each remote track to the locally-parsed track by ID
+   207→    to copy track.data. HLS is skipped as it re-fetches from track.url.
+   208→    """
+   209→    import base64 as b64
+   210→    import zlib
+   211→
+   212→    if not manifests:
+   213→        return
+   214→
+   215→    log_m = logging.getLogger("remote_service")
+   216→    all_tracks = list(tracks.videos) + list(tracks.audio) + list(tracks.subtitles)
+   217→
+   218→    for manifest_info in manifests:
+   219→        m_type = manifest_info.get("type")
+   220→        m_url = manifest_info.get("url")
+   221→        m_data = manifest_info.get("data")
+   222→        if not m_data or not m_url:
+   223→            continue
+   224→
+   225→        try:
+   226→            raw = zlib.decompress(b64.b64decode(m_data))
+   227→
+   228→            if m_type == "dash":
+   229→                from lxml import etree
+   230→
+   231→                from unshackle.core.manifests import DASH
+   232→
+   233→                xml_tree = etree.fromstring(raw)
+   234→                fallback_lang = next(
+   235→                    (t.language for t in all_tracks if t.language and str(t.language) != "und"),
+   236→                    None,
+   237→                )
+   238→                local_tracks = DASH(xml_tree, m_url).to_tracks(language=fallback_lang)
+   239→            elif m_type == "ism":
+   240→                from lxml import etree
+   241→
+   242→                from unshackle.core.manifests import ISM
+   243→
+   244→                local_tracks = ISM(etree.fromstring(raw), m_url).to_tracks()
+   245→            else:
+   246→                continue
+   247→
+   248→            local_all = list(local_tracks.videos) + list(local_tracks.audio) + list(local_tracks.subtitles)
+   249→            for remote_track in all_tracks:
+   250→                if remote_track.data.get(m_type):
+   251→                    continue
+   252→                matched = _match_track(remote_track, local_all)
+   253→                if matched and matched.data.get(m_type):
+   254→                    remote_track.data.update(matched.data)
+   255→                    remote_track.descriptor = matched.descriptor
+   256→                    if matched.drm and not remote_track.drm:
+   257→                        remote_track.drm = matched.drm
+   258→
+   259→        except Exception as e:
+   260→            log_m.warning("Failed to re-parse %s manifest from %s: %s", m_type, m_url, e)
+   261→
+   262→
+   263→def _match_track(remote_track: Track, local_tracks: list) -> Optional[Track]:
+   264→    """Match a remote track to a locally-parsed track by ID or attributes."""
+   265→    remote_id = str(remote_track.id)
+   266→    for lt in local_tracks:
+   267→        if str(lt.id) == remote_id:
+   268→            return lt
+   269→
+   270→    for lt in local_tracks:
+   271→        if type(lt).__name__ != type(remote_track).__name__:
+   272→            continue
+   273→        if lt.codec != remote_track.codec or str(lt.language) != str(remote_track.language):
+   274→            continue
+   275→        if hasattr(lt, "width") and hasattr(remote_track, "width"):
+   276→            if lt.width == remote_track.width and lt.height == remote_track.height:
+   277→                return lt
+   278→        elif hasattr(lt, "channels") and hasattr(remote_track, "channels"):
+   279→            if lt.bitrate == remote_track.bitrate:
+   280→                return lt
+   281→        elif hasattr(lt, "forced"):
+   282→            if lt.forced == remote_track.forced and lt.sdh == remote_track.sdh:
+   283→                return lt
+   284→    return None
+   285→
+   286→
+   287→def _build_title(info: Dict[str, Any], service_tag: str, fallback_id: str) -> Union[Episode, Movie]:
+   288→    svc_class = type(service_tag, (), {})
+   289→    lang = Language.get(info["language"]) if info.get("language") else None
+   290→    if info.get("type") == "episode":
+   291→        return Episode(
+   292→            id_=info.get("id", fallback_id),
+   293→            service=svc_class,
+   294→            title=info.get("series_title", "Unknown"),
+   295→            season=info.get("season", 0),
+   296→            number=info.get("number", 0),
+   297→            name=info.get("name"),
+   298→            year=info.get("year"),
+   299→            language=lang,
+   300→            air_date=info.get("air_date"),
+   301→        )
+   302→    return Movie(
+   303→        id_=info.get("id", fallback_id),
+   304→        service=svc_class,
+   305→        name=info.get("name", "Unknown"),
+   306→        year=info.get("year"),
+   307→        language=lang,
+   308→    )
+   309→
+   310→
+   311→def resolve_server(server_name: Optional[str]) -> tuple[str, str, dict]:
+   312→    """Resolve server URL, API key, and per-service config from remote_services."""
+   313→    remote_services = config.remote_services
+   314→    if not remote_services:
+   315→        raise click.ClickException(
+   316→            "No remote services configured. Add 'remote_services' to your unshackle.yaml:\n\n"
+   317→            "  remote_services:\n"
+   318→            "    my_server:\n"
+   319→            '      url: "https://server:8080"\n'
+   320→            '      api_key: "your-api-key"'
+   321→        )
+   322→
+   323→    if server_name:
+   324→        svc = remote_services.get(server_name)
+   325→        if not svc:
+   326→            available = ", ".join(remote_services.keys())
+   327→            raise click.ClickException(f"Remote service '{server_name}' not found. Available: {available}")
+   328→        services = svc.get("services", {})
+   329→        services["_server_cdm"] = svc.get("server_cdm", False)
+   330→        return svc["url"], svc.get("api_key", ""), services
+   331→
+   332→    if len(remote_services) == 1:
+   333→        name, svc = next(iter(remote_services.items()))
+   334→        log.info(f"Using remote service: {name}")
+   335→        services = svc.get("services", {})
+   336→        services["_server_cdm"] = svc.get("server_cdm", False)
+   337→        return svc["url"], svc.get("api_key", ""), services
+   338→
+   339→    available = ", ".join(remote_services.keys())
+   340→    raise click.ClickException(f"Multiple remote services configured. Use --server to select one: {available}")
+   341→
+   342→
+   343→def _load_credentials_for_transport(service_tag: str, profile: Optional[str]) -> Optional[Dict[str, str]]:
+   344→    from unshackle.commands.dl import dl
+   345→
+   346→    credential = dl.get_credentials(service_tag, profile)
+   347→    if credential:
+   348→        result: Dict[str, str] = {"username": credential.username, "password": credential.password}
+   349→        if credential.extra:
+   350→            result["extra"] = credential.extra
+   351→        return result
+   352→    return None
+   353→
+   354→
+   355→def _load_cookies_for_transport(service_tag: str, profile: Optional[str]) -> Optional[str]:
+   356→    import zlib
+   357→
+   358→    from unshackle.commands.dl import dl
+   359→
+   360→    cookie_path = dl.get_cookie_path(service_tag, profile)
+   361→    if cookie_path and cookie_path.exists():
+   362→        return base64.b64encode(zlib.compress(cookie_path.read_bytes())).decode("ascii")
+   363→    return None
+   364→
+   365→
+   366→def _resolve_proxy(proxy_arg: Optional[str]) -> Optional[str]:
+   367→    if not proxy_arg:
+   368→        return None
+   369→
+   370→    from unshackle.core.proxies.resolve import initialize_proxy_providers, resolve_proxy
+   371→
+   372→    try:
+   373→        providers = initialize_proxy_providers()
+   374→        return resolve_proxy(proxy_arg, providers)
+   375→    except ValueError as e:
+   376→        raise click.ClickException(str(e))
+   377→
+   378→
+   379→class RemoteService:
+   380→    """Service adapter that proxies to a remote unshackle server.
+   381→
+   382→    Implements the same interface dl.py's result() expects without
+   383→    subclassing Service (avoids proxy/geofence setup in __init__).
+   384→    """
+   385→
+   386→    ALIASES: tuple[str, ...] = ()
+   387→    GEOFENCE: tuple[str, ...] = ()
+   388→    NO_SUBTITLES: bool = False
+   389→
+   390→    def __init__(
+   391→        self,
+   392→        ctx: click.Context,
+   393→        service_tag: str,
+   394→        title_id: str,
+   395→        server_url: str,
+   396→        api_key: str,
+   397→        services_config: dict,
+   398→        service_params: Optional[Dict[str, Any]] = None,
+   399→    ) -> None:
+   400→        self.__class__.__name__ = service_tag
+   401→        console.print(Padding(Rule(f"[rule.text]Service: {service_tag} (Remote)"), (1, 2)))
+   402→
+   403→        self.service_tag = service_tag
+   404→        self.title_id = title_id
+   405→        self.client = RemoteClient(server_url, api_key)
+   406→        self.ctx = ctx
+   407→        self._service_params = service_params or {}
+   408→        self.log = logging.getLogger(service_tag)
+   409→        self.credential: Optional[Credential] = None
+   410→        self.current_region: Optional[str] = None
+   411→        self.title_cache = None
+   412→        self._titles: Optional[Titles_T] = None
+   413→        self._tracks_by_title: Dict[str, Tracks] = {}
+   414→        self._chapters_by_title: Dict[str, list] = {}
+   415→        self._session_id: Optional[str] = None
+   416→        self._server_cdm_type: str = "widevine"
+   417→
+   418→        self._session = requests.Session()
+   419→        self._session.headers.update(config.headers)
+   420→        self._session.mount(
+   421→            "https://",
+   422→            HTTPAdapter(
+   423→                max_retries=Retry(total=5, backoff_factor=0.2, status_forcelist=[429, 500, 502, 503, 504]),
+   424→                pool_block=True,
+   425→            ),
+   426→        )
+   427→        self._session.mount("http://", self._session.adapters["https://"])
+   428→
+   429→        svc_config = services_config.get(service_tag, {})
+   430→        self._server_cdm = services_config.get("_server_cdm", False)
+   431→        self._apply_service_config(svc_config)
+   432→
+   433→    def _apply_service_config(self, svc_config: dict) -> None:
+   434→        if not svc_config:
+   435→            return
+   436→        config_maps = {
+   437→            "cdm": ("cdm", self.service_tag),
+   438→            "decryption": ("decryption_map", self.service_tag),
+   439→        }
+   440→        for key, (attr, tag) in config_maps.items():
+   441→            if svc_config.get(key):
+   442→                target = getattr(config, attr, None)
+   443→                if target is None:
+   444→                    setattr(config, attr, {})
+   445→                    target = getattr(config, attr)
+   446→                target[tag] = svc_config[key]
+   447→
+   448→        if svc_config.get("decryption"):
+   449→            config.decryption = svc_config["decryption"]
+   450→
+   451→        extra = {k: v for k, v in svc_config.items() if k not in config_maps}
+   452→        if extra:
+   453→            existing = config.services.get(self.service_tag, {})
+   454→            for key, value in extra.items():
+   455→                if key in existing and isinstance(existing[key], dict) and isinstance(value, dict):
+   456→                    existing[key].update(value)
+   457→                else:
+   458→                    existing[key] = value
+   459→            config.services[self.service_tag] = existing
+   460→
+   461→    @property
+   462→    def session(self) -> requests.Session:
+   463→        return self._session
+   464→
+   465→    @property
+   466→    def title(self) -> str:
+   467→        return self.title_id
+   468→
+   469→    def authenticate(self, cookies: Optional[CookieJar] = None, credential: Optional[Credential] = None) -> None:
+   470→        self.credential = credential
+   471→        profile = self.ctx.parent.params.get("profile") if self.ctx.parent else None
+   472→        proxy = self.ctx.parent.params.get("proxy") if self.ctx.parent else None
+   473→        no_proxy = self.ctx.parent.params.get("no_proxy", False) if self.ctx.parent else False
+   474→
+   475→        create_data: Dict[str, Any] = {"service": self.service_tag, "title_id": self.title_id}
+   476→
+   477→        credentials = _load_credentials_for_transport(self.service_tag, profile)
+   478→        if credentials:
+   479→            create_data["credentials"] = credentials
+   480→
+   481→        cookies_text = _load_cookies_for_transport(self.service_tag, profile)
+   482→        if cookies_text:
+   483→            create_data["cookies"] = cookies_text
+   484→
+   485→        if not no_proxy and proxy:
+   486→            resolved_proxy = _resolve_proxy(proxy)
+   487→            if resolved_proxy:
+   488→                create_data["proxy"] = resolved_proxy
+   489→
+   490→        if not no_proxy and not proxy:
+   491→            try:
+   492→                from unshackle.core.utils.ip_info import get_ip_info
+   493→
+   494→                ip_info = get_ip_info(self._session, cached=True)
+   495→                if ip_info and ip_info.get("country"):
+   496→                    create_data["client_region"] = ip_info["country"].lower()
+   497→            except Exception:
+   498→                pass
+   499→
+   500→        if profile:
+   501→            create_data["profile"] = profile
+   502→        if no_proxy:
+   503→            create_data["no_proxy"] = True
+   504→        # Forward track selection params so the server fetches the right manifests
+   505→        if self.ctx.parent:
+   506→            range_ = self.ctx.parent.params.get("range_")
+   507→            if range_:
+   508→                create_data["range_"] = [r.name for r in range_]
+   509→            vcodec = self.ctx.parent.params.get("vcodec")
+   510→            if vcodec:
+   511→                create_data["vcodec"] = [c.name for c in vcodec]
+   512→            quality = self.ctx.parent.params.get("quality")
+   513→            if quality:
+   514→                create_data["quality"] = list(quality)
+   515→            if self.ctx.parent.params.get("best_available"):
+   516→                create_data["best_available"] = True
+   517→
+   518→        if self._service_params:
+   519→            create_data.update(self._service_params)
+   520→
+   521→        cdm = self.ctx.obj.cdm if self.ctx.obj else None
+   522→        if cdm is not None:
+   523→            from unshackle.core.cdm.detect import is_playready_cdm
+   524→
+   525→            create_data["cdm_type"] = "playready" if is_playready_cdm(cdm) else "widevine"
+   526→
+   527→        cache_data = self._load_cache_files()
+   528→        if cache_data:
+   529→            create_data["cache"] = cache_data
+   530→
+   531→        result = self.client.post("/api/session/create", create_data)
+   532→        self._session_id = result["session_id"]
+   533→
+   534→        status = result.get("status", "authenticated")
+   535→        if status == "authenticating":
+   536→            self._poll_auth_completion()
+   537→
+   538→    def _poll_auth_completion(self, poll_interval: float = 2.0, timeout: float = 600.0) -> None:
+   539→        """Poll the server until authentication completes, handling interactive prompts.
+   540→
+   541→        When the server needs user input (OTP, device code, PIN), it returns
+   542→        ``pending_input`` with a prompt. We display it locally, collect the
+   543→        response, and POST it back. The server resumes its auth flow.
+   544→        """
+   545→        deadline = time.monotonic() + timeout
+   546→
+   547→        while time.monotonic() < deadline:
+   548→            resp = self.client.get(f"/api/session/{self._session_id}/prompt")
+   549→            status = resp.get("status")
+   550→
+   551→            if status == "authenticated":
+   552→                return
+   553→
+   554→            if status == "failed":
+   555→                error = resp.get("error", "Authentication failed on server")
+   556→                log.error(f"Remote auth failed: {error}")
+   557→                raise SystemExit(1)
+   558→
+   559→            if status == "pending_input":
+   560→                prompt = resp.get("prompt", "Enter input: ")
+   561→                user_response = click.prompt(prompt.rstrip("\n "), default="", show_default=False)
+   562→                self.client.post(
+   563→                    f"/api/session/{self._session_id}/prompt",
+   564→                    {"response": user_response},
+   565→                )
+   566→                continue
+   567→
+   568→            time.sleep(poll_interval)
+   569→
+   570→        log.error("Remote authentication timed out")
+   571→        raise SystemExit(1)
+   572→
+   573→    def get_titles(self) -> Titles_T:
+   574→        if self._titles is not None:
+   575→            return self._titles
+   576→        result = self.client.get(f"/api/session/{self._session_id}/titles")
+   577→        titles_list = [_build_title(t, self.service_tag, self.title_id) for t in result.get("titles", [])]
+   578→        self._titles = (
+   579→            Series(titles_list) if titles_list and isinstance(titles_list[0], Episode) else Movies(titles_list)
+   580→        )
+   581→        return self._titles
+   582→
+   583→    def get_titles_cached(self, title_id: str = None) -> Titles_T:
+   584→        """Apply the client's local title_map to titles fetched from the remote server.
+   585→
+   586→        Lets users rename titles for remote services they don't have installed locally.
+   587→        The server sends raw titles; the client's own ``services.<TAG>.title_map`` wins.
+   588→        """
+   589→        title_map = (config.services.get(self.service_tag) or {}).get("title_map") or {}
+   590→        return remap_titles(self.get_titles(), title_map)
+   591→
+   592→    def get_tracks(self, title: Title_T) -> Tracks:
+   593→        title_id = str(title.id)
+   594→        if title_id in self._tracks_by_title:
+   595→            return self._tracks_by_title[title_id]
+   596→        result = self.client.post(f"/api/session/{self._session_id}/tracks", {"title_id": title_id})
+   597→        tracks = _build_tracks(result)
+   598→
+   599→        for k, v in result.get("session_headers", {}).items():
+   600→            if k.lower() not in ("host", "content-length", "content-type"):
+   601→                self._session.headers[k] = v
+   602→        for k, v in result.get("session_cookies", {}).items():
+   603→            self._session.cookies.set(k, v)
+   604→
+   605→        _resolve_manifest_data(tracks, result.get("manifests", []))
+   606→
+   607→        self._server_cdm_type = result.get("server_cdm_type", "widevine")
+   608→
+   609→        self._tracks_by_title[title_id] = tracks
+   610→        self._chapters_by_title[title_id] = result.get("chapters", [])
+   611→
+   612→        return tracks
+   613→
+   614→    def resolve_server_keys(self, title: Title_T) -> None:
+   615→        """Resolve DRM keys via server CDM for all tracks on a title.
+   616→
+   617→        Called by dl.py between track selection and download. The server
+   618→        decides which CDM device to use and tells the client via
+   619→        server_cdm_type. We send track IDs and the server does the full
+   620→        CDM flow, returning KID:KEY pairs.
+   621→        """
+   622→        if not self._server_cdm:
+   623→            return
+   624→
+   625→        from uuid import UUID
+   626→
+   627→        track_ids = [str(t.id) for t in title.tracks.videos + title.tracks.audio]
+   628→        if not track_ids:
+   629→            return
+   630→
+   631→        drm_type = getattr(self, "_server_cdm_type", "widevine")
+   632→        self.log.debug(f"Requesting server CDM keys (server_cdm_type={drm_type})")
+   633→
+   634→        try:
+   635→            with console.status("Retrieving Remote License...", spinner="dots"):
+   636→                resp = self.client.post(
+   637→                    f"/api/session/{self._session_id}/license",
+   638→                    {
+   639→                        "track_ids": track_ids,
+   640→                        "mode": "server_cdm",
+   641→                        "drm_type": drm_type,
+   642→                    },
+   643→                )
+   644→            keys_by_track = resp.get("keys", {})
+   645→            server_drm_type = resp.get("drm_type", drm_type)
+   646→            self._server_cdm_type = server_drm_type
+   647→            self.log.debug(f"Server responded with drm_type={server_drm_type}, keys for {len(keys_by_track)} track(s)")
+   648→
+   649→            for track in title.tracks:
+   650→                track_keys = keys_by_track.get(str(track.id), {})
+   651→                if not track_keys:
+   652→                    continue
+   653→
+   654→                kid_list = list(track_keys.keys())
+   655→                drm_obj = self._create_drm_stub(server_drm_type, kid_list)
+   656→                for kid_hex, key_hex in track_keys.items():
+   657→                    drm_obj.content_keys[UUID(hex=kid_hex)] = key_hex
+   658→                track.drm = [drm_obj]
+   659→                self.log.debug(
+   660→                    f"Track {track.id}: set DRM to {drm_obj.__class__.__name__} with {len(track_keys)} key(s)"
+   661→                )
+   662→            key_count = sum(len(v) for v in keys_by_track.values())
+   663→            if key_count:
+   664→                self.log.debug(f"Server CDM resolved {key_count} key(s) using {server_drm_type.upper()}")
+   665→        except Exception as e:
+   666→            self.log.warning("Failed to resolve server CDM keys: %s", e)
+   667→
+   668→    @staticmethod
+   669→    def _create_drm_stub(drm_type: str, kid_hexes: list[str]) -> Any:
+   670→        """Create a DRM object stub matching the type the server actually used.
+   671→
+   672→        For server_cdm mode, this is only used for display — keys are already
+   673→        resolved. We build a minimal DRM object that holds content_keys.
+   674→        """
+   675→        from uuid import UUID
+   676→
+   677→        if drm_type == "playready":
+   678→            import base64 as b64
+   679→            import struct
+   680→
+   681→            from pyplayready.system.pssh import PSSH as PlayReadyPSSH
+   682→
+   683→            from unshackle.core.drm import PlayReady
+   684→
+   685→            kid_uuids = [UUID(hex=k) for k in kid_hexes]
+   686→            kid_b64 = b64.b64encode(kid_uuids[0].bytes_le).decode()
+   687→            wrm_xml = (
+   688→                '<WRMHEADER xmlns="http://schemas.microsoft.com/DRM/2007/03/PlayReadyHeader" version="4.0.0.0">'
+   689→                f"<DATA><PROTECTINFO><KEYLEN>16</KEYLEN><ALGID>AESCTR</ALGID></PROTECTINFO>"
+   690→                f"<KID>{kid_b64}</KID></DATA></WRMHEADER>"
+   691→            )
+   692→            wrm_bytes = wrm_xml.encode("utf-16-le")
+   693→            record_length = len(wrm_bytes)
+   694→            obj_length = 4 + 2 + 2 + 2 + record_length
+   695→            pr_obj = struct.pack("<IHH", obj_length, 1, 1) + struct.pack("<H", record_length) + wrm_bytes
+   696→            pr_pssh = PlayReadyPSSH(pr_obj)
+   697→            pssh_b64 = b64.b64encode(pr_obj).decode("ascii")
+   698→            drm = PlayReady(pssh=pr_pssh, pssh_b64=pssh_b64)
+   699→            for kid_uuid in kid_uuids:
+   700→                if kid_uuid not in drm.kids:
+   701→                    drm.kids.append(kid_uuid)
+   702→            return drm
+   703→        else:
+   704→            from pywidevine.pssh import PSSH as WvPSSH
+   705→
+   706→            from unshackle.core.drm import Widevine
+   707→
+   708→            kid_uuids = [UUID(hex=k) for k in kid_hexes]
+   709→            WIDEVINE_SYSTEM_ID = UUID("edef8ba9-79d6-4ace-a3c8-27dcd51d21ed")
+   710→            dummy_pssh = WvPSSH.new(system_id=WIDEVINE_SYSTEM_ID, key_ids=kid_uuids)
+   711→            return Widevine(pssh=dummy_pssh, kid=kid_hexes[0])
+   712→
+   713→    def get_chapters(self, title: Title_T) -> Chapters:
+   714→        title_id = str(title.id)
+   715→        if title_id not in self._chapters_by_title:
+   716→            self.get_tracks(title)
+   717→        raw = self._chapters_by_title.get(title_id, [])
+   718→        return Chapters([Chapter(ch["timestamp"], ch.get("name")) for ch in raw])
+   719→
+   720→    def get_widevine_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> Optional[Union[bytes, str]]:
+   721→        return self._proxy_license(challenge, track, "widevine")
+   722→
+   723→    def get_playready_license(
+   724→        self, *, challenge: bytes, title: Title_T, track: AnyTrack
+   725→    ) -> Optional[Union[bytes, str]]:
+   726→        return self._proxy_license(challenge, track, "playready")
+   727→
+   728→    def get_widevine_service_certificate(
+   729→        self,
+   730→        *,
+   731→        challenge: bytes,
+   732→        title: Title_T,
+   733→        track: AnyTrack,
+   734→    ) -> Union[bytes, str]:
+   735→        try:
+   736→            resp = self.client.post(
+   737→                f"/api/session/{self._session_id}/license",
+   738→                {
+   739→                    "track_id": str(track.id),
+   740→                    "challenge": base64.b64encode(challenge).decode("ascii"),
+   741→                    "drm_type": "widevine",
+   742→                    "is_certificate": True,
+   743→                },
+   744→            )
+   745→            return base64.b64decode(resp["license"])
+   746→        except Exception:
+   747→            return None
+   748→
+   749→    def _proxy_license(self, challenge: Union[bytes, str], track: AnyTrack, drm_type: str) -> bytes:
+   750→        if isinstance(challenge, str):
+   751→            challenge = challenge.encode("utf-8")
+   752→
+   753→        pssh_b64 = None
+   754→        if track.drm:
+   755→            for drm_obj in track.drm:
+   756→                drm_class = drm_obj.__class__.__name__
+   757→                if drm_type == "playready" and drm_class == "PlayReady":
+   758→                    pssh_b64 = drm_obj.data["pssh_b64"]
+   759→                    break
+   760→                elif drm_type == "widevine" and drm_class == "Widevine":
+   761→                    pssh_b64 = drm_obj.pssh.dumps()
+   762→                    break
+   763→
+   764→        if self._server_cdm:
+   765→            from uuid import UUID
+   766→
+   767→            if pssh_b64:
+   768→                try:
+   769→                    resp = self.client.post(
+   770→                        f"/api/session/{self._session_id}/license",
+   771→                        {
+   772→                            "track_id": str(track.id),
+   773→                            "drm_type": drm_type,
+   774→                            "mode": "server_cdm",
+   775→                            "pssh": pssh_b64,
+   776→                        },
+   777→                    )
+   778→                    keys = resp.get("keys", {})
+   779→                    if keys and track.drm:
+   780→                        for drm_obj in track.drm:
+   781→                            if hasattr(drm_obj, "content_keys"):
+   782→                                for kid_hex, key_hex in keys.items():
+   783→                                    drm_obj.content_keys[UUID(hex=kid_hex)] = key_hex
+   784→                        return challenge
+   785→                except Exception as e:
+   786→                    self.log.warning("server_cdm license failed: %s", e)
+   787→            return challenge
+   788→
+   789→        payload = {
+   790→            "track_id": str(track.id),
+   791→            "challenge": base64.b64encode(challenge).decode("ascii"),
+   792→            "drm_type": drm_type,
+   793→        }
+   794→        if pssh_b64:
+   795→            payload["pssh"] = pssh_b64
+   796→
+   797→        resp = self.client.post(f"/api/session/{self._session_id}/license", payload)
+   798→        return base64.b64decode(resp["license"])
+   799→
+   800→    def on_segment_downloaded(self, track: AnyTrack, segment: Any) -> None:
+   801→        pass
+   802→
+   803→    def on_track_downloaded(self, track: AnyTrack) -> None:
+   804→        pass
+   805→
+   806→    def on_track_decrypted(self, track: AnyTrack, drm: Any, segment: Any = None) -> None:
+   807→        pass
+   808→
+   809→    def on_track_repacked(self, track: AnyTrack) -> None:
+   810→        pass
+   811→
+   812→    def on_track_multiplex(self, track: AnyTrack) -> None:
+   813→        pass
+   814→
+   815→    def close(self) -> None:
+   816→        if self._session_id:
+   817→            try:
+   818→                result = self.client.delete(f"/api/session/{self._session_id}")
+   819→                self._save_returned_cache(result.get("cache", {}))
+   820→            except Exception as e:
+   821→                self.log.warning(f"Failed to clean up remote session: {e}")
+   822→            self._session_id = None
+   823→
+   824→    def _save_returned_cache(self, cache_data: Dict[str, str]) -> None:
+   825→        """Save cache files returned by the server to the local cache directory.
+   826→
+   827→        The server returns updated cache files (e.g. refreshed tokens) on
+   828→        session close. Writing them locally means the next remote session
+   829→        can forward them back, skipping interactive auth.
+   830→        """
+   831→        if not cache_data:
+   832→            return
+   833→
+   834→        import zlib
+   835→
+   836→        cache_dir = config.directories.cache / self.service_tag
+   837→        cache_dir.mkdir(parents=True, exist_ok=True)
+   838→
+   839→        for key, content in cache_data.items():
+   840→            try:
+   841→                decompressed = zlib.decompress(base64.b64decode(content))
+   842→                (cache_dir / key).with_suffix(".json").write_bytes(decompressed)
+   843→            except Exception as e:
+   844→                self.log.warning(f"Failed to save returned cache file '{key}': {e}")
+   845→
+   846→        self.log.info(f"Saved {len(cache_data)} cache file(s) from server")
+   847→
+   848→    def _load_cache_files(self) -> Dict[str, str]:
+   849→        import zlib
+   850→
+   851→        cache_dir = config.directories.cache / self.service_tag
+   852→        if not cache_dir.is_dir():
+   853→            return {}
+   854→        return {
+   855→            f.stem: base64.b64encode(zlib.compress(f.read_bytes())).decode("ascii")
+   856→            for f in cache_dir.glob("*.json")
+   857→            if not f.stem.startswith("titles_")
+   858→        }
+   859→
+   860→
+   861→__all__ = ("RemoteClient", "RemoteService", "resolve_server")
+   862→

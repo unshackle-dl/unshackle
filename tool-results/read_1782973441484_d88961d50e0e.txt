@@ -1,0 +1,602 @@
+  1000→                    self.debug_logger.log_error("load_cdm", e, service=self.service)
+  1001→                sys.exit(1)
+  1002→
+  1003→            if self.cdm:
+  1004→                cdm_info = {}
+  1005→                if isinstance(self.cdm, DecryptLabsRemoteCDM):
+  1006→                    drm_type = "PlayReady" if self.cdm.is_playready else "Widevine"
+  1007→                    self.log.info(f"Loaded {drm_type} Remote CDM: DecryptLabs (L{self.cdm.security_level})")
+  1008→                    cdm_info = {"type": "DecryptLabs", "drm_type": drm_type, "security_level": self.cdm.security_level}
+  1009→                elif hasattr(self.cdm, "device_type") and self.cdm.device_type.name in ["ANDROID", "CHROME"]:
+  1010→                    self.log.info(f"Loaded Widevine CDM: {self.cdm.system_id} (L{self.cdm.security_level})")
+  1011→                    cdm_info = {
+  1012→                        "type": "Widevine",
+  1013→                        "system_id": self.cdm.system_id,
+  1014→                        "security_level": self.cdm.security_level,
+  1015→                        "device_type": self.cdm.device_type.name,
+  1016→                    }
+  1017→                else:
+  1018→                    # Handle both local PlayReady CDM and RemoteCdm (which has certificate_chain=None)
+  1019→                    is_remote = self.cdm.certificate_chain is None and hasattr(self.cdm, "device_name")
+  1020→                    if is_remote:
+  1021→                        cdm_name = self.cdm.device_name
+  1022→                        self.log.info(f"Loaded PlayReady Remote CDM: {cdm_name} (L{self.cdm.security_level})")
+  1023→                    else:
+  1024→                        cdm_name = self.cdm.certificate_chain.get_name() if self.cdm.certificate_chain else "Unknown"
+  1025→                        self.log.info(f"Loaded PlayReady CDM: {cdm_name} (L{self.cdm.security_level})")
+  1026→                    cdm_info = {
+  1027→                        "type": "PlayReady",
+  1028→                        "certificate": cdm_name,
+  1029→                        "security_level": self.cdm.security_level,
+  1030→                    }
+  1031→
+  1032→                if cdm_info:
+  1033→                    log_event("load_cdm", level="INFO", service=self.service, context={"cdm": cdm_info})
+  1034→
+  1035→        self.proxy_providers = []
+  1036→        if no_proxy:
+  1037→            ctx.params["proxy"] = None
+  1038→        else:
+  1039→            with console.status("Loading Proxy Providers...", spinner="dots"):
+  1040→                if config.proxy_providers.get("basic"):
+  1041→                    self.proxy_providers.append(Basic(**config.proxy_providers["basic"]))
+  1042→                # ExpressVPN/ProtonVPN auto-load when their default cookie file exists (no yaml needed)
+  1043→                expressvpn = ExpressVPN(**(config.proxy_providers.get("expressvpn") or {}))
+  1044→                if config.proxy_providers.get("expressvpn") or expressvpn.cookie_path.is_file():
+  1045→                    self.proxy_providers.append(expressvpn)
+  1046→                if config.proxy_providers.get("nordvpn"):
+  1047→                    self.proxy_providers.append(NordVPN(**config.proxy_providers["nordvpn"]))
+  1048→                proton = ProtonVPN(**(config.proxy_providers.get("protonvpn") or {}))
+  1049→                if config.proxy_providers.get("protonvpn") or proton.cookie_path.is_file():
+  1050→                    self.proxy_providers.append(proton)
+  1051→                if config.proxy_providers.get("surfsharkvpn"):
+  1052→                    self.proxy_providers.append(SurfsharkVPN(**config.proxy_providers["surfsharkvpn"]))
+  1053→                if config.proxy_providers.get("windscribevpn"):
+  1054→                    self.proxy_providers.append(WindscribeVPN(**config.proxy_providers["windscribevpn"]))
+  1055→                if config.proxy_providers.get("gluetun"):
+  1056→                    self.proxy_providers.append(Gluetun(**config.proxy_providers["gluetun"]))
+  1057→                if binaries.HolaProxy:
+  1058→                    self.proxy_providers.append(Hola())
+  1059→                for proxy_provider in self.proxy_providers:
+  1060→                    self.log.info(f"Loaded {proxy_provider.__class__.__name__}: {proxy_provider}")
+  1061→
+  1062→            if proxy:
+  1063→                requested_provider = None
+  1064→                if re.match(r"^[a-z]+:.+$", proxy, re.IGNORECASE):
+  1065→                    # requesting proxy from a specific proxy provider
+  1066→                    requested_provider, proxy = proxy.split(":", maxsplit=1)
+  1067→                # Match simple region codes (us, ca, uk1, us:ny) or provider:region (nordvpn:ca, protonvpn:us:ny).
+  1068→                # ':' is allowed as a city separator (e.g. nordvpn:us:seattle, protonvpn:de:berlin).
+  1069→                if re.match(r"^[a-z]{2}(?:[-:][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE) or re.match(
+  1070→                    r"^[a-z]+:[a-z]{2}(?:[-:][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE
+  1071→                ):
+  1072→                    proxy = proxy.lower()
+  1073→                    # Preserve the original user query (region code) for service-specific proxy_map overrides.
+  1074→                    # NOTE: `proxy` may be overwritten with the resolved proxy URI later.
+  1075→                    proxy_query = proxy
+  1076→                    status_msg = (
+  1077→                        f"Connecting to VPN ({proxy})..."
+  1078→                        if requested_provider == "gluetun"
+  1079→                        else f"Getting a Proxy to {proxy}..."
+  1080→                    )
+  1081→                    with console.status(status_msg, spinner="dots"):
+  1082→                        if requested_provider:
+  1083→                            proxy_provider = next(
+  1084→                                (x for x in self.proxy_providers if x.__class__.__name__.lower() == requested_provider),
+  1085→                                None,
+  1086→                            )
+  1087→                            if not proxy_provider:
+  1088→                                self.log.error(f"The proxy provider '{requested_provider}' was not recognised.")
+  1089→                                sys.exit(1)
+  1090→                            proxy_uri = proxy_provider.get_proxy(proxy)
+  1091→                            if not proxy_uri:
+  1092→                                self.log.error(f"The proxy provider {requested_provider} had no proxy for {proxy}")
+  1093→                                sys.exit(1)
+  1094→                            proxy = ctx.params["proxy"] = proxy_uri
+  1095→                            # Show connection info for Gluetun (IP, location) instead of proxy URL
+  1096→                            if hasattr(proxy_provider, "get_connection_info"):
+  1097→                                conn_info = proxy_provider.get_connection_info(proxy_query)
+  1098→                                if conn_info and conn_info.get("public_ip"):
+  1099→                                    location_parts = [conn_info.get("city"), conn_info.get("country")]
+  1100→                                    location = ", ".join(p for p in location_parts if p)
+  1101→                                    self.log.info(f"VPN Connected: {conn_info['public_ip']} ({location})")
+  1102→                                else:
+  1103→                                    self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+  1104→                            else:
+  1105→                                display = None
+  1106→                                if hasattr(proxy_provider, "last_connection_display"):
+  1107→                                    display = proxy_provider.last_connection_display()
+  1108→                                if display:
+  1109→                                    self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy {display}")
+  1110→                                else:
+  1111→                                    self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+  1112→                        else:
+  1113→                            for proxy_provider in self.proxy_providers:
+  1114→                                proxy_uri = proxy_provider.get_proxy(proxy)
+  1115→                                if proxy_uri:
+  1116→                                    proxy = ctx.params["proxy"] = proxy_uri
+  1117→                                    # Show connection info for Gluetun (IP, location) instead of proxy URL
+  1118→                                    if hasattr(proxy_provider, "get_connection_info"):
+  1119→                                        conn_info = proxy_provider.get_connection_info(proxy_query)
+  1120→                                        if conn_info and conn_info.get("public_ip"):
+  1121→                                            location_parts = [conn_info.get("city"), conn_info.get("country")]
+  1122→                                            location = ", ".join(p for p in location_parts if p)
+  1123→                                            self.log.info(f"VPN Connected: {conn_info['public_ip']} ({location})")
+  1124→                                        else:
+  1125→                                            self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+  1126→                                    else:
+  1127→                                        display = None
+  1128→                                        if hasattr(proxy_provider, "last_connection_display"):
+  1129→                                            display = proxy_provider.last_connection_display()
+  1130→                                        if display:
+  1131→                                            self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy {display}")
+  1132→                                        else:
+  1133→                                            self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+  1134→                                    break
+  1135→                    # Store proxy query info for service-specific overrides
+  1136→                    ctx.params["proxy_query"] = proxy_query
+  1137→                    ctx.params["proxy_provider"] = requested_provider
+  1138→                else:
+  1139→                    self.log.info(f"Using explicit Proxy: {proxy}")
+  1140→                    # For explicit proxies, store None for query/provider
+  1141→                    ctx.params["proxy_query"] = None
+  1142→                    ctx.params["proxy_provider"] = None
+  1143→
+  1144→        ctx.obj = ContextData(
+  1145→            config=self.service_config, cdm=self.cdm, proxy_providers=self.proxy_providers, profile=self.profile
+  1146→        )
+  1147→
+  1148→        if repack:
+  1149→            config.repack = True
+  1150→
+  1151→        if tag:
+  1152→            config.tag = tag
+  1153→
+  1154→        # needs to be added this way instead of @cli.result_callback to be
+  1155→        # able to keep `self` as the first positional
+  1156→        self.cli._result_callback = self.result
+  1157→
+  1158→    def result(
+  1159→        self,
+  1160→        service: Service,
+  1161→        quality: list[int],
+  1162→        vcodec: list[Video.Codec],
+  1163→        acodec: list[Audio.Codec],
+  1164→        vbitrate: int,
+  1165→        abitrate: int,
+  1166→        vbitrate_range: Optional[str],
+  1167→        abitrate_range: Optional[str],
+  1168→        range_: list[Video.Range],
+  1169→        channels: float,
+  1170→        no_atmos: bool,
+  1171→        select_titles: bool,
+  1172→        wanted: list[str],
+  1173→        latest_episode: bool,
+  1174→        lang: list[str],
+  1175→        v_lang: list[str],
+  1176→        a_lang: list[str],
+  1177→        s_lang: list[str],
+  1178→        require_subs: list[str],
+  1179→        forced_subs: bool,
+  1180→        exact_lang: bool,
+  1181→        sub_format: Optional[Union[Subtitle.Codec, str]],
+  1182→        video_only: bool,
+  1183→        audio_only: bool,
+  1184→        subs_only: bool,
+  1185→        chapters_only: bool,
+  1186→        no_subs: bool,
+  1187→        skip_subtitle_errors: bool,
+  1188→        no_audio: bool,
+  1189→        no_chapters: bool,
+  1190→        no_video: bool,
+  1191→        audio_description: bool,
+  1192→        slow: Optional[tuple[int, int]],
+  1193→        list_: bool,
+  1194→        list_titles: bool,
+  1195→        skip_dl: bool,
+  1196→        export: bool,
+  1197→        cdm_only: Optional[bool],
+  1198→        no_proxy: bool,
+  1199→        no_proxy_download: bool,
+  1200→        no_folder: bool,
+  1201→        no_source: bool,
+  1202→        no_mux: bool,
+  1203→        workers: Optional[int],
+  1204→        downloads: int,
+  1205→        worst: bool,
+  1206→        best_available: bool,
+  1207→        split_audio: Optional[bool] = None,
+  1208→        merge_video: Optional[bool] = None,
+  1209→        real_video_bitrate: bool = False,
+  1210→        real_audio_bitrate: bool = False,
+  1211→        progress_sink: Optional[Callable[[dict[str, Any]], None]] = None,
+  1212→        *_: Any,
+  1213→        **__: Any,
+  1214→    ) -> None:
+  1215→        self.tmdb_searched = False
+  1216→        self.search_source = None
+  1217→        self.server_cdm = getattr(service, "_server_cdm", False)
+  1218→        self._remote_service = service if self.server_cdm else None
+  1219→        start_time = time.time()
+  1220→
+  1221→        if skip_dl:
+  1222→            DOWNLOAD_LICENCE_ONLY.set()
+  1223→
+  1224→        if export:
+  1225→            config.directories.exports.mkdir(parents=True, exist_ok=True)
+  1226→            export_path = config.directories.exports / f"export_{self.service}_{int(time.time())}.json"
+  1227→            self.export_service = service
+  1228→        else:
+  1229→            export_path = None
+  1230→
+  1231→        # Parse bitrate range options
+  1232→        vbitrate_min, vbitrate_max = None, None
+  1233→        if vbitrate_range:
+  1234→            if vbitrate and vbitrate_range:
+  1235→                self.log.error("Cannot use both --vbitrate and --vbitrate-range at the same time.")
+  1236→                sys.exit(1)
+  1237→            try:
+  1238→                parts = vbitrate_range.split("-")
+  1239→                if len(parts) != 2:
+  1240→                    raise ValueError
+  1241→                vbitrate_min, vbitrate_max = int(parts[0]), int(parts[1])
+  1242→                if vbitrate_min > vbitrate_max:
+  1243→                    vbitrate_min, vbitrate_max = vbitrate_max, vbitrate_min
+  1244→            except (ValueError, IndexError):
+  1245→                self.log.error("Invalid --vbitrate-range format. Use 'MIN-MAX' (e.g., '6000-7000').")
+  1246→                sys.exit(1)
+  1247→
+  1248→        abitrate_min, abitrate_max = None, None
+  1249→        if abitrate_range:
+  1250→            if abitrate and abitrate_range:
+  1251→                self.log.error("Cannot use both --abitrate and --abitrate-range at the same time.")
+  1252→                sys.exit(1)
+  1253→            try:
+  1254→                parts = abitrate_range.split("-")
+  1255→                if len(parts) != 2:
+  1256→                    raise ValueError
+  1257→                abitrate_min, abitrate_max = int(parts[0]), int(parts[1])
+  1258→                if abitrate_min > abitrate_max:
+  1259→                    abitrate_min, abitrate_max = abitrate_max, abitrate_min
+  1260→            except (ValueError, IndexError):
+  1261→                self.log.error("Invalid --abitrate-range format. Use 'MIN-MAX' (e.g., '128-256').")
+  1262→                sys.exit(1)
+  1263→
+  1264→        if not acodec:
+  1265→            acodec = []
+  1266→        elif isinstance(acodec, Audio.Codec):
+  1267→            acodec = [acodec]
+  1268→        elif isinstance(acodec, str) or (
+  1269→            isinstance(acodec, list) and not all(isinstance(v, Audio.Codec) for v in acodec)
+  1270→        ):
+  1271→            acodec = AUDIO_CODEC_LIST.convert(acodec)
+  1272→
+  1273→        if require_subs and s_lang != ["all"]:
+  1274→            self.log.error("--require-subs and --s-lang cannot be used together")
+  1275→            sys.exit(1)
+  1276→
+  1277→        if worst and not quality:
+  1278→            self.log.error("--worst requires -q/--quality to be specified")
+  1279→            sys.exit(1)
+  1280→
+  1281→        if select_titles and wanted:
+  1282→            self.log.error("--select-titles and -w/--wanted cannot be used together")
+  1283→            sys.exit(1)
+  1284→
+  1285→        # Check if dovi_tool is available when hybrid mode is requested
+  1286→        if any(r == Video.Range.HYBRID for r in range_):
+  1287→            from unshackle.core.binaries import DoviTool
+  1288→
+  1289→            if not DoviTool:
+  1290→                self.log.error("Unable to run hybrid mode: dovi_tool not detected")
+  1291→                self.log.error("Please install dovi_tool from https://github.com/quietvoid/dovi_tool")
+  1292→                sys.exit(1)
+  1293→
+  1294→        if cdm_only is None:
+  1295→            vaults_only = None
+  1296→        else:
+  1297→            vaults_only = not cdm_only
+  1298→
+  1299→        config.decryption = resolve_decryption(config.decryption_map, config.decryption, service.__class__.__name__.upper())
+  1300→
+  1301→        log_event(
+  1302→            "drm_mode_config",
+  1303→            level="DEBUG",
+  1304→            service=self.service,
+  1305→            context={
+  1306→                "cdm_only": cdm_only,
+  1307→                "vaults_only": vaults_only,
+  1308→                "mode": "CDM only" if cdm_only else ("Vaults only" if vaults_only else "Both CDM and Vaults"),
+  1309→                "decryption": config.decryption,
+  1310→            },
+  1311→        )
+  1312→
+  1313→        with console.status(
+  1314→            "Preparing Remote Service Session..." if self.is_remote else "Preparing Service Session...",
+  1315→            spinner="dots",
+  1316→        ):
+  1317→            try:
+  1318→                cookies = self.get_cookie_jar(self.service, self.profile)
+  1319→                credential = self.get_credentials(self.service, self.profile)
+  1320→                service.authenticate(cookies, credential)
+  1321→                if cookies or credential:
+  1322→                    self.log.info("Authenticated with Service")
+  1323→                    log_event(
+  1324→                        "authenticate",
+  1325→                        level="INFO",
+  1326→                        service=self.service,
+  1327→                        context={
+  1328→                            "has_cookies": bool(cookies),
+  1329→                            "has_credentials": bool(credential),
+  1330→                            "profile": self.profile,
+  1331→                        },
+  1332→                    )
+  1333→            except Exception as e:
+  1334→                if self.debug_logger:
+  1335→                    self.debug_logger.log_error(
+  1336→                        "authenticate", e, service=self.service, context={"profile": self.profile}
+  1337→                    )
+  1338→                raise
+  1339→
+  1340→        with console.status(
+  1341→            "Fetching Remote Title Metadata..." if self.is_remote else "Fetching Title Metadata...", spinner="dots"
+  1342→        ):
+  1343→            try:
+  1344→                titles = service.get_titles_cached()
+  1345→                if not titles:
+  1346→                    self.log.error("No titles returned, nothing to download...")
+  1347→                    log_event(
+  1348→                        "get_titles",
+  1349→                        level="ERROR",
+  1350→                        service=self.service,
+  1351→                        message="No titles returned from service",
+  1352→                        success=False,
+  1353→                    )
+  1354→                    sys.exit(1)
+  1355→            except Exception as e:
+  1356→                if self.debug_logger:
+  1357→                    self.debug_logger.log_error("get_titles", e, service=self.service)
+  1358→                raise
+  1359→
+  1360→            if self.debug_logger:
+  1361→                titles_info = {
+  1362→                    "type": titles.__class__.__name__,
+  1363→                    "count": len(titles) if hasattr(titles, "__len__") else 1,
+  1364→                    "title": str(titles),
+  1365→                }
+  1366→                if hasattr(titles, "seasons"):
+  1367→                    titles_info["seasons"] = len(titles.seasons) if hasattr(titles, "seasons") else 0
+  1368→                self.debug_logger.log(
+  1369→                    level="INFO", operation="get_titles", service=self.service, context={"titles": titles_info}
+  1370→                )
+  1371→
+  1372→        title_cacher = service.title_cache if hasattr(service, "title_cache") else None
+  1373→        cache_title_id = None
+  1374→        if hasattr(service, "title"):
+  1375→            cache_title_id = service.title
+  1376→        elif hasattr(service, "title_id"):
+  1377→            cache_title_id = service.title_id
+  1378→        cache_region = service.current_region if hasattr(service, "current_region") else None
+  1379→        cache_account_hash = get_account_hash(service.credential) if hasattr(service, "credential") else None
+  1380→
+  1381→        if self.enrich:
+  1382→            sample_title = titles[0] if hasattr(titles, "__getitem__") else titles
+  1383→            kind = "tv" if isinstance(sample_title, Episode) else "movie"
+  1384→
+  1385→            enrich_title: Optional[str] = None
+  1386→            enrich_year: Optional[int] = None
+  1387→
+  1388→            if self.animeapi_title:
+  1389→                enrich_title = self.animeapi_title
+  1390→
+  1391→            if self.tmdb_id:
+  1392→                if not enrich_title:
+  1393→                    enrich_title = providers.get_title_by_id(
+  1394→                        self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
+  1395→                    )
+  1396→                enrich_year = providers.get_year_by_id(
+  1397→                    self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
+  1398→                )
+  1399→            elif self.imdb_id:
+  1400→                imdbapi = providers.get_provider("imdbapi")
+  1401→                if imdbapi:
+  1402→                    imdb_result = imdbapi.get_by_id(self.imdb_id, kind)
+  1403→                    if imdb_result:
+  1404→                        if not enrich_title:
+  1405→                            enrich_title = imdb_result.title
+  1406→                        enrich_year = imdb_result.year
+  1407→
+  1408→            if enrich_title or enrich_year:
+  1409→                if isinstance(titles, (Series, Movies)):
+  1410→                    for t in titles:
+  1411→                        if enrich_title:
+  1412→                            if isinstance(t, Episode):
+  1413→                                t.title = enrich_title
+  1414→                            else:
+  1415→                                t.name = enrich_title
+  1416→                        if enrich_year and not t.year:
+  1417→                            t.year = enrich_year
+  1418→                else:
+  1419→                    if enrich_title:
+  1420→                        if isinstance(titles, Episode):
+  1421→                            titles.title = enrich_title
+  1422→                        else:
+  1423→                            titles.name = enrich_title
+  1424→                    if enrich_year and not titles.year:
+  1425→                        titles.year = enrich_year
+  1426→
+  1427→        music_mode = isinstance(titles, Music)
+  1428→        music_collection_mode = (
+  1429→            isinstance(titles, list) and bool(titles) and all(isinstance(title, Music) for title in titles)
+  1430→        )
+  1431→        music_titles = list(titles) if music_collection_mode else ([titles] if music_mode else [])
+  1432→        music_plans = {}
+  1433→
+  1434→        if music_titles:
+  1435→            music_renderer = MusicRenderer()
+  1436→            if music_collection_mode:
+  1437→                collection_label_getter = getattr(service, "get_music_collection_label", None)
+  1438→                collection_label = (
+  1439→                    collection_label_getter(music_titles)
+  1440→                    if callable(collection_label_getter)
+  1441→                    else f"Music Collection ({len(music_titles)} Releases)"
+  1442→                )
+  1443→                if collection_label:
+  1444→                    console.print(Padding(Rule(f"[rule.text]{collection_label}"), (1, 2)))
+  1445→            if list_:
+  1446→                for music_title in music_titles:
+  1447→                    music_kind = MusicRenderer.display_kind(getattr(music_title, "kind", "") or "album")
+  1448→                    console.print(Padding(Rule(f"[rule.text]{music_kind}: {music_title}"), (1, 2)))
+  1449→                    current_plan = MusicPlanner(service).build(music_title)
+  1450→                    music_plans[id(music_title)] = current_plan
+  1451→                    music_renderable = music_renderer.render_plan(current_plan, verbose=True)
+  1452→                    if music_renderable:
+  1453→                        console.print(Padding(music_renderable, (0, 5)))
+  1454→        else:
+  1455→            console.print(Padding(Rule(f"[rule.text]{titles.__class__.__name__}: {titles}"), (1, 2)))
+  1456→            console.print(Padding(titles.tree(verbose=list_titles), (0, 5)))
+  1457→
+  1458→        if list_titles:
+  1459→            return
+  1460→
+  1461→        if music_titles and list_:
+  1462→            return
+  1463→
+  1464→        # Enables manual selection for Series when --select-titles is set
+  1465→        if select_titles and isinstance(titles, Series):
+  1466→            console.print(Padding(Rule("[rule.text]Select Titles"), (1, 2)))
+  1467→
+  1468→            selection_titles = []
+  1469→            dependencies = {}
+  1470→            original_indices = {}
+  1471→
+  1472→            current_season = None
+  1473→            current_season_header_idx = -1
+  1474→
+  1475→            unique_seasons = {t.season for t in titles}
+  1476→            multiple_seasons = len(unique_seasons) > 1
+  1477→
+  1478→            # Build selection options
+  1479→            for i, t in enumerate(titles):
+  1480→                # Insert season header only if multiple seasons exist
+  1481→                if multiple_seasons and t.season != current_season:
+  1482→                    current_season = t.season
+  1483→                    header_text = f"Season {t.season}"
+  1484→                    selection_titles.append(header_text)
+  1485→                    current_season_header_idx = len(selection_titles) - 1
+  1486→                    dependencies[current_season_header_idx] = []
+  1487→                    # Note: Headers are not mapped to actual title indices
+  1488→
+  1489→                # Format display name
+  1490→                display_name = ((t.name[:30].rstrip() + "…") if len(t.name) > 30 else t.name) if t.name else None
+  1491→
+  1492→                # Apply indentation only for multiple seasons
+  1493→                prefix = " " if multiple_seasons else ""
+  1494→                option_text = f"{prefix}{t.number}" + (f". {display_name}" if t.name else "")
+  1495→
+  1496→                selection_titles.append(option_text)
+  1497→                current_ui_idx = len(selection_titles) - 1
+  1498→
+  1499→                # Map UI index to actual title index
+  1500→                original_indices[current_ui_idx] = i
+  1501→
+  1502→                # Link episode to season header for group selection
+  1503→                if current_season_header_idx != -1:
+  1504→                    dependencies[current_season_header_idx].append(current_ui_idx)
+  1505→
+  1506→            selection_start = time.time()
+  1507→
+  1508→            # Execute selector with dependencies (headers select all children)
+  1509→            selected_ui_idx = select_multiple(
+  1510→                selection_titles,
+  1511→                minimal_count=1,
+  1512→                page_size=8,
+  1513→                return_indices=True,
+  1514→                dependencies=dependencies,
+  1515→                collapse_on_start=multiple_seasons,
+  1516→            )
+  1517→
+  1518→            if not selected_ui_idx:
+  1519→                console.print(Padding(":x: Selection Cancelled...", (0, 5, 1, 5)))
+  1520→                return
+  1521→
+  1522→            selection_end = time.time()
+  1523→            start_time += selection_end - selection_start
+  1524→
+  1525→            # Map UI indices back to title indices (excluding headers)
+  1526→            selected_idx = []
+  1527→            for idx in selected_ui_idx:
+  1528→                if idx in original_indices:
+  1529→                    selected_idx.append(original_indices[idx])
+  1530→
+  1531→            # Ensure indices are unique and ordered
+  1532→            selected_idx = sorted(set(selected_idx))
+  1533→            keep = set(selected_idx)
+  1534→
+  1535→            # In-place filter: remove unselected items (iterate backwards)
+  1536→            for i in range(len(titles) - 1, -1, -1):
+  1537→                if i not in keep:
+  1538→                    del titles[i]
+  1539→
+  1540→            # Show selected count
+  1541→            if titles:
+  1542→                count = len(titles)
+  1543→                console.print(Padding(f"[text]Total selected: {count}[/]", (0, 5)))
+  1544→
+  1545→        # Determine the latest episode if --latest-episode is set
+  1546→        latest_episode_id = None
+  1547→        if latest_episode and isinstance(titles, Series) and len(titles) > 0:
+  1548→            # Series is already sorted by (season, number, year)
+  1549→            # The last episode in the sorted list is the latest
+  1550→            latest_ep = titles[-1]
+  1551→            latest_episode_id = f"{latest_ep.season}x{latest_ep.number}"
+  1552→            self.log.info(f"Latest episode mode: Selecting S{latest_ep.season:02}E{latest_ep.number:02}")
+  1553→
+  1554→        music_group_download = (
+  1555→            bool(music_titles)
+  1556→            and getattr(service, "GROUP_AUDIO_DOWNLOADS", False)
+  1557→            and not no_mux
+  1558→            and not video_only
+  1559→            and not subs_only
+  1560→            and not chapters_only
+  1561→            and not no_audio
+  1562→        )
+  1563→        if music_group_download:
+  1564→
+  1565→            def download_music_title(titles: Music, plan: Any) -> bool:
+  1566→                music_items: list[tuple[Song, Audio, Callable[..., None]]] = []
+  1567→                music_song_plans = {id(song_plan.song): song_plan for disc in plan.discs for song_plan in disc.songs}
+  1568→                music_renderer = MusicRenderer()
+  1569→                music_start_time = time.time()
+  1570→
+  1571→                music_kind = MusicRenderer.display_kind(getattr(titles, "kind", "") or "album")
+  1572→                console.print(Padding(Rule(f"[rule.text]{music_kind}: {titles}"), (1, 2)))
+  1573→                music_header = music_renderer.render_plan_header(plan)
+  1574→                if music_header:
+  1575→                    console.print(Padding(music_header, (0, 5)))
+  1576→
+  1577→                def music_track_count(count: int) -> str:
+  1578→                    return f"{count} track{'s' if count != 1 else ''}"
+  1579→
+  1580→                def format_elapsed_seconds(elapsed: float) -> str:
+  1581→                    elapsed_int = int(elapsed)
+  1582→                    minutes, seconds = divmod(elapsed_int, 60)
+  1583→                    hours, minutes = divmod(minutes, 60)
+  1584→                    value = f"{minutes:d}m{seconds:d}s"
+  1585→                    return f"{hours:d}h{value}" if hours else value
+  1586→
+  1587→                def select_music_audio(song: Song) -> None:
+  1588→                    if not audio_description:
+  1589→                        song.tracks.select_audio(lambda x: not x.descriptive)
+  1590→                    if acodec:
+  1591→                        song.tracks.select_audio(lambda x: x.codec in acodec)
+  1592→                        if not song.tracks.audio:
+  1593→                            codec_names = ", ".join(c.name for c in acodec)
+  1594→                            self.log.error(f"No audio tracks matching codecs for {song.name}: {codec_names}")
+  1595→                            sys.exit(1)
+  1596→                    if channels:
+  1597→                        song.tracks.select_audio(lambda x: math.ceil(x.channels) == math.ceil(channels))
+  1598→                        if not song.tracks.audio:
+  1599→                            self.log.error(f"There's no {channels} Audio Track for {song.name}...")
+
+[showing lines 1000-1599 of 4352; use offset=1600 with limit to continue reading]

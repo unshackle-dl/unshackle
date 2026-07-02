@@ -13,6 +13,7 @@ This is the **canonical configuration reference** for unshackle. `unshackle/unsh
 | [Download & Processing Configuration](DOWNLOAD_CONFIG.md) | Downloader settings, concurrency, retries, and post-processing behaviour |
 | [DRM & CDM Configuration](DRM_CONFIG.md) | Widevine, PlayReady, and ClearKey CDM setup; local and remote CDMs; key vaults |
 | [Gluetun VPN Proxy](GLUETUN.md) | Docker-managed VPN proxies via Gluetun; setup, WireGuard ready-detection |
+| [V2Ray / Xray Proxy](V2RAY.md) | V2Ray/Xray local subprocess proxy; subscription, config-file, inline, or per-country URI sources |
 | [Network & Proxy Configuration](NETWORK_CONFIG.md) | Proxy providers, geofence bypass, per-service proxy overrides |
 | [Output & Naming Configuration](OUTPUT_CONFIG.md) | Output directory layout, filename templates, folder naming |
 | [Service Integration & Authentication](SERVICE_CONFIG.md) | Per-service config blocks, cookies, credentials, and metadata sources |

@@ -1,0 +1,602 @@
+  1400→                imdbapi = providers.get_provider("imdbapi")
+  1401→                if imdbapi:
+  1402→                    imdb_result = imdbapi.get_by_id(self.imdb_id, kind)
+  1403→                    if imdb_result:
+  1404→                        if not enrich_title:
+  1405→                            enrich_title = imdb_result.title
+  1406→                        enrich_year = imdb_result.year
+  1407→
+  1408→            if enrich_title or enrich_year:
+  1409→                if isinstance(titles, (Series, Movies)):
+  1410→                    for t in titles:
+  1411→                        if enrich_title:
+  1412→                            if isinstance(t, Episode):
+  1413→                                t.title = enrich_title
+  1414→                            else:
+  1415→                                t.name = enrich_title
+  1416→                        if enrich_year and not t.year:
+  1417→                            t.year = enrich_year
+  1418→                else:
+  1419→                    if enrich_title:
+  1420→                        if isinstance(titles, Episode):
+  1421→                            titles.title = enrich_title
+  1422→                        else:
+  1423→                            titles.name = enrich_title
+  1424→                    if enrich_year and not titles.year:
+  1425→                        titles.year = enrich_year
+  1426→
+  1427→        music_mode = isinstance(titles, Music)
+  1428→        music_collection_mode = (
+  1429→            isinstance(titles, list) and bool(titles) and all(isinstance(title, Music) for title in titles)
+  1430→        )
+  1431→        music_titles = list(titles) if music_collection_mode else ([titles] if music_mode else [])
+  1432→        music_plans = {}
+  1433→
+  1434→        if music_titles:
+  1435→            music_renderer = MusicRenderer()
+  1436→            if music_collection_mode:
+  1437→                collection_label_getter = getattr(service, "get_music_collection_label", None)
+  1438→                collection_label = (
+  1439→                    collection_label_getter(music_titles)
+  1440→                    if callable(collection_label_getter)
+  1441→                    else f"Music Collection ({len(music_titles)} Releases)"
+  1442→                )
+  1443→                if collection_label:
+  1444→                    console.print(Padding(Rule(f"[rule.text]{collection_label}"), (1, 2)))
+  1445→            if list_:
+  1446→                for music_title in music_titles:
+  1447→                    music_kind = MusicRenderer.display_kind(getattr(music_title, "kind", "") or "album")
+  1448→                    console.print(Padding(Rule(f"[rule.text]{music_kind}: {music_title}"), (1, 2)))
+  1449→                    current_plan = MusicPlanner(service).build(music_title)
+  1450→                    music_plans[id(music_title)] = current_plan
+  1451→                    music_renderable = music_renderer.render_plan(current_plan, verbose=True)
+  1452→                    if music_renderable:
+  1453→                        console.print(Padding(music_renderable, (0, 5)))
+  1454→        else:
+  1455→            console.print(Padding(Rule(f"[rule.text]{titles.__class__.__name__}: {titles}"), (1, 2)))
+  1456→            console.print(Padding(titles.tree(verbose=list_titles), (0, 5)))
+  1457→
+  1458→        if list_titles:
+  1459→            return
+  1460→
+  1461→        if music_titles and list_:
+  1462→            return
+  1463→
+  1464→        # Enables manual selection for Series when --select-titles is set
+  1465→        if select_titles and isinstance(titles, Series):
+  1466→            console.print(Padding(Rule("[rule.text]Select Titles"), (1, 2)))
+  1467→
+  1468→            selection_titles = []
+  1469→            dependencies = {}
+  1470→            original_indices = {}
+  1471→
+  1472→            current_season = None
+  1473→            current_season_header_idx = -1
+  1474→
+  1475→            unique_seasons = {t.season for t in titles}
+  1476→            multiple_seasons = len(unique_seasons) > 1
+  1477→
+  1478→            # Build selection options
+  1479→            for i, t in enumerate(titles):
+  1480→                # Insert season header only if multiple seasons exist
+  1481→                if multiple_seasons and t.season != current_season:
+  1482→                    current_season = t.season
+  1483→                    header_text = f"Season {t.season}"
+  1484→                    selection_titles.append(header_text)
+  1485→                    current_season_header_idx = len(selection_titles) - 1
+  1486→                    dependencies[current_season_header_idx] = []
+  1487→                    # Note: Headers are not mapped to actual title indices
+  1488→
+  1489→                # Format display name
+  1490→                display_name = ((t.name[:30].rstrip() + "…") if len(t.name) > 30 else t.name) if t.name else None
+  1491→
+  1492→                # Apply indentation only for multiple seasons
+  1493→                prefix = " " if multiple_seasons else ""
+  1494→                option_text = f"{prefix}{t.number}" + (f". {display_name}" if t.name else "")
+  1495→
+  1496→                selection_titles.append(option_text)
+  1497→                current_ui_idx = len(selection_titles) - 1
+  1498→
+  1499→                # Map UI index to actual title index
+  1500→                original_indices[current_ui_idx] = i
+  1501→
+  1502→                # Link episode to season header for group selection
+  1503→                if current_season_header_idx != -1:
+  1504→                    dependencies[current_season_header_idx].append(current_ui_idx)
+  1505→
+  1506→            selection_start = time.time()
+  1507→
+  1508→            # Execute selector with dependencies (headers select all children)
+  1509→            selected_ui_idx = select_multiple(
+  1510→                selection_titles,
+  1511→                minimal_count=1,
+  1512→                page_size=8,
+  1513→                return_indices=True,
+  1514→                dependencies=dependencies,
+  1515→                collapse_on_start=multiple_seasons,
+  1516→            )
+  1517→
+  1518→            if not selected_ui_idx:
+  1519→                console.print(Padding(":x: Selection Cancelled...", (0, 5, 1, 5)))
+  1520→                return
+  1521→
+  1522→            selection_end = time.time()
+  1523→            start_time += selection_end - selection_start
+  1524→
+  1525→            # Map UI indices back to title indices (excluding headers)
+  1526→            selected_idx = []
+  1527→            for idx in selected_ui_idx:
+  1528→                if idx in original_indices:
+  1529→                    selected_idx.append(original_indices[idx])
+  1530→
+  1531→            # Ensure indices are unique and ordered
+  1532→            selected_idx = sorted(set(selected_idx))
+  1533→            keep = set(selected_idx)
+  1534→
+  1535→            # In-place filter: remove unselected items (iterate backwards)
+  1536→            for i in range(len(titles) - 1, -1, -1):
+  1537→                if i not in keep:
+  1538→                    del titles[i]
+  1539→
+  1540→            # Show selected count
+  1541→            if titles:
+  1542→                count = len(titles)
+  1543→                console.print(Padding(f"[text]Total selected: {count}[/]", (0, 5)))
+  1544→
+  1545→        # Determine the latest episode if --latest-episode is set
+  1546→        latest_episode_id = None
+  1547→        if latest_episode and isinstance(titles, Series) and len(titles) > 0:
+  1548→            # Series is already sorted by (season, number, year)
+  1549→            # The last episode in the sorted list is the latest
+  1550→            latest_ep = titles[-1]
+  1551→            latest_episode_id = f"{latest_ep.season}x{latest_ep.number}"
+  1552→            self.log.info(f"Latest episode mode: Selecting S{latest_ep.season:02}E{latest_ep.number:02}")
+  1553→
+  1554→        music_group_download = (
+  1555→            bool(music_titles)
+  1556→            and getattr(service, "GROUP_AUDIO_DOWNLOADS", False)
+  1557→            and not no_mux
+  1558→            and not video_only
+  1559→            and not subs_only
+  1560→            and not chapters_only
+  1561→            and not no_audio
+  1562→        )
+  1563→        if music_group_download:
+  1564→
+  1565→            def download_music_title(titles: Music, plan: Any) -> bool:
+  1566→                music_items: list[tuple[Song, Audio, Callable[..., None]]] = []
+  1567→                music_song_plans = {id(song_plan.song): song_plan for disc in plan.discs for song_plan in disc.songs}
+  1568→                music_renderer = MusicRenderer()
+  1569→                music_start_time = time.time()
+  1570→
+  1571→                music_kind = MusicRenderer.display_kind(getattr(titles, "kind", "") or "album")
+  1572→                console.print(Padding(Rule(f"[rule.text]{music_kind}: {titles}"), (1, 2)))
+  1573→                music_header = music_renderer.render_plan_header(plan)
+  1574→                if music_header:
+  1575→                    console.print(Padding(music_header, (0, 5)))
+  1576→
+  1577→                def music_track_count(count: int) -> str:
+  1578→                    return f"{count} track{'s' if count != 1 else ''}"
+  1579→
+  1580→                def format_elapsed_seconds(elapsed: float) -> str:
+  1581→                    elapsed_int = int(elapsed)
+  1582→                    minutes, seconds = divmod(elapsed_int, 60)
+  1583→                    hours, minutes = divmod(minutes, 60)
+  1584→                    value = f"{minutes:d}m{seconds:d}s"
+  1585→                    return f"{hours:d}h{value}" if hours else value
+  1586→
+  1587→                def select_music_audio(song: Song) -> None:
+  1588→                    if not audio_description:
+  1589→                        song.tracks.select_audio(lambda x: not x.descriptive)
+  1590→                    if acodec:
+  1591→                        song.tracks.select_audio(lambda x: x.codec in acodec)
+  1592→                        if not song.tracks.audio:
+  1593→                            codec_names = ", ".join(c.name for c in acodec)
+  1594→                            self.log.error(f"No audio tracks matching codecs for {song.name}: {codec_names}")
+  1595→                            sys.exit(1)
+  1596→                    if channels:
+  1597→                        song.tracks.select_audio(lambda x: math.ceil(x.channels) == math.ceil(channels))
+  1598→                        if not song.tracks.audio:
+  1599→                            self.log.error(f"There's no {channels} Audio Track for {song.name}...")
+  1600→                            sys.exit(1)
+  1601→                    if no_atmos:
+  1602→                        song.tracks.audio = [x for x in song.tracks.audio if not x.atmos]
+  1603→                        if not song.tracks.audio:
+  1604→                            self.log.error(f"No non-Atmos audio tracks available for {song.name}...")
+  1605→                            sys.exit(1)
+  1606→                    if abitrate:
+  1607→                        song.tracks.select_audio(lambda x: x.bitrate and x.bitrate // 1000 == abitrate)
+  1608→                        if not song.tracks.audio:
+  1609→                            self.log.error(f"There's no {abitrate}kbps Audio Track for {song.name}...")
+  1610→                            sys.exit(1)
+  1611→                    if abitrate_min is not None and abitrate_max is not None:
+  1612→                        song.tracks.select_audio(
+  1613→                            lambda x: x.bitrate and abitrate_min <= x.bitrate // 1000 <= abitrate_max
+  1614→                        )
+  1615→                        if not song.tracks.audio:
+  1616→                            self.log.error(
+  1617→                                f"No Audio Track in {abitrate_min}-{abitrate_max}kbps range for {song.name}..."
+  1618→                            )
+  1619→                            sys.exit(1)
+  1620→
+  1621→                    audio_languages = a_lang or lang
+  1622→                    if audio_languages:
+  1623→                        processed_lang = []
+  1624→                        for language in audio_languages:
+  1625→                            if language == "orig":
+  1626→                                if song.language:
+  1627→                                    orig_lang = (
+  1628→                                        str(song.language) if hasattr(song.language, "__str__") else song.language
+  1629→                                    )
+  1630→                                    if orig_lang not in processed_lang:
+  1631→                                        processed_lang.append(orig_lang)
+  1632→                                else:
+  1633→                                    self.log.warning("Original language not available for music track, skipping 'orig'")
+  1634→                            elif language not in processed_lang:
+  1635→                                processed_lang.append(language)
+  1636→
+  1637→                        if "best" not in processed_lang and "all" not in processed_lang:
+  1638→                            song.tracks.audio = song.tracks.by_language(
+  1639→                                song.tracks.audio,
+  1640→                                processed_lang,
+  1641→                                per_language=1,
+  1642→                                exact_match=exact_lang,
+  1643→                            )
+  1644→                            if not song.tracks.audio:
+  1645→                                self.log.error(f"There's no {processed_lang} Audio Track for {song.name}...")
+  1646→                                sys.exit(1)
+  1647→
+  1648→                self.log.debug("Getting Tracks")
+  1649→                tracks_label = "Getting Remote Tracks..." if self.is_remote else "Getting Tracks..."
+  1650→                with console.status(tracks_label, spinner="dots"):
+  1651→                    for song in titles:
+  1652→                        events.reset()
+  1653→                        events.subscribe(events.Types.SEGMENT_DOWNLOADED, service.on_segment_downloaded)
+  1654→                        events.subscribe(events.Types.TRACK_DOWNLOADED, service.on_track_downloaded)
+  1655→                        events.subscribe(events.Types.TRACK_DECRYPTED, service.on_track_decrypted)
+  1656→                        events.subscribe(events.Types.TRACK_REPACKED, service.on_track_repacked)
+  1657→                        events.subscribe(events.Types.TRACK_MULTIPLEX, service.on_track_multiplex)
+  1658→
+  1659→                        song.tracks.add(service.get_tracks(song), warn_only=True)
+  1660→                        song.tracks.chapters = service.get_chapters(song)
+  1661→                        song.tracks.sort_audio(by_language=a_lang or lang)
+  1662→                        select_music_audio(song)
+  1663→                        if not song.tracks.audio:
+  1664→                            self.log.error(f"No audio tracks returned for {song.name}.")
+  1665→                            sys.exit(1)
+  1666→
+  1667→                music_tree = Tree(
+  1668→                    f"[repr.number]{len(titles)}[/] {'Track' if len(titles) == 1 else 'Tracks'}",
+  1669→                    guide_style="bright_black",
+  1670→                )
+  1671→                for song in titles:
+  1672→                    track = song.tracks.audio[0]
+  1673→                    progress = Progress(
+  1674→                        SpinnerColumn(finished_text=""),
+  1675→                        BarColumn(),
+  1676→                        " | ",
+  1677→                        TimeRemainingColumn(compact=True, elapsed_when_finished=True),
+  1678→                        " | ",
+  1679→                        TextColumn("[progress.data.speed]{task.fields[downloaded]}"),
+  1680→                        console=console,
+  1681→                        speed_estimate_period=10,
+  1682→                    )
+  1683→                    task = progress.add_task("", downloaded="-")
+  1684→                    state = {"total": 100.0}
+  1685→
+  1686→                    def update_track_progress(
+  1687→                        task_id: int = task,
+  1688→                        _state: dict[str, float] = state,
+  1689→                        _progress: Progress = progress,
+  1690→                        **kwargs,
+  1691→                    ) -> None:
+  1692→                        if "total" in kwargs and kwargs["total"] is not None:
+  1693→                            _state["total"] = kwargs["total"]
+  1694→
+  1695→                        downloaded_state = kwargs.get("downloaded")
+  1696→                        if downloaded_state in {"Downloaded", "Decrypted", "[yellow]SKIPPED"}:
+  1697→                            kwargs["completed"] = _state["total"]
+  1698→                        _progress.update(task_id=task_id, **kwargs)
+  1699→
+  1700→                    track_table = Table.grid()
+  1701→                    track_table.add_row(music_renderer._song_line(song, titles))
+  1702→                    song_plan = music_song_plans.get(id(song))
+  1703→                    if song_plan and song_plan.selected:
+  1704→                        track_table.add_row(music_renderer._option_line(song_plan.selected), style="text2")
+  1705→                    else:
+  1706→                        track_table.add_row(str(track)[6:], style="text2")
+  1707→                    track_table.add_row(progress)
+  1708→                    music_tree.add(track_table, guide_style="bright_black")
+  1709→                    music_items.append((song, track, update_track_progress))
+  1710→
+  1711→                download_table = Table.grid()
+  1712→                download_table.add_row(music_tree)
+  1713→
+  1714→                try:
+  1715→                    with Live(Padding(download_table, (1, 5)), console=console, refresh_per_second=5):
+  1716→                        with ThreadPoolExecutor(downloads) as pool:
+  1717→                            download_futures = [
+  1718→                                pool.submit(
+  1719→                                    track.download,
+  1720→                                    session=track.session or service.session,
+  1721→                                    no_proxy_download=no_proxy_download,
+  1722→                                    prepare_drm=partial(
+  1723→                                        partial(self.prepare_drm, table=download_table),
+  1724→                                        track=track,
+  1725→                                        title=song,
+  1726→                                        certificate=partial(
+  1727→                                            service.get_widevine_service_certificate,
+  1728→                                            title=song,
+  1729→                                            track=track,
+  1730→                                        ),
+  1731→                                        licence=partial(
+  1732→                                            service.get_playready_license
+  1733→                                            if is_playready_cdm(self.cdm)
+  1734→                                            else service.get_widevine_license,
+  1735→                                            title=song,
+  1736→                                            track=track,
+  1737→                                        ),
+  1738→                                        cdm_only=cdm_only,
+  1739→                                        vaults_only=vaults_only,
+  1740→                                        export=export_path,
+  1741→                                    ),
+  1742→                                    cdm=self.cdm,
+  1743→                                    max_workers=workers,
+  1744→                                    progress=progress_call,
+  1745→                                )
+  1746→                                for song, track, progress_call in music_items
+  1747→                            ]
+  1748→                            for download in futures.as_completed(download_futures):
+  1749→                                download.result()
+  1750→                except KeyboardInterrupt:
+  1751→                    console.print(Padding(":x: Download Cancelled...", (0, 5, 1, 5)))
+  1752→                    return
+  1753→                except Exception as e:  # noqa
+  1754→                    console.print(
+  1755→                        Padding(
+  1756→                            Group(
+  1757→                                ":x: Download Failed...",
+  1758→                                f"   {type(e).__name__}: {e}",
+  1759→                                "   An unexpected error occurred in one of the download workers.",
+  1760→                            ),
+  1761→                            (1, 5),
+  1762→                        )
+  1763→                    )
+  1764→                    console.print_exception()
+  1765→                    return
+  1766→
+  1767→                if skip_dl:
+  1768→                    console.log("Skipped downloads as --skip-dl was used...")
+  1769→                else:
+  1770→                    dl_time = time_elapsed_since(music_start_time)
+  1771→                    console.print(Padding(f"Track downloads finished in [progress.elapsed]{dl_time}[/]", (0, 5)))
+  1772→
+  1773→                    integrity_results = {}
+  1774→                    media_infos = {}
+  1775→                    integrity_start = time.time()
+  1776→                    try:
+  1777→                        with console.status("Verifying audio integrity...", spinner="dots"):
+  1778→                            for song, track, _ in music_items:
+  1779→                                if not track.path or not track.path.exists():
+  1780→                                    continue
+  1781→                                if track.needs_repack:
+  1782→                                    track.repackage()
+  1783→                                    events.emit(events.Types.TRACK_REPACKED, track=track)
+  1784→
+  1785→                                media_info = MediaInfo.parse(track.path)
+  1786→                                media_infos[id(track)] = media_info
+  1787→                                integrity_results[id(track)] = verify_music_audio(
+  1788→                                    track.path,
+  1789→                                    song=song,
+  1790→                                    track=track,
+  1791→                                    media_info=media_info,
+  1792→                                )
+  1793→                    except MusicAudioIntegrityError as error:
+  1794→                        console.print(Padding(f"Audio integrity failed: {error}", (0, 5, 1, 5)))
+  1795→                        return
+  1796→                    integrity_time = format_elapsed_seconds(time.time() - integrity_start)
+  1797→
+  1798→                    source_md5 = {}
+  1799→                    md5_elapsed = 0.0
+  1800→                    md5_start = time.time()
+  1801→                    with console.status("Recording MD5 checksums...", spinner="dots"):
+  1802→                        for _, track, _ in music_items:
+  1803→                            if track.path and track.path.exists():
+  1804→                                source_md5[id(track)] = file_md5(track.path)
+  1805→                    md5_elapsed += time.time() - md5_start
+  1806→
+  1807→                    metadata_results = {}
+  1808→                    final_paths = {}
+  1809→                    final_md5 = {}
+  1810→                    manifest_records = []
+  1811→                    metadata_start = time.time()
+  1812→                    metadata_warning = ""
+  1813→                    used_final_paths: set[Path] = set()
+  1814→                    with console.status("Writing music metadata...", spinner="dots"):
+  1815→                        for song, track, _ in music_items:
+  1816→                            if not track.path or not track.path.exists():
+  1817→                                continue
+  1818→
+  1819→                            media_info = media_infos.get(id(track)) or MediaInfo.parse(track.path)
+  1820→                            final_dir = self.output_dir or config.directories.downloads
+  1821→                            final_filename = song.get_filename(media_info, show_service=not no_source)
+  1822→                            if not no_folder:
+  1823→                                final_dir /= song.get_filename(media_info, show_service=not no_source, folder=True)
+  1824→
+  1825→                            final_dir.mkdir(parents=True, exist_ok=True)
+  1826→                            final_path = final_dir / f"{final_filename}{track.path.suffix}"
+  1827→                            sep = config.get_template_separator("songs")
+  1828→                            if final_path in used_final_paths:
+  1829→                                index = 2
+  1830→                                while final_path in used_final_paths:
+  1831→                                    final_path = final_dir / f"{final_filename.rstrip()}{sep}{index}{track.path.suffix}"
+  1832→                                    index += 1
+  1833→
+  1834→                            try:
+  1835→                                os.replace(track.path, final_path)
+  1836→                            except OSError:
+  1837→                                if final_path.exists():
+  1838→                                    final_path.unlink()
+  1839→                                shutil.move(track.path, final_path)
+  1840→                            used_final_paths.add(final_path)
+  1841→                            final_paths[id(track)] = final_path
+  1842→                            self.completed_files.append(final_path)
+  1843→
+  1844→                            try:
+  1845→                                metadata_results[id(track)] = write_music_metadata(
+  1846→                                    final_path,
+  1847→                                    song,
+  1848→                                    session=service.session,
+  1849→                                    source_md5=source_md5.get(id(track), ""),
+  1850→                                )
+  1851→                            except Exception as error:
+  1852→                                metadata_warning = f"{type(error).__name__}: {error}"
+  1853→                                self.log.warning(f"Music metadata failed for {song.name}: {metadata_warning}")
+  1854→                                metadata_results[id(track)] = MusicMetadataResult(skipped=True, reason=metadata_warning)
+  1855→                    metadata_time = format_elapsed_seconds(time.time() - metadata_start)
+  1856→
+  1857→                    final_md5_start = time.time()
+  1858→                    with console.status("Recording final MD5 checksums...", spinner="dots"):
+  1859→                        for _, track, _ in music_items:
+  1860→                            final_path = final_paths.get(id(track))
+  1861→                            if final_path and final_path.exists():
+  1862→                                final_md5[id(track)] = file_md5(final_path)
+  1863→                    md5_elapsed += time.time() - final_md5_start
+  1864→                    md5_time = format_elapsed_seconds(md5_elapsed)
+  1865→
+  1866→                    for song, track, _ in music_items:
+  1867→                        final_path = final_paths.get(id(track))
+  1868→                        if not final_path:
+  1869→                            continue
+  1870→                        integrity_result = integrity_results.get(id(track))
+  1871→                        metadata_result = metadata_results.get(
+  1872→                            id(track), MusicMetadataResult(skipped=True, reason="not processed")
+  1873→                        )
+  1874→                        manifest_records.append(
+  1875→                            {
+  1876→                                "track_number": song.track,
+  1877→                                "disc_number": song.disc,
+  1878→                                "title": song.name,
+  1879→                                "artist": song.artist,
+  1880→                                "album": song.album,
+  1881→                                "file": str(final_path),
+  1882→                                "source_md5": source_md5.get(id(track), ""),
+  1883→                                "final_md5": final_md5.get(id(track), ""),
+  1884→                                "integrity": integrity_result.to_dict() if integrity_result else {},
+  1885→                                "metadata": metadata_result.to_dict(),
+  1886→                            }
+  1887→                        )
+  1888→
+  1889→                    if final_paths:
+  1890→                        manifest_slug = ".".join(
+  1891→                            part
+  1892→                            for part in re.sub(
+  1893→                                r"[^A-Za-z0-9._-]+",
+  1894→                                ".",
+  1895→                                ".".join(
+  1896→                                    str(part or "")
+  1897→                                    for part in (
+  1898→                                        self.service,
+  1899→                                        getattr(titles, "artist", ""),
+  1900→                                        getattr(titles, "title", ""),
+  1901→                                        getattr(titles, "year", ""),
+  1902→                                        int(time.time()),
+  1903→                                    )
+  1904→                                ),
+  1905→                            )
+  1906→                            .strip(".")
+  1907→                            .split(".")
+  1908→                            if part
+  1909→                        )
+  1910→                        try:
+  1911→                            write_music_manifest(
+  1912→                                config.directories.logs / "music" / f"{manifest_slug or 'music'}.json",
+  1913→                                release={
+  1914→                                    "kind": getattr(titles, "kind", ""),
+  1915→                                    "title": getattr(titles, "title", ""),
+  1916→                                    "artist": getattr(titles, "artist", ""),
+  1917→                                    "year": getattr(titles, "year", None),
+  1918→                                    "service": self.service,
+  1919→                                },
+  1920→                                tracks=manifest_records,
+  1921→                            )
+  1922→                        except Exception as error:
+  1923→                            self.log.warning(f"Music manifest write failed: {error}")
+  1924→
+  1925→                    album_time = time_elapsed_since(music_start_time)
+  1926→                    release_label = MusicRenderer.display_kind(getattr(titles, "kind", "") or "music")
+  1927→
+  1928→                    integrity_count = len(integrity_results)
+  1929→                    md5_count = len(final_md5)
+  1930→                    metadata_written_count = sum(1 for result in metadata_results.values() if result.written)
+  1931→                    console.print(
+  1932→                        Padding(
+  1933→                            f"Audio integrity verified for {music_track_count(integrity_count)} in [progress.elapsed]{integrity_time}[/]",
+  1934→                            (0, 5),
+  1935→                        )
+  1936→                    )
+  1937→                    console.print(
+  1938→                        Padding(
+  1939→                            f"MD5 checksum recorded for {music_track_count(md5_count)} in [progress.elapsed]{md5_time}[/]",
+  1940→                            (0, 5),
+  1941→                        )
+  1942→                    )
+  1943→                    if metadata_written_count:
+  1944→                        console.print(
+  1945→                            Padding(
+  1946→                                f"Metadata written for {music_track_count(metadata_written_count)} in [progress.elapsed]{metadata_time}[/]",
+  1947→                                (0, 5),
+  1948→                            )
+  1949→                        )
+  1950→                    else:
+  1951→                        reason = metadata_warning or next(
+  1952→                            (result.reason for result in metadata_results.values() if result.reason),
+  1953→                            "install mutagen to write music tags",
+  1954→                        )
+  1955→                        console.print(Padding(f"Metadata skipped: {reason}", (0, 5)))
+  1956→                    console.print(
+  1957→                        Padding(f"{release_label} downloaded in [progress.elapsed]{album_time}[/]!", (0, 5, 1, 5))
+  1958→                    )
+  1959→
+  1960→                return True
+  1961→
+  1962→            for music_title in music_titles:
+  1963→                current_plan = music_plans.get(id(music_title)) or MusicPlanner(service).build(music_title)
+  1964→                if not download_music_title(music_title, current_plan):
+  1965→                    return
+  1966→
+  1967→            if not hasattr(service, "close"):
+  1968→                cookie_file = self.get_cookie_path(self.service, self.profile)
+  1969→                if cookie_file:
+  1970→                    self.save_cookies(cookie_file, service.session.cookies)
+  1971→
+  1972→            if hasattr(service, "close"):
+  1973→                service.close()
+  1974→
+  1975→            dl_time = time_elapsed_since(start_time)
+  1976→            console.print(Padding(f"Processed all titles in [progress.elapsed]{dl_time}", (0, 5, 1, 5)))
+  1977→            return
+  1978→
+  1979→        if music_collection_mode:
+  1980→            raise click.ClickException("Music collections require grouped audio downloads.")
+  1981→
+  1982→        for i, title in enumerate(titles):
+  1983→            if isinstance(title, Episode) and latest_episode and latest_episode_id:
+  1984→                # If --latest-episode is set, only process the latest episode
+  1985→                if f"{title.season}x{title.number}" != latest_episode_id:
+  1986→                    continue
+  1987→            elif isinstance(title, Episode) and wanted and f"{title.season}x{title.number}" not in wanted:
+  1988→                continue
+  1989→
+  1990→            if progress_sink:
+  1991→                if isinstance(title, Episode):
+  1992→                    progress_sink(
+  1993→                        {
+  1994→                            "title": title.title,
+  1995→                            "current_title": f"S{title.season or 0:02}E{title.number or 0:02}",
+  1996→                        }
+  1997→                    )
+  1998→                else:
+  1999→                    progress_sink({"title": getattr(title, "name", None) or str(title)})
+
+[showing lines 1400-1999 of 4352; use offset=2000 with limit to continue reading]

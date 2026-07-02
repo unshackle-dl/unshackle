@@ -1,0 +1,639 @@
+     1→import logging
+     2→from abc import ABCMeta, abstractmethod
+     3→from collections.abc import Callable, Generator
+     4→from dataclasses import dataclass, field
+     5→from http.cookiejar import CookieJar
+     6→from pathlib import Path
+     7→from typing import TYPE_CHECKING, Optional, Union
+     8→from urllib.parse import urlparse, urlunparse
+     9→
+    10→if TYPE_CHECKING:
+    11→    from unshackle.core.api.input_bridge import InputBridge
+    12→
+    13→import click
+    14→import m3u8
+    15→import requests
+    16→from requests.adapters import HTTPAdapter, Retry
+    17→from rich.padding import Padding
+    18→from rich.rule import Rule
+    19→from rich.text import Text
+    20→
+    21→from unshackle.core.cacher import Cacher
+    22→from unshackle.core.config import config
+    23→from unshackle.core.console import console
+    24→from unshackle.core.constants import AnyTrack
+    25→from unshackle.core.credential import Credential
+    26→from unshackle.core.drm import DRM_T
+    27→from unshackle.core.search_result import SearchResult
+    28→from unshackle.core.title_cacher import TitleCacher, get_account_hash, get_region_from_proxy
+    29→from unshackle.core.titles import Title_T, Titles_T, remap_titles
+    30→from unshackle.core.tracks import Chapters, Tracks
+    31→from unshackle.core.tracks.video import Video
+    32→from unshackle.core.utils.ip_info import get_ip_info
+    33→
+    34→
+    35→@dataclass
+    36→class TrackRequest:
+    37→    """Holds what the user requested for video codec and range selection.
+    38→
+    39→    Services read from this instead of ctx.parent.params for vcodec/range.
+    40→
+    41→    Attributes:
+    42→        codecs: Requested codecs from CLI. Empty list means no filter (accept any).
+    43→        ranges: Requested ranges from CLI. Defaults to [SDR].
+    44→    """
+    45→
+    46→    codecs: list[Video.Codec] = field(default_factory=list)
+    47→    ranges: list[Video.Range] = field(default_factory=lambda: [Video.Range.SDR])
+    48→    best_available: bool = False
+    49→
+    50→
+    51→def sanitize_proxy_for_log(uri: Optional[str]) -> Optional[str]:
+    52→    """
+    53→    Sanitize a proxy URI for logs by redacting any embedded userinfo (username/password).
+    54→
+    55→    Examples:
+    56→      - http://user:pass@host:8080 -> http://REDACTED@host:8080
+    57→      - socks5h://user@host:1080   -> socks5h://REDACTED@host:1080
+    58→    """
+    59→    if uri is None:
+    60→        return None
+    61→    if not isinstance(uri, str):
+    62→        return str(uri)
+    63→    if not uri:
+    64→        return uri
+    65→
+    66→    try:
+    67→        parsed = urlparse(uri)
+    68→
+    69→        # Handle schemeless proxies like "user:pass@host:port"
+    70→        if not parsed.scheme and not parsed.netloc and "@" in uri and "://" not in uri:
+    71→            # Parse as netloc using a dummy scheme, then strip scheme back out.
+    72→            dummy = urlparse(f"http://{uri}")
+    73→            netloc = dummy.netloc
+    74→            if "@" in netloc:
+    75→                netloc = f"REDACTED@{netloc.split('@', 1)[1]}"
+    76→            # urlparse("http://...") sets path to "" for typical netloc-only strings; keep it just in case.
+    77→            return f"{netloc}{dummy.path}"
+    78→
+    79→        netloc = parsed.netloc
+    80→        if "@" in netloc:
+    81→            netloc = f"REDACTED@{netloc.split('@', 1)[1]}"
+    82→
+    83→        return urlunparse(parsed._replace(netloc=netloc))
+    84→    except Exception:
+    85→        if "@" in uri:
+    86→            return f"REDACTED@{uri.split('@', 1)[1]}"
+    87→        return uri
+    88→
+    89→
+    90→class Service(metaclass=ABCMeta):
+    91→    """The Service Base Class."""
+    92→
+    93→    # Abstract class variables
+    94→    ALIASES: tuple[str, ...] = ()  # list of aliases for the service; alternatives to the service tag.
+    95→    GEOFENCE: tuple[str, ...] = ()  # list of ip regions required to use the service. empty list == no specific region.
+    96→    # vault namespace override; when set, key vault read/write uses this tag instead of the service's own.
+    97→    VAULT_TAG: Optional[str] = None
+    98→    # Auth methods the service accepts ("cookies"/"credentials"); when None the REST /services
+    99→    # endpoint infers them from authenticate().
+   100→    AUTH_METHODS: Optional[tuple[str, ...]] = None
+   101→
+   102→    def __init__(self, ctx: click.Context):
+   103→        console.print(Padding(Rule(f"[rule.text]Service: {self.__class__.__name__}"), (1, 2)))
+   104→
+   105→        self.config = ctx.obj.config
+   106→
+   107→        self.log = logging.getLogger(self.__class__.__name__)
+   108→
+   109→        self.session = self.get_session()
+   110→        self.cache = Cacher(self.__class__.__name__)
+   111→        self.title_cache = TitleCacher(self.__class__.__name__)
+   112→        self.cache_dir = config.directories.cache / self.__class__.__name__
+   113→
+   114→        # Store context for cache control flags and credential
+   115→        self.ctx = ctx
+   116→        self.credential = None  # Will be set in authenticate()
+   117→        self.current_region = None  # Will be set based on proxy/geolocation
+   118→        self._input_bridge: Optional[InputBridge] = None
+   119→
+   120→        # Set track request from CLI params - services can read/override in their __init__
+   121→        vcodec = ctx.parent.params.get("vcodec") if ctx.parent else None
+   122→        range_ = ctx.parent.params.get("range_") if ctx.parent else None
+   123→        best_available = ctx.parent.params.get("best_available", False) if ctx.parent else False
+   124→        self.track_request = TrackRequest(
+   125→            codecs=list(vcodec) if vcodec else [],
+   126→            ranges=list(range_) if range_ else [Video.Range.SDR],
+   127→            best_available=bool(best_available),
+   128→        )
+   129→
+   130→        if not ctx.parent or not ctx.parent.params.get("no_proxy"):
+   131→            if ctx.parent:
+   132→                proxy = ctx.parent.params["proxy"]
+   133→                proxy_query = ctx.parent.params.get("proxy_query")
+   134→                proxy_provider_name = ctx.parent.params.get("proxy_provider")
+   135→            else:
+   136→                proxy = None
+   137→                proxy_query = None
+   138→                proxy_provider_name = None
+   139→
+   140→            # Check for service-specific proxy mapping
+   141→            service_name = self.__class__.__name__
+   142→            service_config_dict = config.services.get(service_name, {})
+   143→            proxy_map = service_config_dict.get("proxy_map", {})
+   144→
+   145→            if proxy_map and proxy_query:
+   146→                # Build the full proxy query key (e.g., "nordvpn:ca" or "us")
+   147→                if proxy_provider_name:
+   148→                    full_proxy_key = f"{proxy_provider_name}:{proxy_query}"
+   149→                else:
+   150→                    full_proxy_key = proxy_query
+   151→
+   152→                # Check if there's a mapping for this query
+   153→                mapped_value = proxy_map.get(full_proxy_key)
+   154→                if mapped_value:
+   155→                    self.log.info(
+   156→                        f"Found service-specific proxy mapping: {full_proxy_key} -> {sanitize_proxy_for_log(mapped_value)}"
+   157→                    )
+   158→                    # Query the proxy provider with the mapped value
+   159→                    if proxy_provider_name:
+   160→                        # Specific provider requested
+   161→                        proxy_provider = next(
+   162→                            (x for x in ctx.obj.proxy_providers if x.__class__.__name__.lower() == proxy_provider_name),
+   163→                            None,
+   164→                        )
+   165→                        if proxy_provider:
+   166→                            mapped_proxy_uri = proxy_provider.get_proxy(mapped_value)
+   167→                            if mapped_proxy_uri:
+   168→                                proxy = mapped_proxy_uri
+   169→                                self.log.info(
+   170→                                    f"Using mapped proxy from {proxy_provider.__class__.__name__}: {sanitize_proxy_for_log(proxy)}"
+   171→                                )
+   172→                            else:
+   173→                                self.log.warning(
+   174→                                    f"Failed to get proxy for mapped value '{sanitize_proxy_for_log(mapped_value)}', using default"
+   175→                                )
+   176→                        else:
+   177→                            self.log.warning(f"Proxy provider '{proxy_provider_name}' not found, using default proxy")
+   178→                    else:
+   179→                        # No specific provider, try all providers
+   180→                        for proxy_provider in ctx.obj.proxy_providers:
+   181→                            mapped_proxy_uri = proxy_provider.get_proxy(mapped_value)
+   182→                            if mapped_proxy_uri:
+   183→                                proxy = mapped_proxy_uri
+   184→                                self.log.info(
+   185→                                    f"Using mapped proxy from {proxy_provider.__class__.__name__}: {sanitize_proxy_for_log(proxy)}"
+   186→                                )
+   187→                                break
+   188→                        else:
+   189→                            self.log.warning(
+   190→                                f"No provider could resolve mapped value '{sanitize_proxy_for_log(mapped_value)}', using default"
+   191→                            )
+   192→
+   193→            if not proxy:
+   194→                # don't override the explicit proxy set by the user, even if they may be geoblocked
+   195→                with console.status("Checking if current region is Geoblocked...", spinner="dots"):
+   196→                    if self.GEOFENCE:
+   197→                        # Service has geofence - need fresh IP check to determine if proxy needed
+   198→                        try:
+   199→                            current_region = get_ip_info(self.session)["country"].lower()
+   200→                            if any(x.lower() == current_region for x in self.GEOFENCE):
+   201→                                self.log.info("Service is not Geoblocked in your region")
+   202→                            else:
+   203→                                requested_proxy = self.GEOFENCE[0]  # first is likely main region
+   204→                                self.log.info(
+   205→                                    f"Service is Geoblocked in your region, getting a Proxy to {requested_proxy}"
+   206→                                )
+   207→                                for proxy_provider in ctx.obj.proxy_providers:
+   208→                                    proxy = proxy_provider.get_proxy(requested_proxy)
+   209→                                    if proxy:
+   210→                                        self.log.info(f"Got Proxy from {proxy_provider.__class__.__name__}")
+   211→                                        break
+   212→                        except Exception as e:
+   213→                            self.log.warning(f"Failed to check geofence: {e}")
+   214→                            current_region = None
+   215→                    else:
+   216→                        self.log.info("Service has no Geofence")
+   217→
+   218→            if proxy:
+   219→                self.session.proxies.update({"all": proxy})
+   220→                # Don't set Proxy-Authorization manually: both rnet (Proxy.all) and
+   221→                # requests authenticate from the credentials embedded in the proxy URL.
+   222→                # A manual header here was malformed (no "Basic " scheme) and broke
+   223→                # plaintext-http forward-proxy requests with HTTP 407.
+   224→                # Always verify proxy IP - proxies can change exit nodes
+   225→                try:
+   226→                    proxy_ip_info = get_ip_info(self.session)
+   227→                    self.current_region = proxy_ip_info.get("country", "").lower() if proxy_ip_info else None
+   228→                except Exception as e:
+   229→                    self.log.warning(f"Failed to verify proxy IP: {e}")
+   230→                    # Fallback to extracting region from proxy config
+   231→                    self.current_region = get_region_from_proxy(proxy)
+   232→            else:
+   233→                # No proxy, use cached IP info for title caching (non-critical)
+   234→                try:
+   235→                    ip_info = get_ip_info(self.session, cached=True)
+   236→                    self.current_region = ip_info.get("country", "").lower() if ip_info else None
+   237→                except Exception as e:
+   238→                    self.log.debug(f"Failed to get cached IP info: {e}")
+   239→                    self.current_region = None
+   240→
+   241→    def _get_tracks_for_variants(
+   242→        self,
+   243→        title: Title_T,
+   244→        fetch_fn: Callable[..., Tracks],
+   245→    ) -> Tracks:
+   246→        """Call fetch_fn for each codec/range combo in track_request, merge results.
+   247→
+   248→        Services that need separate API calls per codec/range combo can use this
+   249→        helper from their get_tracks() implementation.
+   250→
+   251→        The fetch_fn signature should be: (title, codec, range_) -> Tracks
+   252→
+   253→        For HYBRID range, fetch_fn is called with HDR10 and DV separately and
+   254→        the DV video tracks are merged into the HDR10 result.
+   255→
+   256→        Args:
+   257→            title: The title being processed.
+   258→            fetch_fn: A callable that fetches tracks for a specific codec/range.
+   259→        """
+   260→        all_tracks = Tracks()
+   261→        first = True
+   262→
+   263→        codecs = self.track_request.codecs or [None]
+   264→        ranges = self.track_request.ranges or [Video.Range.SDR]
+   265→
+   266→        for range_val in ranges:
+   267→            if range_val == Video.Range.HYBRID:
+   268→                # HYBRID: fetch HDR10 first (full tracks), then DV (video only)
+   269→                for codec_val in codecs:
+   270→                    try:
+   271→                        hdr_tracks = fetch_fn(title, codec=codec_val, range_=Video.Range.HDR10)
+   272→                    except (ValueError, SystemExit) as e:
+   273→                        if self.track_request.best_available:
+   274→                            self.log.warning(f" - HDR10 not available for HYBRID, skipping ({e})")
+   275→                            continue
+   276→                        raise
+   277→                    if first:
+   278→                        all_tracks.add(hdr_tracks, warn_only=True)
+   279→                        if hdr_tracks.manifest_url and not all_tracks.manifest_url:
+   280→                            all_tracks.manifest_url = hdr_tracks.manifest_url
+   281→                        first = False
+   282→                    else:
+   283→                        for video in hdr_tracks.videos:
+   284→                            all_tracks.add(video, warn_only=True)
+   285→
+   286→                    try:
+   287→                        dv_tracks = fetch_fn(title, codec=codec_val, range_=Video.Range.DV)
+   288→                        for video in dv_tracks.videos:
+   289→                            all_tracks.add(video, warn_only=True)
+   290→                    except (ValueError, SystemExit):
+   291→                        self.log.info(" - No DolbyVision manifest available for HYBRID")
+   292→            else:
+   293→                for codec_val in codecs:
+   294→                    try:
+   295→                        tracks = fetch_fn(title, codec=codec_val, range_=range_val)
+   296→                    except (ValueError, SystemExit) as e:
+   297→                        if self.track_request.best_available:
+   298→                            codec_name = codec_val.name if codec_val else "default"
+   299→                            self.log.warning(f" - {range_val.name}/{codec_name} not available, skipping ({e})")
+   300→                            continue
+   301→                        raise
+   302→                    if first:
+   303→                        all_tracks.add(tracks, warn_only=True)
+   304→                        if tracks.manifest_url and not all_tracks.manifest_url:
+   305→                            all_tracks.manifest_url = tracks.manifest_url
+   306→                        first = False
+   307→                    else:
+   308→                        for video in tracks.videos:
+   309→                            all_tracks.add(video, warn_only=True)
+   310→
+   311→        return all_tracks
+   312→
+   313→    # Optional Abstract functions
+   314→    # The following functions may be implemented by the Service.
+   315→    # Otherwise, the base service code (if any) of the function will be executed on call.
+   316→    # The functions will be executed in shown order.
+   317→
+   318→    @staticmethod
+   319→    def get_session() -> requests.Session:
+   320→        """
+   321→        Creates a Python-requests Session, adds common headers
+   322→        from config, cookies, retry handler, and a proxy if available.
+   323→        :returns: Prepared Python-requests Session
+   324→        """
+   325→        session = requests.Session()
+   326→        session.headers.update(config.headers)
+   327→        session.mount(
+   328→            "https://",
+   329→            HTTPAdapter(
+   330→                max_retries=Retry(total=5, backoff_factor=0.2, status_forcelist=[429, 500, 502, 503, 504]),
+   331→                pool_block=True,
+   332→            ),
+   333→        )
+   334→        session.mount("http://", session.adapters["https://"])
+   335→        return session
+   336→
+   337→    def authenticate(self, cookies: Optional[CookieJar] = None, credential: Optional[Credential] = None) -> None:
+   338→        """
+   339→        Authenticate the Service with Cookies and/or Credentials (Email/Username and Password).
+   340→
+   341→        This is effectively a login() function. Any API calls or object initializations
+   342→        needing to be made, should be made here. This will be run before any of the
+   343→        following abstract functions.
+   344→
+   345→        You should avoid storing or using the Credential outside this function.
+   346→        Make any calls you need for any Cookies, Tokens, or such, then use those.
+   347→
+   348→        The Cookie jar should also not be stored outside this function. However, you may load
+   349→        the Cookie jar into the service session.
+   350→        """
+   351→        if cookies is not None:
+   352→            if not isinstance(cookies, CookieJar):
+   353→                raise TypeError(f"Expected cookies to be a {CookieJar}, not {cookies!r}.")
+   354→            self.session.cookies.update(cookies)
+   355→
+   356→        # Store credential for cache key generation
+   357→        self.credential = credential
+   358→
+   359→    def request_input(self, prompt: str) -> str:
+   360→        """Request interactive input from the user.
+   361→
+   362→        When running locally (CLI), prompts via the shared rich console so the
+   363→        prompt renders correctly alongside Live progress / log handlers.
+   364→        When running in serve mode with an :class:`InputBridge` attached,
+   365→        delegates to the bridge which relays the prompt to the remote client.
+   366→        """
+   367→        if self._input_bridge is not None:
+   368→            return self._input_bridge.request_input(prompt)
+   369→        indent = " " * 5
+   370→        padded = indent + prompt.replace("\n", "\n" + indent)
+   371→        return console.input(Text(padded, style="text"))
+   372→
+   373→    def search(self) -> Generator[SearchResult, None, None]:
+   374→        """
+   375→        Search by query for titles from the Service.
+   376→
+   377→        The query must be taken as a CLI argument by the Service class.
+   378→        Ideally just re-use the title ID argument (i.e. self.title).
+   379→
+   380→        Search results will be displayed in the order yielded.
+   381→        """
+   382→        raise NotImplementedError(f"Search functionality has not been implemented by {self.__class__.__name__}")
+   383→
+   384→    def get_widevine_service_certificate(
+   385→        self, *, challenge: bytes, title: Title_T, track: AnyTrack
+   386→    ) -> Union[bytes, str]:
+   387→        """
+   388→        Get the Widevine Service Certificate used for Privacy Mode.
+   389→
+   390→        :param challenge: The service challenge, providing this to a License endpoint should return the
+   391→            privacy certificate that the service uses.
+   392→        :param title: The current `Title` from get_titles that is being executed. This is provided in
+   393→            case it has data needed to be used, e.g. for a HTTP request.
+   394→        :param track: The current `Track` needing decryption. Provided for same reason as `title`.
+   395→        :return: The Service Privacy Certificate as Bytes or a Base64 string. Don't Base64 Encode or
+   396→            Decode the data, return as is to reduce unnecessary computations.
+   397→        """
+   398→
+   399→    def get_widevine_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> Optional[Union[bytes, str]]:
+   400→        """
+   401→        Get a Widevine License message by sending a License Request (challenge).
+   402→
+   403→        This License message contains the encrypted Content Decryption Keys and will be
+   404→        read by the Cdm and decrypted.
+   405→
+   406→        This is a very important request to get correct. A bad, unexpected, or missing
+   407→        value in the request can cause your key to be detected and promptly banned,
+   408→        revoked, disabled, or downgraded.
+   409→
+   410→        :param challenge: The license challenge from the Widevine CDM.
+   411→        :param title: The current `Title` from get_titles that is being executed. This is provided in
+   412→            case it has data needed to be used, e.g. for a HTTP request.
+   413→        :param track: The current `Track` needing decryption. Provided for same reason as `title`.
+   414→        :return: The License response as Bytes or a Base64 string. Don't Base64 Encode or
+   415→            Decode the data, return as is to reduce unnecessary computations.
+   416→        """
+   417→
+   418→    def get_playready_license(
+   419→        self, *, challenge: bytes, title: Title_T, track: AnyTrack
+   420→    ) -> Optional[Union[bytes, str]]:
+   421→        """
+   422→        Get a PlayReady License message by sending a License Request (challenge).
+   423→
+   424→        This License message contains the encrypted Content Decryption Keys and will be
+   425→        read by the CDM and decrypted.
+   426→
+   427→        This is a very important request to get correct. A bad, unexpected, or missing
+   428→        value in the request can cause your key to be detected and promptly banned,
+   429→        revoked, disabled, or downgraded.
+   430→
+   431→        :param challenge: The license challenge from the PlayReady CDM.
+   432→        :param title: The current `Title` from get_titles that is being executed. This is provided in
+   433→            case it has data needed to be used, e.g. for a HTTP request.
+   434→        :param track: The current `Track` needing decryption. Provided for same reason as `title`.
+   435→        :return: The License response as Bytes or a Base64 string. Don't Base64 Encode or
+   436→            Decode the data, return as is to reduce unnecessary computations.
+   437→        """
+   438→        # Delegates license handling to the Widevine license method by default if a service-specific PlayReady implementation is not provided.
+   439→        return self.get_widevine_license(challenge=challenge, title=title, track=track)
+   440→
+   441→    def get_clearkey_license(
+   442→        self, *, challenge: bytes, title: Title_T, track: AnyTrack
+   443→    ) -> Optional[Union[bytes, str, dict]]:
+   444→        """
+   445→        Get a W3C ClearKey License (JWK Set) by sending a License Request (challenge).
+   446→
+   447→        Used for DASH `org.w3.clearkey` content. No CDM is involved: the challenge is
+   448→        the W3C EME JSON license request, e.g. ``{"kids": ["<base64url>"], "type": "temporary"}``,
+   449→        and the license is a JWK Set, e.g. ``{"keys": [{"kty": "oct", "k": "...", "kid": "..."}]}``.
+   450→
+   451→        :param challenge: The JSON license request bytes to POST to the license server.
+   452→        :param title: The current `Title` from get_titles that is being executed. This is provided in
+   453→            case it has data needed to be used, e.g. for a HTTP request.
+   454→        :param track: The current `Track` needing decryption. Provided for same reason as `title`.
+   455→        :return: The JWK Set license as a dict, JSON str, or raw bytes. Return None (the default)
+   456→            to let the framework POST the challenge to the manifest-provided Laurl, if any.
+   457→            Services with no license server can instead pre-populate the DRM object's
+   458→            `content_keys` in get_tracks.
+   459→        """
+   460→        return None
+   461→
+   462→    # Required Abstract functions
+   463→    # The following functions *must* be implemented by the Service.
+   464→    # The functions will be executed in shown order.
+   465→
+   466→    @abstractmethod
+   467→    def get_titles(self) -> Titles_T:
+   468→        """
+   469→        Get Titles for the provided title ID.
+   470→
+   471→        Return a Movies, Series, or Album objects containing Movie, Episode, or Song title objects respectively.
+   472→        The returned data must be for the given title ID, or a spawn of the title ID.
+   473→
+   474→        At least one object is expected to be returned, or it will presume an invalid Title ID was
+   475→        provided.
+   476→
+   477→        You can use the `data` dictionary class instance attribute of each Title to store data you may need later on.
+   478→        This can be useful to store information on each title that will be required like any sub-asset IDs, or such.
+   479→        """
+   480→
+   481→    def get_titles_cached(self, title_id: str = None) -> Titles_T:
+   482→        """
+   483→        Cached wrapper around get_titles() to reduce redundant API calls.
+   484→
+   485→        This method checks the cache before calling get_titles() and handles
+   486→        fallback to cached data when API calls fail.
+   487→
+   488→        Args:
+   489→            title_id: Optional title ID for cache key generation.
+   490→                     If not provided, will try to extract from service instance.
+   491→
+   492→        Returns:
+   493→            Titles object (Movies, Series, or Album)
+   494→        """
+   495→        # Try to get title_id from service instance if not provided
+   496→        if title_id is None:
+   497→            # Different services store the title ID in different attributes
+   498→            if hasattr(self, "title"):
+   499→                title_id = self.title
+   500→            elif hasattr(self, "title_id"):
+   501→                title_id = self.title_id
+   502→            else:
+   503→                # If we can't determine title_id, just call get_titles directly
+   504→                self.log.debug("Cannot determine title_id for caching, bypassing cache")
+   505→                return self.apply_title_map(self.get_titles())
+   506→
+   507→        # Get cache control flags from context
+   508→        no_cache = False
+   509→        reset_cache = False
+   510→        if self.ctx and self.ctx.parent:
+   511→            no_cache = self.ctx.parent.params.get("no_cache", False)
+   512→            reset_cache = self.ctx.parent.params.get("reset_cache", False)
+   513→
+   514→        # Get account hash for cache key
+   515→        account_hash = get_account_hash(self.credential)
+   516→
+   517→        # Use title cache to get titles with fallback support
+   518→        titles = self.title_cache.get_cached_titles(
+   519→            title_id=str(title_id),
+   520→            fetch_function=self.get_titles,
+   521→            region=self.current_region,
+   522→            account_hash=account_hash,
+   523→            no_cache=no_cache,
+   524→            reset_cache=reset_cache,
+   525→        )
+   526→        return self.apply_title_map(titles)
+   527→
+   528→    def apply_title_map(self, titles: Titles_T) -> Titles_T:
+   529→        """
+   530→        Rewrite service-provided titles using the per-service ``title_map`` config.
+   531→
+   532→        ``title_map`` lives under ``services.<TAG>`` in unshackle.yaml. Applied after the
+   533→        title cache so config edits take effect without a cache reset, and before any
+   534→        ``--enrich`` override so enrich wins. See ``remap_titles`` for the match rules.
+   535→        """
+   536→        return remap_titles(titles, (self.config or {}).get("title_map") or {})
+   537→
+   538→    @abstractmethod
+   539→    def get_tracks(self, title: Title_T) -> Tracks:
+   540→        """
+   541→        Get Track objects of the Title.
+   542→
+   543→        Return a Tracks object, which itself can contain Video, Audio, Subtitle or even Chapters.
+   544→        Tracks.videos, Tracks.audio, Tracks.subtitles, and Track.chapters should be a List of Track objects.
+   545→
+   546→        Each Track in the Tracks should represent a Video/Audio Stream/Representation/Adaptation or
+   547→        a Subtitle file.
+   548→
+   549→        While one Track should only hold information for one stream/downloadable, try to get as many
+   550→        unique Track objects per stream type so Stream selection by the root code can give you more
+   551→        options in terms of Resolution, Bitrate, Codecs, Language, e.t.c.
+   552→
+   553→        No decision making or filtering of which Tracks get returned should happen here. It can be
+   554→        considered an error to filter for e.g. resolution, codec, and such. All filtering based on
+   555→        arguments will be done by the root code automatically when needed.
+   556→
+   557→        Make sure you correctly mark which Tracks are encrypted or not, and by which DRM System
+   558→        via its `drm` property.
+   559→
+   560→        If you are able to obtain the Track's KID (Key ID) as a 32 char (16 bit) HEX string, provide
+   561→        it to the Track's `kid` variable as it will speed up the decryption process later on. It may
+   562→        or may not be needed, that depends on the service. Generally if you can provide it, without
+   563→        downloading any of the Track's stream data, then do.
+   564→
+   565→        :param title: The current `Title` from get_titles that is being executed.
+   566→        :return: Tracks object containing Video, Audio, Subtitles, and Chapters, if available.
+   567→        """
+   568→
+   569→    @abstractmethod
+   570→    def get_chapters(self, title: Title_T) -> Chapters:
+   571→        """
+   572→        Get Chapters for the Title.
+   573→
+   574→        Parameters:
+   575→            title: The current Title from `get_titles` that is being processed.
+   576→
+   577→        You must return a Chapters object containing 0 or more Chapter objects.
+   578→
+   579→        You do not need to set a Chapter number or sort/order the chapters in any way as
+   580→        the Chapters class automatically handles all of that for you. If there's no
+   581→        descriptive name for a Chapter then do not set a name at all.
+   582→
+   583→        You must not set Chapter names to "Chapter {n}" or such. If you (or the user)
+   584→        wants "Chapter {n}" style Chapter names (or similar) then they can use the config
+   585→        option `chapter_fallback_name`. For example, `"Chapter {i:02}"` for "Chapter 01".
+   586→        """
+   587→
+   588→    # Optional Event methods
+   589→
+   590→    def on_segment_downloaded(self, track: AnyTrack, segment: Path) -> None:
+   591→        """
+   592→        Called when one of a Track's Segments has finished downloading.
+   593→
+   594→        Parameters:
+   595→            track: The Track object that had a Segment downloaded.
+   596→            segment: The Path to the Segment that was downloaded.
+   597→        """
+   598→
+   599→    def on_track_downloaded(self, track: AnyTrack) -> None:
+   600→        """
+   601→        Called when a Track has finished downloading.
+   602→
+   603→        Parameters:
+   604→            track: The Track object that was downloaded.
+   605→        """
+   606→
+   607→    def on_track_decrypted(self, track: AnyTrack, drm: DRM_T, segment: Optional[m3u8.Segment] = None) -> None:
+   608→        """
+   609→        Called when a Track has finished decrypting.
+   610→
+   611→        Parameters:
+   612→            track: The Track object that was decrypted.
+   613→            drm: The DRM object it decrypted with.
+   614→            segment: The HLS segment information that was decrypted.
+   615→        """
+   616→
+   617→    def on_track_repacked(self, track: AnyTrack) -> None:
+   618→        """
+   619→        Called when a Track has finished repacking.
+   620→
+   621→        Parameters:
+   622→            track: The Track object that was repacked.
+   623→        """
+   624→
+   625→    def on_track_multiplex(self, track: AnyTrack) -> None:
+   626→        """
+   627→        Called when a Track is about to be Multiplexed into a Container.
+   628→
+   629→        Note: Right now only MKV containers are multiplexed but in the future
+   630→        this may also be called when multiplexing to other containers like
+   631→        MP4 via ffmpeg/mp4box.
+   632→
+   633→        Parameters:
+   634→            track: The Track object that was repacked.
+   635→        """
+   636→
+   637→
+   638→__all__ = ("Service", "TrackRequest")
+   639→

@@ -114,3 +114,56 @@ Stage Summary:
 - mypy: 0 errors in my code (the 1 remaining error is pre-existing in binaries.py:31, unrelated to my changes — `shutil.which` returns `str | None` but the loop variable was typed as `Path`)
 - End-to-end sanity check confirms: imports work, V2Ray is a Proxy subclass, countries map works, direct-URI detection works, resolve_proxy routes `v2ray:us` / `v2ray:vmess://...` / `nordvpn:us` all correctly
 - Zero dead code, zero duplicate logic, zero stale comments — structure now matches the rest of the unshackle proxy providers
+
+---
+Task ID: v2ray-full-codebase-audit
+Agent: main
+Task: Read through the ENTIRE unshackle codebase (not just the proxy layer) to fully understand the system, then cross-reference the V2Ray changes against that understanding and fix any integration issues.
+
+Work Log:
+- Delegated a full codebase read to an Explore subagent covering: entry points (__main__, commands/*), core orchestration (service.py, services.py, session.py, service_repo.py, events.py), config + vaults + credentials, DRM/CDM subsystem, tracks subsystem, manifests subsystem, titles subsystem, downloaders + utilities + utils, REST API subsystem, remote_service + import_service + music subsystem, providers, proxies (re-skimmed), tests structure, and docs index
+- The audit returned 9 findings (2 real integration bugs, 3 optional polish items, 4 confirmations of correctness)
+
+Issues found and fixed:
+
+1. [HIGH] dl.py and search.py had HARDCODED proxy provider lists that omitted V2Ray
+   - dl.py:1040-1058 and search.py:68-85 each maintain their own copy-pasted provider loading loop, separate from resolve.py's initialize_proxy_providers()
+   - V2Ray was only added to resolve.py, NOT to dl.py or search.py
+   - This meant `unshackle dl TAG URL --proxy v2ray:us` (the local, non-remote path) would never load the V2Ray provider — the user would get "The proxy provider 'v2ray' was not recognised" and sys.exit(1)
+   - Fix: added `V2Ray` to the import line + added `if config.proxy_providers.get("v2ray"): self.proxy_providers.append(V2Ray(...))` to both dl.py and search.py
+
+2. [HIGH] dl.py and search.py still had the broken `^[a-z]+:.+$` regex that fails to match `v2ray:`
+   - The regex fix was applied to resolve.py but not propagated to the two CLI command files
+   - This meant even after fix #1, `--proxy v2ray:us` wouldn't be recognized as a provider:query pair — `v2ray` contains a digit so `[a-z]+` doesn't match
+   - Also added handling for V2Ray direct-URI queries (v2ray:vmess://...) which don't match the existing 2-letter-country-code fallback regex
+   - Also avoided lowercasing V2Ray URIs (their base64 payloads are case-sensitive)
+   - Fix: updated both files to `^[a-z][a-z0-9]*:.+$` + added a V2Ray-URI-scheme branch to the query-validation condition
+
+3. [LOW] commands/env.py:get_dependencies() didn't list xray/v2ray binaries
+   - HolaProxy, Docker, Caddy etc. are all listed, but V2Ray/Xray were missing
+   - Fix: added two entries to the Network category
+
+4. [POLISH] v2ray.py was the ONLY proxy provider that prefixed error/log messages with its module name
+   - Every other provider (NordVPN, Gluetun, Basic, ProtonVPN, etc.) uses unprefixed messages — the logger name already identifies the source
+   - Fix: dropped the "v2ray: " prefix from all 32 raise/log calls in v2ray.py
+
+5. [POLISH] docs/README.md table didn't list V2RAY.md
+   - Gluetun has its own row; V2Ray should too for consistency
+   - Fix: added a row linking to V2RAY.md
+
+Issues confirmed as non-issues (no fix needed):
+- V2Ray's socks5:// return URIs are fully supported by both requests.Session (via requests[socks] dep) and RnetSession (via rnet.Proxy.all) — no code assumes http:// or https://
+- V2Ray's _verify_proxy duplicates the base Service.__init__ IP verification, but this is the same pattern Gluetun uses — it's the established convention
+- V2Ray's get_connection_info() is implemented and will be called by dl.py once fix #2 is in place — no change needed
+- No REST API endpoint enumerates proxy providers, so no V2Ray entry is needed there
+- V2Ray's config key naming (countries, servers, subscription_url, config_path, server_map, binary, etc.) all match existing conventions
+- V2Ray's __repr__ format matches the base Proxy class convention exactly
+- V2Ray's log_event usage matches Gluetun's pattern exactly
+- V2Ray's atexit cleanup pattern matches Gluetun's exactly
+
+Stage Summary:
+- All 554 tests pass (0 failures, 0 regressions)
+- ruff: All checks passed
+- isort: clean
+- End-to-end verification confirms: V2Ray is imported in dl.py + search.py, the fixed regex is in all 3 files (dl.py, search.py, resolve.py), the provider list includes V2Ray in all 3 files, env.py lists xray + v2ray binaries, and the regex correctly matches all v2ray: query forms (v2ray:us, v2ray:us:1, v2ray:vmess://..., v2ray:vless://..., v2ray:trojan://..., v2ray:ss://...) while still correctly routing existing providers (nordvpn:us, expressvpn:us, gluetun:windscribe:us)
+- The V2Ray integration is now complete across the entire system: local dl path, local search path, remote service path, and REST API path all load and route V2Ray correctly

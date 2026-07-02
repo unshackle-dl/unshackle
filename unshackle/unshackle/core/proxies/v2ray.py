@@ -212,7 +212,7 @@ def _parse_vmess(uri: str) -> Optional[V2RayServer]:
     try:
         data = json.loads(_b64_decode_loose(payload))
     except (ValueError, json.JSONDecodeError) as error:
-        log.debug("v2ray: skipping unparseable vmess URI: %s", error)
+        log.debug("skipping unparseable vmess URI: %s", error)
         return None
 
     address = str(data.get("add") or "").strip()
@@ -497,11 +497,11 @@ def parse_server_uri(uri: str) -> Optional[V2RayServer]:
         try:
             server = parser(uri)
         except Exception as error:
-            log.debug("v2ray: parser %s raised on %r: %s", parser.__name__, uri[:80], error)
+            log.debug("parser %s raised on %r: %s", parser.__name__, uri[:80], error)
             server = None
         if server is not None:
             return server
-    log.debug("v2ray: no parser matched URI %r", uri[:80])
+    log.debug("no parser matched URI %r", uri[:80])
     return None
 
 
@@ -536,7 +536,7 @@ def fetch_subscription(url: str, *, timeout: float = _SUBSCRIPTION_TIMEOUT) -> l
         try:
             body = _b64_decode_loose(body)
         except ValueError as error:
-            log.warning("v2ray: subscription %s looked base64 but could not be decoded: %s", url, error)
+            log.warning("subscription %s looked base64 but could not be decoded: %s", url, error)
             return []
 
     servers: list[V2RayServer] = []
@@ -547,7 +547,7 @@ def fetch_subscription(url: str, *, timeout: float = _SUBSCRIPTION_TIMEOUT) -> l
         server = parse_server_uri(line)
         if server is not None:
             servers.append(server)
-    log.info("v2ray: subscription %s yielded %d server(s)", url, len(servers))
+    log.info("subscription %s yielded %d server(s)", url, len(servers))
     return servers
 
 
@@ -561,10 +561,10 @@ def load_config_file(path: Path) -> list[V2RayServer]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        raise ValueError(f"v2ray: could not read config file {path}: {error}")
+        raise ValueError(f"could not read config file {path}: {error}")
 
     if "outbounds" not in data or not isinstance(data.get("outbounds"), list):
-        raise ValueError(f"v2ray: config file {path} has no 'outbounds' list")
+        raise ValueError(f"config file {path} has no 'outbounds' list")
     outbounds = data["outbounds"]
 
     servers: list[V2RayServer] = []
@@ -629,7 +629,7 @@ def load_config_file(path: Path) -> list[V2RayServer]:
             )
         )
 
-    log.info("v2ray: config file %s yielded %d server(s)", path, len(servers))
+    log.info("config file %s yielded %d server(s)", path, len(servers))
     return servers
 
 
@@ -859,7 +859,7 @@ class V2Ray(Proxy):
         self.proxy_scheme = str(proxy_scheme or "socks5").lower()
         if self.proxy_scheme not in ("socks5", "socks5h", "http", "https"):
             raise ValueError(
-                f"v2ray: proxy_scheme must be one of socks5/socks5h/http/https, got {self.proxy_scheme!r}"
+                f"proxy_scheme must be one of socks5/socks5h/http/https, got {self.proxy_scheme!r}"
             )
         self.verify_ip = bool(verify_ip)
         self.startup_timeout = float(startup_timeout)
@@ -939,7 +939,7 @@ class V2Ray(Proxy):
         raw_query = query or ""
         query_key = raw_query.strip().lower()
         if not query_key:
-            raise ValueError("v2ray: empty query — supply a country code, alias, remark substring, or V2Ray URI")
+            raise ValueError("empty query — supply a country code, alias, remark substring, or V2Ray URI")
 
         # Direct-URI mode: the query is itself a vmess:// / vless:// / trojan:// / ss:// URI.
         # Parse it on the fly and spawn a one-shot subprocess. This works even when no
@@ -948,7 +948,7 @@ class V2Ray(Proxy):
             server = parse_server_uri(raw_query)
             if server is None:
                 raise ValueError(
-                    f"v2ray: query looked like a V2Ray URI but could not be parsed: {raw_query[:80]!r}"
+                    f"query looked like a V2Ray URI but could not be parsed: {raw_query[:80]!r}"
                 )
             return self._spawn_for_server(server, query_key)
 
@@ -999,7 +999,7 @@ class V2Ray(Proxy):
             self._kill_process(process_info)
             self._active.pop(query_key, None)
             raise RuntimeError(
-                f"v2ray: subprocess did not become ready within {self.startup_timeout:.0f}s "
+                f"subprocess did not become ready within {self.startup_timeout:.0f}s "
                 f"(server={server.label}, port={socks_port})"
             )
 
@@ -1079,7 +1079,7 @@ class V2Ray(Proxy):
                 pool = [s for s in pool if remark_query in (s.remark or "").lower()]
                 if not pool:
                     log.warning(
-                        "v2ray: countries[%s] has no server matching remark %r",
+                        "countries[%s] has no server matching remark %r",
                         key, remark_query,
                     )
                     return None
@@ -1096,7 +1096,7 @@ class V2Ray(Proxy):
 
         if not pool:
             log.warning(
-                "v2ray: no server matched query %r (country=%s, remark=%s, index=%s)",
+                "no server matched query %r (country=%s, remark=%s, index=%s)",
                 query, country, remark_query, index,
             )
             return None
@@ -1128,7 +1128,7 @@ class V2Ray(Proxy):
         """
         if index is not None:
             if index < 1 or index > len(pool):
-                log.warning("v2ray: index %d out of range for pool of %d server(s)", index, len(pool))
+                log.warning("index %d out of range for pool of %d server(s)", index, len(pool))
                 return None
             return pool[index - 1]
         if random_pick:
@@ -1177,18 +1177,18 @@ class V2Ray(Proxy):
             try:
                 loaded.extend(self._fetch_subscription_cached(url))
             except Exception as error:
-                log.warning("v2ray: subscription %s failed: %s", url, error)
+                log.warning("subscription %s failed: %s", url, error)
 
         # 2. Config file
         if config_path:
             path = Path(config_path).expanduser()
             if not path.is_file():
-                log.warning("v2ray: config_path %s does not exist", path)
+                log.warning("config_path %s does not exist", path)
             else:
                 try:
                     loaded.extend(load_config_file(path))
                 except Exception as error:
-                    log.warning("v2ray: config file %s failed: %s", path, error)
+                    log.warning("config file %s failed: %s", path, error)
 
         # 3. Inline servers
         if servers:
@@ -1202,7 +1202,7 @@ class V2Ray(Proxy):
                     try:
                         loaded.append(V2RayServer(**entry))
                     except TypeError as error:
-                        log.warning("v2ray: skipping malformed inline server dict: %s", error)
+                        log.warning("skipping malformed inline server dict: %s", error)
 
         # De-duplicate by (protocol, address, port) — many subscriptions list the same
         # server under multiple remarks.
@@ -1229,7 +1229,7 @@ class V2Ray(Proxy):
             servers = fetch_subscription(url)
         except Exception:
             if cached_entry:
-                log.warning("v2ray: subscription %s failed, using cached copy", url)
+                log.warning("subscription %s failed, using cached copy", url)
                 return [V2RayServer(**s) for s in cached_entry.get("servers", [])]
             raise
         if servers:
@@ -1258,7 +1258,7 @@ class V2Ray(Proxy):
         try:
             return json.loads(self.cache_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as error:
-            log.warning("v2ray: cache read failed (%s): %s", self.cache_path, error)
+            log.warning("cache read failed (%s): %s", self.cache_path, error)
             return {}
 
     def _save_cache(self, cache: dict) -> None:
@@ -1268,7 +1268,7 @@ class V2Ray(Proxy):
             self.cache_path.parent.mkdir(parents=True, exist_ok=True)
             self.cache_path.write_text(json.dumps(cache, indent=2), encoding="utf-8")
         except OSError as error:
-            log.warning("v2ray: cache write failed (%s): %s", self.cache_path, error)
+            log.warning("cache write failed (%s): %s", self.cache_path, error)
 
     def _load_country_map(self, countries: dict) -> dict[str, list[V2RayServer]]:
         """Parse the ``basic``-style ``countries`` config map.
@@ -1284,7 +1284,7 @@ class V2Ray(Proxy):
         """
         if not isinstance(countries, dict):
             raise TypeError(
-                f"v2ray: 'countries' must be a dict mapping country code -> URI or list of URIs, "
+                f"'countries' must be a dict mapping country code -> URI or list of URIs, "
                 f"got {type(countries).__name__}"
             )
 
@@ -1301,7 +1301,7 @@ class V2Ray(Proxy):
                 uri_list = [str(v) for v in raw_value if v]
             else:
                 log.warning(
-                    "v2ray: countries[%s] has unsupported value type %s — expected str or list, skipping",
+                    "countries[%s] has unsupported value type %s — expected str or list, skipping",
                     key, type(raw_value).__name__,
                 )
                 continue
@@ -1310,7 +1310,7 @@ class V2Ray(Proxy):
             for uri in uri_list:
                 parsed = parse_server_uri(uri)
                 if parsed is None:
-                    log.warning("v2ray: countries[%s] could not parse URI %r — skipping", key, uri[:80])
+                    log.warning("countries[%s] could not parse URI %r — skipping", key, uri[:80])
                     continue
                 # Force the server's country to match the map key, so the IP-verification
                 # step (when enabled) compares against the user's intent rather than the
@@ -1322,7 +1322,7 @@ class V2Ray(Proxy):
             if servers:
                 result[key] = servers
             else:
-                log.warning("v2ray: countries[%s] produced zero valid servers", key)
+                log.warning("countries[%s] produced zero valid servers", key)
 
         return result
 
@@ -1333,7 +1333,7 @@ class V2Ray(Proxy):
         if explicit:
             path = Path(explicit).expanduser()
             if not path.is_file():
-                raise FileNotFoundError(f"v2ray: configured binary not found at {path}")
+                raise FileNotFoundError(f"configured binary not found at {path}")
             return path
         # Xray is the modern, fully-compatible fork; prefer it when both are installed.
         return binaries.Xray or binaries.V2Ray
@@ -1392,9 +1392,9 @@ class V2Ray(Proxy):
             finally:
                 os.close(fd)
         except OSError as error:
-            raise RuntimeError(f"v2ray: could not write config file {config_path}: {error}")
+            raise RuntimeError(f"could not write config file {config_path}: {error}")
 
-        log.debug("v2ray: wrote config for %s to %s", server.label, config_path)
+        log.debug("wrote config for %s to %s", server.label, config_path)
         log_event(
             "v2ray_spawn_start",
             level="DEBUG",
@@ -1468,7 +1468,7 @@ class V2Ray(Proxy):
             except OSError as error:
                 last_error = str(error)
                 time.sleep(0.2)
-        log.warning("v2ray: subprocess on port %d not ready after %.1fs: %s", socks_port, timeout, last_error)
+        log.warning("subprocess on port %d not ready after %.1fs: %s", socks_port, timeout, last_error)
         return False
 
     @staticmethod
@@ -1545,7 +1545,7 @@ class V2Ray(Proxy):
                     # exit IP's country).
                     if expected_country and actual_country and actual_country != expected_country:
                         log.warning(
-                            "v2ray: country mismatch for %s — expected %s, got %s (IP: %s). "
+                            "country mismatch for %s — expected %s, got %s (IP: %s). "
                             "The proxy is still returned; check your subscription if this is unexpected.",
                             server.label, expected_country, actual_country, ip_info.get("ip"),
                         )
@@ -1594,7 +1594,7 @@ class V2Ray(Proxy):
                     process.kill()
                     process.wait(timeout=5)
             except Exception as error:
-                log.debug("v2ray: error killing process %s: %s", info.get("pid"), error)
+                log.debug("error killing process %s: %s", info.get("pid"), error)
 
         # Close stdout/stderr pipes so we don't leak FDs. The pipe handles live on the
         # Popen object (set via stdout=PIPE / stderr=PIPE in _spawn_process), not on the

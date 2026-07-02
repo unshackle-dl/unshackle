@@ -1,0 +1,733 @@
+     1→"""Session utilities for creating HTTP sessions with TLS fingerprinting via rnet (Rust/BoringSSL)."""
+     2→
+     3→from __future__ import annotations
+     4→
+     5→import http
+     6→import logging
+     7→import random
+     8→import time
+     9→from collections.abc import Iterator, MutableMapping
+    10→from datetime import datetime, timezone
+    11→from email.utils import parsedate_to_datetime
+    12→from http.cookiejar import CookieJar
+    13→from typing import Any, Optional
+    14→from urllib.parse import urlencode, urlparse, urlunparse
+    15→
+    16→import rnet
+    17→from requests import HTTPError, Request
+    18→from requests.structures import CaseInsensitiveDict
+    19→
+    20→from unshackle.core.config import config
+    21→
+    22→# ---------------------------------------------------------------------------
+    23→# Impersonate preset mapping — rnet uses named presets (no custom JA3/Akamai)
+    24→# ---------------------------------------------------------------------------
+    25→
+    26→DEFAULT_IMPERSONATE = rnet.Impersonate.Chrome131
+    27→
+    28→
+    29→def _resolve_impersonate(browser: str) -> rnet.Impersonate:
+    30→    """Resolve a browser string to an rnet.Impersonate preset.
+    31→
+    32→    Accepts exact rnet preset names (e.g. "Chrome131", "OkHttp4_12", "Edge101").
+    33→    See https://github.com/0x676e67/rnet for the full list of available presets.
+    34→    """
+    35→    preset = getattr(rnet.Impersonate, browser, None)
+    36→    if preset is not None:
+    37→        return preset
+    38→    raise ValueError(
+    39→        f"Unknown impersonate preset: {browser!r}. "
+    40→        f"Use exact rnet preset names like 'Chrome131', 'OkHttp4_12', 'Edge101'. "
+    41→        f"See rnet.Impersonate for all available presets."
+    42→    )
+    43→
+    44→
+    45→# Map string method names to rnet.Method enum
+    46→_METHOD_MAP: dict[str, rnet.Method] = {
+    47→    "GET": rnet.Method.GET,
+    48→    "POST": rnet.Method.POST,
+    49→    "PUT": rnet.Method.PUT,
+    50→    "DELETE": rnet.Method.DELETE,
+    51→    "HEAD": rnet.Method.HEAD,
+    52→    "OPTIONS": rnet.Method.OPTIONS,
+    53→    "PATCH": rnet.Method.PATCH,
+    54→    "TRACE": rnet.Method.TRACE,
+    55→}
+    56→
+    57→
+    58→# ---------------------------------------------------------------------------
+    59→# Response headers adapter — bytes → str
+    60→# ---------------------------------------------------------------------------
+    61→
+    62→
+    63→class RnetResponseHeaders(MutableMapping):
+    64→    """Read-only str-based view over rnet's bytes-based HeaderMap."""
+    65→
+    66→    def __init__(self, header_map: Any) -> None:
+    67→        self._map = header_map
+    68→
+    69→    def _decode(self, val: Any) -> str:
+    70→        return val.decode("utf-8", errors="replace") if isinstance(val, (bytes, bytearray)) else str(val)
+    71→
+    72→    def __getitem__(self, key: str) -> str:
+    73→        val = self._map[key]
+    74→        return self._decode(val)
+    75→
+    76→    def __setitem__(self, key: str, value: str) -> None:
+    77→        raise TypeError("Response headers are read-only")
+    78→
+    79→    def __delitem__(self, key: str) -> None:
+    80→        raise TypeError("Response headers are read-only")
+    81→
+    82→    def __contains__(self, key: object) -> bool:
+    83→        if not isinstance(key, str):
+    84→            return False
+    85→        return self._map.contains_key(key)
+    86→
+    87→    def __iter__(self) -> Iterator[str]:
+    88→        seen: set[str] = set()
+    89→        for k, _ in self._map.items():
+    90→            dk = self._decode(k)
+    91→            if dk not in seen:
+    92→                seen.add(dk)
+    93→                yield dk
+    94→
+    95→    def __len__(self) -> int:
+    96→        return self._map.keys_len()
+    97→
+    98→    def get(self, key: str, default: Optional[str] = None) -> Optional[str]:
+    99→        val = self._map.get(key)
+   100→        if val is None:
+   101→            return default
+   102→        return self._decode(val)
+   103→
+   104→    def items(self) -> list[tuple[str, str]]:
+   105→        return [(self._decode(k), self._decode(v)) for k, v in self._map.items()]
+   106→
+   107→
+   108→# ---------------------------------------------------------------------------
+   109→# Response wrapper — requests-compatible interface
+   110→# ---------------------------------------------------------------------------
+   111→
+   112→
+   113→class RnetResponse:
+   114→    """Wraps rnet.BlockingResponse with a requests-compatible API."""
+   115→
+   116→    def __init__(self, resp: Any) -> None:
+   117→        self._resp = resp
+   118→        self._headers: Optional[RnetResponseHeaders] = None
+   119→        self._content: Optional[bytes] = None
+   120→        self._text: Optional[str] = None
+   121→        self._streamed = False
+   122→
+   123→    @property
+   124→    def status_code(self) -> int:
+   125→        return int(str(self._resp.status_code))
+   126→
+   127→    @property
+   128→    def ok(self) -> bool:
+   129→        return self._resp.ok
+   130→
+   131→    @property
+   132→    def headers(self) -> RnetResponseHeaders:
+   133→        if self._headers is None:
+   134→            self._headers = RnetResponseHeaders(self._resp.headers)
+   135→        return self._headers
+   136→
+   137→    @property
+   138→    def url(self) -> str:
+   139→        return str(self._resp.url)
+   140→
+   141→    @property
+   142→    def content_length(self) -> Optional[int]:
+   143→        return self._resp.content_length
+   144→
+   145→    @property
+   146→    def content(self) -> bytes:
+   147→        if self._content is None:
+   148→            self._content = self._resp.bytes()
+   149→        return self._content
+   150→
+   151→    @property
+   152→    def text(self) -> str:
+   153→        if self._text is None:
+   154→            encoding = self._resp.encoding or "utf-8"
+   155→            self._text = self.content.decode(encoding, errors="replace")
+   156→        return self._text
+   157→
+   158→    @property
+   159→    def reason(self) -> str:
+   160→        try:
+   161→            return http.HTTPStatus(self.status_code).phrase
+   162→        except ValueError:
+   163→            return "Unknown"
+   164→
+   165→    @property
+   166→    def cookies(self) -> Any:
+   167→        return self._resp.cookies
+   168→
+   169→    def json(self, **kwargs: Any) -> Any:
+   170→        import json as _json
+   171→
+   172→        return _json.loads(self.content)
+   173→
+   174→    def raise_for_status(self) -> None:
+   175→        if not self.ok:
+   176→            raise HTTPError(
+   177→                f"{self.status_code} {self.reason}: {self.url}",
+   178→                response=self,
+   179→            )
+   180→
+   181→    def iter_content(self, chunk_size: Optional[int] = None) -> Iterator[bytes]:
+   182→        """Re-chunk rnet's variable-size stream into fixed-size pieces."""
+   183→        self._streamed = True
+   184→        if chunk_size is None or chunk_size <= 0:
+   185→            yield from self._resp.stream()
+   186→            return
+   187→
+   188→        buf = bytearray()
+   189→        for chunk in self._resp.stream():
+   190→            buf.extend(chunk)
+   191→            while len(buf) >= chunk_size:
+   192→                yield bytes(buf[:chunk_size])
+   193→                buf = buf[chunk_size:]
+   194→        if buf:
+   195→            yield bytes(buf)
+   196→
+   197→    def stream(self) -> Iterator[bytes]:
+   198→        """Direct pass-through of rnet's native stream iterator."""
+   199→        self._streamed = True
+   200→        yield from self._resp.stream()
+   201→
+   202→    def close(self) -> None:
+   203→        try:
+   204→            self._resp.close()
+   205→        except Exception:
+   206→            pass
+   207→
+   208→
+   209→# ---------------------------------------------------------------------------
+   210→# Session headers adapter — persists via client.update()
+   211→# ---------------------------------------------------------------------------
+   212→
+   213→
+   214→class RnetSessionHeaders(CaseInsensitiveDict):
+   215→    """Dict-like headers that persist to the rnet client via update()."""
+   216→
+   217→    def __init__(self, client: Any) -> None:
+   218→        self._client = client
+   219→        super().__init__()
+   220→
+   221→    def _sync(self) -> None:
+   222→        """Push current headers to the rnet client."""
+   223→        if self._client is not None and hasattr(self, "_store") and self._store:
+   224→            self._client.update(headers={k: v for k, v in self.items()})
+   225→
+   226→    def __setitem__(self, key: str, value: str) -> None:
+   227→        super().__setitem__(key, value)
+   228→        self._sync()
+   229→
+   230→    def update(self, __m: Any = None, **kwargs: Any) -> None:
+   231→        if __m:
+   232→            if hasattr(__m, "items"):
+   233→                for k, v in __m.items():
+   234→                    super().__setitem__(k, v)
+   235→            else:
+   236→                for k, v in __m:
+   237→                    super().__setitem__(k, v)
+   238→        for k, v in kwargs.items():
+   239→            super().__setitem__(k, v)
+   240→        self._sync()
+   241→
+   242→    def pop(self, key: str, *args: Any) -> Any:
+   243→        result = super().pop(key, *args)
+   244→        # rnet doesn't support removing individual headers, but we track locally
+   245→        # and always send the full set on next update
+   246→        return result
+   247→
+   248→    def __delitem__(self, key: str) -> None:
+   249→        super().__delitem__(key)
+   250→
+   251→
+   252→# ---------------------------------------------------------------------------
+   253→# Session cookies adapter
+   254→# ---------------------------------------------------------------------------
+   255→
+   256→
+   257→class RnetCookieAdapter(MutableMapping):
+   258→    """Cookie adapter that bridges requests-style cookie access to rnet."""
+   259→
+   260→    def __init__(self, client: Any) -> None:
+   261→        self._client = client
+   262→        self._cookies: dict[str, dict[str, str]] = {}
+   263→        self._flat: dict[str, str] = {}
+   264→        self._original_cookies: list[Any] = []
+   265→
+   266→    def _set_cookie_on_client(self, url: str, name: str, value: str) -> None:
+   267→        """Set a cookie on the rnet client, or buffer locally if the client is not yet created."""
+   268→        if self._client is not None:
+   269→            try:
+   270→                self._client.set_cookie(url, rnet.Cookie(name, value))
+   271→            except Exception:
+   272→                pass
+   273→
+   274→    def _flush_to_client(self) -> None:
+   275→        """Push all buffered cookies to the rnet client once it is created."""
+   276→        if self._client is None:
+   277→            return
+   278→        for domain, cookies in self._cookies.items():
+   279→            url = f"https://{domain.lstrip('.')}" if domain else "https://localhost"
+   280→            for name, value in cookies.items():
+   281→                try:
+   282→                    self._client.set_cookie(url, rnet.Cookie(name, value))
+   283→                except Exception:
+   284→                    pass
+   285→
+   286→    @property
+   287→    def jar(self) -> CookieJar:
+   288→        """Return a CookieJar with original Cookie objects (requests compat).
+   289→
+   290→        Used by ``save_cookies`` in dl.py to persist cookies back to disk.
+   291→        """
+   292→        jar = CookieJar()
+   293→        for cookie in self._original_cookies:
+   294→            jar.set_cookie(cookie)
+   295→        return jar
+   296→
+   297→    def update(self, other: Any = None, **kwargs: Any) -> None:
+   298→        if other is None:
+   299→            other = {}
+   300→        if isinstance(other, CookieJar):
+   301→            for cookie in other:
+   302→                domain = cookie.domain or ""
+   303→                name = cookie.name
+   304→                value = cookie.value or ""
+   305→                self._flat[name] = value
+   306→                self._cookies.setdefault(domain, {})[name] = value
+   307→                self._original_cookies.append(cookie)
+   308→                url = f"https://{domain.lstrip('.')}" if domain else "https://localhost"
+   309→                self._set_cookie_on_client(url, name, value)
+   310→        elif isinstance(other, dict):
+   311→            for name, value in other.items():
+   312→                self._flat[name] = value
+   313→                self._set_cookie_on_client("https://localhost", name, str(value))
+   314→            self._flat.update(other)
+   315→        elif hasattr(other, "items"):
+   316→            for name, value in other.items():
+   317→                self._flat[name] = str(value)
+   318→                self._set_cookie_on_client("https://localhost", name, str(value))
+   319→
+   320→        for name, value in kwargs.items():
+   321→            self._flat[name] = value
+   322→            self._set_cookie_on_client("https://localhost", name, value)
+   323→
+   324→    def get(
+   325→        self, name: str, default: Optional[str] = None, domain: Optional[str] = None, path: Optional[str] = None
+   326→    ) -> Optional[str]:
+   327→        if domain and domain in self._cookies:
+   328→            return self._cookies[domain].get(name, default)
+   329→        return self._flat.get(name, default)
+   330→
+   331→    def set(self, name: str, value: str, domain: str = "localhost") -> None:
+   332→        self._flat[name] = value
+   333→        self._cookies.setdefault(domain, {})[name] = value
+   334→        url = f"https://{domain.lstrip('.')}"
+   335→        self._set_cookie_on_client(url, name, value)
+   336→
+   337→    def __getitem__(self, name: str) -> str:
+   338→        return self._flat[name]
+   339→
+   340→    def __setitem__(self, name: str, value: str) -> None:
+   341→        self.set(name, value)
+   342→
+   343→    def __delitem__(self, name: str) -> None:
+   344→        self._flat.pop(name, None)
+   345→        for domain_cookies in self._cookies.values():
+   346→            domain_cookies.pop(name, None)
+   347→
+   348→    def __contains__(self, name: object) -> bool:
+   349→        return name in self._flat
+   350→
+   351→    def __iter__(self) -> Iterator:
+   352→        return iter(self._flat)
+   353→
+   354→    def __len__(self) -> int:
+   355→        return len(self._flat)
+   356→
+   357→    def __bool__(self) -> bool:
+   358→        return bool(self._flat)
+   359→
+   360→    def get_dict(self, domain: Optional[str] = None, path: Optional[str] = None) -> dict[str, str]:
+   361→        """Return cookies as a plain dict (requests RequestsCookieJar compat).
+   362→
+   363→        If *domain* is given, only cookies for that domain are returned.
+   364→        *path* is accepted for API compatibility but ignored (flat storage).
+   365→        """
+   366→        if domain is not None:
+   367→            return dict(self._cookies.get(domain, {}))
+   368→        return dict(self._flat)
+   369→
+   370→    def clear(self, domain: Optional[str] = None, path: Optional[str] = None, name: Optional[str] = None) -> None:
+   371→        """Remove cookies (requests RequestsCookieJar compat).
+   372→
+   373→        - ``clear()`` removes all cookies.
+   374→        - ``clear(domain=..., path=..., name=...)`` removes a specific cookie.
+   375→        """
+   376→        if name is not None:
+   377→            self._flat.pop(name, None)
+   378→            if domain is not None and domain in self._cookies:
+   379→                self._cookies[domain].pop(name, None)
+   380→            else:
+   381→                for domain_cookies in self._cookies.values():
+   382→                    domain_cookies.pop(name, None)
+   383→        elif domain is not None:
+   384→            removed = self._cookies.pop(domain, {})
+   385→            for k in removed:
+   386→                # Only remove from flat if no other domain has same key
+   387→                still_exists = any(k in dc for dc in self._cookies.values())
+   388→                if not still_exists:
+   389→                    self._flat.pop(k, None)
+   390→        else:
+   391→            self._flat.clear()
+   392→            self._cookies.clear()
+   393→
+   394→    def items(self) -> list[tuple[str, str]]:
+   395→        return list(self._flat.items())
+   396→
+   397→    def keys(self) -> list[str]:
+   398→        return list(self._flat.keys())
+   399→
+   400→    def values(self) -> list[str]:
+   401→        return list(self._flat.values())
+   402→
+   403→
+   404→# ---------------------------------------------------------------------------
+   405→# Session proxy adapter
+   406→# ---------------------------------------------------------------------------
+   407→
+   408→
+   409→class RnetProxyDict(dict):
+   410→    """Dict-like proxy config that syncs to the rnet client.
+   411→
+   412→    Accepts ``{"all": url}``, ``{"https": url}``, or ``{"http": url}``
+   413→    and applies via rnet's native ``proxies`` parameter (``List[rnet.Proxy]``).
+   414→    Supports both lazy (pre-client) and live (post-client) proxy updates.
+   415→    """
+   416→
+   417→    def __init__(self, session: "RnetSession") -> None:
+   418→        super().__init__()
+   419→        self._session = session
+   420→
+   421→    def _sync(self) -> None:
+   422→        proxy = self.get("all") or self.get("https") or self.get("http")
+   423→        proxies = [rnet.Proxy.all(proxy)] if proxy else []
+   424→        self._session._client_kwargs["proxies"] = proxies or None
+   425→        if self._session._client is not None:
+   426→            self._session._client.update(proxies=proxies or None)
+   427→
+   428→    def update(self, __m: Any = None, **kwargs: Any) -> None:
+   429→        super().update(__m or {}, **kwargs)
+   430→        self._sync()
+   431→
+   432→    def __setitem__(self, key: str, value: str) -> None:
+   433→        super().__setitem__(key, value)
+   434→        self._sync()
+   435→
+   436→
+   437→# ---------------------------------------------------------------------------
+   438→# Exceptions
+   439→# ---------------------------------------------------------------------------
+   440→
+   441→
+   442→class MaxRetriesError(Exception):
+   443→    def __init__(self, message: str, cause: Optional[Exception] = None) -> None:
+   444→        super().__init__(message)
+   445→        self.__cause__ = cause
+   446→
+   447→
+   448→# ---------------------------------------------------------------------------
+   449→# RnetSession — main session class
+   450→# ---------------------------------------------------------------------------
+   451→
+   452→
+   453→class RnetSession:
+   454→    """TLS-fingerprinted HTTP session powered by rnet (Rust/BoringSSL).
+   455→
+   456→    Drop-in replacement for CurlSession with requests-compatible API.
+   457→    Supports browser impersonation (Chrome, Firefox, Edge, Safari, OkHttp),
+   458→    retry with exponential backoff, cookie persistence, and proxy support.
+   459→
+   460→    The client is created lazily on the first request so that headers,
+   461→    cookies, and proxies can be configured freely before any connection
+   462→    is established.
+   463→    """
+   464→
+   465→    def __init__(
+   466→        self,
+   467→        max_retries: int = 5,
+   468→        backoff_factor: float = 0.2,
+   469→        max_backoff: float = 60.0,
+   470→        status_forcelist: Optional[list[int]] = None,
+   471→        allowed_methods: Optional[set[str]] = None,
+   472→        catch_exceptions: Optional[tuple[type[Exception], ...]] = None,
+   473→        **session_kwargs: Any,
+   474→    ) -> None:
+   475→        self.max_retries = max_retries
+   476→        self.backoff_factor = backoff_factor
+   477→        self.max_backoff = max_backoff
+   478→        self.status_forcelist = status_forcelist or [429, 500, 502, 503, 504]
+   479→        self.allowed_methods = allowed_methods or {"GET", "POST", "HEAD", "OPTIONS", "PUT", "DELETE", "TRACE"}
+   480→        self.catch_exceptions = catch_exceptions or (
+   481→            rnet.ConnectionError,
+   482→            rnet.TimeoutError,
+   483→            rnet.RequestError,
+   484→        )
+   485→        self.log = logging.getLogger(self.__class__.__name__)
+   486→
+   487→        client_kwargs: dict[str, Any] = {}
+   488→        for key in ("impersonate", "timeout", "proxies", "verify", "redirect"):
+   489→            if key in session_kwargs:
+   490→                client_kwargs[key] = session_kwargs.pop(key)
+   491→        if "proxy" in session_kwargs:
+   492→            proxy_url = session_kwargs.pop("proxy")
+   493→            if proxy_url:
+   494→                client_kwargs["proxies"] = [rnet.Proxy.all(proxy_url)]
+   495→
+   496→        client_kwargs["cookie_store"] = True
+   497→
+   498→        self.verify: bool = client_kwargs.pop("verify", True)
+   499→        if not self.verify:
+   500→            client_kwargs["danger_accept_invalid_certs"] = True
+   501→
+   502→        self._client_kwargs = dict(client_kwargs)
+   503→        self._client: Optional[rnet.BlockingClient] = None
+   504→
+   505→        self.headers = RnetSessionHeaders(None)
+   506→        self.cookies = RnetCookieAdapter(None)
+   507→        self.proxies = RnetProxyDict(self)
+   508→
+   509→        if "headers" in session_kwargs:
+   510→            self.headers.update(session_kwargs.pop("headers"))
+   511→        if "cookies" in session_kwargs:
+   512→            self.cookies.update(session_kwargs.pop("cookies"))
+   513→        if "proxies" in session_kwargs:
+   514→            self.proxies.update(session_kwargs.pop("proxies"))
+   515→
+   516→    def _ensure_client(self) -> rnet.BlockingClient:
+   517→        """Lazily create the rnet client on first use, flushing any buffered state."""
+   518→        if self._client is None:
+   519→            self._client = rnet.BlockingClient(**self._client_kwargs)
+   520→            self.headers._client = self._client
+   521→            self.headers._sync()
+   522→            self.cookies._client = self._client
+   523→            self.cookies._flush_to_client()
+   524→        return self._client
+   525→
+   526→    def _build_url(self, url: str, params: Optional[Any] = None) -> str:
+   527→        """Encode params into the URL (rnet ignores the params kwarg).
+   528→
+   529→        Accepts the same shapes as requests: a mapping, a sequence of pairs, or a
+   530→        pre-built query string/bytes. A string is appended verbatim (already encoded);
+   531→        urlencode() would raise TypeError on it.
+   532→        """
+   533→        if not params:
+   534→            return url
+   535→        if isinstance(params, bytes):
+   536→            extra = params.decode("utf-8")
+   537→        elif isinstance(params, str):
+   538→            extra = params
+   539→        else:
+   540→            extra = urlencode(params, doseq=True)
+   541→        parsed = urlparse(url)
+   542→        separator = "&" if parsed.query else ""
+   543→        query = parsed.query + separator + extra if parsed.query else extra
+   544→        return urlunparse(parsed._replace(query=query))
+   545→
+   546→    def get_sleep_time(self, response: Optional[RnetResponse], attempt: int) -> Optional[float]:
+   547→        if response:
+   548→            retry_after = response.headers.get("Retry-After")
+   549→            if retry_after:
+   550→                try:
+   551→                    return float(retry_after)
+   552→                except ValueError:
+   553→                    if retry_date := parsedate_to_datetime(retry_after):
+   554→                        return (retry_date - datetime.now(timezone.utc)).total_seconds()
+   555→
+   556→        if attempt == 0:
+   557→            return 0.0
+   558→
+   559→        backoff_value = self.backoff_factor * (2 ** (attempt - 1))
+   560→        jitter = backoff_value * 0.1
+   561→        sleep_time = backoff_value + random.uniform(-jitter, jitter)
+   562→        return min(sleep_time, self.max_backoff)
+   563→
+   564→    def request(self, method: str, url: str, **kwargs: Any) -> RnetResponse:
+   565→        client = self._ensure_client()
+   566→        method_upper = method.upper() if isinstance(method, str) else str(method).upper()
+   567→
+   568→        # Build URL with params
+   569→        url = self._build_url(url, kwargs.pop("params", None))
+   570→
+   571→        # Default allow_redirects=True
+   572→        kwargs.setdefault("allow_redirects", True)
+   573→
+   574→        # Pass verify setting
+   575→        if not self.verify:
+   576→            kwargs.setdefault("verify", False)
+   577→
+   578→        # Remove kwargs rnet doesn't understand
+   579→        kwargs.pop("stream", None)  # rnet responses are always lazy
+   580→
+   581→        # Translate requests-compatible 'data' kwarg to rnet equivalents
+   582→        data = kwargs.pop("data", None)
+   583→        if data is not None:
+   584→            if isinstance(data, dict):
+   585→                kwargs["form"] = list(data.items())
+   586→            elif isinstance(data, (str, bytes)):
+   587→                kwargs["body"] = data
+   588→            else:
+   589→                kwargs["body"] = data
+   590→
+   591→        # Resolve method enum
+   592→        rnet_method = _METHOD_MAP.get(method_upper)
+   593→        if rnet_method is None:
+   594→            raise ValueError(f"Unsupported HTTP method: {method}")
+   595→
+   596→        # Convert headers to standard dict once to resolve PyO3 CaseInsensitiveDict rejection.
+   597→        if kwargs.get("headers") is not None:
+   598→            kwargs["headers"] = dict(kwargs["headers"])
+   599→
+   600→        # Skip retry for non-allowed methods
+   601→        if method_upper not in self.allowed_methods:
+   602→            raw_resp = client.request(rnet_method, url, **kwargs)
+   603→            return RnetResponse(raw_resp)
+   604→
+   605→        last_exception: Optional[Exception] = None
+   606→        response: Optional[RnetResponse] = None
+   607→
+   608→        for attempt in range(self.max_retries + 1):
+   609→            try:
+   610→                raw_resp = client.request(rnet_method, url, **kwargs)
+   611→                response = RnetResponse(raw_resp)
+   612→                if response.status_code not in self.status_forcelist:
+   613→                    return response
+   614→                last_exception = HTTPError(f"Received status code: {response.status_code}")
+   615→                self.log.warning(
+   616→                    f"{response.status_code} {response.reason}({urlparse(url).path}). Retrying... "
+   617→                    f"({attempt + 1}/{self.max_retries})"
+   618→                )
+   619→
+   620→            except self.catch_exceptions as e:
+   621→                last_exception = e
+   622→                response = None
+   623→                self.log.warning(
+   624→                    f"{e.__class__.__name__}({urlparse(url).path}). Retrying... ({attempt + 1}/{self.max_retries})"
+   625→                )
+   626→
+   627→            if attempt < self.max_retries:
+   628→                if sleep_duration := self.get_sleep_time(response, attempt + 1):
+   629→                    if sleep_duration > 0:
+   630→                        time.sleep(sleep_duration)
+   631→            else:
+   632→                break
+   633→
+   634→        raise MaxRetriesError(f"Max retries exceeded for {method} {url}", cause=last_exception)
+   635→
+   636→    def get(self, url: str, **kwargs: Any) -> RnetResponse:
+   637→        return self.request("GET", url, **kwargs)
+   638→
+   639→    def post(self, url: str, **kwargs: Any) -> RnetResponse:
+   640→        return self.request("POST", url, **kwargs)
+   641→
+   642→    def put(self, url: str, **kwargs: Any) -> RnetResponse:
+   643→        return self.request("PUT", url, **kwargs)
+   644→
+   645→    def delete(self, url: str, **kwargs: Any) -> RnetResponse:
+   646→        return self.request("DELETE", url, **kwargs)
+   647→
+   648→    def head(self, url: str, **kwargs: Any) -> RnetResponse:
+   649→        return self.request("HEAD", url, **kwargs)
+   650→
+   651→    def options(self, url: str, **kwargs: Any) -> RnetResponse:
+   652→        return self.request("OPTIONS", url, **kwargs)
+   653→
+   654→    def patch(self, url: str, **kwargs: Any) -> RnetResponse:
+   655→        return self.request("PATCH", url, **kwargs)
+   656→
+   657→    def prepare_request(self, req: Request) -> Request:
+   658→        """Compatibility shim for services using prepared requests."""
+   659→        # Merge session headers into request headers
+   660→        if req.headers:
+   661→            merged = dict(self.headers)
+   662→            merged.update(req.headers)
+   663→            req.headers = merged
+   664→        else:
+   665→            req.headers = dict(self.headers)
+   666→        return req
+   667→
+   668→    def send(self, req: Request, **kwargs: Any) -> RnetResponse:
+   669→        """Compatibility shim for services using prepared requests."""
+   670→        method = req.method or "GET"
+   671→        url = req.url or ""
+   672→
+   673→        send_kwargs: dict[str, Any] = {}
+   674→        if req.headers:
+   675→            send_kwargs["headers"] = dict(req.headers)
+   676→        if req.body:
+   677→            send_kwargs["data"] = req.body
+   678→        if req.json:
+   679→            send_kwargs["json"] = req.json
+   680→
+   681→        send_kwargs.update(kwargs)
+   682→        return self.request(method, url, **send_kwargs)
+   683→
+   684→    def mount(self, prefix: str, adapter: Any) -> None:
+   685→        """No-op — rnet handles TLS and connection pooling natively."""
+   686→        pass
+   687→
+   688→    def close(self) -> None:
+   689→        """No-op — rnet manages its own resources."""
+   690→        pass
+   691→
+   692→
+   693→# ---------------------------------------------------------------------------
+   694→# session() factory
+   695→# ---------------------------------------------------------------------------
+   696→
+   697→
+   698→def session(
+   699→    browser: Optional[str] = None,
+   700→    **kwargs: Any,
+   701→) -> RnetSession:
+   702→    """
+   703→    Create an rnet session with TLS fingerprinting (browser/app impersonation).
+   704→
+   705→    Args:
+   706→        browser: Exact rnet.Impersonate preset name. Examples:
+   707→                 "Chrome131", "OkHttp4_12", "Edge101", "Firefox135",
+   708→                 "Safari18", "OkHttp5", "Opera118"
+   709→                 Uses the configured default from config if not specified.
+   710→                 See rnet.Impersonate for all available presets.
+   711→        **kwargs: Additional arguments passed to RnetSession constructor.
+   712→
+   713→    Returns:
+   714→        RnetSession configured with browser impersonation and retry behavior.
+   715→
+   716→    Examples:
+   717→        session()                               # Default browser from config
+   718→        session("OkHttp4_12")                   # OkHttp 4.12 fingerprint
+   719→        session("Chrome131")                    # Chrome 131
+   720→        session("Edge101", max_retries=3)       # Edge 101 with custom retry
+   721→    """
+   722→    if browser is None:
+   723→        browser = config.curl_impersonate.get("browser", "Chrome131")
+   724→
+   725→    impersonate = _resolve_impersonate(browser)
+   726→
+   727→    session_kwargs: dict[str, Any] = {"impersonate": impersonate}
+   728→    session_kwargs.update(kwargs)
+   729→
+   730→    session_obj = RnetSession(**session_kwargs)
+   731→    session_obj.headers.update(config.headers)
+   732→    return session_obj
+   733→

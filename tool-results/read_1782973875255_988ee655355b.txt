@@ -1,0 +1,664 @@
+     1→import math
+     2→import os
+     3→import time
+     4→from concurrent.futures import FIRST_COMPLETED, wait
+     5→from concurrent.futures.thread import ThreadPoolExecutor
+     6→from http.cookiejar import CookieJar
+     7→from pathlib import Path
+     8→from queue import Empty, Queue
+     9→from typing import Any, Generator, MutableMapping, Optional, Union
+    10→
+    11→from requests import Session
+    12→from requests.adapters import HTTPAdapter
+    13→from rich import filesize
+    14→
+    15→from unshackle.core.constants import DOWNLOAD_CANCELLED
+    16→from unshackle.core.utilities import get_debug_logger, get_extension
+    17→
+    18→MAX_ATTEMPTS = 5
+    19→RETRY_WAIT = 2
+    20→PROGRESS_WINDOW = 2
+    21→
+    22→# Adaptive chunk sizing — benchmarked optimal range
+    23→MIN_CHUNK = 524_288  # 512KB
+    24→MAX_CHUNK = 4_194_304  # 4MB
+    25→DEFAULT_CHUNK = 524_288  # 512KB
+    26→SPEED_ROLLING_WINDOW = 10  # seconds of history to keep for speed calculation
+    27→
+    28→RANGE_PARALLEL_MIN_SIZE = 64 * 1024 * 1024
+    29→RANGE_PARALLEL_PART_SIZE = 16 * 1024 * 1024
+    30→
+    31→
+    32→def _adaptive_chunk_size(content_length: int) -> int:
+    33→    """Pick chunk size based on content length. Benchmarked sweet spot: 512KB-4MB."""
+    34→    if content_length <= 0:
+    35→        return DEFAULT_CHUNK
+    36→    return min(MAX_CHUNK, max(MIN_CHUNK, content_length // 4))
+    37→
+    38→
+    39→def _is_requests_session(session: Any) -> bool:
+    40→    """Check if the session is a standard requests.Session (supports resp.raw)."""
+    41→    return isinstance(session, Session)
+    42→
+    43→
+    44→def _is_rnet_session(session: Any) -> bool:
+    45→    """Check if the session is an RnetSession (uses resp.stream())."""
+    46→    from unshackle.core.session import RnetSession
+    47→
+    48→    return isinstance(session, RnetSession)
+    49→
+    50→
+    51→def _probe_ranged(url: str, session: Any, **kwargs: Any) -> tuple[int, bool]:
+    52→    headers = {**(kwargs.get("headers") or {}), "Range": "bytes=0-0"}
+    53→    rest = {k: v for k, v in kwargs.items() if k != "headers"}
+    54→    try:
+    55→        resp = session.get(url, stream=True, headers=headers, **rest)
+    56→    except Exception:
+    57→        return 0, False
+    58→    try:
+    59→        if resp.status_code != 206:
+    60→            return 0, False
+    61→        ce = (resp.headers.get("Content-Encoding") or resp.headers.get("content-encoding") or "").lower()
+    62→        if ce in ("gzip", "deflate", "br"):
+    63→            return 0, False
+    64→        content_range = resp.headers.get("Content-Range") or resp.headers.get("content-range") or ""
+    65→        total = content_range.rsplit("/", 1)[-1].strip()
+    66→        return (int(total), True) if total.isdigit() else (0, False)
+    67→    finally:
+    68→        try:
+    69→            resp.close()
+    70→        except Exception:
+    71→            pass
+    72→
+    73→
+    74→def _dispatch_parts(
+    75→    url: str,
+    76→    save_path: Path,
+    77→    session: Any,
+    78→    total_size: int,
+    79→    max_workers: int,
+    80→    **kwargs: Any,
+    81→) -> Generator[dict[str, Any], None, None]:
+    82→    save_path.parent.mkdir(parents=True, exist_ok=True)
+    83→    control_file = save_path.with_name(f"{save_path.name}.!dev")
+    84→
+    85→    n_parts = max(1, min(max_workers, math.ceil(total_size / RANGE_PARALLEL_PART_SIZE)))
+    86→    part_size = math.ceil(total_size / n_parts)
+    87→    parts = [
+    88→        (s, e)
+    89→        for i in range(n_parts)
+    90→        for s, e in [(i * part_size, min(total_size - 1, (i + 1) * part_size - 1))]
+    91→        if s <= e
+    92→    ]
+    93→
+    94→    control_file.write_bytes(b"")
+    95→    with open(save_path, "wb") as f:
+    96→        f.truncate(total_size)
+    97→
+    98→    events: Queue[dict[str, Any]] = Queue()
+    99→
+   100→    def _worker(start: int, end: int) -> None:
+   101→        for ev in download(
+   102→            url=url,
+   103→            save_path=save_path,
+   104→            session=session,
+   105→            part_offset=start,
+   106→            part_end=end,
+   107→            **kwargs,
+   108→        ):
+   109→            events.put(ev)
+   110→
+   111→    pool = ThreadPoolExecutor(max_workers=len(parts))
+   112→    futures = [pool.submit(_worker, s, e) for s, e in parts]
+   113→    pending = set(futures)
+   114→
+   115→    yield {"total": total_size}
+   116→
+   117→    total_bytes = 0
+   118→    start_time = last_report = time.time()
+   119→    completed = False
+   120→    worker_error = False
+   121→
+   122→    try:
+   123→        while pending:
+   124→            advance = 0
+   125→            while not events.empty():
+   126→                try:
+   127→                    ev = events.get_nowait()
+   128→                except Empty:
+   129→                    break
+   130→                a = ev.get("advance")
+   131→                if a:
+   132→                    advance += a
+   133→            if advance:
+   134→                total_bytes += advance
+   135→                yield {"advance": advance}
+   136→
+   137→            now = time.time()
+   138→            if now - last_report > 0.5 and total_bytes > 0:
+   139→                yield {"downloaded": f"{filesize.decimal(math.ceil(total_bytes / (now - start_time)))}/s"}
+   140→                last_report = now
+   141→
+   142→            done, pending = wait(pending, timeout=0.1, return_when=FIRST_COMPLETED)
+   143→            for fut in done:
+   144→                exc = fut.exception()
+   145→                if exc:
+   146→                    worker_error = True
+   147→                    DOWNLOAD_CANCELLED.set()
+   148→                    raise exc
+   149→
+   150→        advance = 0
+   151→        while not events.empty():
+   152→            try:
+   153→                ev = events.get_nowait()
+   154→            except Empty:
+   155→                break
+   156→            a = ev.get("advance")
+   157→            if a:
+   158→                advance += a
+   159→        if advance:
+   160→            total_bytes += advance
+   161→            yield {"advance": advance}
+   162→
+   163→        yield {"file_downloaded": save_path, "written": total_size}
+   164→        completed = True
+   165→    except KeyboardInterrupt:
+   166→        DOWNLOAD_CANCELLED.set()
+   167→        pool.shutdown(wait=False, cancel_futures=True)
+   168→        raise
+   169→    finally:
+   170→        pool.shutdown(wait=worker_error, cancel_futures=True)
+   171→        if completed:
+   172→            control_file.unlink(missing_ok=True)
+   173→
+   174→
+   175→def download(
+   176→    url: str,
+   177→    save_path: Path,
+   178→    session: Optional[Any] = None,
+   179→    segmented: bool = False,
+   180→    part_offset: Optional[int] = None,
+   181→    part_end: Optional[int] = None,
+   182→    **kwargs: Any,
+   183→) -> Generator[dict[str, Any], None, None]:
+   184→    """
+   185→    Download a file with optimized I/O.
+   186→
+   187→    Supports both requests.Session and RnetSession for TLS fingerprinting.
+   188→    Uses raw socket reads for requests.Session and native rnet streaming for RnetSession.
+   189→
+   190→    Yields the following download status updates while chunks are downloading:
+   191→
+   192→    - {total: 123} (there are 123 chunks to download)
+   193→    - {total: None} (there are an unknown number of chunks to download)
+   194→    - {advance: 1} (one chunk was downloaded)
+   195→    - {downloaded: "10.1 MB/s"} (currently downloading at a rate of 10.1 MB/s)
+   196→    - {file_downloaded: Path(...), written: 1024} (download finished, has the save path and size)
+   197→
+   198→    Parameters:
+   199→        url: Web URL of a file to download.
+   200→        save_path: The path to save the file to. If the save path's directory does not
+   201→            exist then it will be made automatically.
+   202→        session: A requests.Session or RnetSession to make HTTP requests with.
+   203→            RnetSession preserves TLS fingerprinting for services that need it.
+   204→        segmented: If downloads are segments or parts of one bigger file.
+   205→        part_offset: Byte offset to write at within a pre-allocated file. When set
+   206→            (with `part_end`), enables part mode for parallel ranged downloads —
+   207→            no truncate, no skip-if-exists, no control file; emits only `advance`
+   208→            events; retries resume mid-part via Range.
+   209→        part_end: Inclusive end byte of the part. Required when `part_offset` is set.
+   210→        kwargs: Any extra keyword arguments to pass to the session.get() call. Use this
+   211→            for one-time request changes like a header, cookie, or proxy. For example,
+   212→            to request Byte-ranges use e.g., `headers={"Range": "bytes=0-128"}`.
+   213→    """
+   214→    session = session or Session()
+   215→    part_mode = part_offset is not None and part_end is not None
+   216→
+   217→    save_dir = save_path.parent
+   218→    control_file = save_path.with_name(f"{save_path.name}.!dev")
+   219→    save_dir.mkdir(parents=True, exist_ok=True)
+   220→
+   221→    resume_offset = 0
+   222→    if not part_mode:
+   223→        if control_file.exists() and save_path.exists():
+   224→            resume_offset = save_path.stat().st_size
+   225→        elif control_file.exists():
+   226→            control_file.unlink()
+   227→        elif save_path.exists():
+   228→            yield dict(file_downloaded=save_path, written=save_path.stat().st_size)
+   229→            return
+   230→        control_file.write_bytes(b"")
+   231→
+   232→    _time = time.time
+   233→    use_raw = _is_requests_session(session)
+   234→
+   235→    attempts = 1
+   236→    completed = False
+   237→    written = 0
+   238→    try:
+   239→        while True:
+   240→            if not part_mode:
+   241→                written = 0
+   242→            last_speed_refresh = _time()
+   243→
+   244→            try:
+   245→                use_rnet = _is_rnet_session(session)
+   246→
+   247→                request_kwargs = dict(kwargs)
+   248→                if part_mode:
+   249→                    req_headers = dict(request_kwargs.get("headers", {}) or {})
+   250→                    req_headers["Range"] = f"bytes={part_offset + written}-{part_end}"
+   251→                    request_kwargs["headers"] = req_headers
+   252→                elif resume_offset > 0:
+   253→                    req_headers = dict(request_kwargs.get("headers", {}) or {})
+   254→                    req_headers["Range"] = f"bytes={resume_offset}-"
+   255→                    request_kwargs["headers"] = req_headers
+   256→
+   257→                stream = session.get(url, stream=True, **request_kwargs)
+   258→                stream.raise_for_status()
+   259→
+   260→                resumed = (not part_mode) and resume_offset > 0 and stream.status_code == 206
+   261→                if (not part_mode) and resume_offset > 0 and not resumed:
+   262→                    resume_offset = 0
+   263→                if part_mode and stream.status_code != 206:
+   264→                    raise IOError(f"expected 206 for ranged part, got {stream.status_code}")
+   265→                if use_rnet:
+   266→                    content_length = stream.content_length or 0
+   267→                else:
+   268→                    try:
+   269→                        content_length = int(stream.headers.get("Content-Length", "0"))
+   270→                        if stream.headers.get("Content-Encoding", "").lower() in ["gzip", "deflate", "br"]:
+   271→                            content_length = 0
+   272→                    except ValueError:
+   273→                        content_length = 0
+   274→
+   275→                chunk_size = _adaptive_chunk_size(content_length)
+   276→                total_size = (resume_offset + content_length) if resumed and content_length > 0 else content_length
+   277→
+   278→                if not segmented and not part_mode:
+   279→                    if total_size > 0:
+   280→                        yield dict(total=total_size)
+   281→                    else:
+   282→                        yield dict(total=None)
+   283→                    if resumed and resume_offset > 0:
+   284→                        yield dict(advance=resume_offset)
+   285→
+   286→                if part_mode:
+   287→                    file_mode = "r+b"
+   288→                    file_buffering = 0
+   289→                else:
+   290→                    file_mode = "ab" if resumed else "wb"
+   291→                    file_buffering = 1_048_576
+   292→                with open(save_path, file_mode, buffering=file_buffering) as f:
+   293→                    if part_mode:
+   294→                        f.seek(part_offset + written)
+   295→                    elif not resumed and content_length > 0:
+   296→                        f.truncate(content_length)
+   297→                        f.seek(0)
+   298→
+   299→                    _write = f.write
+   300→
+   301→                    if use_rnet:
+   302→                        chunks = stream.stream()
+   303→                    elif use_raw:
+   304→                        chunks = iter(lambda: stream.raw.read(chunk_size), b"")
+   305→                    else:
+   306→                        chunks = stream.iter_content(chunk_size=chunk_size)
+   307→
+   308→                    _data_accumulated = 0
+   309→                    _bytes_since_yield = 0
+   310→                    emit_progress = (not segmented) or part_mode
+   311→                    for chunk in chunks:
+   312→                        if DOWNLOAD_CANCELLED.is_set():
+   313→                            break
+   314→                        _write(chunk)
+   315→                        download_size = len(chunk)
+   316→                        written += download_size
+   317→
+   318→                        if emit_progress:
+   319→                            _bytes_since_yield += download_size
+   320→                            _data_accumulated += download_size
+   321→                            now = _time()
+   322→                            time_since = now - last_speed_refresh
+   323→                            if time_since > PROGRESS_WINDOW:
+   324→                                yield dict(advance=_bytes_since_yield)
+   325→                                _bytes_since_yield = 0
+   326→                                if not part_mode:
+   327→                                    download_speed = math.ceil(_data_accumulated / (time_since or 1))
+   328→                                    yield dict(downloaded=f"{filesize.decimal(download_speed)}/s")
+   329→                                last_speed_refresh = now
+   330→                                _data_accumulated = 0
+   331→
+   332→                    if emit_progress and _bytes_since_yield > 0:
+   333→                        yield dict(advance=_bytes_since_yield)
+   334→
+   335→                    try:
+   336→                        stream.close()
+   337→                    except Exception:
+   338→                        pass
+   339→
+   340→                    if not part_mode and not resumed and content_length > 0 and written != content_length:
+   341→                        f.truncate(written)
+   342→
+   343→                if part_mode:
+   344→                    expected = part_end - part_offset + 1
+   345→                    if written < expected:
+   346→                        raise IOError(f"Failed to read part {part_offset}-{part_end}: got {written}/{expected}")
+   347→                elif not segmented and content_length and written < content_length:
+   348→                    raise IOError(f"Failed to read {content_length} bytes from the track URI.")
+   349→
+   350→                if not part_mode:
+   351→                    yield dict(file_downloaded=save_path, written=resume_offset + written)
+   352→                    if segmented:
+   353→                        yield dict(advance=1)
+   354→                completed = True
+   355→                break
+   356→            except Exception:
+   357→                try:
+   358→                    stream.close()
+   359→                except Exception:
+   360→                    pass
+   361→                if DOWNLOAD_CANCELLED.is_set() or attempts == MAX_ATTEMPTS:
+   362→                    if part_mode and not DOWNLOAD_CANCELLED.is_set():
+   363→                        raise
+   364→                    return
+   365→                if not part_mode and save_path.exists():
+   366→                    resume_offset = save_path.stat().st_size
+   367→                time.sleep(RETRY_WAIT)
+   368→                attempts += 1
+   369→    finally:
+   370→        if completed and not part_mode:
+   371→            control_file.unlink(missing_ok=True)
+   372→
+   373→
+   374→def requests(
+   375→    urls: Union[str, list[str], dict[str, Any], list[dict[str, Any]]],
+   376→    output_dir: Path,
+   377→    filename: str,
+   378→    headers: Optional[MutableMapping[str, Union[str, bytes]]] = None,
+   379→    cookies: Optional[Union[MutableMapping[str, str], CookieJar]] = None,
+   380→    proxy: Optional[str] = None,
+   381→    max_workers: Optional[int] = None,
+   382→    session: Optional[Any] = None,
+   383→) -> Generator[dict[str, Any], None, None]:
+   384→    """
+   385→    Download files with optimized I/O and adaptive chunk sizing.
+   386→
+   387→    Supports both requests.Session and RnetSession. When a RnetSession is
+   388→    provided (e.g. from a service's get_session()), TLS fingerprinting is preserved
+   389→    on all segment downloads.
+   390→
+   391→    Yields the following download status updates while chunks are downloading:
+   392→
+   393→    - {total: 123} (there are 123 chunks to download)
+   394→    - {total: None} (there are an unknown number of chunks to download)
+   395→    - {advance: 1} (one chunk was downloaded)
+   396→    - {downloaded: "10.1 MB/s"} (currently downloading at a rate of 10.1 MB/s)
+   397→    - {file_downloaded: Path(...), written: 1024} (download finished, has the save path and size)
+   398→
+   399→    The data is in the same format accepted by rich's progress.update() function.
+   400→    However, The `downloaded`, `file_downloaded` and `written` keys are custom and not
+   401→    natively accepted by rich progress bars.
+   402→
+   403→    Parameters:
+   404→        urls: Web URL(s) to file(s) to download. You can use a dictionary with the key
+   405→            "url" for the URI, and other keys for extra arguments to use per-URL.
+   406→        output_dir: The folder to save the file into. If the save path's directory does
+   407→            not exist then it will be made automatically.
+   408→        filename: The filename or filename template to use for each file. The variables
+   409→            you can use are `i` for the URL index and `ext` for the URL extension.
+   410→        headers: A mapping of HTTP Header Key/Values to use for all downloads.
+   411→        cookies: A mapping of Cookie Key/Values or a Cookie Jar to use for all downloads.
+   412→        proxy: An optional proxy URI to route connections through for all downloads.
+   413→        max_workers: The maximum amount of threads to use for downloads. Defaults to
+   414→            min(12,(cpu_count+4)).
+   415→        session: An optional requests.Session or RnetSession to use. If provided,
+   416→            it will be used directly (preserving TLS fingerprinting). If None, a new
+   417→            requests.Session with HTTPAdapter connection pooling will be created.
+   418→    """
+   419→    if not urls:
+   420→        raise ValueError("urls must be provided and not empty")
+   421→    elif not isinstance(urls, (str, dict, list)):
+   422→        raise TypeError(f"Expected urls to be {str} or {dict} or a list of one of them, not {type(urls)}")
+   423→
+   424→    if not output_dir:
+   425→        raise ValueError("output_dir must be provided")
+   426→    elif not isinstance(output_dir, Path):
+   427→        raise TypeError(f"Expected output_dir to be {Path}, not {type(output_dir)}")
+   428→
+   429→    if not filename:
+   430→        raise ValueError("filename must be provided")
+   431→    elif not isinstance(filename, str):
+   432→        raise TypeError(f"Expected filename to be {str}, not {type(filename)}")
+   433→
+   434→    if not isinstance(headers, (MutableMapping, type(None))):
+   435→        raise TypeError(f"Expected headers to be {MutableMapping}, not {type(headers)}")
+   436→
+   437→    if not isinstance(cookies, (MutableMapping, CookieJar, type(None))):
+   438→        raise TypeError(f"Expected cookies to be {MutableMapping} or {CookieJar}, not {type(cookies)}")
+   439→
+   440→    if not isinstance(proxy, (str, type(None))):
+   441→        raise TypeError(f"Expected proxy to be {str}, not {type(proxy)}")
+   442→
+   443→    if not isinstance(max_workers, (int, type(None))):
+   444→        raise TypeError(f"Expected max_workers to be {int}, not {type(max_workers)}")
+   445→
+   446→    debug_logger = get_debug_logger()
+   447→
+   448→    if not isinstance(urls, list):
+   449→        urls = [urls]
+   450→
+   451→    if not max_workers:
+   452→        max_workers = min(16, (os.cpu_count() or 1) + 4)
+   453→
+   454→    urls = [
+   455→        dict(save_path=save_path, **url) if isinstance(url, dict) else dict(url=url, save_path=save_path)
+   456→        for i, url in enumerate(urls)
+   457→        for save_path in [
+   458→            output_dir / filename.format(i=i, ext=get_extension(url["url"] if isinstance(url, dict) else url))
+   459→        ]
+   460→    ]
+   461→
+   462→    # Use provided session or create a new optimized requests.Session
+   463→    # When a session is provided (e.g., service's RnetSession), don't mutate headers/cookies/proxy —
+   464→    # they're already set and the session may be shared across tracks.
+   465→    if session is None:
+   466→        session = Session()
+   467→        if headers:
+   468→            headers = {k: v for k, v in headers.items() if k.lower() != "accept-encoding"}
+   469→            session.headers.update(headers)
+   470→        if cookies:
+   471→            session.cookies.update(cookies)
+   472→        if proxy:
+   473→            session.proxies.update({"all": proxy})
+   474→
+   475→    # Mount HTTPAdapter with connection pooling sized to worker count.
+   476→    # Safe to do on any requests.Session — improves connection reuse for parallel downloads.
+   477→    if _is_requests_session(session):
+   478→        adapter = HTTPAdapter(pool_connections=max_workers, pool_maxsize=max_workers, pool_block=True)
+   479→        session.mount("https://", adapter)
+   480→        session.mount("http://", adapter)
+   481→
+   482→    if debug_logger:
+   483→        first_url = urls[0].get("url", "") if urls else ""
+   484→        url_display = first_url[:200] + "..." if len(first_url) > 200 else first_url
+   485→        debug_logger.log(
+   486→            level="DEBUG",
+   487→            operation="downloader_start",
+   488→            message="Starting download",
+   489→            context={
+   490→                "url_count": len(urls),
+   491→                "first_url": url_display,
+   492→                "output_dir": str(output_dir),
+   493→                "filename": filename,
+   494→                "max_workers": max_workers,
+   495→                "has_proxy": bool(proxy),
+   496→                "session_type": type(session).__name__,
+   497→            },
+   498→        )
+   499→
+   500→    segmented_batch = len(urls) > 1
+   501→
+   502→    if len(urls) == 1:
+   503→        url_item = urls[0]
+   504→        try:
+   505→            ranged_used = False
+   506→            if max_workers > 1:
+   507→                total_size, supports_ranges = _probe_ranged(url_item["url"], session)
+   508→                if supports_ranges and total_size >= RANGE_PARALLEL_MIN_SIZE:
+   509→                    try:
+   510→                        yield from _dispatch_parts(
+   511→                            session=session,
+   512→                            total_size=total_size,
+   513→                            max_workers=max_workers,
+   514→                            **url_item,
+   515→                        )
+   516→                        ranged_used = True
+   517→                    except KeyboardInterrupt:
+   518→                        raise
+   519→                    except Exception:
+   520→                        save_path = url_item.get("save_path")
+   521→                        if save_path:
+   522→                            sp = Path(save_path)
+   523→                            for target in (sp, sp.with_name(f"{sp.name}.!dev")):
+   524→                                try:
+   525→                                    target.unlink(missing_ok=True)
+   526→                                except OSError:
+   527→                                    pass
+   528→            if not ranged_used:
+   529→                yield from download(
+   530→                    session=session,
+   531→                    segmented=segmented_batch,
+   532→                    **url_item,
+   533→                )
+   534→        except KeyboardInterrupt:
+   535→            DOWNLOAD_CANCELLED.set()
+   536→            yield dict(downloaded="[yellow]CANCELLED")
+   537→            raise
+   538→    else:
+   539→        # Segmented download with thread pool
+   540→        # Speed is tracked here on the main thread, not in workers
+   541→        total_bytes = 0
+   542→        start_time = time.time()
+   543→        last_speed_report = start_time
+   544→
+   545→        pool = ThreadPoolExecutor(max_workers=max_workers)
+   546→        event_queue: Queue[dict[str, Any]] = Queue()
+   547→
+   548→        def _download_worker(url_item: dict[str, Any]) -> None:
+   549→            for event in download(
+   550→                session=session,
+   551→                segmented=segmented_batch,
+   552→                **url_item,
+   553→            ):
+   554→                event_queue.put(event)
+   555→
+   556→        futures = [pool.submit(_download_worker, url) for url in urls]
+   557→        pending = set(futures)
+   558→
+   559→        pending_advance = 0
+   560→
+   561→        try:
+   562→            while pending:
+   563→                # Drain queued events — batch advances, track bytes for speed
+   564→                while True:
+   565→                    try:
+   566→                        event = event_queue.get_nowait()
+   567→                    except Empty:
+   568→                        break
+   569→                    # Accumulate advance events for batched yield
+   570→                    advance = event.get("advance")
+   571→                    if advance:
+   572→                        pending_advance += advance
+   573→                        continue
+   574→                    # Track bytes from completed segments for speed calculation
+   575→                    written = event.get("written")
+   576→                    if written:
+   577→                        total_bytes += written
+   578→                    # Pass through other events (file_downloaded, total, etc.)
+   579→                    yield event
+   580→
+   581→                # Yield batched advances every drain cycle for responsive progress bar
+   582→                if pending_advance > 0:
+   583→                    yield dict(advance=pending_advance)
+   584→                    pending_advance = 0
+   585→
+   586→                # Yield speed every 0.5s (throttled to avoid spamming Rich)
+   587→                now = time.time()
+   588→                if now - last_speed_report > 0.5 and total_bytes > 0:
+   589→                    elapsed = now - start_time
+   590→                    if elapsed > 0:
+   591→                        download_speed = math.ceil(total_bytes / elapsed)
+   592→                        yield dict(downloaded=f"{filesize.decimal(download_speed)}/s")
+   593→                    last_speed_report = now
+   594→
+   595→                # Wait efficiently for next future completion (OS condition variable)
+   596→                completed, pending = wait(pending, timeout=0.1, return_when=FIRST_COMPLETED)
+   597→                for future in completed:
+   598→                    exc = future.exception()
+   599→                    if isinstance(exc, KeyboardInterrupt):
+   600→                        raise KeyboardInterrupt()
+   601→                    elif exc:
+   602→                        DOWNLOAD_CANCELLED.set()
+   603→                        yield dict(downloaded="[red]FAILING")
+   604→                        pool.shutdown(wait=False, cancel_futures=True)
+   605→                        yield dict(downloaded="[red]FAILED")
+   606→                        if debug_logger:
+   607→                            debug_logger.log(
+   608→                                level="ERROR",
+   609→                                operation="downloader_failed",
+   610→                                message=f"Download failed: {exc}",
+   611→                                error=exc,
+   612→                                context={
+   613→                                    "url_count": len(urls),
+   614→                                    "output_dir": str(output_dir),
+   615→                                },
+   616→                            )
+   617→                        raise exc
+   618→        except KeyboardInterrupt:
+   619→            DOWNLOAD_CANCELLED.set()
+   620→            yield dict(downloaded="[yellow]CANCELLING")
+   621→            pool.shutdown(wait=False, cancel_futures=True)
+   622→            yield dict(downloaded="[yellow]CANCELLED")
+   623→            raise
+   624→        finally:
+   625→            pool.shutdown(wait=False, cancel_futures=True)
+   626→
+   627→        # Drain remaining events
+   628→        while True:
+   629→            try:
+   630→                event = event_queue.get_nowait()
+   631→            except Empty:
+   632→                break
+   633→            advance = event.get("advance")
+   634→            if advance:
+   635→                pending_advance += advance
+   636→                continue
+   637→            written = event.get("written")
+   638→            if written:
+   639→                total_bytes += written
+   640→            yield event
+   641→
+   642→        # Flush remaining advances and final speed
+   643→        if pending_advance > 0:
+   644→            yield dict(advance=pending_advance)
+   645→        elapsed = time.time() - start_time
+   646→        if elapsed > 0 and total_bytes > 0:
+   647→            download_speed = math.ceil(total_bytes / elapsed)
+   648→            yield dict(downloaded=f"{filesize.decimal(download_speed)}/s")
+   649→
+   650→    if debug_logger:
+   651→        debug_logger.log(
+   652→            level="DEBUG",
+   653→            operation="downloader_complete",
+   654→            message="Download completed successfully",
+   655→            context={
+   656→                "url_count": len(urls),
+   657→                "output_dir": str(output_dir),
+   658→                "filename": filename,
+   659→            },
+   660→        )
+   661→
+   662→
+   663→__all__ = ("requests",)
+   664→
