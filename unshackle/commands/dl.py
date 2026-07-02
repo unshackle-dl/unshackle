@@ -1987,6 +1987,17 @@ class dl:
             elif isinstance(title, Episode) and wanted and f"{title.season}x{title.number}" not in wanted:
                 continue
 
+            if progress_sink:
+                if isinstance(title, Episode):
+                    progress_sink(
+                        {
+                            "title": title.title,
+                            "current_title": f"S{title.season or 0:02}E{title.number or 0:02}",
+                        }
+                    )
+                else:
+                    progress_sink({"title": getattr(title, "name", None) or str(title)})
+
             title_rule = (
                 f"Track {title.track:02}: {title.name}" if music_mode and isinstance(title, Song) else str(title)
             )
@@ -3439,6 +3450,9 @@ class dl:
                         (0, 5, 1, 5),
                     )
                 )
+
+                if progress_sink:
+                    progress_sink({"output_files": [str(p) for p in self.completed_files]})
 
             if not hasattr(service, "close"):
                 cookie_file = self.get_cookie_path(self.service, self.profile)

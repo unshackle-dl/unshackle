@@ -94,6 +94,11 @@ def build_job_progress_callables(
                 "completed_tracks": completed,
                 "total_tracks": total,
                 "active_tracks": active,
+                "track_progress": [
+                    {"label": labels[i], "progress": round(fractions[i] * 100, 1), "speed": speeds[i]}
+                    for i in range(total)
+                    if started[i] and not done[i]
+                ],
                 "segments_done": seg_done[active_i] if active_i is not None else 0.0,
                 "segments_total": seg_total[active_i] if active_i is not None else 0.0,
                 "speed": speeds[active_i] if active_i is not None else None,

@@ -101,9 +101,12 @@ class DownloadJob:
 
     # Current phase, track counts, and labels of the tracks downloading now.
     phase: Optional[str] = None
+    title: Optional[str] = None
+    current_title: Optional[str] = None
     completed_tracks: int = 0
     total_tracks: int = 0
     active_tracks: List[str] = field(default_factory=list)
+    track_progress: List[Dict[str, Any]] = field(default_factory=list)
     # Segment counts and transfer speed of the track downloading now (granular display)
     segments_done: float = 0.0
     segments_total: float = 0.0
@@ -124,11 +127,14 @@ class DownloadJob:
             "created_time": self.created_time.isoformat(),
             "service": self.service,
             "title_id": self.title_id,
+            "title": self.title,
             "progress": self.progress,
             "phase": self.phase,
+            "current_title": self.current_title,
             "completed_tracks": self.completed_tracks,
             "total_tracks": self.total_tracks,
             "active_tracks": self.active_tracks,
+            "track_progress": self.track_progress,
             "segments_done": self.segments_done,
             "segments_total": self.segments_total,
             "speed": self.speed,
@@ -734,12 +740,20 @@ class DownloadQueueManager:
                             progress_data = json.load(handle)
                             if progress_data.get("phase") and progress_data["phase"] != job.phase:
                                 job.phase = progress_data["phase"]
+                            if progress_data.get("current_title"):
+                                job.current_title = str(progress_data["current_title"])
+                            if progress_data.get("title"):
+                                job.title = str(progress_data["title"])
+                            if progress_data.get("output_files"):
+                                job.output_files = [str(f) for f in progress_data["output_files"]]
                             if progress_data.get("total_tracks"):
                                 job.total_tracks = int(progress_data["total_tracks"])
                             if progress_data.get("completed_tracks") is not None:
                                 job.completed_tracks = int(progress_data["completed_tracks"])
                             if "active_tracks" in progress_data:
                                 job.active_tracks = list(progress_data["active_tracks"])
+                            if "track_progress" in progress_data:
+                                job.track_progress = list(progress_data["track_progress"])
                             for _sk in ("segments_done", "segments_total"):
                                 if _sk in progress_data:
                                     try:

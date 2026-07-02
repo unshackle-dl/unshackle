@@ -49,12 +49,16 @@ def main(argv: list[str]) -> int:
 
         log.info(f"Worker starting job {job_id} ({service}:{title_id})")
 
+        # Merged so sparse keys (current_title, output_files) survive later writes.
+        progress_state: Dict[str, Any] = {}
+
         def progress_callback(progress_data: Dict[str, Any]) -> None:
             """Write progress updates to file for main process to read."""
             if progress_path:
                 try:
+                    progress_state.update(progress_data)
                     log.info(f"Writing progress update: {progress_data}")
-                    _write_result(progress_path, progress_data)
+                    _write_result(progress_path, progress_state)
                     log.info(f"Progress update written to {progress_path}")
                 except Exception as e:
                     log.error(f"Failed to write progress update: {e}")
