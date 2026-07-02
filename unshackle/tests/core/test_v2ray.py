@@ -1023,3 +1023,414 @@ def test_v2ray_registered_in_resolve_initialize():
 
     assert V2RayMock.called, "V2Ray constructor was never invoked"
     assert V2RayMock.call_args.kwargs == {"subscription_url": "https://sub.example/list"}
+
+
+# ---------------------------------------------------------------------------
+# Provider: basic-style countries map (per-country URI assignment)
+# ---------------------------------------------------------------------------
+
+
+def test_countries_map_loads_single_uri_per_country():
+    provider = V2Ray(
+        countries={
+            "us": _make_vmess_uri(remark="🇺🇸 US", address="1.1.1.1"),
+            "jp": _make_vless_uri(remark="🇯🇵 JP", address="2.2.2.2"),
+        }
+    )
+    assert set(provider.country_servers.keys()) == {"us", "jp"}
+    assert len(provider.country_servers["us"]) == 1
+    assert provider.country_servers["us"][0].address == "1.1.1.1"
+    assert provider.country_servers["jp"][0].address == "2.2.2.2"
+
+
+def test_countries_map_loads_list_of_uris_per_country():
+    provider = V2Ray(
+        countries={
+            "us": [
+                _make_vmess_uri(remark="🇺🇸 US-1", address="1.1.1.1"),
+                _make_vmess_uri(remark="🇺🇸 US-2", address="2.2.2.2"),
+                _make_vless_uri(remark="🇺🇸 US-3", address="3.3.3.3"),
+            ],
+        }
+    )
+    assert len(provider.country_servers["us"]) == 3
+    addresses = [s.address for s in provider.country_servers["us"]]
+    assert addresses == ["1.1.1.1", "2.2.2.2", "3.3.3.3"]
+
+
+def test_countries_map_skips_unparseable_uris():
+    provider = V2Ray(
+        countries={
+            "us": [
+                _make_vmess_uri(remark="🇺🇸 US", address="1.1.1.1"),
+                "garbage-not-a-uri",
+                "vmess://!!!invalid-base64!!!",
+                _make_vless_uri(remark="🇺🇸 US-2", address="2.2.2.2"),
+            ],
+        }
+    )
+    # Only the two valid URIs loaded; bad ones skipped with a warning.
+    assert len(provider.country_servers["us"]) == 2
+    assert provider.country_servers["us"][0].address == "1.1.1.1"
+    assert provider.country_servers["us"][1].address == "2.2.2.2"
+
+
+def test_countries_map_rejects_non_dict():
+    with pytest.raises(TypeError, match="'countries' must be a dict"):
+        V2Ray(countries="not a dict")  # type: ignore[arg-type]
+
+
+def test_countries_map_skips_non_string_non_list_values():
+    provider = V2Ray(
+        countries={
+            "us": _make_vmess_uri(remark="🇺🇸 US", address="1.1.1.1"),
+            "bad": 12345,  # unsupported type — skipped with warning
+            "jp": _make_vless_uri(remark="🇯🇵 JP", address="2.2.2.2"),
+        }
+    )
+    assert set(provider.country_servers.keys()) == {"us", "jp"}
+
+
+def test_countries_map_forces_country_to_match_key():
+    """A URI whose auto-detected country differs from the map key gets overridden."""
+    # This vmess URI's remark says "🇺🇸 US" but we assign it to "jp" in the map.
+    provider = V2Ray(
+        countries={
+            "jp": _make_vmess_uri(remark="🇺🇸 US", address="1.1.1.1"),
+        }
+    )
+    assert provider.country_servers["jp"][0].country == "jp"
+
+
+def test_countries_map_supports_arbitrary_alias_keys():
+    """Keys don't have to be country codes — any alias works."""
+    provider = V2Ray(
+        countries={
+            "stream-us": _make_vmess_uri(remark="🇺🇸 US", address="1.1.1.1"),
+            "home": _make_vless_uri(remark="🇯🇵 JP", address="2.2.2.2"),
+        }
+    )
+    assert set(provider.country_servers.keys()) == {"stream-us", "home"}
+
+
+def test_select_from_countries_map_by_country():
+    provider = V2Ray(
+        countries={
+            "us": _make_vmess_uri(remark="🇺🇸 US", address="1.1.1.1"),
+            "jp": _make_vless_uri(remark="🇯🇵 JP", address="2.2.2.2"),
+        }
+    )
+    server = provider._select_server("us")
+    assert server is not None
+    assert server.address == "1.1.1.1"
+
+
+def test_select_from_countries_map_by_index():
+    provider = V2Ray(
+        countries={
+            "us": [
+                _make_vmess_uri(remark="🇺🇸 US-1", address="1.1.1.1"),
+                _make_vmess_uri(remark="🇺🇸 US-2", address="2.2.2.2"),
+            ],
+        }
+    )
+    server = provider._select_server("us:2")
+    assert server is not None
+    assert server.address == "2.2.2.2"
+
+
+def test_select_from_countries_map_by_alias():
+    provider = V2Ray(
+        countries={
+            "stream-us": _make_vmess_uri(remark="🇺🇸 US", address="1.1.1.1"),
+        }
+    )
+    server = provider._select_server("stream-us")
+    assert server is not None
+    assert server.address == "1.1.1.1"
+
+
+def test_countries_map_takes_priority_over_flat_list():
+    """If both ``servers`` and ``countries`` are configured, the country map wins."""
+    provider = V2Ray(
+        servers=[_make_vmess_uri(remark="🇺🇸 US-from-flat-list", address="9.9.9.9")],
+        countries={
+            "us": _make_vmess_uri(remark="🇺🇸 US-from-map", address="1.1.1.1"),
+        },
+    )
+    server = provider._select_server("us")
+    assert server is not None
+    assert server.address == "1.1.1.1"  # from the map, not the flat list
+
+
+def test_countries_map_repr_counts_both_pools():
+    provider = V2Ray(
+        servers=[_make_vmess_uri(remark="🇺🇸 US", address="1.1.1.1")],
+        countries={
+            "jp": _make_vless_uri(remark="🇯🇵 JP", address="2.2.2.2"),
+            "de": _make_ss_sip002_uri(remark="🇩🇪 DE", address="3.3.3.3"),
+        },
+    )
+    # 3 countries (us from flat list + jp + de from map), 3 servers total.
+    assert repr(provider) == "3 Countries (3 Servers)"
+
+
+def test_get_proxy_with_countries_map_returns_socks5_uri():
+    provider = V2Ray(
+        countries={
+            "us": _make_vmess_uri(remark="🇺🇸 US", address="1.1.1.1"),
+        }
+    )
+    provider.binary = Path("/fake/xray")
+    patches = _patch_lifecycle(provider)
+    with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
+        uri = provider.get_proxy("us")
+    assert uri is not None
+    assert uri.startswith("socks5://127.0.0.1:")
+
+
+# ---------------------------------------------------------------------------
+# Provider: direct-URI mode (--proxy v2ray:vmess://...)
+# ---------------------------------------------------------------------------
+
+
+def test_is_v2ray_uri_detects_all_schemes():
+    from unshackle.core.proxies.v2ray import _is_v2ray_uri
+
+    assert _is_v2ray_uri("vmess://abc")
+    assert _is_v2ray_uri("vless://abc@host:443")
+    assert _is_v2ray_uri("trojan://pass@host:443")
+    assert _is_v2ray_uri("ss://abc")
+    assert _is_v2ray_uri("  vmess://abc  ")  # whitespace is stripped
+    assert not _is_v2ray_uri("us")
+    assert not _is_v2ray_uri("us:1")
+    assert not _is_v2ray_uri("https://example.com")
+    assert not _is_v2ray_uri("socks5://127.0.0.1:1080")
+    assert not _is_v2ray_uri("")
+
+
+def test_get_proxy_with_direct_vmess_uri_spawns_subprocess():
+    """``--proxy v2ray:vmess://...`` spawns a one-shot subprocess for that URI."""
+    provider = V2Ray(servers=[])  # no preloaded servers — direct-URI mode still works
+    provider.binary = Path("/fake/xray")
+    uri = _make_vmess_uri(remark="🇺🇸 US", address="1.1.1.1")
+    patches = _patch_lifecycle(provider)
+    with patches[0] as spawn_patch, patches[1], patches[2], patches[3], patches[4], patches[5]:
+        result = provider.get_proxy(uri)
+    assert result is not None
+    assert result.startswith("socks5://127.0.0.1:")
+    spawn_patch.assert_called_once()
+    # Verify the spawned server matches the URI we passed in.
+    spawned_server = spawn_patch.call_args.args[3]  # 4th positional arg is `server`
+    assert spawned_server.protocol == "vmess"
+    assert spawned_server.address == "1.1.1.1"
+
+
+def test_get_proxy_with_direct_vless_uri_spawns_subprocess():
+    provider = V2Ray(servers=[])
+    provider.binary = Path("/fake/xray")
+    uri = _make_vless_uri(remark="🇯🇵 JP", address="2.2.2.2")
+    patches = _patch_lifecycle(provider)
+    with patches[0] as spawn_patch, patches[1], patches[2], patches[3], patches[4], patches[5]:
+        result = provider.get_proxy(uri)
+    assert result is not None
+    spawned_server = spawn_patch.call_args.args[3]
+    assert spawned_server.protocol == "vless"
+    assert spawned_server.address == "2.2.2.2"
+
+
+def test_get_proxy_with_direct_trojan_uri_spawns_subprocess():
+    provider = V2Ray(servers=[])
+    provider.binary = Path("/fake/xray")
+    uri = _make_trojan_uri(remark="🇬🇧 UK", address="3.3.3.3")
+    patches = _patch_lifecycle(provider)
+    with patches[0] as spawn_patch, patches[1], patches[2], patches[3], patches[4], patches[5]:
+        result = provider.get_proxy(uri)
+    assert result is not None
+    spawned_server = spawn_patch.call_args.args[3]
+    assert spawned_server.protocol == "trojan"
+    assert spawned_server.address == "3.3.3.3"
+
+
+def test_get_proxy_with_direct_ss_uri_spawns_subprocess():
+    provider = V2Ray(servers=[])
+    provider.binary = Path("/fake/xray")
+    uri = _make_ss_sip002_uri(remark="🇩🇪 DE", address="4.4.4.4")
+    patches = _patch_lifecycle(provider)
+    with patches[0] as spawn_patch, patches[1], patches[2], patches[3], patches[4], patches[5]:
+        result = provider.get_proxy(uri)
+    assert result is not None
+    spawned_server = spawn_patch.call_args.args[3]
+    assert spawned_server.protocol == "shadowsocks"
+    assert spawned_server.address == "4.4.4.4"
+
+
+def test_get_proxy_direct_uri_works_without_any_servers_configured():
+    """Direct-URI mode doesn't require subscription_url / config_path / servers."""
+    provider = V2Ray()  # completely empty config
+    provider.binary = Path("/fake/xray")
+    uri = _make_vmess_uri(remark="🇺🇸 US", address="1.1.1.1")
+    patches = _patch_lifecycle(provider)
+    with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
+        result = provider.get_proxy(uri)
+    assert result is not None
+
+
+def test_get_proxy_direct_uri_reuses_subprocess_for_same_uri():
+    """Passing the same URI twice reuses the existing subprocess."""
+    provider = V2Ray(servers=[])
+    provider.binary = Path("/fake/xray")
+    uri = _make_vmess_uri(remark="🇺🇸 US", address="1.1.1.1")
+    patches = _patch_lifecycle(provider)
+    with patches[0] as spawn_patch, patches[1], patches[2], patches[3], patches[4], patches[5]:
+        result1 = provider.get_proxy(uri)
+        result2 = provider.get_proxy(uri)
+    assert result1 == result2
+    spawn_patch.assert_called_once()  # second call reuses
+
+
+def test_get_proxy_direct_uri_different_uris_get_different_subprocesses():
+    provider = V2Ray(servers=[])
+    provider.binary = Path("/fake/xray")
+    uri1 = _make_vmess_uri(remark="🇺🇸 US", address="1.1.1.1")
+    uri2 = _make_vless_uri(remark="🇯🇵 JP", address="2.2.2.2")
+    patches = _patch_lifecycle(provider)
+    with patches[0] as spawn_patch, patches[1], patches[2], patches[3], patches[4], patches[5]:
+        result1 = provider.get_proxy(uri1)
+        result2 = provider.get_proxy(uri2)
+    assert result1 != result2  # different ports
+    assert spawn_patch.call_count == 2
+
+
+def test_get_proxy_direct_unparseable_uri_raises_value_error():
+    provider = V2Ray(servers=[])
+    provider.binary = Path("/fake/xray")
+    with pytest.raises(ValueError, match="could not be parsed"):
+        provider.get_proxy("vmess://!!!not-base64!!!")
+
+
+def test_get_proxy_country_query_still_works_alongside_direct_uri_mode():
+    """Both modes coexist: country queries use the server pool, URIs use one-shot spawn."""
+    provider = V2Ray(
+        servers=[_make_vmess_uri(remark="🇺🇸 US", address="1.1.1.1")],
+    )
+    provider.binary = Path("/fake/xray")
+    patches = _patch_lifecycle(provider)
+    direct_uri = _make_vless_uri(remark="🇯🇵 JP", address="2.2.2.2")
+    with patches[0] as spawn_patch, patches[1], patches[2], patches[3], patches[4], patches[5]:
+        country_result = provider.get_proxy("us")
+        direct_result = provider.get_proxy(direct_uri)
+    assert country_result is not None
+    assert direct_result is not None
+    assert country_result != direct_result  # different subprocesses / ports
+    assert spawn_patch.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# resolve_proxy: v2ray: prefix routing (including the digit-in-name fix)
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_proxy_routes_v2ray_prefix_to_v2ray_provider():
+    """``--proxy v2ray:us`` must route to the V2Ray provider, not fall through.
+
+    This is a regression test for the provider-prefix regex: the old ``[a-z]+``
+    pattern didn't match ``v2ray`` (because of the digit ``2``), so the query
+    silently fell through to the try-every-provider loop and raised a confusing
+    "No proxy provider had a proxy" error.
+    """
+    from unshackle.core.proxies.resolve import resolve_proxy
+
+    v2ray_provider = MagicMock()
+    v2ray_provider.__class__.__name__ = "V2Ray"
+    v2ray_provider.get_proxy.return_value = "socks5://127.0.0.1:11080"
+
+    result = resolve_proxy("v2ray:us", [v2ray_provider])
+    assert result == "socks5://127.0.0.1:11080"
+    v2ray_provider.get_proxy.assert_called_once_with("us")
+
+
+def test_resolve_proxy_routes_v2ray_vmess_uri_to_v2ray_provider():
+    """``--proxy v2ray:vmess://...`` routes the URI to the V2Ray provider."""
+    from unshackle.core.proxies.resolve import resolve_proxy
+
+    v2ray_provider = MagicMock()
+    v2ray_provider.__class__.__name__ = "V2Ray"
+    v2ray_provider.get_proxy.return_value = "socks5://127.0.0.1:11080"
+
+    uri = _make_vmess_uri(remark="🇺🇸 US", address="1.1.1.1")
+    result = resolve_proxy(f"v2ray:{uri}", [v2ray_provider])
+    assert result == "socks5://127.0.0.1:11080"
+    v2ray_provider.get_proxy.assert_called_once_with(uri)
+
+
+def test_resolve_proxy_routes_v2ray_vless_uri_to_v2ray_provider():
+    from unshackle.core.proxies.resolve import resolve_proxy
+
+    v2ray_provider = MagicMock()
+    v2ray_provider.__class__.__name__ = "V2Ray"
+    v2ray_provider.get_proxy.return_value = "socks5://127.0.0.1:11080"
+
+    uri = _make_vless_uri(remark="🇯🇵 JP", address="2.2.2.2")
+    result = resolve_proxy(f"v2ray:{uri}", [v2ray_provider])
+    assert result == "socks5://127.0.0.1:11080"
+    v2ray_provider.get_proxy.assert_called_once_with(uri)
+
+
+def test_resolve_proxy_routes_v2ray_ss_uri_to_v2ray_provider():
+    from unshackle.core.proxies.resolve import resolve_proxy
+
+    v2ray_provider = MagicMock()
+    v2ray_provider.__class__.__name__ = "V2Ray"
+    v2ray_provider.get_proxy.return_value = "socks5://127.0.0.1:11080"
+
+    uri = _make_ss_sip002_uri(remark="🇩🇪 DE", address="3.3.3.3")
+    result = resolve_proxy(f"v2ray:{uri}", [v2ray_provider])
+    assert result == "socks5://127.0.0.1:11080"
+    v2ray_provider.get_proxy.assert_called_once_with(uri)
+
+
+def test_resolve_proxy_v2ray_not_found_lists_available_providers():
+    from unshackle.core.proxies.resolve import resolve_proxy
+
+    nordvpn = MagicMock()
+    nordvpn.__class__.__name__ = "NordVPN"
+
+    with pytest.raises(ValueError, match="Proxy provider 'v2ray' not found"):
+        resolve_proxy("v2ray:us", [nordvpn])
+
+
+def test_resolve_proxy_still_routes_all_letter_provider_names():
+    """The regex fix must not break existing providers (all-letter names)."""
+    from unshackle.core.proxies.resolve import resolve_proxy
+
+    nordvpn = MagicMock()
+    nordvpn.__class__.__name__ = "NordVPN"
+    nordvpn.get_proxy.return_value = "https://user:pass@us.proxy.nordvpn.com:89"
+
+    result = resolve_proxy("nordvpn:us", [nordvpn])
+    assert "nordvpn.com" in result
+    nordvpn.get_proxy.assert_called_once_with("us")
+
+
+def test_resolve_proxy_country_only_does_not_match_v2ray_prefix():
+    """``--proxy us`` (no prefix) must NOT be routed to the V2Ray provider.
+
+    It should fall through to the try-every-provider loop so Basic / NordVPN / etc.
+    can handle the bare country code.
+    """
+    from unshackle.core.proxies.resolve import resolve_proxy
+
+    v2ray_provider = MagicMock()
+    v2ray_provider.__class__.__name__ = "V2Ray"
+    v2ray_provider.get_proxy.return_value = None  # V2Ray has no opinion on bare "us"
+
+    basic_provider = MagicMock()
+    basic_provider.__class__.__name__ = "Basic"
+    basic_provider.get_proxy.return_value = "http://us-proxy.example:8080"
+
+    result = resolve_proxy("us", [v2ray_provider, basic_provider])
+    assert result == "http://us-proxy.example:8080"
+    # Both providers are tried (V2Ray first, then Basic which matches).
+    v2ray_provider.get_proxy.assert_called_once_with("us")
+    basic_provider.get_proxy.assert_called_once_with("us")

@@ -1,0 +1,59 @@
+Added native V2Ray support
+
+Adds a new V2Ray / Xray proxy provider (`proxy_providers.v2ray`) that spins up a
+local V2Ray or Xray subprocess with an ephemeral SOCKS5 (and HTTP) inbound on
+127.0.0.1 and routes traffic through a user-selected outbound. Works seamlessly
+across all services alongside the existing NordVPN, ExpressVPN, ProtonVPN,
+SurfsharkVPN, WindscribeVPN, Hola, Gluetun, and Basic proxy providers.
+
+Supported protocols: VMess, VLESS (incl. XTLS Reality + Vision flow), Trojan,
+and Shadowsocks (SIP002 + legacy + plaintext-cred forms).
+
+Four ways to supply servers (all can coexist):
+- `subscription_url` — base64/plain subscription endpoint(s)
+- `config_path`      — pre-built V2Ray/Xray JSON config file
+- `servers`          — inline list of vmess:// / vless:// / trojan:// / ss:// URIs
+- `countries`        — basic-style per-country URI map (country code -> URI or list)
+
+Plus a direct-URI CLI mode: `--proxy v2ray:vmess://...` spawns a one-shot
+subprocess for that exact URI with no YAML config required.
+
+Query formats (all prefixed with `v2ray:`):
+- `v2ray:us`           any server assigned to / detected as US
+- `v2ray:us:1`         first US server (1-indexed)
+- `v2ray:us:tokyo`     US server whose remark contains "tokyo"
+- `v2ray:tokyo`        any server whose remark contains "tokyo"
+- `v2ray:stream-us`    a server_map or countries-map alias
+- `v2ray:vmess://...`  direct-URI one-shot (no YAML needed)
+
+Each unique query gets its own subprocess on a dedicated local port pair;
+subprocesses are reused for the rest of the process and cleaned up via atexit.
+Optional IP verification confirms the exit country via ipinfo.io before
+returning the proxy URI.
+
+Also fixes a pre-existing bug in `resolve_proxy`: the provider-prefix regex
+`^[a-z]+:.+$` didn't match provider names containing digits (like `v2ray`),
+so `--proxy v2ray:us` was silently falling through to the try-every-provider
+loop and raising a confusing error. The regex now allows digits after the
+first letter: `^[a-z][a-z0-9]*:.+$`.
+
+Files added:
+- unshackle/core/proxies/v2ray.py           — the provider (~1600 lines)
+- tests/core/test_v2ray.py                  — 113 unit tests
+- docs/V2RAY.md                             — full reference documentation
+
+Files modified (additive, no breaking changes):
+- unshackle/core/binaries.py                — added Xray + V2Ray binary discovery
+- unshackle/core/proxies/__init__.py        — registered V2Ray
+- unshackle/core/proxies/resolve.py         — wired V2Ray into initialize_proxy_providers;
+                                               fixed the provider-prefix regex to allow
+                                               digits in provider names
+- docs/NETWORK_CONFIG.md                    — added a v2ray section
+- mkdocs.yml                                — added V2RAY.md to the nav
+
+Test results: 554 passed (524 pre-existing + 30 new for the countries-map and
+direct-URI modes + 83 from the initial V2Ray commit), 0 failures, 0 regressions.
+ruff + isort + mypy all clean on the changed files.
+
+No new runtime dependencies — uses existing requests[socks], pycountry, rich,
+and appdirs already declared in pyproject.toml.

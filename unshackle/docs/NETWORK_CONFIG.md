@@ -216,9 +216,10 @@ Usage: `--proxy gluetun:windscribe:us`
 V2Ray / Xray local proxy provider. Spins up a local V2Ray or Xray subprocess with an
 ephemeral SOCKS5 (and HTTP) inbound on `127.0.0.1`, then routes traffic through a
 user-selected outbound. Supports VMess, VLESS, Trojan, and Shadowsocks outbounds, fed
-from a subscription URL, a pre-built V2Ray/Xray JSON config file, or an inline list of
-`vmess://` / `vless://` / `trojan://` / `ss://` URIs. See [V2RAY.md](V2RAY.md) for the
-full configuration reference and protocol/query details.
+from a subscription URL, a pre-built V2Ray/Xray JSON config file, an inline list of
+URIs, or a per-country URI map. You can also pass a V2Ray URI directly on the CLI
+(`--proxy v2ray:vmess://...`) for one-shot use without any YAML config at all.
+See [V2RAY.md](V2RAY.md) for the full configuration reference and protocol/query details.
 
 ```yaml
 proxy_providers:
@@ -228,6 +229,11 @@ proxy_providers:
     # servers:                                        # or inline URIs
     #   - vmess://...
     #   - vless://...
+    # countries:                                      # or basic-style per-country map
+    #   us:
+    #     - vmess://...
+    #     - vless://...
+    #   jp: vless://...
     server_map:
       stream-us: us:1                                # optional friendly alias
     proxy_scheme: socks5                             # socks5 | socks5h | http
@@ -235,7 +241,13 @@ proxy_providers:
     auto_cleanup: true                               # kill subprocess on exit
 ```
 
-Usage: `--proxy v2ray:us`, `--proxy v2ray:us:1`, `--proxy v2ray:tokyo`, `--proxy v2ray:stream-us`
+Usage:
+
+- `--proxy v2ray:us` — any server assigned to `us` (from the `countries` map, or auto-detected from the flat list)
+- `--proxy v2ray:us:1` — first server in the `us` pool (1-indexed)
+- `--proxy v2ray:tokyo` — server whose remark contains "tokyo"
+- `--proxy v2ray:stream-us` — a `server_map` alias
+- `--proxy v2ray:vmess://...` — spawn a one-shot subprocess for that exact URI (no YAML needed)
 
 ---
 

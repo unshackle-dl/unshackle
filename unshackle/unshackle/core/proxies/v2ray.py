@@ -452,6 +452,23 @@ _PROTOCOL_PARSERS = (
     _parse_shadowsocks,
 )
 
+# Schemes recognised as V2Ray-family URIs. Used by _is_v2ray_uri() to detect direct-URI
+# queries on the CLI (e.g. ``--proxy v2ray:vmess://...``).
+_V2RAY_URI_SCHEMES = ("vmess://", "vless://", "trojan://", "ss://")
+
+
+def _is_v2ray_uri(text: str) -> bool:
+    """Return True if ``text`` looks like a V2Ray-family URI (vmess/vless/trojan/ss).
+
+    Used by :meth:`V2Ray.get_proxy` to detect direct-URI queries — e.g.
+    ``--proxy v2ray:vmess://...`` — and spawn a one-shot subprocess for that exact
+    server, bypassing the country/remark selection logic.
+    """
+    if not text:
+        return False
+    text = text.strip()
+    return any(text.startswith(scheme) for scheme in _V2RAY_URI_SCHEMES)
+
 
 def parse_server_uri(uri: str) -> Optional[V2RayServer]:
     """Parse a single ``vmess://``, ``vless://``, ``trojan://``, or ``ss://`` URI.
@@ -771,6 +788,7 @@ class V2Ray(Proxy):
         subscription_url: Optional[Any] = None,
         config_path: Optional[Any] = None,
         servers: Optional[list[Any]] = None,
+        countries: Optional[dict[str, Any]] = None,
         server_map: Optional[dict[str, str]] = None,
         binary: Optional[Any] = None,
         bind_host: str = "127.0.0.1",
@@ -791,6 +809,14 @@ class V2Ray(Proxy):
                 protocols are extracted and added to the selectable server pool.
             servers: Inline list of ``vmess://``/``vless://``/``trojan://``/``ss://``
                 URIs or pre-parsed server dicts (useful for tests / programmatic use).
+            countries: ``basic``-style per-country assignment — a dict mapping a country
+                code (or arbitrary alias) to a single URI string or a list of URI strings.
+                Queries like ``v2ray:us`` then pick from the URIs assigned to ``us``
+                (random pick by default; ``v2ray:us:2`` selects the second one). This is
+                the simplest way to pin specific servers to specific regions without
+                dealing with subscription URLs or remark substrings. URIs that fail to
+                parse are skipped with a warning, so a single bad entry never aborts the
+                whole map.
             server_map: Optional dict mapping a query alias (e.g. ``"stream-us"``) to
                 either a country code, a remark substring, or a ``country:remark`` pair.
                 Lets users give friendly names to specific servers.
@@ -837,21 +863,28 @@ class V2Ray(Proxy):
         # Per-instance state
         self._port_lock = threading.Lock()
         self._servers: list[V2RayServer] = []
+        self._country_servers: dict[str, list[V2RayServer]] = {}
         self._active: dict[str, dict] = {}  # query_key -> process info
 
         # Load servers (priority: subscription > config_path > inline).
         self._servers = self._load_servers(subscription_url, config_path, servers)
 
+        # Load the per-country map (basic-style assignment). Done after the flat list so
+        # the two can coexist: ``v2ray:us`` first checks the explicit country map, then
+        # falls back to country-detection on the flat server list.
+        self._country_servers = self._load_country_map(countries or {})
+
         # Register for atexit cleanup (always, even if no servers loaded yet —
-        # get_proxy may load more later via subscription refresh).
+        # get_proxy may load more later via subscription refresh or direct URI queries).
         _register_cleanup()
         with _cleanup_lock:
             _v2ray_instances.append(self)
 
+        total_servers = len(self._servers) + sum(len(v) for v in self._country_servers.values())
         log_event(
             "v2ray_init",
             level="INFO",
-            message=f"V2Ray proxy provider initialized with {len(self._servers)} server(s)",
+            message=f"V2Ray proxy provider initialized with {total_servers} server(s)",
             context={
                 "binary": str(self.binary) if self.binary else None,
                 "bind_host": self.bind_host,
@@ -859,33 +892,65 @@ class V2Ray(Proxy):
                 "proxy_scheme": self.proxy_scheme,
                 "verify_ip": self.verify_ip,
                 "server_count": len(self._servers),
+                "country_server_count": total_servers - len(self._servers),
+                "country_keys": list(self._country_servers.keys()),
             },
         )
 
     # -- Proxy interface ---------------------------------------------------
 
     def __repr__(self) -> str:
-        servers = len(self._servers)
-        countries = len({s.country for s in self._servers if s.country})
-        return f"{countries} Countr{['ies', 'y'][countries == 1]} ({servers} Server{['s', ''][servers == 1]})"
+        flat_countries = {s.country for s in self._servers if s.country}
+        mapped_countries = set(self._country_servers.keys())
+        all_countries = flat_countries | mapped_countries
+        total_servers = len(self._servers) + sum(len(v) for v in self._country_servers.values())
+        countries = len(all_countries)
+        return f"{countries} Countr{['ies', 'y'][countries == 1]} ({total_servers} Server{['s', ''][total_servers == 1]})"
 
     def get_proxy(self, query: str) -> Optional[str]:
-        """Resolve ``query`` to a local proxy URI backed by a V2Ray subprocess."""
+        """Resolve ``query`` to a local proxy URI backed by a V2Ray subprocess.
+
+        ``query`` may be:
+
+        - A direct V2Ray URI (``vmess://...``, ``vless://...``, ``trojan://...``,
+          ``ss://...``) — a one-shot subprocess is spawned for that exact server.
+          Useful for ad-hoc invocations like ``--proxy v2ray:vmess://...`` without
+          any YAML configuration at all.
+        - A country code, ``country:index``, ``country:remark``, remark substring, or
+          ``server_map`` alias — resolved against the configured server pool
+          (``countries`` map first, then the flat ``servers`` / ``subscription_url`` /
+          ``config_path`` list).
+        """
         if not self.binary:
             raise EnvironmentError(
                 "V2Ray/Xray binary not found. Install xray (https://github.com/XTLS/Xray-core) "
                 "or v2ray (https://github.com/v2fly/v2ray-core) and ensure it is on your PATH, "
                 "or set proxy_providers.v2ray.binary in your config."
             )
-        if not self._servers:
+
+        raw_query = query or ""
+        query_key = raw_query.strip().lower()
+        if not query_key:
+            raise ValueError("v2ray: empty query — supply a country code, alias, remark substring, or V2Ray URI")
+
+        # Direct-URI mode: the query is itself a vmess:// / vless:// / trojan:// / ss:// URI.
+        # Parse it on the fly and spawn a one-shot subprocess. This works even when no
+        # servers are configured in YAML — handy for ``--proxy v2ray:vmess://...``.
+        if _is_v2ray_uri(raw_query):
+            server = parse_server_uri(raw_query)
+            if server is None:
+                raise ValueError(
+                    f"v2ray: query looked like a V2Ray URI but could not be parsed: {raw_query[:80]!r}"
+                )
+            return self._spawn_for_server(server, query_key)
+
+        # Country / remark / alias mode requires at least one preloaded server source.
+        if not self._servers and not self._country_servers:
             raise ValueError(
                 "V2Ray proxy provider has no servers configured. Provide subscription_url, "
-                "config_path, or servers under proxy_providers.v2ray."
+                "config_path, servers, or countries under proxy_providers.v2ray — "
+                "or pass a vmess:// / vless:// / trojan:// / ss:// URI directly on the CLI."
             )
-
-        query_key = (query or "").strip().lower()
-        if not query_key:
-            raise ValueError("v2ray: empty query — supply a country code, alias, or remark substring")
 
         # Reuse a running subprocess for the same query.
         if query_key in self._active and self._is_process_alive(self._active[query_key]):
@@ -898,6 +963,21 @@ class V2Ray(Proxy):
         if server is None:
             # No server matched — return None to indicate "accepted but unavailable" per Proxy contract.
             return None
+
+        return self._spawn_for_server(server, query_key)
+
+    def _spawn_for_server(self, server: V2RayServer, query_key: str) -> str:
+        """Allocate ports, spawn the subprocess for ``server``, and return the proxy URI.
+
+        Used by both the country/remark selection path and the direct-URI path so the
+        readiness / verify / cleanup behaviour is identical.
+        """
+        # Reuse an already-running subprocess for the same key (e.g. the same URI passed twice).
+        if query_key in self._active and self._is_process_alive(self._active[query_key]):
+            entry = self._active[query_key]
+            if self.verify_ip and not entry.get("verified"):
+                self._verify_proxy(query_key)
+            return self._build_proxy_uri(entry["socks_port"], entry["http_port"])
 
         socks_port, http_port = self._allocate_ports()
         config = build_config(server, socks_port=socks_port, http_port=http_port)
@@ -929,31 +1009,66 @@ class V2Ray(Proxy):
         if mapped:
             query = mapped.lower()
 
-        country: Optional[str] = None
-        index: Optional[int] = None
-        remark_query: Optional[str] = None
-
-        # Split "country:rest" — the rest may be an index (1-indexed) or a remark substring.
+        # Split "head:tail" — head is a country code / alias, tail is an index or remark.
+        head = query
+        tail = ""
         if ":" in query:
             head, tail = query.split(":", 1)
             head = head.strip()
             tail = tail.strip()
-            if head:
-                country = self._normalise_country(head)
-            if tail:
-                if tail.isdigit():
-                    index = int(tail)
-                else:
-                    remark_query = tail
-        else:
-            # No colon: either a country code, a numeric index (rare), or a remark substring.
-            if query.isdigit():
-                index = int(query)
-            elif self._looks_like_country(query):
-                country = self._normalise_country(query)
+
+        index: Optional[int] = None
+        remark_query: Optional[str] = None
+        if tail:
+            if tail.isdigit():
+                index = int(tail)
             else:
+                remark_query = tail
+        elif query.isdigit():
+            # No colon but all digits — treat as a global index into the flat list.
+            index = int(query)
+
+        # Normalise head to a country code if it looks like one.
+        country: Optional[str] = None
+        if head and not head.isdigit():
+            country = self._normalise_country(head)
+
+        # If head didn't parse as a country (e.g. "zz" or "tokyo"), treat the whole
+        # query as a remark substring for the flat-list fallback. This preserves the
+        # existing behaviour where unknown 2-letter codes return None instead of
+        # falling through to "return the first server in the flat list".
+        if head and country is None and remark_query is None and not index:
+            # Only set remark_query if head isn't a known countries-map key — otherwise
+            # the countries-map lookup below will handle it.
+            if head not in self._country_servers:
                 remark_query = query
 
+        # 1. Check the explicit ``countries`` map first (basic-style assignment). The map
+        # key may be either an ISO country code (e.g. "us") or an arbitrary alias (e.g.
+        # "stream-us"), so we look it up by every plausible form of the head.
+        lookup_keys: list[str] = []
+        if country:
+            lookup_keys.append(country)
+        if head:
+            lookup_keys.append(head)
+        if not head and query:
+            lookup_keys.append(query)
+        for key in lookup_keys:
+            mapped_pool = self._country_servers.get(key)
+            if mapped_pool:
+                # If a remark substring was given (e.g. "us:tokyo"), filter the pool by it.
+                pool = mapped_pool
+                if remark_query:
+                    pool = [s for s in pool if remark_query in (s.remark or "").lower()]
+                    if not pool:
+                        log.warning(
+                            "v2ray: countries[%s] has no server matching remark %r",
+                            key, remark_query,
+                        )
+                        return None
+                return self._pick_from_pool(pool, index, random_pick=True)
+
+        # 2. Fall back to the flat server list (subscription / config_path / servers).
         pool = self._servers
         if country:
             pool = [s for s in pool if (s.country or "").lower() == country]
@@ -967,12 +1082,24 @@ class V2Ray(Proxy):
             )
             return None
 
+        # Flat-list fallback uses deterministic first-match (preserves existing behaviour
+        # for subscription / inline servers). The countries map uses random pick to match
+        # Basic's behaviour for multi-server lists.
+        return self._pick_from_pool(pool, index, random_pick=False)
+
+    @staticmethod
+    def _pick_from_pool(
+        pool: list[V2RayServer], index: Optional[int], *, random_pick: bool = False
+    ) -> Optional[V2RayServer]:
+        """Pick a server from ``pool``, honouring the 1-indexed ``index`` if set."""
         if index is not None:
             if index < 1 or index > len(pool):
                 log.warning("v2ray: index %d out of range for pool of %d server(s)", index, len(pool))
                 return None
             return pool[index - 1]
-
+        if random_pick:
+            import random as _random
+            return _random.choice(pool)
         return pool[0]
 
     @staticmethod
@@ -1115,6 +1242,62 @@ class V2Ray(Proxy):
             self.cache_path.write_text(json.dumps(cache, indent=2), encoding="utf-8")
         except OSError as error:
             log.warning("v2ray: cache write failed (%s): %s", self.cache_path, error)
+
+    def _load_country_map(self, countries: dict) -> dict[str, list[V2RayServer]]:
+        """Parse the ``basic``-style ``countries`` config map.
+
+        The input is a dict mapping a country code (or arbitrary alias) to either a
+        single URI string or a list of URI strings. Each URI is parsed via
+        :func:`parse_server_uri`; entries that fail to parse are skipped with a warning
+        so a single bad URI never aborts the whole map. The returned dict maps each
+        lowercased key to the list of successfully-parsed servers.
+
+        This mirrors :class:`unshackle.core.proxies.basic.Basic` — the user explicitly
+        asked for V2Ray to support the same per-country assignment pattern.
+        """
+        if not isinstance(countries, dict):
+            raise TypeError(
+                f"v2ray: 'countries' must be a dict mapping country code -> URI or list of URIs, "
+                f"got {type(countries).__name__}"
+            )
+
+        result: dict[str, list[V2RayServer]] = {}
+        for raw_key, raw_value in countries.items():
+            key = str(raw_key).strip().lower()
+            if not key:
+                continue
+
+            # Normalise the value to a list of URI strings.
+            if isinstance(raw_value, str):
+                uri_list: list[str] = [raw_value]
+            elif isinstance(raw_value, (list, tuple)):
+                uri_list = [str(v) for v in raw_value if v]
+            else:
+                log.warning(
+                    "v2ray: countries[%s] has unsupported value type %s — expected str or list, skipping",
+                    key, type(raw_value).__name__,
+                )
+                continue
+
+            servers: list[V2RayServer] = []
+            for uri in uri_list:
+                parsed = parse_server_uri(uri)
+                if parsed is None:
+                    log.warning("v2ray: countries[%s] could not parse URI %r — skipping", key, uri[:80])
+                    continue
+                # Force the server's country to match the map key, so the IP-verification
+                # step (when enabled) compares against the user's intent rather than the
+                # auto-detected country from the remark.
+                if key and get_country_name(key):
+                    parsed.country = _normalise_country_code(key)
+                servers.append(parsed)
+
+            if servers:
+                result[key] = servers
+            else:
+                log.warning("v2ray: countries[%s] produced zero valid servers", key)
+
+        return result
 
     # -- Binary discovery --------------------------------------------------
 
@@ -1436,8 +1619,13 @@ class V2Ray(Proxy):
 
     @property
     def servers(self) -> list[V2RayServer]:
-        """Read-only view of the loaded server pool (for tests / debugging)."""
+        """Read-only view of the flat server pool (subscription / config_path / servers)."""
         return list(self._servers)
+
+    @property
+    def country_servers(self) -> dict[str, list[V2RayServer]]:
+        """Read-only view of the per-country server map (the ``countries:`` YAML block)."""
+        return {k: list(v) for k, v in self._country_servers.items()}
 
     def get_connection_info(self, query: str) -> Optional[dict]:
         """Return the connection info dict for a previously-resolved query, if any."""

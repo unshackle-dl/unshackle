@@ -37,3 +37,32 @@ Stage Summary:
 - Lint: ruff + isort + mypy all pass on the new/modified files
 - Backward compatibility: zero changes to existing provider code; the only edits to existing files are additive (new imports, new __all__ entries, new conditional instantiation block in resolve.py)
 - No new runtime dependencies required (uses existing requests[socks], pycountry, rich, appdirs already in pyproject.toml)
+
+---
+Task ID: v2ray-basic-style-and-direct-uri
+Agent: main
+Task: Add two new V2Ray usage modes requested by the user: (1) basic-style per-country YAML assignment (`countries:` map, used with `--proxy v2ray:us`), and (2) direct V2Ray URI on the CLI (`--proxy v2ray:vmess://...`). Also write the commit/PR message.
+
+Work Log:
+- Added `countries` parameter to V2Ray.__init__ — a dict mapping country code / alias to a single URI or list of URIs (mirrors Basic's `**countries` pattern)
+- Implemented `_load_country_map()` to parse the YAML map into `dict[str, list[V2RayServer]]`, skipping unparseable URIs with a warning and forcing the server's country to match the map key (when the key is a valid ISO code) so IP verification compares against the user's intent
+- Updated `_select_server()` to check `_country_servers` first (by normalised country, raw head, and arbitrary alias), then fall back to the flat list — with random pick for the countries map (matching Basic) and deterministic first-match for the flat list (preserving existing test expectations)
+- Added `_is_v2ray_uri()` helper to detect vmess:// / vless:// / trojan:// / ss:// URI queries
+- Updated `get_proxy()` to detect direct-URI queries and spawn a one-shot subprocess via the new `_spawn_for_server()` method (shared between country/remark selection and direct-URI mode for identical lifecycle behaviour)
+- Loosened the "no servers configured" check so direct-URI mode works with a completely empty YAML config
+- Added `country_servers` read-only property for introspection
+- Updated `__repr__` to count both the flat list and the countries map
+- Fixed a critical pre-existing bug in resolve_proxy: the provider-prefix regex `^[a-z]+:.+$` didn't match `v2ray` (because of the digit `2`), so `--proxy v2ray:us` was silently falling through to the try-every-provider loop and raising a confusing "No proxy provider had a proxy" error. Changed to `^[a-z][a-z0-9]*:.+$` (letter first, then letters/digits) so provider names with digits are recognised. Verified the fix doesn't break any existing provider (nordvpn, expressvpn, basic, etc. all still route correctly).
+- Added 30 new unit tests covering: countries-map loading (single URI, list, unparseable-skipping, non-dict rejection, non-string-non-list skipping, country-override, arbitrary alias keys), selection from the countries map (by country, by index, by alias, priority over flat list), repr counting both pools, get_proxy with countries map, _is_v2ray_uri detection for all 4 schemes + whitespace + non-URI strings, direct-URI get_proxy for vmess/vless/trojan/ss (one-shot spawn, reuse for same URI, different URIs get different subprocesses, unparseable URI raises, coexistence with country-query mode), and resolve_proxy routing (v2ray:us, v2ray:vmess://..., v2ray:vless://..., v2ray:ss://..., v2ray-not-found error, nordvpn:us backward compat, bare `us` falls through to try-every-provider)
+- Updated docs/V2RAY.md with new "Quick Start" options A-E (countries map, subscription, config_path, inline list, direct URI), a new `countries` section under Server Sources, a new "Direct URI on the CLI" section, an expanded Query Format table (added alias + URI rows), and the countries row in the Provider Options table
+- Updated docs/NETWORK_CONFIG.md v2ray section to mention the countries map and direct-URI CLI mode
+- Wrote COMMIT_MESSAGE.txt with the PR description ("Added native V2Ray support")
+
+Stage Summary:
+- All 554 tests pass (524 from previous commit + 30 new), 0 failures, 0 regressions
+- ruff + isort + mypy all clean on the changed files
+- Three usage modes now supported:
+  1. basic-style countries map: `countries: {us: [vmess://..., vless://...]}` + `--proxy v2ray:us`
+  2. direct URI on CLI: `--proxy v2ray:vmess://...` (no YAML needed)
+  3. existing flat-list / subscription / config_path modes (unchanged)
+- The resolve_proxy regex fix is a bonus bug-fix that was blocking ALL `v2ray:*` queries (not just the new modes)

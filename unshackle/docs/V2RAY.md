@@ -33,10 +33,37 @@ is found, the provider raises a clear `EnvironmentError` pointing at the install
 
 ## Quick Start
 
-### 1. Configuration
+The V2Ray provider supports four ways to supply servers, plus a direct-URI CLI mode that
+needs no YAML at all. Pick whichever fits your workflow — they can be mixed.
 
-Add a `v2ray` block to `proxy_providers` in `~/.config/unshackle/unshackle.yaml`. You can
-supply servers in any of three ways — the first non-empty source wins.
+### Option A — Per-country map (basic-style, recommended for small setups)
+
+Assign V2Ray URIs directly to country codes, exactly like the `basic` proxy provider.
+Then `--proxy v2ray:us` picks one of them and spawns a local subprocess for it.
+
+```yaml
+proxy_providers:
+  v2ray:
+    countries:
+      us:
+        - vmess://eyJ2IjoiMiIsInBzIjoi8J+HuvCfh7kgVVMgLSBMb3MgQW5nZWxlcyIsImFkZCI6IjEuMi4zLjQiLCJwb3J0IjoiNDQzIiwiaWQiOiJiODMxMzgxZC02MzI0LTRkNTMtYWQ0Zi04Y2RhNDhiMzA4MTEiLCJhaWQiOjAsIm5ldCI6IndzIiwidHlwZSI6Im5vbmUiLCJob3N0IjoiZXhhbXBsZS5jb20iLCJwYXRoIjoiL3JheSIsInRscyI6InRscyIsInNuaSI6ImV4YW1wbGUuY29tIn0=
+        - vless://b831381d-6324-4d53-ad4f-8cda48b30811@1.2.3.5:443?encryption=none&security=tls&type=ws&host=us2.example.com&path=/vless&sni=us2.example.com#🇺🇸 US-East
+      jp: vless://b831381d-6324-4d53-ad4f-8cda48b30811@1.2.3.6:443?encryption=none&security=tls&type=ws&host=jp.example.com&path=/vless&sni=jp.example.com#🇯🇵 JP - Tokyo
+      gb: trojan://secretpass@1.2.3.7:443?security=tls&type=tcp&sni=uk.example.com#🇬🇧 UK - London
+```
+
+```bash
+unshackle dl SERVICE CONTENT --proxy v2ray:us           # random US server from the list
+unshackle dl SERVICE CONTENT --proxy v2ray:us:2         # second US server (1-indexed)
+unshackle dl SERVICE CONTENT --proxy v2ray:jp           # the JP server
+```
+
+The map key can be any country code or arbitrary alias — `us`, `jp`, `stream-us`, `home`
+all work. When the key is a valid ISO 3166-1 alpha-2 code, the server's auto-detected
+country is forced to match it (so IP verification compares against your intent, not the
+remark's flag emoji).
+
+### Option B — Subscription URL
 
 ```yaml
 proxy_providers:
@@ -44,7 +71,15 @@ proxy_providers:
     subscription_url: https://your-provider.example/sub.yaml
 ```
 
-Or with an inline list:
+### Option C — Pre-built V2Ray/Xray JSON config file
+
+```yaml
+proxy_providers:
+  v2ray:
+    config_path: /etc/xray/config.json
+```
+
+### Option D — Inline list of URIs
 
 ```yaml
 proxy_providers:
@@ -56,22 +91,41 @@ proxy_providers:
       - ss://YWVzLTI1Ni1nY206c3NwYXNz@1.2.3.7:8388#🇩🇪 DE - Berlin
 ```
 
-### 2. Usage
+### Option E — Direct URI on the CLI (no YAML needed)
 
-Use 2-letter country codes (auto-detected from server remarks), specific server indices,
-or remark substrings — all prefixed with `v2ray:`:
+Pass a `vmess://`, `vless://`, `trojan://`, or `ss://` URI directly after `v2ray:` and a
+one-shot subprocess is spawned for that exact server. No YAML configuration is required —
+handy for ad-hoc use or testing a single server.
 
 ```bash
-unshackle dl SERVICE CONTENT --proxy v2ray:us           # any server detected as US
+unshackle dl SERVICE CONTENT --proxy v2ray:vmess://eyJ2IjoiMiIsInBzIjoi...
+unshackle dl SERVICE CONTENT --proxy v2ray:vless://b831381d-...@1.2.3.4:443?...
+unshackle dl SERVICE CONTENT --proxy v2ray:trojan://pass@1.2.3.4:443?...
+unshackle dl SERVICE CONTENT --proxy v2ray:ss://YWVzLTI1Ni1nY206c3NwYXNz@1.2.3.4:8388
+```
+
+The same URI passed twice reuses the existing subprocess (keyed by the URI string), so
+repeated `--proxy v2ray:vmess://...` calls don't re-spawn.
+
+### Usage (all modes)
+
+All query forms work with every server source. The `countries` map is checked first, then
+the flat list (subscription / config_path / servers) is searched by country / remark / index.
+
+```bash
+unshackle dl SERVICE CONTENT --proxy v2ray:us           # any server assigned to / detected as US
 unshackle dl SERVICE CONTENT --proxy v2ray:us:1         # first US server (1-indexed)
 unshackle dl SERVICE CONTENT --proxy v2ray:tokyo        # server whose remark contains "tokyo"
 unshackle dl SERVICE CONTENT --proxy v2ray:us:tokyo     # US server whose remark contains "tokyo"
+unshackle dl SERVICE CONTENT --proxy v2ray:stream-us    # a server_map alias
+unshackle dl SERVICE CONTENT --proxy v2ray:vmess://...  # direct-URI one-shot (no YAML needed)
 ```
 
 ## Server Sources
 
-The provider loads servers in priority order — the first non-empty source wins, but you can
-mix them (e.g. fall back to a config file when the subscription is down).
+The provider loads servers from up to four sources. They can be mixed — the `countries`
+map is checked first during selection, then the flat list (subscription / config_path /
+servers) is searched as a fallback.
 
 ### `subscription_url` (str | list[str])
 
@@ -117,17 +171,63 @@ Inline list of `vmess://` / `vless://` / `trojan://` / `ss://` URIs, or pre-pars
 dicts (useful for programmatic setups). Mostly useful for testing or for very small static
 server pools.
 
+### `countries` (dict[str, str | list[str]])
+
+`basic`-style per-country assignment — a dict mapping a country code (or arbitrary alias)
+to a single URI string or a list of URI strings. Queries like `v2ray:us` then pick from
+the URIs assigned to `us` (random pick by default; `v2ray:us:2` selects the second one).
+This is the simplest way to pin specific servers to specific regions without dealing with
+subscription URLs or remark substrings.
+
+```yaml
+proxy_providers:
+  v2ray:
+    countries:
+      us:
+        - vmess://...    # first US server
+        - vless://...    # second US server
+      jp: vless://...    # single JP server (string, not list)
+      stream-us: vmess://...   # arbitrary alias (not a country code) — works too
+```
+
+URIs that fail to parse are skipped with a warning, so a single bad entry never aborts
+the whole map. When the map key is a valid ISO 3166-1 alpha-2 code, the server's
+auto-detected country is forced to match it — so IP verification (when enabled) compares
+against your intent rather than the remark's flag emoji.
+
+The `countries` map takes priority over the flat list (`subscription_url` / `config_path`
+/ `servers`) during selection: `v2ray:us` first checks the `countries["us"]` pool, then
+falls back to the flat list filtered by `country == "us"`.
+
+### Direct URI on the CLI
+
+In addition to the YAML-based sources above, you can pass a V2Ray URI directly on the CLI:
+
+```bash
+unshackle dl SERVICE CONTENT --proxy v2ray:vmess://...
+unshackle dl SERVICE CONTENT --proxy v2ray:vless://...
+unshackle dl SERVICE CONTENT --proxy v2ray:trojan://...
+unshackle dl SERVICE CONTENT --proxy v2ray:ss://...
+```
+
+This spawns a one-shot subprocess for that exact URI, no YAML configuration required. The
+URI is parsed via the same parsers as YAML-supplied URIs, so all four protocols and their
+transport / security options are supported. The same URI passed twice reuses the existing
+subprocess (keyed by the URI string).
+
 ## Query Format
 
-The query (the part after `v2ray:`) supports four forms, which can be combined:
+The query (the part after `v2ray:`) supports these forms, which can be combined:
 
 | Format | Meaning | Example |
 | --- | --- | --- |
-| `<country>` | Any server detected as that country | `v2ray:us` |
+| `<country>` | Any server assigned to / detected as that country | `v2ray:us` |
 | `<country>:<index>` | The Nth server (1-indexed) in the country pool | `v2ray:us:2` |
 | `<country>:<remark>` | Country-filtered remark substring match | `v2ray:us:tokyo` |
 | `<remark>` | Remark substring match across all servers | `v2ray:tokyo` |
 | `<index>` | The Nth server overall (1-indexed) | `v2ray:1` |
+| `<alias>` | An arbitrary key from the `countries` map or `server_map` | `v2ray:stream-us` |
+| `<URI>` | A direct `vmess://` / `vless://` / `trojan://` / `ss://` URI | `v2ray:vmess://...` |
 
 Country codes use ISO 3166-1 alpha-2 (e.g. `us`, `gb`, `jp`, `de`). The provider normalises
 `uk` → `gb` automatically. Full country names (e.g. `japan`, `germany`) are also accepted
@@ -173,6 +273,7 @@ Use as `--proxy v2ray:stream-us`, `--proxy v2ray:home`, `--proxy v2ray:europe`.
 | `subscription_url` | str \| list[str] | — | Subscription endpoint(s). |
 | `config_path` | str \| Path | — | Pre-built V2Ray/Xray JSON config file. |
 | `servers` | list[str \| dict] | — | Inline list of URIs or pre-parsed server dicts. |
+| `countries` | dict[str, str \| list[str]] | `{}` | `basic`-style per-country URI assignment. Keys are country codes or arbitrary aliases; values are a single URI or a list of URIs. Checked first during selection. |
 | `server_map` | dict[str, str] | `{}` | Query alias overrides. |
 | `binary` | str \| Path | auto | Explicit path to the `xray` / `v2ray` binary. Auto-discovers via `PATH` and `unshackle/binaries/` when unset (Xray preferred). |
 | `bind_host` | str | `127.0.0.1` | Host the local inbounds listen on. Proxies are never exposed publicly by default. |
@@ -182,6 +283,9 @@ Use as `--proxy v2ray:stream-us`, `--proxy v2ray:home`, `--proxy v2ray:europe`.
 | `startup_timeout` | float | `30.0` | Seconds to wait for the subprocess to start accepting connections. |
 | `auto_cleanup` | bool | `true` | Kill the subprocess on object destruction / interpreter exit. |
 | `cache_path` | str \| Path | — | Optional path to cache the parsed subscription server list. Used as a fallback on fetch failure. |
+
+In addition to the YAML options above, V2Ray URIs can be passed directly on the CLI
+(`--proxy v2ray:vmess://...`) for one-shot use without any YAML configuration.
 
 ## Supported Protocols
 

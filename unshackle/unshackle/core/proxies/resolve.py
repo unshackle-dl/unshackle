@@ -65,6 +65,7 @@ def resolve_proxy(proxy: str, proxy_providers: List[Any]) -> Optional[str]:
       - Direct URI: "https://...", "socks5://..."
       - Country code: "us", "uk"
       - Provider:country: "nordvpn:us"
+      - Provider:URI: "v2ray:vmess://..." (V2Ray direct-URI mode)
     """
     if not proxy:
         return None
@@ -74,7 +75,11 @@ def resolve_proxy(proxy: str, proxy_providers: List[Any]) -> Optional[str]:
 
     requested_provider = None
     query = proxy
-    if re.match(r"^[a-z]+:.+$", proxy, re.IGNORECASE):
+    # Provider prefix is a name starting with a letter, followed by letters/digits, then ":".
+    # The digit allowance is required so provider names like "v2ray" (which contains a "2")
+    # are recognised — the old ``[a-z]+`` pattern silently failed to match ``v2ray:us`` and
+    # fell through to the try-every-provider loop, which then raised a confusing error.
+    if re.match(r"^[a-z][a-z0-9]*:.+$", proxy, re.IGNORECASE):
         requested_provider, query = proxy.split(":", maxsplit=1)
 
     if requested_provider:
