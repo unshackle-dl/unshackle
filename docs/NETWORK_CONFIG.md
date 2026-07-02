@@ -243,18 +243,42 @@ fingerprinting. `RnetSession` is a drop-in `requests.Session` replacement and is
 - Native rnet proxy support (HTTP, HTTPS, SOCKS5) — used by all proxy providers below.
 - Cookie-jar and `requests`-style `data=` / `json=` / `headers=` kwargs for compatibility.
 
-The legacy `curl_cffi` backend has been removed. The config key is still spelled
-`curl_impersonate` for backward compatibility, but its value now selects an rnet preset.
+The legacy `curl_cffi` backend has been removed.
 
-### curl_impersonate (dict)
+### network (dict)
+
+HTTP session settings: which client to impersonate and how the underlying rnet
+client behaves.
 
 ```yaml
-curl_impersonate:
+network:
   browser: Chrome131   # exact rnet.Impersonate preset name
 ```
 
 `browser` must be an exact `rnet.Impersonate` preset name (e.g. `Chrome131`, `Chrome124`,
 `Edge101`, `Firefox133`, `Safari18`, `OkHttp4_12`). See the rnet README for the full list.
 Default when unset: `Chrome131`.
+
+The same section accepts optional rnet client tuning keys, forwarded verbatim:
+
+```yaml
+network:
+  browser: Chrome131
+  http1_only: true            # force HTTP/1.1 instead of negotiated HTTP/2
+  # http2_only: true
+  # pool_max_size: 64         # max total connections in the pool
+  # pool_max_idle_per_host: 32
+  # tcp_nodelay: true
+```
+
+!!! note "Renamed from `curl_impersonate`"
+    This section was previously named `curl_impersonate` (after the removed backend).
+    The old spelling still works but is deprecated; rename it to `network`.
+
+!!! tip "When to force HTTP/1.1"
+    HTTP/2 is the right default on large CDNs. Force `http1_only: true` when a host
+    throttles per connection or has a slow origin behind HTTP/2 flow control — in
+    benchmarks this gained 30–50% on such hosts, while costing up to 27% on fast
+    CDNs. Set it only when measurements support it.
 
 ---

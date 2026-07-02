@@ -485,7 +485,20 @@ class RnetSession:
         self.log = logging.getLogger(self.__class__.__name__)
 
         client_kwargs: dict[str, Any] = {}
-        for key in ("impersonate", "timeout", "proxies", "verify", "redirect"):
+        for key in (
+            "impersonate",
+            "timeout",
+            "connect_timeout",
+            "read_timeout",
+            "proxies",
+            "verify",
+            "redirect",
+            "pool_max_idle_per_host",
+            "pool_max_size",
+            "http1_only",
+            "http2_only",
+            "tcp_nodelay",
+        ):
             if key in session_kwargs:
                 client_kwargs[key] = session_kwargs.pop(key)
         if "proxy" in session_kwargs:
@@ -720,11 +733,15 @@ def session(
         session("Edge101", max_retries=3)       # Edge 101 with custom retry
     """
     if browser is None:
-        browser = config.curl_impersonate.get("browser", "Chrome131")
+        browser = config.network.get("browser", "Chrome131")
 
     impersonate = _resolve_impersonate(browser)
 
     session_kwargs: dict[str, Any] = {"impersonate": impersonate}
+    # optional rnet client knobs, see docs/NETWORK_CONFIG.md
+    for key in ("http1_only", "http2_only", "pool_max_idle_per_host", "pool_max_size", "tcp_nodelay"):
+        if key in config.network:
+            session_kwargs[key] = config.network[key]
     session_kwargs.update(kwargs)
 
     session_obj = RnetSession(**session_kwargs)

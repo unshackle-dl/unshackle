@@ -57,7 +57,14 @@ class Config:
         self.dl: dict = kwargs.get("dl") or {}
         self.cdm: dict = kwargs.get("cdm") or {}
         self.chapter_fallback_name: str = kwargs.get("chapter_fallback_name") or ""
-        self.curl_impersonate: dict = kwargs.get("curl_impersonate") or {}
+        self.network: dict = kwargs.get("network") or kwargs.get("curl_impersonate") or {}
+        self.curl_impersonate: dict = self.network
+        if "curl_impersonate" in kwargs and "network" not in kwargs:
+            warnings.warn(
+                "the 'curl_impersonate' config section is deprecated, rename it to 'network'.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         self.remote_cdm: list[dict] = kwargs.get("remote_cdm") or []
         self.credentials: dict = kwargs.get("credentials") or {}
         self.firefox_cookies: dict = kwargs.get("firefox_cookies") or {}
