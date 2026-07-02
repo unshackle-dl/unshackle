@@ -1,0 +1,1385 @@
+     1→import atexit
+     2→import logging
+     3→import os
+     4→import re
+     5→import stat
+     6→import subprocess
+     7→import tempfile
+     8→import threading
+     9→import time
+    10→from typing import Optional
+    11→
+    12→import requests
+    13→
+    14→from unshackle.core import binaries
+    15→from unshackle.core.proxies.proxy import Proxy
+    16→from unshackle.core.utilities import get_country_code, get_country_name, get_debug_logger, log_event
+    17→from unshackle.core.utils.ip_info import get_ip_info
+    18→
+    19→# Global registry for cleanup on exit
+    20→_gluetun_instances: list["Gluetun"] = []
+    21→_cleanup_lock = threading.Lock()
+    22→_cleanup_registered = False
+    23→
+    24→
+    25→def _cleanup_all_gluetun_containers():
+    26→    """Cleanup all Gluetun containers on exit."""
+    27→    # Get instances without holding the lock during cleanup
+    28→    with _cleanup_lock:
+    29→        instances = list(_gluetun_instances)
+    30→        _gluetun_instances.clear()
+    31→
+    32→    # Cleanup each instance (no lock held, so no deadlock possible)
+    33→    for instance in instances:
+    34→        try:
+    35→            instance.cleanup()
+    36→        except Exception:
+    37→            pass
+    38→
+    39→
+    40→def _register_cleanup():
+    41→    """Register cleanup handlers (only once)."""
+    42→    global _cleanup_registered
+    43→    with _cleanup_lock:
+    44→        if not _cleanup_registered:
+    45→            # Only use atexit for cleanup - don't override signal handlers
+    46→            # This allows Ctrl+C to work normally while still cleaning up on exit
+    47→            atexit.register(_cleanup_all_gluetun_containers)
+    48→            _cleanup_registered = True
+    49→
+    50→
+    51→class Gluetun(Proxy):
+    52→    """
+    53→    Dynamic Gluetun VPN-to-HTTP Proxy Provider with multi-provider support.
+    54→
+    55→    Automatically manages Docker containers running Gluetun for WireGuard/OpenVPN VPN connections.
+    56→    Supports multiple VPN providers in a single configuration using query format: provider:region
+    57→
+    58→    Supported VPN providers: windscribe, expressvpn, nordvpn, surfshark, protonvpn, mullvad,
+    59→    privateinternetaccess, cyberghost, vyprvpn, torguard, and 50+ more.
+    60→
+    61→    Configuration example in unshackle.yaml:
+    62→        proxy_providers:
+    63→          gluetun:
+    64→            providers:
+    65→              windscribe:
+    66→                vpn_type: wireguard
+    67→                credentials:
+    68→                  private_key: YOUR_KEY
+    69→                  addresses: YOUR_ADDRESS
+    70→                server_countries:
+    71→                  us: US
+    72→                  uk: GB
+    73→              nordvpn:
+    74→                vpn_type: wireguard
+    75→                credentials:
+    76→                  private_key: YOUR_KEY
+    77→                  addresses: YOUR_ADDRESS
+    78→                server_countries:
+    79→                  us: US
+    80→                  de: DE
+    81→            # Global settings (optional)
+    82→            base_port: 8888
+    83→            auto_cleanup: true
+    84→            container_prefix: "unshackle-gluetun"
+    85→
+    86→    Usage:
+    87→        --proxy gluetun:windscribe:us
+    88→        --proxy gluetun:nordvpn:de
+    89→    """
+    90→
+    91→    # Mapping of common VPN provider names to Gluetun identifiers
+    92→    PROVIDER_MAPPING = {
+    93→        "windscribe": "windscribe",
+    94→        "expressvpn": "expressvpn",
+    95→        "nordvpn": "nordvpn",
+    96→        "surfshark": "surfshark",
+    97→        "protonvpn": "protonvpn",
+    98→        "mullvad": "mullvad",
+    99→        "pia": "private internet access",
+   100→        "privateinternetaccess": "private internet access",
+   101→        "cyberghost": "cyberghost",
+   102→        "vyprvpn": "vyprvpn",
+   103→        "torguard": "torguard",
+   104→        "ipvanish": "ipvanish",
+   105→        "purevpn": "purevpn",
+   106→    }
+   107→
+   108→    # Windscribe uses specific region names instead of country codes
+   109→    # See: https://github.com/qdm12/gluetun-wiki/blob/main/setup/providers/windscribe.md
+   110→    WINDSCRIBE_REGION_MAP = {
+   111→        # Country codes to Windscribe region names
+   112→        "us": "US East",
+   113→        "us-east": "US East",
+   114→        "us-west": "US West",
+   115→        "us-central": "US Central",
+   116→        "ca": "Canada East",
+   117→        "ca-east": "Canada East",
+   118→        "ca-west": "Canada West",
+   119→        "uk": "United Kingdom",
+   120→        "gb": "United Kingdom",
+   121→        "de": "Germany",
+   122→        "fr": "France",
+   123→        "nl": "Netherlands",
+   124→        "au": "Australia",
+   125→        "jp": "Japan",
+   126→        "sg": "Singapore",
+   127→        "hk": "Hong Kong",
+   128→        "kr": "South Korea",
+   129→        "in": "India",
+   130→        "it": "Italy",
+   131→        "es": "Spain",
+   132→        "ch": "Switzerland",
+   133→        "se": "Sweden",
+   134→        "no": "Norway",
+   135→        "dk": "Denmark",
+   136→        "fi": "Finland",
+   137→        "at": "Austria",
+   138→        "be": "Belgium",
+   139→        "ie": "Ireland",
+   140→        "pl": "Poland",
+   141→        "pt": "Portugal",
+   142→        "cz": "Czech Republic",
+   143→        "ro": "Romania",
+   144→        "hu": "Hungary",
+   145→        "gr": "Greece",
+   146→        "tr": "Turkey",
+   147→        "ru": "Russia",
+   148→        "ua": "Ukraine",
+   149→        "br": "Brazil",
+   150→        "mx": "Mexico",
+   151→        "ar": "Argentina",
+   152→        "za": "South Africa",
+   153→        "nz": "New Zealand",
+   154→        "th": "Thailand",
+   155→        "ph": "Philippines",
+   156→        "id": "Indonesia",
+   157→        "my": "Malaysia",
+   158→        "vn": "Vietnam",
+   159→        "tw": "Taiwan",
+   160→        "ae": "United Arab Emirates",
+   161→        "il": "Israel",
+   162→    }
+   163→
+   164→    def __init__(
+   165→        self,
+   166→        providers: Optional[dict] = None,
+   167→        base_port: int = 8888,
+   168→        auto_cleanup: bool = True,
+   169→        container_prefix: str = "unshackle-gluetun",
+   170→        auth_user: Optional[str] = None,
+   171→        auth_password: Optional[str] = None,
+   172→        verify_ip: bool = True,
+   173→        **kwargs,
+   174→    ):
+   175→        """
+   176→        Initialize Gluetun proxy provider with multi-provider support.
+   177→
+   178→        Args:
+   179→            providers: Dict of VPN provider configurations
+   180→                Format: {
+   181→                    "windscribe": {
+   182→                        "vpn_type": "wireguard",
+   183→                        "credentials": {"private_key": "...", "addresses": "..."},
+   184→                        "server_countries": {"us": "US", "uk": "GB"}
+   185→                    },
+   186→                    "nordvpn": {...}
+   187→                }
+   188→            base_port: Starting port for HTTP proxies (default: 8888)
+   189→            auto_cleanup: Automatically remove stopped containers (default: True)
+   190→            container_prefix: Docker container name prefix (default: "unshackle-gluetun")
+   191→            auth_user: Optional HTTP proxy authentication username
+   192→            auth_password: Optional HTTP proxy authentication password
+   193→            verify_ip: Automatically verify IP and region after connection (default: True)
+   194→        """
+   195→        # Check Docker availability using binaries module
+   196→        if not binaries.Docker:
+   197→            raise RuntimeError(
+   198→                "Docker is not available. Please install Docker to use Gluetun proxy.\n"
+   199→                "Visit: https://docs.docker.com/engine/install/"
+   200→            )
+   201→
+   202→        self.providers = providers or {}
+   203→        self.base_port = base_port
+   204→        self.auto_cleanup = auto_cleanup
+   205→        self.container_prefix = container_prefix
+   206→        self.auth_user = auth_user
+   207→        self.auth_password = auth_password
+   208→        self.verify_ip = verify_ip
+   209→
+   210→        # Track active containers: {query_key: {"container_name": ..., "port": ..., ...}}
+   211→        self.active_containers = {}
+   212→
+   213→        # Lock for thread-safe port allocation
+   214→        self._port_lock = threading.Lock()
+   215→
+   216→        # Validate provider configurations
+   217→        for provider_name, config in self.providers.items():
+   218→            self._validate_provider_config(provider_name, config)
+   219→
+   220→        # Register this instance for cleanup on exit
+   221→        _register_cleanup()
+   222→        with _cleanup_lock:
+   223→            _gluetun_instances.append(self)
+   224→
+   225→        # Log initialization
+   226→        log_event(
+   227→            "gluetun_init",
+   228→            level="INFO",
+   229→            message=f"Gluetun proxy provider initialized with {len(self.providers)} provider(s)",
+   230→            context={
+   231→                "providers": list(self.providers.keys()),
+   232→                "base_port": base_port,
+   233→                "auto_cleanup": auto_cleanup,
+   234→                "verify_ip": verify_ip,
+   235→                "container_prefix": container_prefix,
+   236→            },
+   237→        )
+   238→
+   239→    def __repr__(self) -> str:
+   240→        provider_count = len(self.providers)
+   241→        return f"Gluetun ({provider_count} provider{['s', ''][provider_count == 1]})"
+   242→
+   243→    def get_proxy(self, query: str) -> Optional[str]:
+   244→        """
+   245→        Get an HTTP proxy URI for a Gluetun VPN connection.
+   246→
+   247→        Args:
+   248→            query: Query format: "provider:region" (e.g., "windscribe:us", "nordvpn:uk")
+   249→
+   250→        Returns:
+   251→            HTTP proxy URI or None if unavailable
+   252→        """
+   253→        # Parse query
+   254→        parts = query.split(":")
+   255→        if len(parts) != 2:
+   256→            raise ValueError(f"Invalid query format: '{query}'. Expected 'provider:region' (e.g., 'windscribe:us')")
+   257→
+   258→        provider_name = parts[0].lower()
+   259→        region = parts[1].lower()
+   260→
+   261→        # Check if provider is configured
+   262→        if provider_name not in self.providers:
+   263→            available = ", ".join(self.providers.keys())
+   264→            raise ValueError(f"VPN provider '{provider_name}' not configured. Available providers: {available}")
+   265→
+   266→        # Create query key for tracking
+   267→        query_key = f"{provider_name}:{region}"
+   268→        container_name = f"{self.container_prefix}-{provider_name}-{region}"
+   269→
+   270→        # Check if container already exists (in memory OR in Docker)
+   271→        # This handles multiple concurrent Unshackle sessions
+   272→        if query_key in self.active_containers:
+   273→            container = self.active_containers[query_key]
+   274→            if self._is_container_running(container["container_name"]):
+   275→                log_event(
+   276→                    "gluetun_container_reuse",
+   277→                    level="DEBUG",
+   278→                    message=f"Reusing existing container (in-memory): {query_key}",
+   279→                    context={
+   280→                        "query_key": query_key,
+   281→                        "container_name": container["container_name"],
+   282→                        "port": container["port"],
+   283→                    },
+   284→                )
+   285→                # Re-verify if needed
+   286→                if self.verify_ip:
+   287→                    self._verify_container(query_key)
+   288→                return self._build_proxy_uri(container["port"])
+   289→        else:
+   290→            # Not in memory, but might exist in Docker (from another session)
+   291→            existing_info = self._get_existing_container_info(container_name)
+   292→            if existing_info:
+   293→                # Container exists in Docker, reuse it
+   294→                self.active_containers[query_key] = existing_info
+   295→                log_event(
+   296→                    "gluetun_container_reuse_docker",
+   297→                    level="INFO",
+   298→                    message=f"Reusing existing Docker container: {query_key}",
+   299→                    context={
+   300→                        "query_key": query_key,
+   301→                        "container_name": container_name,
+   302→                        "port": existing_info["port"],
+   303→                    },
+   304→                )
+   305→                # Re-verify if needed
+   306→                if self.verify_ip:
+   307→                    self._verify_container(query_key)
+   308→                return self._build_proxy_uri(existing_info["port"])
+   309→
+   310→        # Get provider configuration
+   311→        provider_config = self.providers[provider_name]
+   312→
+   313→        # Determine server location
+   314→        server_countries = provider_config.get("server_countries", {})
+   315→        server_cities = provider_config.get("server_cities", {})
+   316→        server_hostnames = provider_config.get("server_hostnames", {})
+   317→
+   318→        country = server_countries.get(region)
+   319→        city = server_cities.get(region)
+   320→        hostname = server_hostnames.get(region)
+   321→
+   322→        # Check if region is a specific server pattern (e.g., us1239, uk5678)
+   323→        # Format: 2-letter country code + number
+   324→        specific_server_match = re.match(r"^([a-z]{2})(\d+)$", region, re.IGNORECASE)
+   325→
+   326→        if specific_server_match and not country and not city and not hostname:
+   327→            # Specific server requested (e.g., us1239)
+   328→            country_code = specific_server_match.group(1).upper()
+   329→            server_num = specific_server_match.group(2)
+   330→
+   331→            # Build hostname based on provider
+   332→            hostname = self._build_server_hostname(provider_name, country_code, server_num)
+   333→            country = country_code  # Set country for verification
+   334→
+   335→        # If not explicitly mapped and not a specific server, try to use query as country code
+   336→        elif not country and not city and not hostname:
+   337→            if re.match(r"^[a-z]{2}$", region):
+   338→                # Convert country code to full name for Gluetun
+   339→                country = get_country_name(region)
+   340→                if not country:
+   341→                    raise ValueError(
+   342→                        f"Country code '{region}' not recognized. "
+   343→                        f"Configure it in server_countries or use a valid ISO 3166-1 alpha-2 code."
+   344→                    )
+   345→            else:
+   346→                raise ValueError(
+   347→                    f"Region '{region}' not recognized for provider '{provider_name}'. "
+   348→                    f"Configure it in server_countries or server_cities, or use a 2-letter country code."
+   349→                )
+   350→
+   351→        # Remove any stopped container with the same name
+   352→        self._remove_stopped_container(container_name)
+   353→
+   354→        # Find available port
+   355→        port = self._get_available_port()
+   356→
+   357→        # Create container (name already set above)
+   358→        try:
+   359→            self._create_container(
+   360→                container_name=container_name,
+   361→                port=port,
+   362→                provider_name=provider_name,
+   363→                provider_config=provider_config,
+   364→                country=country,
+   365→                city=city,
+   366→                hostname=hostname,
+   367→            )
+   368→
+   369→            # Store container info
+   370→            self.active_containers[query_key] = {
+   371→                "container_name": container_name,
+   372→                "port": port,
+   373→                "provider": provider_name,
+   374→                "region": region,
+   375→                "country": country,
+   376→                "city": city,
+   377→                "hostname": hostname,
+   378→            }
+   379→
+   380→            # Wait for container to be ready (60s timeout for VPN connection)
+   381→            if not self._wait_for_container(container_name, timeout=60):
+   382→                # Get container logs for better error message
+   383→                logs = self._get_container_logs(container_name, tail=30)
+   384→                error_msg = f"Gluetun container '{container_name}' failed to start"
+   385→                if hasattr(self, "_last_wait_error") and self._last_wait_error:
+   386→                    error_msg += f": {self._last_wait_error}"
+   387→                if logs:
+   388→                    # Extract last few relevant lines
+   389→                    log_lines = [line for line in logs.strip().split("\n") if line.strip()][-5:]
+   390→                    error_msg += "\nRecent logs:\n" + "\n".join(log_lines)
+   391→                raise RuntimeError(error_msg)
+   392→
+   393→            # Verify IP and region if enabled
+   394→            if self.verify_ip:
+   395→                self._verify_container(query_key)
+   396→
+   397→            return self._build_proxy_uri(port)
+   398→
+   399→        except Exception as e:
+   400→            # Cleanup on failure
+   401→            self._remove_container(container_name)
+   402→            if query_key in self.active_containers:
+   403→                del self.active_containers[query_key]
+   404→            raise RuntimeError(f"Failed to create Gluetun container: {e}")
+   405→
+   406→    def cleanup(self):
+   407→        """Stop and remove all managed Gluetun containers."""
+   408→        container_count = len(self.active_containers)
+   409→
+   410→        if container_count > 0:
+   411→            log_event(
+   412→                "gluetun_cleanup_start",
+   413→                level="DEBUG",
+   414→                message=f"Cleaning up {container_count} Gluetun container(s)",
+   415→                context={
+   416→                    "container_count": container_count,
+   417→                    "containers": list(self.active_containers.keys()),
+   418→                },
+   419→            )
+   420→
+   421→        for query_key, container_info in list(self.active_containers.items()):
+   422→            container_name = container_info["container_name"]
+   423→            self._remove_container(container_name)
+   424→
+   425→            log_event(
+   426→                "gluetun_container_removed",
+   427→                level="DEBUG",
+   428→                message=f"Removed Gluetun container: {container_name}",
+   429→                context={
+   430→                    "query_key": query_key,
+   431→                    "container_name": container_name,
+   432→                },
+   433→            )
+   434→
+   435→        self.active_containers.clear()
+   436→
+   437→        if container_count > 0:
+   438→            log_event(
+   439→                "gluetun_cleanup_complete",
+   440→                level="INFO",
+   441→                message=f"Cleanup complete: removed {container_count} container(s)",
+   442→                context={"container_count": container_count},
+   443→                success=True,
+   444→            )
+   445→
+   446→    def get_connection_info(self, query: str) -> Optional[dict]:
+   447→        """
+   448→        Get connection info for a proxy query.
+   449→
+   450→        Args:
+   451→            query: Query format "provider:region" (e.g., "windscribe:us")
+   452→
+   453→        Returns:
+   454→            Dict with connection info including public_ip, country, city, or None if not found.
+   455→        """
+   456→        parts = query.split(":")
+   457→        if len(parts) != 2:
+   458→            return None
+   459→
+   460→        provider_name = parts[0].lower()
+   461→        region = parts[1].lower()
+   462→        query_key = f"{provider_name}:{region}"
+   463→
+   464→        container = self.active_containers.get(query_key)
+   465→        if not container:
+   466→            return None
+   467→
+   468→        return {
+   469→            "provider": container.get("provider"),
+   470→            "region": container.get("region"),
+   471→            "public_ip": container.get("public_ip"),
+   472→            "country": container.get("ip_country"),
+   473→            "city": container.get("ip_city"),
+   474→            "org": container.get("ip_org"),
+   475→        }
+   476→
+   477→    def _validate_provider_config(self, provider_name: str, config: dict):
+   478→        """Validate a provider's configuration."""
+   479→        vpn_type = config.get("vpn_type", "wireguard").lower()
+   480→        credentials = config.get("credentials", {})
+   481→
+   482→        if vpn_type not in ["wireguard", "openvpn"]:
+   483→            raise ValueError(f"Provider '{provider_name}': Invalid vpn_type '{vpn_type}'. Use 'wireguard' or 'openvpn'")
+   484→
+   485→        if vpn_type == "wireguard":
+   486→            # private_key is always required for WireGuard
+   487→            if "private_key" not in credentials:
+   488→                raise ValueError(f"Provider '{provider_name}': WireGuard requires 'private_key' in credentials")
+   489→
+   490→            # Provider-specific WireGuard requirements based on Gluetun wiki:
+   491→            # - NordVPN, ProtonVPN: only private_key required
+   492→            # - Windscribe: private_key, addresses, AND preshared_key required (preshared_key MUST be set)
+   493→            # - Surfshark, Mullvad, IVPN: private_key AND addresses required
+   494→            provider_lower = provider_name.lower()
+   495→
+   496→            # Windscribe requires preshared_key (can be empty string, but must be set)
+   497→            if provider_lower == "windscribe":
+   498→                if "preshared_key" not in credentials:
+   499→                    raise ValueError(
+   500→                        f"Provider '{provider_name}': Windscribe WireGuard requires 'preshared_key' in credentials "
+   501→                        "(can be empty string, but must be set). Get it from windscribe.com/getconfig/wireguard"
+   502→                    )
+   503→                if "addresses" not in credentials:
+   504→                    raise ValueError(
+   505→                        f"Provider '{provider_name}': Windscribe WireGuard requires 'addresses' in credentials. "
+   506→                        "Get it from windscribe.com/getconfig/wireguard"
+   507→                    )
+   508→
+   509→            # Providers that require addresses (but not preshared_key)
+   510→            elif provider_lower in ["surfshark", "mullvad", "ivpn"]:
+   511→                if "addresses" not in credentials:
+   512→                    raise ValueError(f"Provider '{provider_name}': WireGuard requires 'addresses' in credentials")
+   513→
+   514→        elif vpn_type == "openvpn":
+   515→            if "username" not in credentials or "password" not in credentials:
+   516→                raise ValueError(
+   517→                    f"Provider '{provider_name}': OpenVPN requires 'username' and 'password' in credentials"
+   518→                )
+   519→
+   520→    def _get_available_port(self) -> int:
+   521→        """Find an available port starting from base_port (thread-safe)."""
+   522→        with self._port_lock:
+   523→            used_ports = {info["port"] for info in self.active_containers.values()}
+   524→            port = self.base_port
+   525→            while port in used_ports or self._is_port_in_use(port):
+   526→                port += 1
+   527→            return port
+   528→
+   529→    def _is_port_in_use(self, port: int) -> bool:
+   530→        """Check if a port is in use on the system or by any Docker container."""
+   531→        import socket
+   532→
+   533→        # First check if the port is available on the system
+   534→        try:
+   535→            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+   536→                s.bind(("127.0.0.1", port))
+   537→        except OSError:
+   538→            # Port is in use by something on the system
+   539→            return True
+   540→
+   541→        # Also check Docker containers (in case of port forwarding)
+   542→        try:
+   543→            result = subprocess.run(
+   544→                ["docker", "ps", "--format", "{{.Ports}}"],
+   545→                capture_output=True,
+   546→                text=True,
+   547→                timeout=5,
+   548→            )
+   549→            if result.returncode == 0:
+   550→                return f":{port}->" in result.stdout or f"0.0.0.0:{port}" in result.stdout
+   551→            return False
+   552→        except (subprocess.TimeoutExpired, FileNotFoundError):
+   553→            return False
+   554→
+   555→    def _build_server_hostname(self, provider_name: str, country_code: str, server_num: str) -> str:
+   556→        """
+   557→        Build a server hostname for specific server selection.
+   558→
+   559→        Args:
+   560→            provider_name: VPN provider name (e.g., "nordvpn")
+   561→            country_code: 2-letter country code (e.g., "US")
+   562→            server_num: Server number (e.g., "1239")
+   563→
+   564→        Returns:
+   565→            Server hostname (e.g., "us1239.nordvpn.com")
+   566→        """
+   567→        # Convert to lowercase for hostname
+   568→        country_lower = country_code.lower()
+   569→
+   570→        # Provider-specific hostname formats
+   571→        hostname_formats = {
+   572→            "nordvpn": f"{country_lower}{server_num}.nordvpn.com",
+   573→            "surfshark": f"{country_lower}-{server_num}.prod.surfshark.com",
+   574→            "expressvpn": f"{country_lower}-{server_num}.expressvpn.com",
+   575→            "cyberghost": f"{country_lower}-s{server_num}.cg-dialup.net",
+   576→            # Generic fallback for other providers
+   577→        }
+   578→
+   579→        # Get provider-specific format or use generic
+   580→        if provider_name in hostname_formats:
+   581→            return hostname_formats[provider_name]
+   582→        else:
+   583→            # Generic format: country_code + server_num
+   584→            return f"{country_lower}{server_num}"
+   585→
+   586→    def _ensure_image_available(self, image: str = "qmcgaw/gluetun:latest") -> bool:
+   587→        """
+   588→        Ensure the Gluetun Docker image is available locally.
+   589→
+   590→        If the image is not present, it will be pulled. This prevents
+   591→        the container creation from timing out during the first run.
+   592→
+   593→        Args:
+   594→            image: Docker image name with tag
+   595→
+   596→        Returns:
+   597→            True if image is available, False otherwise
+   598→        """
+   599→        log = logging.getLogger("Gluetun")
+   600→
+   601→        # Check if image exists locally
+   602→        try:
+   603→            result = subprocess.run(
+   604→                ["docker", "image", "inspect", image],
+   605→                capture_output=True,
+   606→                text=True,
+   607→                timeout=10,
+   608→                encoding="utf-8",
+   609→                errors="replace",
+   610→            )
+   611→            if result.returncode == 0:
+   612→                return True
+   613→            log.debug(f"Image inspect failed: {result.stderr}")
+   614→        except subprocess.TimeoutExpired:
+   615→            log.warning("Docker image inspect timed out")
+   616→        except FileNotFoundError:
+   617→            log.error("Docker command not found - is Docker installed and in PATH?")
+   618→            return False
+   619→
+   620→        # Image not found, pull it
+   621→        log.info(f"Pulling Docker image {image}...")
+   622→        try:
+   623→            result = subprocess.run(
+   624→                ["docker", "pull", image],
+   625→                capture_output=True,
+   626→                text=True,
+   627→                timeout=300,  # 5 minutes for pull
+   628→                encoding="utf-8",
+   629→                errors="replace",
+   630→            )
+   631→            if result.returncode == 0:
+   632→                return True
+   633→            log.error(f"Docker pull failed: {result.stderr}")
+   634→            return False
+   635→        except subprocess.TimeoutExpired:
+   636→            raise RuntimeError(f"Timed out pulling Docker image '{image}'")
+   637→
+   638→    def _create_container(
+   639→        self,
+   640→        container_name: str,
+   641→        port: int,
+   642→        provider_name: str,
+   643→        provider_config: dict,
+   644→        country: Optional[str] = None,
+   645→        city: Optional[str] = None,
+   646→        hostname: Optional[str] = None,
+   647→    ):
+   648→        """Create and start a Gluetun Docker container."""
+   649→        start_time = time.time()
+   650→
+   651→        log_event(
+   652→            "gluetun_container_create_start",
+   653→            level="DEBUG",
+   654→            message=f"Creating Gluetun container: {container_name}",
+   655→            context={
+   656→                "container_name": container_name,
+   657→                "port": port,
+   658→                "provider": provider_name,
+   659→                "country": country,
+   660→                "city": city,
+   661→                "hostname": hostname,
+   662→            },
+   663→        )
+   664→
+   665→        # Ensure the Gluetun image is available (pulls if needed)
+   666→        gluetun_image = "qmcgaw/gluetun:latest"
+   667→        if not self._ensure_image_available(gluetun_image):
+   668→            log_event(
+   669→                "gluetun_image_pull_failed",
+   670→                level="ERROR",
+   671→                message=f"Failed to pull Docker image: {gluetun_image}",
+   672→                success=False,
+   673→            )
+   674→            raise RuntimeError(f"Failed to ensure Gluetun Docker image '{gluetun_image}' is available")
+   675→
+   676→        vpn_type = provider_config.get("vpn_type", "wireguard").lower()
+   677→        credentials = provider_config.get("credentials", {})
+   678→        extra_env = provider_config.get("extra_env", {})
+   679→
+   680→        # Normalize provider name
+   681→        gluetun_provider = self.PROVIDER_MAPPING.get(provider_name.lower(), provider_name.lower())
+   682→
+   683→        # Build environment variables
+   684→        env_vars = {
+   685→            "VPN_SERVICE_PROVIDER": gluetun_provider,
+   686→            "VPN_TYPE": vpn_type,
+   687→            "HTTPPROXY": "on",
+   688→            "HTTPPROXY_LISTENING_ADDRESS": ":8888",
+   689→            "HTTPPROXY_LOG": "on",
+   690→            "TZ": os.environ.get("TZ", "UTC"),
+   691→            "LOG_LEVEL": "info",
+   692→        }
+   693→
+   694→        # Add credentials
+   695→        if vpn_type == "wireguard":
+   696→            env_vars["WIREGUARD_PRIVATE_KEY"] = credentials["private_key"]
+   697→            # addresses is optional - not needed for some providers like NordVPN
+   698→            if "addresses" in credentials:
+   699→                env_vars["WIREGUARD_ADDRESSES"] = credentials["addresses"]
+   700→            # preshared_key is required for Windscribe, optional for others
+   701→            if "preshared_key" in credentials:
+   702→                env_vars["WIREGUARD_PRESHARED_KEY"] = credentials["preshared_key"]
+   703→        elif vpn_type == "openvpn":
+   704→            env_vars["OPENVPN_USER"] = credentials.get("username", "")
+   705→            env_vars["OPENVPN_PASSWORD"] = credentials.get("password", "")
+   706→
+   707→        # Add server location
+   708→        # Priority: hostname > country + city > country only
+   709→        # Note: Different providers support different server selection variables
+   710→        # - Most providers: SERVER_COUNTRIES, SERVER_CITIES
+   711→        # - Windscribe, VyprVPN, VPN Secure: SERVER_REGIONS, SERVER_CITIES (no SERVER_COUNTRIES)
+   712→        if hostname:
+   713→            # Specific server hostname requested (e.g., us1239.nordvpn.com)
+   714→            env_vars["SERVER_HOSTNAMES"] = hostname
+   715→        else:
+   716→            # Providers that use SERVER_REGIONS instead of SERVER_COUNTRIES
+   717→            region_only_providers = {"windscribe", "vyprvpn", "vpn secure"}
+   718→            uses_regions = gluetun_provider in region_only_providers
+   719→
+   720→            # Use country/city selection
+   721→            if country:
+   722→                if uses_regions:
+   723→                    # Convert country code to provider-specific region name
+   724→                    if gluetun_provider == "windscribe":
+   725→                        region_name = self.WINDSCRIBE_REGION_MAP.get(country.lower(), country)
+   726→                        env_vars["SERVER_REGIONS"] = region_name
+   727→                    else:
+   728→                        env_vars["SERVER_REGIONS"] = country
+   729→                else:
+   730→                    env_vars["SERVER_COUNTRIES"] = country
+   731→            if city:
+   732→                env_vars["SERVER_CITIES"] = city
+   733→
+   734→        # Add authentication if configured
+   735→        if self.auth_user:
+   736→            env_vars["HTTPPROXY_USER"] = self.auth_user
+   737→        if self.auth_password:
+   738→            env_vars["HTTPPROXY_PASSWORD"] = self.auth_password
+   739→
+   740→        # Merge extra environment variables
+   741→        env_vars.update(extra_env)
+   742→
+   743→        # Debug log environment variables (redact sensitive values)
+   744→        if debug_logger := get_debug_logger():
+   745→            redact_markers = ("KEY", "PASSWORD", "PASS", "TOKEN", "SECRET", "USER")
+   746→            safe_env = {k: ("***" if any(m in k for m in redact_markers) else v) for k, v in env_vars.items()}
+   747→            debug_logger.log(
+   748→                level="DEBUG",
+   749→                operation="gluetun_env_vars",
+   750→                message=f"Environment variables for {container_name}",
+   751→                context={"env_vars": safe_env, "gluetun_provider": gluetun_provider},
+   752→            )
+   753→
+   754→        # Build docker run command
+   755→        cmd = [
+   756→            "docker",
+   757→            "run",
+   758→            "-d",
+   759→            "--name",
+   760→            container_name,
+   761→            "--cap-add=NET_ADMIN",
+   762→            "--device=/dev/net/tun",
+   763→            "-p",
+   764→            f"127.0.0.1:{port}:8888/tcp",
+   765→        ]
+   766→
+   767→        # Avoid exposing credentials in process listings by using --env-file instead of many "-e KEY=VALUE".
+   768→        env_file_path: str | None = None
+   769→        try:
+   770→            fd, env_file_path = tempfile.mkstemp(prefix=f"unshackle-{container_name}-", suffix=".env")
+   771→            try:
+   772→                # Best-effort restrictive permissions.
+   773→                if os.name != "nt":
+   774→                    if hasattr(os, "fchmod"):
+   775→                        os.fchmod(fd, 0o600)
+   776→                    else:
+   777→                        os.chmod(env_file_path, 0o600)
+   778→                else:
+   779→                    os.chmod(env_file_path, stat.S_IREAD | stat.S_IWRITE)
+   780→
+   781→                with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
+   782→                    for key, value in env_vars.items():
+   783→                        if "=" in key:
+   784→                            raise ValueError(f"Invalid env var name for docker env-file: {key!r}")
+   785→                        v = "" if value is None else str(value)
+   786→                        if "\n" in v or "\r" in v:
+   787→                            raise ValueError(f"Invalid env var value (contains newline) for {key!r}")
+   788→                        f.write(f"{key}={v}\n")
+   789→            except Exception:
+   790→                # If we fail before fdopen closes the descriptor, make sure it's not leaked.
+   791→                try:
+   792→                    os.close(fd)
+   793→                except Exception:
+   794→                    pass
+   795→                raise
+   796→
+   797→            cmd.extend(["--env-file", env_file_path])
+   798→
+   799→            # Add Gluetun image
+   800→            cmd.append(gluetun_image)
+   801→
+   802→            # Execute docker run
+   803→            try:
+   804→                result = subprocess.run(
+   805→                    cmd,
+   806→                    capture_output=True,
+   807→                    text=True,
+   808→                    timeout=30,
+   809→                    encoding="utf-8",
+   810→                    errors="replace",
+   811→                )
+   812→            except subprocess.TimeoutExpired:
+   813→                log_event(
+   814→                    "gluetun_container_create_timeout",
+   815→                    level="ERROR",
+   816→                    message=f"Docker run timed out for {container_name}",
+   817→                    context={"container_name": container_name},
+   818→                    success=False,
+   819→                    duration_ms=(time.time() - start_time) * 1000,
+   820→                )
+   821→                raise RuntimeError("Docker run command timed out")
+   822→
+   823→            if result.returncode != 0:
+   824→                error_msg = result.stderr or "unknown error"
+   825→                log_event(
+   826→                    "gluetun_container_create_failed",
+   827→                    level="ERROR",
+   828→                    message=f"Docker run failed for {container_name}",
+   829→                    context={
+   830→                        "container_name": container_name,
+   831→                        "return_code": result.returncode,
+   832→                        "stderr": error_msg,
+   833→                    },
+   834→                    success=False,
+   835→                    duration_ms=(time.time() - start_time) * 1000,
+   836→                )
+   837→                raise RuntimeError(f"Docker run failed: {error_msg}")
+   838→
+   839→            # Log successful container creation
+   840→            log_event(
+   841→                "gluetun_container_created",
+   842→                level="INFO",
+   843→                message=f"Gluetun container created: {container_name}",
+   844→                context={
+   845→                    "container_name": container_name,
+   846→                    "port": port,
+   847→                    "provider": provider_name,
+   848→                    "vpn_type": vpn_type,
+   849→                    "country": country,
+   850→                    "city": city,
+   851→                    "hostname": hostname,
+   852→                    "container_id": result.stdout.strip()[:12] if result.stdout else None,
+   853→                },
+   854→                success=True,
+   855→                duration_ms=(time.time() - start_time) * 1000,
+   856→            )
+   857→        finally:
+   858→            if env_file_path:
+   859→                # Best-effort "secure delete": overwrite then unlink (not guaranteed on all filesystems).
+   860→                try:
+   861→                    with open(env_file_path, "r+b") as f:
+   862→                        try:
+   863→                            f.seek(0, os.SEEK_END)
+   864→                            length = f.tell()
+   865→                            f.seek(0)
+   866→                            if length > 0:
+   867→                                f.write(b"\x00" * length)
+   868→                                f.flush()
+   869→                                os.fsync(f.fileno())
+   870→                        except Exception:
+   871→                            pass
+   872→                except Exception:
+   873→                    pass
+   874→                try:
+   875→                    os.remove(env_file_path)
+   876→                except FileNotFoundError:
+   877→                    pass
+   878→                except Exception:
+   879→                    pass
+   880→
+   881→    def _is_container_running(self, container_name: str) -> bool:
+   882→        """Check if a Docker container is running."""
+   883→        try:
+   884→            result = subprocess.run(
+   885→                [
+   886→                    "docker",
+   887→                    "ps",
+   888→                    "--filter",
+   889→                    f"name=^{re.escape(container_name)}$",
+   890→                    "--format",
+   891→                    "{{.Names}}",
+   892→                ],
+   893→                capture_output=True,
+   894→                text=True,
+   895→                timeout=5,
+   896→            )
+   897→            if result.returncode != 0:
+   898→                return False
+   899→
+   900→            names = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+   901→            return any(name == container_name for name in names)
+   902→        except (subprocess.TimeoutExpired, FileNotFoundError):
+   903→            return False
+   904→
+   905→    def _get_existing_container_info(self, container_name: str) -> Optional[dict]:
+   906→        """
+   907→        Check if a container exists in Docker and get its info.
+   908→
+   909→        This handles multiple Unshackle sessions - if another session already
+   910→        created the container, we'll reuse it instead of trying to create a duplicate.
+   911→
+   912→        Args:
+   913→            container_name: Name of the container to check
+   914→
+   915→        Returns:
+   916→            Dict with container info if exists and running, None otherwise
+   917→        """
+   918→        try:
+   919→            # Check if container is running
+   920→            if not self._is_container_running(container_name):
+   921→                return None
+   922→
+   923→            # Get container port mapping
+   924→            # Format: "127.0.0.1:8888->8888/tcp"
+   925→            result = subprocess.run(
+   926→                ["docker", "inspect", container_name, "--format", "{{.NetworkSettings.Ports}}"],
+   927→                capture_output=True,
+   928→                text=True,
+   929→                timeout=5,
+   930→            )
+   931→
+   932→            if result.returncode != 0:
+   933→                return None
+   934→
+   935→            # Parse port from output like "map[8888/tcp:[{127.0.0.1 8888}]]"
+   936→            port_match = re.search(r"127\.0\.0\.1\s+(\d+)", result.stdout)
+   937→            if not port_match:
+   938→                return None
+   939→
+   940→            port = int(port_match.group(1))
+   941→
+   942→            # Extract provider and region from container name
+   943→            # Format: unshackle-gluetun-provider-region
+   944→            name_pattern = f"{self.container_prefix}-(.+)-([^-]+)$"
+   945→            name_match = re.match(name_pattern, container_name)
+   946→            if not name_match:
+   947→                return None
+   948→
+   949→            provider_name = name_match.group(1)
+   950→            region = name_match.group(2)
+   951→
+   952→            # Get expected country and hostname from config (if available)
+   953→            country = None
+   954→            hostname = None
+   955→
+   956→            # Check if region is a specific server (e.g., us1239)
+   957→            specific_server_match = re.match(r"^([a-z]{2})(\d+)$", region, re.IGNORECASE)
+   958→            if specific_server_match:
+   959→                country_code = specific_server_match.group(1).upper()
+   960→                server_num = specific_server_match.group(2)
+   961→                hostname = self._build_server_hostname(provider_name, country_code, server_num)
+   962→                country = country_code
+   963→
+   964→            # Otherwise check config
+   965→            elif provider_name in self.providers:
+   966→                provider_config = self.providers[provider_name]
+   967→                server_countries = provider_config.get("server_countries", {})
+   968→                country = server_countries.get(region)
+   969→
+   970→                if not country and re.match(r"^[a-z]{2}$", region):
+   971→                    country = region.upper()
+   972→
+   973→            return {
+   974→                "container_name": container_name,
+   975→                "port": port,
+   976→                "provider": provider_name,
+   977→                "region": region,
+   978→                "country": country,
+   979→                "city": None,
+   980→                "hostname": hostname,
+   981→            }
+   982→
+   983→        except (subprocess.TimeoutExpired, FileNotFoundError, ValueError):
+   984→            return None
+   985→
+   986→    def _wait_for_container(self, container_name: str, timeout: int = 60) -> bool:
+   987→        """
+   988→        Wait for Gluetun container to be ready by checking logs for proxy readiness.
+   989→
+   990→        Gluetun logs "http proxy listening" when the HTTP proxy is ready to accept connections.
+   991→
+   992→        Args:
+   993→            container_name: Name of the container to wait for
+   994→            timeout: Maximum time to wait in seconds (default: 60)
+   995→
+   996→        Returns:
+   997→            True if container is ready, False if it failed or timed out
+   998→        """
+   999→        start_time = time.time()
+  1000→        last_error = None
+  1001→
+  1002→        log_event(
+  1003→            "gluetun_container_wait_start",
+  1004→            level="DEBUG",
+  1005→            message=f"Waiting for container to be ready: {container_name}",
+  1006→            context={"container_name": container_name, "timeout": timeout},
+  1007→        )
+  1008→
+  1009→        while time.time() - start_time < timeout:
+  1010→            try:
+  1011→                # First check if container is still running
+  1012→                if not self._is_container_running(container_name):
+  1013→                    # Container may have exited - check if it crashed
+  1014→                    exit_info = self._get_container_exit_info(container_name)
+  1015→                    if exit_info:
+  1016→                        last_error = f"Container exited with code {exit_info.get('exit_code', 'unknown')}"
+  1017→                    time.sleep(1)
+  1018→                    continue
+  1019→
+  1020→                # Check logs for readiness indicators
+  1021→                result = subprocess.run(
+  1022→                    ["docker", "logs", container_name, "--tail", "100"],
+  1023→                    capture_output=True,
+  1024→                    text=True,
+  1025→                    timeout=5,
+  1026→                    encoding="utf-8",
+  1027→                    errors="replace",
+  1028→                )
+  1029→
+  1030→                if result.returncode == 0:
+  1031→                    # Combine stdout and stderr for checking (handle None values)
+  1032→                    stdout = result.stdout or ""
+  1033→                    stderr = result.stderr or ""
+  1034→                    all_logs = (stdout + stderr).lower()
+  1035→
+  1036→                    # Gluetun needs both proxy listening AND VPN connected
+  1037→                    # The proxy starts before VPN is ready, so we need to wait for VPN
+  1038→                    proxy_ready = "[http proxy] listening" in all_logs
+  1039→                    vpn_ready = "initialization sequence completed" in all_logs or "public ip address is" in all_logs
+  1040→
+  1041→                    if proxy_ready and vpn_ready:
+  1042→                        # Give a brief moment for the proxy to fully initialize
+  1043→                        time.sleep(1)
+  1044→                        duration_ms = (time.time() - start_time) * 1000
+  1045→                        log_event(
+  1046→                            "gluetun_container_ready",
+  1047→                            level="INFO",
+  1048→                            message=f"Gluetun container is ready: {container_name}",
+  1049→                            context={
+  1050→                                "container_name": container_name,
+  1051→                                "proxy_ready": proxy_ready,
+  1052→                                "vpn_ready": vpn_ready,
+  1053→                            },
+  1054→                            success=True,
+  1055→                            duration_ms=duration_ms,
+  1056→                        )
+  1057→                        return True
+  1058→
+  1059→                    # Check for fatal errors that indicate VPN connection failure
+  1060→                    error_indicators = [
+  1061→                        "fatal",
+  1062→                        "cannot connect",
+  1063→                        "authentication failed",
+  1064→                        "invalid credentials",
+  1065→                        "connection refused",
+  1066→                        "no valid servers",
+  1067→                    ]
+  1068→
+  1069→                    for error in error_indicators:
+  1070→                        if error in all_logs:
+  1071→                            # Extract the error line for better messaging
+  1072→                            for line in (stdout + stderr).split("\n"):
+  1073→                                if error in line.lower():
+  1074→                                    last_error = line.strip()
+  1075→                                    break
+  1076→                            # Fatal errors mean we should stop waiting
+  1077→                            if "fatal" in all_logs or "invalid credentials" in all_logs:
+  1078→                                return False
+  1079→
+  1080→            except subprocess.TimeoutExpired:
+  1081→                pass
+  1082→
+  1083→            time.sleep(2)
+  1084→
+  1085→        # Store the last error for potential logging
+  1086→        if last_error:
+  1087→            self._last_wait_error = last_error
+  1088→
+  1089→        # Log timeout/failure
+  1090→        duration_ms = (time.time() - start_time) * 1000
+  1091→        log_event(
+  1092→            "gluetun_container_wait_timeout",
+  1093→            level="ERROR",
+  1094→            message=f"Gluetun container failed to become ready: {container_name}",
+  1095→            context={
+  1096→                "container_name": container_name,
+  1097→                "timeout": timeout,
+  1098→                "last_error": last_error,
+  1099→            },
+  1100→            success=False,
+  1101→            duration_ms=duration_ms,
+  1102→        )
+  1103→        return False
+  1104→
+  1105→    def _get_container_exit_info(self, container_name: str) -> Optional[dict]:
+  1106→        """Get exit information for a stopped container."""
+  1107→        try:
+  1108→            result = subprocess.run(
+  1109→                ["docker", "inspect", container_name, "--format", "{{.State.ExitCode}}:{{.State.Error}}"],
+  1110→                capture_output=True,
+  1111→                text=True,
+  1112→                timeout=5,
+  1113→            )
+  1114→            if result.returncode == 0:
+  1115→                parts = result.stdout.strip().split(":", 1)
+  1116→                return {
+  1117→                    "exit_code": int(parts[0]) if parts[0].isdigit() else -1,
+  1118→                    "error": parts[1] if len(parts) > 1 else "",
+  1119→                }
+  1120→            return None
+  1121→        except (subprocess.TimeoutExpired, FileNotFoundError, ValueError):
+  1122→            return None
+  1123→
+  1124→    def _get_container_logs(self, container_name: str, tail: int = 50) -> str:
+  1125→        """Get recent logs from a container for error reporting."""
+  1126→        try:
+  1127→            result = subprocess.run(
+  1128→                ["docker", "logs", container_name, "--tail", str(tail)],
+  1129→                capture_output=True,
+  1130→                text=True,
+  1131→                timeout=10,
+  1132→                encoding="utf-8",
+  1133→                errors="replace",
+  1134→            )
+  1135→            return (result.stdout or "") + (result.stderr or "")
+  1136→        except (subprocess.TimeoutExpired, FileNotFoundError):
+  1137→            return ""
+  1138→
+  1139→    def _verify_container(self, query_key: str, max_retries: int = 3):
+  1140→        """
+  1141→        Verify container's VPN IP and region using ipinfo.io lookup.
+  1142→
+  1143→        Uses the shared get_ip_info function with a session configured to use
+  1144→        the Gluetun proxy. Retries with exponential backoff if the network
+  1145→        isn't ready immediately after the VPN connects.
+  1146→
+  1147→        Args:
+  1148→            query_key: The container query key (provider:region)
+  1149→            max_retries: Maximum number of retry attempts (default: 3)
+  1150→
+  1151→        Raises:
+  1152→            RuntimeError: If verification fails after all retries
+  1153→        """
+  1154→        start_time = time.time()
+  1155→
+  1156→        if query_key not in self.active_containers:
+  1157→            return
+  1158→
+  1159→        container = self.active_containers[query_key]
+  1160→        proxy_url = self._build_proxy_uri(container["port"])
+  1161→        expected_country = container.get("country", "").upper()
+  1162→
+  1163→        log_event(
+  1164→            "gluetun_verify_start",
+  1165→            level="DEBUG",
+  1166→            message=f"Verifying VPN IP for: {query_key}",
+  1167→            context={
+  1168→                "query_key": query_key,
+  1169→                "container_name": container.get("container_name"),
+  1170→                "expected_country": expected_country,
+  1171→                "max_retries": max_retries,
+  1172→            },
+  1173→        )
+  1174→
+  1175→        last_error = None
+  1176→
+  1177→        # Create a session with the proxy configured
+  1178→        session = requests.Session()
+  1179→        try:
+  1180→            session.proxies = {"http": proxy_url, "https": proxy_url}
+  1181→
+  1182→            # Retry with exponential backoff
+  1183→            for attempt in range(max_retries):
+  1184→                try:
+  1185→                    # Get external IP through the proxy using shared utility
+  1186→                    ip_info = get_ip_info(session)
+  1187→
+  1188→                    if ip_info:
+  1189→                        actual_country = ip_info.get("country", "").upper()
+  1190→
+  1191→                        # Check if country matches (if we have an expected country)
+  1192→                        # ipinfo.io returns country codes (CA), but we may have full names (Canada)
+  1193→                        # Normalize both to country codes for comparison using shared utility
+  1194→                        if expected_country:
+  1195→                            # Convert expected country name to code if it's a full name
+  1196→                            expected_code = get_country_code(expected_country) or expected_country
+  1197→                            expected_code = expected_code.upper()
+  1198→
+  1199→                            if actual_country != expected_code:
+  1200→                                duration_ms = (time.time() - start_time) * 1000
+  1201→                                log_event(
+  1202→                                    "gluetun_verify_mismatch",
+  1203→                                    level="ERROR",
+  1204→                                    message=f"Region mismatch for {query_key}",
+  1205→                                    context={
+  1206→                                        "query_key": query_key,
+  1207→                                        "expected_country": expected_code,
+  1208→                                        "actual_country": actual_country,
+  1209→                                        "ip": ip_info.get("ip"),
+  1210→                                        "city": ip_info.get("city"),
+  1211→                                        "org": ip_info.get("org"),
+  1212→                                    },
+  1213→                                    success=False,
+  1214→                                    duration_ms=duration_ms,
+  1215→                                )
+  1216→                                raise RuntimeError(
+  1217→                                    f"Region mismatch for {container['provider']}:{container['region']}: "
+  1218→                                    f"Expected '{expected_code}' but got '{actual_country}' "
+  1219→                                    f"(IP: {ip_info.get('ip')}, City: {ip_info.get('city')})"
+  1220→                                )
+  1221→
+  1222→                        # Verification successful - store IP info in container record
+  1223→                        if query_key in self.active_containers:
+  1224→                            self.active_containers[query_key]["public_ip"] = ip_info.get("ip")
+  1225→                            self.active_containers[query_key]["ip_country"] = actual_country
+  1226→                            self.active_containers[query_key]["ip_city"] = ip_info.get("city")
+  1227→                            self.active_containers[query_key]["ip_org"] = ip_info.get("org")
+  1228→
+  1229→                        duration_ms = (time.time() - start_time) * 1000
+  1230→                        log_event(
+  1231→                            "gluetun_verify_success",
+  1232→                            level="INFO",
+  1233→                            message=f"VPN IP verified for: {query_key}",
+  1234→                            context={
+  1235→                                "query_key": query_key,
+  1236→                                "ip": ip_info.get("ip"),
+  1237→                                "country": actual_country,
+  1238→                                "city": ip_info.get("city"),
+  1239→                                "org": ip_info.get("org"),
+  1240→                                "attempts": attempt + 1,
+  1241→                            },
+  1242→                            success=True,
+  1243→                            duration_ms=duration_ms,
+  1244→                        )
+  1245→                        return
+  1246→
+  1247→                    # ip_info was None, retry
+  1248→                    last_error = "Failed to get IP info from ipinfo.io"
+  1249→
+  1250→                except RuntimeError:
+  1251→                    raise  # Re-raise region mismatch errors immediately
+  1252→                except Exception as e:
+  1253→                    last_error = str(e)
+  1254→                    log_event(
+  1255→                        "gluetun_verify_retry",
+  1256→                        level="DEBUG",
+  1257→                        message=f"Verification attempt {attempt + 1} failed, retrying",
+  1258→                        context={
+  1259→                            "query_key": query_key,
+  1260→                            "attempt": attempt + 1,
+  1261→                            "error": last_error,
+  1262→                        },
+  1263→                    )
+  1264→
+  1265→                # Wait before retry (exponential backoff)
+  1266→                if attempt < max_retries - 1:
+  1267→                    wait_time = 2**attempt  # 1, 2, 4 seconds
+  1268→                    time.sleep(wait_time)
+  1269→        finally:
+  1270→            try:
+  1271→                session.close()
+  1272→            except Exception:
+  1273→                pass
+  1274→
+  1275→        # All retries exhausted
+  1276→        duration_ms = (time.time() - start_time) * 1000
+  1277→        log_event(
+  1278→            "gluetun_verify_failed",
+  1279→            level="ERROR",
+  1280→            message=f"VPN verification failed after {max_retries} attempts",
+  1281→            context={
+  1282→                "query_key": query_key,
+  1283→                "max_retries": max_retries,
+  1284→                "last_error": last_error,
+  1285→            },
+  1286→            success=False,
+  1287→            duration_ms=duration_ms,
+  1288→        )
+  1289→        raise RuntimeError(
+  1290→            f"Failed to verify VPN IP for {container['provider']}:{container['region']} "
+  1291→            f"after {max_retries} attempts. Last error: {last_error}"
+  1292→        )
+  1293→
+  1294→    def _remove_stopped_container(self, container_name: str) -> bool:
+  1295→        """
+  1296→        Remove a stopped container with the given name if it exists.
+  1297→
+  1298→        This prevents "container name already in use" errors when a previous
+  1299→        container wasn't properly cleaned up.
+  1300→
+  1301→        Args:
+  1302→            container_name: Name of the container to check and remove
+  1303→
+  1304→        Returns:
+  1305→            True if a container was removed, False otherwise
+  1306→        """
+  1307→        try:
+  1308→            # Check if container exists (running or stopped)
+  1309→            result = subprocess.run(
+  1310→                ["docker", "ps", "-a", "--filter", f"name=^{container_name}$", "--format", "{{.Names}}:{{.Status}}"],
+  1311→                capture_output=True,
+  1312→                text=True,
+  1313→                timeout=5,
+  1314→            )
+  1315→
+  1316→            if result.returncode != 0 or not result.stdout.strip():
+  1317→                return False
+  1318→
+  1319→            # Parse status - format is "name:Up 2 hours" or "name:Exited (0) 2 hours ago"
+  1320→            output = result.stdout.strip()
+  1321→            if container_name not in output:
+  1322→                return False
+  1323→
+  1324→            # Check if container is stopped (not running)
+  1325→            if "Exited" in output or "Created" in output or "Dead" in output:
+  1326→                # Container exists but is stopped - remove it
+  1327→                subprocess.run(
+  1328→                    ["docker", "rm", "-f", container_name],
+  1329→                    capture_output=True,
+  1330→                    text=True,
+  1331→                    timeout=10,
+  1332→                )
+  1333→                return True
+  1334→
+  1335→            return False
+  1336→
+  1337→        except (subprocess.TimeoutExpired, FileNotFoundError):
+  1338→            return False
+  1339→
+  1340→    def _remove_container(self, container_name: str):
+  1341→        """Stop and remove a Docker container."""
+  1342→        try:
+  1343→            if self.auto_cleanup:
+  1344→                # Use docker rm -f to force remove (stops and removes in one command)
+  1345→                subprocess.run(
+  1346→                    ["docker", "rm", "-f", container_name],
+  1347→                    capture_output=True,
+  1348→                    text=True,
+  1349→                    timeout=10,
+  1350→                )
+  1351→            else:
+  1352→                # Just stop the container
+  1353→                subprocess.run(
+  1354→                    ["docker", "stop", container_name],
+  1355→                    capture_output=True,
+  1356→                    text=True,
+  1357→                    timeout=10,
+  1358→                )
+  1359→        except subprocess.TimeoutExpired:
+  1360→            # Force kill if timeout
+  1361→            try:
+  1362→                subprocess.run(
+  1363→                    ["docker", "rm", "-f", container_name],
+  1364→                    capture_output=True,
+  1365→                    text=True,
+  1366→                    timeout=5,
+  1367→                )
+  1368→            except subprocess.TimeoutExpired:
+  1369→                pass
+  1370→
+  1371→    def _build_proxy_uri(self, port: int) -> str:
+  1372→        """Build HTTP proxy URI."""
+  1373→        if self.auth_user and self.auth_password:
+  1374→            return f"http://{self.auth_user}:{self.auth_password}@localhost:{port}"
+  1375→        return f"http://localhost:{port}"
+  1376→
+  1377→    def __del__(self):
+  1378→        """Cleanup containers on object destruction."""
+  1379→        if hasattr(self, "auto_cleanup") and self.auto_cleanup:
+  1380→            try:
+  1381→                if hasattr(self, "active_containers") and self.active_containers:
+  1382→                    self.cleanup()
+  1383→            except Exception:
+  1384→                pass
+  1385→

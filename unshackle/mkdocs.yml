@@ -1,0 +1,106 @@
+site_name: unshackle
+site_description: Configuration reference for unshackle
+site_url: https://docs.unshackle.dev/
+repo_url: https://github.com/unshackle-dl/unshackle
+docs_dir: docs
+
+theme:
+  name: material
+  custom_dir: overrides
+  favicon: assets/favicon.svg
+  icon:
+    logo: custom/no_encryption
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/link
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: indigo
+      toggle:
+        icon: material/toggle-switch-off
+        name: Switch to system preference
+  font:
+    text: Roboto
+    code: Roboto Mono
+  features:
+    - content.code.annotate
+    - content.code.copy
+    - content.tooltips
+    - navigation.footer
+    - navigation.indexes
+    - navigation.sections
+    - navigation.tabs
+    - navigation.top
+    - navigation.tracking
+    - search.highlight
+    - search.share
+    - search.suggest
+    - toc.follow
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+plugins:
+  - search
+
+nav:
+  - Home: README.md
+  - Creating a Service: CREATING_A_SERVICE.md
+  - Configuration:
+      - Service Integration & Auth: SERVICE_CONFIG.md
+      - Download & Processing: DOWNLOAD_CONFIG.md
+      - Output & Naming: OUTPUT_CONFIG.md
+      - Subtitles: SUBTITLE_CONFIG.md
+      - DRM & CDM: DRM_CONFIG.md
+      - Network & Proxy: NETWORK_CONFIG.md
+      - Gluetun VPN: GLUETUN.md
+      - V2Ray / Xray: V2RAY.md
+      - Advanced & System: ADVANCED_CONFIG.md
+  - REST API:
+      - Overview: API.md
+      - Quick Start: api/quick-start.md
+      - Authentication: api/authentication.md
+      - Endpoints: api/endpoints.md
+      - Endpoint Map: api/endpoint-map.md
+      - Download Job Lifecycle: api/download-job-lifecycle.md
+      - Remote Service Sessions: api/remote-service-sessions.md
+      - Client Configuration: api/client-configuration.md
+      - Error Responses: api/error-responses.md
+  - Reference:
+      - Debug Logging: DEBUG_LOGGING.md

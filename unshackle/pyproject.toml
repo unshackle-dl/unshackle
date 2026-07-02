@@ -1,0 +1,163 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "unshackle"
+version = "5.3.0"
+description = "Modular Movie, TV, and Music Archival Software."
+authors = [{ name = "unshackle team" }]
+requires-python = ">=3.11,<3.15"
+readme = "README.md"
+license = "GPL-3.0-only"
+keywords = [
+    "python",
+    "downloader",
+    "drm",
+    "widevine",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Security :: Cryptography",
+]
+dependencies = [
+    "appdirs>=1.4.4,<2",
+    "Brotli>=1.1.0,<2",
+    "click>=8.1.8,<9",
+    "construct>=2.8.8,<3",
+    "crccheck>=1.3.0,<2",
+    "filelock>=3.20.3,<4",
+    "fonttools>=4.60.2,<5",
+    "jsonpickle>=3.0.4,<5",
+    "langcodes>=3.4.0,<4",
+    "lxml>=5.2.1,<7",
+    "protobuf>=4.25.3,<7",
+    "pycaption>=2.2.6,<3",
+    "pycryptodomex>=3.20.0,<4",
+    "pyjwt>=2.12.0,<3",
+    "pymediainfo>=6.1.0,<8",
+    "pymp4>=1.4.0,<2",
+    "pymysql>=1.1.0,<2",
+    "pywidevine[serve]>=1.8.0,<2",
+    "PyYAML>=6.0.1,<7",
+    "requests[socks]>=2.32.5,<3",
+    "rich>=13.7.1,<15",
+    "rlaphoenix.m3u8>=3.4.0,<4",
+    "ruamel.yaml>=0.18.6,<0.19",
+    "sortedcontainers>=2.4.0,<3",
+    "subtitle-filter>=1.4.9,<2",
+    "Unidecode>=1.3.8,<2",
+    "urllib3>=2.6.3,<3",
+    "chardet>=5.2.0,<6",
+    "pyplayready>=0.8.3,<0.9",
+    "cryptography>=45.0.0,<47",
+    "subby",
+    "aiohttp>=3.14.0,<4",
+    "aiohttp-swagger3>=0.9.0,<1",
+    "pysubs2>=1.7.0,<2",
+    "PyExecJS>=1.5.1,<2",
+    "pycountry>=24.6.1",
+    "language-data>=1.4.0",
+    "wasmtime>=41.0.0",
+    "animeapi-py>=0.6.0",
+    "rnet>=2.4.2",
+    "bandit>=1.9.4",
+    "jsonpath-ng>=1.8.0",
+    "mutagen>=1.47.0,<2",
+    "defusedxml>=0.7.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/unshackle-dl/unshackle"
+Repository = "https://github.com/unshackle-dl/unshackle"
+Issues = "https://github.com/unshackle-dl/unshackle/issues"
+Discussions = "https://github.com/unshackle-dl/unshackle/discussions"
+Changelog = "https://github.com/unshackle-dl/unshackle/blob/master/CHANGELOG.md"
+
+[project.scripts]
+unshackle = "unshackle.core.__main__:main"
+
+[dependency-groups]
+dev = [
+    "pre-commit>=3.7.0,<5",
+    "virtualenv>=20.36.1,<22",
+    "mypy>=1.9.0,<2",
+    "mypy-protobuf>=3.6.0,<4",
+    "types-protobuf>=4.24.0.20240408,<7",
+    "types-PyMySQL>=1.1.0.1,<2",
+    "types-requests>=2.31.0.20240406,<3",
+    "isort>=5.13.2,<8",
+    "ruff>=0.3.7,<0.15",
+]
+test = [
+    "pytest>=8.3.0,<9",
+    "pytest-asyncio>=0.24.0,<1",
+    "pytest-aiohttp>=1.0.5,<2",
+    "responses>=0.25.0,<1",
+    "PyYAML>=6.0.1,<7",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "unit: fast, mocked tests (default)",
+    "live: end-to-end tests against a running serve (opt-in via --live)",
+    "slow: tests that hit real services and may take >10s",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning:click.*",
+    "ignore::DeprecationWarning:unshackle.core.services",
+    "ignore::DeprecationWarning:ast",
+    "ignore::aiohttp.web_exceptions.NotAppKeyWarning",
+    "ignore::DeprecationWarning:pycaption.*",
+    "ignore::bs4.XMLParsedAsHTMLWarning",
+]
+addopts = "-ra --strict-markers"
+
+[tool.hatch.build.targets.wheel]
+packages = ["unshackle"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "CHANGELOG.md",
+    "README.md",
+    "LICENSE",
+]
+
+[tool.ruff]
+force-exclude = true
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "W"]
+
+[tool.isort]
+line_length = 118
+
+[tool.mypy]
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+follow_imports = "silent"
+ignore_missing_imports = true
+no_implicit_optional = true
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv"]
+skips = [
+    "B101",  # assert used legitimately in non-test code
+    "B324",  # MD5/SHA1 used for identifiers and cache keys, not security
+    "B413",  # false positive: pycryptodome uses Crypto namespace, not deprecated pyCrypto
+    "B314",  # XML from DRM protocol headers, not untrusted user input
+    "B608",  # SQL table names from internal service tags, not user input; parameterized values
+]
+
+[tool.uv.sources]
+unshackle = { workspace = true }
+subby = { git = "https://github.com/vevv/subby.git", rev = "a057280f31acd3a0ba5c6dc69eaefbb88aea974e" }

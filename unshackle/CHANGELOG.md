@@ -1,0 +1,792 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+This changelog is automatically generated using [git-cliff](https://git-cliff.org).
+
+## [5.3.0] - 2026-06-30
+
+### Features
+
+- *dl*: Add --merge-video to merge video language variants
+- Native ExpressVPN HTTPS Proxy Provider
+- Support Python 3.14 and widen range to 3.11-3.14
+- Add automatic Firefox cookie and localstorage extraction
+- *api*: Expose title description, date and cover_url in serialize_title
+- *api*: Expose active-track segment counts and transfer speed in job progress
+- *vaults*: Add configurable network timeout for remote vaults
+- *docs*: Add per-vault network timeout configuration for remote vaults
+- *services*: Load service plugins from git repos
+- *proxies*: Add Proton VPN proxy provider
+- *output*: Support nested directories in folder templates
+- *proxies*: Add ProtonVPN TV login, drop cookie refresh
+- *titles*: Add air_date for date-based episode naming
+
+### Bug Fixes
+
+- *api*: Annotate routes.py to pass strict mypy
+- *config*: Match per-service cdm keys case-insensitively
+- *drm*: Don't switch to a mismatched CDM type during licensing
+- *env*: Only resolve Path items in directory lists
+- *output*: Treat `/` and `\` as folder separators on any OS
+- *console*: Pause active live contexts during terminal input
+- *dl*: Apply per-service decryption tool override
+- *hls*: Stream segment merges to avoid OOM on large tracks
+
+### Documentation
+
+- Rename to match other docs.
+- *config*: Make docs/ canonical, slim unshackle-example.yaml to a starter
+- Add MkDocs Material documentation site
+- *readme*: Link Docs to docs.unshackle.dev, remove Wiki
+- Add "Creating a Service" guide
+- Fix inaccuracies in service-creation guide
+
+### Performance Improvements
+
+- *tracks*: Skip redundant DV/VUI bitstream passes
+- *hls*: Rename single decrypted range instead of re-copying
+
+### Changes
+
+- *api*: Remove dead code paths in serve/remote layer
+- *api*: Dedup handler serializers, validation, and service setup
+- *api*: Use Event.wait and a shared to_enum helper
+- *api*: Collapse route registration into single ROUTES table
+- *api*: Drop dead error codes, lock error contract harness
+
+## [5.2.0] - 2026-06-16
+
+### Features
+
+- *vault*: Add VAULT_TAG to share key vault across services
+- *subtitle*: Data-driven conversion registry + SubtitleEdit 5 support
+- *subtitle*: Support 'original' sub_format to keep source format
+- *api*: Aggregate REST download progress with weighting, track labels and mux stage
+- *logging*: Expand debug-logging coverage, add primitives, redaction & tests
+- *logging*: Add debug_requests flag and aggregate subtitle-conversion logs
+- *drm*: Add native DASH ClearKey (org.w3.clearkey) support
+- *music*: Native music core - shared helpers, album folder template, display cleanup
+
+### Bug Fixes
+
+- *core*: Replace deprecated ast.Num visitor in FPS parser
+- *hls*: Decrypt AES-128 (ClearKey) media-playlist keys + per-segment sequence IV
+- *dl*: Mux hybrid ingredients standalone only when range explicitly requested
+- *dl*: Make a failed subtitle non-fatal under --skip-subtitle-errors
+- *api*: Repair REST API downloads, add /services flags & live progress
+- *dl*: Apply per-service dl config overrides for all options
+- *security*: Sanitize logs, redact secrets, harden XML parsing
+- *dl*: Export DRM-free, ClearKey, MonaLisa and server-CDM tracks
+- *ism*: Rebuild moov init segment for Smooth Streaming decrypt
+- *ism*: Derive video colour range from CodecPrivateData SPS VUI
+- *subtitle*: Drive SubtitleEdit 4.x with legacy /convert syntax
+
+### Changes
+
+- *cli*: Replace deprecated click.MultiCommand with click.Group
+- *dl*: Type the two-pass download helper + pin skipped_subtitles shape
+
+## [5.1.0] - 2026-06-03
+
+### Features
+
+- *ip-info*: Consolidate IP lookup, add ipinfo.io token support
+- *dl*: Cache content keys in-memory to skip duplicate license requests
+- *mux*: Add muxing.default_language to override default track per type
+- *hls*: Detect DV-composite tracks and restore signaling post-mux
+- *video*: Normalize SPS VUI to match manifest-derived range
+- *api*: Sync /api/download with dl CLI flags and add serve.* defaults
+- *vaults*: Tolerate vault failures during key get/add
+- *tracks*: Configurable audio codec priority for tie-breaking
+- *dl*: Live countdown for --slow delay
+- *dl*: Gate s_lang/a_lang miss behind --best-available
+- *dl*: Add real bitrate probing (-rvb/-rab)
+- *import*: Reconstruct downloads from an --export sidecar
+- *naming*: Per-service title_map remapping
+- *import*: Include cover-art attachments in --export/--import
+
+### Bug Fixes
+
+- *manifests*: Clean stale .!dev resume markers before merge
+- *sanitize*: Preserve parentheses, strip unidecode bracket artifacts
+- *tracks*: Honor --worst in hybrid range selection
+- *dl*: Re-pick DV/HDR10 when HYBRID falls back under best_available
+- *proxies/nordvpn*: Use *.proxy.nordvpn.com for HTTPS proxy
+- *template_formatter*: Preserve dash separator around empty conditional
+- *dl*: Prefer Atmos in -l best/all language selection
+- *title*: Detect Atmos across all audio tracks for filename template
+- *title*: Use original-language audio for filename metadata
+- *service*: Render request_input prompt via rich console
+- *titles*: Normalize odd resolutions in filename quality token
+- *api*: Propagate Click default=None through service instantiation
+- *api*: Load real CDM for service init in list/session/download flows
+- *vaults*: Enable WAL on SQLite vault to fix concurrent locks
+- *hybrid*: Correct static L6 source and reset stale L5 active area
+- *cli*: Report broken command/service loads once and cleanly
+- *hls*: Resolve per-rendition KID in no-EXT-X-KEY fallback
+- *dash*: Inherit SegmentTemplate attributes across AdaptationSet/Representation
+- *dl*: Mux all requested ranges and select highest DV alongside hybrid
+- *session*: Proxy auth on http targets and string params support
+
+### Documentation
+
+- Update docs to match current codebase
+- *output*: Document muxing.default_language override
+- Simplify README with demo and requirements
+
+### Changes
+
+- *routes, subtitle, track*: Improve code readability by formatting list structures
+- *hybrid*: Extract dovi_tool and run_step helpers
+- *ip_info*: Simplify lookup and trim cache
+- *example*: Showcase full unshackle feature surface
+- *dl*: Declare hybrid_base_only flag and extract standalone mux helper
+- Remove dead aria2c and n_m3u8dl_re downloader code
+
+### Maintenance
+
+- *pre-commit*: Update hook versions in .pre-commit-config.yaml
+- *changelog*: Update version date and add new features and fixes for 5.1.0
+- *changelog*: Update changelog and cleanup readme
+
+## [5.0.0] - 2026-05-04
+
+### Features
+
+- *dl*: Add --vbitrate-range and --abitrate-range options for bitrate range selection
+- *remote*: Server vault lookups, service CDM mapping, key display, and service param forwarding
+- *remote*: Interactive auth handshake, server CDM, cache round-trip, and serve remote-only mode
+- *template*: Add configurable folder naming via output_template.folder
+- *hls*: Probe TS segments for resolution and codec when master playlist lacks RESOLUTION/CODECS tags
+- *downloader*: Consolidate into unified requests-based downloader
+- *dash*: Refactor segment extraction and add content period validation
+- *downloader*: Optimize download throughput with Queue-based threading and raw reads
+- *session*: Replace curl_cffi with rnet for TLS-fingerprinted HTTP
+- *session*: Translate requests 'data' kwarg to rnet equivalents for compatibility
+- *dl*: Allow --slow to accept custom delay range
+- *serve*: Add service allowlist for global and per-user access control
+- *dl*: Change --export flag with manifest URL, subtitles, and track info
+- *dl*: Add download resume support via HTTP Range headers
+- *track*: Add optional per-track session parameter
+- *session*: Optimize header handling in session requests
+- *kv*: Add search subcommand to look up KID across vaults
+- *kv*: Add --local-only flag to copy/sync
+- *config*: Per-title-type folder templates
+- *dl*: Add --no-proxy-download flag
+- *docs*: Add AGENTS.md to .gitignore
+
+### Bug Fixes
+
+- Update actions/checkout to v5 in release workflow
+- *audio*: Support 'xheaac' profile
+- *drm*: Include external KID in PSSH when it differs from existing KIDs
+- *deps*: Bump PyJWT minimum to 2.12.0 for CVE-2026-32597
+- *sanitize*: Restore parentheses stripping in filename sanitization
+- *serve*: Allow remote-only mode without output_template and fix CORS/auth for Cloudflare
+- *remote*: Forward track selection params to server and improve error display
+- *subtitle*: Decompress gzip/zlib responses for subtitle downloads
+- *drm*: Add zero-KID fallback for mp4decrypt and clear HLS track.drm after download
+- *drm*: Add track ID fallback for mp4decrypt CBCS zero-KID content
+- *hybrid*: Read actual HDR metadata for HDR10+ to DV conversion
+- *template*: Detect folder spacer from template separators, not raw string
+- *session*: Native rnet proxy support and cookie compat layer
+- *deps*: Bump aiohttp and pygments to resolve 11 security vulnerabilities
+- *api*: Sanitize user-provided values in log statements to prevent log injection
+- *dl*: Preserve per-language video selection in quality step
+- *dash*: Add SIDX parsing for SegmentBase manifests and deduplicate multi-period segments
+- *gluetun*: Support WireGuard VPN ready detection
+- *api*: Sync REST API download endpoint with updated dl command
+- *drm*: Handle non-UTF-8 output from shaka-packager stderr
+- *tags*: Prevent metadata lookup failures from skipping group tag
+- *dl*: Always report full error trace for download worker failures
+- *dash*: Deduplicate multi-period SegmentBase segments
+- *dash*: Expand CICP enums to full H.273 range
+- *drm*: Pass per-segment PSSH to PlayReady license callback
+- *drm*: Pass per-segment PSSH to Widevine license callback
+- *hls*: Carry DRM keys forward across EXT-X-KEY rotation
+
+### Documentation
+
+- *api*: Update --export from string path to boolean flag
+
+### Performance Improvements
+
+- *downloader*: Optimize hot loop and threading efficiency
+- *downloader*: Parallel byte-range fetch for single-URL tracks
+
+### Maintenance
+
+- *gitignore*: Ignore binary files in unshackle/binaries/
+- Update version to 5.0.0
+
+## [4.0.0] - 2026-03-17
+
+### Features
+
+- *hybrid*: Add L5 active area and dynamic L6 luminance metadata
+- *debug*: Add JSONL debug logging to decryption, muxing, and all downloaders
+- *debug*: Log binary tool versions at session start
+- *dl*: Add --repack flag to insert REPACK tag in output filenames
+- *core*: Add TrackRequest system for multi-codec/multi-range support
+- *dl*: Add --output option to override download directory
+- *tracks*: Add edition tags to output filenames
+- *templates*: [**breaking**] Add customizable output filename templates
+- *templates*: Add configurable language tagging rule engine
+- Update unshackle version to 4.0.0
+- *dl*: Add --animeapi and --enrich options for anime metadata and tagging
+- *dl*: Add skip messages for --no-audio and --no-chapters flags
+- *dl*: Extract closed captions from HLS manifests and improve CC extraction
+- *dl*: Add --worst flag and SHIELD OkHttp fingerprint preset
+- *dl*: Add --remote flag for downloading via remote unshackle server
+- *remote*: Add server-CDM mode, manifest transfer, and region-aware proxy
+- *remote*: Add zlib compression for API payloads and gzip transport
+- *remote*: Fetch service list and CLI options from server for --remote help
+- *session*: Add IP validation for session access and enhance session management
+
+### Bug Fixes
+
+- *n_m3u8dl_re*: Pass all content keys for DualKey DRM decryption
+- *hybrid*: Skip bitrate filter for DV tracks in HYBRID mode
+- *attachment*: Sanitize filenames with illegal Windows characters
+- *hybrid*: Accept HDR10+ tracks as valid base layer for HYBRID mode
+- *dl*: Allow selection of audio tracks for 'all' languages in addition to 'best'
+- *dl*: Overwrite existing files on re-download and use atomic replace
+- *dl*: Handle cross-device moves when temp and downloads differ
+- *track*: Fallback to requests downloader from n_m3u8dl_re for unsupported track types
+- *n_m3u8dl_re*: Disable segment count validation for duration-based DASH
+- Correct formatting and add missing newlines in selector and EXAMPLE service
+- *dependencies*: Update pyplayready version to 0.8.3 and adjust dependencies
+- *drm*: Update PlayReady KID extraction for pyplayready 0.8.3 compatibility
+- *api*: Resolve Sentinel serialization, missing params, and add search endpoint
+- *dash*: Pass period_filter to n_m3u8dl_re via filtered MPD file
+- *title*: Add HDR Vivid Format HDR Tag
+- *ism*: Prevent duplicate track IDs for audio tracks with same lang/codec/bitrate
+- *aria2c*: Correct progress bar tracking for HLS downloads
+- *dl*: Filter CC subtitle languages with --s-lang and extract all manifest CCs
+- *serve*: Use X-Secret-Key header for REST API auth to match pywidevine
+- *drm*: Preserve original PSSH for content_id-based Widevine manifests
+- *drm*: Add zero-KID fallback for mp4decrypt and clear HLS track.drm after download
+
+### Documentation
+
+- Update and correct configuration documentation
+- *dl*: Add comprehensive list of available `dl` keys and their descriptions
+- Update API and configuration documentation with example service tags
+
+### Changes
+
+- *hybrid*: Replace log.info with console status and add JSONL debug logging
+- *dl*: Remove legacy multi-fetch loop for unmigrated services
+- *example*: Migrate EXAMPLE service to track_request pattern
+- *providers*: Extract metadata providers into modular system
+- *remote*: Deduplicate CDM loading, proxy resolution, and license handling
+
+### Maintenance
+
+- *changelog*: Update changelog for upcoming release and reorganize sections
+- *changelog*: Update changelog
+- *changelog*: Tag v4.0.0 release
+
+## [3.0.0] - 2026-02-15
+
+### Features
+
+- *titles*: Use track source attribute for service name in filenames
+- *debug*: Add download output verification logging
+- Gluetun VPN integration and remote service enhancements
+- *gluetun*: Improve VPN connection display and Windscribe support
+- *serve*: Add PlayReady CDM support alongside Widevine
+- *cdm*: Add remote PlayReady CDM support via pyplayready RemoteCdm
+- *env*: Add ML-Worker binary for DRM licensing
+- *video*: Detect interlaced scan type from MPD manifests
+- *drm*: Add MonaLisa DRM support to core infrastructure
+- *audio*: Codec lists and split muxing
+- *proxy*: Add specific server selection for WindscribeVPN
+- *cdm*: Normalize CDM detection for local and remote implementations
+- *HLS*: Improve audio codec handling with error handling for codec extraction
+- *tracks*: Prioritize Atmos audio tracks over higher bitrate non-Atmos
+
+### Bug Fixes
+
+- *subs*: Update SubtitleEdit CLI syntax and respect conversion_method
+- *n_m3u8dl_re*: Include language in DASH audio track selection
+- *hls*: Prefer media playlist keys over session keys for accurate KID matching
+- *deps*: Upgrade vulnerable dependencies for security alerts
+- *serve*: Use correct pywidevine users config format
+- *cdm*: Correct error key casing in Decrypt Labs API response parsing
+- *api*: Validate Bearer prefix before extracting API key
+- *serve*: Correct PlayReady RemoteCDM server validation
+- *n_m3u8dl_re*: Remove duplicate --write-meta-json argument causing download failures
+- *manifests*: Correct DRM type selection for remote PlayReady CDMs
+- *proxies*: Fixes WindscribeVPN server authentication
+- *subs*: Route pycaption-unsupported formats to pysubs2 in auto mode
+- *proxy*: Remove regional restrictions from WindscribeVPN
+- *proxy*: Collect servers from all locations in WindscribeVPN
+- *downloader*: Correct progress bar tracking for segmented downloads
+- *binaries*: Search subdirectories for binary files
+- *dash*: Handle high startNumber in SegmentTimeline for DVR manifests
+- *drm*: Hide Shaka Packager message for MonaLisa decryption
+- *dash*: Add CENC namespace support for PSSH extraction
+- *dash*: Preserve MPD DRM instead of overwriting from init segment
+- *subtitles*: Preserve sidecar originals
+- *mux*: Avoid audio codec suffix on split-audio outputs
+- *dl*: Prevent attachment downloads during --skip-dl
+- *progress*: Force track bar completion on terminal states
+- *progress*: Bind per-track bars and force terminal completion
+- *dl*: Keep descriptive and standard audio for requested langs
+- *dl*: Always clean up hybrid temp hevc outputs
+- *hls*: Finalize n_m3u8dl_re outputs
+- *downloader*: Restore requests progress for single-url downloads
+- *dl*: Invert audio codec suffixing when splitting
+- *dl*: Support snake_case keys for RemoteCdm
+- *aria2c*: Warn on config mismatch and wait for RPC ready
+- *serve*: [**breaking**] Make PlayReady users config consistently a mapping
+- *dl*: Preserve proxy_query selector (not resolved URI)
+- *gluetun*: Stop leaking proxy/vpn secrets to process list
+- *monalisa*: Avoid leaking secrets and add worker safety
+- *dl*: Avoid selecting all variants when multiple audio codecs requested
+- *hls*: Keep range offset numeric and align MonaLisa licensing
+- *titles*: Remove trailing space from HDR dynamic range label
+- *config*: Normalize playready_remote remote_cdm keys
+- *titles*: Avoid None/double spaces in HDR tokens
+- *naming*: Keep technical tokens with scene_naming off
+- *api*: Log PSSH extraction failures
+- *proxies*: Harden surfshark and windscribe selection
+- *service*: Redact proxy credentials in logs
+- *monalisa*: Harden wasm calls and license handling
+- *hls*: Remove no-op encryption_data reassignment
+- *serve*: Default PlayReady access to none
+- *tracks*: Close temp session and improve path type error
+- *main*: Update copyright year dynamically in version display
+
+### Reverts
+
+- *monalisa*: Pass key via argv again
+
+### Documentation
+
+- Add configuration documentation WIP
+- *changelog*: Add 2.4.0 release notes
+- *changelog*: Update cliff config and regenerate changelog
+- *changelog*: Complete 2.4.0 notes
+- *config*: Clarify sdh_method uses subtitle-filter
+
+### Performance Improvements
+
+- *aria2c*: Improve download performance with singleton manager
+
+### Changes
+
+- *remote_auth*: Remove unused requests.Session
+- Remove remote-service code until feature is more complete
+
+### Maintenance
+
+- *api*: Remove remote services
+
+### Chore
+
+- *release*: [**breaking**] Bump version to 3.0.0
+
+## [2.3.0] - 2026-01-18
+
+### Features
+
+- *config*: Add unicode_filenames option to preserve native characters
+
+### Bug Fixes
+
+- *drm*: Correct PSSH system ID comparison in PlayReady
+- *dash*: Handle placeholder KIDs and improve DRM init from segments
+- *dash*: Handle N_m3u8DL-RE merge and decryption
+- *drm*: Include shaka-packager binary in error messages
+- *subs*: Strip whitespace from ASS font names
+- *subs*: Handle negative TTML values in multi-value attributes
+- *drm*: Filter Widevine PSSH by system ID instead of sorting
+- *subs*: Handle WebVTT cue identifiers and overlapping multi-line cues
+
+## [2.2.0] - 2026-01-15
+
+### Features
+
+- *debug*: Add comprehensive debug logging for downloaders and muxing
+- *drm*: Add CDM-aware PlayReady fallback detection
+
+### Bug Fixes
+
+- *util*: Improve test command error detection and add natural sorting
+- *vaults*: Batch bulk key operations to avoid query limits
+- *titles*: Detect HDR10 in hybrid DV filenames correctly
+- *vaults*: Adaptive batch sizing for bulk key operations
+
+## [2.1.0] - 2025-11-27
+
+### Features
+
+- *export*: Enhance track export with URL, descriptor, and hex-formatted keys
+- *cdm*: Add per-track quality-based CDM selection during runtime DRM switching
+- Merge upstream dev branch
+
+### Bug Fixes
+
+- *deps*: Pin pyplayready to <0.7 to avoid KID extraction bug
+- *hls*: Convert range_offset to int to prevent TypeError
+- *video*: Correct CICP enum values to match ITU-T H.273 specification
+- *utilities*: Handle space-hyphen-space separators in sanitize_filename
+- *utilities*: Make space-hyphen-space handling conditional on scene_naming
+- *windscribevpn*: Add error handling for unsupported regions in get_proxy method
+- Restrict WindscribeVPN to supported regions
+- *dash*: Add AdaptationSet-level BaseURL resolution
+- *dl*: Preserve attachments when rebuilding track list
+
+## [2.0.0] - 2025-11-10
+
+### Features
+
+- Add REST API server with download management
+- Add comprehensive JSON debug logging system
+- *cdm*: Add highly configurable CustomRemoteCDM for flexible API support
+- *proxies*: Add WindscribeVPN proxy provider support
+- *dl*: Add --latest-episode option to download only the most recent episode
+- Add service-specific configuration overrides
+- Add retry handler to curl_cffi Session
+- *dl*: Add --audio-description flag to download AD tracks
+- *api*: Add url field to services endpoint response
+- *api*: Complete API enhancements for v2.0.0
+- *api*: Add default parameter handling and improved error responses
+- *cache*: Add TMDB and Simkl metadata caching to title cache
+- *session*: Add custom fingerprint and preset support
+- *fonts*: Add Linux font support for ASS/SSA subtitles
+- *subtitle*: Preserve original formatting when no conversion requested
+- *dl*: Add --no-video flag to skip video track downloads
+
+### Bug Fixes
+
+- Use keyword arguments for Attachment constructor in font attachment
+- Only exclude forced subs when --forced-subs flag is not set
+- Update lxml constraint and pyplayready import path
+- *tags*: Gracefully handle missing TMDB/Simkl API keys
+- *config*: Support config in user config directory across platforms
+- *dl*: Validate HYBRID mode requirements before download
+- *drm*: Add explicit UTF-8 encoding to mp4decrypt subprocess calls
+- *subtitle*: Resolve SDH stripping crash with VTT files
+- *naming*: Improve HDR detection with comprehensive transfer checks and hybrid DV+HDR10 support
+- *dash*: Correct segment count calculation for startNumber=0
+- *session*: Update OkHttp fingerprint presets
+- *session*: Remove padding extension from OkHttp JA3 fingerprints
+- *dl*: Prevent vault loading when --cdm-only flag is set
+- *cdm*: Resolve session key handling for partial cached keys
+- *cdm*: Apply session key fix to custom_remote_cdm
+- *n_m3u8dl_re*: Read lang attribute from DASH manifests correctly
+- *subtitles*: Fix closure bug preventing SDH subtitle stripping
+- Ensure subtitles use requests downloader instead of n_m3u8dl_re if Descriptor.URL
+- Suppress verbose fontTools logging when scanning system fonts
+- *tags*: Skip metadata lookup when API keys not configured
+
+### Documentation
+
+- Improve GitHub issue templates for better bug reports and feature requests
+- Add dev branch and update README
+- Update CHANGELOG for audio description feature
+- *changelog*: Complete v2.0.0 release documentation
+- *changelog*: Add --no-video flag and PR #38 credit
+- *changelog*: Set release date for version 2.0.0
+- *readme*: Remove dev branch warning for main merge
+
+### Changes
+
+- *session*: Modernize type annotations to PEP 604 syntax
+- *binaries*: Remove unused mypy import
+- Remove unnecessary underscore prefixes from function names
+- *tags*: Remove environment variable fallbacks for API keys
+
+### Maintenance
+
+- *api*: Fix import ordering in download_manager and handlers
+- Update CHANGELOG.md for version 2.0.0
+
+## [1.4.8] - 2025-10-08
+
+### Features
+
+- Add AC4 codec support in Audio class and update mime/profile handling
+- Add pysubs2 subtitle conversion with extended format support
+- Add --no-mux flag to skip muxing tracks into container files
+- *vaults*: Add DecryptLabs API support to HTTP vault
+- Add --exact-lang flag for precise language matching
+
+### Bug Fixes
+
+- Optimize audio track sorting by grouping descriptive tracks and sorting by bitrate, fixes bug that does not identify ATMOS or DD+ as the highest quality available in filenaming.
+- Update lxml constraint and pyplayready import path
+- Dl.py
+- Upgrade pyplayready to 0.6.3 and resolve import compatibility issues
+- Suppress tinycss SyntaxWarning by initializing filter before imports
+- (subtitle): Move pysubs2 to not be auto while in "testing" phase.
+
+### Reverts
+
+- Remove tinycss SyntaxWarning suppression and fix isort
+
+### Documentation
+
+- Add pysubs2 conversion_method to configuration documentation
+
+### Maintenance
+
+- Bump version to 1.4.8
+
+## [1.4.7] - 2025-09-25
+
+### Features
+
+- Add options for required subtitles and best available quality in download command
+- Add download retry count option to download function
+- Add decrypt_labs_api_key to Config initialization and change duplicate track log level to debug
+- Add curl_cffi session support with browser impersonation
+- Update changelog for version 1.4.7
+
+## [1.4.6] - 2025-09-13
+
+### Features
+
+- Automatic audio language metadata for embedded audio tracks
+- Add quality-based CDM selection for dynamic CDM switching
+
+### Bug Fixes
+
+- Resolve service name transmission and vault case sensitivity issues
+- Improve import ordering and code formatting
+
+### Maintenance
+
+- Bump version to 1.4.6 and update changelog
+
+## [1.4.5] - 2025-09-09
+
+### Features
+
+- *changelog*: Update changelog for version 1.4.4 with enhanced CDM support, configuration options, and various improvements
+- *cdm*: Enhance key retrieval logic and improve cached keys handling
+- Implement intelligent caching system for CDM license requests
+- *tags*: Enhance tag handling for TV shows and movies from Simkl data
+- *kv*: Enhance vault loading and key copying logic
+- *dl*: Truncate PSSH string for display in non-debug mode
+- *cdm*: Add fallback to Widevine common cert for L1 devices
+- *cdm*: Optimize get_cached_keys_if_exists for L1/L2 devices
+- *cdm*: Update User-Agent to use dynamic version
+
+### Bug Fixes
+
+- *tags*: Fix import order.
+- *cdm*: Add error message for missing service certificate in CDM session
+- *tags*: Fix formatting issues
+
+### Maintenance
+
+- Bump version to 1.4.5 and update changelog
+
+## [1.4.4] - 2025-09-02
+
+### Features
+
+- *ip-info*: Add cached IP info retrieval with fallback tester to avoid rate limiting
+- *ip-info*: Fix few more issues with the get_ip_info make sure we failover to different provider on 429 errors and allow future for more API providers to be added later.
+- *release*: Bump version to 1.4.3 and update changelog with new features and improvements
+- *config*: Add new configuration options for device certificate status list and language preferences
+- *cdm*: Enhance DecryptLabsRemoteCDM to support cached keys and improve license handling
+- *cdm*: Enhance DecryptLabsRemoteCDM with improved session management and caching support and better support for remote WV/PR
+- *cdm*: Add DecryptLabs CDM configurations for Chrome and PlayReady devices with updated User-Agent and service certificate
+- *cdm*: Refactor DecryptLabsRemoteCDM full support for Widevine/Playready and ChromeCDM
+
+### Bug Fixes
+
+- *dependencies*: Remove unnecessary data extra requirement from langcodes
+- *main*: As requested old devine version removed from banner to avoid any confusion the developer of this software. Original GNU is still applys.
+- *tags*: Fix Matroska tag compliance with official specification
+
+### Changes
+
+- *drm*: Simplify decrypt method by removing unused parameter and streamline logic
+
+## [1.4.2] - 2025-08-14
+
+### Features
+
+- *dl*: Add audio language option to override language for audio tracks
+- *vault*: Add no_push option to Vault and its subclasses to control key reception
+- *hls*: Enhance segment merging with recursive file search and fallback to binary concatenation
+- *hls*: Enhance segment retrieval by allowing all file types and clean up empty segment directories. Fixes issues with VTT files from HLS not being found correctly due to new HLS "changes"
+- *config*: Add series_year option to control year inclusion in titles and YAML configuration
+- *tags*: Implement session management for API requests with retry logic
+- *release*: Bump version to 1.4.2 and update changelog with new features and fixes
+
+### Bug Fixes
+
+- *dl*: Adjust per_language logic to ensure correct audio track selection and not download all tracks for selected language.
+
+## [1.4.1] - 2025-08-08
+
+### Features
+
+- Implement title caching system to reduce API calls
+- *dl*: Update language option default to 'orig' if no -l is set, avoids hardcoded en
+- *config*: Add options for tagging with group name and IMDB/TMDB details and new API endpoint of simkl if no tmdb api key is added.
+- *tags*: Enhance tag_file function to prioritize provided TMDB ID if --tmdb is used
+- *changelog*: Update changelog with enhanced tagging configuration and improvements
+
+### Bug Fixes
+
+- *subtitle*: Handle ValueError in subtitle filtering for multiple colons in time references fixes issues with subtitles that contain multiple colons
+
+### Changes
+
+- Remove Dockerfile and .dockerignore from the repository
+- *tags*: Simplify Simkl search logic and soft-fail when no results found
+
+## [1.4.0] - 2025-08-05
+
+### Features
+
+- *update_checker*: Enhance update checking logic and cache handling
+- *dl*: Add option to include forced subtitle tracks
+- *subtitle*: Add filtering for unwanted cues in WebVTT subtitles
+- *tracks*: Add support for HLG color transfer characteristics in video arguments
+- *dl*: Enhance language selection for video and audio tracks, including original language support
+- *dl*: Improve DRM track decryption handling
+- *series*: Enhance tree representation with season breakdown
+- *hybrid*: Enhance extraction and conversion processes with dymanic spinning bars to follow the rest of the codebase.
+- *dl*: Fix track selection to support combining -V, -A, -S flags
+- *titles*: Better detection of DV across all codecs in Episode and Movie classes dvhe.05.06 was not being detected correctly.
+- *dl*: Add support for services that do not support subtitle downloads
+- *playready*: Enhance KID extraction from PSSH with base64 support and XML parsing
+- Bump version to 1.4.0 and update changelog with new features and fixes
+
+### Maintenance
+
+- Update changelog with new features, enhancements, and fixes for version 1.3.0
+- Bump unshackle version to 1.3.0 in uv.lock
+
+## [1.3.0] - 2025-08-03
+
+### Features
+
+- Add update check interval configuration and implement rate limiting for update checks
+- Implement terminal cleanup on exit and signal handling in ComfyConsole
+- Add Unspecified_Image option to Transfer enum in Video class.
+- Enhance credential management and CDM configuration in unshackle.yaml
+- Update path of update_check.json to .gitignore
+- Add scene naming option to configuration and update naming logic in titles
+- Add unshackle-example.yaml to replace the unshackle.yaml file, you can now make changes to the unshackle.yaml file and pull from the the repo without issues.
+- *drm*: Add support for mp4decrypt as a decryption method
+
+### Bug Fixes
+
+- Correct URL handling and improve key retrieval logic in HTTP vault
+- Rename 'servers' to 'server_map' for proxy configuration in unshackle.yaml to resolve nord/surfshark incorrect named config
+
+### Changes
+
+- Replace log.exit calls with ValueError exceptions for error handling in Hybrid class
+
+### Maintenance
+
+- Bump version to 1.3.0 and update changelog with mp4decrypt support and enhancements
+
+## [1.2.0] - 2025-07-30
+
+### Features
+
+- *dl*: Enhance hybrid processing to handle HDR10 and DV tracks separately by resolution, Hotfix for -q 2160,1080 both tracks will have Hybrid correctly now.
+- *hybrid*: Display resolution of HDR10 track in hybrid mode console output and clean up unused code
+- *subtitle*: Add information into unshackle.yaml on how to use new Subby subtitle conversion.
+- *vaults*: Enhance vault loading with success status
+- *attachment*: Ensure temporary directory is created for downloads
+- *tracks*: Add duration fix handling for video and hybrid tracks
+- *hybrid*: Add HDR10+ support for conversion to Dolby Vision and enhance metadata extraction
+- Update version to 1.1.1 and add update checking functionality
+- Bump version to 1.2.0 and update changelog, I'll eventually learn symantic versioning.
+
+### Changes
+
+- *env*: Enhance dependency check with detailed categorization and status summary
+
+### Maintenance
+
+- *workflow*: Remove Docker build and publish workflow, its too messy at the moment doing manual builds for now.
+
+## [1.1.0] - 2025-07-30
+
+### Features
+
+- Update version display in main.py
+- *proxies*: Add SurfsharkVPN support
+- *binaries*: Add support for `MKVToolNix` and `mkvpropedit`
+- *subtitles*: Integrate `subby` library for enhanced subtitle processing and conversion methods
+- *hybrid*: Implement HDR10+DV hybrid processing and injection support
+- *EXAMPLE*: Add support for HDR10 and DV tracks in hybrid mode
+
+### Bug Fixes
+
+- *cfg*: Update services directory handling
+- *binaries*: Improve local binary search functionality
+- *env*: Update binary search functionality to use `binaries.find`
+- *env*: Update `Shaka-Packager` binary retrieval method
+- *env*: Improve handling of directory paths in `info` command
+- *install*: Improve UV installation process and error handling
+- *download*: Skip Content-Length validation for compressed responses in curl_impersonate and requests. The fix ensures that when Content-Encoding indicates compression, we skip the validation by setting content_length = 0, allowing the downloads to complete successfully.
+- *dl*: Check for dovi_tool availability in hybrid mode
+- *download*: Skip Content-Length validation for compressed responses in curl_impersonate and requests
+
+### Maintenance
+
+- Bump version to 1.1.0 in pyproject.toml, __init__.py, and uv.lock to follow correct Semantic Versioning.
+- Add CHANGELOG.md to document notable changes and version history
+
+## [1.0.1] - 2025-07-20
+
+### Features
+
+- Enhance CONFIG.md with new configuration options for curl_impersonate, filenames, n_m3u8dl_re, and nordvpn
+- Update .gitignore and enhance README with planned features
+- Add .github/ to .gitignore to exclude GitHub-related files
+- Implement VideoCodecChoice for enhanced codec selection
+- Add Dockerfile and GitHub Actions workflow for building and publishing Docker image
+- Update GitHub Actions workflow for Docker image build and add Docker installation instructions to README
+
+### Bug Fixes
+
+- Change default value of set_terminal_bg to False
+- Add video_only condition to subtitle track selection logic fixes issues where ccextractor would run even with -V enabled
+- Add SubtitleCodecChoice for resolving issues with config clicktype selection, using names like VTT or SRT was not working as expected
+- Update shaka packager version and enhance Docker run command with additional volume mounts
+
+### Changes
+
+- Streamline README by removing outdated service and legal information and moved it directly to the WIKI
+- Reorganize Planned Features section in README for clarity
+- Improve track selection logic in dl.py
+
+[5.2.0]: https://github.com/unshackle-dl/unshackle/compare/5.1.0..5.2.0
+[5.1.0]: https://github.com/unshackle-dl/unshackle/compare/5.0.0..5.1.0
+[5.0.0]: https://github.com/unshackle-dl/unshackle/compare/4.0.0..5.0.0
+[4.0.0]: https://github.com/unshackle-dl/unshackle/compare/3.0.0..4.0.0
+[3.0.0]: https://github.com/unshackle-dl/unshackle/compare/2.3.0..3.0.0
+[2.3.0]: https://github.com/unshackle-dl/unshackle/compare/2.2.0..2.3.0
+[2.2.0]: https://github.com/unshackle-dl/unshackle/compare/2.1.0..2.2.0
+[2.1.0]: https://github.com/unshackle-dl/unshackle/compare/2.0.0..2.1.0
+[2.0.0]: https://github.com/unshackle-dl/unshackle/compare/1.4.8..2.0.0
+[1.4.8]: https://github.com/unshackle-dl/unshackle/compare/1.4.7..1.4.8
+[1.4.7]: https://github.com/unshackle-dl/unshackle/compare/1.4.6..1.4.7
+[1.4.6]: https://github.com/unshackle-dl/unshackle/compare/1.4.5..1.4.6
+[1.4.5]: https://github.com/unshackle-dl/unshackle/compare/1.4.4..1.4.5
+[1.4.4]: https://github.com/unshackle-dl/unshackle/compare/1.4.2..1.4.4
+[1.4.2]: https://github.com/unshackle-dl/unshackle/compare/1.4.1..1.4.2
+[1.4.1]: https://github.com/unshackle-dl/unshackle/compare/1.4.0..1.4.1
+[1.4.0]: https://github.com/unshackle-dl/unshackle/compare/1.3.0..1.4.0
+[1.3.0]: https://github.com/unshackle-dl/unshackle/compare/1.2.0..1.3.0
+[1.2.0]: https://github.com/unshackle-dl/unshackle/compare/1.1.0..1.2.0
+[1.1.0]: https://github.com/unshackle-dl/unshackle/compare/1.0.1..1.1.0

@@ -1,0 +1,57 @@
+# unshackle configuration (copy to unshackle.yaml)
+#
+# This is a MINIMAL starter. Every option has a sane default, so unshackle runs
+# even with most of this file empty or removed.
+#
+# The full, canonical configuration reference lives in docs/ — start at
+# docs/README.md. Each section below points to the doc that documents it.
+
+# Group or username appended to download filenames after a dash.
+tag: "NOGRP"
+
+# --- Output filename & folder templates --- docs/OUTPUT_CONFIG.md
+# Full variable list (35 vars incl. music) and all naming options are
+# documented in docs/OUTPUT_CONFIG.md. If omitted, scene-style defaults are
+# used (with a warning). Conditional variables take a ? suffix, e.g. {year?}.
+output_template:
+  # Scene-style naming (dot-separated)
+  movies: "{title}.{year?}.{repack?}.{edition?}.{lang_tag?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}"
+  series: "{title}.{year?}.{season_episode}.{episode_name?}.{repack?}.{edition?}.{lang_tag?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}"
+  songs: "{track_number}.{title}.{repack?}.{edition?}.{lang_tag?}.{source?}.WEB-DL.{audio_full}.{atmos?}-{tag}"
+  folder:
+    movies: "{title}.{year?}.{repack?}.{edition?}.{lang_tag?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}"
+    series: "{title}.{year?}.{repack?}.{edition?}.{lang_tag?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}"
+    albums: "{album_artist} - {album} ({year?})"
+
+  #
+  # Plex-friendly alternatives:
+  # movies: '{title} ({year}) {quality}'
+  # series: '{title} {season_episode} {episode_name?}'
+  # songs: '{track_number}. {title}'
+  #
+  # Folder naming (optional). One template for all, or a per-kind map.
+  # Valid kinds: movies, series, songs, albums (album vars: see docs).
+  # folder: '{title} ({year?})'
+  # folder:
+  #   movies: '{title} ({year})'
+  #   series: '{title} ({year?})'
+  #   albums: '{album_artist} - {album} ({year?})'
+
+# --- DRM / CDM --- docs/DRM_CONFIG.md
+# Which Widevine (.wvd) or PlayReady (.prd) device to use. 'default' is the
+# global fallback. Per-service, per-profile, quality-based selection and remote
+# CDMs are all documented in docs/DRM_CONFIG.md.
+cdm:
+  default: WVD_1
+
+# --- Key vaults --- docs/DRM_CONFIG.md
+# Where obtained Content Encryption Keys (CEKs) are stored and retrieved.
+key_vaults:
+  - type: SQLite
+    name: Local
+    path: key_store.db
+
+# --- Everything else lives in docs/ ---
+# credentials, directories, proxy providers, subtitles, muxing, serve/REST API,
+# remote services, per-service overrides, debug logging, Firefox cookie import,
+# and more. See docs/README.md for the full index.
