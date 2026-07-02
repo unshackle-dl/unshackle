@@ -419,14 +419,20 @@ def _perform_download(
         "output_dir": Path(params["output_dir"]) if params.get("output_dir") else None,
         "no_cache": params.get("no_cache", False),
         "reset_cache": params.get("reset_cache", False),
+        # Track-selection params read by Service.__init__ via ctx.parent.params
+        "quality": params.get("quality", []),
+        "vcodec": params.get("vcodec", []),
+        "range_": params.get("range", [Video.Range.SDR]),
+        "best_available": params.get("best_available", False),
     }
     # Hand-built context: record parameter sources so service dl overrides
     # apply to defaults but never clobber client-sent values.
     from click.core import ParameterSource
 
     for param_name in ctx.params:
+        source_key = "range" if param_name == "range_" else param_name
         ctx.set_parameter_source(
-            param_name, ParameterSource.COMMANDLINE if param_name in params else ParameterSource.DEFAULT
+            param_name, ParameterSource.COMMANDLINE if source_key in params else ParameterSource.DEFAULT
         )
 
     dl_instance = dl(
