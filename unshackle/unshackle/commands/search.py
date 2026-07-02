@@ -84,6 +84,11 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
                 proxy_providers.append(Gluetun(**config.proxy_providers["gluetun"]))
             if config.proxy_providers.get("v2ray"):
                 proxy_providers.append(V2Ray(**config.proxy_providers["v2ray"]))
+            elif binaries.Xray or binaries.V2Ray:
+                # Auto-load V2Ray when the binary is available even without YAML config,
+                # so --proxy v2ray:vmess://... (direct-URI mode) works out of the box.
+                # Mirrors how Hola auto-loads when the hola-proxy binary is on PATH.
+                proxy_providers.append(V2Ray())
             if binaries.HolaProxy:
                 proxy_providers.append(Hola())
             for proxy_provider in proxy_providers:

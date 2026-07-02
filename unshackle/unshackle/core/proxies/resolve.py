@@ -43,6 +43,11 @@ def initialize_proxy_providers() -> List[Any]:
             proxy_providers.append(SurfsharkVPN(**proxy_config["surfsharkvpn"]))
         if proxy_config.get("v2ray"):
             proxy_providers.append(V2Ray(**proxy_config["v2ray"]))
+        elif binaries.Xray or binaries.V2Ray:
+            # Auto-load V2Ray when the binary is available even without YAML config,
+            # so --proxy v2ray:vmess://... (direct-URI mode) works out of the box.
+            # Mirrors how Hola auto-loads when the hola-proxy binary is on PATH.
+            proxy_providers.append(V2Ray())
         if hasattr(binaries, "HolaProxy") and binaries.HolaProxy:
             proxy_providers.append(Hola())
 

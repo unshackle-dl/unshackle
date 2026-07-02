@@ -1025,6 +1025,89 @@ def test_v2ray_registered_in_resolve_initialize():
     assert V2RayMock.call_args.kwargs == {"subscription_url": "https://sub.example/list"}
 
 
+def test_v2ray_auto_loads_when_binary_present_without_yaml_config():
+    """V2Ray auto-loads when xray/v2ray binary is on PATH, even with no YAML config.
+
+    Mirrors how Hola auto-loads when the hola-proxy binary is detected. This makes
+    ``--proxy v2ray:vmess://...`` (direct-URI mode) work out of the box.
+    """
+    import unshackle.core.proxies.v2ray as v2ray_module
+    from unshackle.core.proxies import resolve
+
+    main_config = MagicMock()
+    main_config.proxy_providers = {}  # no v2ray block at all
+
+    fake_binary = Path("/usr/local/bin/xray")
+    with patch.object(v2ray_module, "V2Ray", side_effect=lambda **kw: MagicMock(name="V2Ray", kwargs=kw)) as V2RayMock, \
+         patch("unshackle.core.binaries.Xray", fake_binary), \
+         patch("unshackle.core.binaries.V2Ray", None), \
+         patch("unshackle.core.binaries.HolaProxy", None), \
+         patch("unshackle.core.config.config", main_config):
+        resolve.initialize_proxy_providers()
+
+    assert V2RayMock.called, "V2Ray should auto-load when xray binary is present"
+    assert V2RayMock.call_args.kwargs == {}, "Auto-loaded V2Ray should be constructed with no args"
+
+
+def test_v2ray_auto_loads_with_v2ray_binary_fallback():
+    """V2Ray auto-loads with the v2ray binary when xray isn't installed."""
+    import unshackle.core.proxies.v2ray as v2ray_module
+    from unshackle.core.proxies import resolve
+
+    main_config = MagicMock()
+    main_config.proxy_providers = {}
+
+    fake_binary = Path("/usr/local/bin/v2ray")
+    with patch.object(v2ray_module, "V2Ray", side_effect=lambda **kw: MagicMock(name="V2Ray", kwargs=kw)) as V2RayMock, \
+         patch("unshackle.core.binaries.Xray", None), \
+         patch("unshackle.core.binaries.V2Ray", fake_binary), \
+         patch("unshackle.core.binaries.HolaProxy", None), \
+         patch("unshackle.core.config.config", main_config):
+        resolve.initialize_proxy_providers()
+
+    assert V2RayMock.called, "V2Ray should auto-load when v2ray binary is present"
+
+
+def test_v2ray_does_not_auto_load_without_binary_or_yaml():
+    """V2Ray is not loaded when neither YAML config nor binary is present."""
+    import unshackle.core.proxies.v2ray as v2ray_module
+    from unshackle.core.proxies import resolve
+
+    main_config = MagicMock()
+    main_config.proxy_providers = {}
+
+    with patch.object(v2ray_module, "V2Ray", side_effect=lambda **kw: MagicMock(name="V2Ray", kwargs=kw)) as V2RayMock, \
+         patch("unshackle.core.binaries.Xray", None), \
+         patch("unshackle.core.binaries.V2Ray", None), \
+         patch("unshackle.core.binaries.HolaProxy", None), \
+         patch("unshackle.core.config.config", main_config):
+        resolve.initialize_proxy_providers()
+
+    assert not V2RayMock.called, "V2Ray should not load without YAML config or binary"
+
+
+def test_v2ray_yaml_config_takes_priority_over_auto_load():
+    """When both YAML config AND binary are present, YAML config wins (no auto-load duplicate)."""
+    import unshackle.core.proxies.v2ray as v2ray_module
+    from unshackle.core.proxies import resolve
+
+    main_config = MagicMock()
+    main_config.proxy_providers = {
+        "v2ray": {"subscription_url": "https://sub.example/list"},
+    }
+
+    fake_binary = Path("/usr/local/bin/xray")
+    with patch.object(v2ray_module, "V2Ray", side_effect=lambda **kw: MagicMock(name="V2Ray", kwargs=kw)) as V2RayMock, \
+         patch("unshackle.core.binaries.Xray", fake_binary), \
+         patch("unshackle.core.binaries.V2Ray", None), \
+         patch("unshackle.core.binaries.HolaProxy", None), \
+         patch("unshackle.core.config.config", main_config):
+        resolve.initialize_proxy_providers()
+
+    assert V2RayMock.call_count == 1, "V2Ray should be loaded exactly once (YAML config, not auto-load)"
+    assert V2RayMock.call_args.kwargs == {"subscription_url": "https://sub.example/list"}
+
+
 # ---------------------------------------------------------------------------
 # Provider: basic-style countries map (per-country URI assignment)
 # ---------------------------------------------------------------------------

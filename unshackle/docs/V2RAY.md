@@ -107,6 +107,15 @@ unshackle dl SERVICE CONTENT --proxy v2ray:ss://YWVzLTI1Ni1nY206c3NwYXNz@1.2.3.4
 The same URI passed twice reuses the existing subprocess (keyed by the URI string), so
 repeated `--proxy v2ray:vmess://...` calls don't re-spawn.
 
+#### Auto-loading
+
+The V2Ray provider is auto-loaded whenever the `xray` or `v2ray` binary is detected on
+your `PATH` (or in `unshackle/binaries/`), even with no `v2ray:` block in your YAML.
+This mirrors how the Hola provider auto-loads when `hola-proxy` is installed, and it
+makes the direct-URI mode above work with zero configuration. If you do have a `v2ray:`
+YAML block, it takes priority over the auto-load (the provider is only loaded once, with
+your config).
+
 ### Usage (all modes)
 
 All query forms work with every server source. The `countries` map is checked first, then

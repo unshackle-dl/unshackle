@@ -1057,6 +1057,11 @@ class dl:
                     self.proxy_providers.append(Gluetun(**config.proxy_providers["gluetun"]))
                 if config.proxy_providers.get("v2ray"):
                     self.proxy_providers.append(V2Ray(**config.proxy_providers["v2ray"]))
+                elif binaries.Xray or binaries.V2Ray:
+                    # Auto-load V2Ray when the binary is available even without YAML config,
+                    # so --proxy v2ray:vmess://... (direct-URI mode) works out of the box.
+                    # Mirrors how Hola auto-loads when the hola-proxy binary is on PATH.
+                    self.proxy_providers.append(V2Ray())
                 if binaries.HolaProxy:
                     self.proxy_providers.append(Hola())
                 for proxy_provider in self.proxy_providers:

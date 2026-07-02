@@ -167,3 +167,22 @@ Stage Summary:
 - isort: clean
 - End-to-end verification confirms: V2Ray is imported in dl.py + search.py, the fixed regex is in all 3 files (dl.py, search.py, resolve.py), the provider list includes V2Ray in all 3 files, env.py lists xray + v2ray binaries, and the regex correctly matches all v2ray: query forms (v2ray:us, v2ray:us:1, v2ray:vmess://..., v2ray:vless://..., v2ray:trojan://..., v2ray:ss://...) while still correctly routing existing providers (nordvpn:us, expressvpn:us, gluetun:windscribe:us)
 - The V2Ray integration is now complete across the entire system: local dl path, local search path, remote service path, and REST API path all load and route V2Ray correctly
+
+---
+Task ID: v2ray-auto-load-fix
+Agent: main
+Task: User reported "The proxy provider 'v2ray' was not recognised." when running `unshackle dl TAG URL --proxy v2ray:...`. Root cause: V2Ray was only loaded when a `v2ray:` block existed in the YAML config, but the user had no such block (they were testing direct-URI mode or country mode without configuring servers). Fix: auto-load V2Ray when the xray/v2ray binary is detected on PATH, mirroring how Hola auto-loads when hola-proxy is installed.
+
+Work Log:
+- Diagnosed: the user's log output showed "Loaded ExpressVPN" and "Loaded NordVPN" but no "Loaded V2Ray" line, confirming V2Ray wasn't being instantiated. The provider lookup in dl.py then failed with "The proxy provider 'v2ray' was not recognised."
+- Root cause: all three provider-loading sites (dl.py, search.py, resolve.py) only loaded V2Ray conditionally on `config.proxy_providers.get("v2ray")` — if there's no YAML block, V2Ray is never instantiated, even if the xray binary is installed and the user explicitly requests `--proxy v2ray:...`
+- Applied the Hola auto-load pattern to all three files: if there's a YAML `v2ray:` block, load V2Ray with that config; otherwise, if `binaries.Xray or binaries.V2Ray` is set, auto-load V2Ray with no args (enabling direct-URI mode `--proxy v2ray:vmess://...` out of the box)
+- Verified V2Ray() with no args instantiates cleanly (binary=None, servers=0, countries=0) and that get_proxy() raises a clear error if a country/alias query is used without configured servers
+- Added 4 new unit tests: auto-load with xray binary, auto-load with v2ray binary fallback, no auto-load without binary or YAML, YAML config takes priority over auto-load
+- Updated docs/V2RAY.md with an "Auto-loading" subsection explaining the behaviour
+- End-to-end verification: simulated the user's exact scenario (no YAML v2ray block, xray binary present) and confirmed V2Ray now auto-loads and the provider lookup succeeds
+
+Stage Summary:
+- All 558 tests pass (554 + 4 new auto-load tests), 0 failures, 0 regressions
+- ruff + isort clean
+- The "proxy provider 'v2ray' was not recognised" error is fixed: V2Ray now auto-loads whenever the xray or v2ray binary is on PATH, regardless of YAML config
