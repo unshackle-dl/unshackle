@@ -400,19 +400,30 @@ back empty). Check that:
 The provider logs a warning for each failed source — enable debug logging
 (see [DEBUG_LOGGING.md](DEBUG_LOGGING.md)) for details.
 
-### "subprocess did not become ready within Ns"
+### "V2Ray subprocess failed to start"
 
-The V2Ray/Xray binary started but the SOCKS5 inbound didn't accept connections within
-`startup_timeout` seconds (default 30s). Common causes:
+The V2Ray/Xray binary started but either crashed immediately or didn't open the SOCKS5
+inbound in time. The error message includes the **actual xray/v2ray stderr output** so you
+can see exactly why it failed — look for lines like `failed to load`, `invalid config`,
+`address already in use`, etc.
 
-- The selected server's credentials are wrong or expired (re-fetch the subscription).
-- The selected server's transport doesn't match what's actually deployed (e.g. a `ws` path
-  was renamed server-side).
-- The binary itself crashed on startup — check the captured stderr (it's logged at WARNING
-  level along with the timeout message).
+Common causes:
 
-Increase `startup_timeout` if the binary is just slow to initialise (e.g. on a cold
-container).
+- **Missing `geoip.dat` / `geosite.dat`** — older V2Ray-core builds exit if these files
+  aren't found next to the binary. The generated config no longer references `geoip:private`
+  (it uses explicit CIDR ranges instead), but if you supply your own `config_path` file
+  that references geoip rules, make sure the dat files are installed.
+- **The selected server's credentials are wrong or expired** — re-fetch the subscription.
+- **The selected server's transport doesn't match what's actually deployed** (e.g. a `ws`
+  path was renamed server-side).
+- **Port already in use** — another process is listening on the allocated port. The
+  provider auto-skips used ports, but if something grabs the port between the check and
+  the spawn, xray will exit. Re-running usually fixes this.
+- **Windows path issues** — make sure the `xray` / `v2ray` binary is on your `PATH` and
+  runnable from any directory.
+
+Increase `startup_timeout` (in the YAML config) if the binary is just slow to initialise
+(e.g. on a cold container or a slow VPN connection).
 
 ### Country mismatch warning
 

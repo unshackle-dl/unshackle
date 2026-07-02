@@ -186,3 +186,26 @@ Stage Summary:
 - All 558 tests pass (554 + 4 new auto-load tests), 0 failures, 0 regressions
 - ruff + isort clean
 - The "proxy provider 'v2ray' was not recognised" error is fixed: V2Ray now auto-loads whenever the xray or v2ray binary is on PATH, regardless of YAML config
+
+---
+Task ID: v2ray-windows-stderr-fix
+Agent: main
+Task: User on Windows reported "subprocess did not become ready within 30s: process exited unexpectedly" — the V2Ray subprocess was crashing but the actual error was hidden. Root causes: (1) _read_stderr_tail used select.select() which doesn't work on Windows pipes, returning empty; (2) the config used geoip:private which requires a geoip.dat file often missing from manual xray installs.
+
+Work Log:
+- Diagnosed: the user's xray subprocess was starting then crashing immediately, but the error message said "process exited unexpectedly" with no detail about WHY. The tests passed because they mock the subprocess — they never exercise the real xray binary or the stderr-reading code.
+- Fixed _read_stderr_tail: replaced select.select() (Unix-only for pipes, silently returns empty on Windows) with _read_dead_process_output() which uses Popen.communicate() (cross-platform, returns immediately when the process is dead). The method reads both stdout and stderr.
+- Fixed _wait_for_ready: now stores the captured output in info["exit_output"] so the caller can include it in the error message. Also distinguishes between "process exited" and "timed out while still running" in the stored message.
+- Fixed _spawn_for_server: the RuntimeError now includes the actual xray/v2ray stderr output, the binary path, and the server label — so users can immediately see why xray crashed (missing dat file, invalid config, bad credentials, port conflict, etc.).
+- Fixed build_config: replaced "geoip:private" in the routing rules with explicit CIDR ranges (127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, ::1/128, fc00::/7). This eliminates the geoip.dat dependency that was likely causing xray to crash on startup for users with minimal/manual installs.
+- Removed the now-unused `import select` from the top of the module.
+- Updated test_build_config_has_socks_and_http_inbounds to assert on the explicit CIDR ranges instead of geoip:private.
+- Updated test_get_proxy_startup_failure_raises_runtime_error to match the new error message format ("V2Ray subprocess failed to start" instead of "subprocess did not become ready").
+- Added test_get_proxy_startup_failure_includes_subprocess_output — verifies the RuntimeError includes the actual xray stderr so users can diagnose.
+- Updated docs/V2RAY.md troubleshooting section with the new error message format and common causes.
+
+Stage Summary:
+- All 559 tests pass (558 + 1 new error-reporting test), 0 failures, 0 regressions
+- ruff + isort clean
+- Two root causes fixed: (1) Windows stderr reading now works via communicate(); (2) geoip:private dependency removed
+- Error messages now include the actual xray/v2ray output so users can self-diagnose instead of seeing a cryptic "process exited unexpectedly"

@@ -576,11 +576,15 @@ def test_build_config_has_socks_and_http_inbounds():
     # Outbound section has proxy + direct + block
     outbound_tags = [o["tag"] for o in config["outbounds"]]
     assert outbound_tags == ["proxy", "direct", "block"]
-    # Routing bypasses private IPs to direct
-    assert any(
-        rule.get("outboundTag") == "direct" and "geoip:private" in rule.get("ip", [])
-        for rule in config["routing"]["rules"]
+    # Routing bypasses private IPs to direct — uses explicit CIDR ranges (not geoip:private,
+    # which requires a geoip.dat file that's often missing from manual installs).
+    private_rule = next(
+        (r for r in config["routing"]["rules"] if r.get("outboundTag") == "direct"), None
     )
+    assert private_rule is not None
+    assert "127.0.0.0/8" in private_rule["ip"]
+    assert "192.168.0.0/16" in private_rule["ip"]
+    assert "geoip:private" not in private_rule["ip"]
 
 
 def test_build_config_without_http_inbound():
@@ -904,10 +908,37 @@ def test_get_proxy_startup_failure_raises_runtime_error():
     provider.binary = Path("/fake/xray")
     patches = _patch_lifecycle(provider, ready=False)
     with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5] as kill_patch:
-        with pytest.raises(RuntimeError, match="subprocess did not become ready"):
+        with pytest.raises(RuntimeError, match="V2Ray subprocess failed to start"):
             provider.get_proxy("us")
     # The failed subprocess is killed and removed from the active dict.
     kill_patch.assert_called_once()
+
+
+def test_get_proxy_startup_failure_includes_subprocess_output():
+    """The RuntimeError must include the actual xray/v2ray stderr so users can diagnose."""
+    provider = V2Ray(servers=[_make_vmess_uri(remark="🇺🇸 US", address="1.1.1.1")])
+    provider.binary = Path("/fake/xray")
+
+    # Patch _wait_for_ready to return False AND set exit_output on the process_info,
+    # simulating a dead process whose output was captured.
+    def fake_wait(self, socks_port, *, timeout):
+        for info in self._active.values():
+            if info.get("socks_port") == socks_port:
+                info["exit_output"] = "xray: failed to load geoip.dat: file not found"
+        return False
+
+    process = _make_mock_process()
+    with patch.object(V2Ray, "_spawn_process", side_effect=lambda c, s, h, srv: {
+            "process": process, "config_path": Path(f"/tmp/fake-{s}.json"),
+            "socks_port": s, "http_port": h, "pid": 12345, "started_at": 0.0, "verified": False,
+        }), \
+         patch.object(V2Ray, "_wait_for_ready", fake_wait), \
+         patch.object(V2Ray, "_verify_proxy"), \
+         patch.object(V2Ray, "_is_process_alive", return_value=False), \
+         patch.object(V2Ray, "_is_port_in_use", return_value=False), \
+         patch.object(V2Ray, "_kill_process"):
+        with pytest.raises(RuntimeError, match="failed to load geoip.dat"):
+            provider.get_proxy("us")
 
 
 def test_get_proxy_socks5h_scheme_supported():

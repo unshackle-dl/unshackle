@@ -36,7 +36,6 @@ import logging
 import os
 import random
 import re
-import select
 import socket
 import subprocess
 import tempfile
@@ -750,9 +749,19 @@ def build_config(server: V2RayServer, *, socks_port: int, http_port: Optional[in
             {"tag": "direct", "protocol": "freedom", "settings": {}},
             {"tag": "block", "protocol": "blackhole", "settings": {}},
         ],
+        # Route private-IP traffic directly (bypass the proxy) using explicit CIDR ranges
+        # instead of "geoip:private" — the latter requires a geoip.dat file that is often
+        # missing from manual Xray/V2Ray installs and causes a startup crash.
         "routing": {
             "rules": [
-                {"type": "field", "ip": ["geoip:private"], "outboundTag": "direct"},
+                {
+                    "type": "field",
+                    "ip": [
+                        "127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12",
+                        "192.168.0.0/16", "169.254.0.0/16", "::1/128", "fc00::/7",
+                    ],
+                    "outboundTag": "direct",
+                },
             ]
         },
     }
@@ -996,11 +1005,15 @@ class V2Ray(Proxy):
 
         # Wait for the SOCKS5 inbound to accept connections.
         if not self._wait_for_ready(socks_port, timeout=self.startup_timeout):
+            exit_output = process_info.get("exit_output", "")
             self._kill_process(process_info)
             self._active.pop(query_key, None)
+            # Include the actual xray/v2ray stderr in the error so the user can diagnose
+            # config issues, missing dat files, bad credentials, etc.
+            detail = exit_output or "no output captured"
             raise RuntimeError(
-                f"subprocess did not become ready within {self.startup_timeout:.0f}s "
-                f"(server={server.label}, port={socks_port})"
+                f"V2Ray subprocess failed to start (server={server.label}, port={socks_port}, "
+                f"binary={self.binary}). Subprocess output:\n{detail}"
             )
 
         if self.verify_ip:
@@ -1450,48 +1463,54 @@ class V2Ray(Proxy):
         return True
 
     def _wait_for_ready(self, socks_port: int, *, timeout: float) -> bool:
-        """Poll the SOCKS5 inbound until it accepts connections or timeout."""
+        """Poll the SOCKS5 inbound until it accepts connections or the process exits.
+
+        Returns True if the port accepted a connection. Returns False if the process
+        exited or the timeout elapsed. When the process exits, its captured stdout/stderr
+        is stored in ``info["exit_output"]`` so the caller can include it in an error
+        message.
+        """
         deadline = time.monotonic() + timeout
-        last_error: Optional[str] = None
         while time.monotonic() < deadline:
-            # If the process died, surface its stderr and bail out fast.
             info = next((i for i in self._active.values() if i.get("socks_port") == socks_port), None)
             if info and not self._is_process_alive(info):
-                stderr = self._read_stderr_tail(info, max_lines=20)
-                last_error = stderr or "process exited unexpectedly"
-                break
+                # Process died — capture its output for error reporting. communicate()
+                # is used instead of select() because select doesn't work on Windows
+                # pipes. Since the process is dead, communicate() returns immediately.
+                info["exit_output"] = self._read_dead_process_output(info)
+                return False
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                     s.settimeout(0.5)
                     s.connect((self.bind_host, socks_port))
                     return True
-            except OSError as error:
-                last_error = str(error)
+            except OSError:
                 time.sleep(0.2)
-        log.warning("subprocess on port %d not ready after %.1fs: %s", socks_port, timeout, last_error)
+        # Timed out — the process is still alive but the port never opened.
+        info = next((i for i in self._active.values() if i.get("socks_port") == socks_port), None)
+        if info:
+            info["exit_output"] = f"process still running (pid {info.get('pid')}) but port {socks_port} never accepted connections"
         return False
 
     @staticmethod
-    def _read_stderr_tail(info: dict, *, max_lines: int = 30) -> str:
-        """Best-effort non-blocking read of the subprocess's buffered stderr.
+    def _read_dead_process_output(info: dict) -> str:
+        """Read all stdout+stderr from a process that has exited.
 
-        Returns the last ``max_lines`` lines (joined with newlines), or an empty string
-        if nothing is buffered or the read fails for any reason. Used only to surface a
-        hint when the subprocess fails to become ready — never on the hot path.
+        Uses :meth:`subprocess.Popen.communicate` which is cross-platform (unlike
+        ``select.select`` on pipes, which is Unix-only). Since the process is already
+        dead, ``communicate`` returns immediately at EOF.
         """
         process: Optional[subprocess.Popen] = info.get("process")
-        if process is None or process.stderr is None:
+        if process is None:
             return ""
         try:
-            readable, _, _ = select.select([process.stderr], [], [], 0)
-            if not readable:
-                return ""
-            data = process.stderr.read1(8192) if hasattr(process.stderr, "read1") else b""
-            if not data:
-                return ""
-            text = data.decode("utf-8", errors="replace")
-            lines = text.splitlines()
-            return "\n".join(lines[-max_lines:])
+            stdout, stderr = process.communicate(timeout=2)
+            parts: list[str] = []
+            if stdout:
+                parts.append(stdout.decode("utf-8", errors="replace").strip())
+            if stderr:
+                parts.append(stderr.decode("utf-8", errors="replace").strip())
+            return "\n".join(p for p in parts if p)
         except Exception:
             return ""
 
