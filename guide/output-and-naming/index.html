@@ -1,0 +1,2875 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Movie, TV, and Music archival software — user guide and REST API reference">
+      
+      
+      
+        <link rel="canonical" href="https://docs.unshackle.dev/guide/output-and-naming/">
+      
+      
+        <link rel="prev" href="../vaults/">
+      
+      
+        <link rel="next" href="../subtitles/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Output & Naming - unshackle</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#output-naming" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="unshackle" class="md-header__button md-logo" aria-label="unshackle" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24"><path d="m800-274-80-80v-206H514l-80-80h166v-80q0-50-34.5-85T481-840q-50 0-84 34.5T363-720v9l-73-73q22-61 75-98.5T481-920q83 0 141 58.5T680-720v80h40q33 0 56.5 23.5T800-560v286Zm20 246-62-62q-11 5-20 7.5T720-80H240q-33 0-56.5-23.5T160-160v-400q0-25 14.5-46t37.5-30L28-820l56-56L876-84l-56 56ZM686-160 539-309q-11 11-25.5 17t-31.5 6q-33 0-56.5-23.5T402-366q0-17 6-31.5t17-25.5L286-560h-46v400h446ZM486-360Zm131-97Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            unshackle
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Output & Naming
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1M8 13h8v-2H8zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4a5 5 0 0 0 5-5 5 5 0 0 0-5-5"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5m0 8a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5M7 15a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/unshackle-dl/unshackle" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    unshackle-dl/unshackle
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/installation/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../downloading/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  User Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/configuration/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Configuration
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../dev/creating-a-service/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Developer
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/api/service/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="unshackle" class="md-nav__button md-logo" aria-label="unshackle" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24"><path d="m800-274-80-80v-206H514l-80-80h166v-80q0-50-34.5-85T481-840q-50 0-84 34.5T363-720v9l-73-73q22-61 75-98.5T481-920q83 0 141 58.5T680-720v80h40q33 0 56.5 23.5T800-560v286Zm20 246-62-62q-11 5-20 7.5T720-80H240q-33 0-56.5-23.5T160-160v-400q0-25 14.5-46t37.5-30L28-820l56-56L876-84l-56 56ZM686-160 539-309q-11 11-25.5 17t-31.5 6q-33 0-56.5-23.5T402-366q0-17 6-31.5t17-25.5L286-560h-46v400h446ZM486-360Zm131-97Z"/></svg>
+
+    </a>
+    unshackle
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/unshackle-dl/unshackle" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    unshackle-dl/unshackle
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/configuration-file/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Configuration File
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../downloading/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Downloading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../drm-and-cdm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DRM & CDM Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../proxies-and-vpn/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Proxies & VPN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vaults/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Key Vaults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Output & Naming
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Output & Naming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#how-an-output-path-is-assembled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How an output path is assembled
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output-templates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output templates
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Output templates">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#required-vs-optional-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required vs. optional variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#separator-style-dots-vs-spaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Separator style (dots vs. spaces)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#template-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Template variables
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Template variables">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#common-video" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common / video
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#episode-specific" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Episode-specific
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#audio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audio
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#music-specific" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Music-specific
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#folder-templates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Folder templates
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#muxing-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Muxing options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tags-group-naming" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tags &amp; group naming
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unicode-filenames" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unicode filenames
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#directory-filename-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Directory &amp; filename configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Directory &amp; filename configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#filename-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filename patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chapters-naming" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chapters naming
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#removed-migrated-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Removed &amp; migrated options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worked-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked examples
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../subtitles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Subtitles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Configuration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Developer
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/creating-a-service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Creating a Service
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/service-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../dev/rest-api/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    REST API
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5_3" id="__nav_5_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    REST API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/authentication/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/endpoints/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Endpoints
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/job-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Job Lifecycle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/remote-sessions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remote Sessions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/errors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Error Responses
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/tracks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/titles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Titles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/drm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DRM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#how-an-output-path-is-assembled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How an output path is assembled
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output-templates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output templates
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Output templates">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#required-vs-optional-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required vs. optional variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#separator-style-dots-vs-spaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Separator style (dots vs. spaces)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#template-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Template variables
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Template variables">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#common-video" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common / video
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#episode-specific" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Episode-specific
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#audio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audio
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#music-specific" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Music-specific
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#folder-templates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Folder templates
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#muxing-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Muxing options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tags-group-naming" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tags &amp; group naming
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unicode-filenames" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unicode filenames
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#directory-filename-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Directory &amp; filename configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Directory &amp; filename configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#filename-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filename patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chapters-naming" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chapters naming
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#removed-migrated-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Removed &amp; migrated options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worked-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked examples
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="output-naming">Output &amp; Naming<a class="headerlink" href="#output-naming" title="Permanent link">&para;</a></h1>
+<p>This page explains where unshackle writes finished downloads and how it names them. You control naming with <strong>output templates</strong> (the filename) and <strong>folder templates</strong> (the directory the file lands in), using a set of <code>{variable}</code> placeholders that unshackle fills in from the media it just downloaded. It also covers muxing options, release-group tagging, Unicode filenames, and how to relocate unshackle's working directories.</p>
+<p>If you have not configured <code>unshackle.yaml</code> yet, read <a href="../../getting-started/configuration-file/">Configuration File</a> first. Everything below lives in that file.</p>
+<h2 id="how-an-output-path-is-assembled">How an output path is assembled<a class="headerlink" href="#how-an-output-path-is-assembled" title="Permanent link">&para;</a></h2>
+<p>When a download finishes muxing, unshackle builds the final path from three pieces:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>&lt;output directory&gt; / &lt;folder template&gt; / &lt;filename template&gt;&lt;extension&gt;
+</span></code></pre></div>
+<ul>
+<li><strong>Output directory</strong>: <code>directories.downloads</code> from your config, or whatever you pass to <code>-o/--output</code> on the command line for a single run.</li>
+<li><strong>Folder template</strong>: an optional per-title subfolder. TV episodes and music tracks are <strong>always</strong> placed in a folder; movies only get one if you define a <code>movies</code> folder template (see <a href="#folder-templates">Folder templates</a>).</li>
+<li><strong>Filename template</strong>: the <code>output_template</code> for the title kind (movie, series, or song).</li>
+<li><strong>Extension</strong>: chosen by the muxer: <code>.mkv</code> for video, <code>.mka</code> for audio-only, <code>.mks</code> for subtitle-only.</li>
+</ul>
+<div class="admonition example">
+<p class="admonition-title">A typical episode path</p>
+<p><div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>/home/user/Downloads/
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  └─ Show Name S01 1080p AMZN WEB-DL DDP5.1 H.264/
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>     └─ Show.Name.S01E01.Pilot.1080p.AMZN.WEB-DL.DDP5.1.H.264-TAG.mkv
+</span></code></pre></div>
+The folder name comes from the <code>series</code> folder template and the file from the <code>series</code> output template.</p>
+</div>
+<p>Two command-line flags change this layout for a single run:</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-o</code>, <code>--output</code></td>
+<td>Use this directory instead of <code>directories.downloads</code>.</td>
+</tr>
+<tr>
+<td><code>--no-folder</code></td>
+<td>Skip the per-title subfolder; write the file directly into the output directory.</td>
+</tr>
+<tr>
+<td><code>--no-source</code></td>
+<td>Omit the service source tag from both the filename and folder (the <code>{source}</code> variable resolves to empty).</td>
+</tr>
+</tbody>
+</table>
+<h2 id="output-templates">Output templates<a class="headerlink" href="#output-templates" title="Permanent link">&para;</a></h2>
+<p>Filename templates live under the <code>output_template</code> key, keyed by title kind. Each value is a format string built from <code>{variable}</code> placeholders.</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">output_template</span><span class="p">:</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{year}.{quality}.{source}.WEB-DL.{audio_full}.{video}-{tag}&quot;</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{season_episode}.{episode_name?}.{quality}.{source}.WEB-DL.{audio_full}.{video}-{tag}&quot;</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">songs</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{track_number}.</span><span class="nv"> </span><span class="s">{title}&quot;</span>
+</span></code></pre></div>
+<p>The recognized kinds are:</p>
+<table>
+<thead>
+<tr>
+<th>Kind</th>
+<th>Applies to</th>
+<th>Default when unset</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>movies</code></td>
+<td>Movies</td>
+<td><em>(required for movie downloads to be named, no built-in default)</em></td>
+</tr>
+<tr>
+<td><code>series</code></td>
+<td>TV episodes</td>
+<td><em>(required for episode downloads to be named)</em></td>
+</tr>
+<tr>
+<td><code>songs</code></td>
+<td>Music tracks</td>
+<td><code>"{track_number}. {title}"</code></td>
+</tr>
+<tr>
+<td><code>albums</code></td>
+<td>Album <strong>folders</strong> only (see below)</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><code>movies</code> and <code>series</code> have no hardcoded filename fallback. If you download those title types, define their templates. <code>songs</code> falls back to <code>"{track_number}. {title}"</code> when omitted.</p>
+</div>
+<h3 id="required-vs-optional-variables">Required vs. optional variables<a class="headerlink" href="#required-vs-optional-variables" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>{variable}</code>: <strong>required</strong>. If it is missing from the download's context, formatting raises an error. (Note that most variables are always present in context but resolve to an <em>empty string</em> when not applicable, so being "present but empty" is different from "missing".)</li>
+<li><code>{variable?}</code>: <strong>optional</strong>. A trailing <code>?</code> marks the variable conditional. When it resolves to empty, unshackle removes the placeholder <em>and</em> one adjacent separator (<code>.</code>, <code>-</code>, or space), so the surrounding text collapses cleanly.</li>
+</ul>
+<div class="admonition tip">
+<p class="admonition-title">Use <code>?</code> for anything that isn't always there</p>
+<p>Episode names, editions, tags, HDR labels and audio extras aren't present on every title. Mark them optional so you never get doubled dots or dangling separators:</p>
+<p><div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{season_episode}.{episode_name?}.{quality}.{hdr?}.{source}-{tag?}&quot;</span>
+</span></code></pre></div>
+For an episode with no on-screen name, <code>{episode_name?}</code> and its adjacent dot simply disappear.</p>
+</div>
+<h3 id="separator-style-dots-vs-spaces">Separator style (dots vs. spaces)<a class="headerlink" href="#separator-style-dots-vs-spaces" title="Permanent link">&para;</a></h3>
+<p>unshackle looks at the characters you place <em>between</em> variables to decide the filename's separator style. If spaces outnumber dots in your template, it sanitizes with spaces; otherwise it uses dots (the scene-style default). This is also applied to the auto-generated date separators for daily/dated content.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Scene style (dots)</label><label for="__tabbed_1_2">Readable style (spaces)</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p><div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">output_template</span><span class="p">:</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{year}.{quality}.{source}.WEB-DL.{audio_full}.{video}-{tag}&quot;</span>
+</span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>The.Movie.2024.1080p.NF.WEB-DL.DDP5.1.H.264-TAG.mkv
+</span></code></pre></div></p>
+</div>
+<div class="tabbed-block">
+<p><div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">output_template</span><span class="p">:</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}</span><span class="nv"> </span><span class="s">({year})</span><span class="nv"> </span><span class="s">{quality}</span><span class="nv"> </span><span class="s">{source}</span><span class="nv"> </span><span class="s">WEB-DL</span><span class="nv"> </span><span class="s">{audio_full}</span><span class="nv"> </span><span class="s">{video}&quot;</span>
+</span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>The Movie (2024) 1080p NF WEB-DL DDP5.1 H.264.mkv
+</span></code></pre></div></p>
+</div>
+</div>
+</div>
+<h2 id="template-variables">Template variables<a class="headerlink" href="#template-variables" title="Permanent link">&para;</a></h2>
+<p>Every variable below is valid in both output and folder templates. Values are derived from the downloaded media (via MediaInfo), from the title metadata, or from your config. Variables that don't apply to a given title resolve to an empty string.</p>
+<h3 id="common-video">Common / video<a class="headerlink" href="#common-video" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Meaning</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>title</code></td>
+<td>Title name (movie/show/song name; <code>$</code> is rendered as <code>S</code>)</td>
+<td><code>The Show</code></td>
+</tr>
+<tr>
+<td><code>year</code></td>
+<td>Release year</td>
+<td><code>2024</code></td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td>Service tag / class name (empty with <code>--no-source</code>)</td>
+<td><code>NF</code></td>
+</tr>
+<tr>
+<td><code>quality</code></td>
+<td>Resolution with scan suffix</td>
+<td><code>1080p</code>, <code>2160p</code>, <code>576i</code></td>
+</tr>
+<tr>
+<td><code>resolution</code></td>
+<td>Resolution number only</td>
+<td><code>1080</code></td>
+</tr>
+<tr>
+<td><code>video</code></td>
+<td>Video codec</td>
+<td><code>H.264</code>, <code>H.265</code></td>
+</tr>
+<tr>
+<td><code>hdr</code></td>
+<td>Dynamic-range label</td>
+<td><code>HDR</code>, <code>HDR10P</code>, <code>DV</code>, <code>DV.HDR10</code>, <code>HLG</code></td>
+</tr>
+<tr>
+<td><code>hfr</code></td>
+<td>High frame rate marker (frame rate &gt; 30)</td>
+<td><code>HFR</code></td>
+</tr>
+<tr>
+<td><code>edition</code></td>
+<td>Edition label from the track, if any</td>
+<td><code>Directors Cut</code></td>
+</tr>
+<tr>
+<td><code>tag</code></td>
+<td>Release-group tag (from <code>config.tag</code> or <code>--tag</code>)</td>
+<td><code>TAG</code></td>
+</tr>
+<tr>
+<td><code>repack</code></td>
+<td><code>REPACK</code> when the <code>--repack</code> flag is used</td>
+<td><code>REPACK</code></td>
+</tr>
+<tr>
+<td><code>lang_tag</code></td>
+<td>Result of your <code>language_tags</code> rules, if configured</td>
+<td><code>MULTi</code></td>
+</tr>
+</tbody>
+</table>
+<div class="admonition note">
+<p class="admonition-title">How <code>language_tags</code> rules match</p>
+<p>Rules are tried in order, but language comparison is <strong>fuzzy</strong>: a rule condition of <code>en</code> matches <code>en-US</code>, <code>en-GB</code>, and any other <code>en-*</code> variant. Within a single rule, <strong>all</strong> conditions must match (AND logic) for it to apply. The first rule that fully matches wins; if none match, <code>{lang_tag?}</code> is removed from the filename cleanly.</p>
+</div>
+<h3 id="episode-specific">Episode-specific<a class="headerlink" href="#episode-specific" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Meaning</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>season</code></td>
+<td>Zero-padded season (<code>S%02d</code>)</td>
+<td><code>S01</code></td>
+</tr>
+<tr>
+<td><code>episode</code></td>
+<td>Zero-padded episode (<code>E%02d</code>)</td>
+<td><code>E05</code></td>
+</tr>
+<tr>
+<td><code>season_episode</code></td>
+<td>Combined</td>
+<td><code>S01E05</code></td>
+</tr>
+<tr>
+<td><code>episode_name</code></td>
+<td>Episode title</td>
+<td><code>Pilot</code></td>
+</tr>
+<tr>
+<td><code>date</code></td>
+<td>ISO air date for daily/dated content</td>
+<td><code>2024-06-01</code></td>
+</tr>
+</tbody>
+</table>
+<div class="admonition note">
+<p class="admonition-title">Daily &amp; sports content</p>
+<p>When an episode has an air date, unshackle switches to date-based naming automatically: <code>season</code> and <code>season_episode</code> become the formatted air date, <code>episode</code> and <code>year</code> are cleared, and <code>{date}</code> holds the ISO date. The date's internal separator (dots or spaces) follows your <code>series</code> template style.</p>
+</div>
+<h3 id="audio">Audio<a class="headerlink" href="#audio" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Meaning</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>audio</code></td>
+<td>Audio codec</td>
+<td><code>DDP</code>, <code>DD</code>, <code>AAC</code></td>
+</tr>
+<tr>
+<td><code>audio_channels</code></td>
+<td>Channel layout</td>
+<td><code>5.1</code>, <code>2.0</code></td>
+</tr>
+<tr>
+<td><code>audio_full</code></td>
+<td>Codec + channels combined</td>
+<td><code>DDP5.1</code></td>
+</tr>
+<tr>
+<td><code>atmos</code></td>
+<td><code>Atmos</code> when any track carries JOC</td>
+<td><code>Atmos</code></td>
+</tr>
+<tr>
+<td><code>dual</code></td>
+<td><code>DUAL</code> for exactly two distinct audio languages</td>
+<td><code>DUAL</code></td>
+</tr>
+<tr>
+<td><code>multi</code></td>
+<td><code>MULTi</code> for more than two audio languages</td>
+<td><code>MULTi</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="music-specific">Music-specific<a class="headerlink" href="#music-specific" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>track_number</code></td>
+<td>Zero-padded track number</td>
+</tr>
+<tr>
+<td><code>artist</code> / <code>album_artist</code></td>
+<td>Artist / album artist (falls back to artist)</td>
+</tr>
+<tr>
+<td><code>album</code></td>
+<td>Album name</td>
+</tr>
+<tr>
+<td><code>disc</code></td>
+<td>Disc number (only shown when greater than 1)</td>
+</tr>
+<tr>
+<td><code>track_total</code> / <code>disc_total</code></td>
+<td>Totals</td>
+</tr>
+<tr>
+<td><code>release_type</code></td>
+<td><code>album</code>, <code>single</code>, <code>ep</code>, etc.</td>
+</tr>
+<tr>
+<td><code>genre</code></td>
+<td>Genre</td>
+</tr>
+<tr>
+<td><code>explicit</code></td>
+<td><code>Explicit</code> when flagged</td>
+</tr>
+<tr>
+<td><code>isrc</code> / <code>upc</code> / <code>label</code></td>
+<td>ISRC, UPC and record label</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition warning">
+<p class="admonition-title">Unknown variables are ignored, not errors</p>
+<p>If you use a variable that isn't in the list above, unshackle emits a warning at startup but continues. Double-check spelling. A typo'd <code>{quailty}</code> will simply be left in the filename literally or dropped, not filled in.</p>
+</div>
+<h2 id="folder-templates">Folder templates<a class="headerlink" href="#folder-templates" title="Permanent link">&para;</a></h2>
+<p>Folder templates are nested under a special <code>folder</code> key inside <code>output_template</code>. This key is handled separately from the filename kinds. You can give it a single string (used for all title kinds) or a per-kind map.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Single folder template</label><label for="__tabbed_2_2">Per-kind folder templates</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">output_template</span><span class="p">:</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{year}.{quality}.{source}-{tag}&quot;</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{season_episode}.{quality}.{source}-{tag}&quot;</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span><span class="nt">folder</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{year}&quot;</span>
+</span></code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">output_template</span><span class="p">:</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{year}.{quality}.{source}-{tag}&quot;</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{season_episode}.{quality}.{source}-{tag}&quot;</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span><span class="nt">folder</span><span class="p">:</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">    </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}</span><span class="nv"> </span><span class="s">({year})&quot;</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">    </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}</span><span class="nv"> </span><span class="s">({year})/Season</span><span class="nv"> </span><span class="s">{season}&quot;</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">    </span><span class="nt">albums</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{artist}</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">{album}</span><span class="nv"> </span><span class="s">({year})&quot;</span>
+</span></code></pre></div>
+</div>
+</div>
+</div>
+<p>The per-kind folder keys are <code>movies</code>, <code>series</code>, <code>songs</code>, and <code>albums</code>. Any other key produces a startup warning. Path separators (<code>/</code> or <code>\</code>) are allowed in folder templates. Each segment is formatted independently, so you can build nested directory structures like <code>Show/Season 01</code>.</p>
+<p><strong>Fallback behavior:</strong></p>
+<ul>
+<li>A per-kind folder template wins if present; otherwise the single <code>folder</code> string is used; otherwise unshackle falls back to a built-in default.</li>
+<li>Built-in defaults when no folder template is set: movies get no folder at all unless a <code>movies</code> folder template exists; series fall back to a folder <em>derived</em> from the <code>series</code> output template (stripping <code>{episode}</code>, <code>{episode_name}</code>, and collapsing <code>{season_episode}</code> down to <code>{season}</code>); music albums fall back to <code>{artist} - {album} ({year})</code>.</li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Movies are flat by default</p>
+<p>Episodes and songs are always foldered. Movies are written directly into the output directory <em>unless</em> you define a <code>movies</code> folder template. Set one if you want each movie in its own directory.</p>
+</div>
+<h2 id="muxing-options">Muxing options<a class="headerlink" href="#muxing-options" title="Permanent link">&para;</a></h2>
+<p>Muxing (combining video, audio, subtitle, chapter and attachment tracks into a single Matroska file with <code>mkvmerge</code>) is configured under the <code>muxing</code> key.</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">muxing</span><span class="p">:</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">set_title</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nt">merge_video</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span><span class="nt">merge_audio</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span><span class="nt">default_language</span><span class="p">:</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">    </span><span class="nt">audio</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">    </span><span class="nt">subtitle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Type</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>set_title</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Write the title name into the MKV container title with <code>--title</code>. Set to <code>false</code> to omit it.</td>
+</tr>
+<tr>
+<td><code>merge_video</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Group video tracks that share the same resolution, range, and codec into one file so only language varies inside it.</td>
+</tr>
+<tr>
+<td><code>merge_audio</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Merge audio tracks of the same kind so multiple languages sit in one file.</td>
+</tr>
+<tr>
+<td><code>default_language</code></td>
+<td>map</td>
+<td><em>(unset)</em></td>
+<td>Preferred language per track type (<code>video</code> / <code>audio</code> / <code>subtitle</code>). A track in the preferred language is flagged as the default track.</td>
+</tr>
+</tbody>
+</table>
+<p>When no preferred language is matched, unshackle applies sensible defaults: the video default falls back to the title language / original-language track / first track; the audio default is the original-language track; and the subtitle default is a forced track matching the first audio's language.</p>
+<div class="admonition note">
+<p class="admonition-title"><code>default_language</code> only sets the default-track flag</p>
+<p><code>default_language</code> controls <strong>which track carries the MKV <code>--default-track</code> flag</strong>. Nothing else. It does not change track <em>selection</em> (that stays with <code>-l</code>/<code>--alang</code> and friends), and it does not touch which track is marked as original: <code>--original-flag</code> still tags the <em>true</em> original-audio track. That is the point: you can make your player default to, say, Polish audio on an English-original title without altering the original marker. When the configured language isn't present in the manifest, each track type falls back to its normal default rule described above.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title"><code>merge_video</code> collapses only the language dimension</p>
+<p><code>merge_video</code> groups video tracks by <code>(resolution, range, codec)</code> and merges them so that only <strong>language</strong> differs within a single file, with no re-encode and no concatenation. Different resolutions, ranges (SDR / HDR10 / HDR10+ / DV / HYBRID), and codecs (H.264 / H.265) <strong>always</strong> land in separate files. So <code>-r HYBRID,DV,HDR10,SDR --merge-video</code> produces one file <em>per range</em> (never a single fused file), whereas English + French video of identical resolution, range, and codec yields one file containing both video tracks. <code>merge_audio</code> works the same way for audio languages.</p>
+</div>
+<p>A few muxing behaviors are automatic and not configurable:</p>
+<ul>
+<li><code>--no-date</code> is always passed for privacy (no timestamps embedded).</li>
+<li>Descriptive audio gets the visually-impaired flag; SDH subtitles get the hearing-impaired flag; forced subtitles get the forced flag.</li>
+<li>Chapters are written from the title's chapter list (see <a href="#chapters-naming">Chapters</a> below).</li>
+</ul>
+<p>The <code>--no-mux</code> flag skips muxing entirely and writes the individual track files, each with a track-type suffix, into the same output/folder structure.</p>
+<h2 id="tags-group-naming">Tags &amp; group naming<a class="headerlink" href="#tags-group-naming" title="Permanent link">&para;</a></h2>
+<p>The release-group tag is the <code>-TAG</code> portion at the end of scene-style names, produced by the <code>{tag}</code> variable.</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;MYGROUP&quot;</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="nt">tag_group_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="nt">tag_imdb_tmdb</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Type</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tag</code></td>
+<td>str</td>
+<td><code>""</code></td>
+<td>The release-group tag used for <code>{tag}</code>.</td>
+</tr>
+<tr>
+<td><code>tag_group_name</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Write the group name (<code>config.tag</code>) into the MKV <code>Group</code> metadata tag.</td>
+</tr>
+<tr>
+<td><code>tag_imdb_tmdb</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Look up and embed IMDb / TMDB / TVDB external-ID tags in the MKV metadata (uses <code>tmdb_api_key</code> / <code>simkl_client_id</code> when available).</td>
+</tr>
+</tbody>
+</table>
+<p>You can override the tag per run without editing config:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--tag<span class="w"> </span>OTHERGROUP<span class="w"> </span>AMZN<span class="w"> </span><span class="s2">&quot;...&quot;</span>
+</span></code></pre></div>
+<p>The <code>--repack</code> flag adds the <code>REPACK</code> marker (surfaced through the <code>{repack}</code> variable) to the filename for that run:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--repack<span class="w"> </span>NF<span class="w"> </span><span class="s2">&quot;...&quot;</span>
+</span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Empty tags collapse cleanly</p>
+<p>If <code>config.tag</code> is empty and your template ends with <code>-{tag?}</code>, the trailing <code>-</code> and the placeholder are both removed. Use the optional form <code>{tag?}</code> if you sometimes download without a tag set.</p>
+</div>
+<h2 id="unicode-filenames">Unicode filenames<a class="headerlink" href="#unicode-filenames" title="Permanent link">&para;</a></h2>
+<p>By default unshackle transliterates non-ASCII characters (Korean, Japanese, Chinese, accented Latin, etc.) into ASCII equivalents, which is safest for older tools, DDL, and P2P sharing. Set <code>unicode_filenames</code> to keep the native characters.</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">unicode_filenames</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>false</code> (default)</td>
+<td><code>기생충</code> → transliterated ASCII; accents stripped.</td>
+</tr>
+<tr>
+<td><code>true</code></td>
+<td>Native characters preserved in filenames and folders.</td>
+</tr>
+</tbody>
+</table>
+<p>Regardless of this setting, a set of filesystem-unsafe and structural characters is always removed or replaced during sanitization (for example <code>/</code> and <code>;</code> become <code>&amp;</code>, and characters like <code>\ * ! ? , ' " &lt; &gt; | $ # ~</code> are stripped). This is why you should never put path-unsafe characters directly in a template. unshackle warns about templates containing <code>&lt; &gt; : " / \ | ? *</code> at startup (folder templates are checked per path segment, so <code>/</code> is allowed there as a directory separator).</p>
+<h2 id="directory-filename-configuration">Directory &amp; filename configuration<a class="headerlink" href="#directory-filename-configuration" title="Permanent link">&para;</a></h2>
+<p>The <code>directories</code> key relocates unshackle's working folders. Only the folders listed here can be moved; core package paths are protected and silently ignored if you try to override them.</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nt">directories</span><span class="p">:</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="nt">downloads</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;~/Media/unshackle&quot;</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span><span class="nt">temp</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;/mnt/fast/unshackle-temp&quot;</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">  </span><span class="nt">cache</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;~/.cache/unshackle&quot;</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">  </span><span class="nt">cookies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;~/.config/unshackle/cookies&quot;</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">  </span><span class="nt">logs</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;~/.config/unshackle/logs&quot;</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>downloads</code></td>
+<td>Default output directory for finished files.</td>
+</tr>
+<tr>
+<td><code>temp</code></td>
+<td>Working directory for in-progress downloads, muxing, and intermediate files.</td>
+</tr>
+<tr>
+<td><code>cache</code></td>
+<td>Title/HTTP cache and update-check state.</td>
+</tr>
+<tr>
+<td><code>cookies</code></td>
+<td>Per-service cookie files.</td>
+</tr>
+<tr>
+<td><code>logs</code></td>
+<td>Log files.</td>
+</tr>
+<tr>
+<td><code>exports</code></td>
+<td>Export JSONs.</td>
+</tr>
+<tr>
+<td><code>services</code>, <code>vaults</code>, <code>fonts</code>, <code>commands</code></td>
+<td>Search paths for services, key-vault backends, bundled fonts, and CLI commands.</td>
+</tr>
+<tr>
+<td><code>wvds</code>, <code>prds</code>, <code>dcsl</code></td>
+<td>Widevine devices, PlayReady devices, and DCSL data.</td>
+</tr>
+</tbody>
+</table>
+<p>Paths support <code>~</code> expansion. The names <code>app_dirs</code>, <code>core_dir</code>, <code>namespace_dir</code>, <code>user_configs</code>, and <code>data</code> are protected and cannot be changed.</p>
+<h3 id="filename-patterns">Filename patterns<a class="headerlink" href="#filename-patterns" title="Permanent link">&para;</a></h3>
+<p>The <code>filenames</code> key overrides the naming patterns for a handful of internal files. These are <strong>not</strong> your media output names. They are logs, temp files, and per-service configs.</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">filenames</span><span class="p">:</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;unshackle_{name}_{time}.log&quot;</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span><span class="nt">chapters</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Chapters_{title}_{random}.txt&quot;</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">  </span><span class="nt">subtitle</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Subtitle_{id}_{language}.srt&quot;</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Default</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>log</code></td>
+<td><code>unshackle_{name}_{time}.log</code></td>
+<td><code>directories.logs</code></td>
+</tr>
+<tr>
+<td><code>debug_log</code></td>
+<td><code>unshackle_debug_{service}_{time}.jsonl</code></td>
+<td><code>directories.logs</code></td>
+</tr>
+<tr>
+<td><code>config</code></td>
+<td><code>config.yaml</code></td>
+<td>per-service directory</td>
+</tr>
+<tr>
+<td><code>root_config</code></td>
+<td><code>unshackle.yaml</code></td>
+<td>main config filename</td>
+</tr>
+<tr>
+<td><code>chapters</code></td>
+<td><code>Chapters_{title}_{random}.txt</code></td>
+<td><code>directories.temp</code></td>
+</tr>
+<tr>
+<td><code>subtitle</code></td>
+<td><code>Subtitle_{id}_{language}.srt</code></td>
+<td><code>directories.temp</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="chapters-naming">Chapters naming<a class="headerlink" href="#chapters-naming" title="Permanent link">&para;</a></h3>
+<p>When a title has chapters, they are written to an OGM chapters file (<code>filenames.chapters</code>) and passed to the muxer. Unnamed chapters use the <code>chapter_fallback_name</code> template:</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nt">chapter_fallback_name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Chapter</span><span class="nv"> </span><span class="s">{i:02}&quot;</span>
+</span></code></pre></div>
+<p>The fallback supports two placeholders: <code>{i}</code> (chapter number, starting at 1) and <code>{j}</code> (which increments only for unnamed chapters). Standard format directives like <code>{i:02}</code> are allowed.</p>
+<h2 id="removed-migrated-options">Removed &amp; migrated options<a class="headerlink" href="#removed-migrated-options" title="Permanent link">&para;</a></h2>
+<div class="admonition warning">
+<p class="admonition-title"><code>scene_naming</code> was removed</p>
+<p>The old <code>scene_naming</code> option no longer exists. If it is present in your config, unshackle exits immediately with an error asking you to configure <code>output_template</code> instead. Migrate any scene-naming setup to the templates described on this page.</p>
+</div>
+<h2 id="worked-examples">Worked examples<a class="headerlink" href="#worked-examples" title="Permanent link">&para;</a></h2>
+<div class="tabbed-set tabbed-alternate" data-tabs="3:3"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><input id="__tabbed_3_3" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Movies</label><label for="__tabbed_3_2">TV series</label><label for="__tabbed_3_3">Music</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p><div class="language-yaml highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nt">output_template</span><span class="p">:</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{year}.{edition?}.{quality}.{source}.WEB-DL.{audio_full}.{atmos?}.{video}.{hdr?}-{tag?}&quot;</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">  </span><span class="nt">folder</span><span class="p">:</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">    </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}</span><span class="nv"> </span><span class="s">({year})&quot;</span>
+</span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>The Movie (2024)/
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>  └─ The.Movie.2024.1080p.NF.WEB-DL.DDP5.1.Atmos.H.265.HDR-TAG.mkv
+</span></code></pre></div></p>
+</div>
+<div class="tabbed-block">
+<p><div class="language-yaml highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="nt">output_template</span><span class="p">:</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">  </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{season_episode}.{episode_name?}.{quality}.{source}.WEB-DL.{audio_full}.{video}-{tag}&quot;</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">  </span><span class="nt">folder</span><span class="p">:</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">    </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}</span><span class="nv"> </span><span class="s">({year})/Season</span><span class="nv"> </span><span class="s">{season}&quot;</span>
+</span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>The Show (2023)/Season S02/
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>  └─ The.Show.S02E04.The.Reckoning.2160p.AMZN.WEB-DL.DDP5.1.H.265-TAG.mkv
+</span></code></pre></div></p>
+</div>
+<div class="tabbed-block">
+<p><div class="language-yaml highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="nt">output_template</span><span class="p">:</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="w">  </span><span class="nt">songs</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{track_number}.</span><span class="nv"> </span><span class="s">{title}&quot;</span>
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="w">  </span><span class="nt">folder</span><span class="p">:</span>
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="w">    </span><span class="nt">albums</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{album_artist}</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">{album}</span><span class="nv"> </span><span class="s">({year})&quot;</span>
+</span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>The Artist - The Album (2024)/
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>  └─ 01. Opening Track.mka
+</span></code></pre></div></p>
+</div>
+</div>
+</div>
+<h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../../getting-started/configuration-file/">Configuration File</a>: the full <code>unshackle.yaml</code> structure.</li>
+<li><a href="../downloading/">Downloading</a>: the <code>dl</code> command and per-run flags like <code>-o</code>, <code>--no-folder</code>, <code>--tag</code>, and <code>--repack</code>.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../vaults/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Key Vaults">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Key Vaults
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../subtitles/" class="md-footer__link md-footer__link--next" aria-label="Next: Subtitles">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Subtitles
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.annotate", "content.code.copy", "content.tabs.link", "content.tooltips", "navigation.footer", "navigation.indexes", "navigation.sections", "navigation.tabs", "navigation.top", "navigation.tracking", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

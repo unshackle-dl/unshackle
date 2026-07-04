@@ -1,0 +1,2439 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Movie, TV, and Music archival software — user guide and REST API reference">
+      
+      
+      
+        <link rel="canonical" href="https://docs.unshackle.dev/guide/troubleshooting/">
+      
+      
+        <link rel="prev" href="../subtitles/">
+      
+      
+        <link rel="next" href="../../reference/configuration/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Troubleshooting - unshackle</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#troubleshooting-debugging" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="unshackle" class="md-header__button md-logo" aria-label="unshackle" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24"><path d="m800-274-80-80v-206H514l-80-80h166v-80q0-50-34.5-85T481-840q-50 0-84 34.5T363-720v9l-73-73q22-61 75-98.5T481-920q83 0 141 58.5T680-720v80h40q33 0 56.5 23.5T800-560v286Zm20 246-62-62q-11 5-20 7.5T720-80H240q-33 0-56.5-23.5T160-160v-400q0-25 14.5-46t37.5-30L28-820l56-56L876-84l-56 56ZM686-160 539-309q-11 11-25.5 17t-31.5 6q-33 0-56.5-23.5T402-366q0-17 6-31.5t17-25.5L286-560h-46v400h446ZM486-360Zm131-97Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            unshackle
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Troubleshooting
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1M8 13h8v-2H8zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4a5 5 0 0 0 5-5 5 5 0 0 0-5-5"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5m0 8a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5M7 15a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/unshackle-dl/unshackle" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    unshackle-dl/unshackle
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/installation/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../downloading/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  User Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/configuration/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Configuration
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../dev/creating-a-service/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Developer
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/api/service/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="unshackle" class="md-nav__button md-logo" aria-label="unshackle" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24"><path d="m800-274-80-80v-206H514l-80-80h166v-80q0-50-34.5-85T481-840q-50 0-84 34.5T363-720v9l-73-73q22-61 75-98.5T481-920q83 0 141 58.5T680-720v80h40q33 0 56.5 23.5T800-560v286Zm20 246-62-62q-11 5-20 7.5T720-80H240q-33 0-56.5-23.5T160-160v-400q0-25 14.5-46t37.5-30L28-820l56-56L876-84l-56 56ZM686-160 539-309q-11 11-25.5 17t-31.5 6q-33 0-56.5-23.5T402-366q0-17 6-31.5t17-25.5L286-560h-46v400h446ZM486-360Zm131-97Z"/></svg>
+
+    </a>
+    unshackle
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/unshackle-dl/unshackle" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    unshackle-dl/unshackle
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/configuration-file/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Configuration File
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../downloading/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Downloading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../drm-and-cdm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DRM & CDM Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../proxies-and-vpn/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Proxies & VPN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vaults/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Key Vaults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../output-and-naming/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Output & Naming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../subtitles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Subtitles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#turning-on-debug-logging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Turning on debug logging
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-structured-json-debug-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The structured JSON debug log
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The structured JSON debug log">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#where-it-is-written" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where it is written
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-a-log-entry-looks-like" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a log entry looks like
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reading-and-filtering-the-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading and filtering the log
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#debugging-drm-keys-with-debug_keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Debugging DRM keys with debug_keys
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#debugging-http-traffic-with-debug_requests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Debugging HTTP traffic with debug_requests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-gets-redacted" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What gets redacted
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#checking-your-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Checking your environment
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Checking your environment">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#env-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        env check
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#env-info" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        env info
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#env-clear" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        env clear
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-failure-modes-and-how-to-inspect-them" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common failure modes and how to inspect them
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-is-my-config-not-being-picked-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why is my config not being picked up?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Why is my config not being picked up?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#logging-conventions-when-adding-entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logging conventions when adding entries
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Configuration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Developer
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/creating-a-service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Creating a Service
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/service-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../dev/rest-api/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    REST API
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5_3" id="__nav_5_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    REST API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/authentication/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/endpoints/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Endpoints
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/job-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Job Lifecycle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/remote-sessions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remote Sessions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/errors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Error Responses
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/tracks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/titles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Titles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/drm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DRM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#turning-on-debug-logging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Turning on debug logging
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-structured-json-debug-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The structured JSON debug log
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The structured JSON debug log">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#where-it-is-written" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where it is written
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-a-log-entry-looks-like" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a log entry looks like
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reading-and-filtering-the-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading and filtering the log
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#debugging-drm-keys-with-debug_keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Debugging DRM keys with debug_keys
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#debugging-http-traffic-with-debug_requests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Debugging HTTP traffic with debug_requests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-gets-redacted" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What gets redacted
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#checking-your-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Checking your environment
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Checking your environment">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#env-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        env check
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#env-info" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        env info
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#env-clear" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        env clear
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-failure-modes-and-how-to-inspect-them" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common failure modes and how to inspect them
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-is-my-config-not-being-picked-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why is my config not being picked up?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Why is my config not being picked up?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#logging-conventions-when-adding-entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logging conventions when adding entries
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="troubleshooting-debugging">Troubleshooting &amp; Debugging<a class="headerlink" href="#troubleshooting-debugging" title="Permanent link">&para;</a></h1>
+<p>When a download fails, a service misbehaves, or a key won't resolve, unshackle gives you three tools to find out why:</p>
+<ul>
+<li><strong>Debug logging</strong>: verbose <code>DEBUG</code>-level console output plus a structured, machine-readable log file.</li>
+<li><strong><a href="#checking-your-environment"><code>unshackle env</code></a></strong>: verify that the external tools unshackle depends on are installed, and see exactly which directories and config file are in use.</li>
+<li><strong>Targeted toggles</strong>: <code>debug_keys</code> and <code>debug_requests</code> for the two areas (DRM keys and raw HTTP traffic) that are deliberately quiet by default.</li>
+</ul>
+<p>The sections below cover how to enable each of them, how to read what they produce, and which diagnostic fits which failure mode.</p>
+<hr />
+<h2 id="turning-on-debug-logging">Turning on debug logging<a class="headerlink" href="#turning-on-debug-logging" title="Permanent link">&para;</a></h2>
+<p>There are two independent ways to enable debug logging, and they do slightly different things.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">The <code>-d</code> / <code>--debug</code> flag</label><label for="__tabbed_1_2">The <code>debug</code> config key</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p>The root-level flag turns on verbose logging for a single invocation:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="go">unshackle -d dl SERVICE TITLE_ID</span>
+</span></code></pre></div>
+<p>It must come <strong>before</strong> the subcommand, because it is an option on the root <code>unshackle</code> command, not on <code>dl</code>.</p>
+<p><code>-d</code> does three things:</p>
+<ol>
+<li>Sets the console log level to <code>DEBUG</code>, so every module logs its full detail.</li>
+<li>Enables the structured JSON debug log file (see <a href="#the-structured-json-debug-log">below</a>).</li>
+<li>Adds source-path annotations to console log lines (which file and line each message came from).</li>
+</ol>
+</div>
+<div class="tabbed-block">
+<p>To make debug logging the default for every run without typing <code>-d</code> each time, set it in your <code>unshackle.yaml</code>:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">debug</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span></code></pre></div>
+<p>or via the <a href="../cli-reference/#cfg"><code>cfg</code></a> command:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="go">unshackle cfg debug true</span>
+</span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title"><code>debug: true</code> is not identical to <code>-d</code></p>
+<p>The <code>debug</code> config key enables the <strong>JSON debug log file</strong>, but it does <strong>not</strong> raise the console to <code>DEBUG</code> level and does not add source-path annotations. Those only happen when you pass the <code>-d</code> flag. Use the flag when you want to <em>watch</em> the verbose output live; use the config key when you just want the log file written every time. Passing <code>-d</code> is the most complete option, and you can combine both.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Debug logging can be noisy and revealing</p>
+<p>Debug output is verbose and includes request metadata, service internals, and stack traces. Secrets, URLs, and local paths are automatically redacted (see <a href="#what-gets-redacted">Redaction</a>), but you should still glance over a log before sharing it publicly.</p>
+</div>
+<hr />
+<h2 id="the-structured-json-debug-log">The structured JSON debug log<a class="headerlink" href="#the-structured-json-debug-log" title="Permanent link">&para;</a></h2>
+<p>Beyond the console output, unshackle writes a structured log in <a href="https://jsonlines.org/">JSON Lines</a> format: one complete JSON object per line. This file is designed to be filtered, searched, and analysed with standard tooling (<code>jq</code>, <code>grep</code>, a text editor), and it is safe to attach to a bug report because it is redacted.</p>
+<h3 id="where-it-is-written">Where it is written<a class="headerlink" href="#where-it-is-written" title="Permanent link">&para;</a></h3>
+<p>The debug log is created during a <code>dl</code> run (and by <a href="../cli-reference/#import"><code>import</code></a>, which wraps <code>dl</code>). The path is:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>&lt;logs directory&gt;/unshackle_debug_&lt;service&gt;_&lt;timestamp&gt;.jsonl
+</span></code></pre></div>
+<p>For example, <code>unshackle_debug_NETFLIX_20260703-142530.jsonl</code>. The <code>&lt;service&gt;</code> tag and the timestamp mean each download gets its own file, so runs never overwrite each other.</p>
+<div class="admonition tip">
+<p class="admonition-title">Find your logs directory</p>
+<p>The logs directory defaults to a <code>logs</code> folder inside the package data directory, but it can be relocated with the <code>directories.logs</code> config key. To see the exact resolved path on your machine, run <a href="#env-info"><code>unshackle env info</code></a> and read the <strong>Directories</strong> table.</p>
+</div>
+<h3 id="what-a-log-entry-looks-like">What a log entry looks like<a class="headerlink" href="#what-a-log-entry-looks-like" title="Permanent link">&para;</a></h3>
+<p>Every line is a self-contained JSON object. The first line of a session records the environment:</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="p">{</span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="s2">&quot;2026-07-03T14:25:30.123456+00:00&quot;</span><span class="p">,</span><span class="nt">&quot;session_id&quot;</span><span class="p">:</span><span class="s2">&quot;a1b2c3d4&quot;</span><span class="p">,</span><span class="nt">&quot;level&quot;</span><span class="p">:</span><span class="s2">&quot;INFO&quot;</span><span class="p">,</span><span class="nt">&quot;operation&quot;</span><span class="p">:</span><span class="s2">&quot;session_start&quot;</span><span class="p">,</span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="s2">&quot;Debug logging session started&quot;</span><span class="p">,</span><span class="nt">&quot;context&quot;</span><span class="p">:{</span><span class="nt">&quot;unshackle_version&quot;</span><span class="p">:</span><span class="s2">&quot;5.3.0&quot;</span><span class="p">,</span><span class="nt">&quot;python_version&quot;</span><span class="p">:</span><span class="s2">&quot;3.12.4 ...&quot;</span><span class="p">,</span><span class="nt">&quot;platform&quot;</span><span class="p">:</span><span class="s2">&quot;Linux-6.18.5-x86_64&quot;</span><span class="p">,</span><span class="nt">&quot;platform_system&quot;</span><span class="p">:</span><span class="s2">&quot;Linux&quot;</span><span class="p">,</span><span class="nt">&quot;platform_release&quot;</span><span class="p">:</span><span class="s2">&quot;6.18.5&quot;</span><span class="p">}}</span>
+</span></code></pre></div>
+<p>Subsequent lines describe operations: service calls, DRM licence requests, vault lookups, downloader progress, and errors. Common fields include:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>timestamp</code></td>
+<td>UTC ISO-8601 time of the entry.</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>Short random ID shared by every entry in one run, handy for correlating lines.</td>
+</tr>
+<tr>
+<td><code>level</code></td>
+<td><code>DEBUG</code>, <code>INFO</code>, <code>WARNING</code>, or <code>ERROR</code>.</td>
+</tr>
+<tr>
+<td><code>operation</code></td>
+<td>The action being logged, e.g. <code>service_call</code>, <code>download_init</code>, <code>drm_get_widevine_license</code>, <code>vault_get_key</code>, <code>session_end</code>.</td>
+</tr>
+<tr>
+<td><code>message</code></td>
+<td>Human-readable description (redacted).</td>
+</tr>
+<tr>
+<td><code>service</code></td>
+<td>Service tag the entry belongs to, when applicable.</td>
+</tr>
+<tr>
+<td><code>context</code></td>
+<td>Arbitrary structured detail for the operation.</td>
+</tr>
+<tr>
+<td><code>request</code> / <code>response</code></td>
+<td>HTTP method/URL and response metadata for network operations.</td>
+</tr>
+<tr>
+<td><code>duration_ms</code></td>
+<td>How long a timed operation took.</td>
+</tr>
+<tr>
+<td><code>success</code></td>
+<td>Whether the operation succeeded.</td>
+</tr>
+<tr>
+<td><code>error</code></td>
+<td>On failures: the exception <code>type</code>, <code>message</code>, and a full <code>traceback</code> array (all redacted).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="reading-and-filtering-the-log">Reading and filtering the log<a class="headerlink" href="#reading-and-filtering-the-log" title="Permanent link">&para;</a></h3>
+<p>Because each line is independent JSON, <code>jq</code> is the natural tool:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="gp"># </span>Show<span class="w"> </span>only<span class="w"> </span>error-level<span class="w"> </span>entries
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="go">jq &#39;select(.level == &quot;ERROR&quot;)&#39; unshackle_debug_NETFLIX_20260703-142530.jsonl</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="gp"># </span>List<span class="w"> </span>every<span class="w"> </span>operation<span class="w"> </span>and<span class="w"> </span>whether<span class="w"> </span>it<span class="w"> </span>succeeded
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="go">jq -c &#39;{operation, success}&#39; unshackle_debug_NETFLIX_20260703-142530.jsonl</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="gp"># </span>Pull<span class="w"> </span>the<span class="w"> </span>traceback<span class="w"> </span>out<span class="w"> </span>of<span class="w"> </span>the<span class="w"> </span>first<span class="w"> </span>error
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="go">jq -r &#39;select(.error) | .error.traceback[]&#39; unshackle_debug_NETFLIX_20260703-142530.jsonl</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="gp"># </span>Show<span class="w"> </span>only<span class="w"> </span>DRM<span class="w"> </span>/<span class="w"> </span>licensing<span class="w"> </span>operations
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="go">jq &#39;select(.operation | startswith(&quot;drm_&quot;))&#39; unshackle_debug_NETFLIX_20260703-142530.jsonl</span>
+</span></code></pre></div>
+<p>The session's binary-tool versions (Shaka Packager, mp4decrypt, mkvmerge, FFmpeg, FFprobe) are logged near the start of a <code>dl</code> run, which is often the fastest way to confirm a muxing or decryption failure is really a wrong-version problem.</p>
+<hr />
+<h2 id="debugging-drm-keys-with-debug_keys">Debugging DRM keys with <code>debug_keys</code><a class="headerlink" href="#debugging-drm-keys-with-debug_keys" title="Permanent link">&para;</a></h2>
+<p>By default, content-decryption <strong>keys are redacted</strong> in the JSON debug log. Any field that looks like a key is written as <code>[REDACTED]</code>. This keeps logs shareable. When you are specifically debugging a key-retrieval or decryption problem and need to see the actual KID/KEY values that were fetched, enable <code>debug_keys</code>:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">debug_keys</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span></code></pre></div>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="go">unshackle cfg debug_keys true</span>
+</span></code></pre></div>
+<p>With <code>debug_keys: true</code>, the debug log stops masking key fields, so you can confirm which keys came back from a licence server or vault and compare them against what decryption expected.</p>
+<div class="admonition warning">
+<p class="admonition-title">Keys are sensitive, turn this back off</p>
+<p><code>debug_keys</code> writes real decryption keys into the log file in cleartext. Only enable it while actively diagnosing a key issue, never share a log produced with it on, and set it back to <code>false</code> when you're done. Note that <code>debug_keys</code> only affects the <strong>JSON debug log file</strong>. It does not change what the console prints.</p>
+</div>
+<p>Fields that are <em>always</em> redacted regardless of <code>debug_keys</code> (anything whose name contains <code>password</code>, <code>token</code>, <code>secret</code>, <code>auth</code>, or <code>cookie</code>) stay masked, so credentials never leak even in a keys-on log.</p>
+<hr />
+<h2 id="debugging-http-traffic-with-debug_requests">Debugging HTTP traffic with <code>debug_requests</code><a class="headerlink" href="#debugging-http-traffic-with-debug_requests" title="Permanent link">&para;</a></h2>
+<p>When you pass <code>-d</code>, unshackle raises its own modules to <code>DEBUG</code> but deliberately <strong>silences</strong> the noisy low-level HTTP libraries (<code>urllib3</code>, <code>requests</code>, <code>rnet</code>, <code>httpx</code>, <code>httpcore</code>, <code>hpack</code>, <code>h2</code>) back down to <code>WARNING</code>. Without this, a single download would bury the useful output under thousands of connection-pool and HTTP/2 frame messages.</p>
+<p>If you need that low-level traffic (for example when a request is failing at the TLS or connection layer and you need to see the underlying library's own logs), enable <code>debug_requests</code>:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">debug_requests</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span></code></pre></div>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="go">unshackle cfg debug_requests true</span>
+</span></code></pre></div>
+<p>With <code>debug_requests: true</code>, those libraries are left at <code>DEBUG</code> level when you run with <code>-d</code>, so their request/response chatter appears in the console.</p>
+<div class="admonition note">
+<p class="admonition-title"><code>debug_requests</code> needs <code>-d</code> to have any effect</p>
+<p>The <code>debug_requests</code> toggle only decides whether the HTTP libraries are silenced when the <code>-d</code> flag is active. If you are not running with <code>-d</code> (verbose console logging), it changes nothing. Combine them: <code>unshackle -d dl ...</code> with <code>debug_requests: true</code> in config.</p>
+</div>
+<hr />
+<h2 id="what-gets-redacted">What gets redacted<a class="headerlink" href="#what-gets-redacted" title="Permanent link">&para;</a></h2>
+<p>unshackle redacts logged strings so that debug output is safe to share. Three passes are applied to every logged message, error, and structured value:</p>
+<ul>
+<li><strong>Secrets</strong>: passwords, tokens, API secrets, auth values, and cookies are replaced with <code>[REDACTED]</code>.</li>
+<li><strong>URLs</strong>: every <code>http(s)</code> URL is collapsed to <code>redacted</code> (keeping only the file extension, so a manifest still shows as <code>redacted.mpd</code> and a segment as <code>redacted.m4s</code>). This hides content, CDN, manifest, and licence-server locations while preserving the <em>type</em> of resource.</li>
+<li><strong>Local paths</strong>: install-root, virtualenv, and home-directory prefixes are replaced with tokens, so your username and machine layout don't appear in logs.</li>
+</ul>
+<p>Path redaction is controlled by the <code>redact_paths</code> config key, which is <strong>on by default</strong>:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">redact_paths</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">   </span><span class="c1"># default — mask local base directories in logged paths</span>
+</span></code></pre></div>
+<p>Set <code>redact_paths: false</code> if you are debugging a path problem locally and want to see full, unmasked paths in the console and logs. Secret and URL redaction in the JSON debug log are always applied and are not affected by this toggle.</p>
+<hr />
+<h2 id="checking-your-environment">Checking your environment<a class="headerlink" href="#checking-your-environment" title="Permanent link">&para;</a></h2>
+<p>Many "download failed" problems are really missing external tools or a config file that isn't where you think it is. The <a href="../cli-reference/#env"><code>unshackle env</code></a> command group answers both questions before you dig into logs.</p>
+<h3 id="env-check"><code>env check</code><a class="headerlink" href="#env-check" title="Permanent link">&para;</a></h3>
+<p><code>unshackle env check</code> verifies every external binary unshackle can use and prints a table of what's installed:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="go">unshackle env check</span>
+</span></code></pre></div>
+<p>It reports each tool's status (<code>✓</code> installed / <code>✗</code> missing), whether it is <strong>required</strong> or optional, and what it's for. A summary line tells you the installed-vs-total count and, if anything mandatory is absent, exactly which required tools are missing.</p>
+<p>The required tools (unshackle will not get far without them) are:</p>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>FFmpeg</strong></td>
+<td>Media processing</td>
+</tr>
+<tr>
+<td><strong>FFprobe</strong></td>
+<td>Media analysis</td>
+</tr>
+<tr>
+<td><strong>MKVToolNix</strong> (<code>mkvmerge</code>)</td>
+<td>MKV muxing</td>
+</tr>
+<tr>
+<td><strong>mkvpropedit</strong></td>
+<td>MKV metadata</td>
+</tr>
+<tr>
+<td><strong>Shaka Packager</strong></td>
+<td>DRM decryption</td>
+</tr>
+</tbody>
+</table>
+<p>Optional tools unlock extra capabilities. For example, <code>mp4decrypt</code> (alternative decryptor), <code>dovi_tool</code> / <code>HDR10Plus_tool</code> (Dolby Vision / HDR10+), <code>SubtitleEdit</code> / <code>CCExtractor</code> (subtitle conversion and CC extraction), <code>MPV</code> / <code>FFplay</code> (playback preview), and <code>git</code> (service repositories) or <code>docker</code> (Gluetun VPN, see <a href="../proxies-and-vpn/">Proxies &amp; VPN</a>).</p>
+<div class="admonition tip">
+<p class="admonition-title">First thing to run when something breaks</p>
+<p>If a decryption step errors, a mux fails, or a Dolby Vision title won't process, run <code>unshackle env check</code> first. A red <code>✗</code> next to the relevant tool is the answer far more often than a bug in unshackle.</p>
+</div>
+<h3 id="env-info"><code>env info</code><a class="headerlink" href="#env-info" title="Permanent link">&para;</a></h3>
+<p><code>unshackle env info</code> shows where unshackle is reading configuration from and where every working directory lives:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="go">unshackle env info</span>
+</span></code></pre></div>
+<ul>
+<li>If a config file was found, it prints the path it was <strong>loaded from</strong>. If none was found, it lists every location it <em>would</em> accept one (see <a href="#why-is-my-config-not-being-picked-up">Config file discovery</a> below), so you can create the file in the right place.</li>
+<li>It then prints a <strong>Directories</strong> table for every configured path: <code>downloads</code>, <code>temp</code>, <code>cache</code>, <code>cookies</code>, <code>logs</code>, <code>exports</code>, <code>wvds</code>, <code>prds</code>, the <code>services</code> search paths, and more.</li>
+</ul>
+<p>This is the authoritative way to answer "where are my logs / downloads / cookies actually going?" The defaults are relative to the installed package, and any <code>directories:</code> overrides in your config are reflected here.</p>
+<h3 id="env-clear"><code>env clear</code><a class="headerlink" href="#env-clear" title="Permanent link">&para;</a></h3>
+<p>Stale cache or leftover temp files can cause confusing behaviour (an old cached title list, a half-written temp file). <code>env clear</code> wipes those directories safely:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="go">unshackle env clear cache            # clear the whole cache directory</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="go">unshackle env clear cache NETFLIX    # clear just one service&#39;s cache subdirectory</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="go">unshackle env clear temp             # clear the temp working directory</span>
+</span></code></pre></div>
+<p>Each command reports how many files it removed and how much space it freed, then recreates the empty directory.</p>
+<div class="admonition tip">
+<p class="admonition-title">Cache-related weirdness</p>
+<p>If a service keeps returning stale titles or metadata even after the source changed, clear that service's cache with <code>unshackle env clear cache &lt;SERVICE&gt;</code>. See <a href="../vaults/">Vaults</a> for the separate, persistent key-vault store, which <code>env clear</code> does <strong>not</strong> touch.</p>
+</div>
+<hr />
+<h2 id="common-failure-modes-and-how-to-inspect-them">Common failure modes and how to inspect them<a class="headerlink" href="#common-failure-modes-and-how-to-inspect-them" title="Permanent link">&para;</a></h2>
+<div class="admonition example">
+<p class="admonition-title">A required tool is missing</p>
+<p><strong>Symptom:</strong> decryption, muxing, or analysis fails early, sometimes with a "binary not found" style error.</p>
+<p><strong>Inspect:</strong> run <code>unshackle env check</code> and look for a red <code>✗</code> on a <strong>required</strong> row. Install the missing tool and re-run.</p>
+</div>
+<div class="admonition example">
+<p class="admonition-title">Decryption produces garbage or fails</p>
+<p><strong>Symptom:</strong> the download completes but the file won't play, or the decrypt step errors.</p>
+<p><strong>Inspect:</strong> enable <code>debug_keys</code> and run with <code>-d</code>, then check the JSON debug log's <code>drm_*</code> and <code>vault_*</code> operations to confirm which keys were fetched and from where. Also confirm Shaka Packager (or <code>mp4decrypt</code>) shows a sane version in the <code>download_init</code> binary-versions entry. See <a href="../drm-and-cdm/">DRM &amp; CDM</a>.</p>
+</div>
+<div class="admonition example">
+<p class="admonition-title">A network request fails at the connection or TLS layer</p>
+<p><strong>Symptom:</strong> timeouts, connection resets, or handshake errors that unshackle's own logs don't fully explain.</p>
+<p><strong>Inspect:</strong> set <code>debug_requests: true</code> and run with <code>-d</code> to surface the underlying <code>urllib3</code> / <code>rnet</code> / <code>httpx</code> logs. In the JSON debug log, filter for <code>service_call</code> operations to see which request failed. If a proxy is involved, cross-check <a href="../proxies-and-vpn/">Proxies &amp; VPN</a>.</p>
+</div>
+<div class="admonition example">
+<p class="admonition-title">The wrong titles/metadata keep coming back</p>
+<p><strong>Symptom:</strong> a service returns outdated titles even after the source changed.</p>
+<p><strong>Inspect:</strong> the title cache is likely serving stale data. Clear it with <code>unshackle env clear cache &lt;SERVICE&gt;</code>, or bypass it for one run using the <code>dl</code> no-cache / reset-cache options (see <a href="../downloading/">Downloading</a> and the <a href="../cli-reference/#dl">CLI Reference</a>).</p>
+</div>
+<div class="admonition example">
+<p class="admonition-title">A config value doesn't seem to apply</p>
+<p><strong>Symptom:</strong> a setting you edited has no effect.</p>
+<p><strong>Inspect:</strong> run <code>unshackle env info</code> to confirm <strong>which</strong> config file is actually loaded, and <code>unshackle cfg --list</code> to dump the effective values. It's common to edit a config file in a location unshackle isn't reading from. See below.</p>
+</div>
+<hr />
+<h2 id="why-is-my-config-not-being-picked-up">Why is my config not being picked up?<a class="headerlink" href="#why-is-my-config-not-being-picked-up" title="Permanent link">&para;</a></h2>
+<p>unshackle loads the <strong>first</strong> <code>unshackle.yaml</code> it finds, in this order:</p>
+<ol>
+<li><code>unshackle.yaml</code> inside the package's namespace directory.</li>
+<li><code>unshackle.yaml</code> in the parent of that directory.</li>
+<li><code>unshackle.yaml</code> in your OS user-config directory: on Linux <code>~/.config/unshackle/unshackle.yaml</code>, on Windows <code>%LOCALAPPDATA%\unshackle\unshackle.yaml</code>, on macOS <code>~/Library/Application Support/unshackle/unshackle.yaml</code>.</li>
+</ol>
+<p>If you have config in more than one of these, an earlier one wins and your edits to a later file are silently ignored. <code>unshackle env info</code> prints the path that was actually loaded (or, if none exists, lists all three candidate locations so you can create the file correctly). See <a href="../cli-reference/#cfg">Configuration</a> for editing values with the <code>cfg</code> command.</p>
+<hr />
+<div class="admonition note">
+<p class="admonition-title">Developer note: structured logging in code</p>
+<p>Service and command code emits entries through the shared <code>log_event(...)</code> helper (and the <code>timed_operation(...)</code> context manager for timing a block) from <code>unshackle.core.utilities</code>. These are no-ops when debug logging is disabled, so they are always safe to leave in place. When adding a new feature, call <code>log_event("my_feature_event", message="...", context={...})</code> rather than reimplementing the "is the logger enabled?" guard. The redaction and JSON-serialisation are handled for you, and any field whose name looks like a key/secret/token is redacted automatically (keys only appear when the run has <code>debug_keys</code> enabled).</p>
+</div>
+<h3 id="logging-conventions-when-adding-entries">Logging conventions when adding entries<a class="headerlink" href="#logging-conventions-when-adding-entries" title="Permanent link">&para;</a></h3>
+<p>The debug log is tuned for <strong>developers troubleshooting pipeline flow</strong> (maximum signal, minimum noise), not for end users. A few conventions keep it that way. They are not enforced by the <code>log_event</code> signature, so they are easy to miss and worth stating explicitly.</p>
+<div class="admonition tip">
+<p class="admonition-title">Log levels are a flow skeleton, not just severity</p>
+<p>Treat <code>level</code> as structure, not decoration. Emit exactly <strong>one <code>INFO</code> milestone per pipeline stage</strong> so that <code>jq 'select(.level=="INFO")'</code> reads back the whole end-to-end flow of a run. Everything internal goes to <code>DEBUG</code>; failures go to <code>ERROR</code>. Keeping <code>INFO</code> sparse is the whole point. It is the line a developer skims first to see where a run got to before it broke.</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="gp"># </span>Read<span class="w"> </span>the<span class="w"> </span>pipeline<span class="err">&#39;</span>s<span class="w"> </span>high-level<span class="w"> </span>flow,<span class="w"> </span>one<span class="w"> </span>line<span class="w"> </span>per<span class="w"> </span>stage
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="go">jq &#39;select(.level == &quot;INFO&quot;)&#39; unshackle_debug_NETFLIX_20260703-142530.jsonl</span>
+</span></code></pre></div>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">No raw dumps</p>
+<p>Never log a full <code>Tracks</code> object, an MPD/manifest body, or a response payload. Log only <strong>counts, ids, sizes, and <code>safe_display_url(url)</code></strong>. This keeps the log low-noise and prevents leaking content or manifest data into the file <em>before</em> redaction even runs. Redaction is a backstop, not a licence to dump raw objects.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Operation names: <code>&lt;area&gt;_&lt;event&gt;</code>, no registry</p>
+<p>Operation names are plain lowercase strings following an <code>&lt;area&gt;_&lt;event&gt;</code> convention: <code>manifest_dash_parse</code>, <code>drm_decrypt</code>, <code>vault_get_key</code>, <code>tool_run</code>. They are written inline at each call site on purpose: there is <strong>no central registry or enum</strong>, and you should not go hunting for one or create one. The absence is a deliberate design choice, not an omission.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Message reads alone; data lives in fields</p>
+<p>Give every entry a single-sentence <code>message</code> that stands on its own, and put all structured data (<code>context</code>, counts, ids, <code>duration_ms</code>) in <strong>fields</strong> rather than baking it into the prose. This separation is what lets the log be both human-scannable and machine-filterable; a message like <code>"Parsed DASH manifest"</code> with <code>context={"video": 4, "audio": 2}</code> beats <code>"Parsed manifest with 4 video and 2 audio tracks"</code>.</p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">Let tool runs log themselves</p>
+<p>For external-tool calls (FFmpeg, mkvmerge, <code>dovi_tool</code>, and friends), route through <code>run_step</code> / <code>ffprobe</code>, which auto-emit a <code>tool_run</code> entry capturing the binary's version, return code, and duration consistently. Only fall back to calling <code>log_tool_run</code> manually for a direct <code>subprocess.run</code> you genuinely can't route through <code>run_step</code>. Auto-logging is the preferred path precisely because it captures those fields the same way every time.</p>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../subtitles/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Subtitles">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Subtitles
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../../reference/configuration/" class="md-footer__link md-footer__link--next" aria-label="Next: Reference">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Reference
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.annotate", "content.code.copy", "content.tabs.link", "content.tooltips", "navigation.footer", "navigation.indexes", "navigation.sections", "navigation.tabs", "navigation.top", "navigation.tracking", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

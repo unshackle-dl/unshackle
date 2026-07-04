@@ -1,0 +1,2860 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Movie, TV, and Music archival software — user guide and REST API reference">
+      
+      
+      
+        <link rel="canonical" href="https://docs.unshackle.dev/guide/drm-and-cdm/">
+      
+      
+        <link rel="prev" href="../cli-reference/">
+      
+      
+        <link rel="next" href="../proxies-and-vpn/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>DRM & CDM Setup - unshackle</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#drm-cdm-setup" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="unshackle" class="md-header__button md-logo" aria-label="unshackle" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24"><path d="m800-274-80-80v-206H514l-80-80h166v-80q0-50-34.5-85T481-840q-50 0-84 34.5T363-720v9l-73-73q22-61 75-98.5T481-920q83 0 141 58.5T680-720v80h40q33 0 56.5 23.5T800-560v286Zm20 246-62-62q-11 5-20 7.5T720-80H240q-33 0-56.5-23.5T160-160v-400q0-25 14.5-46t37.5-30L28-820l56-56L876-84l-56 56ZM686-160 539-309q-11 11-25.5 17t-31.5 6q-33 0-56.5-23.5T402-366q0-17 6-31.5t17-25.5L286-560h-46v400h446ZM486-360Zm131-97Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            unshackle
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              DRM & CDM Setup
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1M8 13h8v-2H8zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4a5 5 0 0 0 5-5 5 5 0 0 0-5-5"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5m0 8a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5M7 15a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/unshackle-dl/unshackle" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    unshackle-dl/unshackle
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/installation/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../downloading/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  User Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/configuration/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Configuration
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../dev/creating-a-service/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Developer
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/api/service/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="unshackle" class="md-nav__button md-logo" aria-label="unshackle" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24"><path d="m800-274-80-80v-206H514l-80-80h166v-80q0-50-34.5-85T481-840q-50 0-84 34.5T363-720v9l-73-73q22-61 75-98.5T481-920q83 0 141 58.5T680-720v80h40q33 0 56.5 23.5T800-560v286Zm20 246-62-62q-11 5-20 7.5T720-80H240q-33 0-56.5-23.5T160-160v-400q0-25 14.5-46t37.5-30L28-820l56-56L876-84l-56 56ZM686-160 539-309q-11 11-25.5 17t-31.5 6q-33 0-56.5-23.5T402-366q0-17 6-31.5t17-25.5L286-560h-46v400h446ZM486-360Zm131-97Z"/></svg>
+
+    </a>
+    unshackle
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/unshackle-dl/unshackle" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    unshackle-dl/unshackle
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/configuration-file/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Configuration File
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../downloading/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Downloading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DRM & CDM Setup
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DRM & CDM Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#key-concepts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key concepts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supported-drm-systems" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported DRM systems
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Supported DRM systems">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#widevine-vs-playready" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Widevine vs PlayReady
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#providing-a-device-with-the-wvd-and-prd-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Providing a device with the wvd and prd commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Providing a device with the wvd and prd commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#widevine-devices-the-wvd-command" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Widevine devices: the wvd command
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#playready-devices-the-prd-command" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PlayReady devices: the prd command
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#selecting-which-device-to-use-the-cdm-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Selecting which device to use: the cdm config
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Selecting which device to use: the cdm config">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#advanced-selection-by-quality-drm-or-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced selection: by quality, DRM, or profile
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#local-vs-remote-cdms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local vs remote CDMs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#remote-cdms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remote CDMs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Remote CDMs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#widevine-remote-cdm-pywidevine-serve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Widevine remote CDM (pywidevine serve)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#playready-remote-cdm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PlayReady remote CDM
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#decrypt-labs-hosted-keyxtractor-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decrypt Labs (hosted KeyXtractor API)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#custom-api-custom_api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom API (custom_api)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decryption-backends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decryption backends
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#clearkey" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ClearKey
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ClearKey">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#clearkey-over-hls-aes-128" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ClearKey over HLS (AES-128)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clearkey-over-cenc-w3c-eme-orgw3clearkey" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ClearKey over CENC (W3C EME org.w3.clearkey)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#widevine-and-playready-on-the-same-title" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Widevine and PlayReady on the same title
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#keys-vaults-and-caching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keys, vaults, and caching
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#debugging-drm-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Debugging DRM issues
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../proxies-and-vpn/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Proxies & VPN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vaults/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Key Vaults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../output-and-naming/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Output & Naming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../subtitles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Subtitles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Configuration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Developer
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/creating-a-service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Creating a Service
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/service-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../dev/rest-api/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    REST API
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5_3" id="__nav_5_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    REST API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/authentication/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/endpoints/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Endpoints
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/job-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Job Lifecycle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/remote-sessions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remote Sessions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/errors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Error Responses
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/tracks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/titles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Titles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/drm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DRM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#key-concepts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key concepts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supported-drm-systems" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported DRM systems
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Supported DRM systems">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#widevine-vs-playready" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Widevine vs PlayReady
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#providing-a-device-with-the-wvd-and-prd-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Providing a device with the wvd and prd commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Providing a device with the wvd and prd commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#widevine-devices-the-wvd-command" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Widevine devices: the wvd command
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#playready-devices-the-prd-command" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PlayReady devices: the prd command
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#selecting-which-device-to-use-the-cdm-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Selecting which device to use: the cdm config
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Selecting which device to use: the cdm config">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#advanced-selection-by-quality-drm-or-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced selection: by quality, DRM, or profile
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#local-vs-remote-cdms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local vs remote CDMs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#remote-cdms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remote CDMs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Remote CDMs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#widevine-remote-cdm-pywidevine-serve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Widevine remote CDM (pywidevine serve)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#playready-remote-cdm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PlayReady remote CDM
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#decrypt-labs-hosted-keyxtractor-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decrypt Labs (hosted KeyXtractor API)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#custom-api-custom_api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom API (custom_api)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decryption-backends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decryption backends
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#clearkey" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ClearKey
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ClearKey">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#clearkey-over-hls-aes-128" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ClearKey over HLS (AES-128)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clearkey-over-cenc-w3c-eme-orgw3clearkey" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ClearKey over CENC (W3C EME org.w3.clearkey)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#widevine-and-playready-on-the-same-title" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Widevine and PlayReady on the same title
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#keys-vaults-and-caching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keys, vaults, and caching
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#debugging-drm-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Debugging DRM issues
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="drm-cdm-setup">DRM &amp; CDM Setup<a class="headerlink" href="#drm-cdm-setup" title="Permanent link">&para;</a></h1>
+<p>Most commercial streaming content is protected by a Digital Rights Management (DRM)
+system. To download and play it back, unshackle needs to obtain the <strong>content keys</strong>
+for the encrypted tracks and then decrypt them. This page explains the DRM systems
+unshackle supports, how to provide a device so it can talk to a license server, the
+difference between local and remote CDMs, and how to choose a decryption backend.</p>
+<div class="admonition note">
+<p class="admonition-title">Who this page is for</p>
+<p>This is a practical configuration guide for end users of the unshackle CLI.
+A few sections are marked <strong>Developer</strong>. They describe internal behaviour that is
+useful when writing a service, but you do not need them to download protected
+content.</p>
+</div>
+<h2 id="key-concepts">Key concepts<a class="headerlink" href="#key-concepts" title="Permanent link">&para;</a></h2>
+<p>Before configuring anything, it helps to know the vocabulary. unshackle draws a firm
+line between two things:</p>
+<ul>
+<li>A <strong>CDM</strong> (Content Decryption Module) is the trusted "black box" that turns a
+  <em>license challenge</em> into <em>content keys</em>. It is backed by a <strong>device</strong>, a file
+  containing the cryptographic identity of a real client (a phone, a browser, etc.).</li>
+<li>A <strong>DRM system</strong> is the wrapper around a CDM that parses the protection metadata,
+  drives the challenge → license → keys handshake, and finally invokes an external
+  tool to physically decrypt the downloaded file.</li>
+</ul>
+<p>A handful of other terms show up throughout:</p>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>PSSH</strong></td>
+<td>Protection System Specific Header. The per-system init data extracted from the file's init segment or the manifest.</td>
+</tr>
+<tr>
+<td><strong>KID</strong></td>
+<td>Key ID: a 16-byte UUID identifying <em>which</em> key a track needs.</td>
+</tr>
+<tr>
+<td><strong>CEK</strong></td>
+<td>Content Encryption Key: the actual AES key, mapped from its KID.</td>
+</tr>
+<tr>
+<td><strong>Challenge</strong></td>
+<td>The license request the CDM produces, sent to the service's license server.</td>
+</tr>
+<tr>
+<td><strong>License</strong></td>
+<td>The server's response, which the CDM parses to recover the content keys.</td>
+</tr>
+</tbody>
+</table>
+<p>For a Widevine or PlayReady title, the flow is: unshackle reads the PSSH and KIDs
+from the track, asks the CDM for a license challenge, sends that challenge to the
+service's license server, hands the response back to the CDM to extract the keys, and
+then decrypts the file with those keys.</p>
+<h2 id="supported-drm-systems">Supported DRM systems<a class="headerlink" href="#supported-drm-systems" title="Permanent link">&para;</a></h2>
+<p>unshackle implements five DRM systems. Only the first two need a device file and a
+license-server handshake; the rest are special cases.</p>
+<table>
+<thead>
+<tr>
+<th>System</th>
+<th>Device file</th>
+<th>License flow</th>
+<th>Decryption</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Widevine</strong> (Google)</td>
+<td><code>.wvd</code></td>
+<td>CDM challenge → license server → CDM parses → keys</td>
+<td>shaka-packager / mp4decrypt</td>
+</tr>
+<tr>
+<td><strong>PlayReady</strong> (Microsoft)</td>
+<td><code>.prd</code></td>
+<td>CDM challenge (WRM header) → license server → CDM parses → keys</td>
+<td>shaka-packager / mp4decrypt</td>
+</tr>
+<tr>
+<td><strong>ClearKey (CENC)</strong>, W3C EME <code>org.w3.clearkey</code></td>
+<td>none</td>
+<td>JSON <code>{"kids":[…],"type":"temporary"}</code> → license server returns a JWK Set. No CDM.</td>
+<td>shaka-packager / mp4decrypt</td>
+</tr>
+<tr>
+<td><strong>ClearKey (HLS)</strong>, AES-128 <code>EXT-X-KEY</code></td>
+<td>none</td>
+<td>Key fetched directly from a URI or <code>data:</code> URL. No CDM, no challenge.</td>
+<td>in-process AES-CBC</td>
+</tr>
+<tr>
+<td><strong>MonaLisa</strong> (proprietary, WASM)</td>
+<td><code>.mld</code></td>
+<td>Ticket from the service API; keys extracted locally via WASM. No license server.</td>
+<td>ML-Worker binary + AES-ECB, per segment</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition warning">
+<p class="admonition-title">Two different ClearKeys</p>
+<p>"ClearKey (HLS)" and "ClearKey (CENC)" are entirely different systems that happen
+to share a name. The HLS variant is the AES-128 key referenced by an <code>EXT-X-KEY</code>
+tag and is decrypted in-process. The CENC variant is the W3C EME
+<code>org.w3.clearkey</code> scheme, delivers keys as a JWK Set, and is decrypted through
+shaka-packager or mp4decrypt just like Widevine. Neither involves a device file.</p>
+</div>
+<h3 id="widevine-vs-playready">Widevine vs PlayReady<a class="headerlink" href="#widevine-vs-playready" title="Permanent link">&para;</a></h3>
+<p>These are the two "real" DRMs, and in unshackle they behave almost identically: the
+same PSSH/KID handling, the same decryption backends, and the same key-caching flow.
+The differences that matter to you are:</p>
+<ul>
+<li><strong>Device file</strong>: Widevine uses a <code>.wvd</code>; PlayReady uses a <code>.prd</code>.</li>
+<li><strong>Availability</strong>: some services offer only one system, some offer both. When a
+  manifest carries both, unshackle picks the appropriate CDM for each track (see
+  <a href="#widevine-and-playready-on-the-same-title">Widevine and PlayReady on the same title</a>).</li>
+</ul>
+<p>To download a Widevine-protected title you need a <code>.wvd</code> device; for PlayReady you
+need a <code>.prd</code> device. You can hold both and let unshackle choose, or force one with
+the <code>--drm</code> flag.</p>
+<div class="admonition info">
+<p class="admonition-title">Obtaining device files</p>
+<p>A <code>.wvd</code> or <code>.prd</code> encodes the private keys of a real client device. unshackle
+does <strong>not</strong> ship with one and cannot generate the underlying secret material for
+you. You must supply your own. The <code>wvd</code> and <code>prd</code> commands below manage and
+provision device files once you have the raw key material.</p>
+</div>
+<h2 id="providing-a-device-with-the-wvd-and-prd-commands">Providing a device with the <code>wvd</code> and <code>prd</code> commands<a class="headerlink" href="#providing-a-device-with-the-wvd-and-prd-commands" title="Permanent link">&para;</a></h2>
+<p>Device files live in dedicated directories, by default:</p>
+<table>
+<thead>
+<tr>
+<th>Kind</th>
+<th>Default directory</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Widevine <code>.wvd</code></td>
+<td><code>data/WVDs</code></td>
+</tr>
+<tr>
+<td>PlayReady <code>.prd</code></td>
+<td><code>data/PRDs</code></td>
+</tr>
+</tbody>
+</table>
+<p>You can move these with the <code>directories</code> section of your <code>unshackle.yaml</code>:</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">directories</span><span class="p">:</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">wvds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/home/george/unshackle-data/WVDs</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">prds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/home/george/unshackle-data/PRDs</span>
+</span></code></pre></div>
+<h3 id="widevine-devices-the-wvd-command">Widevine devices: the <code>wvd</code> command<a class="headerlink" href="#widevine-devices-the-wvd-command" title="Permanent link">&para;</a></h3>
+<p>The <code>wvd</code> command group manages <code>.wvd</code> files.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Add an existing device</label><label for="__tabbed_1_2">Inspect a device</label><label for="__tabbed_1_3">Create from raw material</label><label for="__tabbed_1_4">Delete / dump</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="language-console highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>wvd<span class="w"> </span>add<span class="w"> </span>./nexus_6p.wvd
+</span></code></pre></div>
+<p>The file is validated and moved into the WVDs directory. You can add several at
+once by passing multiple paths.</p>
+</div>
+<div class="tabbed-block">
+<div class="language-console highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>wvd<span class="w"> </span>parse<span class="w"> </span>nexus_6p
+</span></code></pre></div>
+<p>Prints the System ID, Security Level, Type, Flags, and whether a Private Key,
+Client ID, and VMP are present. A bare name (no extension) is resolved inside the
+WVDs directory; a path with an extension is used as-is.</p>
+</div>
+<div class="tabbed-block">
+<div class="language-console highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>wvd<span class="w"> </span>new<span class="w"> </span><span class="s2">&quot;Nexus 6P&quot;</span><span class="w"> </span>./private_key.pem<span class="w"> </span>./client_id.bin<span class="w"> </span>./vmp.bin<span class="w"> </span>-t<span class="w"> </span>ANDROID<span class="w"> </span>-l<span class="w"> </span><span class="m">3</span>
+</span></code></pre></div>
+<p>Builds a <code>.wvd</code> from a PEM private key, a Client ID blob, and an optional
+FileHashes (VMP) blob. <code>-t/--type</code> is the device type (default <code>Android</code>) and
+<code>-l/--level</code> is the security level 1 to 3 (default <code>1</code>). The VMP argument is
+optional.</p>
+</div>
+<div class="tabbed-block">
+<div class="language-console highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>wvd<span class="w"> </span>delete<span class="w"> </span>nexus_6p
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="gp">$ </span>unshackle<span class="w"> </span>wvd<span class="w"> </span>dump<span class="w"> </span>nexus_6p<span class="w"> </span>./out
+</span></code></pre></div>
+<p><code>delete</code> removes a device (with a confirmation prompt). <code>dump</code> extracts a
+device's contents (metadata, private key, Client ID, VMP) into a folder.</p>
+</div>
+</div>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">v1 WVD files must be migrated</p>
+<p>If loading a device fails with a message about a "v1 WVD file", it was made with
+an older format. Migrate it with pywidevine before use:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="gp">$ </span>pywidevine<span class="w"> </span>migrate<span class="w"> </span>--help
+</span></code></pre></div>
+</div>
+<h3 id="playready-devices-the-prd-command">PlayReady devices: the <code>prd</code> command<a class="headerlink" href="#playready-devices-the-prd-command" title="Permanent link">&para;</a></h3>
+<p>The <code>prd</code> command group creates and maintains <code>.prd</code> files.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:3"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><input id="__tabbed_2_3" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Create a new device</label><label for="__tabbed_2_2">Reprovision</label><label for="__tabbed_2_3">Test against Microsoft's demo server</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="language-console highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>prd<span class="w"> </span>new<span class="w"> </span>./zgpriv.dat<span class="w"> </span>./bgroupcert.dat
+</span></code></pre></div>
+<p>Provision a new device from a group key and group certificate. You can instead
+point at a single folder that contains <code>zgpriv.dat</code> and <code>bgroupcert.dat</code>:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>prd<span class="w"> </span>new<span class="w"> </span>./device_folder/
+</span></code></pre></div>
+<p>A fresh leaf certificate is generated and the device is written to the PRDs
+directory (or to <code>-o/--output</code>). Use <code>-e/--encryption_key</code> and <code>-s/--signing_key</code>
+to supply your own ECC keys instead of generating them.</p>
+</div>
+<div class="tabbed-block">
+<div class="language-console highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>prd<span class="w"> </span>reprovision<span class="w"> </span>./data/PRDs/mydevice.prd
+</span></code></pre></div>
+<p>Regenerates the leaf certificate and encryption/signing keys of an existing
+device in place. The device must support reprovisioning (a group key must be
+present, i.e. a version 3 or higher device).</p>
+</div>
+<div class="tabbed-block">
+<div class="language-console highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>prd<span class="w"> </span><span class="nb">test</span><span class="w"> </span>./data/PRDs/mydevice.prd<span class="w"> </span>-sl<span class="w"> </span><span class="m">2000</span><span class="w"> </span>-c<span class="w"> </span>aesctr
+</span></code></pre></div>
+<p>Runs a full challenge/license/keys cycle against Microsoft's public PlayReady
+test server and prints the returned keys, confirming the device works.
+<code>-sl/--security-level</code> accepts <code>150</code>, <code>2000</code>, or <code>3000</code> (default <code>2000</code>);
+<code>-c/--ckt</code> accepts <code>aesctr</code> or <code>aescbc</code>.</p>
+</div>
+</div>
+</div>
+<h2 id="selecting-which-device-to-use-the-cdm-config">Selecting which device to use: the <code>cdm</code> config<a class="headerlink" href="#selecting-which-device-to-use-the-cdm-config" title="Permanent link">&para;</a></h2>
+<p>Having a device on disk is not enough; you must tell unshackle which device to use
+for which service. That is the job of the <code>cdm</code> section, which maps a service tag to
+a device name (the file's name without extension). A <code>default</code> entry acts as the
+fallback:</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">cdm</span><span class="p">:</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">nexus_6p_26830_l3</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nt">AMZN</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span><span class="nt">NF</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sm_g935f_l1</span>
+</span></code></pre></div>
+<p>Lookups are case-insensitive. On the command line you can override the configured
+device for a single run:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>chromecdm_l3<span class="w"> </span>AMZN<span class="w"> </span>B0ABCDEF
+</span></code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">The device name is the file name</p>
+<p>A device named <code>chromecdm_l3</code> in the config resolves to <code>chromecdm_l3.wvd</code> in the
+WVDs directory (or <code>chromecdm_l3.prd</code> in the PRDs directory). It may also be the
+<code>name</code> of a remote CDM defined in <code>remote_cdm</code>. See
+<a href="#remote-cdms">Remote CDMs</a> below.</p>
+</div>
+<h3 id="advanced-selection-by-quality-drm-or-profile">Advanced selection: by quality, DRM, or profile<a class="headerlink" href="#advanced-selection-by-quality-drm-or-profile" title="Permanent link">&para;</a></h3>
+<p>Instead of a plain name, a <code>cdm</code> entry can be a nested mapping, letting unshackle pick
+a different device based on the track quality, the DRM system, or the active service
+profile.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="3:3"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><input id="__tabbed_3_3" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">By quality</label><label for="__tabbed_3_2">By DRM system</label><label for="__tabbed_3_3">By profile</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p>Keys are matched against the video height. You can use exact heights or
+comparisons (<code>&gt;=1080</code>, <code>&gt;720</code>, <code>&lt;=576</code>, <code>&lt;480</code>). More specific matches win.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">cdm</span><span class="p">:</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="nt">SOMESERVICE</span><span class="p">:</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">    </span><span class="s">&quot;&gt;=1080&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sm_g935f_l1</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
+</span></code></pre></div>
+</div>
+<div class="tabbed-block">
+<p>Keys <code>widevine</code> and <code>playready</code> select a device per system. This pairs with the
+<code>--drm</code> flag, which accepts <code>wv</code>/<code>widevine</code> or <code>pr</code>/<code>playready</code>.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">cdm</span><span class="p">:</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">SOMESERVICE</span><span class="p">:</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">    </span><span class="nt">widevine</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sm_g935f_l1</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">    </span><span class="nt">playready</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mydevice_sl3</span>
+</span></code></pre></div>
+</div>
+<div class="tabbed-block">
+<p>Keys are matched against the active profile, with a <code>default</code> fallback.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">cdm</span><span class="p">:</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">SOMESERVICE</span><span class="p">:</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span><span class="nt">premium</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sm_g935f_l1</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
+</span></code></pre></div>
+</div>
+</div>
+</div>
+<h2 id="local-vs-remote-cdms">Local vs remote CDMs<a class="headerlink" href="#local-vs-remote-cdms" title="Permanent link">&para;</a></h2>
+<p>A CDM can run in two places:</p>
+<ul>
+<li>A <strong>local CDM</strong> loads a <code>.wvd</code> or <code>.prd</code> device from your machine and performs the
+  challenge/license/keys handshake locally. This is what the <code>cdm</code> mapping above
+  resolves to by default.</li>
+<li>A <strong>remote CDM</strong> delegates the CDM operations to an HTTP API. Your device (and its
+  secrets) live on the remote server; unshackle sends it PSSH/challenge data and
+  receives keys back. This is useful for sharing a high-security-level device, using
+  a hosted key service, or keeping device secrets off your download machine.</li>
+</ul>
+<p>The device name in your <code>cdm</code> mapping resolves to a remote CDM whenever it matches the
+<code>name</code> of an entry in the <code>remote_cdm</code> list. Otherwise it falls back to a local
+<code>.prd</code>/<code>.wvd</code> file of that name.</p>
+<h2 id="remote-cdms">Remote CDMs<a class="headerlink" href="#remote-cdms" title="Permanent link">&para;</a></h2>
+<p>Remote CDMs are declared as a list under <code>remote_cdm</code>. Each entry has a <code>name</code> (which
+you then reference from the <code>cdm</code> mapping) and a shape that depends on its <code>type</code>.
+There are four kinds.</p>
+<h3 id="widevine-remote-cdm-pywidevine-serve">Widevine remote CDM (pywidevine serve)<a class="headerlink" href="#widevine-remote-cdm-pywidevine-serve" title="Permanent link">&para;</a></h3>
+<p>With no <code>type</code> field and a non-PlayReady device type, the entry is treated as a
+standard pywidevine "serve" endpoint:</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nt">remote_cdm</span><span class="p">:</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_wv_remote</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">    </span><span class="nt">device_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ANDROID</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">    </span><span class="nt">system_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">26830</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">    </span><span class="nt">security_level</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://cdm.example.com</span>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="w">    </span><span class="nt">secret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your-api-secret</span>
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="w">    </span><span class="nt">device_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sm_g935f_l1</span>
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="nt">cdm</span><span class="p">:</span>
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_wv_remote</span>
+</span></code></pre></div>
+<p><code>security_level</code> defaults to <code>3000</code> if omitted. Field names are read
+case-insensitively, so <code>Device Type</code>/<code>device_type</code>, <code>System ID</code>/<code>system_id</code>, etc. are
+all accepted.</p>
+<h3 id="playready-remote-cdm">PlayReady remote CDM<a class="headerlink" href="#playready-remote-cdm" title="Permanent link">&para;</a></h3>
+<p>If the device type is <code>PLAYREADY</code>, the entry is routed to the pyplayready remote CDM:</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">remote_cdm</span><span class="p">:</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_pr_remote</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">    </span><span class="nt">device_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PLAYREADY</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">    </span><span class="nt">security_level</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3000</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://cdm.example.com</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">    </span><span class="nt">secret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your-api-secret</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">    </span><span class="nt">device_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mydevice_sl3</span>
+</span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">The <code>host</code> must end in <code>/playready</code></p>
+<p>For a PlayReady remote CDM the <code>host</code> URL has to include the trailing
+<code>/playready</code> path segment (e.g. <code>https://cdm.example.com/playready</code>). pyplayready's
+<code>RemoteCdm</code> treats <code>host</code> as a base and appends its own endpoint paths on top of it,
+so a host without the suffix points the requests at the wrong location. The symptom
+is <code>404</code> responses from the server rather than an obvious configuration error.</p>
+</div>
+<h3 id="decrypt-labs-hosted-keyxtractor-api">Decrypt Labs (hosted KeyXtractor API)<a class="headerlink" href="#decrypt-labs-hosted-keyxtractor-api" title="Permanent link">&para;</a></h3>
+<p>Set <code>type: decrypt_labs</code> to use Decrypt Labs' hosted KeyXtractor service, which
+includes an intelligent key-caching layer:</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nt">remote_cdm</span><span class="p">:</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">decryptlabs</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">decrypt_labs</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">    </span><span class="nt">device_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">L1</span><span class="w">        </span><span class="c1"># ChromeCDM, L1, L2 (Widevine) or SL2, SL3 (PlayReady)</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">    </span><span class="c1"># host: https://keyxtractor.decryptlabs.com   # optional, this is the default</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">    </span><span class="c1"># secret: ...          # optional if decrypt_labs_api_key is set globally</span>
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="nt">decrypt_labs_api_key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your-decrypt-labs-key</span>
+</span></code></pre></div>
+<p>The API key is sent as the <code>decrypt-labs-api-key</code> header. If you omit <code>secret</code> on the
+entry, unshackle falls back to the global <code>decrypt_labs_api_key</code> value; if neither is
+present it raises an error. The <code>host</code> defaults to
+<code>https://keyxtractor.decryptlabs.com</code>. PlayReady devices (<code>SL2</code>/<code>SL3</code>) default to
+security level <code>2000</code>/<code>3000</code> respectively; Widevine devices default to
+<code>system_id: 26830</code>, <code>security_level: 3</code>.</p>
+<h3 id="custom-api-custom_api">Custom API (<code>custom_api</code>)<a class="headerlink" href="#custom-api-custom_api" title="Permanent link">&para;</a></h3>
+<p>For an arbitrary CDM HTTP API, <code>type: custom_api</code> provides a fully configurable client
+that adapts to almost any request/response shape through YAML alone. A minimal example:</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nt">remote_cdm</span><span class="p">:</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_custom</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">custom_api</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">    </span><span class="nt">device</span><span class="p">:</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ChromeCDM</span>
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CHROME</span><span class="w">          </span><span class="c1"># CHROME, ANDROID, or PLAYREADY</span>
+</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="w">      </span><span class="nt">system_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">26830</span>
+</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="w">      </span><span class="nt">security_level</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
+</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="w">    </span><span class="nt">auth</span><span class="p">:</span>
+</span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bearer</span><span class="w">          </span><span class="c1"># header, bearer, or basic</span>
+</span><span id="__span-18-11"><a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a><span class="w">      </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your-token</span>
+</span><span id="__span-18-12"><a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a><span class="w">    </span><span class="nt">endpoints</span><span class="p">:</span>
+</span><span id="__span-18-13"><a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a><span class="w">      </span><span class="nt">get_request</span><span class="p">:</span>
+</span><span id="__span-18-14"><a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a><span class="w">        </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/get-challenge</span>
+</span><span id="__span-18-15"><a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a><span class="w">        </span><span class="nt">method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">POST</span>
+</span><span id="__span-18-16"><a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a><span class="w">      </span><span class="nt">decrypt_response</span><span class="p">:</span>
+</span><span id="__span-18-17"><a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a><span class="w">        </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/get-keys</span>
+</span><span id="__span-18-18"><a id="__codelineno-18-18" name="__codelineno-18-18" href="#__codelineno-18-18"></a><span class="w">        </span><span class="nt">method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">POST</span>
+</span><span id="__span-18-19"><a id="__codelineno-18-19" name="__codelineno-18-19" href="#__codelineno-18-19"></a><span class="w">    </span><span class="nt">timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
+</span></code></pre></div>
+<p>The <code>custom_api</code> type supports much more: request/response field remapping,
+transforms (base64/hex/JSON encoding, <code>kid:key</code> parsing), conditional parameters,
+success/error detection, and vault-backed caching. Its full schema is aimed at
+developers integrating a bespoke key server; see the developer note below.</p>
+<div class="admonition note">
+<p class="admonition-title">Developer: full <code>custom_api</code> schema</p>
+<p>A <code>custom_api</code> entry accepts these sub-objects: <code>device</code> (<code>name</code>, <code>type</code>,
+<code>system_id</code>, <code>security_level</code>); <code>auth</code> (<code>type</code> of <code>header</code>/<code>bearer</code>/<code>basic</code> with
+the matching credential fields, plus <code>custom_headers</code>); <code>endpoints</code>
+(<code>get_request</code> and <code>decrypt_response</code>, each <code>{path, method, timeout}</code>);
+per-endpoint <code>request_mapping</code> (<code>param_names</code>, <code>static_params</code>,
+<code>conditional_params</code>, <code>transforms</code>, <code>nested_params</code>, <code>exclude_params</code>) and
+<code>response_mapping</code> (<code>fields</code>, <code>transforms</code>, <code>response_types</code>,
+<code>success_conditions</code>, <code>error_fields</code>, <code>key_fields</code>); <code>caching</code> (<code>enabled</code>,
+<code>use_vaults</code>, <code>check_cached_first</code>); and <code>legacy</code>/<code>timeout</code>. PlayReady mode is
+inferred when <code>device.type == PLAYREADY</code> or the device name is <code>SL2</code>/<code>SL3</code>.</p>
+</div>
+<h2 id="decryption-backends">Decryption backends<a class="headerlink" href="#decryption-backends" title="Permanent link">&para;</a></h2>
+<p>Once the content keys are known, the encrypted file (for Widevine, PlayReady, and
+ClearKey-CENC) is decrypted by one of two external tools:</p>
+<ul>
+<li><strong>shaka-packager</strong> is the default.</li>
+<li><strong>mp4decrypt</strong> is part of the Bento4 tools.</li>
+</ul>
+<p>Both must be discoverable in unshackle's bundled <code>binaries/</code> directory or on your
+<code>PATH</code>. If the selected tool's binary is missing at decrypt time, unshackle raises an
+"executable not found but is required" error. See <a href="../../getting-started/installation/">dependencies</a> for
+installation.</p>
+<p>You choose the backend with the <code>decryption</code> key. It can be a single value applied
+globally, or a per-service mapping:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="4:2"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">Global default</label><label for="__tabbed_4_2">Per service</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nt">decryption</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shaka</span>
+</span></code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="nt">decryption</span><span class="p">:</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shaka</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">  </span><span class="nt">SOMESERVICE</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mp4decrypt</span>
+</span></code></pre></div>
+</div>
+</div>
+</div>
+<div class="admonition info">
+<p class="admonition-title">How the value is interpreted</p>
+<p>The default is <code>shaka</code>. Only the exact value <code>mp4decrypt</code> selects mp4decrypt;
+<strong>anything else</strong> (including <code>shaka</code>) selects shaka-packager. Per-service lookups
+are case-insensitive, with the <code>default</code>/<code>DEFAULT</code> entry used as the fallback.</p>
+</div>
+<p>The two backends produce equivalent output for standard CENC content. shaka-packager
+is generally preferred; switch a specific service to <code>mp4decrypt</code> if you hit a track
+that shaka-packager cannot handle.</p>
+<div class="admonition note">
+<p class="admonition-title">ClearKey (HLS) does not use these tools</p>
+<p>HLS AES-128 ClearKey content is decrypted in-process using AES-CBC and ignores the
+<code>decryption</code> setting entirely. There is nothing to configure.</p>
+</div>
+<h2 id="clearkey">ClearKey<a class="headerlink" href="#clearkey" title="Permanent link">&para;</a></h2>
+<h3 id="clearkey-over-hls-aes-128">ClearKey over HLS (AES-128)<a class="headerlink" href="#clearkey-over-hls-aes-128" title="Permanent link">&para;</a></h3>
+<p>When an HLS playlist references a key with an <code>EXT-X-KEY</code> tag, unshackle fetches the
+key directly (from the given URI or an inline <code>data:</code> URL) and decrypts each segment
+in-process with AES-CBC. There is no device, no CDM, and no license challenge, so
+there is nothing to set up. Such tracks are handled automatically during download.</p>
+<h3 id="clearkey-over-cenc-w3c-eme-orgw3clearkey">ClearKey over CENC (W3C EME <code>org.w3.clearkey</code>)<a class="headerlink" href="#clearkey-over-cenc-w3c-eme-orgw3clearkey" title="Permanent link">&para;</a></h3>
+<p>The CENC ClearKey scheme is a proper license flow, but the "license server" simply
+returns the keys as a JWK Set rather than a DRM-wrapped blob. unshackle builds a W3C
+EME request of the form:</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="p">{</span><span class="nt">&quot;kids&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;&lt;base64url-kid&gt;&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">…</span><span class="p">],</span><span class="w"> </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;temporary&quot;</span><span class="p">}</span>
+</span></code></pre></div>
+<p>It sends this to the manifest's license URL (or to whatever a service's ClearKey
+license hook returns) and reads the JSON Web Key set back. No device file is needed.
+The decrypted content still goes through shaka-packager or mp4decrypt like any other
+CENC track, so the <code>decryption</code> setting applies.</p>
+<h2 id="widevine-and-playready-on-the-same-title">Widevine and PlayReady on the same title<a class="headerlink" href="#widevine-and-playready-on-the-same-title" title="Permanent link">&para;</a></h2>
+<p>A single manifest can advertise both Widevine and PlayReady. unshackle picks the CDM
+per track: if a track needs a system that your loaded CDM does not provide, it
+transparently switches to the appropriate device for that track using your <code>cdm</code>
+mapping. If it cannot find a matching device, it fails with a clear message such as:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>Title needs a Widevine CDM but SOMESERVICE is configured with PlayReady.
+</span></code></pre></div>
+<p>Use the <code>cdm</code> mapping's <a href="#advanced-selection-by-quality-drm-or-profile">DRM-based selection</a>
+to configure a device for each system, or force one system with <code>--drm</code> on the
+command line.</p>
+<h2 id="keys-vaults-and-caching">Keys, vaults, and caching<a class="headerlink" href="#keys-vaults-and-caching" title="Permanent link">&para;</a></h2>
+<p>Fetching a license is comparatively slow and, for some services, rate-limited.
+unshackle therefore resolves each key ID in this order before ever contacting a
+license server:</p>
+<ol>
+<li>Keys already known for the current DRM object.</li>
+<li>An in-process license-key cache (for the running session).</li>
+<li>Your configured <a href="../vaults/">key vaults</a>.</li>
+<li>Only if still missing, a live license request.</li>
+</ol>
+<p>After a successful license request, the recovered keys are written back to all
+configured vaults so future downloads can skip the license server. Two flags let you
+control this trade-off on the <code>dl</code> command:</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--vaults-only</code></td>
+<td>Never send a license request; use only cached/vault keys. Fails if a key is missing.</td>
+</tr>
+<tr>
+<td><code>--cdm-only</code></td>
+<td>Ignore vaults for sourcing keys and always perform a fresh license request.</td>
+</tr>
+</tbody>
+</table>
+<p>See <a href="../vaults/">key vaults</a> for how to configure vault backends.</p>
+<h2 id="debugging-drm-issues">Debugging DRM issues<a class="headerlink" href="#debugging-drm-issues" title="Permanent link">&para;</a></h2>
+<p>A few configuration toggles help when a title will not decrypt:</p>
+<table>
+<thead>
+<tr>
+<th>Config key</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>debug</code></td>
+<td><code>false</code></td>
+<td>Global debug output.</td>
+</tr>
+<tr>
+<td><code>debug_keys</code></td>
+<td><code>false</code></td>
+<td>Log decryption keys.</td>
+</tr>
+<tr>
+<td><code>debug_requests</code></td>
+<td><code>false</code></td>
+<td>Log HTTP requests.</td>
+</tr>
+</tbody>
+</table>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="nt">debug_keys</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="nt">debug_requests</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Keys and paths in logs</p>
+<p>When key logging is enabled, content keys (KID:key pairs) are written to the logs.
+Treat those logs as sensitive. The unrelated <code>redact_paths</code> option (default
+<code>true</code>) masks local directory paths in log output.</p>
+</div>
+<h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../downloading/">Downloading</a>: the <code>dl</code> command and its DRM-related flags.</li>
+<li><a href="../vaults/">Key vaults</a>: caching content keys across downloads.</li>
+<li><a href="../../reference/configuration/">Configuration</a>: the full <code>unshackle.yaml</code> reference.</li>
+<li><a href="../../getting-started/installation/">Dependencies</a>: installing shaka-packager and mp4decrypt.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../cli-reference/" class="md-footer__link md-footer__link--prev" aria-label="Previous: CLI Reference">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                CLI Reference
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../proxies-and-vpn/" class="md-footer__link md-footer__link--next" aria-label="Next: Proxies &amp; VPN">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Proxies & VPN
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.annotate", "content.code.copy", "content.tabs.link", "content.tooltips", "navigation.footer", "navigation.indexes", "navigation.sections", "navigation.tabs", "navigation.top", "navigation.tracking", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

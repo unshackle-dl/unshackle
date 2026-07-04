@@ -1,0 +1,3474 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Movie, TV, and Music archival software — user guide and REST API reference">
+      
+      
+      
+        <link rel="canonical" href="https://docs.unshackle.dev/guide/downloading/">
+      
+      
+        <link rel="prev" href="../../getting-started/configuration-file/">
+      
+      
+        <link rel="next" href="../cli-reference/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Downloading - unshackle</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#downloading" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="unshackle" class="md-header__button md-logo" aria-label="unshackle" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24"><path d="m800-274-80-80v-206H514l-80-80h166v-80q0-50-34.5-85T481-840q-50 0-84 34.5T363-720v9l-73-73q22-61 75-98.5T481-920q83 0 141 58.5T680-720v80h40q33 0 56.5 23.5T800-560v286Zm20 246-62-62q-11 5-20 7.5T720-80H240q-33 0-56.5-23.5T160-160v-400q0-25 14.5-46t37.5-30L28-820l56-56L876-84l-56 56ZM686-160 539-309q-11 11-25.5 17t-31.5 6q-33 0-56.5-23.5T402-366q0-17 6-31.5t17-25.5L286-560h-46v400h446ZM486-360Zm131-97Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            unshackle
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Downloading
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1M8 13h8v-2H8zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4a5 5 0 0 0 5-5 5 5 0 0 0-5-5"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5m0 8a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5M7 15a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/unshackle-dl/unshackle" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    unshackle-dl/unshackle
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/installation/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
+          
+  
+  
+    
+  
+  User Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/configuration/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Configuration
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../dev/creating-a-service/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Developer
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/api/service/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="unshackle" class="md-nav__button md-logo" aria-label="unshackle" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24"><path d="m800-274-80-80v-206H514l-80-80h166v-80q0-50-34.5-85T481-840q-50 0-84 34.5T363-720v9l-73-73q22-61 75-98.5T481-920q83 0 141 58.5T680-720v80h40q33 0 56.5 23.5T800-560v286Zm20 246-62-62q-11 5-20 7.5T720-80H240q-33 0-56.5-23.5T160-160v-400q0-25 14.5-46t37.5-30L28-820l56-56L876-84l-56 56ZM686-160 539-309q-11 11-25.5 17t-31.5 6q-33 0-56.5-23.5T402-366q0-17 6-31.5t17-25.5L286-560h-46v400h446ZM486-360Zm131-97Z"/></svg>
+
+    </a>
+    unshackle
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/unshackle-dl/unshackle" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    unshackle-dl/unshackle
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/configuration-file/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Configuration File
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Downloading
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Downloading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#command-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command shape
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-download-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The download flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#choosing-quality" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Choosing quality
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Choosing quality">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#resolution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#best-available-and-worst" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best-available and worst
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#video-codec-and-color-range" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Video codec and color range
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Video codec and color range">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#codec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#color-range" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Color range
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bitrate-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bitrate selection
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Bitrate selection">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#real-bitrate-probing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Real bitrate probing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#audio-codec-channels-and-atmos" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audio codec, channels, and Atmos
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Audio codec, channels, and Atmos">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#codec_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#channels-and-atmos" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Channels and Atmos
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#languages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Languages
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Languages">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#video-and-audio-language" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Video and audio language
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exact-vs-fuzzy-matching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exact vs fuzzy matching
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#subtitles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Subtitles
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Subtitles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#selecting-subtitle-languages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Selecting subtitle languages
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#requiring-subtitles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Requiring subtitles
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#forced-subtitles-and-output-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forced subtitles and output format
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#selecting-episodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Selecting episodes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Selecting episodes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#wanted-ranges" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wanted ranges
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-selection-flags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other selection flags
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#including-and-excluding-track-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Including and excluding track types
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#listing-and-dry-runs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Listing and dry runs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output-and-muxing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output and muxing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Output and muxing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#output-location-and-folders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output location and folders
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#muxing-behaviour" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Muxing behaviour
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#naming-tags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Naming tags
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proxies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-and-caching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance and caching
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#keys-vaults-and-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keys, vaults, and export
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#metadata-and-tagging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metadata and tagging
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-defaults" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration defaults
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../drm-and-cdm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DRM & CDM Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../proxies-and-vpn/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Proxies & VPN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vaults/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Key Vaults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../output-and-naming/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Output & Naming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../subtitles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Subtitles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Configuration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Developer
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/creating-a-service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Creating a Service
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/service-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../dev/rest-api/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    REST API
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5_3" id="__nav_5_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    REST API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/authentication/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/endpoints/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Endpoints
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/job-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Job Lifecycle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/remote-sessions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remote Sessions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/errors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Error Responses
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/tracks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/titles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Titles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/drm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DRM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#command-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command shape
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-download-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The download flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#choosing-quality" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Choosing quality
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Choosing quality">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#resolution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#best-available-and-worst" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best-available and worst
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#video-codec-and-color-range" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Video codec and color range
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Video codec and color range">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#codec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#color-range" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Color range
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bitrate-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bitrate selection
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Bitrate selection">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#real-bitrate-probing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Real bitrate probing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#audio-codec-channels-and-atmos" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audio codec, channels, and Atmos
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Audio codec, channels, and Atmos">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#codec_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#channels-and-atmos" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Channels and Atmos
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#languages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Languages
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Languages">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#video-and-audio-language" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Video and audio language
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exact-vs-fuzzy-matching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exact vs fuzzy matching
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#subtitles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Subtitles
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Subtitles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#selecting-subtitle-languages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Selecting subtitle languages
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#requiring-subtitles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Requiring subtitles
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#forced-subtitles-and-output-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forced subtitles and output format
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#selecting-episodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Selecting episodes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Selecting episodes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#wanted-ranges" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wanted ranges
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-selection-flags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other selection flags
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#including-and-excluding-track-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Including and excluding track types
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#listing-and-dry-runs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Listing and dry runs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output-and-muxing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output and muxing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Output and muxing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#output-location-and-folders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output location and folders
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#muxing-behaviour" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Muxing behaviour
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#naming-tags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Naming tags
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proxies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-and-caching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance and caching
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#keys-vaults-and-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keys, vaults, and export
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#metadata-and-tagging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metadata and tagging
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-defaults" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration defaults
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="downloading">Downloading<a class="headerlink" href="#downloading" title="Permanent link">&para;</a></h1>
+<p><code>unshackle dl</code> is the main download command: it fetches a title's manifest from a
+streaming service, selects exactly the tracks you asked for, acquires and applies
+decryption keys, and muxes everything into a finished Matroska file. The flags below
+cover quality and codec selection, language and subtitle handling, episode ranges, and
+the download flow itself, with examples throughout.</p>
+<div class="admonition note">
+<p class="admonition-title">Where the full flag list lives</p>
+<p>This page covers the flags you will use most and explains how they interact. It is
+not an exhaustive enumeration. For the complete, always-current list of every option
+and its exact wording, run <code>unshackle dl --help</code>. Every flag shown here can also be
+given a default in your configuration file. See
+<a href="../../getting-started/configuration-file/">Configuration file</a>.</p>
+</div>
+<h2 id="command-shape">Command shape<a class="headerlink" href="#command-shape" title="Permanent link">&para;</a></h2>
+<p>A download is always three layers: the root CLI, the <code>dl</code> command (which is where all
+the flags below are parsed), and a <strong>service tag</strong> subcommand that carries the title
+argument.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span><span class="o">[</span>OPTIONS<span class="o">]</span><span class="w"> </span>SERVICE<span class="w"> </span><span class="o">[</span>SERVICE<span class="w"> </span>ARGUMENTS<span class="o">]</span>
+</span></code></pre></div>
+<ul>
+<li><code>unshackle</code>: the root command.</li>
+<li><code>dl</code>: the download command. <strong>All of the options on this page are parsed here</strong>, so
+  they go <em>before</em> the service tag.</li>
+<li><code>SERVICE</code>: a service tag such as <code>NF</code>, <code>DSNP</code>, <code>AMZN</code>. Service tags are
+  case-insensitive and honour each service's aliases (for example <code>disney+</code> resolves to
+  its real tag).</li>
+<li><code>SERVICE ARGUMENTS</code>: usually a title ID or URL. This positional argument belongs to
+  the <strong>service</strong>, not to <code>dl</code>, so it comes <em>after</em> the tag.</li>
+</ul>
+<div class="language-shell highlight"><span class="filename">A minimal download</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<div class="language-shell highlight"><span class="filename">Flags belong to dl, the title belongs to the service</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">1080</span><span class="w"> </span>-v<span class="w"> </span>H.265<span class="w"> </span>-r<span class="w"> </span>HDR10<span class="w"> </span>--lang<span class="w"> </span>en<span class="w"> </span>DSNP<span class="w"> </span><span class="s1">&#39;https://www.disneyplus.com/…&#39;</span>
+</span></code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">See what a service accepts</p>
+<p>Because the positional argument is defined by each service, run
+<code>unshackle dl SERVICE --help</code> (e.g. <code>unshackle dl NF --help</code>) to see that service's
+own argument and any service-specific options.</p>
+</div>
+<h2 id="the-download-flow">The download flow<a class="headerlink" href="#the-download-flow" title="Permanent link">&para;</a></h2>
+<p>When you run a download, <code>dl</code> moves through the pipeline below. Understanding the order
+helps explain why, for example, <code>--list</code> stops early and why keys are fetched even with
+<code>--skip-dl</code>.</p>
+<ol>
+<li><strong>Setup</strong>: load the DRM CDM, key vaults, proxy providers, cookies, and credentials.</li>
+<li><strong>Authenticate</strong>: sign in to the service with your profile's cookies/credentials.</li>
+<li><strong>Fetch titles</strong>: retrieve the movie, episode list, or album (cached unless
+   <code>--no-cache</code>/<code>--reset-cache</code>).</li>
+<li><strong>Filter titles</strong>: apply <code>--wanted</code>, <code>--latest-episode</code>, or <code>--select-titles</code>.</li>
+<li><strong>Get tracks</strong>: parse the manifest into video, audio, subtitle, and chapter tracks.</li>
+<li><strong>Select tracks</strong>: narrow each type down using your quality, codec, range, language,
+   and bitrate flags.</li>
+<li><strong>Download</strong>: pull segments for the selected tracks (concurrently per <code>--downloads</code>).</li>
+<li><strong>License &amp; decrypt</strong>: acquire content keys (vault → CDM), decrypt each track.</li>
+<li><strong>Post-process</strong>: extract closed captions, convert subtitles, repack, mux with
+   <code>mkvmerge</code>, and move the finished file to your downloads directory.</li>
+</ol>
+<p><code>--list</code> and <code>--list-titles</code> stop after selection/filtering and print what <em>would</em> be
+downloaded. <code>--skip-dl</code> runs the license step but skips the actual segment download.</p>
+<h2 id="choosing-quality">Choosing quality<a class="headerlink" href="#choosing-quality" title="Permanent link">&para;</a></h2>
+<h3 id="resolution">Resolution<a class="headerlink" href="#resolution" title="Permanent link">&para;</a></h3>
+<p><code>-q</code> / <code>--quality</code> takes one or more target resolutions (heights) as a comma-separated
+list. Without it, unshackle picks the <strong>best available</strong> resolution.</p>
+<div class="language-shell highlight"><span class="filename">Single resolution</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">1080</span><span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<div class="language-shell highlight"><span class="filename">Multiple resolutions in one run</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">2160</span>,1080,720<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">16:9 canvas matching</p>
+<p>Resolution matching is by track <strong>height</strong> first. If no track has an exact matching
+height, unshackle falls back to a 16:9-canvas match, so <code>-q 1080</code> will also match an
+anamorphic <code>1920×804</code> track (computed as <code>int(width × 9 / 16)</code>).</p>
+</div>
+<h3 id="best-available-and-worst">Best-available and worst<a class="headerlink" href="#best-available-and-worst" title="Permanent link">&para;</a></h3>
+<p>By default a missing requested resolution is an error. Two flags change that:</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--best-available</code></td>
+<td>If the requested resolution(s) aren't present, continue with the best that <em>is</em> available instead of failing. Also softens missing audio/subtitle languages and hybrid fallbacks.</td>
+</tr>
+<tr>
+<td><code>--worst</code></td>
+<td>Within the specified quality, pick the <strong>lowest</strong> bitrate rendition. <strong>Requires <code>-q/--quality</code>.</strong></td>
+</tr>
+</tbody>
+</table>
+<div class="language-shell highlight"><span class="filename">Never fail on a missing resolution</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">2160</span><span class="w"> </span>--best-available<span class="w"> </span>AMZN<span class="w"> </span>0ABC123
+</span></code></pre></div>
+<h2 id="video-codec-and-color-range">Video codec and color range<a class="headerlink" href="#video-codec-and-color-range" title="Permanent link">&para;</a></h2>
+<h3 id="codec">Codec<a class="headerlink" href="#codec" title="Permanent link">&para;</a></h3>
+<p><code>-v</code> / <code>--vcodec</code> selects one or more video codecs; the default is any codec. It accepts
+either enum <strong>names</strong> or their <strong>values</strong>, comma-separated.</p>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AVC</code></td>
+<td><code>H.264</code></td>
+</tr>
+<tr>
+<td><code>HEVC</code></td>
+<td><code>H.265</code></td>
+</tr>
+<tr>
+<td><code>VC1</code></td>
+<td><code>VC-1</code></td>
+</tr>
+<tr>
+<td><code>VP8</code></td>
+<td><code>VP8</code></td>
+</tr>
+<tr>
+<td><code>VP9</code></td>
+<td><code>VP9</code></td>
+</tr>
+<tr>
+<td><code>AV1</code></td>
+<td><code>AV1</code></td>
+</tr>
+</tbody>
+</table>
+<div class="language-shell highlight"><span class="filename">Either spelling works</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-v<span class="w"> </span>HEVC<span class="w">   </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-v<span class="w"> </span>H.265<span class="w">  </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-v<span class="w"> </span>hevc,avc<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<h3 id="color-range">Color range<a class="headerlink" href="#color-range" title="Permanent link">&para;</a></h3>
+<p><code>-r</code> / <code>--range</code> selects one or more color ranges; the default is <code>SDR</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Range</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SDR</code></td>
+<td>Standard dynamic range (default)</td>
+</tr>
+<tr>
+<td><code>HLG</code></td>
+<td>Hybrid Log-Gamma</td>
+</tr>
+<tr>
+<td><code>HDR10</code></td>
+<td>HDR10</td>
+</tr>
+<tr>
+<td><code>HDR10P</code></td>
+<td>HDR10+</td>
+</tr>
+<tr>
+<td><code>DV</code></td>
+<td>Dolby Vision</td>
+</tr>
+<tr>
+<td><code>HYBRID</code></td>
+<td>Fetch both an HDR10/HDR10+ base and a DV track, then merge them</td>
+</tr>
+</tbody>
+</table>
+<div class="language-shell highlight"><span class="filename">Grab HDR10 and Dolby Vision in one run</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">2160</span><span class="w"> </span>-r<span class="w"> </span>HDR10,DV<span class="w"> </span>DSNP<span class="w"> </span><span class="s1">&#39;…&#39;</span>
+</span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">HYBRID requires dovi_tool</p>
+<p><code>-r HYBRID</code> produces a single hybrid stream by injecting the Dolby Vision RPU
+metadata onto an HDR10/HDR10+ base layer using <strong>dovi_tool</strong>. It requires the
+<code>dovi_tool</code> binary on your PATH and needs both an HDR10(+) <em>and</em> a DV track to be
+available, otherwise the title fails (unless <code>--best-available</code> lets it fall back).
+When HDR10+ is present it is preferred over HDR10 as the base layer.</p>
+<p>To keep an HDR10+ deliverable <em>alongside</em> the hybrid, request both ranges:
+<code>-r HYBRID,HDR10P</code>. <code>-r HYBRID</code> on its own muxes only the merged hybrid.</p>
+</div>
+<h2 id="bitrate-selection">Bitrate selection<a class="headerlink" href="#bitrate-selection" title="Permanent link">&para;</a></h2>
+<p>By default unshackle keeps the highest-bitrate rendition for each selected
+resolution/codec/range/language combination. You can constrain this.</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-vb</code> / <code>--vbitrate</code></td>
+<td>Exact video bitrate in kbps.</td>
+</tr>
+<tr>
+<td><code>-ab</code> / <code>--abitrate</code></td>
+<td>Exact audio bitrate in kbps.</td>
+</tr>
+<tr>
+<td><code>-vb-range</code> / <code>--vbitrate-range</code></td>
+<td>Video bitrate range in kbps, e.g. <code>6000-7000</code>; picks the highest within it.</td>
+</tr>
+<tr>
+<td><code>-ab-range</code> / <code>--abitrate-range</code></td>
+<td>Audio bitrate range in kbps, e.g. <code>128-256</code>.</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition warning">
+<p class="admonition-title">Exact vs range are mutually exclusive</p>
+<p><code>--vbitrate</code> cannot be combined with <code>--vbitrate-range</code>, and likewise for the audio
+pair. Pick one form.</p>
+</div>
+<h3 id="real-bitrate-probing">Real bitrate probing<a class="headerlink" href="#real-bitrate-probing" title="Permanent link">&para;</a></h3>
+<p>Manifest-declared bitrates are sometimes rounded or wrong. Services often advertise a
+<strong>peak</strong> or <strong>nominal</strong> bandwidth that is far from the stream's real average. This matters
+because a track's bitrate drives the track listing, the sort order, <em>and</em> the
+<code>--vbitrate</code>/<code>--vbitrate-range</code> selection above. A bogus declared value therefore makes
+unshackle pick the wrong track. These flags remove that risk by probing the actual media
+size to compute a true bitrate for the top renditions, overriding the manifest value:</p>
+<ul>
+<li><code>-rvb</code> / <code>--real-video-bitrate</code>: probe real video bitrates (per codec/range).</li>
+<li><code>-rab</code> / <code>--real-audio-bitrate</code>: probe real audio bitrates (per codec/channels/
+  language). Slower than the video variant because there are more renditions to probe.</li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Reading the probed numbers</p>
+<p>A single-file track (DASH <code>SegmentBase</code>/<code>BaseURL</code>) is measured <strong>exactly</strong>. A
+multi-segment track (most HLS) is a <strong>sampled estimate</strong>, normally within a few percent
+of the true value. For MPEG-TS HLS the probed figure also reads a few percent <em>above</em>
+the demuxed elementary stream, because the segment bytes include container overhead.
+That is the real <em>delivered</em> size, not an over-report or a bug.</p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">Why not every rendition is probed</p>
+<p>Probing does not touch every rendition. Only the top rendition of each quality tier is
+probed in parallel (video grouped by codec+range, audio by codec+channels+language),
+and the pass then reaches downward only as far as it must to keep the ranking correct.
+This keeps probing fast even when a service exposes dozens of renditions. Tracks whose
+duration can't be determined fall back to <code>ffprobe</code>, and a probe failure is non-fatal:
+the manifest value is simply left in place.</p>
+</div>
+<h2 id="audio-codec-channels-and-atmos">Audio codec, channels, and Atmos<a class="headerlink" href="#audio-codec-channels-and-atmos" title="Permanent link">&para;</a></h2>
+<h3 id="codec_1">Codec<a class="headerlink" href="#codec_1" title="Permanent link">&para;</a></h3>
+<p><code>-a</code> / <code>--acodec</code> selects one or more audio codecs (comma-separated); the default is any.</p>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Value</th>
+<th>Codec</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AAC</code></td>
+<td><code>AAC</code></td>
+<td>Advanced Audio Coding</td>
+</tr>
+<tr>
+<td><code>AC3</code></td>
+<td><code>DD</code></td>
+<td>Dolby Digital</td>
+</tr>
+<tr>
+<td><code>EC3</code></td>
+<td><code>DD+</code></td>
+<td>Dolby Digital Plus</td>
+</tr>
+<tr>
+<td><code>AC4</code></td>
+<td><code>AC-4</code></td>
+<td>Dolby AC-4</td>
+</tr>
+<tr>
+<td><code>OPUS</code></td>
+<td><code>OPUS</code></td>
+<td>Opus</td>
+</tr>
+<tr>
+<td><code>OGG</code></td>
+<td><code>VORB</code></td>
+<td>Vorbis</td>
+</tr>
+<tr>
+<td><code>DTS</code></td>
+<td><code>DTS</code></td>
+<td>DTS</td>
+</tr>
+<tr>
+<td><code>ALAC</code></td>
+<td><code>ALAC</code></td>
+<td>Apple Lossless</td>
+</tr>
+<tr>
+<td><code>FLAC</code></td>
+<td><code>FLAC</code></td>
+<td>FLAC</td>
+</tr>
+</tbody>
+</table>
+<p>Names, values, and a few aliases are accepted: <code>eac3</code> and <code>ddp</code> both resolve to <code>EC3</code>,
+and <code>vorbis</code> resolves to <code>OGG</code>.</p>
+<div class="language-shell highlight"><span class="filename">Prefer Dolby Digital Plus, fall back to AAC</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-a<span class="w"> </span>EC3,AAC<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<h3 id="channels-and-atmos">Channels and Atmos<a class="headerlink" href="#channels-and-atmos" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>-c</code> / <code>--channels</code>: desired channel layout, e.g. <code>5.1</code> or <code>2.0</code>. Matching is by
+  ceiling, so <code>5.1</code> implicitly matches a <code>6.0</code>-reported layout.</li>
+<li><code>-naa</code> / <code>--noatmos</code>: exclude Dolby Atmos audio tracks from selection.</li>
+</ul>
+<div class="language-shell highlight"><span class="filename">5.1 audio, no Atmos</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-c<span class="w"> </span><span class="m">5</span>.1<span class="w"> </span>--noatmos<span class="w"> </span>AMZN<span class="w"> </span>0ABC123
+</span></code></pre></div>
+<h2 id="languages">Languages<a class="headerlink" href="#languages" title="Permanent link">&para;</a></h2>
+<h3 id="video-and-audio-language">Video and audio language<a class="headerlink" href="#video-and-audio-language" title="Permanent link">&para;</a></h3>
+<p><code>-l</code> / <code>--lang</code> sets the wanted language(s) for <strong>both video and audio</strong>. The default is
+<code>orig</code>, the title's original language.</p>
+<div class="language-shell highlight"><span class="filename">Original language plus English</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-l<span class="w"> </span>orig,en<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<p>The special token <code>orig</code> is resolved to the title's actual original language everywhere
+it is used. You can override each stream type independently:</p>
+<ul>
+<li><code>-vl</code> / <code>--v-lang</code>: language for <strong>video only</strong> (overrides <code>-l</code> for video). Useful
+  when the burned-in video language differs from the audio you want.</li>
+<li><code>-al</code> / <code>--a-lang</code>: language for <strong>audio only</strong> (overrides <code>-l</code> for audio).</li>
+</ul>
+<div class="language-shell highlight"><span class="filename">English audio over the original video</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-al<span class="w"> </span>en<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<h3 id="exact-vs-fuzzy-matching">Exact vs fuzzy matching<a class="headerlink" href="#exact-vs-fuzzy-matching" title="Permanent link">&para;</a></h3>
+<p>By default language matching is fuzzy: <code>-l en</code> also accepts <code>en-US</code>, <code>en-GB</code>, etc. (up
+to a small distance). Pass <code>--exact-lang</code> to require an exact match: with it, <code>-l es-419</code>
+matches only <code>es-419</code>, not <code>es-ES</code>.</p>
+<div class="admonition tip">
+<p class="admonition-title">The <code>all</code> and <code>best</code> tokens</p>
+<p>For audio, the tokens <code>all</code> and <code>best</code> bypass the usual one-track-per-language pick
+and instead select the best track for <strong>each</strong> language present. For subtitles, <code>all</code>
+keeps every subtitle language.</p>
+</div>
+<h2 id="subtitles">Subtitles<a class="headerlink" href="#subtitles" title="Permanent link">&para;</a></h2>
+<h3 id="selecting-subtitle-languages">Selecting subtitle languages<a class="headerlink" href="#selecting-subtitle-languages" title="Permanent link">&para;</a></h3>
+<p><code>-sl</code> / <code>--s-lang</code> sets the wanted subtitle language(s). The default is <code>all</code>, meaning
+every available subtitle language is downloaded.</p>
+<div class="language-shell highlight"><span class="filename">Only English and Spanish subtitles</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-sl<span class="w"> </span>en,es<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<h3 id="requiring-subtitles">Requiring subtitles<a class="headerlink" href="#requiring-subtitles" title="Permanent link">&para;</a></h3>
+<p><code>--require-subs</code> takes a list of languages that <strong>must</strong> exist. If they all exist, <em>all</em>
+subtitles are downloaded; if any is missing, the title fails. This is useful for gating a
+download on the presence of a specific subtitle track.</p>
+<div class="admonition warning">
+<p class="admonition-title">Cannot combine with <code>--s-lang</code></p>
+<p><code>--require-subs</code> and <code>--s-lang</code> are mutually exclusive. Use one or the other.</p>
+</div>
+<h3 id="forced-subtitles-and-output-format">Forced subtitles and output format<a class="headerlink" href="#forced-subtitles-and-output-format" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>-fs</code> / <code>--forced-subs</code>: include forced subtitle tracks (signs/foreign dialogue).
+  Without this flag, forced subs are dropped from selection.</li>
+<li><code>--sub-format</code>: set the output subtitle format, converting only when necessary.
+  Accepts codec names/values and common aliases (<code>srt</code>, <code>vtt</code>, <code>ass</code>, <code>ssa</code>, <code>ttml</code>,
+  etc.), or the literal <code>original</code> to keep the source format.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Format</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SRT</code> / <code>srt</code></td>
+<td>SubRip</td>
+</tr>
+<tr>
+<td><code>VTT</code> / <code>vtt</code></td>
+<td>WebVTT</td>
+</tr>
+<tr>
+<td><code>ASS</code> / <code>ass</code></td>
+<td>Advanced SubStation Alpha</td>
+</tr>
+<tr>
+<td><code>SSA</code> / <code>ssa</code></td>
+<td>SubStation Alpha</td>
+</tr>
+<tr>
+<td><code>TTML</code> / <code>ttml</code></td>
+<td>Timed Text Markup</td>
+</tr>
+<tr>
+<td><code>original</code></td>
+<td>Keep the source format, no conversion</td>
+</tr>
+</tbody>
+</table>
+<div class="language-shell highlight"><span class="filename">Convert subtitles to SRT</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--sub-format<span class="w"> </span>srt<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">SDH stripping happens by default</p>
+<p>When a subtitle track is marked SDH (for the deaf/hard-of-hearing) and there is no
+plain same-language subtitle, unshackle produces a stripped, non-SDH variant
+automatically. This behaviour is governed by the <code>subtitle.strip_sdh</code> config option
+(default on).</p>
+</div>
+<h2 id="selecting-episodes">Selecting episodes<a class="headerlink" href="#selecting-episodes" title="Permanent link">&para;</a></h2>
+<p>For series, several flags control which episodes are downloaded. By default, <strong>all</strong>
+episodes are downloaded.</p>
+<h3 id="wanted-ranges">Wanted ranges<a class="headerlink" href="#wanted-ranges" title="Permanent link">&para;</a></h3>
+<p><code>-w</code> / <code>--wanted</code> accepts flexible season/episode ranges, comma-separated. Prefix a token
+with <code>-</code> to exclude it.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Whole seasons</label><label for="__tabbed_1_2">Specific episodes</label><label for="__tabbed_1_3">Exclusions</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01-S03<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01,S03,S05<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01E01<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01E01-S01E05<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01E01-S02E03<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Seasons 1 through 5, but not season 3</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01-S05,-S03<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+</div>
+</div>
+</div>
+<h3 id="other-selection-flags">Other selection flags<a class="headerlink" href="#other-selection-flags" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--select-titles</code></td>
+<td>Interactively pick episodes from a list (Series only). <strong>Cannot combine with <code>-w</code>.</strong></td>
+</tr>
+<tr>
+<td><code>--latest-episode</code></td>
+<td>Download only the single most recent episode.</td>
+</tr>
+<tr>
+<td><code>--list-titles</code></td>
+<td>List the titles that would be downloaded, then stop.</td>
+</tr>
+</tbody>
+</table>
+<div class="language-shell highlight"><span class="filename">Grab just the newest episode</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--latest-episode<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<h2 id="including-and-excluding-track-types">Including and excluding track types<a class="headerlink" href="#including-and-excluding-track-types" title="Permanent link">&para;</a></h2>
+<p>You can restrict a download to certain track categories, either positively (only these)
+or negatively (everything but these).</p>
+<p><strong>Only these types</strong> (<code>*-only</code> flags):</p>
+<ul>
+<li><code>-V</code> / <code>--video-only</code></li>
+<li><code>-A</code> / <code>--audio-only</code></li>
+<li><code>-S</code> / <code>--subs-only</code></li>
+<li><code>-C</code> / <code>--chapters-only</code></li>
+</ul>
+<p><strong>Skip these types</strong> (<code>no-*</code> flags):</p>
+<ul>
+<li><code>-nv</code> / <code>--no-video</code></li>
+<li><code>-na</code> / <code>--no-audio</code></li>
+<li><code>-ns</code> / <code>--no-subs</code></li>
+<li><code>-nc</code> / <code>--no-chapters</code></li>
+</ul>
+<p>Additional track-type flags:</p>
+<ul>
+<li><code>-ad</code> / <code>--audio-description</code>: include descriptive (audio-description) tracks, which
+  are dropped by default.</li>
+<li><code>--skip-subtitle-errors</code>: if a subtitle fails to download, skip it and continue rather
+  than aborting the whole title. Video and audio failures remain fatal.</li>
+</ul>
+<div class="language-shell highlight"><span class="filename">Subtitles only</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-S<span class="w"> </span>-sl<span class="w"> </span>en<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<div class="language-shell highlight"><span class="filename">Everything except chapters</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-nc<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>You can combine an <code>*-only</code> flag with <code>no-*</code> flags to fine-tune: <code>*-only</code> chooses the
+starting set of categories, then <code>no-*</code> subtracts from it. Attachments (e.g. fonts)
+are always kept.</p>
+</div>
+<h2 id="listing-and-dry-runs">Listing and dry runs<a class="headerlink" href="#listing-and-dry-runs" title="Permanent link">&para;</a></h2>
+<p>Before committing to a long download, inspect what unshackle <em>would</em> do:</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--list</code></td>
+<td>List the available tracks and which would be selected, then stop. No download.</td>
+</tr>
+<tr>
+<td><code>--list-titles</code></td>
+<td>List the titles (episodes) that would be downloaded, then stop.</td>
+</tr>
+<tr>
+<td><code>--skip-dl</code></td>
+<td>Skip downloading but still acquire the decryption keys.</td>
+</tr>
+</tbody>
+</table>
+<div class="language-shell highlight"><span class="filename">See the track selection without downloading</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">1080</span><span class="w"> </span>-v<span class="w"> </span>H.265<span class="w"> </span>-r<span class="w"> </span>HDR10<span class="w"> </span>--list<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<h2 id="output-and-muxing">Output and muxing<a class="headerlink" href="#output-and-muxing" title="Permanent link">&para;</a></h2>
+<h3 id="output-location-and-folders">Output location and folders<a class="headerlink" href="#output-location-and-folders" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>-o</code> / <code>--output</code>: override the output directory for this run (otherwise the
+  configured downloads directory is used).</li>
+<li><code>--no-folder</code>: do not create a per-show folder for TV downloads.</li>
+<li><code>--no-source</code>: remove the service source tag from the filename and path.</li>
+</ul>
+<div class="language-shell highlight"><span class="filename">Send this download somewhere specific</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-o<span class="w"> </span>~/Videos/incoming<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<h3 id="muxing-behaviour">Muxing behaviour<a class="headerlink" href="#muxing-behaviour" title="Permanent link">&para;</a></h3>
+<p>By default, tracks are muxed into a single Matroska (<code>.mkv</code>) file with <code>mkvmerge</code>. These
+flags change how the output is assembled:</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Behaviour</th>
+<th>Default source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--no-mux</code></td>
+<td>Do not mux; keep the individual track files.</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>--split-audio</code></td>
+<td>Write a separate output file per audio codec instead of merging all audio.</td>
+<td>config <code>muxing.merge_audio</code> (on)</td>
+</tr>
+<tr>
+<td><code>--merge-video</code></td>
+<td>Mux all selected video tracks into one file.</td>
+<td>config <code>muxing.merge_video</code> (off)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="naming-tags">Naming tags<a class="headerlink" href="#naming-tags" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>--tag</code>: set the release group tag (overrides the configured tag).</li>
+<li><code>--repack</code>: add a <code>REPACK</code> tag to the output filename.</li>
+</ul>
+<div class="language-shell highlight"><span class="filename">Custom group tag and a REPACK label</span><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--tag<span class="w"> </span>MYGRP<span class="w"> </span>--repack<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<h2 id="proxies">Proxies<a class="headerlink" href="#proxies" title="Permanent link">&para;</a></h2>
+<p><code>--proxy</code> accepts a full proxy URI, a 2-letter country code (resolved through your
+configured proxy providers), or a <code>provider:region</code> form.</p>
+<div class="language-shell highlight"><span class="filename">Proxy forms</span><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>us<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>nordvpn:ca<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span><span class="s1">&#39;http://user:pass@host:8080&#39;</span><span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<p>Two related flags:</p>
+<ul>
+<li><code>--no-proxy</code>: force-disable all proxy use for this run.</li>
+<li><code>--no-proxy-download</code>: bypass the proxy for <strong>segment downloads only</strong>. The manifest,
+  license, and authentication requests still go through the proxy. This is useful when the
+  proxy is only needed to satisfy geo-checks, not to move the bulk of the data.</li>
+</ul>
+<h2 id="performance-and-caching">Performance and caching<a class="headerlink" href="#performance-and-caching" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--workers N</code></td>
+<td>Threads used per track for segment downloads. Default depends on the downloader.</td>
+</tr>
+<tr>
+<td><code>--downloads N</code></td>
+<td>Number of tracks downloaded concurrently. Default <code>1</code>.</td>
+</tr>
+<tr>
+<td><code>--slow [MIN-MAX]</code></td>
+<td>Add a delay between titles to look more like a real device. <code>--slow</code> alone means 60-120s; <code>--slow 20-40</code> sets a custom range. Minimum 20s.</td>
+</tr>
+<tr>
+<td><code>--no-cache</code></td>
+<td>Bypass the title cache for this download.</td>
+</tr>
+<tr>
+<td><code>--reset-cache</code></td>
+<td>Clear the title cache before fetching.</td>
+</tr>
+</tbody>
+</table>
+<div class="language-shell highlight"><span class="filename">Two tracks at a time, eight threads each</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--downloads<span class="w"> </span><span class="m">2</span><span class="w"> </span>--workers<span class="w"> </span><span class="m">8</span><span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<div class="language-shell highlight"><span class="filename">Space out a season download</span><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01<span class="w"> </span>--slow<span class="w"> </span><span class="m">30</span>-60<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<h2 id="keys-vaults-and-export">Keys, vaults, and export<a class="headerlink" href="#keys-vaults-and-export" title="Permanent link">&para;</a></h2>
+<p>By default, unshackle checks your <strong>key vaults</strong> first and only asks a <strong>CDM</strong> to license
+a key when the vault misses. You can force one side or the other:</p>
+<ul>
+<li><code>--cdm-only</code>: only use the CDM (skip vaults).</li>
+<li><code>--vaults-only</code>: only use key vaults (never license via the CDM); a missing key fails.</li>
+</ul>
+<div class="language-shell highlight"><span class="filename">Fetch keys only, no download</span><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<p><code>--export</code> writes a JSON file, into the configured exports directory, containing track
+info and the acquired content keys for each title. This is the format consumed by
+<code>unshackle import</code> to reconstruct a download later.</p>
+<div class="language-shell highlight"><span class="filename">Export track info and keys</span><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>--export<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Region is recorded only with a proxy</p>
+<p>When <code>--proxy</code> is used, the export records the region so an import can reproduce the
+correct geofence. Without a proxy, no region is stored.</p>
+</div>
+<h2 id="metadata-and-tagging">Metadata and tagging<a class="headerlink" href="#metadata-and-tagging" title="Permanent link">&para;</a></h2>
+<p>unshackle looks up metadata automatically, but you can override the identifiers used for
+tagging and naming:</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Example</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--tmdb</code></td>
+<td><code>--tmdb 27205</code></td>
+<td>Use this TMDB ID instead of automatic lookup.</td>
+</tr>
+<tr>
+<td><code>--imdb</code></td>
+<td><code>--imdb tt1375666</code></td>
+<td>Use this IMDb ID.</td>
+</tr>
+<tr>
+<td><code>--animeapi</code></td>
+<td><code>--animeapi mal:12345</code></td>
+<td>Resolve via AnimeAPI (<code>mal:</code>/<code>anilist:</code> prefix; defaults to MAL).</td>
+</tr>
+<tr>
+<td><code>--enrich</code></td>
+<td>—</td>
+<td>Override the show title and year from an external source. <strong>Requires</strong> one of <code>--tmdb</code>, <code>--imdb</code>, or <code>--animeapi</code>.</td>
+</tr>
+</tbody>
+</table>
+<div class="language-shell highlight"><span class="filename">Force the right IMDb match and enrich the title</span><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--imdb<span class="w"> </span>tt1375666<span class="w"> </span>--enrich<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<h2 id="configuration-defaults">Configuration defaults<a class="headerlink" href="#configuration-defaults" title="Permanent link">&para;</a></h2>
+<p>Every flag on this page can be set as a default in your configuration file so you don't
+have to type it each time, and defaults can be scoped per service. See
+<a href="../../getting-started/configuration-file/">Configuration file</a> for the <code>dl:</code> block and
+per-service overrides.</p>
+<div class="admonition tip">
+<p class="admonition-title">Explicit flags always win</p>
+<p>A value you pass on the command line (or via an environment variable) always takes
+precedence over both the global <code>dl:</code> defaults and any per-service <code>dl:</code> overrides.
+Config only fills in options you didn't set explicitly.</p>
+</div>
+<h2 id="quick-reference">Quick reference<a class="headerlink" href="#quick-reference" title="Permanent link">&para;</a></h2>
+<p>A condensed lookup of the most-used options. Run <code>unshackle dl --help</code> for the complete,
+authoritative list.</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Short</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--quality</code></td>
+<td><code>-q</code></td>
+<td>Target resolution(s), e.g. <code>1080,720</code>.</td>
+</tr>
+<tr>
+<td><code>--vcodec</code></td>
+<td><code>-v</code></td>
+<td>Video codec(s).</td>
+</tr>
+<tr>
+<td><code>--acodec</code></td>
+<td><code>-a</code></td>
+<td>Audio codec(s).</td>
+</tr>
+<tr>
+<td><code>--range</code></td>
+<td><code>-r</code></td>
+<td>Color range(s); default <code>SDR</code>.</td>
+</tr>
+<tr>
+<td><code>--channels</code></td>
+<td><code>-c</code></td>
+<td>Audio channel layout.</td>
+</tr>
+<tr>
+<td><code>--noatmos</code></td>
+<td><code>-naa</code></td>
+<td>Exclude Atmos audio.</td>
+</tr>
+<tr>
+<td><code>--lang</code></td>
+<td><code>-l</code></td>
+<td>Video + audio language(s); default <code>orig</code>.</td>
+</tr>
+<tr>
+<td><code>--a-lang</code></td>
+<td><code>-al</code></td>
+<td>Audio-only language override.</td>
+</tr>
+<tr>
+<td><code>--v-lang</code></td>
+<td><code>-vl</code></td>
+<td>Video-only language override.</td>
+</tr>
+<tr>
+<td><code>--s-lang</code></td>
+<td><code>-sl</code></td>
+<td>Subtitle language(s); default <code>all</code>.</td>
+</tr>
+<tr>
+<td><code>--forced-subs</code></td>
+<td><code>-fs</code></td>
+<td>Include forced subtitles.</td>
+</tr>
+<tr>
+<td><code>--sub-format</code></td>
+<td></td>
+<td>Output subtitle format.</td>
+</tr>
+<tr>
+<td><code>--wanted</code></td>
+<td><code>-w</code></td>
+<td>Episode/season range.</td>
+</tr>
+<tr>
+<td><code>--select-titles</code></td>
+<td></td>
+<td>Interactively pick episodes.</td>
+</tr>
+<tr>
+<td><code>--latest-episode</code></td>
+<td></td>
+<td>Only the newest episode.</td>
+</tr>
+<tr>
+<td><code>--video-only</code> / <code>--audio-only</code> / <code>--subs-only</code></td>
+<td><code>-V</code> / <code>-A</code> / <code>-S</code></td>
+<td>Restrict track types.</td>
+</tr>
+<tr>
+<td><code>--no-video</code> / <code>--no-audio</code> / <code>--no-subs</code> / <code>--no-chapters</code></td>
+<td><code>-nv</code> / <code>-na</code> / <code>-ns</code> / <code>-nc</code></td>
+<td>Skip track types.</td>
+</tr>
+<tr>
+<td><code>--worst</code></td>
+<td></td>
+<td>Lowest bitrate within <code>-q</code>.</td>
+</tr>
+<tr>
+<td><code>--best-available</code></td>
+<td></td>
+<td>Degrade gracefully instead of failing.</td>
+</tr>
+<tr>
+<td><code>--output</code></td>
+<td><code>-o</code></td>
+<td>Output directory for this run.</td>
+</tr>
+<tr>
+<td><code>--split-audio</code> / <code>--merge-video</code> / <code>--no-mux</code></td>
+<td></td>
+<td>Muxing behaviour.</td>
+</tr>
+<tr>
+<td><code>--proxy</code> / <code>--no-proxy</code> / <code>--no-proxy-download</code></td>
+<td></td>
+<td>Proxy control.</td>
+</tr>
+<tr>
+<td><code>--workers</code> / <code>--downloads</code> / <code>--slow</code></td>
+<td></td>
+<td>Concurrency and pacing.</td>
+</tr>
+<tr>
+<td><code>--list</code> / <code>--list-titles</code> / <code>--skip-dl</code></td>
+<td></td>
+<td>Dry runs.</td>
+</tr>
+<tr>
+<td><code>--cdm-only</code> / <code>--vaults-only</code></td>
+<td></td>
+<td>Key source control.</td>
+</tr>
+<tr>
+<td><code>--export</code></td>
+<td></td>
+<td>Export track info and keys to JSON.</td>
+</tr>
+<tr>
+<td><code>--tmdb</code> / <code>--imdb</code> / <code>--animeapi</code> / <code>--enrich</code></td>
+<td></td>
+<td>Metadata overrides.</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../../getting-started/configuration-file/" class="md-footer__link md-footer__link--prev" aria-label="Previous: The Configuration File">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                The Configuration File
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../cli-reference/" class="md-footer__link md-footer__link--next" aria-label="Next: CLI Reference">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                CLI Reference
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.annotate", "content.code.copy", "content.tabs.link", "content.tooltips", "navigation.footer", "navigation.indexes", "navigation.sections", "navigation.tabs", "navigation.top", "navigation.tracking", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,2605 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Movie, TV, and Music archival software — user guide and REST API reference">
+      
+      
+      
+        <link rel="canonical" href="https://docs.unshackle.dev/guide/subtitles/">
+      
+      
+        <link rel="prev" href="../output-and-naming/">
+      
+      
+        <link rel="next" href="../troubleshooting/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Subtitles - unshackle</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#subtitles" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="unshackle" class="md-header__button md-logo" aria-label="unshackle" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24"><path d="m800-274-80-80v-206H514l-80-80h166v-80q0-50-34.5-85T481-840q-50 0-84 34.5T363-720v9l-73-73q22-61 75-98.5T481-920q83 0 141 58.5T680-720v80h40q33 0 56.5 23.5T800-560v286Zm20 246-62-62q-11 5-20 7.5T720-80H240q-33 0-56.5-23.5T160-160v-400q0-25 14.5-46t37.5-30L28-820l56-56L876-84l-56 56ZM686-160 539-309q-11 11-25.5 17t-31.5 6q-33 0-56.5-23.5T402-366q0-17 6-31.5t17-25.5L286-560h-46v400h446ZM486-360Zm131-97Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            unshackle
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Subtitles
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1M8 13h8v-2H8zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4a5 5 0 0 0 5-5 5 5 0 0 0-5-5"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5m0 8a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5M7 15a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/unshackle-dl/unshackle" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    unshackle-dl/unshackle
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/installation/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../downloading/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  User Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/configuration/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Configuration
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../dev/creating-a-service/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Developer
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/api/service/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="unshackle" class="md-nav__button md-logo" aria-label="unshackle" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24"><path d="m800-274-80-80v-206H514l-80-80h166v-80q0-50-34.5-85T481-840q-50 0-84 34.5T363-720v9l-73-73q22-61 75-98.5T481-920q83 0 141 58.5T680-720v80h40q33 0 56.5 23.5T800-560v286Zm20 246-62-62q-11 5-20 7.5T720-80H240q-33 0-56.5-23.5T160-160v-400q0-25 14.5-46t37.5-30L28-820l56-56L876-84l-56 56ZM686-160 539-309q-11 11-25.5 17t-31.5 6q-33 0-56.5-23.5T402-366q0-17 6-31.5t17-25.5L286-560h-46v400h446ZM486-360Zm131-97Z"/></svg>
+
+    </a>
+    unshackle
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/unshackle-dl/unshackle" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    unshackle-dl/unshackle
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/configuration-file/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Configuration File
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../downloading/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Downloading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../drm-and-cdm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DRM & CDM Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../proxies-and-vpn/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Proxies & VPN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vaults/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Key Vaults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../output-and-naming/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Output & Naming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Subtitles
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Subtitles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#supported-formats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported formats
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-happens-to-a-subtitle-after-download" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What happens to a subtitle after download
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#selecting-and-filtering-subtitles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Selecting and filtering subtitles
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Selecting and filtering subtitles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#choosing-languages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Choosing languages
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#requiring-languages-before-downloading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Requiring languages before downloading
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#forced-subtitles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forced subtitles
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#track-types-forced-sdh-and-cc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Track types: forced, SDH, and CC
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Track types: forced, SDH, and CC">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#closed-captions-embedded-in-video" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Closed captions embedded in video
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#automatic-sdh-stripping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Automatic SDH stripping
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#converting-subtitle-formats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Converting subtitle formats
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Converting subtitle formats">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-the-conversion-backend-is-chosen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the conversion backend is chosen
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#muxed-vs-sidecar-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Muxed vs. sidecar output
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fonts-for-styled-subtitles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fonts for styled subtitles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#subtitle-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Subtitle configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#developer-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Developer reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Configuration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Developer
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/creating-a-service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Creating a Service
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/service-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../dev/rest-api/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    REST API
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5_3" id="__nav_5_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    REST API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/authentication/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/endpoints/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Endpoints
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/job-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Job Lifecycle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/remote-sessions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remote Sessions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/rest-api/errors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Error Responses
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/tracks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/titles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Titles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/drm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DRM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#supported-formats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported formats
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-happens-to-a-subtitle-after-download" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What happens to a subtitle after download
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#selecting-and-filtering-subtitles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Selecting and filtering subtitles
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Selecting and filtering subtitles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#choosing-languages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Choosing languages
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#requiring-languages-before-downloading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Requiring languages before downloading
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#forced-subtitles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forced subtitles
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#track-types-forced-sdh-and-cc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Track types: forced, SDH, and CC
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Track types: forced, SDH, and CC">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#closed-captions-embedded-in-video" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Closed captions embedded in video
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#automatic-sdh-stripping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Automatic SDH stripping
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#converting-subtitle-formats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Converting subtitle formats
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Converting subtitle formats">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-the-conversion-backend-is-chosen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the conversion backend is chosen
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#muxed-vs-sidecar-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Muxed vs. sidecar output
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fonts-for-styled-subtitles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fonts for styled subtitles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#subtitle-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Subtitle configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#developer-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Developer reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="subtitles">Subtitles<a class="headerlink" href="#subtitles" title="Permanent link">&para;</a></h1>
+<p>Subtitles are first-class tracks in unshackle. When you download a title, subtitle
+tracks are parsed from the manifest alongside video and audio, downloaded, cleaned up,
+optionally converted to the format you want, and then either muxed into the final
+Matroska file or written out as sidecar files next to it. The sections below cover the
+supported formats, how tracks are normalized after download, how to select and filter
+subtitles, and every subtitle-related configuration option.</p>
+<p>Most of this is controlled with a handful of <code>dl</code> flags and a small <code>subtitle</code> block in
+your <a href="../../getting-started/configuration-file/">configuration file</a>. See
+<a href="../downloading/">Downloading</a> for how subtitle flags fit into a full download command.</p>
+<h2 id="supported-formats">Supported formats<a class="headerlink" href="#supported-formats" title="Permanent link">&para;</a></h2>
+<p>unshackle understands the following subtitle codecs. The <strong>Format</strong> column is the value
+shown in track listings; the <strong>Extension</strong> column is the file extension used on disk.</p>
+<table>
+<thead>
+<tr>
+<th>Codec (internal name)</th>
+<th>Format</th>
+<th>Extension</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SubRip</code></td>
+<td>SRT</td>
+<td><code>srt</code></td>
+<td>SubRip, the most widely compatible plain-text format</td>
+</tr>
+<tr>
+<td><code>SubStationAlpha</code></td>
+<td>SSA</td>
+<td><code>ssa</code></td>
+<td>SubStation Alpha (styled)</td>
+</tr>
+<tr>
+<td><code>SubStationAlphav4</code></td>
+<td>ASS</td>
+<td><code>ass</code></td>
+<td>Advanced SubStation Alpha (styled)</td>
+</tr>
+<tr>
+<td><code>TimedTextMarkupLang</code></td>
+<td>TTML</td>
+<td><code>ttml</code></td>
+<td>Timed Text Markup Language (IMSC/DFXP)</td>
+</tr>
+<tr>
+<td><code>WebVTT</code></td>
+<td>VTT</td>
+<td><code>vtt</code></td>
+<td>WebVTT</td>
+</tr>
+<tr>
+<td><code>SAMI</code></td>
+<td>SMI</td>
+<td><code>smi</code></td>
+<td>Synchronized Accessible Media Interchange</td>
+</tr>
+<tr>
+<td><code>MicroDVD</code></td>
+<td>SUB</td>
+<td><code>sub</code></td>
+<td>MicroDVD</td>
+</tr>
+<tr>
+<td><code>MPL2</code></td>
+<td>MPL2</td>
+<td><code>mpl2</code></td>
+<td>MPL2</td>
+</tr>
+<tr>
+<td><code>TMP</code></td>
+<td>TMP</td>
+<td><code>tmp</code></td>
+<td>TMP</td>
+</tr>
+<tr>
+<td><code>fTTML</code></td>
+<td>STPP</td>
+<td><code>stpp</code></td>
+<td>MPEG-DASH box-encapsulated TTML (IMSC1)</td>
+</tr>
+<tr>
+<td><code>fVTT</code></td>
+<td>WVTT</td>
+<td><code>wvtt</code></td>
+<td>MPEG-DASH box-encapsulated WebVTT</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition note">
+<p class="admonition-title">The two boxed formats convert automatically</p>
+<p><code>fTTML</code> (STPP) and <code>fVTT</code> (WVTT) are the fragmented, MP4-box-encapsulated forms that
+DASH and HLS deliver. You never keep these as-is: right after download they are
+unwrapped into their plain counterparts (<code>fTTML</code> becomes TTML and <code>fVTT</code> becomes
+WebVTT), so you always end up with an editable text subtitle. Note that this is a
+one-way, source-only relationship: you can convert <em>from</em> these boxed formats, but no
+backend can produce them as an output target, so they can never be a conversion
+destination.</p>
+</div>
+<h2 id="what-happens-to-a-subtitle-after-download">What happens to a subtitle after download<a class="headerlink" href="#what-happens-to-a-subtitle-after-download" title="Permanent link">&para;</a></h2>
+<p>A subtitle download does more than save a file. Once the bytes are on disk, unshackle runs
+format-appropriate clean-up to produce a single, valid file:</p>
+<ul>
+<li><strong>Encoding</strong>: non-boxed subtitles are forced to UTF-8, and stray <code>&amp;lrm;</code> / <code>&amp;rlm;</code>
+  bidirectional entities are unescaped.</li>
+<li><strong>Segment merging</strong>: when a WebVTT or boxed subtitle arrives as many DASH/HLS
+  segments, the segments are stitched back into one continuous document with correct
+  timing.</li>
+<li><strong>WebVTT sanitization</strong>: merged WebVTT runs through a repair pipeline that clamps
+  negative timestamps to <code>00:00:00.000</code>, removes stray cue identifiers (like <code>Q0</code>, <code>Q1</code>)
+  that confuse downstream parsers, and merges multi-line cues that a service split into
+  separate overlapping cues. By default the original styling and layout are preserved
+  (see <a href="#subtitle-configuration"><code>preserve_formatting</code></a>).</li>
+<li><strong>TTML for muxing</strong>: Matroska cannot carry TTML. If you do not request a specific
+  output format, any plain TTML track is automatically converted to WebVTT before
+  muxing (the closest lossless equivalent). Boxed <code>fTTML</code> is likewise unwrapped to TTML
+  first.</li>
+</ul>
+<p>You normally do not need to think about any of this. It just produces a clean file.</p>
+<h2 id="selecting-and-filtering-subtitles">Selecting and filtering subtitles<a class="headerlink" href="#selecting-and-filtering-subtitles" title="Permanent link">&para;</a></h2>
+<p>Subtitle selection happens through <code>dl</code> flags. The most important is language selection.</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-sl</code>, <code>--s-lang</code></td>
+<td>Language(s) wanted for subtitles. Defaults to <code>all</code>.</td>
+</tr>
+<tr>
+<td><code>--require-subs</code></td>
+<td>Require these languages to exist; if present, download <strong>all</strong> subtitles. Cannot be combined with <code>--s-lang</code>.</td>
+</tr>
+<tr>
+<td><code>-fs</code>, <code>--forced-subs</code></td>
+<td>Include forced subtitle tracks (excluded by default).</td>
+</tr>
+<tr>
+<td><code>--exact-lang</code></td>
+<td>Exact language matching, with no regional variants.</td>
+</tr>
+<tr>
+<td><code>-S</code>, <code>--subs-only</code></td>
+<td>Download only subtitle tracks.</td>
+</tr>
+<tr>
+<td><code>-ns</code>, <code>--no-subs</code></td>
+<td>Do not download subtitle tracks at all.</td>
+</tr>
+<tr>
+<td><code>--sub-format</code></td>
+<td>Output subtitle format / conversion target (see <a href="#converting-subtitle-formats">conversion</a>).</td>
+</tr>
+<tr>
+<td><code>--skip-subtitle-errors</code></td>
+<td>Skip a subtitle that fails to download instead of aborting the whole title.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="choosing-languages">Choosing languages<a class="headerlink" href="#choosing-languages" title="Permanent link">&para;</a></h3>
+<p>By default (<code>--s-lang all</code>) unshackle keeps every subtitle language the service offers.
+To narrow it down, pass a comma-separated list of language tags:</p>
+<div class="language-shell highlight"><span class="filename">English and Spanish subtitles only</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--s-lang<span class="w"> </span>en,es<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<p>Language matching is fuzzy by default: <code>en</code> will match <code>en-US</code>, <code>en-GB</code>, and similar
+variants. If a requested language is missing but others were found, unshackle continues
+with whatever remains and tells you which languages it dropped.</p>
+<p>For strict matching, where <code>es-419</code> matches only <code>es-419</code> and never <code>es-ES</code>, add
+<code>--exact-lang</code>:</p>
+<div class="language-shell highlight"><span class="filename">Only Latin-American Spanish, no other Spanish variants</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--s-lang<span class="w"> </span>es-419<span class="w"> </span>--exact-lang<span class="w"> </span>DSNP<span class="w"> </span><span class="s1">&#39;https://www.disneyplus.com/…&#39;</span>
+</span></code></pre></div>
+<h3 id="requiring-languages-before-downloading">Requiring languages before downloading<a class="headerlink" href="#requiring-languages-before-downloading" title="Permanent link">&para;</a></h3>
+<p><code>--require-subs</code> is a gate rather than a filter. It downloads <strong>all</strong> available
+subtitles, but only if every language you list is present; if any is missing the title
+errors out. This is useful for batch jobs where a title without your must-have language
+should fail loudly rather than silently produce a partial result.</p>
+<div class="language-shell highlight"><span class="filename">Fail unless both English and French subs exist, then grab everything</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--require-subs<span class="w"> </span>en,fr<span class="w"> </span>AMZN<span class="w"> </span>B0ABCDEFGH
+</span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title"><code>--require-subs</code> and <code>--s-lang</code> are mutually exclusive</p>
+<p>Because <code>--require-subs</code> forces downloading of all subtitle languages, it cannot be
+combined with <code>--s-lang</code>. Choose one or the other.</p>
+</div>
+<h3 id="forced-subtitles">Forced subtitles<a class="headerlink" href="#forced-subtitles" title="Permanent link">&para;</a></h3>
+<p>Forced tracks carry only the important on-screen signs and foreign-dialogue lines meant
+to display even when you are watching in your own language. They are <strong>excluded by
+default</strong>. Add <code>-fs</code> / <code>--forced-subs</code> to include them:</p>
+<div class="language-shell highlight"><span class="filename">Include forced tracks alongside full subtitles</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--s-lang<span class="w"> </span>en<span class="w"> </span>--forced-subs<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<h2 id="track-types-forced-sdh-and-cc">Track types: forced, SDH, and CC<a class="headerlink" href="#track-types-forced-sdh-and-cc" title="Permanent link">&para;</a></h2>
+<p>Every subtitle track carries flags describing what kind of captions it holds. These
+flags drive selection, sort order, output filenames, and the Matroska track flags.</p>
+<ul>
+<li><strong>Forced</strong>: only signs and foreign dialogue; meant to play when the audio language
+  matches. Off by default; enable with <code>--forced-subs</code>.</li>
+<li><strong>SDH</strong> (Subtitles for the Deaf and Hard-of-Hearing; also called HOH): a full
+  transcript that includes both dialogue and non-speech sound cues.</li>
+<li><strong>CC</strong> (Closed Captions): captions originating from an EIA-608/708 broadcast stream,
+  often uppercase with <code>&gt;&gt;&gt;</code> speaker markers and sound cues.</li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">SDH and CC are treated together for sorting and stripping</p>
+<p>Within a language, unshackle orders subtitles from fewest to most captions:
+<strong>Forced → Normal → SDH/CC</strong>. For the purposes of hearing-impaired handling, SDH and
+CC tracks are grouped as the "most captions" variant.</p>
+</div>
+<p>A single track cannot be both CC and SDH, and a forced track cannot also be flagged
+CC or SDH. These combinations are rejected as invalid.</p>
+<h3 id="closed-captions-embedded-in-video">Closed captions embedded in video<a class="headerlink" href="#closed-captions-embedded-in-video" title="Permanent link">&para;</a></h3>
+<p>Some services do not ship subtitles as separate tracks but instead embed EIA-608/708
+captions inside the video stream. After a video track is downloaded and decrypted,
+unshackle probes it for these captions and, when found, extracts them into a SubRip
+(<code>SRT</code>) subtitle flagged as CC. This runs automatically unless you disabled subtitles
+(<code>--no-subs</code>) or video (<code>--no-video</code> / <code>--video-only</code> semantics), and it requires the
+CCExtractor tool on your <code>PATH</code>.</p>
+<h2 id="automatic-sdh-stripping">Automatic SDH stripping<a class="headerlink" href="#automatic-sdh-stripping" title="Permanent link">&para;</a></h2>
+<p>When a language has an SDH track but <strong>no</strong> plain (non-SDH, non-forced) track, unshackle
+can generate a clean non-SDH version for you by stripping the hearing-impaired cues:
+sound effects, speaker labels, music notes, and similar. This is on by default and
+controlled by the <a href="#subtitle-configuration"><code>strip_sdh</code></a> config key.</p>
+<p>The check is deliberately loose: if a close-enough plain track already exists (for
+example an <code>en-GB</code> non-SDH track when the SDH track is <code>en-US</code>), no stripped copy is
+created. When a stripped copy <em>is</em> created, the original SDH track is kept as well, so
+you end up with both.</p>
+<p>The stripping engine itself is chosen by the <a href="#subtitle-configuration"><code>sdh_method</code></a>
+config key. The default (<code>auto</code>) prefers the <code>subby</code> cleaner for SRT, falls back to
+SubtitleEdit when it is installed, and otherwise uses the built-in <code>filter-subs</code>
+approach.</p>
+<div class="admonition note">
+<p class="admonition-title">Why <code>convert_before_strip</code> exists</p>
+<p><code>subby</code>'s SDH stripper only operates on SRT. Handed any other codec it returns
+silently without stripping anything, not an error but a no-op that leaves the SDH
+cues in place. This is the whole reason for <a href="#subtitle-configuration"><code>convert_before_strip</code></a>:
+non-SubtitleEdit engines need the subtitle converted to SRT first, or the
+hearing-impaired cues survive the strip untouched.</p>
+</div>
+<h2 id="converting-subtitle-formats">Converting subtitle formats<a class="headerlink" href="#converting-subtitle-formats" title="Permanent link">&para;</a></h2>
+<p>By default unshackle keeps each subtitle in its downloaded format (only auto-converting
+TTML to WebVTT for muxing, as noted above). To force a specific output format, use
+<code>--sub-format</code>:</p>
+<div class="language-shell highlight"><span class="filename">Convert every subtitle to SRT</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--s-lang<span class="w"> </span>en,es<span class="w"> </span>--sub-format<span class="w"> </span>srt<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<p><code>--sub-format</code> accepts the common format names and aliases, including <code>srt</code>, <code>vtt</code>,
+<code>ssa</code>, <code>ass</code>, and <code>ttml</code>. Pass <code>original</code> to explicitly keep the source format and skip
+all conversion:</p>
+<div class="language-shell highlight"><span class="filename">Keep whatever the service delivered</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--sub-format<span class="w"> </span>original<span class="w"> </span>DSNP<span class="w"> </span><span class="s1">&#39;https://www.disneyplus.com/…&#39;</span>
+</span></code></pre></div>
+<p>Conversion only runs when the source format differs from the target, so
+<code>--sub-format srt</code> on a track that is already SRT is a no-op.</p>
+<div class="admonition warning">
+<p class="admonition-title">Down-converting styled subtitles is lossy</p>
+<p>Converting styled SSA/ASS subtitles to SRT throws away positioning, colours, and
+italics. unshackle never does this automatically. It only happens when you
+explicitly ask for it via <code>--sub-format</code>. If you want to preserve styling, convert
+to a format that supports it (or keep <code>original</code>).</p>
+<p>Note that this automatic protection guards <strong>only the default muxed track</strong>: there the
+conversion is skipped and the styled original is kept. It does <strong>not</strong> cover sidecars.
+A <code>sidecar_format: srt</code> will still lossily flatten styled subtitles, dropping
+positioning, colours, and styling, and a per-download <code>--sub-format srt</code> forces the
+muxed track to convert as well. To keep raw styled sidecars, set
+<a href="#subtitle-configuration"><code>sidecar_format: original</code></a>.</p>
+</div>
+<h3 id="how-the-conversion-backend-is-chosen">How the conversion backend is chosen<a class="headerlink" href="#how-the-conversion-backend-is-chosen" title="Permanent link">&para;</a></h3>
+<p>Under the hood unshackle picks the highest-fidelity converter that supports the
+source→target pair. Which converter runs depends on the
+<a href="#subtitle-configuration"><code>conversion_method</code></a> config key (default <code>auto</code>) and the
+formats involved:</p>
+<table>
+<thead>
+<tr>
+<th>Backend</th>
+<th>Best at</th>
+<th>Requires</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>subtitleedit</code></td>
+<td>Highest fidelity; preserves positioning and italics</td>
+<td>SubtitleEdit installed</td>
+</tr>
+<tr>
+<td><code>subby</code></td>
+<td>Native SRT output with clean-up</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>pysubs2</code></td>
+<td>Best fidelity for styled SSA/ASS</td>
+<td>— (pure Python, always available)</td>
+</tr>
+<tr>
+<td><code>pycaption</code></td>
+<td>Last-resort fallback; flattens styling</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>With <code>conversion_method: auto</code>, unshackle ranks these automatically per conversion.
+Setting it to a specific value pins that backend as the first choice, falling back to
+others only if the pin cannot handle the pair.</p>
+<div class="admonition note">
+<p class="admonition-title">Config wins over a service's preference</p>
+<p>A service may set a <code>preferred_conversion_method</code> on its own tracks (for example when
+it ships subtitles that a particular backend handles best). An explicit
+<code>conversion_method</code> in <code>unshackle.yaml</code> always overrides that per-track preference, so
+your config takes precedence. This only matters when a service ships a non-default
+preference; leave <code>conversion_method</code> at <code>auto</code> to let the service's hint stand.</p>
+</div>
+<h2 id="muxed-vs-sidecar-output">Muxed vs. sidecar output<a class="headerlink" href="#muxed-vs-sidecar-output" title="Permanent link">&para;</a></h2>
+<p>By default subtitles are muxed <strong>into</strong> the final <code>.mkv</code>. You can instead (or
+additionally) write them as separate sidecar files next to the video, controlled by the
+<a href="#subtitle-configuration"><code>output_mode</code></a> config key:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">mux (default)</label><label for="__tabbed_1_2">sidecar</label><label for="__tabbed_1_3">both</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">subtitle</span><span class="p">:</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">output_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mux</span>
+</span></code></pre></div>
+<p>Subtitles are embedded in the Matroska file. Nothing is written separately.</p>
+</div>
+<div class="tabbed-block">
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">subtitle</span><span class="p">:</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">output_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sidecar</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">sidecar_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">srt</span>
+</span></code></pre></div>
+<p>Subtitles are written as standalone files and <strong>not</strong> muxed into the video (when
+there is a video or audio track to sit beside).</p>
+</div>
+<div class="tabbed-block">
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">subtitle</span><span class="p">:</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">output_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">both</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">sidecar_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">srt</span>
+</span></code></pre></div>
+<p>Subtitles are muxed into the video <strong>and</strong> written as sidecar files.</p>
+</div>
+</div>
+</div>
+<p>Sidecar files are named after the output file with the language and flags encoded in the
+name, so players and media managers can match them automatically:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>Show.S01E01.1080p.WEB.en.srt
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>Show.S01E01.1080p.WEB.en.forced.srt
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>Show.S01E01.1080p.WEB.en.sdh.srt
+</span></code></pre></div>
+<p>The pattern is <code>{base}.{language}[.forced][.sdh].{extension}</code>. The sidecar file format
+is set by <a href="#subtitle-configuration"><code>sidecar_format</code></a>; use a format name like <code>srt</code> or
+<code>vtt</code>, or <code>original</code> to keep each subtitle in its downloaded format.</p>
+<h2 id="fonts-for-styled-subtitles">Fonts for styled subtitles<a class="headerlink" href="#fonts-for-styled-subtitles" title="Permanent link">&para;</a></h2>
+<p>Styled SSA/ASS subtitles reference specific fonts by name. When unshackle muxes such a
+subtitle it scans it for the fonts it uses and attaches the matching font files to the
+Matroska output so the styling renders correctly on playback. If a referenced font is
+not available locally, unshackle logs the missing font names and suggests installing the
+relevant font packages.</p>
+<h2 id="subtitle-configuration">Subtitle configuration<a class="headerlink" href="#subtitle-configuration" title="Permanent link">&para;</a></h2>
+<p>All of the behaviour above can be defaulted in the <code>subtitle</code> block of your
+<a href="../../getting-started/configuration-file/">configuration file</a>:</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">subtitle</span><span class="p">:</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">strip_sdh</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nt">preserve_formatting</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span><span class="nt">conversion_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span><span class="nt">sdh_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span><span class="nt">convert_before_strip</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">  </span><span class="nt">output_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mux</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">  </span><span class="nt">sidecar_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">srt</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>Values</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>strip_sdh</code></td>
+<td><code>true</code></td>
+<td><code>true</code> / <code>false</code></td>
+<td>Auto-generate a stripped non-SDH copy when a language has only an SDH track.</td>
+</tr>
+<tr>
+<td><code>preserve_formatting</code></td>
+<td><code>true</code></td>
+<td><code>true</code> / <code>false</code></td>
+<td>Keep original WebVTT styling and layout during sanitization. When <code>false</code>, WebVTT is re-encoded more aggressively (merging identical cues, dropping empty ones).</td>
+</tr>
+<tr>
+<td><code>conversion_method</code></td>
+<td><code>auto</code></td>
+<td><code>auto</code>, <code>subby</code>, <code>pysubs2</code>, <code>subtitleedit</code>, <code>pycaption</code></td>
+<td>Which conversion backend to prefer. <code>auto</code> ranks them per conversion.</td>
+</tr>
+<tr>
+<td><code>sdh_method</code></td>
+<td><code>auto</code></td>
+<td><code>auto</code>, <code>subby</code>, <code>subtitleedit</code>, <code>filter-subs</code></td>
+<td>Engine used to strip hearing-impaired cues.</td>
+</tr>
+<tr>
+<td><code>convert_before_strip</code></td>
+<td><code>true</code></td>
+<td><code>true</code> / <code>false</code></td>
+<td>Convert a subtitle to SRT before stripping SDH (for non-SubtitleEdit engines).</td>
+</tr>
+<tr>
+<td><code>output_mode</code></td>
+<td><code>mux</code></td>
+<td><code>mux</code>, <code>sidecar</code>, <code>both</code></td>
+<td>Whether subtitles are embedded, written as sidecars, or both.</td>
+</tr>
+<tr>
+<td><code>sidecar_format</code></td>
+<td><code>srt</code></td>
+<td>a format name (e.g. <code>srt</code>, <code>vtt</code>) or <code>original</code></td>
+<td>Format used for sidecar files.</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition tip">
+<p class="admonition-title">SubtitleEdit is optional but recommended</p>
+<p>Several high-fidelity paths (the best-quality conversions and the SubtitleEdit SDH
+stripper) only activate when the SubtitleEdit CLI is installed and on your <code>PATH</code>.
+See <a href="../../getting-started/installation/">Installation</a> for how to add it. Without it,
+unshackle falls back to its built-in Python backends.</p>
+</div>
+<hr />
+<h2 id="developer-reference">Developer reference<a class="headerlink" href="#developer-reference" title="Permanent link">&para;</a></h2>
+<div class="admonition note">
+<p class="admonition-title">Audience</p>
+<p>This section is for people extending unshackle or writing services. Everyday users
+can stop here.</p>
+</div>
+<p>The subtitle model lives in <code>unshackle.core.tracks.Subtitle</code>. A few internals worth
+knowing when working with subtitle tracks in code:</p>
+<ul>
+<li><strong>Flags and validation</strong>: <code>Subtitle(codec=..., cc=..., sdh=..., forced=...)</code>. A track
+  cannot be both <code>cc</code> and <code>sdh</code>, and <code>forced</code> cannot be combined with either; both raise
+  <code>ValueError</code> at construction.</li>
+<li><strong><code>convert(codec, *, forced=False)</code></strong>: converts the downloaded file in place through
+  the backend chain in <code>subtitle_convert.run_conversion</code>. <code>forced=True</code> (what
+  <code>--sub-format</code> sets) is the only way lossy styled down-converts such as
+  ASS→SRT are permitted. Raises <code>NotImplementedError</code> if no backend supports the pair and
+  <code>RuntimeError</code> if all attempts fail.</li>
+<li><strong><code>strip_hearing_impaired()</code></strong>: removes SDH cues using the engine selected by
+  <code>config.subtitle["sdh_method"]</code>.</li>
+<li><strong><code>reverse_rtl()</code></strong>: fixes right-to-left sentence-ending positioning via SubtitleEdit
+  (requires the binary).</li>
+<li><strong><code>parse(data, codec)</code></strong>: the central parser, returning a <code>pycaption.CaptionSet</code>; it
+  handles the boxed DASH formats, SAMI, and the WebVTT repair helpers.</li>
+<li><strong><code>extract_fonts(text)</code></strong>: returns the set of font names referenced by an ASS/SSA
+  subtitle, used to decide which fonts to attach at mux time.</li>
+</ul>
+<p>The conversion backends (<code>SubtitleEditBackend</code>, <code>SubbyBackend</code>, <code>Pysubs2Backend</code>,
+<code>PycaptionBackend</code>) each implement a small protocol (<code>is_available()</code>, <code>can_convert()</code>,
+<code>rank()</code>, <code>convert()</code>) and are tried in rank order, lowest rank first. See
+<a href="../../reference/api/tracks/">the Tracks API reference</a> for the full model.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../output-and-naming/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Output &amp; Naming">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Output & Naming
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../troubleshooting/" class="md-footer__link md-footer__link--next" aria-label="Next: Troubleshooting">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Troubleshooting
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.annotate", "content.code.copy", "content.tabs.link", "content.tooltips", "navigation.footer", "navigation.indexes", "navigation.sections", "navigation.tabs", "navigation.top", "navigation.tracking", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

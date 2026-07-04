@@ -1,0 +1,2716 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Movie, TV, and Music archival software — user guide and REST API reference">
+      
+      
+      
+        <link rel="canonical" href="https://docs.unshackle.dev/dev/rest-api/job-lifecycle/">
+      
+      
+        <link rel="prev" href="../endpoints/">
+      
+      
+        <link rel="next" href="../remote-sessions/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Job Lifecycle - unshackle</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#download-job-lifecycle" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="unshackle" class="md-header__button md-logo" aria-label="unshackle" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24"><path d="m800-274-80-80v-206H514l-80-80h166v-80q0-50-34.5-85T481-840q-50 0-84 34.5T363-720v9l-73-73q22-61 75-98.5T481-920q83 0 141 58.5T680-720v80h40q33 0 56.5 23.5T800-560v286Zm20 246-62-62q-11 5-20 7.5T720-80H240q-33 0-56.5-23.5T160-160v-400q0-25 14.5-46t37.5-30L28-820l56-56L876-84l-56 56ZM686-160 539-309q-11 11-25.5 17t-31.5 6q-33 0-56.5-23.5T402-366q0-17 6-31.5t17-25.5L286-560h-46v400h446ZM486-360Zm131-97Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            unshackle
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Job Lifecycle
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1M8 13h8v-2H8zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4a5 5 0 0 0 5-5 5 5 0 0 0-5-5"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5m0 8a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5M7 15a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/unshackle-dl/unshackle" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    unshackle-dl/unshackle
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../getting-started/installation/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../guide/downloading/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  User Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../reference/configuration/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Configuration
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../../creating-a-service/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Developer
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../reference/api/service/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="unshackle" class="md-nav__button md-logo" aria-label="unshackle" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24"><path d="m800-274-80-80v-206H514l-80-80h166v-80q0-50-34.5-85T481-840q-50 0-84 34.5T363-720v9l-73-73q22-61 75-98.5T481-920q83 0 141 58.5T680-720v80h40q33 0 56.5 23.5T800-560v286Zm20 246-62-62q-11 5-20 7.5T720-80H240q-33 0-56.5-23.5T160-160v-400q0-25 14.5-46t37.5-30L28-820l56-56L876-84l-56 56ZM686-160 539-309q-11 11-25.5 17t-31.5 6q-33 0-56.5-23.5T402-366q0-17 6-31.5t17-25.5L286-560h-46v400h446ZM486-360Zm131-97Z"/></svg>
+
+    </a>
+    unshackle
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/unshackle-dl/unshackle" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    unshackle-dl/unshackle
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/configuration-file/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Configuration File
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guide/downloading/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Downloading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guide/cli-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guide/drm-and-cdm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DRM & CDM Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guide/proxies-and-vpn/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Proxies & VPN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guide/vaults/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Key Vaults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guide/output-and-naming/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Output & Naming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guide/subtitles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Subtitles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guide/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Configuration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Developer
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../creating-a-service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Creating a Service
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../service-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    REST API
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5_3" id="__nav_5_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    REST API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../authentication/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../endpoints/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Endpoints
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Job Lifecycle
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Job Lifecycle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-five-states" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The five states
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-a-job-moves-between-states" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How a job moves between states
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#creating-a-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating a job
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reading-a-jobs-status-and-progress" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading a job's status and progress
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reading a job&#39;s status and progress">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-progress-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The progress fields
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#terminal-states-in-detail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Terminal states in detail
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Terminal states in detail">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#completed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Completed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#failed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Failed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cancelled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cancelled
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cancelling-a-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cancelling a job
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#retrying-a-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retrying a job
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prioritising-a-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prioritising a job
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#history-and-retention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        History and retention
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#under-the-hood-the-workermanager-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Under the hood: the worker/manager model
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Under the hood: the worker/manager model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-manager-and-its-queue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The manager and its queue
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#each-job-runs-in-its-own-subprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Each job runs in its own subprocess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-progress-reaches-the-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How progress reaches the API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-cancellation-actually-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How cancellation actually works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#secret-handling-in-serialized-jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secret handling in serialized jobs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../remote-sessions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remote Sessions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../errors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Error Responses
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/api/service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/api/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/api/tracks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/api/titles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Titles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/api/drm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DRM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-five-states" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The five states
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-a-job-moves-between-states" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How a job moves between states
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#creating-a-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating a job
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reading-a-jobs-status-and-progress" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading a job's status and progress
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reading a job&#39;s status and progress">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-progress-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The progress fields
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#terminal-states-in-detail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Terminal states in detail
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Terminal states in detail">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#completed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Completed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#failed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Failed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cancelled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cancelled
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cancelling-a-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cancelling a job
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#retrying-a-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retrying a job
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prioritising-a-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prioritising a job
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#history-and-retention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        History and retention
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#under-the-hood-the-workermanager-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Under the hood: the worker/manager model
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Under the hood: the worker/manager model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-manager-and-its-queue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The manager and its queue
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#each-job-runs-in-its-own-subprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Each job runs in its own subprocess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-progress-reaches-the-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How progress reaches the API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-cancellation-actually-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How cancellation actually works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#secret-handling-in-serialized-jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secret handling in serialized jobs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="download-job-lifecycle">Download Job Lifecycle<a class="headerlink" href="#download-job-lifecycle" title="Permanent link">&para;</a></h1>
+<p>When you submit a download over the REST API, the server does not block the request
+until the file is written. Instead it creates a <strong>job</strong>, hands it back to you with an
+ID, and works through it in the background. Everything you do afterwards (watching
+progress, cancelling, retrying, reading the result) is done by referring to that job
+ID.</p>
+<p>This page explains the states a job moves through, how live progress is reported, how
+to cancel or retry, and, in clearly marked developer sections, how the worker and
+manager behind the queue actually run the download.</p>
+<div class="admonition info">
+<p class="admonition-title">Who this page is for</p>
+<p>The first half is for anyone driving the API: the states, the fields you can read,
+and the calls that move a job around. The <strong>Under the hood</strong> sections near the end
+describe the internal worker/manager model and are aimed at contributors and people
+debugging the server. You do not need them to use the API.</p>
+</div>
+<p>For the full request and response shape of each endpoint, see
+<a href="../endpoints/">Endpoints</a>. For how errors are reported, see
+<a href="../errors/">Error Responses</a>.</p>
+<h2 id="the-five-states">The five states<a class="headerlink" href="#the-five-states" title="Permanent link">&para;</a></h2>
+<p>A job is always in exactly one of five states, exposed as the <code>status</code> field:</p>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>queued</code></td>
+<td>Created and waiting for a free worker. No download has started yet.</td>
+</tr>
+<tr>
+<td><code>downloading</code></td>
+<td>A worker has picked the job up and the download is in progress.</td>
+</tr>
+<tr>
+<td><code>completed</code></td>
+<td>The download finished successfully; <code>output_files</code> lists the results.</td>
+</tr>
+<tr>
+<td><code>failed</code></td>
+<td>The download stopped with an error; <code>error_message</code> and <code>error_code</code> explain why.</td>
+</tr>
+<tr>
+<td><code>cancelled</code></td>
+<td>The job was cancelled before it could finish, from either the queued or downloading state.</td>
+</tr>
+</tbody>
+</table>
+<p>The last three (<code>completed</code>, <code>failed</code>, and <code>cancelled</code>) are <strong>terminal</strong>: once a
+job reaches one of them it never changes state again. Terminal jobs can be removed,
+retried, or read from history, but they will not resume.</p>
+<h2 id="how-a-job-moves-between-states">How a job moves between states<a class="headerlink" href="#how-a-job-moves-between-states" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>stateDiagram-v2
+    [*] --&gt; queued: POST /api/download
+    queued --&gt; downloading: a worker picks it up
+    queued --&gt; cancelled: DELETE (while queued)
+    downloading --&gt; completed: download succeeds
+    downloading --&gt; failed: download errors
+    downloading --&gt; cancelled: DELETE (while downloading)
+    completed --&gt; [*]
+    failed --&gt; [*]
+    cancelled --&gt; [*]
+
+    completed --&gt; queued: POST .../retry (as a NEW job)
+    failed --&gt; queued: POST .../retry (as a NEW job)
+    cancelled --&gt; queued: POST .../retry (as a NEW job)</code></pre>
+<p>The transitions in prose:</p>
+<ul>
+<li><strong><code>queued</code> → <code>downloading</code></strong> happens automatically. As soon as one of the server's
+  workers is free, it takes the next job off the queue and starts it. You do not
+  trigger this; you only observe it.</li>
+<li><strong><code>downloading</code> → <code>completed</code></strong> is the happy path: the download engine wrote all the
+  requested files and reported success.</li>
+<li><strong><code>downloading</code> → <code>failed</code></strong> is any error during the download: a service failure, a
+  network problem, a DRM error, and so on. The job records what went wrong.</li>
+<li><strong><code>queued</code>/<code>downloading</code> → <code>cancelled</code></strong> happens when you send a <code>DELETE</code> for a job
+  that has not finished (see <a href="#cancelling-a-job">Cancelling a job</a>).</li>
+<li><strong>Retry</strong> does <em>not</em> move a terminal job back to <code>queued</code>. Instead it creates a
+  brand-new job that reuses the old job's service, title, and parameters. The original
+  job stays in its terminal state (see <a href="#retrying-a-job">Retrying a job</a>).</li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Priority does not change status</p>
+<p>Moving a job to the front of the queue with the priority endpoint reorders <em>when</em>
+it will start, but it stays <code>queued</code> until a worker actually picks it up. It is not
+a state change.</p>
+</div>
+<h2 id="creating-a-job">Creating a job<a class="headerlink" href="#creating-a-job" title="Permanent link">&para;</a></h2>
+<p>A download is queued with <code>POST /api/download</code>. The request needs at least a <code>service</code>
+and a <code>title_id</code>, plus any download options you want to set. On success the server
+replies with <strong><code>202 Accepted</code></strong> and the new job's identity:</p>
+<div class="language-shell highlight"><span class="filename">Queue a download</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://127.0.0.1:8786/api/download<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;X-Secret-Key: your-api-secret&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="s1">        &quot;service&quot;: &quot;NF&quot;,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="s1">        &quot;title_id&quot;: &quot;81234567&quot;,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="s1">        &quot;quality&quot;: [&quot;1080&quot;],</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="s1">        &quot;range&quot;: [&quot;HDR10&quot;]</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="s1">      }&#39;</span>
+</span></code></pre></div>
+<div class="language-json highlight"><span class="filename">202 Accepted</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">&quot;job_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;b1e6c7de-6d0a-4f2f-9d1e-3a2b4c5d6e7f&quot;</span><span class="p">,</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;queued&quot;</span><span class="p">,</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">&quot;created_time&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-07-03T12:00:00.000000&quot;</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="p">}</span>
+</span></code></pre></div>
+<p>The job starts in <code>queued</code>. Workers auto-start on the first job submitted, so there is
+nothing else to switch on. Keep the <code>job_id</code>; every later call is addressed to it.</p>
+<div class="admonition tip">
+<p class="admonition-title">The full parameter set</p>
+<p><code>POST /api/download</code> accepts the same download options as the <code>dl</code> command
+(quality, codecs, language selection, <code>wanted</code> episode ranges, and many more), with
+server-side defaults filling in anything you omit. The complete list, their
+defaults, and validation rules are documented on the <a href="../endpoints/">Endpoints</a> page.</p>
+</div>
+<h2 id="reading-a-jobs-status-and-progress">Reading a job's status and progress<a class="headerlink" href="#reading-a-jobs-status-and-progress" title="Permanent link">&para;</a></h2>
+<p>There are two ways to look at jobs.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">One job in full</label><label for="__tabbed_1_2">All jobs (summaries)</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p><code>GET /api/download/jobs/{job_id}</code> returns the complete detail for a single job,
+including parameters (with secrets redacted), timing, output files, and error
+information if it failed.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>curl<span class="w"> </span>http://127.0.0.1:8786/api/download/jobs/b1e6c7de-6d0a-4f2f-9d1e-3a2b4c5d6e7f<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;X-Secret-Key: your-api-secret&quot;</span>
+</span></code></pre></div>
+</div>
+<div class="tabbed-block">
+<p><code>GET /api/download/jobs</code> lists every job the manager currently holds. By default
+each entry is a <strong>summary</strong>. Pass <code>full=true</code> to get the same full detail as the
+single-job endpoint for every job.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>curl<span class="w"> </span><span class="s2">&quot;http://127.0.0.1:8786/api/download/jobs?status=downloading&amp;sort_by=progress&amp;sort_order=desc&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;X-Secret-Key: your-api-secret&quot;</span>
+</span></code></pre></div>
+<p>The list can be filtered by <code>status</code> and <code>service</code>, and ordered with <code>sort_by</code>
+(<code>created_time</code>, <code>started_time</code>, <code>completed_time</code>, <code>progress</code>, <code>status</code>, or
+<code>service</code>) and <code>sort_order</code> (<code>asc</code> / <code>desc</code>). See <a href="../endpoints/">Endpoints</a> for the
+query-parameter reference.</p>
+</div>
+</div>
+</div>
+<h3 id="the-progress-fields">The progress fields<a class="headerlink" href="#the-progress-fields" title="Permanent link">&para;</a></h3>
+<p>While a job is <code>downloading</code>, the following fields update roughly twice a second so a
+client can poll and render live progress. They are present on both the summary and the
+full detail:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>progress</code></td>
+<td>number <code>0</code> to <code>100</code></td>
+<td>Overall percent complete.</td>
+</tr>
+<tr>
+<td><code>phase</code></td>
+<td>string</td>
+<td>Human-readable phase, e.g. <code>downloading video 1080p HDR10, audio en 5.1</code>.</td>
+</tr>
+<tr>
+<td><code>title</code></td>
+<td>string</td>
+<td>Title being processed.</td>
+</tr>
+<tr>
+<td><code>current_title</code></td>
+<td>string</td>
+<td>The specific episode/movie in progress (for a batch).</td>
+</tr>
+<tr>
+<td><code>completed_tracks</code></td>
+<td>int</td>
+<td>Number of tracks finished so far.</td>
+</tr>
+<tr>
+<td><code>total_tracks</code></td>
+<td>int</td>
+<td>Total tracks selected for the download.</td>
+</tr>
+<tr>
+<td><code>active_tracks</code></td>
+<td>list of strings</td>
+<td>Labels of the tracks downloading right now.</td>
+</tr>
+<tr>
+<td><code>track_progress</code></td>
+<td>list</td>
+<td>Per-active-track <code>{label, progress, speed}</code> entries.</td>
+</tr>
+<tr>
+<td><code>segments_done</code></td>
+<td>number</td>
+<td>Segments downloaded for the track in progress.</td>
+</tr>
+<tr>
+<td><code>segments_total</code></td>
+<td>number</td>
+<td>Total segments for the track in progress.</td>
+</tr>
+<tr>
+<td><code>speed</code></td>
+<td>string</td>
+<td>Transfer speed of the track in progress, e.g. <code>4.20 MB/s</code>.</td>
+</tr>
+<tr>
+<td><code>skipped_subtitles</code></td>
+<td>list</td>
+<td>Subtitles that were skipped as non-fatal failures (when <code>skip_subtitle_errors</code> is set).</td>
+</tr>
+</tbody>
+</table>
+<p>The full detail adds <code>started_time</code>, <code>completed_time</code>, <code>output_files</code>, the redacted
+<code>parameters</code>, and, for failed jobs, <code>error_message</code>, <code>error_details</code>, <code>error_code</code>,
+<code>error_traceback</code>, and <code>worker_stderr</code>.</p>
+<div class="admonition example">
+<p class="admonition-title">A typical polling loop</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nv">JOB</span><span class="o">=</span>b1e6c7de-6d0a-4f2f-9d1e-3a2b4c5d6e7f
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">while</span><span class="w"> </span>true<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>curl<span class="w"> </span>-s<span class="w"> </span><span class="s2">&quot;http://127.0.0.1:8786/api/download/jobs/</span><span class="nv">$JOB</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span>-H<span class="w"> </span><span class="s2">&quot;X-Secret-Key: your-api-secret&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span><span class="p">|</span><span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;import sys,json; d=json.load(sys.stdin); print(d[&quot;status&quot;], d[&quot;progress&quot;], d.get(&quot;phase&quot;))&#39;</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span>sleep<span class="w"> </span><span class="m">1</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="k">done</span>
+</span></code></pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">What the percentage means</p>
+<p><code>progress</code> climbs from <code>0</code> toward <code>90</code> while tracks download, then the final stretch
+to <code>100</code> covers post-download work such as decryption cleanup, repackaging, and
+muxing. A job that has finished downloading but is still muxing can sit near <code>90</code>
+for a moment before completing. On success the manager sets it to exactly <code>100</code>.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">For a batch, <code>progress</code> is per-episode, not whole-batch</p>
+<p>A multi-episode request (a <code>wanted</code> range) is a <strong>single job</strong> that processes its
+episodes sequentially. As each new episode begins, <code>progress</code> and the track counts
+(<code>completed_tracks</code> / <code>total_tracks</code>) <strong>reset to zero</strong> and count up again for that
+episode alone. The top-level bar therefore tracks the <em>current</em> episode, not the
+batch as a whole. To derive true overall completion, compare the growing
+<code>output_files</code> array against <code>parameters.wanted</code> rather than trusting <code>progress</code>.</p>
+</div>
+<h2 id="terminal-states-in-detail">Terminal states in detail<a class="headerlink" href="#terminal-states-in-detail" title="Permanent link">&para;</a></h2>
+<h3 id="completed">Completed<a class="headerlink" href="#completed" title="Permanent link">&para;</a></h3>
+<p>A <code>completed</code> job has its <code>output_files</code> populated with the paths of the muxed
+results, and <code>progress</code> is <code>100</code>. This is the state you are waiting for.</p>
+<h3 id="failed">Failed<a class="headerlink" href="#failed" title="Permanent link">&para;</a></h3>
+<p>A <code>failed</code> job carries the error. <code>error_message</code> is the short human message,
+<code>error_code</code> is one of the API's structured error codes (for example <code>NETWORK_ERROR</code>,
+<code>DRM_ERROR</code>, <code>AUTH_FAILED</code>, or <code>DOWNLOAD_ERROR</code>), and <code>error_details</code> gives more
+context. When the server was started with <code>--debug-api</code>, <code>error_traceback</code> and
+<code>worker_stderr</code> are also filled in for diagnosis.</p>
+<div class="admonition tip">
+<p class="admonition-title">Secrets are scrubbed from error text</p>
+<p>A service can echo a credential or a proxy URL into its output. The server masks
+any known secret values out of <code>error_message</code>, <code>error_details</code>, <code>error_traceback</code>,
+and <code>worker_stderr</code> before returning them, so it is safe to log these fields.</p>
+</div>
+<p>The error-code catalogue and how each maps to an HTTP status is on the
+<a href="../errors/">Error Responses</a> page.</p>
+<h3 id="cancelled">Cancelled<a class="headerlink" href="#cancelled" title="Permanent link">&para;</a></h3>
+<p>A <code>cancelled</code> job was stopped on request before finishing. It may have partial output,
+but it is not considered complete. See below.</p>
+<h2 id="cancelling-a-job">Cancelling a job<a class="headerlink" href="#cancelling-a-job" title="Permanent link">&para;</a></h2>
+<p>Send <code>DELETE /api/download/jobs/{job_id}</code>. The behaviour depends on the job's current
+state, and this is important because the response differs:</p>
+<table>
+<thead>
+<tr>
+<th>Job state when you DELETE</th>
+<th>What happens</th>
+<th>Response</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>queued</code> or <code>downloading</code></td>
+<td>The job is cancelled. A running download's worker process is terminated.</td>
+<td><code>200</code> with <code>{"status": "success", "message": "Job cancelled"}</code></td>
+</tr>
+<tr>
+<td><code>completed</code>, <code>failed</code>, or <code>cancelled</code> (terminal)</td>
+<td>The job is <strong>removed</strong> from the manager entirely.</td>
+<td><code>204 No Content</code>, empty body</td>
+</tr>
+<tr>
+<td>Not found</td>
+<td>—</td>
+<td><code>404</code> with error code <code>JOB_NOT_FOUND</code></td>
+</tr>
+</tbody>
+</table>
+<p>In other words, <code>DELETE</code> on a live job <em>cancels</em> it, while <code>DELETE</code> on an already
+finished job <em>deletes it from the list</em>. This dual meaning is deliberate: one verb
+both stops in-flight work and tidies up afterwards.</p>
+<div class="admonition warning">
+<p class="admonition-title">Do not parse the body of a 204</p>
+<p>Removing a terminal job returns <code>204 No Content</code> with an empty body. A client must
+not try to decode JSON from it; check the status code first.</p>
+</div>
+<div class="language-shell highlight"><span class="filename">Cancel a running job</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>curl<span class="w"> </span>-X<span class="w"> </span>DELETE<span class="w"> </span>http://127.0.0.1:8786/api/download/jobs/b1e6c7de-6d0a-4f2f-9d1e-3a2b4c5d6e7f<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;X-Secret-Key: your-api-secret&quot;</span>
+</span></code></pre></div>
+<p>To remove <em>all</em> terminal jobs at once, use <code>POST /api/download/jobs/clear-finished</code>,
+which returns <code>{"removed": &lt;count&gt;}</code>.</p>
+<h2 id="retrying-a-job">Retrying a job<a class="headerlink" href="#retrying-a-job" title="Permanent link">&para;</a></h2>
+<p><code>POST /api/download/jobs/{job_id}/retry</code> re-runs a finished job by creating a <strong>new</strong>
+job with the same service, title, and parameters. The original job is untouched and
+stays in its terminal state; the response gives you the new job's ID with <code>202</code>.</p>
+<ul>
+<li>Only terminal jobs can be retried. Retrying a <code>queued</code> or <code>downloading</code> job returns
+  <code>409</code> with error code <code>CONFLICT</code>.</li>
+<li>A missing job returns <code>404</code> (<code>JOB_NOT_FOUND</code>).</li>
+<li>The service allowlist and any download gates are re-checked for the new job, exactly
+  as they were for the original submission, so a retry can be rejected with
+  <code>INVALID_SERVICE</code> or <code>FORBIDDEN</code> if permissions changed.</li>
+</ul>
+<div class="language-json highlight"><span class="filename">202 Accepted, a fresh job</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">&quot;job_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;c2f7d8ef-7e1b-5a3a-ae2f-4b3c5d6e7f80&quot;</span><span class="p">,</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;queued&quot;</span><span class="p">,</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="nt">&quot;created_time&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-07-03T12:30:00.000000&quot;</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="p">}</span>
+</span></code></pre></div>
+<h2 id="prioritising-a-job">Prioritising a job<a class="headerlink" href="#prioritising-a-job" title="Permanent link">&para;</a></h2>
+<p><code>POST /api/download/jobs/{job_id}/priority</code> moves a <strong>queued</strong> job to the front of the
+line, so it will be the next one a free worker picks up.</p>
+<ul>
+<li>The job must be <code>queued</code>. Prioritising a job in any other state returns <code>409</code>
+  (<code>CONFLICT</code>); a missing job returns <code>404</code>.</li>
+<li>On success the response is <code>{"job_id": "&lt;id&gt;", "position": "front"}</code>.</li>
+</ul>
+<p>This only reorders the queue; the job's status stays <code>queued</code> until a worker starts
+it.</p>
+<h2 id="history-and-retention">History and retention<a class="headerlink" href="#history-and-retention" title="Permanent link">&para;</a></h2>
+<p>Every job that reaches a terminal state is also written once to a persistent history
+log, so it survives even after the job is removed from the live list.</p>
+<ul>
+<li>Read it with <code>GET /api/history</code> (newest first; supports <code>limit</code> and <code>service</code>
+  filters).</li>
+<li>Delete a single entry with <code>DELETE /api/history/{job_id}</code> (returns <code>204</code>).</li>
+</ul>
+<p>The live in-memory jobs are separate from this on-disk history. A background cleanup
+task periodically drops old terminal jobs from the live list based on a retention
+period; the history file keeps them for later reference. See <a href="../endpoints/">Endpoints</a>
+for the history response shape.</p>
+<div class="admonition note">
+<p class="admonition-title">Why the history file lives under the cache directory</p>
+<p><code>api_history.jsonl</code> is placed under the cache directory on purpose, so it stays out
+of the config/data tree. It is disposable runtime state, not user configuration or
+curated data, which is exactly why clearing the cache is a safe operation against
+it.</p>
+</div>
+<hr />
+<h2 id="under-the-hood-the-workermanager-model">Under the hood: the worker/manager model<a class="headerlink" href="#under-the-hood-the-workermanager-model" title="Permanent link">&para;</a></h2>
+<div class="admonition info">
+<p class="admonition-title">Developer section</p>
+<p>Everything below describes server internals. It is useful for contributors and for
+anyone debugging the server, but it is not needed to <em>use</em> the API.</p>
+</div>
+<h3 id="the-manager-and-its-queue">The manager and its queue<a class="headerlink" href="#the-manager-and-its-queue" title="Permanent link">&para;</a></h3>
+<p>A single process-wide <strong>download queue manager</strong> owns all jobs. It holds them in
+memory keyed by ID, backs the wait list with a FIFO queue, and keeps a separate
+priority deque for jobs that have been bumped to the front. On the first job, it starts
+a fixed pool of worker tasks plus one cleanup task; starting is idempotent, so later
+jobs reuse the same pool.</p>
+<ul>
+<li><strong>Concurrency</strong> is capped by <code>max_concurrent_downloads</code> (default <strong>2</strong>). That many
+  jobs can be in <code>downloading</code> at once; the rest wait in <code>queued</code>.</li>
+<li><strong>Retention</strong> is governed by <code>job_retention_hours</code> (default <strong>24</strong>). An hourly
+  cleanup task removes terminal jobs whose completion time (or, if never started,
+  creation time) is older than the retention window.</li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Two concurrency knobs that are easy to conflate</p>
+<p><code>max_concurrent_downloads</code> caps how many separate download <strong>jobs</strong> run at once.
+The separate <code>serve.downloads</code> setting controls how many <strong>tracks</strong> download in
+parallel <em>within</em> a single job. They are independent, and raising one does not affect
+the other.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Concurrency and retention config keys</p>
+<p>The manager reads these as top-level config attributes
+(<code>config.max_concurrent_downloads</code> and <code>config.download_job_retention_hours</code>).
+Those keys are not part of the standard config schema, so in practice the built-in
+defaults of <strong>2</strong> and <strong>24</strong> apply. The live values are surfaced by
+<a href="../endpoints/"><code>GET /api/config</code></a>. The related <code>serve.history_limit</code> (default
+<strong>100</strong>) instead controls how many entries the on-disk history file keeps.</p>
+</div>
+<p>Each worker loop drains the priority deque first, then the FIFO queue. A job that was
+promoted has its stale FIFO copy skipped so it does not run twice. When a worker takes
+a job it flips it to <code>downloading</code>, stamps <code>started_time</code>, runs it, and on finish
+stamps <code>completed_time</code> and records history.</p>
+<h3 id="each-job-runs-in-its-own-subprocess">Each job runs in its own subprocess<a class="headerlink" href="#each-job-runs-in-its-own-subprocess" title="Permanent link">&para;</a></h3>
+<p>The manager does <strong>not</strong> run the download in the server's event loop or even in the
+server process. For each job it spawns a separate Python subprocess:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>python -m unshackle.core.api.download_worker &lt;payload.json&gt; &lt;result.json&gt; &lt;progress.json&gt;
+</span></code></pre></div>
+<p>Three temporary files bridge the parent and the worker:</p>
+<ul>
+<li><strong><code>payload.json</code></strong>: written by the manager before launch; contains the job ID,
+  service, title ID, and merged parameters.</li>
+<li><strong><code>progress.json</code></strong>: written continuously by the worker as the download proceeds.</li>
+<li><strong><code>result.json</code></strong>: written by the worker at the end.</li>
+</ul>
+<p>Running each download out-of-process isolates the server from crashes, memory growth,
+and blocking work inside the download engine, and makes hard cancellation (killing the
+process) reliable.</p>
+<p>The worker's exit codes are <code>0</code> for success, <code>1</code> for a download error, and <code>2</code> for bad
+arguments. Its <code>result.json</code> is either <code>{"status": "success", "output_files": [...]}</code>
+or <code>{"status": "error", "message", "error_details", "error_code", "traceback"}</code>. If the
+process exits non-zero, or the result is missing or not a success, the parent marks the
+job <code>failed</code> and adopts the worker's <code>error_code</code> (or derives one by categorising the
+exception).</p>
+<h3 id="how-progress-reaches-the-api">How progress reaches the API<a class="headerlink" href="#how-progress-reaches-the-api" title="Permanent link">&para;</a></h3>
+<p>While the worker runs, the manager polls <code>progress.json</code> every <strong>0.5 s</strong> and copies the
+fields it finds onto the live <code>DownloadJob</code>. That is what the <code>GET</code> endpoints return.</p>
+<p>Inside the worker, progress is aggregated across all selected tracks. Each track's
+completion fraction is weighted by its bitrate, so video and audio dominate the bar and
+subtitles barely move it (subtitles get a small fixed weight). Track fractions are kept
+<strong>monotonic</strong>: the percentage only ever climbs. The download portion is scaled to fill
+<code>0</code> to <code>90</code>; the remaining <code>90</code> to <code>100</code> is driven by the download engine as it repackages
+and muxes. A track counts as done when it reaches a terminal state such as
+<code>Downloaded</code>, <code>Decrypted</code>, or a skipped subtitle.</p>
+<h3 id="how-cancellation-actually-works">How cancellation actually works<a class="headerlink" href="#how-cancellation-actually-works" title="Permanent link">&para;</a></h3>
+<p>Each job carries a cancellation event. When you <code>DELETE</code> a live job:</p>
+<ul>
+<li>If it is <strong><code>queued</code></strong>, it flips straight to <code>cancelled</code>, its history is recorded
+  immediately (it never reaches a worker), and the worker loop skips it if it later
+  pops it off the queue.</li>
+<li>If it is <strong><code>downloading</code></strong>, the manager sets the cancellation event and flips the job
+  to <code>cancelled</code>. The polling loop notices the event, <code>terminate()</code>s the worker
+  subprocess (escalating to <code>kill()</code> if it does not exit within 5 seconds), and raises
+  a cancellation so the task unwinds. The subprocess model is what makes this a clean,
+  immediate stop rather than a cooperative one.</li>
+</ul>
+<h3 id="secret-handling-in-serialized-jobs">Secret handling in serialized jobs<a class="headerlink" href="#secret-handling-in-serialized-jobs" title="Permanent link">&para;</a></h3>
+<p>Job parameters may carry secrets: a raw <code>user:pass</code> credential, or a proxy URL with
+embedded userinfo. Whenever the manager serializes a job (for an API response or the
+history file), it masks the sensitive keys (<code>credential</code>, <code>credentials</code>, <code>password</code>,
+<code>token</code>, <code>api_key</code>) and strips userinfo from proxy URLs. Free-text fields that a
+service might have leaked a secret into (<code>error_message</code>, <code>error_details</code>,
+<code>error_traceback</code>, <code>worker_stderr</code>, and worker stdout/stderr in the logs) are scrubbed
+of the job's known secret values, longest-match first, before they are ever returned or
+logged.</p>
+<h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../endpoints/">Endpoints</a>: the full request/response reference for every job endpoint.</li>
+<li><a href="../errors/">Error Responses</a>: the error envelope, codes, and HTTP statuses a failed job reports.</li>
+<li><a href="../authentication/">Authentication</a>: the <code>X-Secret-Key</code> header and per-key service allowlists that gate job creation and retry.</li>
+<li><a href="../../../guide/downloading/">Downloading</a>: the equivalent options on the <code>dl</code> command line.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../endpoints/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Endpoints">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Endpoints
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../remote-sessions/" class="md-footer__link md-footer__link--next" aria-label="Next: Remote Sessions">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Remote Sessions
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["content.code.annotate", "content.code.copy", "content.tabs.link", "content.tooltips", "navigation.footer", "navigation.indexes", "navigation.sections", "navigation.tabs", "navigation.top", "navigation.tracking", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
