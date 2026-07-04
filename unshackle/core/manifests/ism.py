@@ -6,9 +6,7 @@ import html
 import shutil
 import struct
 import urllib.parse
-from functools import partial
-from pathlib import Path
-from typing import Any, Callable, Optional, Union
+from typing import Any, Optional, Union
 
 import requests
 from langcodes import Language, tag_is_valid
@@ -23,7 +21,7 @@ from unshackle.core.events import events
 from unshackle.core.manifests.ism_init import (build_init_segment, parse_codec_private_data_colour,
                                                read_per_sample_iv_size, read_track_id)
 from unshackle.core.session import RnetSession
-from unshackle.core.tracks import Audio, Subtitle, Track, Tracks, Video
+from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Track, Tracks, Video
 from unshackle.core.utilities import log_event, try_ensure_utf8
 from unshackle.core.utils.redact import safe_display_url
 from unshackle.core.utils.xml import load_xml
@@ -365,22 +363,15 @@ class ISM:
         return tracks
 
     @staticmethod
-    def download_track(
-        track: AnyTrack,
-        save_path: Path,
-        save_dir: Path,
-        progress: partial,
-        session: Optional[Union[Session, RnetSession]] = None,
-        proxy: Optional[str] = None,
-        max_workers: Optional[int] = None,
-        license_widevine: Optional[Callable] = None,
-        *,
-        cdm: Optional[object] = None,
-    ) -> None:
-        if not session:
-            session = Session()
-        elif not isinstance(session, (Session, RnetSession)):
-            raise TypeError(f"Expected session to be a {Session} or {RnetSession}, not {session!r}")
+    def download_track(track: AnyTrack, ctx: DownloadContext) -> None:
+        session = ctx.ensure_session()
+        save_path = ctx.save_path
+        save_dir = ctx.save_dir
+        progress = ctx.progress
+        proxy = ctx.proxy
+        max_workers = ctx.max_workers
+        license_widevine = ctx.license_widevine
+        cdm = ctx.cdm
 
         if proxy:
             session.proxies.update({"all": proxy})

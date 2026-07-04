@@ -6,6 +6,7 @@ import shutil
 import subprocess
 from collections import defaultdict
 from copy import copy
+from dataclasses import dataclass
 from enum import Enum
 from functools import partial
 from pathlib import Path
@@ -45,6 +46,29 @@ def direct_session(session: Union[Session, "RnetSession"]) -> Session:
         except Exception:
             pass
     return new
+
+
+@dataclass
+class DownloadContext:
+    """Shared arguments passed to each manifest's ``download_track``."""
+
+    save_path: Path
+    save_dir: Path
+    progress: partial
+    session: Optional[Union[Session, "RnetSession"]] = None
+    proxy: Optional[str] = None
+    max_workers: Optional[int] = None
+    license_widevine: Optional[Callable] = None
+    cdm: Optional[object] = None
+
+    def ensure_session(self) -> Union[Session, "RnetSession"]:
+        """Return the session, or a new ``Session`` if none was set."""
+        session = self.session
+        if not session:
+            session = Session()
+        elif not isinstance(session, (Session, RnetSession)):
+            raise TypeError(f"Expected session to be a {Session} or {RnetSession}, not {session!r}")
+        return session
 
 
 class Track:
@@ -256,9 +280,13 @@ class Track:
             cleanup()
 
         try:
-            if self.descriptor == self.Descriptor.HLS:
-                HLS.download_track(
-                    track=self,
+            manifest_parsers = {
+                self.Descriptor.HLS: HLS,
+                self.Descriptor.DASH: DASH,
+                self.Descriptor.ISM: ISM,
+            }
+            if self.descriptor in manifest_parsers:
+                ctx = DownloadContext(
                     save_path=save_path,
                     save_dir=save_dir,
                     progress=progress,
@@ -268,30 +296,7 @@ class Track:
                     license_widevine=prepare_drm,
                     cdm=cdm,
                 )
-            elif self.descriptor == self.Descriptor.DASH:
-                DASH.download_track(
-                    track=self,
-                    save_path=save_path,
-                    save_dir=save_dir,
-                    progress=progress,
-                    session=dl_session,
-                    proxy=proxy,
-                    max_workers=max_workers,
-                    license_widevine=prepare_drm,
-                    cdm=cdm,
-                )
-            elif self.descriptor == self.Descriptor.ISM:
-                ISM.download_track(
-                    track=self,
-                    save_path=save_path,
-                    save_dir=save_dir,
-                    progress=progress,
-                    session=dl_session,
-                    proxy=proxy,
-                    max_workers=max_workers,
-                    license_widevine=prepare_drm,
-                    cdm=cdm,
-                )
+                manifest_parsers[self.descriptor].download_track(track=self, ctx=ctx)
             elif self.descriptor == self.Descriptor.URL:
                 try:
                     if not self.drm and track_type in ("Video", "Audio"):
@@ -805,4 +810,4 @@ class Track:
         )
 
 
-__all__ = ("Track",)
+__all__ = ("Track", "DownloadContext")
