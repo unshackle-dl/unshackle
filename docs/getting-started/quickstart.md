@@ -1,0 +1,274 @@
+# Quick Start
+
+This page takes you from a fresh install to your first downloaded file. You will
+create the one piece of configuration unshackle insists on, add a streaming
+service and a CDM so it can actually fetch and decrypt media, run a basic
+`unshackle dl` command, and learn where the finished file lands.
+
+!!! note "Before you start"
+    This guide assumes unshackle is already installed and on your `PATH`. If
+    `unshackle --help` does not print a help screen, work through
+    [Installation](installation.md) first.
+
+## 1. Check your environment
+
+unshackle drives several external tools (FFmpeg, MKVToolNix, shaka-packager, and
+others) to decrypt, repack, and mux media. Confirm they are visible before you
+download anything:
+
+```shell
+unshackle env check
+```
+
+This prints a dependency table. The **required** tools (FFmpeg, FFprobe,
+MKVToolNix, mkvpropedit, and shaka-packager) must show a green check. Optional
+tools such as `dovi_tool` (Dolby Vision) and CCExtractor (closed captions) only
+matter for the features that use them.
+
+!!! tip
+    The summary line at the bottom reports `installed/total` and lists anything
+    required that is still missing, so you know exactly what to install next.
+
+## 2. Create a minimal config
+
+unshackle reads a single YAML file named `unshackle.yaml`. To see where it looks
+for that file, and where it *would* accept one if you have not made it yet, run:
+
+```shell
+unshackle env info
+```
+
+If no config exists, this prints the candidate locations. In search order they are:
+
+1. `unshackle.yaml` inside the unshackle package folder.
+2. `unshackle.yaml` in that folder's parent.
+3. `unshackle.yaml` in your OS user-config directory
+   (`~/.config/unshackle/` on Linux, `%LOCALAPPDATA%\unshackle\` on Windows,
+   `~/Library/Application Support/unshackle/` on macOS).
+
+The **first** file that exists wins. Create `unshackle.yaml` in one of those
+locations.
+
+### The one key you must set
+
+unshackle refuses to start a download unless it knows how to name the output file.
+That means `output_template` is the one setting a first run genuinely requires.
+Everything else has a sensible default. A minimal, working config looks like this:
+
+```yaml title="unshackle.yaml"
+output_template:
+  movies: "{title} ({year}) {quality} {source}"
+  series: "{title} S{season}E{episode} {episode_name} {quality} {source}"
+```
+
+Each `{variable}` is filled in from the title and the tracks you downloaded. The
+full set of valid variables, including `resolution`, `video`, `audio`, `hdr`,
+`edition`, `tag`, and more, is documented in [Configuration](configuration-file.md).
+
+!!! note "Spaces or dots?"
+    unshackle auto-detects your naming style from the template: if the separators
+    between variables are mostly spaces, it uses spaces; if they are mostly dots,
+    it produces scene-style `Title.S01E01.1080p` names. Write the template in the
+    style you want the filenames to look.
+
+!!! warning "Editing config from the CLI strips comments"
+    You can read and set keys with `unshackle cfg` (for example
+    `unshackle cfg tag MYGROUP` or `unshackle cfg --list`), but writing a value
+    rewrites the file and **removes any comments** it contained. If you keep notes
+    in your config, edit the file by hand instead.
+
+## 3. Add a service
+
+The service tag you pass to `dl` (like `NF`) maps to a **service module**, a small
+plugin that knows how to talk to one streaming platform. unshackle ships without
+any bundled services, so you add the one(s) you want.
+
+Services live under the `directories.services` path (run `unshackle env info` to
+see where that is). unshackle discovers them by looking for `*/__init__.py`: the
+folder name becomes the **service tag**, and the folder must contain a class with
+that exact same name.
+
+=== "Local folder"
+
+    Drop a service folder into your services directory. A service tagged `NF`
+    lives at:
+
+    ```
+    <services>/NF/__init__.py     # defines a class named NF
+    ```
+
+    Once the folder is in place, the tag `NF` is immediately available to `dl`,
+    `search`, and the other service-aware commands.
+
+=== "Git repository"
+
+    `directories.services` may also list git repositories. unshackle clones them
+    on first use and keeps them up to date:
+
+    ```yaml title="unshackle.yaml"
+    directories:
+      services:
+        - owner/unshackle-services      # a GitHub owner/repo shorthand
+        - /path/to/local/services       # local folders still work too
+    ```
+
+    Force a refresh of every configured service repo at any time with:
+
+    ```shell
+    unshackle util refresh-services
+    ```
+
+!!! info "Where to get services"
+    Service modules are kept separate from the core project. Ask in the community
+    [Discord](https://discord.gg/mHYyPaCbFK) for where to find the service you
+    need. The core repository deliberately does not host them.
+
+## 4. Add a CDM for DRM
+
+Most streaming content is encrypted. To fetch decryption keys, unshackle needs a
+**CDM**, a Widevine device (`.wvd`) or a PlayReady device (`.prd`). Register a
+Widevine device you already have with:
+
+```shell
+unshackle wvd add /path/to/device.wvd
+```
+
+This validates the file and moves it into your WVDs directory. Then point services
+at it in your config. The `cdm` map is keyed by service tag, with a `default` that
+covers everything else:
+
+```yaml title="unshackle.yaml"
+cdm:
+  default: my_device        # the .wvd file's name, without the extension
+  NF: my_other_device       # override for a specific service
+```
+
+PlayReady works the same way with `.prd` files created and managed by the
+[`prd`](configuration-file.md) command. If a title is DRM-free, no CDM is needed.
+
+!!! tip
+    Run `unshackle wvd parse my_device` to inspect a device's security level and
+    contents, and `unshackle env info` to confirm where WVDs and PRDs are stored.
+
+## 5. Provide authentication
+
+Services that require a login read either **cookies** or **credentials**.
+
+- **Cookies**: export the service's cookies to a Netscape-format text file and
+  place it in your cookies directory. unshackle looks for, in order:
+  `cookies/{SERVICE}.txt`, then `cookies/{SERVICE}/{profile}.txt`, then
+  `cookies/{SERVICE}/default.txt`. So a file at `cookies/NF.txt` is picked up
+  automatically for the `NF` service.
+
+- **Credentials**: store a username and password per service in your config:
+
+    ```yaml title="unshackle.yaml"
+    credentials:
+      NF: "email@example.com:your-password"
+    ```
+
+Use the `-p/--profile` flag to switch between multiple accounts for the same
+service. Whether a given service needs cookies, credentials, or nothing at all
+depends on the service module.
+
+## 6. Find a title (optional)
+
+If you have a URL or ID already, skip this. Otherwise, search the service for a
+title and note the `id` it prints, since that is what you feed to `dl`:
+
+```shell
+unshackle search NF "The Office"
+```
+
+You can also list what a service exposes for a given title without downloading:
+
+```shell
+unshackle dl --list-titles NF 81234567     # show seasons/episodes
+unshackle dl --list NF 81234567            # show available tracks
+```
+
+## 7. Run your first download
+
+A download always has three parts:
+
+```
+unshackle dl  <FLAGS>  <SERVICE-TAG>  <TITLE>
+```
+
+- **`dl`** carries every quality, language, track, and output flag.
+- **`<SERVICE-TAG>`** picks which service to talk to (`NF`, `DSNP`, …).
+- **`<TITLE>`** is the URL, ID, or slug the service understands.
+
+A good first command asks for 1080p with English audio and subtitles:
+
+```shell title="Your first download"
+unshackle dl -q 1080 -l en NF 81234567
+```
+
+unshackle will fetch the title, select the tracks matching your flags, acquire
+keys through your CDM (and any key vaults), then decrypt, mux, and tag the result.
+
+### Handy first flags
+
+| Flag | Meaning |
+|---|---|
+| `-q`, `--quality` | Target resolution(s), e.g. `-q 1080` or `-q 1080,720`. Defaults to best available. |
+| `-l`, `--lang` | Language(s) for video and audio, e.g. `-l en` or `-l orig,en`. `orig` = the title's original language. |
+| `-sl`, `--s-lang` | Subtitle language(s); defaults to `all`. |
+| `-v`, `--vcodec` | Video codec, e.g. `-v H.265`. Defaults to any. |
+| `-r`, `--range` | Dynamic range, e.g. `-r HDR10` or `-r DV`. Defaults to `SDR`. |
+| `-w`, `--wanted` | Which episodes, e.g. `-w S01` or `-w S01E01-S01E03`. |
+| `-o`, `--output` | Override the output directory for this run. |
+| `--list` | List the tracks that would be downloaded, then stop. |
+
+!!! example "A few realistic variations"
+    ```shell
+    # A whole first season in the best available quality
+    unshackle dl -w S01 NF 81234567
+
+    # 2160p HDR10 with the original-language audio plus English subtitles
+    unshackle dl -q 2160 -r HDR10 -l orig -sl en NF 81234567
+
+    # Just the newest episode of an ongoing show
+    unshackle dl --latest-episode NF 81234567
+    ```
+
+See [Downloading](../guide/downloading.md) for the complete flag reference, including
+codec, bitrate, channel-layout, and track-type selection.
+
+## 8. Where the output lands
+
+By default, finished files are written to the `downloads` directory
+(`unshackle env info` shows its exact path; the built-in default is a `downloads`
+folder alongside the project). Override it per run with `-o`:
+
+```shell
+unshackle dl -q 1080 -o /mnt/media/incoming NF 81234567
+```
+
+- **Movies** are written as a single `.mkv` file named from your `movies` template.
+- **TV episodes** are grouped into a per-show / per-season folder (from your
+  `series` template) unless you pass `--no-folder`.
+- The filename is built from your `output_template`, and IMDb/TMDB IDs are added to
+  the file's metadata tags when available.
+
+To change the default output location permanently, set it in your config:
+
+```yaml title="unshackle.yaml"
+directories:
+  downloads: /mnt/media/incoming
+```
+
+## Where to go next
+
+- **[Downloading](../guide/downloading.md)**. The full `dl` command: quality, codecs,
+  languages, track selection, hybrid Dolby Vision, and output control.
+- **[Configuration](configuration-file.md)**. Every `unshackle.yaml` key, plus
+  directories, key vaults, proxies, and naming templates.
+- **[REST API](../dev/rest-api/index.md)**. Run the `serve` server to drive downloads over
+  HTTP.
+
+!!! tip "You are never far from help"
+    `unshackle --help`, `unshackle dl --help`, and `unshackle <command> --help`
+    list every option with its default. When in doubt, add `--list` to a `dl`
+    command to preview what it would do before it downloads anything.

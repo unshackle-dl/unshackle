@@ -1,7 +1,8 @@
 site_name: unshackle
-site_description: Configuration reference for unshackle
+site_description: Movie, TV, and Music archival software — user guide and REST API reference
 site_url: https://docs.unshackle.dev/
 repo_url: https://github.com/unshackle-dl/unshackle
+repo_name: unshackle-dl/unshackle
 docs_dir: docs
 
 theme:
@@ -12,12 +13,13 @@ theme:
     logo: custom/no_encryption
   palette:
     - media: "(prefers-color-scheme)"
+      primary: black
       toggle:
         icon: material/link
         name: Switch to light mode
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: indigo
+      primary: black
       accent: indigo
       toggle:
         icon: material/toggle-switch
@@ -35,6 +37,7 @@ theme:
   features:
     - content.code.annotate
     - content.code.copy
+    - content.tabs.link
     - content.tooltips
     - navigation.footer
     - navigation.indexes
@@ -61,6 +64,9 @@ markdown_extensions:
       smart_enable: all
   - pymdownx.caret
   - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - pymdownx.highlight:
       anchor_linenums: true
       line_spans: __span
@@ -69,7 +75,11 @@ markdown_extensions:
   - pymdownx.keys
   - pymdownx.mark
   - pymdownx.smartsymbols
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.tasklist:
@@ -78,28 +88,50 @@ markdown_extensions:
 
 plugins:
   - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]
+          options:
+            docstring_style: google
+            show_root_heading: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            separate_signature: true
+            signature_crossrefs: true
+            merge_init_into_class: true
 
 nav:
-  - Home: README.md
-  - Creating a Service: CREATING_A_SERVICE.md
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quickstart.md
+      - The Configuration File: getting-started/configuration-file.md
+  - User Guide:
+      - Downloading: guide/downloading.md
+      - CLI Reference: guide/cli-reference.md
+      - DRM & CDM Setup: guide/drm-and-cdm.md
+      - Proxies & VPN: guide/proxies-and-vpn.md
+      - Key Vaults: guide/vaults.md
+      - Output & Naming: guide/output-and-naming.md
+      - Subtitles: guide/subtitles.md
+      - Troubleshooting: guide/troubleshooting.md
   - Configuration:
-      - Service Integration & Auth: SERVICE_CONFIG.md
-      - Download & Processing: DOWNLOAD_CONFIG.md
-      - Output & Naming: OUTPUT_CONFIG.md
-      - Subtitles: SUBTITLE_CONFIG.md
-      - DRM & CDM: DRM_CONFIG.md
-      - Network & Proxy: NETWORK_CONFIG.md
-      - Gluetun VPN: GLUETUN.md
-      - Advanced & System: ADVANCED_CONFIG.md
-  - REST API:
-      - Overview: API.md
-      - Quick Start: api/quick-start.md
-      - Authentication: api/authentication.md
-      - Endpoints: api/endpoints.md
-      - Endpoint Map: api/endpoint-map.md
-      - Download Job Lifecycle: api/download-job-lifecycle.md
-      - Remote Service Sessions: api/remote-service-sessions.md
-      - Client Configuration: api/client-configuration.md
-      - Error Responses: api/error-responses.md
-  - Reference:
-      - Debug Logging: DEBUG_LOGGING.md
+      - Reference: reference/configuration.md
+  - Developer:
+      - Creating a Service: dev/creating-a-service.md
+      - Service Architecture: dev/service-architecture.md
+      - REST API:
+          - Overview: dev/rest-api/index.md
+          - Quick Start: dev/rest-api/quickstart.md
+          - Authentication: dev/rest-api/authentication.md
+          - Endpoints: dev/rest-api/endpoints.md
+          - Job Lifecycle: dev/rest-api/job-lifecycle.md
+          - Remote Sessions: dev/rest-api/remote-sessions.md
+          - Error Responses: dev/rest-api/errors.md
+  - API Reference:
+      - Service: reference/api/service.md
+      - Config: reference/api/config.md
+      - Tracks: reference/api/tracks.md
+      - Titles: reference/api/titles.md
+      - DRM: reference/api/drm.md
