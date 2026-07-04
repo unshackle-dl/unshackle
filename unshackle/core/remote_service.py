@@ -725,6 +725,11 @@ class RemoteService:
     ) -> Optional[Union[bytes, str]]:
         return self._proxy_license(challenge, track, "playready")
 
+    def get_clearkey_license(
+        self, *, challenge: bytes, title: Title_T, track: AnyTrack
+    ) -> Optional[Union[bytes, str, dict]]:
+        return None
+
     def get_widevine_service_certificate(
         self,
         *,
