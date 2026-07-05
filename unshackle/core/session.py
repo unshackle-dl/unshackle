@@ -166,6 +166,25 @@ class RnetResponse:
     def cookies(self) -> Any:
         return self._resp.cookies
 
+    @property
+    def version(self) -> str:
+        """Get the HTTP version used for the response as a string (e.g. 'HTTP/2', 'HTTP/1.1')."""
+        try:
+            v_str = str(self._resp.version)
+            if "HTTP_2" in v_str:
+                return "HTTP/2"
+            elif "HTTP_11" in v_str:
+                return "HTTP/1.1"
+            elif "HTTP_3" in v_str:
+                return "HTTP/3"
+            elif "HTTP_10" in v_str:
+                return "HTTP/1.0"
+            elif "HTTP_09" in v_str:
+                return "HTTP/0.9"
+            return v_str.replace("Version.", "").replace("_", "/")
+        except Exception:
+            return "HTTP/1.1"
+
     def json(self, **kwargs: Any) -> Any:
         import json as _json
 
@@ -622,6 +641,22 @@ class RnetSession:
             try:
                 raw_resp = client.request(rnet_method, url, **kwargs)
                 response = RnetResponse(raw_resp)
+
+                # Log requests when debug_requests is enabled
+                if config.debug_requests:
+                    parsed_url = urlparse(url)
+                    port_str = f":{parsed_url.port}" if parsed_url.port else ""
+                    if not port_str:
+                        port_str = ":443" if parsed_url.scheme == "https" else ":80"
+                    host_url = f"{parsed_url.scheme}://{parsed_url.hostname}{port_str}"
+                    path_and_query = parsed_url.path + (f"?{parsed_url.query}" if parsed_url.query else "")
+                    if not path_and_query:
+                        path_and_query = "/"
+                    content_length = response.headers.get("content-length") or response.content_length
+
+                    log_msg = f'{host_url} "{method_upper} {path_and_query} {response.version}" {response.status_code} {content_length}'
+                    self.log.debug(log_msg)
+
                 if response.status_code not in self.status_forcelist:
                     return response
                 last_exception = HTTPError(f"Received status code: {response.status_code}")
