@@ -462,6 +462,7 @@ Two related flags:
 | Flag | Purpose |
 | --- | --- |
 | `--workers N` | Threads used per track for segment downloads. Default depends on the downloader. |
+| `--adaptive-workers` | Opt-in: start with a moderate per-track worker count and ramp it up or back off based on measured CDN throughput and errors, capped at `--workers`. Off by default (fixed worker count). |
 | `--downloads N` | Number of tracks downloaded concurrently. Default `1`. |
 | `--slow [MIN-MAX]` | Add a delay between titles to look more like a real device. `--slow` alone means 60-120s; `--slow 20-40` sets a custom range. Minimum 20s. |
 | `--no-cache` | Bypass the title cache for this download. |

@@ -171,6 +171,7 @@ Keep only certain track types, or skip certain track types. Attachments are alwa
 | Flag | Default | Description |
 |---|---|---|
 | `--workers` | downloader default | Per-track download threads. |
+| `--adaptive-workers` | off | Scale per-track segment workers dynamically (up to the `--workers` cap) based on measured CDN throughput and errors. |
 | `--downloads` | `1` | Number of tracks downloaded concurrently. |
 | `--no-cache` | off | Bypass the title cache. |
 | `--reset-cache` | off | Clear the title cache. |

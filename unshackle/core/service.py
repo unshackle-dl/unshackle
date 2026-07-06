@@ -4,7 +4,7 @@ from collections.abc import Callable, Generator
 from dataclasses import dataclass, field
 from http.cookiejar import CookieJar
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 from urllib.parse import urlparse, urlunparse
 
 if TYPE_CHECKING:
@@ -25,11 +25,54 @@ from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.drm import DRM_T
 from unshackle.core.search_result import SearchResult
+from unshackle.core.session import (BACKOFF_FACTOR, CONNECT_TIMEOUT, MAX_BACKOFF, MAX_RETRIES, POOL_MAX_SIZE,
+                                    READ_TIMEOUT, RETRY_METHODS, STATUS_FORCELIST)
 from unshackle.core.title_cacher import TitleCacher, get_account_hash, get_region_from_proxy
 from unshackle.core.titles import Title_T, Titles_T, remap_titles
 from unshackle.core.tracks import Chapters, Tracks
 from unshackle.core.tracks.video import Video
 from unshackle.core.utils.ip_info import get_ip_info
+
+# Default (connect, read) timeout for the requests path, mirroring RnetSession's
+# connect_timeout / read_timeout construction defaults. A per-request timeout= wins.
+DEFAULT_TIMEOUT = (CONNECT_TIMEOUT, READ_TIMEOUT)
+
+
+class TimeoutSession(requests.Session):
+    """requests.Session applying DEFAULT_TIMEOUT when the caller passes none.
+
+    requests has no native default timeout; without one a stalled connect or
+    read hangs forever. RnetSession bounds every request via its client's
+    connect_timeout/read_timeout, so this mirrors that on the requests path.
+    A per-request non-None ``timeout=`` wins; an explicit ``timeout=None`` is
+    still replaced with the default by :class:`TimeoutHTTPAdapter` on the
+    mounted adapters, so there is no unbounded read, matching RnetSession where
+    the client-level timeouts always apply. Pass a large timeout instead.
+    """
+
+    def request(self, *args: Any, **kwargs: Any) -> requests.Response:
+        kwargs.setdefault("timeout", DEFAULT_TIMEOUT)
+        return super().request(*args, **kwargs)
+
+
+class TimeoutHTTPAdapter(HTTPAdapter):
+    """HTTPAdapter applying DEFAULT_TIMEOUT when the caller passes none.
+
+    Backstops :class:`TimeoutSession` for the ``session.send(prepared)`` path,
+    which bypasses ``Session.request``; RnetSession bounds those too via its
+    client, so this keeps parity. A per-request non-None ``timeout=`` wins;
+    ``None`` (unset, or explicitly passed) gets the default, because the adapter
+    cannot distinguish the two, and rnet has no unbounded mode either.
+    """
+
+    def __init__(self, *args: Any, timeout: Any = DEFAULT_TIMEOUT, **kwargs: Any) -> None:
+        self.default_timeout = timeout
+        super().__init__(*args, **kwargs)
+
+    def send(self, request: Any, **kwargs: Any) -> Any:
+        if kwargs.get("timeout") is None:
+            kwargs["timeout"] = self.default_timeout
+        return super().send(request, **kwargs)
 
 
 @dataclass
@@ -322,12 +365,27 @@ class Service(metaclass=ABCMeta):
         from config, cookies, retry handler, and a proxy if available.
         :returns: Prepared Python-requests Session
         """
-        session = requests.Session()
+        session = TimeoutSession()
         session.headers.update(config.headers)
+        # Retry / pool policy mirrors RnetSession via the shared constants in session.py:
+        # same total, forcelist, backoff cap, allowed_methods (incl. POST, so license
+        # requests retry on both paths), and pool size. Accepted divergence: urllib3's
+        # backoff_jitter adds an absolute 0..N seconds whereas rnet jitters ±10% of the
+        # backoff, the only intentional difference, not worth hand-rolling a retry loop.
         session.mount(
             "https://",
-            HTTPAdapter(
-                max_retries=Retry(total=5, backoff_factor=0.2, status_forcelist=[429, 500, 502, 503, 504]),
+            TimeoutHTTPAdapter(
+                max_retries=Retry(
+                    total=MAX_RETRIES,
+                    backoff_factor=BACKOFF_FACTOR,
+                    backoff_max=MAX_BACKOFF,
+                    backoff_jitter=0.2,
+                    status_forcelist=STATUS_FORCELIST,
+                    allowed_methods=RETRY_METHODS,
+                    respect_retry_after_header=True,
+                ),
+                pool_connections=POOL_MAX_SIZE,
+                pool_maxsize=POOL_MAX_SIZE,
                 pool_block=True,
             ),
         )

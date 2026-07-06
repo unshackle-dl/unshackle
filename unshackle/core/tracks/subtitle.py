@@ -246,8 +246,17 @@ class Subtitle(Track):
         *,
         cdm: Optional[object] = None,
         no_proxy_download: bool = False,
+        adaptive_workers: bool = False,
     ):
-        super().download(session, prepare_drm, max_workers, progress, cdm=cdm, no_proxy_download=no_proxy_download)
+        super().download(
+            session,
+            prepare_drm,
+            max_workers,
+            progress,
+            cdm=cdm,
+            no_proxy_download=no_proxy_download,
+            adaptive_workers=adaptive_workers,
+        )
         if not self.path:
             return
 

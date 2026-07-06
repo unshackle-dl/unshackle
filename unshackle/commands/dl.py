@@ -665,6 +665,15 @@ class dl:
         default=None,
         help="Max workers/threads to download with per-track. Default depends on the downloader.",
     )
+    @click.option(
+        "--adaptive-workers",
+        is_flag=True,
+        default=False,
+        help=(
+            "Dynamically scale per-track segment workers up to the --workers cap (or the built-in cap "
+            "when --workers is unset) based on measured CDN throughput and errors. Off by default."
+        ),
+    )
     @click.option("--downloads", type=int, default=1, help="Amount of tracks to download concurrently.")
     @click.option(
         "-o",
@@ -1201,6 +1210,7 @@ class dl:
         no_source: bool,
         no_mux: bool,
         workers: Optional[int],
+        adaptive_workers: bool,
         downloads: int,
         worst: bool,
         best_available: bool,
@@ -1741,6 +1751,7 @@ class dl:
                                     ),
                                     cdm=self.cdm,
                                     max_workers=workers,
+                                    adaptive_workers=adaptive_workers,
                                     progress=progress_call,
                                 )
                                 for song, track, progress_call in music_items
@@ -2850,6 +2861,7 @@ class dl:
                             ),
                             cdm=self.cdm,
                             max_workers=workers,
+                            adaptive_workers=adaptive_workers,
                             progress=tracks_progress_callables[i],
                         )
                         # DRM-free and HLS-ClearKey tracks never reach prepare_drm, so export here.

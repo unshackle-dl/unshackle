@@ -281,6 +281,7 @@ class DASH:
         progress = ctx.progress
         proxy = ctx.proxy
         max_workers = ctx.max_workers
+        adaptive = ctx.adaptive_workers
         license_widevine = ctx.license_widevine
         cdm = ctx.cdm
 
@@ -458,6 +459,7 @@ class DASH:
             proxy=proxy,
             max_workers=max_workers,
             session=session,
+            adaptive=adaptive,
         )
 
         log_event(
