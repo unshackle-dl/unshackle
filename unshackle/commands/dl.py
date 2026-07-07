@@ -842,19 +842,27 @@ class dl:
                         try:
                             if name == "shaka_packager":
                                 r = subprocess.run(
-                                    [str(binary), "--version"], capture_output=True, text=True, timeout=5
+                                    [str(binary), "--version"],
+                                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
                                 )
                                 version = (r.stdout or r.stderr or "").strip()
                             elif name in ("ffmpeg", "ffprobe"):
-                                r = subprocess.run([str(binary), "-version"], capture_output=True, text=True, timeout=5)
+                                r = subprocess.run(
+                                    [str(binary), "-version"],
+                                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+                                )
                                 version = (r.stdout or "").split("\n")[0].strip()
                             elif name == "mkvmerge":
                                 r = subprocess.run(
-                                    [str(binary), "--version"], capture_output=True, text=True, timeout=5
+                                    [str(binary), "--version"],
+                                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
                                 )
                                 version = (r.stdout or "").strip()
                             elif name == "mp4decrypt":
-                                r = subprocess.run([str(binary)], capture_output=True, text=True, timeout=5)
+                                r = subprocess.run(
+                                    [str(binary)],
+                                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+                                )
                                 output = (r.stdout or "") + (r.stderr or "")
                                 lines = [line.strip() for line in output.split("\n") if line.strip()]
                                 version = " | ".join(lines[:2]) if lines else None

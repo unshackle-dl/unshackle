@@ -1504,7 +1504,9 @@ def _binary_version(path: Any) -> Optional[str]:
 
     for flag in ("--version", "-version"):
         try:
-            proc = subprocess.run([str(path), flag], capture_output=True, text=True, timeout=5)
+            proc = subprocess.run(
+                [str(path), flag], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5
+            )
         except (OSError, subprocess.SubprocessError, ValueError):
             return None
         match = _VERSION_RE.search(proc.stdout or "") or _VERSION_RE.search(proc.stderr or "")

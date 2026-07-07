@@ -456,6 +456,8 @@ class Video(Track):
                 ],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
             vals = dict(line.split("=", 1) for line in probe.stdout.splitlines() if "=" in line)
             current = (vals.get("color_primaries"), vals.get("color_transfer"), vals.get("color_space"))

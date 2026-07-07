@@ -697,7 +697,7 @@ class Tracks:
             errors = []
             warnings = []
             mux_start_time = time.monotonic()
-            p = subprocess.Popen(full_command, text=True, stdout=subprocess.PIPE)
+            p = subprocess.Popen(full_command, text=True, encoding="utf-8", errors="replace", stdout=subprocess.PIPE)
             for line in iter(p.stdout.readline, ""):
                 if line.startswith("#GUI#error") or line.startswith("#GUI#warning"):
                     errors.append(line)

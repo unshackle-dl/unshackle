@@ -41,6 +41,8 @@ def apply_tags(path: Path, tags: dict[str, str]) -> None:
             check=False,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         log_tool_run(
             "mkvpropedit tags",

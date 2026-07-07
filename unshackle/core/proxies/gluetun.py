@@ -544,6 +544,8 @@ class Gluetun(Proxy):
                 ["docker", "ps", "--format", "{{.Ports}}"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=5,
             )
             if result.returncode == 0:
@@ -892,6 +894,8 @@ class Gluetun(Proxy):
                 ],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=5,
             )
             if result.returncode != 0:
@@ -926,6 +930,8 @@ class Gluetun(Proxy):
                 ["docker", "inspect", container_name, "--format", "{{.NetworkSettings.Ports}}"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=5,
             )
 
@@ -1109,6 +1115,8 @@ class Gluetun(Proxy):
                 ["docker", "inspect", container_name, "--format", "{{.State.ExitCode}}:{{.State.Error}}"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=5,
             )
             if result.returncode == 0:
@@ -1310,6 +1318,8 @@ class Gluetun(Proxy):
                 ["docker", "ps", "-a", "--filter", f"name=^{container_name}$", "--format", "{{.Names}}:{{.Status}}"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=5,
             )
 
@@ -1328,6 +1338,8 @@ class Gluetun(Proxy):
                     ["docker", "rm", "-f", container_name],
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=10,
                 )
                 return True
@@ -1346,6 +1358,8 @@ class Gluetun(Proxy):
                     ["docker", "rm", "-f", container_name],
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=10,
                 )
             else:
@@ -1354,6 +1368,8 @@ class Gluetun(Proxy):
                     ["docker", "stop", container_name],
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=10,
                 )
         except subprocess.TimeoutExpired:
@@ -1363,6 +1379,8 @@ class Gluetun(Proxy):
                     ["docker", "rm", "-f", container_name],
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=5,
                 )
             except subprocess.TimeoutExpired:

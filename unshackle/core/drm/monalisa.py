@@ -247,6 +247,8 @@ class MonaLisa:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 startupinfo=startupinfo,
                 timeout=worker_timeout_s,
             )
