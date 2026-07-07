@@ -2139,8 +2139,8 @@
 <div class="admonition example">
 <p class="admonition-title">A typical episode path</p>
 <p><div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>/home/user/Downloads/
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  └─ Show Name S01 1080p AMZN WEB-DL DDP5.1 H.264/
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>     └─ Show.Name.S01E01.Pilot.1080p.AMZN.WEB-DL.DDP5.1.H.264-TAG.mkv
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  └─ Show Name S01 1080p EXAMPLE WEB-DL DDP5.1 H.264/
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>     └─ Show.Name.S01E01.Pilot.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
 </span></code></pre></div>
 The folder name comes from the <code>series</code> folder template and the file from the <code>series</code> output template.</p>
 </div>
@@ -2202,7 +2202,7 @@ The folder name comes from the <code>series</code> folder template and the file 
 <tr>
 <td><code>albums</code></td>
 <td>Album <strong>folders</strong> only (see below)</td>
-<td>—</td>
+<td>-</td>
 </tr>
 </tbody>
 </table>
@@ -2230,14 +2230,14 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 <p><div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">output_template</span><span class="p">:</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{year}.{quality}.{source}.WEB-DL.{audio_full}.{video}-{tag}&quot;</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>The.Movie.2024.1080p.NF.WEB-DL.DDP5.1.H.264-TAG.mkv
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>The.Movie.2024.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
 </span></code></pre></div></p>
 </div>
 <div class="tabbed-block">
 <p><div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">output_template</span><span class="p">:</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}</span><span class="nv"> </span><span class="s">({year})</span><span class="nv"> </span><span class="s">{quality}</span><span class="nv"> </span><span class="s">{source}</span><span class="nv"> </span><span class="s">WEB-DL</span><span class="nv"> </span><span class="s">{audio_full}</span><span class="nv"> </span><span class="s">{video}&quot;</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>The Movie (2024) 1080p NF WEB-DL DDP5.1 H.264.mkv
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>The Movie (2024) 1080p EXAMPLE WEB-DL DDP5.1 H.264.mkv
 </span></code></pre></div></p>
 </div>
 </div>
@@ -2267,7 +2267,7 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 <tr>
 <td><code>source</code></td>
 <td>Service tag / class name (empty with <code>--no-source</code>)</td>
-<td><code>NF</code></td>
+<td><code>EXAMPLE</code></td>
 </tr>
 <tr>
 <td><code>quality</code></td>
@@ -2586,10 +2586,10 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 </tbody>
 </table>
 <p>You can override the tag per run without editing config:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--tag<span class="w"> </span>OTHERGROUP<span class="w"> </span>AMZN<span class="w"> </span><span class="s2">&quot;...&quot;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--tag<span class="w"> </span>OTHERGROUP<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s2">&quot;...&quot;</span>
 </span></code></pre></div>
 <p>The <code>--repack</code> flag adds the <code>REPACK</code> marker (surfaced through the <code>{repack}</code> variable) to the filename for that run:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--repack<span class="w"> </span>NF<span class="w"> </span><span class="s2">&quot;...&quot;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--repack<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s2">&quot;...&quot;</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Empty tags collapse cleanly</p>
@@ -2738,7 +2738,7 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 </span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">    </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}</span><span class="nv"> </span><span class="s">({year})&quot;</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>The Movie (2024)/
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>  └─ The.Movie.2024.1080p.NF.WEB-DL.DDP5.1.Atmos.H.265.HDR-TAG.mkv
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>  └─ The.Movie.2024.1080p.EXAMPLE.WEB-DL.DDP5.1.Atmos.H.265.HDR-TAG.mkv
 </span></code></pre></div></p>
 </div>
 <div class="tabbed-block">
@@ -2748,7 +2748,7 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 </span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">    </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}</span><span class="nv"> </span><span class="s">({year})/Season</span><span class="nv"> </span><span class="s">{season}&quot;</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>The Show (2023)/Season S02/
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>  └─ The.Show.S02E04.The.Reckoning.2160p.AMZN.WEB-DL.DDP5.1.H.265-TAG.mkv
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>  └─ The.Show.S02E04.The.Reckoning.2160p.EXAMPLE.WEB-DL.DDP5.1.H.265-TAG.mkv
 </span></code></pre></div></p>
 </div>
 <div class="tabbed-block">

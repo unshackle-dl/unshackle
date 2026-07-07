@@ -2002,7 +2002,7 @@ rewrites the file and <strong>removes any comments</strong> it contained. If you
 in your config, edit the file by hand instead.</p>
 </div>
 <h2 id="3-add-a-service">3. Add a service<a class="headerlink" href="#3-add-a-service" title="Permanent link">&para;</a></h2>
-<p>The service tag you pass to <code>dl</code> (like <code>NF</code>) maps to a <strong>service module</strong>, a small
+<p>The service tag you pass to <code>dl</code> (like <code>EXAMPLE</code>) maps to a <strong>service module</strong>, a small
 plugin that knows how to talk to one streaming platform. unshackle ships without
 any bundled services, so you add the one(s) you want.</p>
 <p>Services live under the <code>directories.services</code> path (run <code>unshackle env info</code> to
@@ -2012,11 +2012,11 @@ that exact same name.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Local folder</label><label for="__tabbed_1_2">Git repository</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<p>Drop a service folder into your services directory. A service tagged <code>NF</code>
+<p>Drop a service folder into your services directory. A service tagged <code>EXAMPLE</code>
 lives at:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>&lt;services&gt;/NF/__init__.py     # defines a class named NF
+<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>&lt;services&gt;/EXAMPLE/__init__.py     # defines a class named EXAMPLE
 </span></code></pre></div>
-<p>Once the folder is in place, the tag <code>NF</code> is immediately available to <code>dl</code>,
+<p>Once the folder is in place, the tag <code>EXAMPLE</code> is immediately available to <code>dl</code>,
 <code>search</code>, and the other service-aware commands.</p>
 </div>
 <div class="tabbed-block">
@@ -2050,7 +2050,7 @@ at it in your config. The <code>cdm</code> map is keyed by service tag, with a <
 covers everything else:</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">cdm</span><span class="p">:</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_device</span><span class="w">        </span><span class="c1"># the .wvd file&#39;s name, without the extension</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">NF</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_other_device</span><span class="w">       </span><span class="c1"># override for a specific service</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">EXAMPLE</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_other_device</span><span class="w">       </span><span class="c1"># override for a specific service</span>
 </span></code></pre></div>
 <p>PlayReady works the same way with <code>.prd</code> files created and managed by the
 <a href="../configuration-file/"><code>prd</code></a> command. If a title is DRM-free, no CDM is needed.</p>
@@ -2066,13 +2066,13 @@ contents, and <code>unshackle env info</code> to confirm where WVDs and PRDs are
 <p><strong>Cookies</strong>: export the service's cookies to a Netscape-format text file and
   place it in your cookies directory. unshackle looks for, in order:
   <code>cookies/{SERVICE}.txt</code>, then <code>cookies/{SERVICE}/{profile}.txt</code>, then
-  <code>cookies/{SERVICE}/default.txt</code>. So a file at <code>cookies/NF.txt</code> is picked up
-  automatically for the <code>NF</code> service.</p>
+  <code>cookies/{SERVICE}/default.txt</code>. So a file at <code>cookies/EXAMPLE.txt</code> is picked up
+  automatically for the <code>EXAMPLE</code> service.</p>
 </li>
 <li>
 <p><strong>Credentials</strong>: store a username and password per service in your config:</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">credentials</span><span class="p">:</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">NF</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;email@example.com:your-password&quot;</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">EXAMPLE</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;email@example.com:your-password&quot;</span>
 </span></code></pre></div>
 </li>
 </ul>
@@ -2082,11 +2082,11 @@ depends on the service module.</p>
 <h2 id="6-find-a-title-optional">6. Find a title (optional)<a class="headerlink" href="#6-find-a-title-optional" title="Permanent link">&para;</a></h2>
 <p>If you have a URL or ID already, skip this. Otherwise, search the service for a
 title and note the <code>id</code> it prints, since that is what you feed to <code>dl</code>:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>unshackle<span class="w"> </span>search<span class="w"> </span>NF<span class="w"> </span><span class="s2">&quot;The Office&quot;</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>unshackle<span class="w"> </span>search<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s2">&quot;My Show&quot;</span>
 </span></code></pre></div>
 <p>You can also list what a service exposes for a given title without downloading:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--list-titles<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span><span class="w">     </span><span class="c1"># show seasons/episodes</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--list<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span><span class="w">            </span><span class="c1"># show available tracks</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--list-titles<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span><span class="w">     </span><span class="c1"># show seasons/episodes</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--list<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span><span class="w">            </span><span class="c1"># show available tracks</span>
 </span></code></pre></div>
 <h2 id="7-run-your-first-download">7. Run your first download<a class="headerlink" href="#7-run-your-first-download" title="Permanent link">&para;</a></h2>
 <p>A download always has three parts:</p>
@@ -2094,11 +2094,11 @@ title and note the <code>id</code> it prints, since that is what you feed to <co
 </span></code></pre></div>
 <ul>
 <li><strong><code>dl</code></strong> carries every quality, language, track, and output flag.</li>
-<li><strong><code>&lt;SERVICE-TAG&gt;</code></strong> picks which service to talk to (<code>NF</code>, <code>DSNP</code>, …).</li>
+<li><strong><code>&lt;SERVICE-TAG&gt;</code></strong> picks which service to talk to (e.g. <code>EXAMPLE</code>).</li>
 <li><strong><code>&lt;TITLE&gt;</code></strong> is the URL, ID, or slug the service understands.</li>
 </ul>
 <p>A good first command asks for 1080p with English audio and subtitles:</p>
-<div class="language-shell highlight"><span class="filename">Your first download</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">1080</span><span class="w"> </span>-l<span class="w"> </span>en<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Your first download</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">1080</span><span class="w"> </span>-l<span class="w"> </span>en<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p>unshackle will fetch the title, select the tracks matching your flags, acquire
 keys through your CDM (and any key vaults), then decrypt, mux, and tag the result.</p>
@@ -2148,13 +2148,13 @@ keys through your CDM (and any key vaults), then decrypt, mux, and tag the resul
 <div class="admonition example">
 <p class="admonition-title">A few realistic variations</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># A whole first season in the best available quality</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># 2160p HDR10 with the original-language audio plus English subtitles</span>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">2160</span><span class="w"> </span>-r<span class="w"> </span>HDR10<span class="w"> </span>-l<span class="w"> </span>orig<span class="w"> </span>-sl<span class="w"> </span>en<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">2160</span><span class="w"> </span>-r<span class="w"> </span>HDR10<span class="w"> </span>-l<span class="w"> </span>orig<span class="w"> </span>-sl<span class="w"> </span>en<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>
 </span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="c1"># Just the newest episode of an ongoing show</span>
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--latest-episode<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--latest-episode<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 </div>
 <p>See <a href="../../guide/downloading/">Downloading</a> for the complete flag reference, including
@@ -2163,7 +2163,7 @@ codec, bitrate, channel-layout, and track-type selection.</p>
 <p>By default, finished files are written to the <code>downloads</code> directory
 (<code>unshackle env info</code> shows its exact path; the built-in default is a <code>downloads</code>
 folder alongside the project). Override it per run with <code>-o</code>:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">1080</span><span class="w"> </span>-o<span class="w"> </span>/mnt/media/incoming<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">1080</span><span class="w"> </span>-o<span class="w"> </span>/mnt/media/incoming<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <ul>
 <li><strong>Movies</strong> are written as a single <code>.mkv</code> file named from your <code>movies</code> template.</li>

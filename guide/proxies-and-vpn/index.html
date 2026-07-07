@@ -2189,11 +2189,11 @@ file lives and how it is loaded.</p>
 </tr>
 </tbody>
 </table>
-<div class="language-shell highlight"><span class="filename">Explicit proxy URI</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>http://user:pass@1.2.3.4:8080<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Explicit proxy URI</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>http://user:pass@1.2.3.4:8080<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
-<div class="language-shell highlight"><span class="filename">Resolve a US server from your configured providers</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>us<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Resolve a US server from your configured providers</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>us<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
-<div class="language-shell highlight"><span class="filename">Target a specific provider</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>nordvpn:us<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Target a specific provider</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>nordvpn:us<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Set a default proxy in config</p>
@@ -2206,7 +2206,7 @@ do not have to pass it on every command. See
 proxy is often the slowest link in the chain. <code>--no-proxy-download</code> lets you keep the
 proxy where it matters (passing the geo-check for the manifest and the licence) while
 pulling the actual audio and video segments over your normal connection for full speed.</p>
-<div class="language-shell highlight"><span class="filename">Proxy the manifest and licence, download segments direct</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>gb<span class="w"> </span>--no-proxy-download<span class="w"> </span>ITV<span class="w"> </span>10a1234
+<div class="language-shell highlight"><span class="filename">Proxy the manifest and licence, download segments direct</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>gb<span class="w"> </span>--no-proxy-download<span class="w"> </span>EXAMPLE<span class="w"> </span>10a1234
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">When this is unsafe</p>
@@ -2225,8 +2225,8 @@ them in order.</p>
     D -- yes --&gt; E["Ask that one provider&lt;br/&gt;for the query"]
     D -- no --&gt; F["Ask every provider in order,&lt;br/&gt;first match wins"]</code></pre>
 <ol>
-<li><strong>An explicit URI.</strong> Anything shaped like <code>http://…</code>, <code>https://…</code>, or a <code>socks…</code>
-   URI is used exactly as given. unshackle logs <code>Using explicit Proxy: …</code> and does no
+<li><strong>An explicit URI.</strong> Anything shaped like <code>http://...</code>, <code>https://...</code>, or a <code>socks...</code>
+   URI is used exactly as given. unshackle logs <code>Using explicit Proxy: ...</code> and does no
    lookup.</li>
 <li><strong>A provider-prefixed query</strong>: <code>provider:query</code>, for example <code>nordvpn:us</code> or
    <code>gluetun:windscribe:us</code>. unshackle finds the provider whose name matches the prefix
@@ -2303,7 +2303,7 @@ them:</p>
 <li>Each URL is normalised (a missing scheme defaults to <code>http</code>) and validated, so a
   malformed URI is rejected up front rather than failing mid-download.</li>
 </ul>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>de2<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>de2<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <h2 id="gluetun">Gluetun<a class="headerlink" href="#gluetun" title="Permanent link">&para;</a></h2>
 <p>Gluetun is unshackle's most flexible proxy backend, and the one to reach for if you want
@@ -2328,9 +2328,9 @@ to <code>/dev/net/tun</code> to bring up the tunnel. unshackle requests both aut
 <strong>VPN provider</strong> and the <strong>region</strong>.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>gluetun:&lt;vpn-provider&gt;:&lt;region&gt;
 </span></code></pre></div>
-<div class="language-shell highlight"><span class="filename">A Windscribe US exit via Gluetun</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>gluetun:windscribe:us<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">A Windscribe US exit via Gluetun</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>gluetun:windscribe:us<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
-<div class="language-shell highlight"><span class="filename">A NordVPN Germany exit via Gluetun</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>gluetun:nordvpn:de<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">A NordVPN Germany exit via Gluetun</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>gluetun:nordvpn:de<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p>After unshackle strips the leading <code>gluetun:</code>, the provider receives exactly
 <code>provider:region</code> (two colon-separated parts; anything else is an error). The
@@ -2668,7 +2668,7 @@ country-code confusion that <code>uk</code> invites.</p>
 </table>
 <p>The returned proxy is HTTPS on <strong>port 89</strong> (NordVPN disabled its plain-HTTP proxies on
 port 80 in 2021).</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>nordvpn:us:seattle<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>nordvpn:us:seattle<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <h2 id="proton-vpn">Proton VPN<a class="headerlink" href="#proton-vpn" title="Permanent link">&para;</a></h2>
 <p>Proton VPN supports two authentication methods, and unshackle can work with either. Note
@@ -2774,7 +2774,7 @@ previous run's log line (e.g. <code>DE#203</code>) instead.</p>
 <a href="https://github.com/Snawoot/hola-proxy"><code>hola-proxy</code></a> binary, and <strong>auto-loads</strong> whenever
 that binary is found on your <code>PATH</code>. If you query Hola but the binary is missing, the
 provider raises an error telling you to install it.</p>
-<div class="language-shell highlight"><span class="filename">Install hola-proxy, then just query a country</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>hola:us<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Install hola-proxy, then just query a country</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>hola:us<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p><strong>Query forms:</strong> a two-letter country code (e.g. <code>us</code>, <code>gb</code>). unshackle asks <code>hola-proxy</code>
 for available proxies in that country and picks one at random, returning an HTTP proxy.</p>

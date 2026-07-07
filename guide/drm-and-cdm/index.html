@@ -2300,7 +2300,7 @@ license-server handshake; the rest are special cases.</p>
 <tr>
 <td><strong>ClearKey (CENC)</strong>, W3C EME <code>org.w3.clearkey</code></td>
 <td>none</td>
-<td>JSON <code>{"kids":[…],"type":"temporary"}</code> → license server returns a JWK Set. No CDM.</td>
+<td>JSON <code>{"kids":[...],"type":"temporary"}</code> → license server returns a JWK Set. No CDM.</td>
 <td>shaka-packager / mp4decrypt</td>
 </tr>
 <tr>
@@ -2450,12 +2450,12 @@ a device name (the file's name without extension). A <code>default</code> entry 
 fallback:</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">cdm</span><span class="p">:</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">nexus_6p_26830_l3</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nt">AMZN</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span><span class="nt">NF</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sm_g935f_l1</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nt">EXAMPLE1</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span><span class="nt">EXAMPLE2</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sm_g935f_l1</span>
 </span></code></pre></div>
 <p>Lookups are case-insensitive. On the command line you can override the configured
 device for a single run:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>chromecdm_l3<span class="w"> </span>AMZN<span class="w"> </span>B0ABCDEF
+<div class="language-console highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>chromecdm_l3<span class="w"> </span>EXAMPLE1<span class="w"> </span>B0ABCDEF
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">The device name is the file name</p>
@@ -2661,7 +2661,7 @@ there is nothing to set up. Such tracks are handled automatically during downloa
 <p>The CENC ClearKey scheme is a proper license flow, but the "license server" simply
 returns the keys as a JWK Set rather than a DRM-wrapped blob. unshackle builds a W3C
 EME request of the form:</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="p">{</span><span class="nt">&quot;kids&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;&lt;base64url-kid&gt;&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">…</span><span class="p">],</span><span class="w"> </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;temporary&quot;</span><span class="p">}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="p">{</span><span class="nt">&quot;kids&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;&lt;base64url-kid&gt;&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">],</span><span class="w"> </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;temporary&quot;</span><span class="p">}</span>
 </span></code></pre></div>
 <p>It sends this to the manifest's license URL (or to whatever a service's ClearKey
 license hook returns) and reads the JSON Web Key set back. No device file is needed.

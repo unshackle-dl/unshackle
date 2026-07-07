@@ -2784,7 +2784,7 @@ works.</p>
 </tr>
 <tr>
 <td><code>app_dirs</code></td>
-<td>—</td>
+<td>-</td>
 <td><code>AppDirs("unshackle", False)</code></td>
 <td style="text-align: center;">❌ protected</td>
 <td>Internal AppDirs instance.</td>
@@ -2794,7 +2794,7 @@ works.</p>
 <div class="admonition note">
 <p class="admonition-title">The <code>services</code> directory is special</p>
 <p><code>services</code> may be a <strong>list</strong>, and each entry can be either a local directory or a
-<strong>repository spec</strong>: a git URL (<code>https://…</code>, <code>ssh://…</code>, <code>git@…</code>, or anything ending in
+<strong>repository spec</strong>: a git URL (<code>https://...</code>, <code>ssh://...</code>, <code>git@...</code>, or anything ending in
 <code>.git</code>) or <code>owner/repo</code> shorthand. Repo specs are cloned and updated automatically; plain
 paths are used as-is. <strong>List order is priority</strong>: the first source to define a service
 tag wins, so put your own local service directories <strong>last</strong> to make them fallbacks.</p>
@@ -2889,8 +2889,8 @@ runtime.</p>
 <ul>
 <li><strong>Type:</strong> <code>dict</code> keyed by service tag &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
 </ul>
-<p>Per-service configuration, keyed by the canonical service tag (for example <code>AMZN</code>, <code>NF</code>,
-<code>DSNP</code>). unshackle reads several well-known sub-keys out of each service's block:</p>
+<p>Per-service configuration, keyed by the canonical service tag (for example <code>EXAMPLE1</code>, <code>EXAMPLE2</code>,
+<code>EXAMPLE3</code>). unshackle reads several well-known sub-keys out of each service's block:</p>
 <ul>
 <li><strong><code>proxy_map</code></strong>: a dict mapping <code>"provider:query"</code> or <code>"query"</code> to a proxy value, used to
   auto-select a proxy for that service.</li>
@@ -2909,11 +2909,11 @@ at load time. That is why the two config locations exist: one for shared service
 one for your private overrides.</p>
 </div>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">services</span><span class="p">:</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">AMZN</span><span class="p">:</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">EXAMPLE1</span><span class="p">:</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nt">proxy_map</span><span class="p">:</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">      </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">us</span>
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="nt">title_map</span><span class="p">:</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">      </span><span class="s">&quot;The</span><span class="nv"> </span><span class="s">Grand</span><span class="nv"> </span><span class="s">Tour:</span><span class="nv"> </span><span class="s">The</span><span class="nv"> </span><span class="s">Movie&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">&quot;The</span><span class="nv"> </span><span class="s">Grand</span><span class="nv"> </span><span class="s">Tour</span><span class="nv"> </span><span class="s">Presents</span><span class="nv"> </span><span class="s">The</span><span class="nv"> </span><span class="s">Movie&quot;</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">      </span><span class="s">&quot;My</span><span class="nv"> </span><span class="s">Show:</span><span class="nv"> </span><span class="s">The</span><span class="nv"> </span><span class="s">Movie&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">&quot;My</span><span class="nv"> </span><span class="s">Show</span><span class="nv"> </span><span class="s">Presents</span><span class="nv"> </span><span class="s">The</span><span class="nv"> </span><span class="s">Movie&quot;</span>
 </span></code></pre></div>
 <h3 id="credentials"><code>credentials</code><a class="headerlink" href="#credentials" title="Permanent link">&para;</a></h3>
 <ul>
@@ -2923,8 +2923,8 @@ one for your private overrides.</p>
 dict form is also accepted where a service supports it). These are parsed into <code>Credential</code>
 objects; the credential's SHA-1 is also used as an account hash for cache keys.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">credentials</span><span class="p">:</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">NF</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">user@example.com:hunter2</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">AMZN</span><span class="p">:</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">EXAMPLE2</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">user@example.com:hunter2</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">EXAMPLE1</span><span class="p">:</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">primary@example.com:pw1</span>
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">secondary@example.com:pw2</span>
 </span></code></pre></div>
@@ -2974,13 +2974,117 @@ CLI commands that run against the remote server.</p>
 <ul>
 <li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
 </ul>
-<p>Configuration for the <code>serve</code> command (the built-in REST API server).</p>
+<p>Configuration for the <code>serve</code> command (the built-in REST API server). The full server guide
+is the <a href="../../dev/rest-api/">REST API</a> section; these are the config keys.</p>
+<table>
+<thead>
+<tr>
+<th>Sub-key</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>api_secret</code></td>
+<td>str</td>
+<td><em>(unset)</em></td>
+<td>Master secret accepted in the <code>X-Secret-Key</code> header.</td>
+</tr>
+<tr>
+<td><code>users</code></td>
+<td>dict</td>
+<td><code>{}</code></td>
+<td>Per-user API keys and their allowlists (see below).</td>
+</tr>
+<tr>
+<td><code>services</code></td>
+<td>list</td>
+<td><em>(unset)</em></td>
+<td>Global service allowlist. Omit to allow all.</td>
+</tr>
+<tr>
+<td><code>remote_only</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Run without a local <code>output_template</code> (CORS/Cloudflare-friendly).</td>
+</tr>
+<tr>
+<td><code>session_ttl</code></td>
+<td>int (s)</td>
+<td><code>300</code></td>
+<td>Lifetime of an interactive auth session.</td>
+</tr>
+<tr>
+<td><code>max_sessions</code></td>
+<td>int</td>
+<td><code>100</code></td>
+<td>Maximum concurrent sessions.</td>
+</tr>
+<tr>
+<td><code>history_limit</code></td>
+<td>int</td>
+<td><code>100</code></td>
+<td>How many finished jobs to retain in history.</td>
+</tr>
+<tr>
+<td><code>compression_level</code></td>
+<td>int</td>
+<td><code>1</code></td>
+<td>gzip level for responses.</td>
+</tr>
+<tr>
+<td><code>cdm_overrides</code></td>
+<td>dict</td>
+<td><em>(unset)</em></td>
+<td>Allowed per-request CDM overrides.</td>
+</tr>
+<tr>
+<td><code>allow_job_credentials</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Permit clients to supply credentials per job.</td>
+</tr>
+<tr>
+<td><code>devices</code></td>
+<td>list</td>
+<td><em>(auto)</em></td>
+<td>Widevine devices offered; auto-filled from <code>directories.wvds</code>.</td>
+</tr>
+<tr>
+<td><code>playready_devices</code></td>
+<td>list</td>
+<td><em>(auto)</em></td>
+<td>PlayReady devices; auto-filled from <code>directories.prds</code>.</td>
+</tr>
+<tr>
+<td><code>country</code> / <code>locations</code></td>
+<td>str / dict</td>
+<td><em>(unset)</em></td>
+<td>Advertised region metadata.</td>
+</tr>
+</tbody>
+</table>
+<p>Each entry under <code>users</code> is keyed by that user's API key and may set its own <code>services</code>,
+<code>devices</code>, and <code>playready_devices</code> allowlists, narrowing the global ones.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">serve</span><span class="p">:</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">api_secret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">change-me</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">remote_only</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">services</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">EXAMPLE2</span><span class="p p-Indicator">]</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span><span class="c1"># server-wide download defaults (same keys as the `dl:` block)</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span><span class="nt">downloads</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span><span class="nt">best_available</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">  </span><span class="nt">users</span><span class="p">:</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">    </span><span class="nt">a1b2c3d4</span><span class="p">:</span><span class="w">                 </span><span class="c1"># this user&#39;s API key</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">      </span><span class="nt">services</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">]</span><span class="w">        </span><span class="c1"># may only use EXAMPLE1</span>
+</span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Declaring <code>dl</code> defaults under <code>serve</code></p>
-<p>You can nest <code>dl</code> flags (<code>downloads</code>, <code>workers</code>, <code>best_available</code>, and so on) inside
-<code>serve</code>. The point is to raise concurrency and behaviour defaults <strong>server-wide</strong> (every
-request the server handles picks them up) without having to change each client call
-individually.</p>
+<p>You can set any <a href="#dl"><code>dl</code></a> flag key (<code>downloads</code>, <code>workers</code>, <code>best_available</code>, and so on)
+directly inside <code>serve</code>. The point is to raise concurrency and behaviour defaults
+<strong>server-wide</strong> (every request the server handles picks them up) without having to change
+each client call individually.</p>
 </div>
 <hr />
 <h2 id="download-processing">Download &amp; processing<a class="headerlink" href="#download-processing" title="Permanent link">&para;</a></h2>
@@ -2988,24 +3092,281 @@ individually.</p>
 <ul>
 <li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
 </ul>
-<p>Default options forwarded to the <code>dl</code> command. Anything you would otherwise pass as a <code>dl</code>
-flag can be given a persistent default here. See <a href="../../guide/downloading/">Downloading</a> for
-the flags themselves.</p>
+<p>Persistent defaults for the <code>dl</code> command. This block is used as Click's <code>default_map</code>, so
+<strong>any</strong> <code>dl</code> flag can be given a default here and it applies to every download without you
+typing it. See <a href="../../guide/downloading/">Downloading</a> and the
+<a href="../../guide/cli-reference/">CLI Reference</a> for what each flag does.</p>
+<p><strong>Key naming.</strong> A key is the flag's long name with dashes replaced by underscores
+(<code>--best-available</code> → <code>best_available</code>, <code>--sub-format</code> → <code>sub_format</code>). A few keys are named
+after the flag's internal destination rather than its visible name; set these exact keys:</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Config key</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-r</code> / <code>--range</code></td>
+<td><code>range</code></td>
+</tr>
+<tr>
+<td><code>--list</code></td>
+<td><code>list</code></td>
+</tr>
+<tr>
+<td><code>--tmdb</code></td>
+<td><code>tmdb_id</code></td>
+</tr>
+<tr>
+<td><code>--imdb</code></td>
+<td><code>imdb_id</code></td>
+</tr>
+<tr>
+<td><code>--animeapi</code></td>
+<td><code>animeapi_id</code></td>
+</tr>
+<tr>
+<td><code>-naa</code> / <code>--noatmos</code></td>
+<td><code>no_atmos</code></td>
+</tr>
+<tr>
+<td><code>-o</code> / <code>--output</code></td>
+<td><code>output_dir</code></td>
+</tr>
+<tr>
+<td><code>--cdm-only</code> / <code>--vaults-only</code></td>
+<td><code>cdm_only</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Precedence</strong> (highest first): an explicit CLI flag or environment variable → a per-service
+<a href="#services-auth"><code>services.&lt;TAG&gt;.dl</code></a> override → this global <code>dl:</code> block → the built-in
+default. In other words, config only fills in options you did not set on the command line.</p>
+<p>Common keys (a useful subset; every <code>dl</code> flag works):</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Type</th>
+<th>Default</th>
+<th>Sets</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>lang</code></td>
+<td>list</td>
+<td><code>["orig"]</code></td>
+<td>Video/audio language(s); <code>orig</code> = original language.</td>
+</tr>
+<tr>
+<td><code>a_lang</code> / <code>v_lang</code></td>
+<td>list</td>
+<td><code>[]</code></td>
+<td>Audio- / video-only language override.</td>
+</tr>
+<tr>
+<td><code>s_lang</code></td>
+<td>list</td>
+<td><code>["all"]</code></td>
+<td>Subtitle language(s).</td>
+</tr>
+<tr>
+<td><code>quality</code></td>
+<td>list</td>
+<td><code>[]</code> (best)</td>
+<td>Resolution(s), e.g. <code>[1080]</code>.</td>
+</tr>
+<tr>
+<td><code>vcodec</code></td>
+<td>list</td>
+<td><code>[]</code> (any)</td>
+<td>Video codec(s), e.g. <code>[H265]</code>.</td>
+</tr>
+<tr>
+<td><code>acodec</code></td>
+<td>list</td>
+<td><code>[]</code> (any)</td>
+<td>Audio codec(s), e.g. <code>[EC3]</code>.</td>
+</tr>
+<tr>
+<td><code>range</code></td>
+<td>list</td>
+<td><code>["SDR"]</code></td>
+<td>Colour range(s): <code>SDR</code>, <code>HDR10</code>, <code>HDR10+</code>, <code>DV</code>.</td>
+</tr>
+<tr>
+<td><code>channels</code></td>
+<td>float</td>
+<td><em>(unset)</em></td>
+<td>Audio channels, e.g. <code>6</code> for 5.1.</td>
+</tr>
+<tr>
+<td><code>sub_format</code></td>
+<td>str</td>
+<td><em>(unset)</em></td>
+<td>Convert subtitles to this format (<code>srt</code>, <code>vtt</code>, <code>original</code>, ...).</td>
+</tr>
+<tr>
+<td><code>forced_subs</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Include forced subtitle tracks.</td>
+</tr>
+<tr>
+<td><code>no_subs</code> / <code>no_audio</code> / <code>no_chapters</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Skip that track type.</td>
+</tr>
+<tr>
+<td><code>downloads</code></td>
+<td>int</td>
+<td><code>1</code></td>
+<td>Tracks downloaded concurrently.</td>
+</tr>
+<tr>
+<td><code>workers</code></td>
+<td>int</td>
+<td><em>(downloader default)</em></td>
+<td>Threads per track.</td>
+</tr>
+<tr>
+<td><code>slow</code></td>
+<td>str</td>
+<td><em>(unset)</em></td>
+<td>Inter-title delay, e.g. <code>"20-40"</code>.</td>
+</tr>
+<tr>
+<td><code>best_available</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Fall back to best quality if the request is unavailable.</td>
+</tr>
+<tr>
+<td><code>proxy</code></td>
+<td>str</td>
+<td><em>(unset)</em></td>
+<td>Default proxy URI or 2-letter country.</td>
+</tr>
+<tr>
+<td><code>no_folder</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Do not create a per-title folder.</td>
+</tr>
+</tbody>
+</table>
+<div class="language-yaml highlight"><span class="filename">Global download defaults</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">dl</span><span class="p">:</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">lang</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">]</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">quality</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">1080</span><span class="p p-Indicator">]</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span><span class="nt">range</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">HDR10</span><span class="p p-Indicator">]</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span><span class="nt">vcodec</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">H265</span><span class="p p-Indicator">]</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span><span class="nt">sub_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">srt</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span><span class="nt">downloads</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
+</span></code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">Per-service overrides</p>
+<p>Nest a <code>dl</code> block under a service in <a href="#services-auth"><code>services</code></a> to override these defaults
+for just that service. It uses the same keys and wins over the global <code>dl:</code> block (but still
+loses to an explicit CLI flag).</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">dl</span><span class="p">:</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">lang</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">]</span><span class="w">          </span><span class="c1"># global default</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nt">services</span><span class="p">:</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="nt">EXAMPLE1</span><span class="p">:</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="nt">dl</span><span class="p">:</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">      </span><span class="nt">lang</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">ja</span><span class="p p-Indicator">]</span><span class="w">  </span><span class="c1"># EXAMPLE1 downloads both; everything else stays English</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">      </span><span class="nt">range</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">DV</span><span class="p p-Indicator">]</span>
+</span></code></pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title"><code>serve</code> uses these same keys</p>
+<p>The <a href="#serve"><code>serve</code></a> block accepts the same <code>dl</code> option keys at its top level to set
+server-wide download defaults for every request it handles.</p>
+</div>
 <h3 id="subtitle"><code>subtitle</code><a class="headerlink" href="#subtitle" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
 </ul>
-<p>Subtitle handling options. See <a href="../../guide/subtitles/">Subtitles</a>.</p>
+<p>Subtitle handling: SDH stripping, format conversion, and whether subtitles are muxed in or
+written as sidecar files. See <a href="../../guide/subtitles/">Subtitles</a> for the full guide.</p>
+<table>
+<thead>
+<tr>
+<th>Sub-key</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>strip_sdh</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Strip SDH/CC cues (hearing-impaired annotations) into a clean track.</td>
+</tr>
+<tr>
+<td><code>sdh_method</code></td>
+<td>str</td>
+<td><code>"auto"</code></td>
+<td>SDH-stripping backend to use.</td>
+</tr>
+<tr>
+<td><code>preserve_formatting</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Keep styling/positioning when converting or stripping.</td>
+</tr>
+<tr>
+<td><code>convert_before_strip</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Convert to the working format before stripping SDH.</td>
+</tr>
+<tr>
+<td><code>conversion_method</code></td>
+<td>str</td>
+<td><code>"auto"</code></td>
+<td>Subtitle conversion backend.</td>
+</tr>
+<tr>
+<td><code>preferred_conversion_method</code></td>
+<td>str</td>
+<td><em>(unset)</em></td>
+<td>Preferred converter when several are available.</td>
+</tr>
+<tr>
+<td><code>output_mode</code></td>
+<td>str</td>
+<td><code>"mux"</code></td>
+<td><code>mux</code> embeds subtitles in the MKV; <code>sidecar</code> writes separate files.</td>
+</tr>
+<tr>
+<td><code>sidecar_format</code></td>
+<td>str</td>
+<td><code>"srt"</code></td>
+<td>Format for sidecar files when <code>output_mode: sidecar</code>.</td>
+</tr>
+</tbody>
+</table>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">subtitle</span><span class="p">:</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">strip_sdh</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">output_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sidecar</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span><span class="nt">sidecar_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">srt</span>
+</span></code></pre></div>
 <h3 id="audio"><code>audio</code><a class="headerlink" href="#audio" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
 </ul>
 <p>Audio handling options. The most notable sub-key is <strong><code>codec_priority</code></strong>, an ordered list of
 audio codecs used to break ties in track selection.</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">audio</span><span class="p">:</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">codec_priority</span><span class="p">:</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EAC3</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AC3</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">audio</span><span class="p">:</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">codec_priority</span><span class="p">:</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EAC3</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AC3</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title"><code>codec_priority</code> is a soft priority: nothing is dropped</p>
@@ -3021,6 +3382,48 @@ bitrate alone, with those same Atmos/descriptive rules still applied.</p>
 <li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
 </ul>
 <p>Matroska (MKV) muxing options.</p>
+<table>
+<thead>
+<tr>
+<th>Sub-key</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>set_title</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Write a human-readable title into the MKV container.</td>
+</tr>
+<tr>
+<td><code>default_language</code></td>
+<td>dict</td>
+<td><code>{}</code></td>
+<td>Force which language is flagged <em>default</em> per track type, e.g. <code>{audio: en, subtitle: en}</code>.</td>
+</tr>
+<tr>
+<td><code>merge_audio</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Merge all audio into one file. <code>--split-audio</code> on the CLI flips this off.</td>
+</tr>
+<tr>
+<td><code>merge_video</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Merge all video tracks into one file. <code>--merge-video</code> on the CLI flips this on.</td>
+</tr>
+</tbody>
+</table>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">muxing</span><span class="p">:</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nt">set_title</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span><span class="nt">default_language</span><span class="p">:</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span><span class="nt">audio</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">    </span><span class="nt">subtitle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
+</span></code></pre></div>
 <h3 id="language_tags"><code>language_tags</code><a class="headerlink" href="#language_tags" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
@@ -3050,14 +3453,14 @@ A rule may test:</p>
 </tr>
 </tbody>
 </table>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">language_tags</span><span class="p">:</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">rules</span><span class="p">:</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">audio</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">]</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">      </span><span class="nt">subs_contain_all</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">]</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">      </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="w">            </span><span class="c1"># native English release, no tag</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">audio</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">ja</span><span class="p p-Indicator">]</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">      </span><span class="nt">subs_contain</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">]</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">      </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;SUBBED&quot;</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">language_tags</span><span class="p">:</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">rules</span><span class="p">:</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">audio</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">]</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">      </span><span class="nt">subs_contain_all</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">]</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">      </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="w">            </span><span class="c1"># native English release, no tag</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">audio</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">ja</span><span class="p p-Indicator">]</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">      </span><span class="nt">subs_contain</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">]</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">      </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;SUBBED&quot;</span>
 </span></code></pre></div>
 <hr />
 <h2 id="output-naming">Output &amp; naming<a class="headerlink" href="#output-naming" title="Permanent link">&para;</a></h2>
@@ -3071,13 +3474,13 @@ A rule may test:</p>
 <code>movies</code>, <code>series</code>, and <code>songs</code> (and <code>albums</code> for folder templates). A trailing <code>?</code> on a
 variable (e.g. <code>{quality?}</code>) marks it optional: if empty, it and one adjacent separator are
 dropped.</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">output_template</span><span class="p">:</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{year}.{quality?}.{source}-{tag}&quot;</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{season_episode}.{episode_name?}.{quality?}.{source}-{tag}&quot;</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="nt">songs</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{track_number}.</span><span class="nv"> </span><span class="s">{title}&quot;</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span><span class="nt">folder</span><span class="p">:</span><span class="w">                       </span><span class="c1"># special nested key, see below</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}</span><span class="nv"> </span><span class="s">({year})&quot;</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">    </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}</span><span class="nv"> </span><span class="s">({year})&quot;</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">output_template</span><span class="p">:</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{year}.{quality?}.{source}-{tag}&quot;</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{season_episode}.{episode_name?}.{quality?}.{source}-{tag}&quot;</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span><span class="nt">songs</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{track_number}.</span><span class="nv"> </span><span class="s">{title}&quot;</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span><span class="nt">folder</span><span class="p">:</span><span class="w">                       </span><span class="c1"># special nested key, see below</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">    </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}</span><span class="nv"> </span><span class="s">({year})&quot;</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">    </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}</span><span class="nv"> </span><span class="s">({year})&quot;</span>
 </span></code></pre></div>
 <p><strong>The nested <code>folder</code> sub-key</strong> controls output subfolders and is popped out of
 <code>output_template</code>:</p>
@@ -3151,19 +3554,19 @@ keys. Device files themselves live in <a href="#directories"><code>directories.w
 <p>Maps a service tag to the CDM (Widevine/PlayReady device) to use, with a <code>default</code> fallback.
 Resolution is case-insensitive: an explicit CLI override wins, then the per-service entry,
 then <code>default</code>.</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">cdm</span><span class="p">:</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">NF</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">cdm</span><span class="p">:</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span><span class="nt">EXAMPLE2</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span>
 </span></code></pre></div>
 <p>A value may also be a <strong>nested dict</strong> for advanced selection by quality, DRM system, or
 profile:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">cdm</span><span class="p">:</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">AMZN</span><span class="p">:</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span><span class="s">&quot;&gt;=1080&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span><span class="w">        </span><span class="c1"># by track height</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="s">&quot;&lt;1080&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span><span class="nt">widevine</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span><span class="w">        </span><span class="c1"># by DRM system</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span><span class="nt">playready</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sl3000</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">cdm</span><span class="p">:</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">EXAMPLE1</span><span class="p">:</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">    </span><span class="s">&quot;&gt;=1080&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span><span class="w">        </span><span class="c1"># by track height</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">    </span><span class="s">&quot;&lt;1080&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">    </span><span class="nt">widevine</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span><span class="w">        </span><span class="c1"># by DRM system</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">    </span><span class="nt">playready</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sl3000</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
 </span></code></pre></div>
 <p>Quality keys support <code>1080</code>, <code>&gt;=1080</code>, <code>&gt;720</code>, <code>&lt;=576</code>, <code>&lt;480</code> style comparisons; DRM keys
 are <code>widevine</code> / <code>playready</code>.</p>
@@ -3204,17 +3607,17 @@ are <code>widevine</code> / <code>playready</code>.</p>
 </tr>
 </tbody>
 </table>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">remote_cdm</span><span class="p">:</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keyxtractor</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">decrypt_labs</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span><span class="nt">device_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">L1</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_wv_server</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://cdm.example.com</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">    </span><span class="nt">secret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">s3cr3t</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">    </span><span class="nt">device_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span>
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">    </span><span class="nt">device_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ANDROID</span>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="w">    </span><span class="nt">system_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">26830</span>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="w">    </span><span class="nt">security_level</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">remote_cdm</span><span class="p">:</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keyxtractor</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">decrypt_labs</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="nt">device_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">L1</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_wv_server</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://cdm.example.com</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">    </span><span class="nt">secret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">s3cr3t</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">    </span><span class="nt">device_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">    </span><span class="nt">device_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ANDROID</span>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="w">    </span><span class="nt">system_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">26830</span>
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">    </span><span class="nt">security_level</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
 </span></code></pre></div>
 <h3 id="decryption"><code>decryption</code><a class="headerlink" href="#decryption" title="Permanent link">&para;</a></h3>
 <ul>
@@ -3226,13 +3629,13 @@ case-insensitively; <code>"mp4decrypt"</code> selects Bento4's mp4decrypt, and <
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Global</label><label for="__tabbed_1_2">Per-service</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">decryption</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shaka</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nt">decryption</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shaka</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">decryption</span><span class="p">:</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shaka</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span><span class="nt">SOMESERVICE</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mp4decrypt</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">decryption</span><span class="p">:</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shaka</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span><span class="nt">SOMESERVICE</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mp4decrypt</span>
 </span></code></pre></div>
 </div>
 </div>
@@ -3292,9 +3695,9 @@ case-insensitively; <code>"mp4decrypt"</code> selects Bento4's mp4decrypt, and <
 </tr>
 </tbody>
 </table>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">network</span><span class="p">:</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="nt">browser</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Firefox135</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span><span class="nt">http2_only</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nt">network</span><span class="p">:</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="nt">browser</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Firefox135</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">  </span><span class="nt">http2_only</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">When to force <code>http1_only</code></p>
@@ -3314,8 +3717,8 @@ honours it (only when <code>network</code> is absent) but emits a <code>Deprecat
 <li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
 </ul>
 <p>Default HTTP headers merged into every session unshackle creates.</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">headers</span><span class="p">:</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">Accept-Language</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en-US,en;q=0.9</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nt">headers</span><span class="p">:</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="nt">Accept-Language</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en-US,en;q=0.9</span>
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Don't set <code>Accept-Encoding</code> (and similar) here</p>
@@ -3352,31 +3755,31 @@ the full provider guide. Recognised providers and their exit ports:</p>
 <td>NordVPN</td>
 <td><code>nordvpn</code></td>
 <td>48-char <strong>service</strong> credentials</td>
-<td><code>https://…:89</code></td>
+<td><code>https://...:89</code></td>
 </tr>
 <tr>
 <td>Surfshark</td>
 <td><code>surfsharkvpn</code></td>
 <td>48-char <strong>service</strong> credentials</td>
-<td><code>https://…:443</code></td>
+<td><code>https://...:443</code></td>
 </tr>
 <tr>
 <td>Windscribe</td>
 <td><code>windscribevpn</code></td>
 <td>service credentials</td>
-<td><code>https://…:443</code></td>
+<td><code>https://...:443</code></td>
 </tr>
 <tr>
 <td>ExpressVPN</td>
 <td><code>expressvpn</code></td>
 <td>browser cookies / token cache</td>
-<td><code>https://cat:…@…:443</code></td>
+<td><code>https://cat:...@...:443</code></td>
 </tr>
 <tr>
 <td>ProtonVPN</td>
 <td><code>protonvpn</code></td>
 <td>TV login or exported cookies</td>
-<td><code>https://…:4443</code> (or <code>:443</code> Secure Core)</td>
+<td><code>https://...:4443</code> (or <code>:443</code> Secure Core)</td>
 </tr>
 <tr>
 <td>Gluetun</td>
@@ -3388,19 +3791,19 @@ the full provider guide. Recognised providers and their exit ports:</p>
 <td>Hola</td>
 <td><em>(none, auto)</em></td>
 <td>none</td>
-<td><code>http://…:{peer}</code></td>
+<td><code>http://...:{peer}</code></td>
 </tr>
 </tbody>
 </table>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">basic</span><span class="p">:</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://user:pass@1.2.3.4:8080</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="nt">de</span><span class="p">:</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://a.example:8080</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">socks5://b.example:1080</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">  </span><span class="nt">nordvpn</span><span class="p">:</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;48-char service username&gt;</span>
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;48-char service password&gt;</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span><span class="nt">basic</span><span class="p">:</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">    </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://user:pass@1.2.3.4:8080</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">    </span><span class="nt">de</span><span class="p">:</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://a.example:8080</span>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">socks5://b.example:1080</span>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="w">  </span><span class="nt">nordvpn</span><span class="p">:</span>
+</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;48-char service username&gt;</span>
+</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;48-char service password&gt;</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Provider loading differs between CLI and REST server</p>
@@ -3455,17 +3858,17 @@ keys instead of re-licensing. Each entry needs a <code>type</code> (the backend 
 </tr>
 </tbody>
 </table>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nt">key_vaults</span><span class="p">:</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SQLite</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Local</span>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">    </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/.unshackle/keys.db</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MySQL</span>
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Team</span>
-</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">db.example.com</span>
-</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="w">    </span><span class="nt">database</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keys</span>
-</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unshackle</span>
-</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hunter2</span>
-</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="w">    </span><span class="nt">no_push</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="nt">key_vaults</span><span class="p">:</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SQLite</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Local</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">    </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/.unshackle/keys.db</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MySQL</span>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Team</span>
+</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">db.example.com</span>
+</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="w">    </span><span class="nt">database</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keys</span>
+</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unshackle</span>
+</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hunter2</span>
+</span><span id="__span-20-11"><a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="w">    </span><span class="nt">no_push</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Common per-entry options</p>
@@ -3691,46 +4094,46 @@ setting, and KIDs, key counts, and other metadata are always logged either way.<
 <hr />
 <h2 id="a-complete-annotated-example">A complete annotated example<a class="headerlink" href="#a-complete-annotated-example" title="Permanent link">&para;</a></h2>
 <p>The following config sets a handful of common keys. Every key not shown keeps its default.</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">directories</span><span class="p">:</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">downloads</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/Media/unshackle</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span><span class="nt">temp</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/mnt/scratch/unshackle</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="nt">network</span><span class="p">:</span>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">  </span><span class="nt">browser</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Chrome131</span>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>
-</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="nt">headers</span><span class="p">:</span>
-</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="w">  </span><span class="nt">Accept-Language</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en-US,en;q=0.9</span>
-</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>
-</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="nt">cdm</span><span class="p">:</span>
-</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
-</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="w">  </span><span class="nt">NF</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span>
-</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a>
-</span><span id="__span-16-15"><a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a><span class="nt">decryption</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shaka</span>
-</span><span id="__span-16-16"><a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a>
-</span><span id="__span-16-17"><a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a><span class="nt">credentials</span><span class="p">:</span>
-</span><span id="__span-16-18"><a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a><span class="w">  </span><span class="nt">NF</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">user@example.com:hunter2</span>
-</span><span id="__span-16-19"><a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a>
-</span><span id="__span-16-20"><a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a><span class="nt">output_template</span><span class="p">:</span>
-</span><span id="__span-16-21"><a id="__codelineno-16-21" name="__codelineno-16-21" href="#__codelineno-16-21"></a><span class="w">  </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{year}.{quality?}.{source}-{tag}&quot;</span>
-</span><span id="__span-16-22"><a id="__codelineno-16-22" name="__codelineno-16-22" href="#__codelineno-16-22"></a><span class="w">  </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{season_episode}.{quality?}.{source}-{tag}&quot;</span>
-</span><span id="__span-16-23"><a id="__codelineno-16-23" name="__codelineno-16-23" href="#__codelineno-16-23"></a><span class="w">  </span><span class="nt">folder</span><span class="p">:</span>
-</span><span id="__span-16-24"><a id="__codelineno-16-24" name="__codelineno-16-24" href="#__codelineno-16-24"></a><span class="w">    </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}</span><span class="nv"> </span><span class="s">({year})&quot;</span>
-</span><span id="__span-16-25"><a id="__codelineno-16-25" name="__codelineno-16-25" href="#__codelineno-16-25"></a><span class="w">    </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}</span><span class="nv"> </span><span class="s">({year})&quot;</span>
-</span><span id="__span-16-26"><a id="__codelineno-16-26" name="__codelineno-16-26" href="#__codelineno-16-26"></a>
-</span><span id="__span-16-27"><a id="__codelineno-16-27" name="__codelineno-16-27" href="#__codelineno-16-27"></a><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MYGRP</span>
-</span><span id="__span-16-28"><a id="__codelineno-16-28" name="__codelineno-16-28" href="#__codelineno-16-28"></a>
-</span><span id="__span-16-29"><a id="__codelineno-16-29" name="__codelineno-16-29" href="#__codelineno-16-29"></a><span class="nt">key_vaults</span><span class="p">:</span>
-</span><span id="__span-16-30"><a id="__codelineno-16-30" name="__codelineno-16-30" href="#__codelineno-16-30"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SQLite</span>
-</span><span id="__span-16-31"><a id="__codelineno-16-31" name="__codelineno-16-31" href="#__codelineno-16-31"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Local</span>
-</span><span id="__span-16-32"><a id="__codelineno-16-32" name="__codelineno-16-32" href="#__codelineno-16-32"></a><span class="w">    </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/.unshackle/keys.db</span>
-</span><span id="__span-16-33"><a id="__codelineno-16-33" name="__codelineno-16-33" href="#__codelineno-16-33"></a>
-</span><span id="__span-16-34"><a id="__codelineno-16-34" name="__codelineno-16-34" href="#__codelineno-16-34"></a><span class="nt">proxy_providers</span><span class="p">:</span>
-</span><span id="__span-16-35"><a id="__codelineno-16-35" name="__codelineno-16-35" href="#__codelineno-16-35"></a><span class="w">  </span><span class="nt">basic</span><span class="p">:</span>
-</span><span id="__span-16-36"><a id="__codelineno-16-36" name="__codelineno-16-36" href="#__codelineno-16-36"></a><span class="w">    </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://user:pass@1.2.3.4:8080</span>
-</span><span id="__span-16-37"><a id="__codelineno-16-37" name="__codelineno-16-37" href="#__codelineno-16-37"></a>
-</span><span id="__span-16-38"><a id="__codelineno-16-38" name="__codelineno-16-38" href="#__codelineno-16-38"></a><span class="nt">tmdb_api_key</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;your-tmdb-key&quot;</span>
-</span><span id="__span-16-39"><a id="__codelineno-16-39" name="__codelineno-16-39" href="#__codelineno-16-39"></a><span class="nt">title_cache_time</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3600</span>
-</span><span id="__span-16-40"><a id="__codelineno-16-40" name="__codelineno-16-40" href="#__codelineno-16-40"></a><span class="nt">redact_paths</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nt">directories</span><span class="p">:</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="w">  </span><span class="nt">downloads</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/Media/unshackle</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="w">  </span><span class="nt">temp</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/mnt/scratch/unshackle</span>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="nt">network</span><span class="p">:</span>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="w">  </span><span class="nt">browser</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Chrome131</span>
+</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>
+</span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a><span class="nt">headers</span><span class="p">:</span>
+</span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a><span class="w">  </span><span class="nt">Accept-Language</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en-US,en;q=0.9</span>
+</span><span id="__span-21-10"><a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a>
+</span><span id="__span-21-11"><a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a><span class="nt">cdm</span><span class="p">:</span>
+</span><span id="__span-21-12"><a id="__codelineno-21-12" name="__codelineno-21-12" href="#__codelineno-21-12"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
+</span><span id="__span-21-13"><a id="__codelineno-21-13" name="__codelineno-21-13" href="#__codelineno-21-13"></a><span class="w">  </span><span class="nt">EXAMPLE2</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span>
+</span><span id="__span-21-14"><a id="__codelineno-21-14" name="__codelineno-21-14" href="#__codelineno-21-14"></a>
+</span><span id="__span-21-15"><a id="__codelineno-21-15" name="__codelineno-21-15" href="#__codelineno-21-15"></a><span class="nt">decryption</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shaka</span>
+</span><span id="__span-21-16"><a id="__codelineno-21-16" name="__codelineno-21-16" href="#__codelineno-21-16"></a>
+</span><span id="__span-21-17"><a id="__codelineno-21-17" name="__codelineno-21-17" href="#__codelineno-21-17"></a><span class="nt">credentials</span><span class="p">:</span>
+</span><span id="__span-21-18"><a id="__codelineno-21-18" name="__codelineno-21-18" href="#__codelineno-21-18"></a><span class="w">  </span><span class="nt">EXAMPLE2</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">user@example.com:hunter2</span>
+</span><span id="__span-21-19"><a id="__codelineno-21-19" name="__codelineno-21-19" href="#__codelineno-21-19"></a>
+</span><span id="__span-21-20"><a id="__codelineno-21-20" name="__codelineno-21-20" href="#__codelineno-21-20"></a><span class="nt">output_template</span><span class="p">:</span>
+</span><span id="__span-21-21"><a id="__codelineno-21-21" name="__codelineno-21-21" href="#__codelineno-21-21"></a><span class="w">  </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{year}.{quality?}.{source}-{tag}&quot;</span>
+</span><span id="__span-21-22"><a id="__codelineno-21-22" name="__codelineno-21-22" href="#__codelineno-21-22"></a><span class="w">  </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{season_episode}.{quality?}.{source}-{tag}&quot;</span>
+</span><span id="__span-21-23"><a id="__codelineno-21-23" name="__codelineno-21-23" href="#__codelineno-21-23"></a><span class="w">  </span><span class="nt">folder</span><span class="p">:</span>
+</span><span id="__span-21-24"><a id="__codelineno-21-24" name="__codelineno-21-24" href="#__codelineno-21-24"></a><span class="w">    </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}</span><span class="nv"> </span><span class="s">({year})&quot;</span>
+</span><span id="__span-21-25"><a id="__codelineno-21-25" name="__codelineno-21-25" href="#__codelineno-21-25"></a><span class="w">    </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}</span><span class="nv"> </span><span class="s">({year})&quot;</span>
+</span><span id="__span-21-26"><a id="__codelineno-21-26" name="__codelineno-21-26" href="#__codelineno-21-26"></a>
+</span><span id="__span-21-27"><a id="__codelineno-21-27" name="__codelineno-21-27" href="#__codelineno-21-27"></a><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MYGRP</span>
+</span><span id="__span-21-28"><a id="__codelineno-21-28" name="__codelineno-21-28" href="#__codelineno-21-28"></a>
+</span><span id="__span-21-29"><a id="__codelineno-21-29" name="__codelineno-21-29" href="#__codelineno-21-29"></a><span class="nt">key_vaults</span><span class="p">:</span>
+</span><span id="__span-21-30"><a id="__codelineno-21-30" name="__codelineno-21-30" href="#__codelineno-21-30"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SQLite</span>
+</span><span id="__span-21-31"><a id="__codelineno-21-31" name="__codelineno-21-31" href="#__codelineno-21-31"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Local</span>
+</span><span id="__span-21-32"><a id="__codelineno-21-32" name="__codelineno-21-32" href="#__codelineno-21-32"></a><span class="w">    </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/.unshackle/keys.db</span>
+</span><span id="__span-21-33"><a id="__codelineno-21-33" name="__codelineno-21-33" href="#__codelineno-21-33"></a>
+</span><span id="__span-21-34"><a id="__codelineno-21-34" name="__codelineno-21-34" href="#__codelineno-21-34"></a><span class="nt">proxy_providers</span><span class="p">:</span>
+</span><span id="__span-21-35"><a id="__codelineno-21-35" name="__codelineno-21-35" href="#__codelineno-21-35"></a><span class="w">  </span><span class="nt">basic</span><span class="p">:</span>
+</span><span id="__span-21-36"><a id="__codelineno-21-36" name="__codelineno-21-36" href="#__codelineno-21-36"></a><span class="w">    </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://user:pass@1.2.3.4:8080</span>
+</span><span id="__span-21-37"><a id="__codelineno-21-37" name="__codelineno-21-37" href="#__codelineno-21-37"></a>
+</span><span id="__span-21-38"><a id="__codelineno-21-38" name="__codelineno-21-38" href="#__codelineno-21-38"></a><span class="nt">tmdb_api_key</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;your-tmdb-key&quot;</span>
+</span><span id="__span-21-39"><a id="__codelineno-21-39" name="__codelineno-21-39" href="#__codelineno-21-39"></a><span class="nt">title_cache_time</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3600</span>
+</span><span id="__span-21-40"><a id="__codelineno-21-40" name="__codelineno-21-40" href="#__codelineno-21-40"></a><span class="nt">redact_paths</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 <p>For how these interact at runtime, continue to <a href="../../guide/downloading/">Downloading</a>,
 <a href="../../guide/drm-and-cdm/">DRM &amp; CDM</a>, and <a href="../../guide/output-and-naming/">Output &amp; naming</a>.</p>

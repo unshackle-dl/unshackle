@@ -2169,7 +2169,7 @@ every request except <code>/api/health</code>:</p>
 <div class="language-shell highlight"><span class="filename">An authenticated request</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://127.0.0.1:8786/api/search<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;X-Secret-Key: your-api-secret&quot;</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;service&quot;: &quot;NF&quot;, &quot;query&quot;: &quot;example&quot;}&#39;</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;service&quot;: &quot;EXAMPLE&quot;, &quot;query&quot;: &quot;example&quot;}&#39;</span>
 </span></code></pre></div>
 <p>A missing or unknown key returns <code>401</code>. The full model, including per-key service
 allowlists, is covered in <a href="authentication/">Authentication</a>.</p>

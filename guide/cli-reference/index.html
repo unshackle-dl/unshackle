@@ -2575,16 +2575,16 @@
 </span></code></pre></div>
 <ul>
 <li><code>OPTIONS</code>: every flag below, parsed at the <code>dl</code> level.</li>
-<li><code>SERVICE</code>: a service tag (e.g. <code>NF</code>, <code>DSNP</code>). Tags are case-insensitive and honour each service's aliases (<code>disney+</code>, <code>DSNP</code>, etc. all resolve to the same tag).</li>
+<li><code>SERVICE</code>: a service tag (e.g. <code>EXAMPLE1</code>, <code>EXAMPLE2</code>). Tags are case-insensitive and honour each service's aliases (<code>example+</code>, <code>EXAMPLE2</code>, etc. all resolve to the same tag).</li>
 <li><code>SERVICE ARGS</code>: the title, URL, or ID, plus any service-specific options. These belong to the service, not to <code>dl</code>.</li>
 </ul>
 <div class="admonition example">
 <p class="admonition-title">Typical downloads</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Best available 1080p SDR of a Netflix title</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">1080</span><span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Best available 1080p SDR of a title</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">1080</span><span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># 4K HDR10, English audio + subs, from a URL</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">2160</span><span class="w"> </span>-r<span class="w"> </span>HDR10<span class="w"> </span>-l<span class="w"> </span>en<span class="w"> </span>DSNP<span class="w"> </span><span class="s2">&quot;https://www.disneyplus.com/…&quot;</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">2160</span><span class="w"> </span>-r<span class="w"> </span>HDR10<span class="w"> </span>-l<span class="w"> </span>en<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s2">&quot;https://www.example.com/...&quot;</span>
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># A season range, HEVC video, EC3 audio</span>
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01-S03<span class="w"> </span>-v<span class="w"> </span>H.265<span class="w"> </span>-a<span class="w"> </span>EC3<span class="w"> </span>SERVICE<span class="w"> </span>TITLE-ID
@@ -2606,7 +2606,7 @@
 <tbody>
 <tr>
 <td><code>-p</code>, <code>--profile</code></td>
-<td>—</td>
+<td>-</td>
 <td>Profile for credentials and cookies.</td>
 </tr>
 <tr>
@@ -2636,12 +2636,12 @@
 </tr>
 <tr>
 <td><code>-vb-range</code>, <code>--vbitrate-range</code></td>
-<td>—</td>
+<td>-</td>
 <td>Video bitrate range in kbps, e.g. <code>6000-7000</code>; picks highest within. Mutually exclusive with <code>--vbitrate</code>.</td>
 </tr>
 <tr>
 <td><code>-ab-range</code>, <code>--abitrate-range</code></td>
-<td>—</td>
+<td>-</td>
 <td>Audio bitrate range in kbps, e.g. <code>128-256</code>. Mutually exclusive with <code>--abitrate</code>.</td>
 </tr>
 <tr>
@@ -2651,7 +2651,7 @@
 </tr>
 <tr>
 <td><code>-c</code>, <code>--channels</code></td>
-<td>—</td>
+<td>-</td>
 <td>Audio channels; matches sub-layouts (5.1 ≈ 6.0).</td>
 </tr>
 <tr>
@@ -2702,12 +2702,12 @@
 </tr>
 <tr>
 <td><code>-vl</code>, <code>--v-lang</code></td>
-<td>—</td>
+<td>-</td>
 <td>Video-only language (overrides <code>-l</code> for video).</td>
 </tr>
 <tr>
 <td><code>-al</code>, <code>--a-lang</code></td>
-<td>—</td>
+<td>-</td>
 <td>Audio-only language (overrides <code>-l</code> for audio).</td>
 </tr>
 <tr>
@@ -2717,7 +2717,7 @@
 </tr>
 <tr>
 <td><code>--require-subs</code></td>
-<td>—</td>
+<td>-</td>
 <td>Required subtitle langs; keeps <strong>all</strong> subs only if these exist. <strong>Cannot combine with <code>--s-lang</code>.</strong></td>
 </tr>
 <tr>
@@ -2732,8 +2732,8 @@
 </tr>
 <tr>
 <td><code>--sub-format</code></td>
-<td>—</td>
-<td>Output subtitle format (<code>SRT</code>/<code>srt</code>, <code>VTT</code>/<code>webvtt</code>, <code>ASS</code>/<code>ssa</code>, <code>TTML</code>, <code>SMI</code>, …), or <code>original</code> to keep the source format.</td>
+<td>-</td>
+<td>Output subtitle format (<code>SRT</code>/<code>srt</code>, <code>VTT</code>/<code>webvtt</code>, <code>ASS</code>/<code>ssa</code>, <code>TTML</code>, <code>SMI</code>, ...), or <code>original</code> to keep the source format.</td>
 </tr>
 </tbody>
 </table>
@@ -2972,7 +2972,7 @@
 </tr>
 <tr>
 <td><code>--slow</code></td>
-<td>—</td>
+<td>-</td>
 <td>Inter-title delay. Bare <code>--slow</code> = 60-120s; <code>--slow 20-40</code> = custom range (minimum 20s).</td>
 </tr>
 </tbody>
@@ -3011,8 +3011,8 @@
 </table>
 <div class="admonition example">
 <p class="admonition-title">Example</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>unshackle<span class="w"> </span>search<span class="w"> </span>NF<span class="w"> </span><span class="s2">&quot;The Office&quot;</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>unshackle<span class="w"> </span>search<span class="w"> </span>-p<span class="w"> </span>myprofile<span class="w"> </span>NF<span class="w"> </span><span class="s2">&quot;breaking bad&quot;</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>unshackle<span class="w"> </span>search<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s2">&quot;My Show&quot;</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>unshackle<span class="w"> </span>search<span class="w"> </span>-p<span class="w"> </span>myprofile<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s2">&quot;Another Show&quot;</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>unshackle<span class="w"> </span>search<span class="w"> </span>--proxy<span class="w"> </span>nordvpn:ca<span class="w"> </span>SERVICE<span class="w"> </span><span class="s2">&quot;query&quot;</span>
 </span></code></pre></div>
 </div>
@@ -3147,7 +3147,7 @@
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>unshackle<span class="w"> </span>env<span class="w"> </span>check
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>unshackle<span class="w"> </span>env<span class="w"> </span>info
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>unshackle<span class="w"> </span>env<span class="w"> </span>clear<span class="w"> </span>cache
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>unshackle<span class="w"> </span>env<span class="w"> </span>clear<span class="w"> </span>cache<span class="w"> </span>NF<span class="w">     </span><span class="c1"># one service only</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>unshackle<span class="w"> </span>env<span class="w"> </span>clear<span class="w"> </span>cache<span class="w"> </span>EXAMPLE<span class="w">   </span><span class="c1"># one service only</span>
 </span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>unshackle<span class="w"> </span>env<span class="w"> </span>clear<span class="w"> </span>temp
 </span></code></pre></div>
 </div>
@@ -3209,10 +3209,10 @@
 <div class="admonition example">
 <p class="admonition-title">Example</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>unshackle<span class="w"> </span>kv<span class="w"> </span>copy<span class="w"> </span>main<span class="w"> </span>backup1<span class="w"> </span>backup2
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>unshackle<span class="w"> </span>kv<span class="w"> </span>copy<span class="w"> </span>main<span class="w"> </span>backup<span class="w"> </span>-s<span class="w"> </span>NF
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>unshackle<span class="w"> </span>kv<span class="w"> </span>copy<span class="w"> </span>main<span class="w"> </span>backup<span class="w"> </span>-s<span class="w"> </span>EXAMPLE
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>unshackle<span class="w"> </span>kv<span class="w"> </span>sync<span class="w"> </span>main<span class="w"> </span>mysql_vault
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>unshackle<span class="w"> </span>kv<span class="w"> </span>add<span class="w"> </span>keys.txt<span class="w"> </span>NF<span class="w"> </span>main<span class="w"> </span>backup
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>unshackle<span class="w"> </span>kv<span class="w"> </span>search<span class="w"> </span>0123456789abcdef0123456789abcdef<span class="w"> </span>-s<span class="w"> </span>NF<span class="w"> </span>-v<span class="w"> </span>main
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>unshackle<span class="w"> </span>kv<span class="w"> </span>add<span class="w"> </span>keys.txt<span class="w"> </span>EXAMPLE<span class="w"> </span>main<span class="w"> </span>backup
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>unshackle<span class="w"> </span>kv<span class="w"> </span>search<span class="w"> </span>0123456789abcdef0123456789abcdef<span class="w"> </span>-s<span class="w"> </span>EXAMPLE<span class="w"> </span>-v<span class="w"> </span>main
 </span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>unshackle<span class="w"> </span>kv<span class="w"> </span>prepare<span class="w"> </span>main<span class="w"> </span>mysql_vault
 </span></code></pre></div>
 </div>
@@ -3487,7 +3487,7 @@
 <tbody>
 <tr>
 <td><code>--full</code> / <code>--limited</code></td>
-<td>—</td>
+<td>-</td>
 <td>Full (0-255) or limited (16-235) range.</td>
 </tr>
 <tr>

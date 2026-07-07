@@ -2035,7 +2035,7 @@
 <ul>
 <li><strong>KID</strong> (Key ID): a 16-byte identifier for a specific encrypted stream, stored as 32 lowercase hex characters with no dashes.</li>
 <li><strong>KEY</strong>: the 16-byte content key that decrypts that stream, also 32 hex characters.</li>
-<li><strong>Service</strong>: the canonical service tag (for example <code>DSNP</code>, not <code>DisneyPlus</code>) that namespaces the key. Each service gets its own logical table.</li>
+<li><strong>Service</strong>: the canonical service tag (for example <code>EXAMPLE</code>, not <code>ExampleService</code>) that namespaces the key. Each service gets its own logical table.</li>
 </ul>
 <div class="admonition note">
 <p class="admonition-title">Why keys are matched by KID</p>
@@ -2384,12 +2384,12 @@
 </span></code></pre></div>
 <h3 id="kv-add-import-keys-from-a-file"><code>kv add</code>: import keys from a file<a class="headerlink" href="#kv-add-import-keys-from-a-file" title="Permanent link">&para;</a></h3>
 <p>Add <code>KID:KEY</code> pairs to one or more vaults for a given service. The file must contain one pair per line as <code>HEX:HEX</code> (32 hex characters each); lines that do not match are ignored.</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>kv<span class="w"> </span>add<span class="w"> </span>keys.txt<span class="w"> </span>DSNP<span class="w"> </span><span class="nb">local</span><span class="w"> </span>shared
+<div class="language-console highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>kv<span class="w"> </span>add<span class="w"> </span>keys.txt<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="nb">local</span><span class="w"> </span>shared
 </span></code></pre></div>
 <div class="language-text highlight"><span class="filename">keys.txt</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>9a04f07998404286ab92e65be0885f95:b1c2d3e4f5a6978012345678deadbeef
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>0e7cc1a4e2f9411db0f24a3fbb8f8b21:00112233445566778899aabbccddeeff
 </span></code></pre></div>
-<p>The service argument (<code>DSNP</code> above) is normalized to its canonical tag automatically. Keys that already exist in a vault are reported as skipped.</p>
+<p>The service argument (<code>EXAMPLE</code> above) is normalized to its canonical tag automatically. Keys that already exist in a vault are reported as skipped.</p>
 <h3 id="kv-search-find-a-key-by-kid"><code>kv search</code>: find a key by KID<a class="headerlink" href="#kv-search-find-a-key-by-kid" title="Permanent link">&para;</a></h3>
 <p>Search your vaults for a KID and print any matching key.</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>kv<span class="w"> </span>search<span class="w"> </span>9a04f07998404286ab92e65be0885f95

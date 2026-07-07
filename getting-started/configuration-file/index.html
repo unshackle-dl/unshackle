@@ -660,6 +660,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#setting-download-defaults-dl" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setting download defaults (dl:)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-directory-layout" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1777,6 +1788,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#setting-download-defaults-dl" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setting download defaults (dl:)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-directory-layout" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1929,11 +1951,11 @@
 </span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1"># Default Widevine/PlayReady device to use, with per-service overrides</span>
 </span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="nt">cdm</span><span class="p">:</span>
 </span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_device_l3</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">  </span><span class="nt">AMZN</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_device_l1</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">  </span><span class="nt">EXAMPLE</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_device_l1</span>
 </span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
 </span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="c1"># Per-service login details (service tag -&gt; &quot;username:password&quot;)</span>
 </span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="nt">credentials</span><span class="p">:</span>
-</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">  </span><span class="nt">AMZN</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_email@example.com:hunter2</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">  </span><span class="nt">EXAMPLE</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_email@example.com:hunter2</span>
 </span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>
 </span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="c1"># Default HTTP headers merged into every request</span>
 </span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="nt">headers</span><span class="p">:</span>
@@ -1995,12 +2017,41 @@
 <p class="admonition-title">Unknown keys are silently ignored</p>
 <p>unshackle does not validate your config against a schema. If you misspell a key, it is simply skipped and the default is used. You will not get an error. Double-check key names (and their nesting) if a setting does not seem to apply.</p>
 </div>
+<h2 id="setting-download-defaults-dl">Setting download defaults (<code>dl:</code>)<a class="headerlink" href="#setting-download-defaults-dl" title="Permanent link">&para;</a></h2>
+<p>If you always pass the same <code>dl</code> flags (a language, a resolution, a codec), put them under a
+<code>dl:</code> key once and unshackle applies them to every download. Any flag from
+<a href="../../guide/downloading/">Downloading</a> works here; the key is the flag's long name with dashes
+turned into underscores (<code>--best-available</code> → <code>best_available</code>).</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">dl</span><span class="p">:</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">lang</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">]</span><span class="w">          </span><span class="c1"># -l en</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">quality</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">1080</span><span class="p p-Indicator">]</span><span class="w">     </span><span class="c1"># -q 1080</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">vcodec</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">H265</span><span class="p p-Indicator">]</span><span class="w">      </span><span class="c1"># -v H265</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span><span class="nt">sub_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">srt</span><span class="w">     </span><span class="c1"># convert subtitles to SRT</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span><span class="nt">downloads</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span><span class="w">        </span><span class="c1"># two tracks at once</span>
+</span></code></pre></div>
+<p>You can still override any of these on the command line for a one-off; an explicit flag
+always beats the config default. You can also scope defaults to a single service by nesting a
+<code>dl:</code> block under it:</p>
+<div class="language-yaml highlight"><span class="filename">Per-service defaults</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">dl</span><span class="p">:</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">lang</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">]</span><span class="w">          </span><span class="c1"># default for everything</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nt">services</span><span class="p">:</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span><span class="nt">EXAMPLE</span><span class="p">:</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="nt">dl</span><span class="p">:</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">      </span><span class="nt">lang</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">ja</span><span class="p p-Indicator">]</span><span class="w">  </span><span class="c1"># Example downloads English + Japanese</span>
+</span></code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">A few keys are named after the flag's internal name</p>
+<p>Most keys are obvious, but set these exact ones: <code>range</code> (<code>-r</code>), <code>list</code> (<code>--list</code>),
+<code>tmdb_id</code> (<code>--tmdb</code>), <code>imdb_id</code> (<code>--imdb</code>), <code>no_atmos</code> (<code>--noatmos</code>), and <code>output_dir</code>
+(<code>-o</code>). The <a href="../../reference/configuration/#dl">Configuration Reference</a> has the full list
+and every available key.</p>
+</div>
 <h2 id="the-directory-layout">The directory layout<a class="headerlink" href="#the-directory-layout" title="Permanent link">&para;</a></h2>
 <p>The <code>directories</code> key controls where unshackle reads and writes its various files. Each directory has a sensible default, and you can override most of them by giving a new path. Paths support <code>~</code> for your home directory.</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">directories</span><span class="p">:</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">downloads</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/Videos/unshackle</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">temp</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/mnt/fast/unshackle-temp</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">cache</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/.cache/unshackle</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">directories</span><span class="p">:</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">downloads</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/Videos/unshackle</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="nt">temp</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/mnt/fast/unshackle-temp</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="nt">cache</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/.cache/unshackle</span>
 </span></code></pre></div>
 <p>The directories unshackle uses:</p>
 <table>
@@ -2085,11 +2136,11 @@
 </div>
 <h3 id="the-services-directory-is-special">The <code>services</code> directory is special<a class="headerlink" href="#the-services-directory-is-special" title="Permanent link">&para;</a></h3>
 <p>Unlike the other entries, <code>services</code> is a <strong>list</strong>, and each entry can be either a local folder or a remote repository. This lets you mix your own local service code with services pulled from Git:</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">directories</span><span class="p">:</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">services</span><span class="p">:</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unshackle-dl/services</span><span class="w">      </span><span class="c1"># a GitHub owner/repo shorthand</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/me/my-services.git</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/code/local-services</span><span class="w">      </span><span class="c1"># a local folder</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">directories</span><span class="p">:</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">services</span><span class="p">:</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unshackle-dl/services</span><span class="w">      </span><span class="c1"># a GitHub owner/repo shorthand</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/me/my-services.git</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/code/local-services</span><span class="w">      </span><span class="c1"># a local folder</span>
 </span></code></pre></div>
 <p>Entries are searched in the order listed, and <strong>the first source to define a given service tag wins</strong>, so put local folders last if you want them to act as fallbacks rather than overrides. Remote repositories are cloned and periodically updated for you. See <a href="../../dev/creating-a-service/">Services</a> for the full details on how service discovery and repositories work.</p>
 <h2 id="the-filenames-key">The <code>filenames</code> key<a class="headerlink" href="#the-filenames-key" title="Permanent link">&para;</a></h2>
@@ -2097,22 +2148,22 @@
 <h2 id="editing-the-config-with-unshackle-cfg">Editing the config with <code>unshackle cfg</code><a class="headerlink" href="#editing-the-config-with-unshackle-cfg" title="Permanent link">&para;</a></h2>
 <p>You do not have to edit <code>unshackle.yaml</code> by hand. The <code>unshackle cfg</code> command reads and writes individual values for you, creating the config file (and its parent directory) if it does not exist yet.</p>
 <p><strong>Read a single value</strong> by passing its key. Nested keys use dot notation:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>tag
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>cdm.default
+<div class="language-console highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>tag
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>cdm.default
 </span></code></pre></div>
 <p><strong>Set a value</strong> by passing a key and a value:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>tag<span class="w"> </span>MYGRP
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>cdm.default<span class="w"> </span>my_device_l3
+<div class="language-console highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>tag<span class="w"> </span>MYGRP
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>cdm.default<span class="w"> </span>my_device_l3
 </span></code></pre></div>
 <p>Values are parsed as Python literals where possible, so numbers, booleans, and lists work naturally, while bare text is treated as a string:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>update_checks<span class="w"> </span><span class="nb">false</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>vault_timeout<span class="w"> </span><span class="m">30</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>update_checks<span class="w"> </span><span class="nb">false</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>vault_timeout<span class="w"> </span><span class="m">30</span>
 </span></code></pre></div>
 <p><strong>Remove a value</strong> with <code>--unset</code>:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>cdm.default<span class="w"> </span>--unset
+<div class="language-console highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>cdm.default<span class="w"> </span>--unset
 </span></code></pre></div>
 <p><strong>List everything</strong> currently set with <code>--list</code>:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>--list
+<div class="language-console highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>--list
 </span></code></pre></div>
 <p>When it writes, <code>unshackle cfg</code> targets the config file that was loaded. If none exists yet, it creates <code>unshackle.yaml</code> in your OS user-config directory.</p>
 <div class="admonition warning">

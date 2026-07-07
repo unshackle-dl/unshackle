@@ -2031,13 +2031,13 @@ The default is the bundled <code>unshackle/services</code> directory.</p>
 is a service</strong>, and the folder name is the service <strong>tag</strong>:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>services/
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>└── EXAMPLE/
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    ├── __init__.py     # required — defines the service class
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    └── config.yaml     # optional — per-service configuration
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    ├── __init__.py     # required - defines the service class
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    └── config.yaml     # optional - per-service configuration
 </span></code></pre></div>
 <p>Two rules the loader enforces:</p>
 <ol>
-<li><strong>The class name must exactly match the folder/tag name.</strong> Folder <code>AMZN</code> must
-   define <code>class AMZN</code>. A mismatch raises a <code>RuntimeError</code>.</li>
+<li><strong>The class name must exactly match the folder/tag name.</strong> Folder <code>EXAMPLE</code> must
+   define <code>class EXAMPLE</code>. A mismatch raises a <code>RuntimeError</code>.</li>
 <li><strong>List order is priority.</strong> The first services path to define a given tag
    wins; later duplicates are shadowed. Put your own local overrides <em>last</em> to
    use them as fallbacks, or <em>first</em> to override a repo.</li>
@@ -2597,7 +2597,7 @@ flagged, banned, or downgraded.</p>
 </span><span id="__span-18-13"><a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a>
 </span><span id="__span-18-14"><a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a><span class="k">class</span><span class="w"> </span><span class="nc">MYSVC</span><span class="p">(</span><span class="n">Service</span><span class="p">):</span>
 </span><span id="__span-18-15"><a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-</span><span id="__span-18-16"><a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a><span class="sd">    MyService — https://myservice.com</span>
+</span><span id="__span-18-16"><a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a><span class="sd">    MyService - https://myservice.com</span>
 </span><span id="__span-18-17"><a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a>
 </span><span id="__span-18-18"><a id="__codelineno-18-18" name="__codelineno-18-18" href="#__codelineno-18-18"></a><span class="sd">    \b</span>
 </span><span id="__span-18-19"><a id="__codelineno-18-19" name="__codelineno-18-19" href="#__codelineno-18-19"></a><span class="sd">    Usage: unshackle dl MYSVC &lt;title-id-or-url&gt;</span>

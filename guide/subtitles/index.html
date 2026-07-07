@@ -2203,21 +2203,21 @@ format-appropriate clean-up to produce a single, valid file:</p>
 <h3 id="choosing-languages">Choosing languages<a class="headerlink" href="#choosing-languages" title="Permanent link">&para;</a></h3>
 <p>By default (<code>--s-lang all</code>) unshackle keeps every subtitle language the service offers.
 To narrow it down, pass a comma-separated list of language tags:</p>
-<div class="language-shell highlight"><span class="filename">English and Spanish subtitles only</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--s-lang<span class="w"> </span>en,es<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">English and Spanish subtitles only</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--s-lang<span class="w"> </span>en,es<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p>Language matching is fuzzy by default: <code>en</code> will match <code>en-US</code>, <code>en-GB</code>, and similar
 variants. If a requested language is missing but others were found, unshackle continues
 with whatever remains and tells you which languages it dropped.</p>
 <p>For strict matching, where <code>es-419</code> matches only <code>es-419</code> and never <code>es-ES</code>, add
 <code>--exact-lang</code>:</p>
-<div class="language-shell highlight"><span class="filename">Only Latin-American Spanish, no other Spanish variants</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--s-lang<span class="w"> </span>es-419<span class="w"> </span>--exact-lang<span class="w"> </span>DSNP<span class="w"> </span><span class="s1">&#39;https://www.disneyplus.com/…&#39;</span>
+<div class="language-shell highlight"><span class="filename">Only Latin-American Spanish, no other Spanish variants</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--s-lang<span class="w"> </span>es-419<span class="w"> </span>--exact-lang<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s1">&#39;https://www.example.com/...&#39;</span>
 </span></code></pre></div>
 <h3 id="requiring-languages-before-downloading">Requiring languages before downloading<a class="headerlink" href="#requiring-languages-before-downloading" title="Permanent link">&para;</a></h3>
 <p><code>--require-subs</code> is a gate rather than a filter. It downloads <strong>all</strong> available
 subtitles, but only if every language you list is present; if any is missing the title
 errors out. This is useful for batch jobs where a title without your must-have language
 should fail loudly rather than silently produce a partial result.</p>
-<div class="language-shell highlight"><span class="filename">Fail unless both English and French subs exist, then grab everything</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--require-subs<span class="w"> </span>en,fr<span class="w"> </span>AMZN<span class="w"> </span>B0ABCDEFGH
+<div class="language-shell highlight"><span class="filename">Fail unless both English and French subs exist, then grab everything</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--require-subs<span class="w"> </span>en,fr<span class="w"> </span>EXAMPLE<span class="w"> </span>B0ABCDEFGH
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title"><code>--require-subs</code> and <code>--s-lang</code> are mutually exclusive</p>
@@ -2228,7 +2228,7 @@ combined with <code>--s-lang</code>. Choose one or the other.</p>
 <p>Forced tracks carry only the important on-screen signs and foreign-dialogue lines meant
 to display even when you are watching in your own language. They are <strong>excluded by
 default</strong>. Add <code>-fs</code> / <code>--forced-subs</code> to include them:</p>
-<div class="language-shell highlight"><span class="filename">Include forced tracks alongside full subtitles</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--s-lang<span class="w"> </span>en<span class="w"> </span>--forced-subs<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Include forced tracks alongside full subtitles</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--s-lang<span class="w"> </span>en<span class="w"> </span>--forced-subs<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <h2 id="track-types-forced-sdh-and-cc">Track types: forced, SDH, and CC<a class="headerlink" href="#track-types-forced-sdh-and-cc" title="Permanent link">&para;</a></h2>
 <p>Every subtitle track carries flags describing what kind of captions it holds. These
@@ -2281,12 +2281,12 @@ hearing-impaired cues survive the strip untouched.</p>
 <p>By default unshackle keeps each subtitle in its downloaded format (only auto-converting
 TTML to WebVTT for muxing, as noted above). To force a specific output format, use
 <code>--sub-format</code>:</p>
-<div class="language-shell highlight"><span class="filename">Convert every subtitle to SRT</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--s-lang<span class="w"> </span>en,es<span class="w"> </span>--sub-format<span class="w"> </span>srt<span class="w"> </span>NF<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Convert every subtitle to SRT</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--s-lang<span class="w"> </span>en,es<span class="w"> </span>--sub-format<span class="w"> </span>srt<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p><code>--sub-format</code> accepts the common format names and aliases, including <code>srt</code>, <code>vtt</code>,
 <code>ssa</code>, <code>ass</code>, and <code>ttml</code>. Pass <code>original</code> to explicitly keep the source format and skip
 all conversion:</p>
-<div class="language-shell highlight"><span class="filename">Keep whatever the service delivered</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--sub-format<span class="w"> </span>original<span class="w"> </span>DSNP<span class="w"> </span><span class="s1">&#39;https://www.disneyplus.com/…&#39;</span>
+<div class="language-shell highlight"><span class="filename">Keep whatever the service delivered</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--sub-format<span class="w"> </span>original<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s1">&#39;https://www.example.com/...&#39;</span>
 </span></code></pre></div>
 <p>Conversion only runs when the source format differs from the target, so
 <code>--sub-format srt</code> on a track that is already SRT is a no-op.</p>
@@ -2325,17 +2325,17 @@ formats involved:</p>
 <tr>
 <td><code>subby</code></td>
 <td>Native SRT output with clean-up</td>
-<td>—</td>
+<td>-</td>
 </tr>
 <tr>
 <td><code>pysubs2</code></td>
 <td>Best fidelity for styled SSA/ASS</td>
-<td>— (pure Python, always available)</td>
+<td>- (pure Python, always available)</td>
 </tr>
 <tr>
 <td><code>pycaption</code></td>
 <td>Last-resort fallback; flattens styling</td>
-<td>—</td>
+<td>-</td>
 </tr>
 </tbody>
 </table>
