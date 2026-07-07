@@ -277,7 +277,11 @@ class Tracks:
                 continue
             self.audio.sort(key=lambda x: not is_close_match(language, [x.language]))
 
-    def sort_subtitles(self, by_language: Optional[Sequence[Union[str, Language]]] = None) -> None:
+    def sort_subtitles(
+        self,
+        by_language: Optional[Sequence[Union[str, Language]]] = None,
+        type_priority: Optional[Sequence[str]] = None,
+    ) -> None:
         """
         Sort subtitle tracks by various track attributes to a common P2P standard.
         You may optionally provide a sequence of languages to prioritize to the top.
@@ -292,13 +296,25 @@ class Tracks:
           - Normal
           - Hard of Hearing (SDH/CC)
           (Least to most captions expected in the subtitle)
+
+        type_priority overrides the Language Group Order with an explicit ranking of
+        "forced", "normal", and "sdh" (cc counts as sdh); unlisted types fall to the end.
+        The first track after sorting receives the default flag at mux time, so this also
+        controls which subtitle type becomes default.
         """
         if not self.subtitles:
             return
         # language groups
         self.subtitles.sort(key=lambda x: str(x.language))
-        self.subtitles.sort(key=lambda x: x.sdh or x.cc)
-        self.subtitles.sort(key=lambda x: x.forced, reverse=True)
+        if type_priority:
+            rank = {str(t).lower(): i for i, t in enumerate(type_priority)}
+            default_rank = len(rank)
+            self.subtitles.sort(
+                key=lambda x: rank.get("forced" if x.forced else "sdh" if (x.sdh or x.cc) else "normal", default_rank)
+            )
+        else:
+            self.subtitles.sort(key=lambda x: x.sdh or x.cc)
+            self.subtitles.sort(key=lambda x: x.forced, reverse=True)
         # sections
         for language in reversed(by_language or []):
             if str(language) == "all":

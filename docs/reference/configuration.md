@@ -371,6 +371,7 @@ written as sidecar files. See [Subtitles](../guide/subtitles.md) for the full gu
 | `preferred_conversion_method` | str | *(unset)* | Preferred converter when several are available. |
 | `output_mode` | str | `"mux"` | `mux` embeds subtitles in the MKV; `sidecar` writes separate files. |
 | `sidecar_format` | str | `"srt"` | Format for sidecar files when `output_mode: sidecar`. |
+| `type_priority` | list | *(unset)* | Ordered ranking of subtitle types (`forced`, `normal`, `sdh`; CC counts as SDH) that sorts the variants within each language. Types you leave out fall to the end. |
 
 ```yaml
 subtitle:
@@ -378,6 +379,17 @@ subtitle:
   output_mode: sidecar
   sidecar_format: srt
 ```
+
+!!! note "`type_priority` also picks the default subtitle"
+    `type_priority` sorts the tracks within each language, and at mux time the first track
+    in the default subtitle language gets the `default` flag. The built-in order is `forced`,
+    `normal`, `sdh`, which means a forced track becomes default whenever one exists. If you
+    want the full dialogue track as default instead, set:
+
+    ```yaml
+    subtitle:
+      type_priority: [normal, sdh, forced]
+    ```
 
 ### `audio`
 
