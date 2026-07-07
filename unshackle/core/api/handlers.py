@@ -8,9 +8,10 @@ from typing import Any, Dict, List, Optional
 
 from aiohttp import web
 
+from unshackle.core.api.compression import safe_inflate
 from unshackle.core.api.errors import APIError, APIErrorCode, handle_api_exception
 from unshackle.core.api.input_bridge import AuthStatus, InputBridge
-from unshackle.core.api.sanitize import sanitize_log
+from unshackle.core.api.sanitize import safe_cache_key, sanitize_log
 from unshackle.core.config import config
 from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP
 from unshackle.core.proxies.resolve import initialize_proxy_providers, resolve_proxy
@@ -273,6 +274,25 @@ def get_allowed_services(request: Optional[web.Request] = None) -> Optional[List
         return None
 
     return list(result)
+
+
+def caller_key(request: Optional[web.Request] = None) -> str:
+    """The authenticating X-Secret-Key for a request, or 'anonymous' when unauthenticated."""
+    return request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
+
+
+def owns_job(job: Any, request: Optional[web.Request] = None) -> bool:
+    """Whether the calling key owns this job.
+
+    Jobs created without an owner (no-key mode / legacy) stay shared; otherwise a job is
+    only visible to the key that created it (constant-time compare).
+    """
+    import hmac
+
+    owner = getattr(job, "owner_key", None)
+    if owner is None:
+        return True
+    return hmac.compare_digest(owner, caller_key(request))
 
 
 def validate_service(service_tag: str, request: Optional[web.Request] = None) -> Optional[str]:
@@ -985,7 +1005,9 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
             **service_specific_defaults,
             **filtered_params,
         }
-        job = manager.create_job(normalized_service, title_id, **params_with_defaults)
+        job = manager.create_job(
+            normalized_service, title_id, owner_key=caller_key(request), **params_with_defaults
+        )
 
         return web.json_response(
             {"job_id": job.job_id, "status": job.status.value, "created_time": job.created_time.isoformat()}, status=202
@@ -1009,7 +1031,7 @@ async def list_download_jobs_handler(data: Dict[str, Any], request: Optional[web
 
     try:
         manager = get_download_manager()
-        jobs = manager.list_jobs()
+        jobs = [job for job in manager.list_jobs() if owns_job(job, request)]
 
         status_filter = data.get("status")
         if status_filter:
@@ -1080,7 +1102,7 @@ async def get_download_job_handler(job_id: str, request: Optional[web.Request] =
         manager = get_download_manager()
         job = manager.get_job(job_id)
 
-        if not job:
+        if not job or not owns_job(job, request):
             raise APIError(
                 APIErrorCode.JOB_NOT_FOUND,
                 "Job not found",
@@ -1109,7 +1131,7 @@ async def cancel_download_job_handler(job_id: str, request: Optional[web.Request
         manager = get_download_manager()
 
         job = manager.get_job(job_id)
-        if not job:
+        if not job or not owns_job(job, request):
             raise APIError(
                 APIErrorCode.JOB_NOT_FOUND,
                 "Job not found",
@@ -1173,7 +1195,7 @@ async def retry_download_job_handler(job_id: str, request: Optional[web.Request]
         manager = get_download_manager()
 
         job = manager.get_job(job_id)
-        if not job:
+        if not job or not owns_job(job, request):
             raise APIError(
                 APIErrorCode.JOB_NOT_FOUND,
                 "Job not found",
@@ -1200,7 +1222,7 @@ async def retry_download_job_handler(job_id: str, request: Optional[web.Request]
         await manager.start_workers()
 
         # Reuse the raw in-memory parameters; redaction only ever applies to serialized copies.
-        new_job = manager.create_job(job.service, job.title_id, **job.parameters)
+        new_job = manager.create_job(job.service, job.title_id, owner_key=caller_key(request), **job.parameters)
 
         return web.json_response(
             {"job_id": new_job.job_id, "status": new_job.status.value, "created_time": new_job.created_time.isoformat()},
@@ -1227,7 +1249,7 @@ async def prioritize_download_job_handler(job_id: str, request: Optional[web.Req
         manager = get_download_manager()
 
         job = manager.get_job(job_id)
-        if not job:
+        if not job or not owns_job(job, request):
             raise APIError(
                 APIErrorCode.JOB_NOT_FOUND,
                 "Job not found",
@@ -1626,10 +1648,9 @@ def _create_service_instance(
     if cookie_text and isinstance(cookie_text, str):
         import base64
         import tempfile
-        import zlib
         from http.cookiejar import MozillaCookieJar
 
-        cookie_str = zlib.decompress(base64.b64decode(cookie_text)).decode("utf-8")
+        cookie_str = safe_inflate(base64.b64decode(cookie_text)).decode("utf-8")
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as f:
             f.write(cookie_str)
             tmp_path = f.name
@@ -1700,13 +1721,16 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
         cache_data = data.get("cache", {})
         if cache_data:
             import base64
-            import zlib
 
             cache_dir = app_config.directories.cache / session_cache_tag
             cache_dir.mkdir(parents=True, exist_ok=True)
             for key, content in cache_data.items():
-                decompressed = zlib.decompress(base64.b64decode(content)).decode("utf-8")
-                (cache_dir / key).with_suffix(".json").write_text(decompressed, encoding="utf-8")
+                safe_name = safe_cache_key(key)
+                if not safe_name:
+                    log.warning(f"Rejecting unsafe session cache key: {sanitize_log(key)}")
+                    continue
+                decompressed = safe_inflate(base64.b64decode(content)).decode("utf-8")
+                (cache_dir / safe_name).with_suffix(".json").write_text(decompressed, encoding="utf-8")
 
         bridge = InputBridge()
         service_instance._input_bridge = bridge
@@ -1718,6 +1742,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
             session_id=session_id,
         )
         session.creator_ip = request.remote if request else None
+        session.owner_key = api_key
         session.cache_tag = session_cache_tag
         session.input_bridge = bridge
         session.auth_status = AuthStatus.AUTHENTICATING
@@ -2138,7 +2163,14 @@ async def session_prompt_post_handler(
 
 
 async def _get_validated_session(session_id: str, request: Optional[web.Request]) -> Any:
-    """Fetch a session and verify the requesting IP matches the creator."""
+    """Fetch a session and verify the caller owns it.
+
+    Ownership is bound to the authenticating X-Secret-Key rather than the source IP:
+    behind a reverse proxy every caller shares the proxy's address, so the IP check
+    (kept as defence in depth) cannot distinguish users on its own.
+    """
+    import hmac
+
     from unshackle.core.api.session_store import get_session_store
 
     store = get_session_store()
@@ -2149,6 +2181,13 @@ async def _get_validated_session(session_id: str, request: Optional[web.Request]
             f"Session not found or expired: {session_id}",
             details={"session_id": session_id},
         )
+    if session.owner_key is not None and request is not None:
+        caller_key = request.headers.get("X-Secret-Key", "anonymous")
+        if not hmac.compare_digest(caller_key, session.owner_key):
+            raise APIError(
+                APIErrorCode.FORBIDDEN,
+                "Session access denied",
+            )
     if session.creator_ip and request and request.remote != session.creator_ip:
         raise APIError(
             APIErrorCode.FORBIDDEN,
@@ -2407,11 +2446,14 @@ def _handle_single_server_cdm(
         pr_pssh = PlayReadyPSSH(base64.b64decode(pssh_b64))
         pr_drm = PlayReady(pssh=pr_pssh, pssh_b64=pssh_b64)
 
+        # Gate on the caller's CDM device first so a caller with no device cannot
+        # harvest server-side keys from the vault fallback below.
+        device_name = _resolve_device_name(user_config, drm_type, service.__class__.__name__)
+
         vault_keys = _check_vaults(pr_drm.kids, service.__class__.__name__)
         if vault_keys:
             return vault_keys
 
-        device_name = _resolve_device_name(user_config, drm_type, service.__class__.__name__)
         cdm = load_cdm(device_name, service_name=service.__class__.__name__)
         pr_drm.get_content_keys(
             cdm=cdm,
@@ -2427,11 +2469,14 @@ def _handle_single_server_cdm(
         wv_pssh = WvPSSH(pssh_b64)
         wv_drm = Widevine(pssh=wv_pssh)
 
+        # Gate on the caller's CDM device first so a caller with no device cannot
+        # harvest server-side keys from the vault fallback below.
+        device_name = _resolve_device_name(user_config, drm_type, service.__class__.__name__)
+
         vault_keys = _check_vaults(wv_drm.kids, service.__class__.__name__)
         if vault_keys:
             return vault_keys
 
-        device_name = _resolve_device_name(user_config, drm_type, service.__class__.__name__)
         cdm = load_cdm(device_name, service_name=service.__class__.__name__)
         wv_drm.get_content_keys(
             cdm=cdm,

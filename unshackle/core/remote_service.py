@@ -207,7 +207,8 @@ def _resolve_manifest_data(tracks: Tracks, manifests: list) -> None:
     to copy track.data. HLS is skipped as it re-fetches from track.url.
     """
     import base64 as b64
-    import zlib
+
+    from unshackle.core.api.compression import safe_inflate
 
     if not manifests:
         return
@@ -223,7 +224,7 @@ def _resolve_manifest_data(tracks: Tracks, manifests: list) -> None:
             continue
 
         try:
-            raw = zlib.decompress(b64.b64decode(m_data))
+            raw = safe_inflate(b64.b64decode(m_data))
 
             if m_type == "dash":
                 from lxml import etree
@@ -836,17 +837,22 @@ class RemoteService:
         if not cache_data:
             return
 
-        import zlib
+        from unshackle.core.api.compression import safe_inflate
+        from unshackle.core.api.sanitize import safe_cache_key
 
         cache_dir = config.directories.cache / self.service_tag
         cache_dir.mkdir(parents=True, exist_ok=True)
 
         for key, content in cache_data.items():
+            safe_name = safe_cache_key(key)
+            if not safe_name:
+                self.log.warning(f"Rejecting unsafe cache filename from server: {key!r}")
+                continue
             try:
-                decompressed = zlib.decompress(base64.b64decode(content))
-                (cache_dir / key).with_suffix(".json").write_bytes(decompressed)
+                decompressed = safe_inflate(base64.b64decode(content))
+                (cache_dir / safe_name).with_suffix(".json").write_bytes(decompressed)
             except Exception as e:
-                self.log.warning(f"Failed to save returned cache file '{key}': {e}")
+                self.log.warning(f"Failed to save returned cache file '{safe_name}': {e}")
 
         self.log.info(f"Saved {len(cache_data)} cache file(s) from server")
 

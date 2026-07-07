@@ -127,6 +127,9 @@ class DownloadJob:
     # Guards against writing the same job to the persistent history file twice.
     history_recorded: bool = False
 
+    # X-Secret-Key that created the job; scopes per-caller access, never serialized into to_dict().
+    owner_key: Optional[str] = None
+
     def to_dict(self, include_full_details: bool = False) -> Dict[str, Any]:
         """Convert job to dictionary for JSON response."""
         result = {
@@ -617,7 +620,9 @@ class DownloadQueueManager:
             f"Initialized download queue manager: max_concurrent={max_concurrent_downloads}, retention_hours={job_retention_hours}"
         )
 
-    def create_job(self, service: str, title_id: str, **parameters) -> DownloadJob:
+    def create_job(
+        self, service: str, title_id: str, owner_key: Optional[str] = None, **parameters
+    ) -> DownloadJob:
         """Create a new download job and add it to the queue."""
         job_id = str(uuid.uuid4())
         job = DownloadJob(
@@ -627,6 +632,7 @@ class DownloadQueueManager:
             service=service,
             title_id=title_id,
             parameters=parameters,
+            owner_key=owner_key,
         )
 
         self._jobs[job_id] = job

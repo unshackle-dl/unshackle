@@ -3,8 +3,25 @@
 from __future__ import annotations
 
 import gzip
+import zlib
 
 from aiohttp import web
+
+# Cap the inflated size of a peer-supplied compressed blob (cookies, session cache,
+# serialized manifests) so a tiny payload cannot expand without bound (zip-bomb DoS).
+MAX_INFLATE_BYTES = 64 * 1024 * 1024  # 64 MiB
+
+
+def safe_inflate(data: bytes, max_size: int = MAX_INFLATE_BYTES) -> bytes:
+    """zlib-decompress *data*, raising ValueError if the result would exceed *max_size*."""
+    decompressor = zlib.decompressobj()
+    out = decompressor.decompress(data, max_size + 1)
+    if len(out) > max_size or decompressor.unconsumed_tail:
+        raise ValueError("compressed payload expands beyond allowed size")
+    out += decompressor.flush()
+    if len(out) > max_size:
+        raise ValueError("compressed payload expands beyond allowed size")
+    return out
 
 
 @web.middleware
