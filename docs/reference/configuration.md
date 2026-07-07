@@ -411,6 +411,7 @@ Matroska (MKV) muxing options.
 |---------|------|---------|-------------|
 | `set_title` | bool | `true` | Write a human-readable title into the MKV container. |
 | `default_language` | dict | `{}` | Force which language is flagged *default* per track type, e.g. `{audio: en, subtitle: en}`. |
+| `prefer_full_subtitle_on_audio_mismatch` | bool | `true` | Controls whether a *forced* subtitle track can receive the default flag when the default audio language differs from the configured default subtitle language. When `true`, only full/SDH subtitle tracks are eligible for the default flag in that case (forced tracks stay `forced-track=yes` but `default-track=no`); among eligible candidates, non-SDH full tracks are preferred over SDH. When `false`, the historical behavior applies: the first track matching the configured language becomes default, whether forced or not. Has no effect when the default audio and subtitle languages match, since picking the forced track first is the expected behavior in that case. |
 | `merge_audio` | bool | `true` | Merge all audio into one file. `--split-audio` on the CLI flips this off. |
 | `merge_video` | bool | `false` | Merge all video tracks into one file. `--merge-video` on the CLI flips this on. |
 
@@ -420,6 +421,7 @@ muxing:
   default_language:
     audio: en
     subtitle: en
+  prefer_full_subtitle_on_audio_mismatch: true
 ```
 
 ### `language_tags`

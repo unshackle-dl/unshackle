@@ -497,12 +497,26 @@ class Tracks:
                 None,
             )
 
+        audio_default_lang = None
+        if preferred_audio_idx is not None:
+            audio_default_lang = self.audio[preferred_audio_idx].language
+        elif self.audio:
+            original = next((a for a in self.audio if a.is_original_lang), None)
+            audio_default_lang = original.language if original else None
+
         preferred_subtitle_idx: Optional[int] = None
         if preferred_subtitle_lang and not skip_subtitles:
-            preferred_subtitle_idx = next(
-                (idx for idx, s in enumerate(self.subtitles) if is_close_match(s.language, [preferred_subtitle_lang])),
-                None,
+            prefer_full = config.muxing.get("prefer_full_subtitle_on_audio_mismatch", True)
+            languages_mismatch = prefer_full and audio_default_lang and not is_close_match(
+                preferred_subtitle_lang, [audio_default_lang]
             )
+            candidates = [
+                idx
+                for idx, s in enumerate(self.subtitles)
+                if (not languages_mismatch or not s.forced) and is_close_match(s.language, [preferred_subtitle_lang])
+            ]
+            candidates.sort(key=lambda idx: self.subtitles[idx].sdh or self.subtitles[idx].cc)
+            preferred_subtitle_idx = candidates[0] if candidates else None
 
         for i, vt in enumerate(self.videos):
             if not vt.path or not vt.path.exists():
