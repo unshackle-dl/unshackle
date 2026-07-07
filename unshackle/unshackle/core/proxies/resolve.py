@@ -41,13 +41,12 @@ def initialize_proxy_providers() -> List[Any]:
             proxy_providers.append(proton)
         if proxy_config.get("surfsharkvpn"):
             proxy_providers.append(SurfsharkVPN(**proxy_config["surfsharkvpn"]))
-        if proxy_config.get("v2ray"):
+        # V2Ray is config-gated: a ``v2ray:`` block (even an empty one) is required to
+        # opt in. This avoids instantiating a provider for users who have xray installed
+        # for unrelated reasons. Direct-URI mode (``--proxy v2ray:vmess://...``) works
+        # with an empty ``v2ray: {}`` block.
+        if proxy_config.get("v2ray") is not None:
             proxy_providers.append(V2Ray(**proxy_config["v2ray"]))
-        elif binaries.Xray or binaries.V2Ray:
-            # Auto-load V2Ray when the binary is available even without YAML config,
-            # so --proxy v2ray:vmess://... (direct-URI mode) works out of the box.
-            # Mirrors how Hola auto-loads when the hola-proxy binary is on PATH.
-            proxy_providers.append(V2Ray())
         if hasattr(binaries, "HolaProxy") and binaries.HolaProxy:
             proxy_providers.append(Hola())
 
@@ -82,8 +81,7 @@ def resolve_proxy(proxy: str, proxy_providers: List[Any]) -> Optional[str]:
     query = proxy
     # Provider prefix is a name starting with a letter, followed by letters/digits, then ":".
     # The digit allowance is required so provider names like "v2ray" (which contains a "2")
-    # are recognised — the old ``[a-z]+`` pattern silently failed to match ``v2ray:us`` and
-    # fell through to the try-every-provider loop, which then raised a confusing error.
+    # are recognised.
     if re.match(r"^[a-z][a-z0-9]*:.+$", proxy, re.IGNORECASE):
         requested_provider, query = proxy.split(":", maxsplit=1)
 

@@ -9,7 +9,6 @@ import shutil
 import sys
 from copy import deepcopy
 from functools import partial
-from pathlib import Path
 from typing import Any, Callable, Optional, Union
 from urllib.parse import urljoin, urlparse
 from uuid import UUID
@@ -28,7 +27,7 @@ from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, 
 from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.session import RnetSession
-from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
+from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video
 from unshackle.core.utilities import is_close_match, log_event, try_ensure_utf8
 from unshackle.core.utils.redact import safe_display_url
 from unshackle.core.utils.xml import load_xml
@@ -275,22 +274,15 @@ class DASH:
         return tracks
 
     @staticmethod
-    def download_track(
-        track: AnyTrack,
-        save_path: Path,
-        save_dir: Path,
-        progress: partial,
-        session: Optional[Session] = None,
-        proxy: Optional[str] = None,
-        max_workers: Optional[int] = None,
-        license_widevine: Optional[Callable] = None,
-        *,
-        cdm: Optional[object] = None,
-    ):
-        if not session:
-            session = Session()
-        elif not isinstance(session, (Session, RnetSession)):
-            raise TypeError(f"Expected session to be a {Session} or {RnetSession}, not {session!r}")
+    def download_track(track: AnyTrack, ctx: DownloadContext) -> None:
+        session = ctx.ensure_session()
+        save_path = ctx.save_path
+        save_dir = ctx.save_dir
+        progress = ctx.progress
+        proxy = ctx.proxy
+        max_workers = ctx.max_workers
+        license_widevine = ctx.license_widevine
+        cdm = ctx.cdm
 
         if proxy:
             session.proxies.update({"all": proxy})
@@ -548,27 +540,27 @@ class DASH:
             )
             raise FileNotFoundError(error_msg)
 
+        is_text_subtitle = (
+            not drm and isinstance(track, Subtitle) and track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML)
+        )
         with open(save_path, "wb") as f:
             if init_data:
                 f.write(init_data)
             if len(segments_to_merge) > 1:
                 progress(downloaded="Merging", completed=0, total=len(segments_to_merge))
             for segment_file in segments_to_merge:
-                segment_data = segment_file.read_bytes()
-                if (
-                    not drm
-                    and isinstance(track, Subtitle)
-                    and track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML)
-                ):
-                    segment_data = try_ensure_utf8(segment_data)
+                if is_text_subtitle:
+                    segment_data = try_ensure_utf8(segment_file.read_bytes())
                     segment_data = (
                         segment_data.decode("utf8")
                         .replace("&lrm;", html.unescape("&lrm;"))
                         .replace("&rlm;", html.unescape("&rlm;"))
                         .encode("utf8")
                     )
-                f.write(segment_data)
-                f.flush()
+                    f.write(segment_data)
+                else:
+                    with open(segment_file, "rb") as src:
+                        shutil.copyfileobj(src, f, 1024 * 1024)
                 segment_file.unlink()
                 progress(advance=1)
 

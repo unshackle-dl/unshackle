@@ -35,6 +35,7 @@ class SessionEntry:
     tracks_by_title: Dict[str, Dict[str, Track]] = field(default_factory=dict)  # title_key -> {track_id -> Track}
     chapters_by_title: Dict[str, List[Any]] = field(default_factory=dict)  # title_key -> [Chapter]
     creator_ip: Optional[str] = None
+    owner_key: Optional[str] = None  # X-Secret-Key that owns this session
     cache_tag: Optional[str] = None  # per-session cache directory tag
     input_bridge: Optional[InputBridge] = None
     auth_status: AuthStatus = AuthStatus.AUTHENTICATED

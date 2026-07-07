@@ -12,7 +12,7 @@ Servers can be supplied in four ways (all can coexist):
 4. ``countries`` — ``basic``-style per-country URI assignment.
 
 A V2Ray URI can also be passed directly on the CLI (``--proxy v2ray:vmess://...``) for
-one-shot use without any YAML configuration.
+one-shot use, provided a minimal ``v2ray:`` config entry exists (even an empty one).
 
 Query format (after the ``v2ray:`` prefix):
     v2ray:us                -- any server assigned to / detected as US
@@ -90,6 +90,29 @@ def _register_cleanup() -> None:
         if not _cleanup_registered:
             atexit.register(_cleanup_all_v2ray_processes)
             _cleanup_registered = True
+
+
+def _redact_uri(uri: str) -> str:
+    """Redact credentials from a V2Ray URI for safe logging.
+
+    Replaces the userinfo (``user:pass@`` or ``pass@``) with ``***@`` so trojan passwords
+    and plaintext shadowsocks creds don't leak into warning logs.
+    """
+    if not uri:
+        return uri
+    # vmess:// is base64-encoded JSON — no creds in the URI itself, safe to log as-is
+    # (but truncate to avoid log spam).
+    if uri.startswith("vmess://"):
+        return uri[:60] + ("..." if len(uri) > 60 else "")
+    # vless://, trojan://, ss:// — redact the userinfo before the first ``@``
+    for scheme in ("vless://", "trojan://", "ss://"):
+        if uri.startswith(scheme):
+            rest = uri[len(scheme):]
+            if "@" in rest:
+                _, host_part = rest.split("@", 1)
+                return f"{scheme}***@{host_part[:40]}..."
+            return uri[:60] + ("..." if len(uri) > 60 else "")
+    return uri[:60] + ("..." if len(uri) > 60 else "")
 
 
 # ---------------------------------------------------------------------------
@@ -234,7 +257,13 @@ def _parse_vmess(uri: str) -> Optional[V2RayServer]:
     if security == "tls":
         sni = str(data.get("sni") or data.get("host") or "").strip()
         if sni:
-            stream["tlsSettings"] = {"serverName": sni, "allowInsecure": bool(data.get("verify_cert", False) is False)}
+            # TLS verification defaults to ON. Only disable it if the share link
+            # explicitly carries ``verify_cert: false`` — which real vmess links
+            # essentially never do, so this is intentionally opt-in.
+            tls_settings: dict = {"serverName": sni}
+            if data.get("verify_cert") is False:
+                tls_settings["allowInsecure"] = True
+            stream["tlsSettings"] = tls_settings
     if network in ("ws", "httpupgrade"):
         stream["wsSettings" if network == "ws" else "httpupgradeSettings"] = {
             "path": str(data.get("path") or "/"),
@@ -718,12 +747,22 @@ def _normalise_stream(server: V2RayServer) -> dict:
     return stream
 
 
-def build_config(server: V2RayServer, *, socks_port: int, http_port: Optional[int] = None) -> dict:
-    """Build the full V2Ray/Xray JSON config for a single outbound + local inbounds."""
+def build_config(
+    server: V2RayServer,
+    *,
+    socks_port: int,
+    http_port: Optional[int] = None,
+    bind_host: str = "127.0.0.1",
+) -> dict:
+    """Build the full V2Ray/Xray JSON config for a single outbound + local inbounds.
+
+    ``bind_host`` controls the listen address for both inbounds — it must match the host
+    the readiness check connects to, otherwise ``_wait_for_ready`` will always fail.
+    """
     inbounds: list[dict] = [
         {
             "tag": "socks-in",
-            "listen": "127.0.0.1",
+            "listen": bind_host,
             "port": socks_port,
             "protocol": "socks",
             "settings": {"auth": "noauth", "udp": True},
@@ -734,7 +773,7 @@ def build_config(server: V2RayServer, *, socks_port: int, http_port: Optional[in
         inbounds.append(
             {
                 "tag": "http-in",
-                "listen": "127.0.0.1",
+                "listen": bind_host,
                 "port": http_port,
                 "protocol": "http",
                 "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
@@ -814,14 +853,14 @@ class V2Ray(Proxy):
         verify_ip: bool = DEFAULT_VERIFY_IP,
         startup_timeout: float = DEFAULT_STARTUP_TIMEOUT,
         auto_cleanup: bool = True,
-        cache_path: Optional[Any] = None,
         **kwargs: Any,
     ):
         """Initialise the V2Ray provider.
 
         Args:
             subscription_url: A single subscription URL or a list of URLs. Each is
-                fetched once at init and the parsed servers are merged.
+                fetched lazily on first ``get_proxy`` call (not at init time) so it
+                doesn't block CLI startup.
             config_path: Path to a V2Ray/Xray JSON config file. Outbounds with known
                 protocols are extracted and added to the selectable server pool.
             servers: Inline list of ``vmess://``/``vless://``/``trojan://``/``ss://``
@@ -842,8 +881,8 @@ class V2Ray(Proxy):
             bind_host: Host the local inbounds listen on (default ``127.0.0.1`` —
                 proxies are never exposed publicly by default).
             base_port: First port to try when allocating local inbounds (default 11080).
-                Each query gets ``base_port + N`` (SOCKS) and ``base_port + N + 1`` (HTTP)
-                for its inbounds.
+                Each query gets ``base_port + 2N`` (SOCKS) and ``base_port + 2N + 1``
+                (HTTP) for its inbounds.
             proxy_scheme: Scheme used for the returned proxy URI. ``socks5`` (default)
                 and ``socks5h`` are supported; ``http`` returns the HTTP inbound URI
                 instead (requires the HTTP inbound to be enabled, which it is by default).
@@ -854,10 +893,6 @@ class V2Ray(Proxy):
                 connections (default 30s).
             auto_cleanup: When True (default), the subprocess is killed on object
                 destruction / interpreter exit.
-            cache_path: Optional path to cache the parsed subscription server list. The
-                cache is invalidated whenever any subscription URL is re-fetched and the
-                response changes; on a fetch failure the cached list is used as a
-                fallback. Disabled by default.
         """
         # Resolve the binary first; the rest of init can proceed even without one (so
         # the constructor doesn't raise during config validation in tests), but
@@ -873,9 +908,21 @@ class V2Ray(Proxy):
         self.verify_ip = bool(verify_ip)
         self.startup_timeout = float(startup_timeout)
         self.auto_cleanup = bool(auto_cleanup)
-        self.cache_path = Path(cache_path).expanduser() if cache_path else None
 
         self.server_map = self._normalise_server_map(server_map or {})
+
+        # Stash the subscription URLs for lazy loading on first get_proxy() call.
+        # This avoids blocking CLI startup with (potentially slow) subscription fetches.
+        # Inline servers, config_path, and countries are loaded eagerly in __init__
+        # because they're local data (no network).
+        self._subscription_urls: list[str] = []
+        if subscription_url:
+            if isinstance(subscription_url, (list, tuple)):
+                self._subscription_urls.extend(str(u) for u in subscription_url if u)
+            else:
+                self._subscription_urls.append(str(subscription_url))
+        self._subscriptions_loaded = False
+        self._sub_load_lock = threading.Lock()
 
         # Per-instance state
         self._port_lock = threading.Lock()
@@ -884,25 +931,25 @@ class V2Ray(Proxy):
         self._active: dict[str, dict] = {}  # query_key -> process info
         self._last_connection: Optional[dict] = None  # info about the most recent spawn
 
-        # Load servers (priority: subscription > config_path > inline).
-        self._servers = self._load_servers(subscription_url, config_path, servers)
+        # Each instance gets its own temp dir for config files, created on first spawn.
+        # This avoids symlink-plant attacks and clobbering between concurrent instances.
+        self._config_dir: Optional[Path] = None
 
-        # Load the per-country map (basic-style assignment). Done after the flat list so
-        # the two can coexist: ``v2ray:us`` first checks the explicit country map, then
-        # falls back to country-detection on the flat server list.
+        # Eagerly load local server sources (inline servers, config file, countries map).
+        # Subscription URLs are deferred to first get_proxy() call.
+        self._servers = self._load_local_servers(config_path, servers)
         self._country_servers = self._load_country_map(countries or {})
 
         # Register for atexit cleanup (always, even if no servers loaded yet —
-        # get_proxy may load more later via subscription refresh or direct URI queries).
+        # get_proxy may load more later via direct URI queries).
         _register_cleanup()
         with _cleanup_lock:
             _v2ray_instances.append(self)
 
-        total_servers = len(self._servers) + sum(len(v) for v in self._country_servers.values())
         log_event(
             "v2ray_init",
             level="INFO",
-            message=f"V2Ray proxy provider initialized with {total_servers} server(s)",
+            message="V2Ray proxy provider initialized",
             context={
                 "binary": str(self.binary) if self.binary else None,
                 "bind_host": self.bind_host,
@@ -910,10 +957,87 @@ class V2Ray(Proxy):
                 "proxy_scheme": self.proxy_scheme,
                 "verify_ip": self.verify_ip,
                 "server_count": len(self._servers),
-                "country_server_count": total_servers - len(self._servers),
+                "country_server_count": sum(len(v) for v in self._country_servers.values()),
                 "country_keys": list(self._country_servers.keys()),
+                "has_subscription": bool(self._subscription_urls),
             },
         )
+
+    # -- Server loading ----------------------------------------------------
+
+    def _load_local_servers(
+        self,
+        config_path: Optional[Any],
+        servers: Optional[list[Any]],
+    ) -> list[V2RayServer]:
+        """Load servers from local sources (config file + inline list) at init time.
+
+        Subscription URLs are NOT loaded here — they're deferred to first ``get_proxy()``
+        call via :meth:`_ensure_subscriptions_loaded` to avoid blocking CLI startup.
+        """
+        loaded: list[V2RayServer] = []
+
+        # 1. Config file
+        if config_path:
+            path = Path(config_path).expanduser()
+            if not path.is_file():
+                log.warning("config_path %s does not exist", path)
+            else:
+                try:
+                    loaded.extend(load_config_file(path))
+                except Exception as error:
+                    log.warning("config file %s failed: %s", path, error)
+
+        # 2. Inline servers
+        if servers:
+            for entry in servers:
+                if isinstance(entry, str):
+                    parsed = parse_server_uri(entry)
+                    if parsed is not None:
+                        loaded.append(parsed)
+                elif isinstance(entry, dict):
+                    # Accept a pre-parsed server dict (useful for tests / programmatic use).
+                    try:
+                        loaded.append(V2RayServer(**entry))
+                    except TypeError as error:
+                        log.warning("skipping malformed inline server dict: %s", error)
+
+        # De-duplicate by (protocol, address, port) — many subscriptions list the same
+        # server under multiple remarks.
+        seen: set[tuple[str, str, int]] = set()
+        unique: list[V2RayServer] = []
+        for s in loaded:
+            key = (s.protocol, s.address.lower(), s.port)
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(s)
+        return unique
+
+    def _ensure_subscriptions_loaded(self) -> None:
+        """Lazily fetch subscription URLs on first get_proxy() call.
+
+        This defers the (potentially slow, up to 20s per URL) subscription fetch out of
+        ``__init__`` so CLI startup isn't blocked. Thread-safe via _sub_load_lock.
+        """
+        if self._subscriptions_loaded or not self._subscription_urls:
+            return
+        with self._sub_load_lock:
+            if self._subscriptions_loaded:  # double-checked locking
+                return
+            for url in self._subscription_urls:
+                try:
+                    new_servers = fetch_subscription(url)
+                    # De-duplicate against existing servers
+                    seen = {(s.protocol, s.address.lower(), s.port) for s in self._servers}
+                    for s in new_servers:
+                        key = (s.protocol, s.address.lower(), s.port)
+                        if key not in seen:
+                            self._servers.append(s)
+                            seen.add(key)
+                except Exception as error:
+                    log.warning("subscription %s failed: %s", _redact_uri(url), error)
+            self._subscriptions_loaded = True
 
     # -- Proxy interface ---------------------------------------------------
 
@@ -932,8 +1056,7 @@ class V2Ray(Proxy):
 
         - A direct V2Ray URI (``vmess://...``, ``vless://...``, ``trojan://...``,
           ``ss://...``) — a one-shot subprocess is spawned for that exact server.
-          Useful for ad-hoc invocations like ``--proxy v2ray:vmess://...`` without
-          any YAML configuration at all.
+          Useful for ad-hoc invocations like ``--proxy v2ray:vmess://...``.
         - A country code, ``country:index``, ``country:remark``, remark substring, or
           ``server_map`` alias — resolved against the configured server pool
           (``countries`` map first, then the flat ``servers`` / ``subscription_url`` /
@@ -958,11 +1081,13 @@ class V2Ray(Proxy):
             server = parse_server_uri(raw_query)
             if server is None:
                 raise ValueError(
-                    f"query looked like a V2Ray URI but could not be parsed: {raw_query[:80]!r}"
+                    f"query looked like a V2Ray URI but could not be parsed: {_redact_uri(raw_query)}"
                 )
             return self._spawn_for_server(server, query_key)
 
-        # Country / remark / alias mode requires at least one preloaded server source.
+        # Country / remark / alias mode — lazily fetch subscriptions on first use.
+        self._ensure_subscriptions_loaded()
+
         if not self._servers and not self._country_servers:
             raise ValueError(
                 "V2Ray proxy provider has no servers configured. Provide subscription_url, "
@@ -971,8 +1096,12 @@ class V2Ray(Proxy):
             )
 
         # Reuse a running subprocess for the same query.
-        if query_key in self._active and self._is_process_alive(self._active[query_key]):
-            entry = self._active[query_key]
+        with self._port_lock:
+            if query_key in self._active and self._is_process_alive(self._active[query_key]):
+                entry = self._active[query_key]
+            else:
+                entry = None
+        if entry:
             if self.verify_ip and not entry.get("verified"):
                 self._verify_proxy(query_key)
             return self._build_proxy_uri(entry["socks_port"], entry["http_port"])
@@ -988,28 +1117,38 @@ class V2Ray(Proxy):
         """Allocate ports, spawn the subprocess for ``server``, and return the proxy URI.
 
         Used by both the country/remark selection path and the direct-URI path so the
-        readiness / verify / cleanup behaviour is identical.
+        readiness / verify / cleanup behaviour is identical. Thread-safe: holds
+        ``_port_lock`` across the allocate-spawn-store sequence so concurrent calls for
+        the same key don't orphan subprocesses.
         """
-        # Reuse an already-running subprocess for the same key (e.g. the same URI passed twice).
-        if query_key in self._active and self._is_process_alive(self._active[query_key]):
-            entry = self._active[query_key]
-            if self.verify_ip and not entry.get("verified"):
-                self._verify_proxy(query_key)
-            return self._build_proxy_uri(entry["socks_port"], entry["http_port"])
+        with self._port_lock:
+            # Re-check under the lock: another thread may have spawned this exact server
+            # while we were waiting. If so, reuse it and kill nothing.
+            if query_key in self._active and self._is_process_alive(self._active[query_key]):
+                entry = self._active[query_key]
+                if self.verify_ip and not entry.get("verified"):
+                    self._verify_proxy(query_key)
+                return self._build_proxy_uri(entry["socks_port"], entry["http_port"])
 
-        socks_port, http_port = self._allocate_ports()
-        config = build_config(server, socks_port=socks_port, http_port=http_port)
-        process_info = self._spawn_process(config, socks_port, http_port, server)
-        process_info["server"] = server
-        process_info["query"] = query_key
-        self._active[query_key] = process_info
-        self._last_connection = process_info
+            # If there's a dead entry for this key, clean it up before spawning a new one.
+            old = self._active.pop(query_key, None)
+            if old:
+                self._kill_process(old)
+
+            socks_port, http_port = self._allocate_ports()
+            config = build_config(server, socks_port=socks_port, http_port=http_port, bind_host=self.bind_host)
+            process_info = self._spawn_process(config, socks_port, http_port, server)
+            process_info["server"] = server
+            process_info["query"] = query_key
+            self._active[query_key] = process_info
+            self._last_connection = process_info
 
         # Wait for the SOCKS5 inbound to accept connections.
         if not self._wait_for_ready(socks_port, timeout=self.startup_timeout):
             exit_output = process_info.get("exit_output", "")
-            self._kill_process(process_info)
-            self._active.pop(query_key, None)
+            with self._port_lock:
+                self._kill_process(process_info)
+                self._active.pop(query_key, None)
             # Include the actual xray/v2ray stderr in the error so the user can diagnose
             # config issues, missing dat files, bad credentials, etc.
             detail = exit_output or "no output captured"
@@ -1173,118 +1312,6 @@ class V2Ray(Proxy):
 
     # -- Server loading ----------------------------------------------------
 
-    def _load_servers(
-        self,
-        subscription_url: Optional[Any],
-        config_path: Optional[Any],
-        servers: Optional[list[Any]],
-    ) -> list[V2RayServer]:
-        loaded: list[V2RayServer] = []
-
-        # 1. Subscription URL(s)
-        urls: list[str] = []
-        if subscription_url:
-            if isinstance(subscription_url, (list, tuple)):
-                urls.extend(str(u) for u in subscription_url if u)
-            else:
-                urls.append(str(subscription_url))
-        for url in urls:
-            try:
-                loaded.extend(self._fetch_subscription_cached(url))
-            except Exception as error:
-                log.warning("subscription %s failed: %s", url, error)
-
-        # 2. Config file
-        if config_path:
-            path = Path(config_path).expanduser()
-            if not path.is_file():
-                log.warning("config_path %s does not exist", path)
-            else:
-                try:
-                    loaded.extend(load_config_file(path))
-                except Exception as error:
-                    log.warning("config file %s failed: %s", path, error)
-
-        # 3. Inline servers
-        if servers:
-            for entry in servers:
-                if isinstance(entry, str):
-                    parsed = parse_server_uri(entry)
-                    if parsed is not None:
-                        loaded.append(parsed)
-                elif isinstance(entry, dict):
-                    # Accept a pre-parsed server dict (useful for tests / programmatic use).
-                    try:
-                        loaded.append(V2RayServer(**entry))
-                    except TypeError as error:
-                        log.warning("skipping malformed inline server dict: %s", error)
-
-        # De-duplicate by (protocol, address, port) — many subscriptions list the same
-        # server under multiple remarks.
-        seen: set[tuple[str, str, int]] = set()
-        unique: list[V2RayServer] = []
-        for s in loaded:
-            key = (s.protocol, s.address.lower(), s.port)
-            if key in seen:
-                continue
-            seen.add(key)
-            unique.append(s)
-
-        return unique
-
-    def _fetch_subscription_cached(self, url: str) -> list[V2RayServer]:
-        """Fetch a subscription, optionally caching the parsed server list to disk."""
-        if not self.cache_path:
-            return fetch_subscription(url)
-
-        cache_key = f"sub:{url}"
-        cache = self._load_cache()
-        cached_entry = cache.get(cache_key)
-        try:
-            servers = fetch_subscription(url)
-        except Exception:
-            if cached_entry:
-                log.warning("subscription %s failed, using cached copy", url)
-                return [V2RayServer(**s) for s in cached_entry.get("servers", [])]
-            raise
-        if servers:
-            cache[cache_key] = {
-                "servers": [
-                    {
-                        "protocol": s.protocol,
-                        "address": s.address,
-                        "port": s.port,
-                        "remark": s.remark,
-                        "settings": s.settings,
-                        "network": s.network,
-                        "stream": s.stream,
-                        "country": s.country,
-                    }
-                    for s in servers
-                ],
-                "updated_at": time.time(),
-            }
-            self._save_cache(cache)
-        return servers
-
-    def _load_cache(self) -> dict:
-        if not self.cache_path or not self.cache_path.is_file():
-            return {}
-        try:
-            return json.loads(self.cache_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as error:
-            log.warning("cache read failed (%s): %s", self.cache_path, error)
-            return {}
-
-    def _save_cache(self, cache: dict) -> None:
-        if not self.cache_path:
-            return
-        try:
-            self.cache_path.parent.mkdir(parents=True, exist_ok=True)
-            self.cache_path.write_text(json.dumps(cache, indent=2), encoding="utf-8")
-        except OSError as error:
-            log.warning("cache write failed (%s): %s", self.cache_path, error)
-
     def _load_country_map(self, countries: dict) -> dict[str, list[V2RayServer]]:
         """Parse the ``basic``-style ``countries`` config map.
 
@@ -1325,7 +1352,7 @@ class V2Ray(Proxy):
             for uri in uri_list:
                 parsed = parse_server_uri(uri)
                 if parsed is None:
-                    log.warning("countries[%s] could not parse URI %r — skipping", key, uri[:80])
+                    log.warning("countries[%s] could not parse URI %r — skipping", key, _redact_uri(uri))
                     continue
                 # Force the server's country to match the map key, so the IP-verification
                 # step (when enabled) compares against the user's intent rather than the
@@ -1356,25 +1383,25 @@ class V2Ray(Proxy):
     # -- Process management ------------------------------------------------
 
     def _allocate_ports(self) -> tuple[int, int]:
-        """Pick the next free (socks_port, http_port) pair, thread-safely.
+        """Pick the next free (socks_port, http_port) pair.
 
-        SOCKS ports are tried at ``base_port + 2N`` and the HTTP inbound at
-        ``base_port + 2N + 1``, so each subprocess gets a dedicated non-overlapping pair.
+        Must be called while holding ``_port_lock``. SOCKS ports are tried at
+        ``base_port + 2N`` and the HTTP inbound at ``base_port + 2N + 1``, so each
+        subprocess gets a dedicated non-overlapping pair.
         """
-        with self._port_lock:
-            used = {info["socks_port"] for info in self._active.values()}
-            used |= {info["http_port"] for info in self._active.values() if info.get("http_port")}
-            socks_port = self.base_port
-            while True:
-                # Find a free SOCKS port on an even stride.
-                while socks_port in used or self._is_port_in_use(socks_port):
-                    socks_port += 2
-                http_port = socks_port + 1
-                # If the HTTP port is taken, bump the SOCKS port and retry.
-                if http_port in used or self._is_port_in_use(http_port):
-                    socks_port += 2
-                    continue
-                return socks_port, http_port
+        used = {info["socks_port"] for info in self._active.values()}
+        used |= {info["http_port"] for info in self._active.values() if info.get("http_port")}
+        socks_port = self.base_port
+        while True:
+            # Find a free SOCKS port on an even stride.
+            while socks_port in used or self._is_port_in_use(socks_port):
+                socks_port += 2
+            http_port = socks_port + 1
+            # If the HTTP port is taken, bump the SOCKS port and retry.
+            if http_port in used or self._is_port_in_use(http_port):
+                socks_port += 2
+                continue
+            return socks_port, http_port
 
     @staticmethod
     def _is_port_in_use(port: int) -> bool:
@@ -1385,6 +1412,17 @@ class V2Ray(Proxy):
             return True
         return False
 
+    def _ensure_config_dir(self) -> Path:
+        """Create a per-instance temp dir for config files (lazy, thread-safe).
+
+        Uses ``tempfile.mkdtemp`` so each V2Ray instance gets its own directory with an
+        unpredictable name — avoiding symlink-plant attacks and clobbering between
+        concurrent unshackle processes that might share the same base port.
+        """
+        if self._config_dir is None or not self._config_dir.is_dir():
+            self._config_dir = Path(tempfile.mkdtemp(prefix="unshackle-v2ray-"))
+        return self._config_dir
+
     def _spawn_process(
         self,
         config: dict,
@@ -1392,14 +1430,21 @@ class V2Ray(Proxy):
         http_port: int,
         server: V2RayServer,
     ) -> dict:
-        """Write the config to a temp file and start the V2Ray/Xray subprocess."""
-        config_dir = Path(tempfile.gettempdir()) / "unshackle-v2ray"
-        config_dir.mkdir(parents=True, exist_ok=True)
+        """Write the config to a temp file and start the V2Ray/Xray subprocess.
+
+        The config file is created with ``O_EXCL`` to prevent symlink-plant attacks,
+        and written with ``0600`` permissions since it contains server credentials.
+        stdout/stderr go to ``DEVNULL`` to avoid pipe-buffer deadlocks during long
+        downloads — the subprocess's exit output is captured separately via
+        ``communicate()`` when a readiness check fails.
+        """
+        config_dir = self._ensure_config_dir()
         config_path = config_dir / f"config-{socks_port}-{http_port}.json"
 
         try:
-            # Best-effort: write with 0600 so other users on the box can't read credentials.
-            fd = os.open(str(config_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            # O_EXCL prevents symlink-plant attacks: the open() fails if the file already
+            # exists (including via a symlink). O_WRONLY | O_CREAT | O_TRUNC + 0600 perms.
+            fd = os.open(str(config_path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             try:
                 if hasattr(os, "fchmod"):
                     os.fchmod(fd, 0o600)
@@ -1440,7 +1485,7 @@ class V2Ray(Proxy):
         process = subprocess.Popen(
             [str(self.binary), "run", "-c", str(config_path)],
             stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
             cwd=str(config_path.parent),
             start_new_session=start_new_session,
@@ -1471,7 +1516,7 @@ class V2Ray(Proxy):
         """Poll the SOCKS5 inbound until it accepts connections or the process exits.
 
         Returns True if the port accepted a connection. Returns False if the process
-        exited or the timeout elapsed. When the process exits, its captured stdout/stderr
+        exited or the timeout elapsed. When the process exits, its captured stderr
         is stored in ``info["exit_output"]`` so the caller can include it in an error
         message.
         """
@@ -1479,7 +1524,7 @@ class V2Ray(Proxy):
         while time.monotonic() < deadline:
             info = next((i for i in self._active.values() if i.get("socks_port") == socks_port), None)
             if info and not self._is_process_alive(info):
-                # Process died — capture its output for error reporting. communicate()
+                # Process died — capture its stderr for error reporting. communicate()
                 # is used instead of select() because select doesn't work on Windows
                 # pipes. Since the process is dead, communicate() returns immediately.
                 info["exit_output"] = self._read_dead_process_output(info)
@@ -1499,7 +1544,7 @@ class V2Ray(Proxy):
 
     @staticmethod
     def _read_dead_process_output(info: dict) -> str:
-        """Read all stdout+stderr from a process that has exited.
+        """Read stderr from a process that has exited.
 
         Uses :meth:`subprocess.Popen.communicate` which is cross-platform (unlike
         ``select.select`` on pipes, which is Unix-only). Since the process is already
@@ -1509,13 +1554,10 @@ class V2Ray(Proxy):
         if process is None:
             return ""
         try:
-            stdout, stderr = process.communicate(timeout=2)
-            parts: list[str] = []
-            if stdout:
-                parts.append(stdout.decode("utf-8", errors="replace").strip())
+            _, stderr = process.communicate(timeout=2)
             if stderr:
-                parts.append(stderr.decode("utf-8", errors="replace").strip())
-            return "\n".join(p for p in parts if p)
+                return stderr.decode("utf-8", errors="replace").strip()
+            return ""
         except Exception:
             return ""
 
@@ -1603,7 +1645,7 @@ class V2Ray(Proxy):
         return f"{self.proxy_scheme}://{self.bind_host}:{socks_port}"
 
     def _kill_process(self, info: dict) -> None:
-        """Terminate the subprocess, close its stdout/stderr pipes, and unlink the config file.
+        """Terminate the subprocess, close its stderr pipe, and unlink the config file.
 
         The config file is overwritten with zeros before unlinking (best-effort, like
         Gluetun's env-file handling) because it contains server credentials.
@@ -1620,15 +1662,13 @@ class V2Ray(Proxy):
             except Exception as error:
                 log.debug("error killing process %s: %s", info.get("pid"), error)
 
-        # Close stdout/stderr pipes so we don't leak FDs. The pipe handles live on the
-        # Popen object (set via stdout=PIPE / stderr=PIPE in _spawn_process), not on the
-        # info dict.
-        for pipe in (process.stdout, process.stderr) if process else (None, None):
-            if pipe is not None:
-                try:
-                    pipe.close()
-                except Exception:
-                    pass
+        # Close stderr pipe so we don't leak FDs. The pipe handle lives on the Popen
+        # object (set via stderr=PIPE in _spawn_process), not on the info dict.
+        if process and process.stderr:
+            try:
+                process.stderr.close()
+            except Exception:
+                pass
 
         config_path: Optional[Path] = info.get("config_path")
         if config_path and config_path.is_file():

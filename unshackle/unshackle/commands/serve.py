@@ -1,3 +1,4 @@
+import hmac
 import logging
 import subprocess
 
@@ -135,7 +136,9 @@ def serve(
             secret_key = request.headers.get("X-Secret-Key")
             if not secret_key:
                 return web.json_response({"status": 401, "message": "Secret Key is Empty."}, status=401)
-            if secret_key not in request.app["config"]["users"]:
+            # Constant-time compare against every configured key so a valid key can't be
+            # recovered byte-by-byte from response timing.
+            if not any(hmac.compare_digest(secret_key, k) for k in request.app["config"]["users"]):
                 return web.json_response({"status": 401, "message": "Secret Key is Invalid."}, status=401)
             return await handler(request)
 

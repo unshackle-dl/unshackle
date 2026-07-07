@@ -225,6 +225,8 @@ class Hybrid:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
 
             if result_duration.returncode != 0:
@@ -257,6 +259,8 @@ class Hybrid:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
 
             if result_streams.returncode != 0:
@@ -300,6 +304,8 @@ class Hybrid:
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                 )
 
                 # cropdetect outputs crop=w:h:x:y
@@ -603,6 +609,8 @@ class Hybrid:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
 
         max_mdl = 1000

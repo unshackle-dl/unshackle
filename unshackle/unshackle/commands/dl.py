@@ -843,19 +843,27 @@ class dl:
                         try:
                             if name == "shaka_packager":
                                 r = subprocess.run(
-                                    [str(binary), "--version"], capture_output=True, text=True, timeout=5
+                                    [str(binary), "--version"],
+                                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
                                 )
                                 version = (r.stdout or r.stderr or "").strip()
                             elif name in ("ffmpeg", "ffprobe"):
-                                r = subprocess.run([str(binary), "-version"], capture_output=True, text=True, timeout=5)
+                                r = subprocess.run(
+                                    [str(binary), "-version"],
+                                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+                                )
                                 version = (r.stdout or "").split("\n")[0].strip()
                             elif name == "mkvmerge":
                                 r = subprocess.run(
-                                    [str(binary), "--version"], capture_output=True, text=True, timeout=5
+                                    [str(binary), "--version"],
+                                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
                                 )
                                 version = (r.stdout or "").strip()
                             elif name == "mp4decrypt":
-                                r = subprocess.run([str(binary)], capture_output=True, text=True, timeout=5)
+                                r = subprocess.run(
+                                    [str(binary)],
+                                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+                                )
                                 output = (r.stdout or "") + (r.stderr or "")
                                 lines = [line.strip() for line in output.split("\n") if line.strip()]
                                 version = " | ".join(lines[:2]) if lines else None
@@ -1055,13 +1063,11 @@ class dl:
                     self.proxy_providers.append(WindscribeVPN(**config.proxy_providers["windscribevpn"]))
                 if config.proxy_providers.get("gluetun"):
                     self.proxy_providers.append(Gluetun(**config.proxy_providers["gluetun"]))
-                if config.proxy_providers.get("v2ray"):
+                # V2Ray is config-gated: a ``v2ray:`` block (even an empty one) is required
+                # to opt in. Direct-URI mode (``--proxy v2ray:vmess://...``) works with
+                # an empty ``v2ray: {}`` block.
+                if config.proxy_providers.get("v2ray") is not None:
                     self.proxy_providers.append(V2Ray(**config.proxy_providers["v2ray"]))
-                elif binaries.Xray or binaries.V2Ray:
-                    # Auto-load V2Ray when the binary is available even without YAML config,
-                    # so --proxy v2ray:vmess://... (direct-URI mode) works out of the box.
-                    # Mirrors how Hola auto-loads when the hola-proxy binary is on PATH.
-                    self.proxy_providers.append(V2Ray())
                 if binaries.HolaProxy:
                     self.proxy_providers.append(Hola())
                 for proxy_provider in self.proxy_providers:
@@ -1079,13 +1085,16 @@ class dl:
                 # ':' is allowed as a city separator (e.g. nordvpn:us:seattle, protonvpn:de:berlin).
                 # Also accept V2Ray direct-URI queries (vmess://, vless://, trojan://, ss://) which the
                 # V2Ray provider spawns a one-shot subprocess for.
+                is_v2ray_uri = requested_provider == "v2ray" and proxy.lower().startswith(
+                    ("vmess://", "vless://", "trojan://", "ss://")
+                )
                 if (
                     re.match(r"^[a-z]{2}(?:[-:][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE)
                     or re.match(r"^[a-z][a-z0-9]*:[a-z]{2}(?:[-:][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE)
-                    or (requested_provider == "v2ray" and proxy.lower().startswith(("vmess://", "vless://", "trojan://", "ss://")))
+                    or is_v2ray_uri
                 ):
                     # Don't lowercase V2Ray URIs — their base64 payloads are case-sensitive.
-                    if not (requested_provider == "v2ray" and proxy.lower().startswith(("vmess://", "vless://", "trojan://", "ss://"))):
+                    if not is_v2ray_uri:
                         proxy = proxy.lower()
                     # Preserve the original user query (region code) for service-specific proxy_map overrides.
                     # NOTE: `proxy` may be overwritten with the resolved proxy URI later.

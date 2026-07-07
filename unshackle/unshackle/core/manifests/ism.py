@@ -3,11 +3,10 @@ from __future__ import annotations
 import base64
 import hashlib
 import html
+import shutil
 import struct
 import urllib.parse
-from functools import partial
-from pathlib import Path
-from typing import Any, Callable, Optional, Union
+from typing import Any, Optional, Union
 
 import requests
 from langcodes import Language, tag_is_valid
@@ -22,7 +21,7 @@ from unshackle.core.events import events
 from unshackle.core.manifests.ism_init import (build_init_segment, parse_codec_private_data_colour,
                                                read_per_sample_iv_size, read_track_id)
 from unshackle.core.session import RnetSession
-from unshackle.core.tracks import Audio, Subtitle, Track, Tracks, Video
+from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Track, Tracks, Video
 from unshackle.core.utilities import log_event, try_ensure_utf8
 from unshackle.core.utils.redact import safe_display_url
 from unshackle.core.utils.xml import load_xml
@@ -364,22 +363,15 @@ class ISM:
         return tracks
 
     @staticmethod
-    def download_track(
-        track: AnyTrack,
-        save_path: Path,
-        save_dir: Path,
-        progress: partial,
-        session: Optional[Union[Session, RnetSession]] = None,
-        proxy: Optional[str] = None,
-        max_workers: Optional[int] = None,
-        license_widevine: Optional[Callable] = None,
-        *,
-        cdm: Optional[object] = None,
-    ) -> None:
-        if not session:
-            session = Session()
-        elif not isinstance(session, (Session, RnetSession)):
-            raise TypeError(f"Expected session to be a {Session} or {RnetSession}, not {session!r}")
+    def download_track(track: AnyTrack, ctx: DownloadContext) -> None:
+        session = ctx.ensure_session()
+        save_path = ctx.save_path
+        save_dir = ctx.save_dir
+        progress = ctx.progress
+        proxy = ctx.proxy
+        max_workers = ctx.max_workers
+        license_widevine = ctx.license_widevine
+        cdm = ctx.cdm
 
         if proxy:
             session.proxies.update({"all": proxy})
@@ -500,19 +492,20 @@ class ISM:
             )
             raise FileNotFoundError(error_msg)
 
+        is_text_subtitle = (
+            not session_drm
+            and isinstance(track, Subtitle)
+            and track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML)
+        )
         with open(save_path, "wb") as f:
             first_segment = segments_to_merge[0].read_bytes() if segments_to_merge else None
             init_segment = ISM._init_segment(track, session_drm, first_segment)
             if init_segment:
                 f.write(init_segment)
             for index, segment_file in enumerate(segments_to_merge):
-                # First segment was already read for the init synthesis — reuse it.
-                segment_data = first_segment if index == 0 and first_segment else segment_file.read_bytes()
-                if (
-                    not session_drm
-                    and isinstance(track, Subtitle)
-                    and track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML)
-                ):
+                if is_text_subtitle:
+                    # first segment was already read for the init synthesis, reuse it
+                    segment_data = first_segment if index == 0 and first_segment else segment_file.read_bytes()
                     segment_data = try_ensure_utf8(segment_data)
                     segment_data = (
                         segment_data.decode("utf8")
@@ -520,8 +513,12 @@ class ISM:
                         .replace("&rlm;", html.unescape("&rlm;"))
                         .encode("utf8")
                     )
-                f.write(segment_data)
-                f.flush()
+                    f.write(segment_data)
+                elif index == 0 and first_segment:
+                    f.write(first_segment)
+                else:
+                    with open(segment_file, "rb") as src:
+                        shutil.copyfileobj(src, f, 1024 * 1024)
                 segment_file.unlink()
                 progress(advance=1)
 
@@ -535,7 +532,11 @@ class ISM:
             events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=session_drm, segment=None)
             progress(downloaded="Decrypting", advance=100)
 
-        save_dir.rmdir()
+        try:
+            save_dir.rmdir()
+        except OSError:
+            # a superseded hedge download may still drop a .!dev file here
+            shutil.rmtree(save_dir, ignore_errors=True)
         progress(downloaded="Downloaded")
 
 

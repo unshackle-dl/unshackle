@@ -223,7 +223,10 @@ class ClearKeyCENC:
         ]
 
         try:
-            subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
+            subprocess.run(
+                cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                encoding="utf-8", errors="replace",
+            )
         except subprocess.CalledProcessError as e:
             error_msg = e.stderr if e.stderr else f"mp4decrypt failed with exit code {e.returncode}"
             raise subprocess.CalledProcessError(e.returncode, cmd, output=e.stdout, stderr=error_msg)
@@ -262,6 +265,8 @@ class ClearKeyCENC:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
                 universal_newlines=True,
+                encoding="utf-8",
+                errors="replace",
             )
 
             stream_skipped = False

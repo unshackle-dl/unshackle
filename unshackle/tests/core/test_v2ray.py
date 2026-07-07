@@ -169,7 +169,24 @@ def test_parse_vmess_basic_fields():
     assert server.stream["wsSettings"]["path"] == "/ray"
     assert server.stream["wsSettings"]["host"] == "example.com"
     assert server.stream["tlsSettings"]["serverName"] == "example.com"
+    # TLS verification must default to ON — allowInsecure must NOT be set unless the
+    # share link explicitly carries verify_cert: false.
+    assert "allowInsecure" not in server.stream["tlsSettings"]
     assert server.country == "us"
+
+
+def test_parse_vmess_allowInsecure_only_when_verify_cert_false():
+    """allowInsecure must only be set when the share link explicitly opts in via verify_cert: false."""
+    payload = {
+        "v": "2", "ps": "test", "add": "1.2.3.4", "port": "443",
+        "id": "b831381d-6324-4d53-ad4f-8cda48b30811", "aid": 0,
+        "net": "ws", "type": "none", "host": "example.com", "path": "/ray",
+        "tls": "tls", "sni": "example.com", "verify_cert": False,
+    }
+    uri = "vmess://" + _b64(json.dumps(payload))
+    server = parse_server_uri(uri)
+    assert server is not None
+    assert server.stream["tlsSettings"]["allowInsecure"] is True
 
 
 def test_parse_vmess_without_tls():
@@ -594,6 +611,21 @@ def test_build_config_without_http_inbound():
     assert config["inbounds"][0]["tag"] == "socks-in"
 
 
+def test_build_config_uses_bind_host_for_inbounds():
+    """bind_host must flow through to the inbound listen addresses, not be hardcoded."""
+    server = parse_server_uri(_make_vmess_uri())
+    config = build_config(server, socks_port=1080, http_port=1081, bind_host="0.0.0.0")
+    for inbound in config["inbounds"]:
+        assert inbound["listen"] == "0.0.0.0"
+
+
+def test_build_config_default_bind_host_is_localhost():
+    server = parse_server_uri(_make_vmess_uri())
+    config = build_config(server, socks_port=1080, http_port=1081)
+    for inbound in config["inbounds"]:
+        assert inbound["listen"] == "127.0.0.1"
+
+
 # ---------------------------------------------------------------------------
 # Provider: construction + server loading
 # ---------------------------------------------------------------------------
@@ -637,6 +669,8 @@ def test_provider_loads_subscription(tmp_path: Path):
     response = _fake_response(text=body)
     with patch("unshackle.core.proxies.v2ray.requests.get", return_value=response):
         provider = V2Ray(subscription_url="https://sub.example/list")
+        # Subscriptions are loaded lazily on first get_proxy() call
+        provider._ensure_subscriptions_loaded()
     assert len(provider.servers) == 2
 
 
@@ -646,6 +680,7 @@ def test_provider_loads_multiple_subscriptions():
     responses = [_fake_response(text=body1), _fake_response(text=body2)]
     with patch("unshackle.core.proxies.v2ray.requests.get", side_effect=responses):
         provider = V2Ray(subscription_url=["https://sub.example/1", "https://sub.example/2"])
+        provider._ensure_subscriptions_loaded()
     assert len(provider.servers) == 2
 
 
@@ -659,6 +694,7 @@ def test_provider_subscription_failure_does_not_abort_other_sources():
         provider = V2Ray(
             subscription_url=["https://sub.example/broken", "https://sub.example/ok"]
         )
+        provider._ensure_subscriptions_loaded()
     # The failed subscription is logged + skipped; the second one's server still loaded.
     assert len(provider.servers) == 1
 
@@ -1106,17 +1142,34 @@ def test_v2ray_registered_in_resolve_initialize():
     assert V2RayMock.call_args.kwargs == {"subscription_url": "https://sub.example/list"}
 
 
-def test_v2ray_auto_loads_when_binary_present_without_yaml_config():
-    """V2Ray auto-loads when xray/v2ray binary is on PATH, even with no YAML config.
+def test_v2ray_loads_when_yaml_block_present():
+    """V2Ray is loaded when a ``v2ray:`` block exists under proxy_providers (even empty)."""
+    import unshackle.core.proxies.v2ray as v2ray_module
+    from unshackle.core.proxies import resolve
 
-    Mirrors how Hola auto-loads when the hola-proxy binary is detected. This makes
-    ``--proxy v2ray:vmess://...`` (direct-URI mode) work out of the box.
+    main_config = MagicMock()
+    main_config.proxy_providers = {"v2ray": {}}  # empty block — enough to opt in
+
+    with patch.object(v2ray_module, "V2Ray", side_effect=lambda **kw: MagicMock(name="V2Ray", kwargs=kw)) as V2RayMock, \
+         patch("unshackle.core.binaries.HolaProxy", None), \
+         patch("unshackle.core.config.config", main_config):
+        resolve.initialize_proxy_providers()
+
+    assert V2RayMock.called, "V2Ray should load when a v2ray: block exists"
+    assert V2RayMock.call_args.kwargs == {}
+
+
+def test_v2ray_not_loaded_without_yaml_block_even_if_binary_present():
+    """V2Ray is NOT auto-loaded on binary detection — a ``v2ray:`` block is required.
+
+    This is a deliberate design choice (per maintainer feedback) so users who have xray
+    installed for unrelated reasons don't get a V2Ray provider on every run.
     """
     import unshackle.core.proxies.v2ray as v2ray_module
     from unshackle.core.proxies import resolve
 
     main_config = MagicMock()
-    main_config.proxy_providers = {}  # no v2ray block at all
+    main_config.proxy_providers = {}  # no v2ray block
 
     fake_binary = Path("/usr/local/bin/xray")
     with patch.object(v2ray_module, "V2Ray", side_effect=lambda **kw: MagicMock(name="V2Ray", kwargs=kw)) as V2RayMock, \
@@ -1126,49 +1179,11 @@ def test_v2ray_auto_loads_when_binary_present_without_yaml_config():
          patch("unshackle.core.config.config", main_config):
         resolve.initialize_proxy_providers()
 
-    assert V2RayMock.called, "V2Ray should auto-load when xray binary is present"
-    assert V2RayMock.call_args.kwargs == {}, "Auto-loaded V2Ray should be constructed with no args"
+    assert not V2RayMock.called, "V2Ray should NOT auto-load without a v2ray: block"
 
 
-def test_v2ray_auto_loads_with_v2ray_binary_fallback():
-    """V2Ray auto-loads with the v2ray binary when xray isn't installed."""
-    import unshackle.core.proxies.v2ray as v2ray_module
-    from unshackle.core.proxies import resolve
-
-    main_config = MagicMock()
-    main_config.proxy_providers = {}
-
-    fake_binary = Path("/usr/local/bin/v2ray")
-    with patch.object(v2ray_module, "V2Ray", side_effect=lambda **kw: MagicMock(name="V2Ray", kwargs=kw)) as V2RayMock, \
-         patch("unshackle.core.binaries.Xray", None), \
-         patch("unshackle.core.binaries.V2Ray", fake_binary), \
-         patch("unshackle.core.binaries.HolaProxy", None), \
-         patch("unshackle.core.config.config", main_config):
-        resolve.initialize_proxy_providers()
-
-    assert V2RayMock.called, "V2Ray should auto-load when v2ray binary is present"
-
-
-def test_v2ray_does_not_auto_load_without_binary_or_yaml():
-    """V2Ray is not loaded when neither YAML config nor binary is present."""
-    import unshackle.core.proxies.v2ray as v2ray_module
-    from unshackle.core.proxies import resolve
-
-    main_config = MagicMock()
-    main_config.proxy_providers = {}
-
-    with patch.object(v2ray_module, "V2Ray", side_effect=lambda **kw: MagicMock(name="V2Ray", kwargs=kw)) as V2RayMock, \
-         patch("unshackle.core.binaries.Xray", None), \
-         patch("unshackle.core.binaries.V2Ray", None), \
-         patch("unshackle.core.binaries.HolaProxy", None), \
-         patch("unshackle.core.config.config", main_config):
-        resolve.initialize_proxy_providers()
-
-    assert not V2RayMock.called, "V2Ray should not load without YAML config or binary"
-
-
-def test_v2ray_yaml_config_takes_priority_over_auto_load():
-    """When both YAML config AND binary are present, YAML config wins (no auto-load duplicate)."""
+def test_v2ray_loads_with_yaml_config_when_binary_present():
+    """When both YAML config AND binary are present, V2Ray loads once with the YAML config."""
     import unshackle.core.proxies.v2ray as v2ray_module
     from unshackle.core.proxies import resolve
 
@@ -1185,7 +1200,7 @@ def test_v2ray_yaml_config_takes_priority_over_auto_load():
          patch("unshackle.core.config.config", main_config):
         resolve.initialize_proxy_providers()
 
-    assert V2RayMock.call_count == 1, "V2Ray should be loaded exactly once (YAML config, not auto-load)"
+    assert V2RayMock.call_count == 1, "V2Ray should be loaded exactly once"
     assert V2RayMock.call_args.kwargs == {"subscription_url": "https://sub.example/list"}
 
 

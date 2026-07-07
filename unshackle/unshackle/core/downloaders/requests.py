@@ -1,12 +1,14 @@
 import math
 import os
+import statistics
+import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, wait
 from concurrent.futures.thread import ThreadPoolExecutor
 from http.cookiejar import CookieJar
 from pathlib import Path
 from queue import Empty, Queue
-from typing import Any, Generator, MutableMapping, Optional, Union
+from typing import Any, Callable, Generator, MutableMapping, Optional, Union
 
 from requests import Session
 from requests.adapters import HTTPAdapter
@@ -18,6 +20,14 @@ from unshackle.core.utilities import get_debug_logger, get_extension
 MAX_ATTEMPTS = 5
 RETRY_WAIT = 2
 PROGRESS_WINDOW = 2
+
+# read timeout bounds the gap between chunks so a quiet connection errors instead of hanging
+CONNECT_TIMEOUT = 10
+READ_TIMEOUT = 30
+
+# re-request a tail segment stuck past max(HEDGE_FACTOR * median segment time, HEDGE_MIN_WAIT)
+HEDGE_FACTOR = 3
+HEDGE_MIN_WAIT = 5.0
 
 # Adaptive chunk sizing — benchmarked optimal range
 MIN_CHUNK = 524_288  # 512KB
@@ -51,6 +61,10 @@ def _is_rnet_session(session: Any) -> bool:
 def _probe_ranged(url: str, session: Any, **kwargs: Any) -> tuple[int, bool]:
     headers = {**(kwargs.get("headers") or {}), "Range": "bytes=0-0"}
     rest = {k: v for k, v in kwargs.items() if k != "headers"}
+    if _is_rnet_session(session):
+        rest.setdefault("read_timeout", READ_TIMEOUT)
+    else:
+        rest.setdefault("timeout", (CONNECT_TIMEOUT, READ_TIMEOUT))
     try:
         resp = session.get(url, stream=True, headers=headers, **rest)
     except Exception:
@@ -179,6 +193,7 @@ def download(
     segmented: bool = False,
     part_offset: Optional[int] = None,
     part_end: Optional[int] = None,
+    claimed: Optional[Callable[[], bool]] = None,
     **kwargs: Any,
 ) -> Generator[dict[str, Any], None, None]:
     """
@@ -207,6 +222,8 @@ def download(
             no truncate, no skip-if-exists, no control file; emits only `advance`
             events; retries resume mid-part via Range.
         part_end: Inclusive end byte of the part. Required when `part_offset` is set.
+        claimed: Optional predicate checked before every attempt; when it returns True
+            the download stops silently (another worker already delivered this file).
         kwargs: Any extra keyword arguments to pass to the session.get() call. Use this
             for one-time request changes like a header, cookie, or proxy. For example,
             to request Byte-ranges use e.g., `headers={"Range": "bytes=0-128"}`.
@@ -214,161 +231,170 @@ def download(
     session = session or Session()
     part_mode = part_offset is not None and part_end is not None
 
-    save_dir = save_path.parent
-    control_file = save_path.with_name(f"{save_path.name}.!dev")
-    save_dir.mkdir(parents=True, exist_ok=True)
+    # partial data lives at the .!dev name and is renamed into place on completion:
+    # bare save_path = done, bare .!dev = resumable, no per-segment marker files
+    tmp_file = save_path.with_name(f"{save_path.name}.!dev")
+    if not segmented:
+        save_path.parent.mkdir(parents=True, exist_ok=True)
 
     resume_offset = 0
     if not part_mode:
-        if control_file.exists() and save_path.exists():
-            resume_offset = save_path.stat().st_size
-        elif control_file.exists():
-            control_file.unlink()
-        elif save_path.exists():
-            yield dict(file_downloaded=save_path, written=save_path.stat().st_size)
-            return
-        control_file.write_bytes(b"")
+        if save_path.exists():
+            if tmp_file.exists():
+                # legacy layout: empty marker beside a partial save_path, restart clean
+                tmp_file.unlink()
+                save_path.unlink()
+            else:
+                yield dict(file_downloaded=save_path, written=save_path.stat().st_size)
+                return
+        elif tmp_file.exists():
+            resume_offset = tmp_file.stat().st_size
 
     _time = time.time
     use_raw = _is_requests_session(session)
 
     attempts = 1
-    completed = False
     written = 0
-    try:
-        while True:
-            if not part_mode:
-                written = 0
-            last_speed_refresh = _time()
+    while True:
+        if claimed is not None and claimed():
+            return
+        if not part_mode:
+            written = 0
+        last_speed_refresh = _time()
 
-            try:
-                use_rnet = _is_rnet_session(session)
+        try:
+            use_rnet = _is_rnet_session(session)
 
-                request_kwargs = dict(kwargs)
-                if part_mode:
-                    req_headers = dict(request_kwargs.get("headers", {}) or {})
-                    req_headers["Range"] = f"bytes={part_offset + written}-{part_end}"
-                    request_kwargs["headers"] = req_headers
-                elif resume_offset > 0:
-                    req_headers = dict(request_kwargs.get("headers", {}) or {})
-                    req_headers["Range"] = f"bytes={resume_offset}-"
-                    request_kwargs["headers"] = req_headers
+            request_kwargs = dict(kwargs)
+            if use_rnet:
+                request_kwargs.setdefault("read_timeout", READ_TIMEOUT)
+            else:
+                request_kwargs.setdefault("timeout", (CONNECT_TIMEOUT, READ_TIMEOUT))
+            if part_mode:
+                req_headers = dict(request_kwargs.get("headers", {}) or {})
+                req_headers["Range"] = f"bytes={part_offset + written}-{part_end}"
+                request_kwargs["headers"] = req_headers
+            elif resume_offset > 0:
+                req_headers = dict(request_kwargs.get("headers", {}) or {})
+                req_headers["Range"] = f"bytes={resume_offset}-"
+                request_kwargs["headers"] = req_headers
 
-                stream = session.get(url, stream=True, **request_kwargs)
-                stream.raise_for_status()
+            stream = session.get(url, stream=True, **request_kwargs)
+            stream.raise_for_status()
 
-                resumed = (not part_mode) and resume_offset > 0 and stream.status_code == 206
-                if (not part_mode) and resume_offset > 0 and not resumed:
-                    resume_offset = 0
-                if part_mode and stream.status_code != 206:
-                    raise IOError(f"expected 206 for ranged part, got {stream.status_code}")
-                if use_rnet:
-                    content_length = stream.content_length or 0
-                else:
-                    try:
-                        content_length = int(stream.headers.get("Content-Length", "0"))
-                        if stream.headers.get("Content-Encoding", "").lower() in ["gzip", "deflate", "br"]:
-                            content_length = 0
-                    except ValueError:
+            resumed = (not part_mode) and resume_offset > 0 and stream.status_code == 206
+            if (not part_mode) and resume_offset > 0 and not resumed:
+                resume_offset = 0
+            if part_mode and stream.status_code != 206:
+                raise IOError(f"expected 206 for ranged part, got {stream.status_code}")
+            if use_rnet:
+                content_length = stream.content_length or 0
+            else:
+                try:
+                    content_length = int(stream.headers.get("Content-Length", "0"))
+                    if stream.headers.get("Content-Encoding", "").lower() in ["gzip", "deflate", "br"]:
                         content_length = 0
+                except ValueError:
+                    content_length = 0
 
-                chunk_size = _adaptive_chunk_size(content_length)
-                total_size = (resume_offset + content_length) if resumed and content_length > 0 else content_length
+            chunk_size = _adaptive_chunk_size(content_length)
+            total_size = (resume_offset + content_length) if resumed and content_length > 0 else content_length
 
-                if not segmented and not part_mode:
-                    if total_size > 0:
-                        yield dict(total=total_size)
-                    else:
-                        yield dict(total=None)
-                    if resumed and resume_offset > 0:
-                        yield dict(advance=resume_offset)
-
-                if part_mode:
-                    file_mode = "r+b"
-                    file_buffering = 0
+            if not segmented and not part_mode:
+                if total_size > 0:
+                    yield dict(total=total_size)
                 else:
-                    file_mode = "ab" if resumed else "wb"
-                    file_buffering = 1_048_576
-                with open(save_path, file_mode, buffering=file_buffering) as f:
-                    if part_mode:
-                        f.seek(part_offset + written)
-                    elif not resumed and content_length > 0:
-                        f.truncate(content_length)
-                        f.seek(0)
+                    yield dict(total=None)
+                if resumed and resume_offset > 0:
+                    yield dict(advance=resume_offset)
 
-                    _write = f.write
-
-                    if use_rnet:
-                        chunks = stream.stream()
-                    elif use_raw:
-                        chunks = iter(lambda: stream.raw.read(chunk_size), b"")
-                    else:
-                        chunks = stream.iter_content(chunk_size=chunk_size)
-
-                    _data_accumulated = 0
-                    _bytes_since_yield = 0
-                    emit_progress = (not segmented) or part_mode
-                    for chunk in chunks:
-                        if DOWNLOAD_CANCELLED.is_set():
-                            break
-                        _write(chunk)
-                        download_size = len(chunk)
-                        written += download_size
-
-                        if emit_progress:
-                            _bytes_since_yield += download_size
-                            _data_accumulated += download_size
-                            now = _time()
-                            time_since = now - last_speed_refresh
-                            if time_since > PROGRESS_WINDOW:
-                                yield dict(advance=_bytes_since_yield)
-                                _bytes_since_yield = 0
-                                if not part_mode:
-                                    download_speed = math.ceil(_data_accumulated / (time_since or 1))
-                                    yield dict(downloaded=f"{filesize.decimal(download_speed)}/s")
-                                last_speed_refresh = now
-                                _data_accumulated = 0
-
-                    if emit_progress and _bytes_since_yield > 0:
-                        yield dict(advance=_bytes_since_yield)
-
-                    try:
-                        stream.close()
-                    except Exception:
-                        pass
-
-                    if not part_mode and not resumed and content_length > 0 and written != content_length:
-                        f.truncate(written)
-
+            if part_mode:
+                file_mode = "r+b"
+                file_buffering = 0
+            else:
+                file_mode = "ab" if resumed else "wb"
+                file_buffering = 1_048_576
+            with open(save_path if part_mode else tmp_file, file_mode, buffering=file_buffering) as f:
                 if part_mode:
-                    expected = part_end - part_offset + 1
-                    if written < expected:
-                        raise IOError(f"Failed to read part {part_offset}-{part_end}: got {written}/{expected}")
-                elif not segmented and content_length and written < content_length:
-                    raise IOError(f"Failed to read {content_length} bytes from the track URI.")
+                    f.seek(part_offset + written)
+                elif not resumed and content_length > 0:
+                    f.truncate(content_length)
+                    f.seek(0)
 
-                if not part_mode:
-                    yield dict(file_downloaded=save_path, written=resume_offset + written)
-                    if segmented:
-                        yield dict(advance=1)
-                completed = True
-                break
-            except Exception:
+                _write = f.write
+
+                if use_rnet:
+                    chunks = stream.stream()
+                elif use_raw:
+                    chunks = iter(lambda: stream.raw.read(chunk_size), b"")
+                else:
+                    chunks = stream.iter_content(chunk_size=chunk_size)
+
+                _data_accumulated = 0
+                _bytes_since_yield = 0
+                emit_progress = (not segmented) or part_mode
+                for chunk in chunks:
+                    if DOWNLOAD_CANCELLED.is_set():
+                        break
+                    _write(chunk)
+                    download_size = len(chunk)
+                    written += download_size
+
+                    if emit_progress:
+                        _bytes_since_yield += download_size
+                        _data_accumulated += download_size
+                        now = _time()
+                        time_since = now - last_speed_refresh
+                        if time_since > PROGRESS_WINDOW:
+                            yield dict(advance=_bytes_since_yield)
+                            _bytes_since_yield = 0
+                            if not part_mode:
+                                download_speed = math.ceil(_data_accumulated / (time_since or 1))
+                                yield dict(downloaded=f"{filesize.decimal(download_speed)}/s")
+                            last_speed_refresh = now
+                            _data_accumulated = 0
+
+                if emit_progress and _bytes_since_yield > 0:
+                    yield dict(advance=_bytes_since_yield)
+
                 try:
                     stream.close()
                 except Exception:
                     pass
-                if DOWNLOAD_CANCELLED.is_set() or attempts == MAX_ATTEMPTS:
-                    if part_mode and not DOWNLOAD_CANCELLED.is_set():
-                        raise
-                    return
-                if not part_mode and save_path.exists():
-                    resume_offset = save_path.stat().st_size
-                time.sleep(RETRY_WAIT)
-                attempts += 1
-    finally:
-        if completed and not part_mode:
-            control_file.unlink(missing_ok=True)
+
+                if not part_mode and not resumed and content_length > 0 and written != content_length:
+                    f.truncate(written)
+
+            if DOWNLOAD_CANCELLED.is_set() and (not content_length or written < content_length):
+                # cancelled mid-stream: keep the partial .!dev for resume, never finalize
+                return
+
+            if part_mode:
+                expected = part_end - part_offset + 1
+                if written < expected:
+                    raise IOError(f"Failed to read part {part_offset}-{part_end}: got {written}/{expected}")
+            elif not segmented and content_length and written < content_length:
+                raise IOError(f"Failed to read {content_length} bytes from the track URI.")
+
+            if not part_mode:
+                os.replace(tmp_file, save_path)
+                yield dict(file_downloaded=save_path, written=resume_offset + written)
+                if segmented:
+                    yield dict(advance=1)
+            break
+        except Exception:
+            try:
+                stream.close()
+            except Exception:
+                pass
+            if DOWNLOAD_CANCELLED.is_set() or attempts == MAX_ATTEMPTS:
+                if part_mode and not DOWNLOAD_CANCELLED.is_set():
+                    raise
+                return
+            if not part_mode:
+                resume_offset = tmp_file.stat().st_size if tmp_file.exists() else 0
+            time.sleep(RETRY_WAIT)
+            attempts += 1
 
 
 def requests(
@@ -411,7 +437,7 @@ def requests(
         cookies: A mapping of Cookie Key/Values or a Cookie Jar to use for all downloads.
         proxy: An optional proxy URI to route connections through for all downloads.
         max_workers: The maximum amount of threads to use for downloads. Defaults to
-            min(12,(cpu_count+4)).
+            min(16, cpu_count + 4).
         session: An optional requests.Session or RnetSession to use. If provided,
             it will be used directly (preserving TLS fingerprinting). If None, a new
             requests.Session with HTTPAdapter connection pooling will be created.
@@ -458,6 +484,8 @@ def requests(
             output_dir / filename.format(i=i, ext=get_extension(url["url"] if isinstance(url, dict) else url))
         ]
     ]
+    # once per batch; download() skips it for segments
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # Use provided session or create a new optimized requests.Session
     # When a session is provided (e.g., service's RnetSession), don't mutate headers/cookies/proxy —
@@ -545,15 +573,50 @@ def requests(
         pool = ThreadPoolExecutor(max_workers=max_workers)
         event_queue: Queue[dict[str, Any]] = Queue()
 
-        def _download_worker(url_item: dict[str, Any]) -> None:
+        # hedging: first finisher claims the segment in seg_done under the lock,
+        # the loser discards its own output and emits nothing
+        seg_lock = threading.Lock()
+        seg_start: dict[int, float] = {}
+        seg_done: set[int] = set()
+        seg_durations: list[float] = []
+        hedged: set[int] = set()
+
+        def _download_worker(index: int, url_item: dict[str, Any], hedge: bool = False) -> None:
+            item = dict(url_item)
+            save_path = item.pop("save_path")
+            if save_path.exists():  # finished in a previous run
+                with seg_lock:
+                    if index in seg_done:
+                        return
+                    seg_done.add(index)
+                event_queue.put(dict(file_downloaded=save_path, written=save_path.stat().st_size))
+                event_queue.put(dict(advance=1))
+                return
+            # each racer writes to its own target so a loser never touches the final file;
+            # the .!dev suffix keeps strays visible to the manifest parsers' cleanup
+            target = save_path.with_name(f"{save_path.name}.{'h' if hedge else 'p'}.!dev")
+            if not hedge:
+                seg_start[index] = time.time()
             for event in download(
                 session=session,
                 segmented=segmented_batch,
-                **url_item,
+                save_path=target,
+                claimed=lambda: index in seg_done,
+                **item,
             ):
+                if "file_downloaded" in event:
+                    with seg_lock:
+                        if index in seg_done:
+                            target.unlink(missing_ok=True)
+                            return
+                        seg_done.add(index)
+                        if not hedge:
+                            seg_durations.append(time.time() - seg_start[index])
+                    os.replace(target, save_path)
+                    event = dict(event, file_downloaded=save_path)
                 event_queue.put(event)
 
-        futures = [pool.submit(_download_worker, url) for url in urls]
+        futures = [pool.submit(_download_worker, i, url) for i, url in enumerate(urls)]
         pending = set(futures)
 
         pending_advance = 0
@@ -591,6 +654,23 @@ def requests(
                         download_speed = math.ceil(total_bytes / elapsed)
                         yield dict(downloaded=f"{filesize.decimal(download_speed)}/s")
                     last_speed_report = now
+
+                # hedge stuck segments once spare workers exist (pending < max_workers)
+                if len(pending) < max_workers and seg_durations and not DOWNLOAD_CANCELLED.is_set():
+                    threshold = max(HEDGE_FACTOR * statistics.median(seg_durations), HEDGE_MIN_WAIT)
+                    with seg_lock:
+                        stuck = [
+                            i
+                            for i, started in seg_start.items()
+                            if i not in seg_done and i not in hedged and now - started > threshold
+                        ]
+                    for i in stuck[: max_workers - len(pending)]:
+                        hedged.add(i)
+                        pending.add(pool.submit(_download_worker, i, urls[i], True))
+
+                # all segments claimed; superseded losers exit via their claimed() check
+                if len(seg_done) == len(urls):
+                    break
 
                 # Wait efficiently for next future completion (OS condition variable)
                 completed, pending = wait(pending, timeout=0.1, return_when=FIRST_COMPLETED)

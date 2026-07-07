@@ -32,6 +32,7 @@ def test_api_error_default_http_status_per_code() -> None:
         APIErrorCode.JOB_NOT_FOUND: 404,
         APIErrorCode.SESSION_NOT_FOUND: 404,
         APIErrorCode.TRACK_NOT_FOUND: 404,
+        APIErrorCode.CONFLICT: 409,
         APIErrorCode.RATE_LIMITED: 429,
         APIErrorCode.INTERNAL_ERROR: 500,
         APIErrorCode.DOWNLOAD_ERROR: 500,
