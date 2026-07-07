@@ -510,6 +510,12 @@ class Tracks:
             languages_mismatch = prefer_full and audio_default_lang and not is_close_match(
                 preferred_subtitle_lang, [audio_default_lang]
             )
+            if languages_mismatch:
+                # forced tracks won't be eligible for the default flag in this case, so push them
+                # to the end of their language's group instead of leaving them up front, without
+                # disturbing the existing language grouping/order
+                language_order = list(dict.fromkeys(str(s.language) for s in self.subtitles))
+                self.subtitles.sort(key=lambda s: (language_order.index(str(s.language)), s.forced))
             candidates = [
                 idx
                 for idx, s in enumerate(self.subtitles)
