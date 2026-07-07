@@ -86,7 +86,7 @@ curl -X POST http://127.0.0.1:8786/api/download \
   -H "X-Secret-Key: your-api-secret" \
   -H "Content-Type: application/json" \
   -d '{
-        "service": "NF",
+        "service": "EXAMPLE",
         "title_id": "81234567",
         "quality": ["1080"],
         "range": ["HDR10"]
@@ -228,7 +228,7 @@ state, and this is important because the response differs:
 |---|---|---|
 | `queued` or `downloading` | The job is cancelled. A running download's worker process is terminated. | `200` with `{"status": "success", "message": "Job cancelled"}` |
 | `completed`, `failed`, or `cancelled` (terminal) | The job is **removed** from the manager entirely. | `204 No Content`, empty body |
-| Not found | — | `404` with error code `JOB_NOT_FOUND` |
+| Not found | - | `404` with error code `JOB_NOT_FOUND` |
 
 In other words, `DELETE` on a live job *cancels* it, while `DELETE` on an already
 finished job *deletes it from the list*. This dual meaning is deliberate: one verb

@@ -48,7 +48,7 @@ license-server handshake; the rest are special cases.
 |--------|-------------|--------------|------------|
 | **Widevine** (Google) | `.wvd` | CDM challenge → license server → CDM parses → keys | shaka-packager / mp4decrypt |
 | **PlayReady** (Microsoft) | `.prd` | CDM challenge (WRM header) → license server → CDM parses → keys | shaka-packager / mp4decrypt |
-| **ClearKey (CENC)**, W3C EME `org.w3.clearkey` | none | JSON `{"kids":[…],"type":"temporary"}` → license server returns a JWK Set. No CDM. | shaka-packager / mp4decrypt |
+| **ClearKey (CENC)**, W3C EME `org.w3.clearkey` | none | JSON `{"kids":[...],"type":"temporary"}` → license server returns a JWK Set. No CDM. | shaka-packager / mp4decrypt |
 | **ClearKey (HLS)**, AES-128 `EXT-X-KEY` | none | Key fetched directly from a URI or `data:` URL. No CDM, no challenge. | in-process AES-CBC |
 | **MonaLisa** (proprietary, WASM) | `.mld` | Ticket from the service API; keys extracted locally via WASM. No license server. | ML-Worker binary + AES-ECB, per segment |
 
@@ -201,15 +201,15 @@ fallback:
 ```yaml title="unshackle.yaml"
 cdm:
   default: nexus_6p_26830_l3
-  AMZN: chromecdm_l3
-  NF: sm_g935f_l1
+  EXAMPLE1: chromecdm_l3
+  EXAMPLE2: sm_g935f_l1
 ```
 
 Lookups are case-insensitive. On the command line you can override the configured
 device for a single run:
 
 ```console
-$ unshackle dl -w chromecdm_l3 AMZN B0ABCDEF
+$ unshackle dl -w chromecdm_l3 EXAMPLE1 B0ABCDEF
 ```
 
 !!! tip "The device name is the file name"
@@ -451,7 +451,7 @@ returns the keys as a JWK Set rather than a DRM-wrapped blob. unshackle builds a
 EME request of the form:
 
 ```json
-{"kids": ["<base64url-kid>", …], "type": "temporary"}
+{"kids": ["<base64url-kid>", ...], "type": "temporary"}
 ```
 
 It sends this to the manifest's license URL (or to whatever a service's ClearKey

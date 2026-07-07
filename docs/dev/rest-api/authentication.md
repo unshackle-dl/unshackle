@@ -59,7 +59,7 @@ serve:
       username: alice
       devices: ["my_widevine_device"]         # Widevine (.wvd) devices this key may use
       playready_devices: ["my_playready_prd"]  # PlayReady (.prd) devices this key may use
-      services: ["AMZN", "NF"]                 # optional per-key service allowlist
+      services: ["EXAMPLE1", "EXAMPLE2"]       # optional per-key service allowlist
     a-secret-key-for-bob:
       username: bob
       devices: ["my_widevine_device"]
@@ -217,11 +217,11 @@ The effective allowlist for a request is:
 ```yaml title="Restricting services"
 serve:
   api_secret: "admin-key"
-  services: ["AMZN", "NF", "DSNP"]   # global ceiling for all keys
+  services: ["EXAMPLE1", "EXAMPLE2", "EXAMPLE3"]   # global ceiling for all keys
   users:
     limited-key:
       username: limited
-      services: ["AMZN"]              # this key ends up allowed only AMZN
+      services: ["EXAMPLE1"]          # this key ends up allowed only EXAMPLE1
 ```
 
 Endpoints that name a service (listing services, searching, listing titles/tracks, downloading, profiles, history, and remote sessions) all filter against this allowlist. A request for a service outside the key's allowlist is rejected as an invalid service. Service tags are matched after normalization, so casing and aliases resolve consistently.

@@ -25,9 +25,9 @@ your service, in order:
 ```text
 Service.get_titles        →  which movies / episodes / songs exist
       │
-Service.get_tracks        →  fetch a manifest for one title …
+Service.get_tracks        →  fetch a manifest for one title ...
       │
-manifest.to_tracks        →  … parsed into Video / Audio / Subtitle tracks
+manifest.to_tracks        →  ... parsed into Video / Audio / Subtitle tracks
       │
 Track.download            →  fetch + merge segments (core-driven)
       │
@@ -310,7 +310,7 @@ A typical `get_tracks` therefore looks like fetching the manifest text with
 
 - **HLS**: set `track.OnSegmentFilter(segment)` to drop unwanted segments (ads/bumpers).
 - **DASH**: pass a `period_filter` callable to `to_tracks` to drop whole periods.
-  Amazon caching-breadth periods and non-`content` segment types are dropped automatically.
+  Caching-breadth periods some services emit and non-`content` segment types are dropped automatically.
 
 ### Format gotchas worth knowing
 

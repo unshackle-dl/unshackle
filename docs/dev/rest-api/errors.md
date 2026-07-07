@@ -139,7 +139,7 @@ uncategorised exception bubbles up, the server runs it through a classifier that
 inspects the exception type and message and maps it to the most appropriate code.
 The classification is keyword-based, checked in order:
 
-| If the error mentions… | It becomes | Retryable |
+| If the error mentions... | It becomes | Retryable |
 |---|---|---|
 | auth, login, credential, unauthorized, forbidden, token | `AUTH_FAILED` (401) | no |
 | connection, timeout, network, unreachable, socket, dns, resolve (or `ConnectionError`, `TimeoutError`, `URLError`, `SSLError`) | `NETWORK_ERROR` (503) | yes |

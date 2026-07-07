@@ -79,11 +79,11 @@ directories:
 | `data` | path | `unshackle/` | ❌ protected | Base for the data subdirectories above. |
 | `core_dir` | path | `unshackle/core` | ❌ protected | Package core. |
 | `namespace_dir` | path | `unshackle/` | ❌ protected | Package root. |
-| `app_dirs` | — | `AppDirs("unshackle", False)` | ❌ protected | Internal AppDirs instance. |
+| `app_dirs` | - | `AppDirs("unshackle", False)` | ❌ protected | Internal AppDirs instance. |
 
 !!! note "The `services` directory is special"
     `services` may be a **list**, and each entry can be either a local directory or a
-    **repository spec**: a git URL (`https://…`, `ssh://…`, `git@…`, or anything ending in
+    **repository spec**: a git URL (`https://...`, `ssh://...`, `git@...`, or anything ending in
     `.git`) or `owner/repo` shorthand. Repo specs are cloned and updated automatically; plain
     paths are used as-is. **List order is priority**: the first source to define a service
     tag wins, so put your own local service directories **last** to make them fallbacks.
@@ -142,8 +142,8 @@ runtime.
 
 - **Type:** `dict` keyed by service tag &nbsp;·&nbsp; **Default:** `{}`
 
-Per-service configuration, keyed by the canonical service tag (for example `AMZN`, `NF`,
-`DSNP`). unshackle reads several well-known sub-keys out of each service's block:
+Per-service configuration, keyed by the canonical service tag (for example `EXAMPLE1`, `EXAMPLE2`,
+`EXAMPLE3`). unshackle reads several well-known sub-keys out of each service's block:
 
 - **`proxy_map`**: a dict mapping `"provider:query"` or `"query"` to a proxy value, used to
   auto-select a proxy for that service.
@@ -163,11 +163,11 @@ the service as `self.config`.
 
 ```yaml
 services:
-  AMZN:
+  EXAMPLE1:
     proxy_map:
       default: us
     title_map:
-      "The Grand Tour: The Movie": "The Grand Tour Presents The Movie"
+      "My Show: The Movie": "My Show Presents The Movie"
 ```
 
 ### `credentials`
@@ -180,8 +180,8 @@ objects; the credential's SHA-1 is also used as an account hash for cache keys.
 
 ```yaml
 credentials:
-  NF: user@example.com:hunter2
-  AMZN:
+  EXAMPLE2: user@example.com:hunter2
+  EXAMPLE1:
     - primary@example.com:pw1
     - secondary@example.com:pw2
 ```
@@ -230,13 +230,46 @@ CLI commands that run against the remote server.
 
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
 
-Configuration for the `serve` command (the built-in REST API server).
+Configuration for the `serve` command (the built-in REST API server). The full server guide
+is the [REST API](../dev/rest-api/index.md) section; these are the config keys.
+
+| Sub-key | Type | Default | Description |
+|---------|------|---------|-------------|
+| `api_secret` | str | *(unset)* | Master secret accepted in the `X-Secret-Key` header. |
+| `users` | dict | `{}` | Per-user API keys and their allowlists (see below). |
+| `services` | list | *(unset)* | Global service allowlist. Omit to allow all. |
+| `remote_only` | bool | `false` | Run without a local `output_template` (CORS/Cloudflare-friendly). |
+| `session_ttl` | int (s) | `300` | Lifetime of an interactive auth session. |
+| `max_sessions` | int | `100` | Maximum concurrent sessions. |
+| `history_limit` | int | `100` | How many finished jobs to retain in history. |
+| `compression_level` | int | `1` | gzip level for responses. |
+| `cdm_overrides` | dict | *(unset)* | Allowed per-request CDM overrides. |
+| `allow_job_credentials` | bool | `false` | Permit clients to supply credentials per job. |
+| `devices` | list | *(auto)* | Widevine devices offered; auto-filled from `directories.wvds`. |
+| `playready_devices` | list | *(auto)* | PlayReady devices; auto-filled from `directories.prds`. |
+| `country` / `locations` | str / dict | *(unset)* | Advertised region metadata. |
+
+Each entry under `users` is keyed by that user's API key and may set its own `services`,
+`devices`, and `playready_devices` allowlists, narrowing the global ones.
+
+```yaml
+serve:
+  api_secret: change-me
+  remote_only: true
+  services: [EXAMPLE1, EXAMPLE2]
+  # server-wide download defaults (same keys as the `dl:` block)
+  downloads: 3
+  best_available: true
+  users:
+    a1b2c3d4:                 # this user's API key
+      services: [EXAMPLE1]        # may only use EXAMPLE1
+```
 
 !!! tip "Declaring `dl` defaults under `serve`"
-    You can nest `dl` flags (`downloads`, `workers`, `best_available`, and so on) inside
-    `serve`. The point is to raise concurrency and behaviour defaults **server-wide** (every
-    request the server handles picks them up) without having to change each client call
-    individually.
+    You can set any [`dl`](#dl) flag key (`downloads`, `workers`, `best_available`, and so on)
+    directly inside `serve`. The point is to raise concurrency and behaviour defaults
+    **server-wide** (every request the server handles picks them up) without having to change
+    each client call individually.
 
 ---
 
@@ -246,15 +279,105 @@ Configuration for the `serve` command (the built-in REST API server).
 
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
 
-Default options forwarded to the `dl` command. Anything you would otherwise pass as a `dl`
-flag can be given a persistent default here. See [Downloading](../guide/downloading.md) for
-the flags themselves.
+Persistent defaults for the `dl` command. This block is used as Click's `default_map`, so
+**any** `dl` flag can be given a default here and it applies to every download without you
+typing it. See [Downloading](../guide/downloading.md) and the
+[CLI Reference](../guide/cli-reference.md) for what each flag does.
+
+**Key naming.** A key is the flag's long name with dashes replaced by underscores
+(`--best-available` → `best_available`, `--sub-format` → `sub_format`). A few keys are named
+after the flag's internal destination rather than its visible name; set these exact keys:
+
+| Flag | Config key |
+|------|-----------|
+| `-r` / `--range` | `range` |
+| `--list` | `list` |
+| `--tmdb` | `tmdb_id` |
+| `--imdb` | `imdb_id` |
+| `--animeapi` | `animeapi_id` |
+| `-naa` / `--noatmos` | `no_atmos` |
+| `-o` / `--output` | `output_dir` |
+| `--cdm-only` / `--vaults-only` | `cdm_only` |
+
+**Precedence** (highest first): an explicit CLI flag or environment variable → a per-service
+[`services.<TAG>.dl`](#services-auth) override → this global `dl:` block → the built-in
+default. In other words, config only fills in options you did not set on the command line.
+
+Common keys (a useful subset; every `dl` flag works):
+
+| Key | Type | Default | Sets |
+|-----|------|---------|------|
+| `lang` | list | `["orig"]` | Video/audio language(s); `orig` = original language. |
+| `a_lang` / `v_lang` | list | `[]` | Audio- / video-only language override. |
+| `s_lang` | list | `["all"]` | Subtitle language(s). |
+| `quality` | list | `[]` (best) | Resolution(s), e.g. `[1080]`. |
+| `vcodec` | list | `[]` (any) | Video codec(s), e.g. `[H265]`. |
+| `acodec` | list | `[]` (any) | Audio codec(s), e.g. `[EC3]`. |
+| `range` | list | `["SDR"]` | Colour range(s): `SDR`, `HDR10`, `HDR10+`, `DV`. |
+| `channels` | float | *(unset)* | Audio channels, e.g. `6` for 5.1. |
+| `sub_format` | str | *(unset)* | Convert subtitles to this format (`srt`, `vtt`, `original`, ...). |
+| `forced_subs` | bool | `false` | Include forced subtitle tracks. |
+| `no_subs` / `no_audio` / `no_chapters` | bool | `false` | Skip that track type. |
+| `downloads` | int | `1` | Tracks downloaded concurrently. |
+| `workers` | int | *(downloader default)* | Threads per track. |
+| `slow` | str | *(unset)* | Inter-title delay, e.g. `"20-40"`. |
+| `best_available` | bool | `false` | Fall back to best quality if the request is unavailable. |
+| `proxy` | str | *(unset)* | Default proxy URI or 2-letter country. |
+| `no_folder` | bool | `false` | Do not create a per-title folder. |
+
+```yaml title="Global download defaults"
+dl:
+  lang: [en]
+  quality: [1080]
+  range: [HDR10]
+  vcodec: [H265]
+  sub_format: srt
+  downloads: 2
+```
+
+!!! tip "Per-service overrides"
+    Nest a `dl` block under a service in [`services`](#services-auth) to override these defaults
+    for just that service. It uses the same keys and wins over the global `dl:` block (but still
+    loses to an explicit CLI flag).
+
+    ```yaml
+    dl:
+      lang: [en]          # global default
+    services:
+      EXAMPLE1:
+        dl:
+          lang: [en, ja]  # EXAMPLE1 downloads both; everything else stays English
+          range: [DV]
+    ```
+
+!!! note "`serve` uses these same keys"
+    The [`serve`](#serve) block accepts the same `dl` option keys at its top level to set
+    server-wide download defaults for every request it handles.
 
 ### `subtitle`
 
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
 
-Subtitle handling options. See [Subtitles](../guide/subtitles.md).
+Subtitle handling: SDH stripping, format conversion, and whether subtitles are muxed in or
+written as sidecar files. See [Subtitles](../guide/subtitles.md) for the full guide.
+
+| Sub-key | Type | Default | Description |
+|---------|------|---------|-------------|
+| `strip_sdh` | bool | `true` | Strip SDH/CC cues (hearing-impaired annotations) into a clean track. |
+| `sdh_method` | str | `"auto"` | SDH-stripping backend to use. |
+| `preserve_formatting` | bool | `true` | Keep styling/positioning when converting or stripping. |
+| `convert_before_strip` | bool | `true` | Convert to the working format before stripping SDH. |
+| `conversion_method` | str | `"auto"` | Subtitle conversion backend. |
+| `preferred_conversion_method` | str | *(unset)* | Preferred converter when several are available. |
+| `output_mode` | str | `"mux"` | `mux` embeds subtitles in the MKV; `sidecar` writes separate files. |
+| `sidecar_format` | str | `"srt"` | Format for sidecar files when `output_mode: sidecar`. |
+
+```yaml
+subtitle:
+  strip_sdh: true
+  output_mode: sidecar
+  sidecar_format: srt
+```
 
 ### `audio`
 
@@ -283,6 +406,21 @@ audio:
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
 
 Matroska (MKV) muxing options.
+
+| Sub-key | Type | Default | Description |
+|---------|------|---------|-------------|
+| `set_title` | bool | `true` | Write a human-readable title into the MKV container. |
+| `default_language` | dict | `{}` | Force which language is flagged *default* per track type, e.g. `{audio: en, subtitle: en}`. |
+| `merge_audio` | bool | `true` | Merge all audio into one file. `--split-audio` on the CLI flips this off. |
+| `merge_video` | bool | `false` | Merge all video tracks into one file. `--merge-video` on the CLI flips this on. |
+
+```yaml
+muxing:
+  set_title: true
+  default_language:
+    audio: en
+    subtitle: en
+```
 
 ### `language_tags`
 
@@ -381,7 +519,7 @@ then `default`.
 ```yaml
 cdm:
   default: chromecdm_l3
-  NF: android_l1
+  EXAMPLE2: android_l1
 ```
 
 A value may also be a **nested dict** for advanced selection by quality, DRM system, or
@@ -389,7 +527,7 @@ profile:
 
 ```yaml
 cdm:
-  AMZN:
+  EXAMPLE1:
     ">=1080": android_l1        # by track height
     "<1080": chromecdm_l3
     widevine: android_l1        # by DRM system
@@ -515,13 +653,13 @@ the full provider guide. Recognised providers and their exit ports:
 | Provider | Config key | Credentials | Proxy scheme/port |
 |----------|-----------|-------------|-------------------|
 | Basic (static) | `basic` | country → URI(s) | as specified |
-| NordVPN | `nordvpn` | 48-char **service** credentials | `https://…:89` |
-| Surfshark | `surfsharkvpn` | 48-char **service** credentials | `https://…:443` |
-| Windscribe | `windscribevpn` | service credentials | `https://…:443` |
-| ExpressVPN | `expressvpn` | browser cookies / token cache | `https://cat:…@…:443` |
-| ProtonVPN | `protonvpn` | TV login or exported cookies | `https://…:4443` (or `:443` Secure Core) |
+| NordVPN | `nordvpn` | 48-char **service** credentials | `https://...:89` |
+| Surfshark | `surfsharkvpn` | 48-char **service** credentials | `https://...:443` |
+| Windscribe | `windscribevpn` | service credentials | `https://...:443` |
+| ExpressVPN | `expressvpn` | browser cookies / token cache | `https://cat:...@...:443` |
+| ProtonVPN | `protonvpn` | TV login or exported cookies | `https://...:4443` (or `:443` Secure Core) |
 | Gluetun | `gluetun` | per-VPN keys/creds | `http://localhost:{port}` (local Docker) |
-| Hola | *(none, auto)* | none | `http://…:{peer}` |
+| Hola | *(none, auto)* | none | `http://...:{peer}` |
 
 ```yaml
 proxy_providers:
@@ -696,12 +834,12 @@ headers:
 
 cdm:
   default: chromecdm_l3
-  NF: android_l1
+  EXAMPLE2: android_l1
 
 decryption: shaka
 
 credentials:
-  NF: user@example.com:hunter2
+  EXAMPLE2: user@example.com:hunter2
 
 output_template:
   movies: "{title}.{year}.{quality?}.{source}-{tag}"

@@ -82,7 +82,7 @@ By default (`--s-lang all`) unshackle keeps every subtitle language the service 
 To narrow it down, pass a comma-separated list of language tags:
 
 ```shell title="English and Spanish subtitles only"
-unshackle dl --s-lang en,es NF 81234567
+unshackle dl --s-lang en,es EXAMPLE 81234567
 ```
 
 Language matching is fuzzy by default: `en` will match `en-US`, `en-GB`, and similar
@@ -93,7 +93,7 @@ For strict matching, where `es-419` matches only `es-419` and never `es-ES`, add
 `--exact-lang`:
 
 ```shell title="Only Latin-American Spanish, no other Spanish variants"
-unshackle dl --s-lang es-419 --exact-lang DSNP 'https://www.disneyplus.com/…'
+unshackle dl --s-lang es-419 --exact-lang EXAMPLE 'https://www.example.com/...'
 ```
 
 ### Requiring languages before downloading
@@ -104,7 +104,7 @@ errors out. This is useful for batch jobs where a title without your must-have l
 should fail loudly rather than silently produce a partial result.
 
 ```shell title="Fail unless both English and French subs exist, then grab everything"
-unshackle dl --require-subs en,fr AMZN B0ABCDEFGH
+unshackle dl --require-subs en,fr EXAMPLE B0ABCDEFGH
 ```
 
 !!! warning "`--require-subs` and `--s-lang` are mutually exclusive"
@@ -118,7 +118,7 @@ to display even when you are watching in your own language. They are **excluded 
 default**. Add `-fs` / `--forced-subs` to include them:
 
 ```shell title="Include forced tracks alongside full subtitles"
-unshackle dl --s-lang en --forced-subs NF 81234567
+unshackle dl --s-lang en --forced-subs EXAMPLE 81234567
 ```
 
 ## Track types: forced, SDH, and CC
@@ -181,7 +181,7 @@ TTML to WebVTT for muxing, as noted above). To force a specific output format, u
 `--sub-format`:
 
 ```shell title="Convert every subtitle to SRT"
-unshackle dl --s-lang en,es --sub-format srt NF 81234567
+unshackle dl --s-lang en,es --sub-format srt EXAMPLE 81234567
 ```
 
 `--sub-format` accepts the common format names and aliases, including `srt`, `vtt`,
@@ -189,7 +189,7 @@ unshackle dl --s-lang en,es --sub-format srt NF 81234567
 all conversion:
 
 ```shell title="Keep whatever the service delivered"
-unshackle dl --sub-format original DSNP 'https://www.disneyplus.com/…'
+unshackle dl --sub-format original EXAMPLE 'https://www.example.com/...'
 ```
 
 Conversion only runs when the source format differs from the target, so
@@ -218,9 +218,9 @@ formats involved:
 | Backend | Best at | Requires |
 | --- | --- | --- |
 | `subtitleedit` | Highest fidelity; preserves positioning and italics | SubtitleEdit installed |
-| `subby` | Native SRT output with clean-up | — |
-| `pysubs2` | Best fidelity for styled SSA/ASS | — (pure Python, always available) |
-| `pycaption` | Last-resort fallback; flattens styling | — |
+| `subby` | Native SRT output with clean-up | - |
+| `pysubs2` | Best fidelity for styled SSA/ASS | - (pure Python, always available) |
+| `pycaption` | Last-resort fallback; flattens styling | - |
 
 With `conversion_method: auto`, unshackle ranks these automatically per conversion.
 Setting it to a specific value pins that backend as the first choice, falling back to

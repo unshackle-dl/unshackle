@@ -31,15 +31,15 @@ Proxying is controlled at download time by three options on the `dl` command:
 | `--no-proxy-download` | Use the proxy for the manifest, licence, and authentication, but bypass it for the **segment downloads** themselves. |
 
 ```shell title="Explicit proxy URI"
-unshackle dl --proxy http://user:pass@1.2.3.4:8080 NF 81234567
+unshackle dl --proxy http://user:pass@1.2.3.4:8080 EXAMPLE 81234567
 ```
 
 ```shell title="Resolve a US server from your configured providers"
-unshackle dl --proxy us NF 81234567
+unshackle dl --proxy us EXAMPLE 81234567
 ```
 
 ```shell title="Target a specific provider"
-unshackle dl --proxy nordvpn:us NF 81234567
+unshackle dl --proxy nordvpn:us EXAMPLE 81234567
 ```
 
 !!! tip "Set a default proxy in config"
@@ -55,7 +55,7 @@ proxy where it matters (passing the geo-check for the manifest and the licence) 
 pulling the actual audio and video segments over your normal connection for full speed.
 
 ```shell title="Proxy the manifest and licence, download segments direct"
-unshackle dl --proxy gb --no-proxy-download ITV 10a1234
+unshackle dl --proxy gb --no-proxy-download EXAMPLE 10a1234
 ```
 
 !!! warning "When this is unsafe"
@@ -78,8 +78,8 @@ flowchart TD
     D -- no --> F["Ask every provider in order,<br/>first match wins"]
 ```
 
-1. **An explicit URI.** Anything shaped like `http://…`, `https://…`, or a `socks…`
-   URI is used exactly as given. unshackle logs `Using explicit Proxy: …` and does no
+1. **An explicit URI.** Anything shaped like `http://...`, `https://...`, or a `socks...`
+   URI is used exactly as given. unshackle logs `Using explicit Proxy: ...` and does no
    lookup.
 2. **A provider-prefixed query**: `provider:query`, for example `nordvpn:us` or
    `gluetun:windscribe:us`. unshackle finds the provider whose name matches the prefix
@@ -154,7 +154,7 @@ proxy_providers:
   malformed URI is rejected up front rather than failing mid-download.
 
 ```shell
-unshackle dl --proxy de2 NF 81234567
+unshackle dl --proxy de2 EXAMPLE 81234567
 ```
 
 ## Gluetun
@@ -187,11 +187,11 @@ gluetun:<vpn-provider>:<region>
 ```
 
 ```shell title="A Windscribe US exit via Gluetun"
-unshackle dl --proxy gluetun:windscribe:us NF 81234567
+unshackle dl --proxy gluetun:windscribe:us EXAMPLE 81234567
 ```
 
 ```shell title="A NordVPN Germany exit via Gluetun"
-unshackle dl --proxy gluetun:nordvpn:de NF 81234567
+unshackle dl --proxy gluetun:nordvpn:de EXAMPLE 81234567
 ```
 
 After unshackle strips the leading `gluetun:`, the provider receives exactly
@@ -437,7 +437,7 @@ The returned proxy is HTTPS on **port 89** (NordVPN disabled its plain-HTTP prox
 port 80 in 2021).
 
 ```shell
-unshackle dl --proxy nordvpn:us:seattle NF 81234567
+unshackle dl --proxy nordvpn:us:seattle EXAMPLE 81234567
 ```
 
 ## Proton VPN
@@ -521,7 +521,7 @@ that binary is found on your `PATH`. If you query Hola but the binary is missing
 provider raises an error telling you to install it.
 
 ```shell title="Install hola-proxy, then just query a country"
-unshackle dl --proxy hola:us NF 81234567
+unshackle dl --proxy hola:us EXAMPLE 81234567
 ```
 
 **Query forms:** a two-letter country code (e.g. `us`, `gb`). unshackle asks `hola-proxy`

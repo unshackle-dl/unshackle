@@ -63,11 +63,11 @@ tag: MYGRP
 # Default Widevine/PlayReady device to use, with per-service overrides
 cdm:
   default: my_device_l3
-  AMZN: my_device_l1
+  EXAMPLE: my_device_l1
 
 # Per-service login details (service tag -> "username:password")
 credentials:
-  AMZN: my_email@example.com:hunter2
+  EXAMPLE: my_email@example.com:hunter2
 
 # Default HTTP headers merged into every request
 headers:
@@ -93,6 +93,41 @@ For the full list with types and defaults, see the [Configuration Reference](../
 
 !!! warning "Unknown keys are silently ignored"
     unshackle does not validate your config against a schema. If you misspell a key, it is simply skipped and the default is used. You will not get an error. Double-check key names (and their nesting) if a setting does not seem to apply.
+
+## Setting download defaults (`dl:`)
+
+If you always pass the same `dl` flags (a language, a resolution, a codec), put them under a
+`dl:` key once and unshackle applies them to every download. Any flag from
+[Downloading](../guide/downloading.md) works here; the key is the flag's long name with dashes
+turned into underscores (`--best-available` → `best_available`).
+
+```yaml title="unshackle.yaml"
+dl:
+  lang: [en]          # -l en
+  quality: [1080]     # -q 1080
+  vcodec: [H265]      # -v H265
+  sub_format: srt     # convert subtitles to SRT
+  downloads: 2        # two tracks at once
+```
+
+You can still override any of these on the command line for a one-off; an explicit flag
+always beats the config default. You can also scope defaults to a single service by nesting a
+`dl:` block under it:
+
+```yaml title="Per-service defaults"
+dl:
+  lang: [en]          # default for everything
+services:
+  EXAMPLE:
+    dl:
+      lang: [en, ja]  # Example downloads English + Japanese
+```
+
+!!! tip "A few keys are named after the flag's internal name"
+    Most keys are obvious, but set these exact ones: `range` (`-r`), `list` (`--list`),
+    `tmdb_id` (`--tmdb`), `imdb_id` (`--imdb`), `no_atmos` (`--noatmos`), and `output_dir`
+    (`-o`). The [Configuration Reference](../reference/configuration.md#dl) has the full list
+    and every available key.
 
 ## The directory layout
 

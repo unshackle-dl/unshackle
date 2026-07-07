@@ -13,7 +13,7 @@ Every key is stored as a **KID → KEY** pair, grouped by **service**:
 
 - **KID** (Key ID): a 16-byte identifier for a specific encrypted stream, stored as 32 lowercase hex characters with no dashes.
 - **KEY**: the 16-byte content key that decrypts that stream, also 32 hex characters.
-- **Service**: the canonical service tag (for example `DSNP`, not `DisneyPlus`) that namespaces the key. Each service gets its own logical table.
+- **Service**: the canonical service tag (for example `EXAMPLE`, not `ExampleService`) that namespaces the key. Each service gets its own logical table.
 
 !!! note "Why keys are matched by KID"
     Vaults match keys by KID, never by PSSH/CENC header. A KID does not change unless the underlying video file itself changes, whereas the PSSH box can vary between requests for the very same content. That makes the KID a far more reliable match key.
@@ -242,7 +242,7 @@ $ unshackle kv --help
 Add `KID:KEY` pairs to one or more vaults for a given service. The file must contain one pair per line as `HEX:HEX` (32 hex characters each); lines that do not match are ignored.
 
 ```console
-$ unshackle kv add keys.txt DSNP local shared
+$ unshackle kv add keys.txt EXAMPLE local shared
 ```
 
 ```text title="keys.txt"
@@ -250,7 +250,7 @@ $ unshackle kv add keys.txt DSNP local shared
 0e7cc1a4e2f9411db0f24a3fbb8f8b21:00112233445566778899aabbccddeeff
 ```
 
-The service argument (`DSNP` above) is normalized to its canonical tag automatically. Keys that already exist in a vault are reported as skipped.
+The service argument (`EXAMPLE` above) is normalized to its canonical tag automatically. Keys that already exist in a vault are reported as skipped.
 
 ### `kv search`: find a key by KID
 

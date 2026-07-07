@@ -32,14 +32,14 @@ is a service**, and the folder name is the service **tag**:
 ```text
 services/
 └── EXAMPLE/
-    ├── __init__.py     # required — defines the service class
-    └── config.yaml     # optional — per-service configuration
+    ├── __init__.py     # required - defines the service class
+    └── config.yaml     # optional - per-service configuration
 ```
 
 Two rules the loader enforces:
 
-1. **The class name must exactly match the folder/tag name.** Folder `AMZN` must
-   define `class AMZN`. A mismatch raises a `RuntimeError`.
+1. **The class name must exactly match the folder/tag name.** Folder `EXAMPLE` must
+   define `class EXAMPLE`. A mismatch raises a `RuntimeError`.
 2. **List order is priority.** The first services path to define a given tag
    wins; later duplicates are shadowed. Put your own local overrides *last* to
    use them as fallbacks, or *first* to override a repo.
@@ -546,7 +546,7 @@ from unshackle.core.tracks import Chapters, Tracks
 
 class MYSVC(Service):
     """
-    MyService — https://myservice.com
+    MyService - https://myservice.com
 
     \b
     Usage: unshackle dl MYSVC <title-id-or-url>
