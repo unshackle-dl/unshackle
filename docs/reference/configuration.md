@@ -671,6 +671,7 @@ the full provider guide. Recognised providers and their exit ports:
 | ExpressVPN | `expressvpn` | browser cookies / token cache | `https://cat:...@...:443` |
 | ProtonVPN | `protonvpn` | TV login or exported cookies | `https://...:4443` (or `:443` Secure Core) |
 | Gluetun | `gluetun` | per-VPN keys/creds | `http://localhost:{port}` (local Docker) |
+| V2Ray / Xray | `v2ray` | subscription / inline URIs / config file | `socks5://127.0.0.1:{port}` (local subprocess) |
 | Hola | *(none, auto)* | none | `http://...:{peer}` |
 
 ```yaml

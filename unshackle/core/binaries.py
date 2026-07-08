@@ -58,6 +58,11 @@ Mp4decrypt = find("mp4decrypt")
 Docker = find("docker")
 ML_Worker = find("ML-Worker")
 Git = find("git")
+# V2Ray proxy core. Xray (https://github.com/XTLS/Xray-core) is the modern, fully-compatible
+# fork and is preferred when available; v2ray-core (https://github.com/v2fly/v2ray-core)
+# is the original and is used as a fallback. Either binary drives the V2Ray proxy provider.
+Xray = find("xray")
+V2Ray = find("v2ray")
 
 
 __all__ = (
@@ -78,5 +83,7 @@ __all__ = (
     "Docker",
     "ML_Worker",
     "Git",
+    "Xray",
+    "V2Ray",
     "find",
 )

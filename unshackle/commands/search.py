@@ -16,7 +16,8 @@ from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import context_settings
-from unshackle.core.proxies import Basic, ExpressVPN, Gluetun, Hola, NordVPN, ProtonVPN, SurfsharkVPN, WindscribeVPN
+from unshackle.core.proxies import (Basic, ExpressVPN, Gluetun, Hola, NordVPN, ProtonVPN, SurfsharkVPN, V2Ray,
+                                    WindscribeVPN)
 from unshackle.core.service import Service
 from unshackle.core.services import Services
 from unshackle.core.utils.click_types import ContextData
@@ -81,6 +82,11 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
                 proxy_providers.append(WindscribeVPN(**config.proxy_providers["windscribevpn"]))
             if config.proxy_providers.get("gluetun"):
                 proxy_providers.append(Gluetun(**config.proxy_providers["gluetun"]))
+            # V2Ray is config-gated: a ``v2ray:`` block (even an empty one) is required
+            # to opt in. Direct-URI mode (``--proxy v2ray:vmess://...``) works with
+            # an empty ``v2ray: {}`` block.
+            if config.proxy_providers.get("v2ray") is not None:
+                proxy_providers.append(V2Ray(**config.proxy_providers["v2ray"]))
             if binaries.HolaProxy:
                 proxy_providers.append(Hola())
             for proxy_provider in proxy_providers:
@@ -88,14 +94,26 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
 
         if proxy:
             requested_provider = None
-            if re.match(r"^[a-z]+:.+$", proxy, re.IGNORECASE):
+            # Provider prefix is a name starting with a letter, followed by letters/digits, then ":".
+            # The digit allowance is required so provider names like "v2ray" (which contains a "2")
+            # are recognised.
+            if re.match(r"^[a-z][a-z0-9]*:.+$", proxy, re.IGNORECASE):
                 # requesting proxy from a specific proxy provider
                 requested_provider, proxy = proxy.split(":", maxsplit=1)
-            # Match simple region codes (us, ca, uk1) or provider:region format (nordvpn:ca, windscribe:us)
-            if re.match(r"^[a-z]{2}(?:[-][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE) or re.match(
-                r"^[a-z]+:[a-z]{2}(?:[-][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE
+            # Match simple region codes (us, ca, uk1) or provider:region format (nordvpn:ca, windscribe:us).
+            # Also accept V2Ray direct-URI queries (vmess://, vless://, trojan://, ss://) which the
+            # V2Ray provider spawns a one-shot subprocess for.
+            is_v2ray_uri = requested_provider == "v2ray" and proxy.lower().startswith(
+                ("vmess://", "vless://", "trojan://", "ss://")
+            )
+            if (
+                re.match(r"^[a-z]{2}(?:[-][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE)
+                or re.match(r"^[a-z][a-z0-9]*:[a-z]{2}(?:[-][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE)
+                or is_v2ray_uri
             ):
-                proxy = proxy.lower()
+                # Don't lowercase V2Ray URIs — their base64 payloads are case-sensitive.
+                if not is_v2ray_uri:
+                    proxy = proxy.lower()
                 with console.status(f"Getting a Proxy to {proxy}...", spinner="dots"):
                     if requested_provider:
                         proxy_provider = next(

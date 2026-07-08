@@ -50,7 +50,8 @@ from unshackle.core.drm import DRM_T, ClearKeyCENC, MonaLisa, PlayReady, Widevin
 from unshackle.core.events import events
 from unshackle.core.music import (MusicAudioIntegrityError, MusicMetadataResult, MusicPlanner, MusicRenderer,
                                   file_md5, verify_music_audio, write_music_manifest, write_music_metadata)
-from unshackle.core.proxies import Basic, ExpressVPN, Gluetun, Hola, NordVPN, ProtonVPN, SurfsharkVPN, WindscribeVPN
+from unshackle.core.proxies import (Basic, ExpressVPN, Gluetun, Hola, NordVPN, ProtonVPN, SurfsharkVPN, V2Ray,
+                                    WindscribeVPN)
 from unshackle.core.service import Service
 from unshackle.core.services import Services
 from unshackle.core.title_cacher import get_account_hash
@@ -1062,6 +1063,11 @@ class dl:
                     self.proxy_providers.append(WindscribeVPN(**config.proxy_providers["windscribevpn"]))
                 if config.proxy_providers.get("gluetun"):
                     self.proxy_providers.append(Gluetun(**config.proxy_providers["gluetun"]))
+                # V2Ray is config-gated: a ``v2ray:`` block (even an empty one) is required
+                # to opt in. Direct-URI mode (``--proxy v2ray:vmess://...``) works with
+                # an empty ``v2ray: {}`` block.
+                if config.proxy_providers.get("v2ray") is not None:
+                    self.proxy_providers.append(V2Ray(**config.proxy_providers["v2ray"]))
                 if binaries.HolaProxy:
                     self.proxy_providers.append(Hola())
                 for proxy_provider in self.proxy_providers:
@@ -1069,15 +1075,27 @@ class dl:
 
             if proxy:
                 requested_provider = None
-                if re.match(r"^[a-z]+:.+$", proxy, re.IGNORECASE):
+                # Provider prefix is a name starting with a letter, followed by letters/digits, then ":".
+                # The digit allowance is required so provider names like "v2ray" (which contains a "2")
+                # are recognised.
+                if re.match(r"^[a-z][a-z0-9]*:.+$", proxy, re.IGNORECASE):
                     # requesting proxy from a specific proxy provider
                     requested_provider, proxy = proxy.split(":", maxsplit=1)
                 # Match simple region codes (us, ca, uk1, us:ny) or provider:region (nordvpn:ca, protonvpn:us:ny).
                 # ':' is allowed as a city separator (e.g. nordvpn:us:seattle, protonvpn:de:berlin).
-                if re.match(r"^[a-z]{2}(?:[-:][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE) or re.match(
-                    r"^[a-z]+:[a-z]{2}(?:[-:][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE
+                # Also accept V2Ray direct-URI queries (vmess://, vless://, trojan://, ss://) which the
+                # V2Ray provider spawns a one-shot subprocess for.
+                is_v2ray_uri = requested_provider == "v2ray" and proxy.lower().startswith(
+                    ("vmess://", "vless://", "trojan://", "ss://")
+                )
+                if (
+                    re.match(r"^[a-z]{2}(?:[-:][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE)
+                    or re.match(r"^[a-z][a-z0-9]*:[a-z]{2}(?:[-:][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE)
+                    or is_v2ray_uri
                 ):
-                    proxy = proxy.lower()
+                    # Don't lowercase V2Ray URIs — their base64 payloads are case-sensitive.
+                    if not is_v2ray_uri:
+                        proxy = proxy.lower()
                     # Preserve the original user query (region code) for service-specific proxy_map overrides.
                     # NOTE: `proxy` may be overwritten with the resolved proxy URI later.
                     proxy_query = proxy

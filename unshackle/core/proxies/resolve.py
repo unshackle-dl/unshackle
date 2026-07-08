@@ -24,6 +24,7 @@ def initialize_proxy_providers() -> List[Any]:
         from unshackle.core.proxies.nordvpn import NordVPN
         from unshackle.core.proxies.proton import ProtonVPN
         from unshackle.core.proxies.surfsharkvpn import SurfsharkVPN
+        from unshackle.core.proxies.v2ray import V2Ray
 
         proxy_config = getattr(main_config, "proxy_providers", {})
 
@@ -40,6 +41,12 @@ def initialize_proxy_providers() -> List[Any]:
             proxy_providers.append(proton)
         if proxy_config.get("surfsharkvpn"):
             proxy_providers.append(SurfsharkVPN(**proxy_config["surfsharkvpn"]))
+        # V2Ray is config-gated: a ``v2ray:`` block (even an empty one) is required to
+        # opt in. This avoids instantiating a provider for users who have xray installed
+        # for unrelated reasons. Direct-URI mode (``--proxy v2ray:vmess://...``) works
+        # with an empty ``v2ray: {}`` block.
+        if proxy_config.get("v2ray") is not None:
+            proxy_providers.append(V2Ray(**proxy_config["v2ray"]))
         if hasattr(binaries, "HolaProxy") and binaries.HolaProxy:
             proxy_providers.append(Hola())
 
@@ -62,6 +69,7 @@ def resolve_proxy(proxy: str, proxy_providers: List[Any]) -> Optional[str]:
       - Direct URI: "https://...", "socks5://..."
       - Country code: "us", "uk"
       - Provider:country: "nordvpn:us"
+      - Provider:URI: "v2ray:vmess://..." (V2Ray direct-URI mode)
     """
     if not proxy:
         return None
@@ -71,7 +79,10 @@ def resolve_proxy(proxy: str, proxy_providers: List[Any]) -> Optional[str]:
 
     requested_provider = None
     query = proxy
-    if re.match(r"^[a-z]+:.+$", proxy, re.IGNORECASE):
+    # Provider prefix is a name starting with a letter, followed by letters/digits, then ":".
+    # The digit allowance is required so provider names like "v2ray" (which contains a "2")
+    # are recognised.
+    if re.match(r"^[a-z][a-z0-9]*:.+$", proxy, re.IGNORECASE):
         requested_provider, query = proxy.split(":", maxsplit=1)
 
     if requested_provider:
