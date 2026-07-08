@@ -366,9 +366,21 @@ def test_parse_uri_strips_whitespace():
         ("(DE) Berlin", "de"),
         ("United Kingdom - London", "gb"),
         ("Canada East", "ca"),
-        ("UK Server 1", "gb"),  # alias
+        ("UK Server 1", "gb"),  # alias — caught by 2-letter hint path via COUNTRY_CODE_ALIASES
         ("GB Server 1", "gb"),
         ("random-server.example.com", None),  # no country hint
+        # Countries that use pycountry common_name (not in ISO name):
+        ("South Korea - Seoul", "kr"),
+        ("Taiwan - Taipei", "tw"),
+        ("Bolivia - La Paz", "bo"),
+        ("Iran - Tehran", "ir"),
+        ("Vietnam - Hanoi", "vn"),
+        # Countries that were NOT in the old hardcoded list — proves the dynamic lookup works:
+        ("Iceland - Reykjavik", "is"),
+        ("Estonia - Tallinn", "ee"),
+        ("Luxembourg", "lu"),
+        ("Nigeria - Lagos", "ng"),
+        ("Kazakhstan", "kz"),
     ],
 )
 def test_detect_country_from_remark(remark, expected):

@@ -46,12 +46,14 @@ from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import parse_qs, unquote, urlparse
 
+import pycountry
 import requests
 
 from unshackle.core import binaries
 from unshackle.core.proxies.proxy import Proxy
 from unshackle.core.utilities import COUNTRY_CODE_ALIASES, get_country_code, get_country_name, log_event
 from unshackle.core.utils.ip_info import get_ip_info
+from unshackle.core.utils.redact import redact_text
 
 log = logging.getLogger("proxies.v2ray")
 
@@ -92,29 +94,6 @@ def _register_cleanup() -> None:
             _cleanup_registered = True
 
 
-def _redact_uri(uri: str) -> str:
-    """Redact credentials from a V2Ray URI for safe logging.
-
-    Replaces the userinfo (``user:pass@`` or ``pass@``) with ``***@`` so trojan passwords
-    and plaintext shadowsocks creds don't leak into warning logs.
-    """
-    if not uri:
-        return uri
-    # vmess:// is base64-encoded JSON — no creds in the URI itself, safe to log as-is
-    # (but truncate to avoid log spam).
-    if uri.startswith("vmess://"):
-        return uri[:60] + ("..." if len(uri) > 60 else "")
-    # vless://, trojan://, ss:// — redact the userinfo before the first ``@``
-    for scheme in ("vless://", "trojan://", "ss://"):
-        if uri.startswith(scheme):
-            rest = uri[len(scheme):]
-            if "@" in rest:
-                _, host_part = rest.split("@", 1)
-                return f"{scheme}***@{host_part[:40]}..."
-            return uri[:60] + ("..." if len(uri) > 60 else "")
-    return uri[:60] + ("..." if len(uri) > 60 else "")
-
-
 # ---------------------------------------------------------------------------
 # Server model + URI parsing
 # ---------------------------------------------------------------------------
@@ -127,18 +106,36 @@ _FLAG_EMOJI_RE = re.compile(
 _COUNTRY_HINT_RE = re.compile(
     r"(?:^|[\s\-\|_(\[])([A-Z]{2})(?:$|[\s\-\|_)\]])"
 )
-# Common human-readable country names that show up in subscription remarks.
-_COUNTRY_NAME_PATTERNS = (
-    "United States", "United Kingdom", "Canada", "Germany", "France",
-    "Netherlands", "Japan", "Singapore", "Hong Kong", "South Korea",
-    "Australia", "India", "Italy", "Spain", "Switzerland", "Sweden",
-    "Norway", "Denmark", "Finland", "Austria", "Belgium", "Ireland",
-    "Poland", "Portugal", "Czech Republic", "Romania", "Hungary",
-    "Greece", "Turkey", "Russia", "Ukraine", "Brazil", "Mexico",
-    "Argentina", "South Africa", "New Zealand", "Thailand", "Philippines",
-    "Indonesia", "Malaysia", "Vietnam", "Taiwan", "United Arab Emirates",
-    "Israel",
-)
+
+
+def _build_country_name_index() -> list[tuple[str, str]]:
+    """Build a (lowercase_name, alpha_2_code) index from pycountry, sorted longest-first.
+
+    Uses all three name attributes pycountry provides (``name``, ``common_name``,
+    ``official_name``) so both ISO names and common names like "South Korea" are matched.
+    Sorted by name length descending so "United States of America" matches before
+    "United States" before "United" in a substring search.
+    """
+    entries: list[tuple[str, str]] = []
+    for country in pycountry.countries:
+        for attr in ("name", "common_name", "official_name"):
+            name = getattr(country, attr, None)
+            if name:
+                entries.append((name.lower(), country.alpha_2.lower()))
+    # Deduplicate (some countries share names) and sort longest-first.
+    seen: set[str] = set()
+    unique: list[tuple[str, str]] = []
+    for name, code in entries:
+        if name not in seen:
+            seen.add(name)
+            unique.append((name, code))
+    unique.sort(key=lambda x: len(x[0]), reverse=True)
+    return unique
+
+
+# Built once at module load — covers all 249 pycountry countries with their
+# name, common_name, and official_name variants.
+_ALL_COUNTRY_NAMES = _build_country_name_index()
 
 
 @dataclass
@@ -179,7 +176,19 @@ def _b64_decode_loose(payload: str) -> str:
 
 
 def _detect_country(remark: str, server_name: str = "") -> Optional[str]:
-    """Heuristically infer an ISO 3166-1 alpha-2 (lowercase) country code from a remark."""
+    """Heuristically infer an ISO 3166-1 alpha-2 (lowercase) country code from a remark.
+
+    Detection order:
+    1. Flag-emoji stripped, then 2-letter uppercase hints (``US``, ``JP``) — validated
+       against pycountry so false positives like ``VR`` or ``4K`` are rejected.
+    2. Full country names from pycountry (``name``, ``common_name``, ``official_name``)
+       — matched as case-insensitive substrings, longest-first so ``"United States of
+       America"`` wins over ``"United"``.
+    3. TLD of the SNI / server hostname (e.g. ``server.fr`` → ``fr``).
+
+    ``UK`` is handled implicitly: ``COUNTRY_CODE_ALIASES`` maps ``uk`` → ``gb``, so the
+    2-letter hint path catches it and returns ``gb``.
+    """
     if not remark:
         remark = ""
     text = remark
@@ -187,28 +196,19 @@ def _detect_country(remark: str, server_name: str = "") -> Optional[str]:
     # Strip flag emojis first so the surrounding text is easier to parse.
     text = _FLAG_EMOJI_RE.sub(" ", text)
 
-    # Explicit 2-letter hints like "(US)", "- US -", "US | Server 1"
+    # 1. Explicit 2-letter hints like "(US)", "- US -", "US | Server 1"
     for match in _COUNTRY_HINT_RE.finditer(text):
         candidate = match.group(1).lower()
-        # Filter out obvious false positives like "VR", "4K", "HD" by checking
-        # that the alias-or-ISO map actually recognises the candidate.
         if get_country_name(candidate):
             return _normalise_country_code(candidate)
 
-    # Common full country names
+    # 2. Full country names — iterate all pycountry names, longest-first.
     lowered = text.lower()
-    for name in _COUNTRY_NAME_PATTERNS:
-        if name.lower() in lowered:
-            code = get_country_code(name)
-            if code:
-                return code.lower()
+    for name, code in _ALL_COUNTRY_NAMES:
+        if name in lowered:
+            return _normalise_country_code(code)
 
-    # UK is the most common non-ISO alias; normalise here so the rest of the
-    # pipeline only has to reason about ISO codes.
-    if re.search(r"\buk\b|united kingdom|\bgreat britain\b", lowered):
-        return "gb"
-
-    # Last resort: TLD of the SNI / server hostname.
+    # 3. TLD of the SNI / server hostname.
     if server_name:
         host = server_name.split(":")[0]
         tld = host.rsplit(".", 1)[-1].lower() if "." in host else ""
@@ -1036,7 +1036,7 @@ class V2Ray(Proxy):
                             self._servers.append(s)
                             seen.add(key)
                 except Exception as error:
-                    log.warning("subscription %s failed: %s", _redact_uri(url), error)
+                    log.warning("subscription %s failed: %s", redact_text(url), error)
             self._subscriptions_loaded = True
 
     # -- Proxy interface ---------------------------------------------------
@@ -1081,7 +1081,7 @@ class V2Ray(Proxy):
             server = parse_server_uri(raw_query)
             if server is None:
                 raise ValueError(
-                    f"query looked like a V2Ray URI but could not be parsed: {_redact_uri(raw_query)}"
+                    f"query looked like a V2Ray URI but could not be parsed: {redact_text(raw_query)}"
                 )
             return self._spawn_for_server(server, query_key)
 
@@ -1352,7 +1352,7 @@ class V2Ray(Proxy):
             for uri in uri_list:
                 parsed = parse_server_uri(uri)
                 if parsed is None:
-                    log.warning("countries[%s] could not parse URI %r — skipping", key, _redact_uri(uri))
+                    log.warning("countries[%s] could not parse URI %r — skipping", key, redact_text(uri))
                     continue
                 # Force the server's country to match the map key, so the IP-verification
                 # step (when enabled) compares against the user's intent rather than the
