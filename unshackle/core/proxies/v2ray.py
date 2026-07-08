@@ -51,7 +51,8 @@ import requests
 
 from unshackle.core import binaries
 from unshackle.core.proxies.proxy import Proxy
-from unshackle.core.utilities import COUNTRY_CODE_ALIASES, get_country_code, get_country_name, log_event
+from unshackle.core.utilities import (COUNTRY_CODE_ALIASES, get_country_code, get_country_name, log_event,
+                                      timed_operation)
 from unshackle.core.utils.ip_info import get_ip_info
 from unshackle.core.utils.redact import redact_text
 
@@ -1144,21 +1145,33 @@ class V2Ray(Proxy):
             self._last_connection = process_info
 
         # Wait for the SOCKS5 inbound to accept connections.
-        if not self._wait_for_ready(socks_port, timeout=self.startup_timeout):
-            exit_output = process_info.get("exit_output", "")
-            with self._port_lock:
-                self._kill_process(process_info)
-                self._active.pop(query_key, None)
-            # Include the actual xray/v2ray stderr in the error so the user can diagnose
-            # config issues, missing dat files, bad credentials, etc.
-            detail = exit_output or "no output captured"
-            raise RuntimeError(
-                f"V2Ray subprocess failed to start (server={server.label}, port={socks_port}, "
-                f"binary={self.binary}). Subprocess output:\n{detail}"
-            )
+        with timed_operation(
+            "v2ray_wait_for_ready",
+            level="DEBUG",
+            message=f"Waiting for V2Ray subprocess on port {socks_port}",
+            context={"server": server.label, "port": socks_port},
+        ):
+            if not self._wait_for_ready(socks_port, timeout=self.startup_timeout):
+                exit_output = process_info.get("exit_output", "")
+                with self._port_lock:
+                    self._kill_process(process_info)
+                    self._active.pop(query_key, None)
+                # Include the actual xray/v2ray stderr in the error so the user can diagnose
+                # config issues, missing dat files, bad credentials, etc.
+                detail = exit_output or "no output captured"
+                raise RuntimeError(
+                    f"V2Ray subprocess failed to start (server={server.label}, port={socks_port}, "
+                    f"binary={self.binary}). Subprocess output:\n{detail}"
+                )
 
         if self.verify_ip:
-            self._verify_proxy(query_key)
+            with timed_operation(
+                "v2ray_verify_ip",
+                level="DEBUG",
+                message=f"Verifying exit IP for {server.label}",
+                context={"server": server.label, "port": socks_port},
+            ):
+                self._verify_proxy(query_key)
 
         return self._build_proxy_uri(socks_port, http_port)
 
