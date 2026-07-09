@@ -68,7 +68,7 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
             if config.proxy_providers.get("basic"):
                 proxy_providers.append(Basic(**config.proxy_providers["basic"]))
             expressvpn = ExpressVPN(**(config.proxy_providers.get("expressvpn") or {}))
-            if config.proxy_providers.get("expressvpn") or expressvpn.cookie_path.is_file():
+            if config.proxy_providers.get("expressvpn") or expressvpn.cache_path.is_file():
                 proxy_providers.append(expressvpn)
             if config.proxy_providers.get("nordvpn"):
                 proxy_providers.append(NordVPN(**config.proxy_providers["nordvpn"]))

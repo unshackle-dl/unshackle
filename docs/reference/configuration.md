@@ -668,7 +668,7 @@ the full provider guide. Recognised providers and their exit ports:
 | NordVPN | `nordvpn` | 48-char **service** credentials | `https://...:89` |
 | Surfshark | `surfsharkvpn` | 48-char **service** credentials | `https://...:443` |
 | Windscribe | `windscribevpn` | service credentials | `https://...:443` |
-| ExpressVPN | `expressvpn` | browser cookies / token cache | `https://cat:...@...:443` |
+| ExpressVPN | `expressvpn` | device login (`enable: true`) / token cache | `https://cat:...@...:443` |
 | ProtonVPN | `protonvpn` | TV login or exported cookies | `https://...:4443` (or `:443` Secure Core) |
 | Gluetun | `gluetun` | per-VPN keys/creds | `http://localhost:{port}` (local Docker) |
 | Hola | *(none, auto)* | none | `http://...:{peer}` |
@@ -688,7 +688,7 @@ proxy_providers:
 !!! note "Provider loading differs between CLI and REST server"
     The `dl` CLI loads all providers, including `windscribevpn` and `gluetun`. The REST API /
     remote-client path uses a separate resolver that does **not** load `windscribevpn` or
-    `gluetun`. ExpressVPN and ProtonVPN also auto-load when their cookie file exists, and Hola
+    `gluetun`. ExpressVPN and ProtonVPN also auto-load when their cached session exists, and Hola
     auto-loads whenever the `hola-proxy` binary is present.
 
 ---

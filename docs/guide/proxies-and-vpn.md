@@ -107,8 +107,8 @@ provider, prefix the query (`--proxy nordvpn:us`).
 
 !!! note "Auto-loading providers"
     Most providers only load when you configure them under `proxy_providers:`. Three are
-    special: **ExpressVPN** and **Proton VPN** also load automatically if their cookie
-    file already exists on disk (even with no YAML), and **Hola** loads automatically
+    special: **ExpressVPN** and **Proton VPN** also load automatically once their cached
+    session file exists on disk (even with no YAML), and **Hola** loads automatically
     whenever the `hola-proxy` binary is found on your `PATH`.
 
 ### Connection feedback
@@ -347,24 +347,24 @@ Understanding what Gluetun does behind the scenes helps when something goes wron
 
 ## ExpressVPN
 
-ExpressVPN emulates the flow used by the ExpressVPN browser extension: it authenticates
-with cookies (or a cached token), obtains proxy-capable locations from ExpressVPN's API,
-and returns an authenticated HTTPS proxy. Because it relies on browser cookies rather than
-service credentials, setup is slightly more involved than the credential-based providers.
+ExpressVPN mirrors the ExpressVPN Android TV app: it signs in through Express's OAuth 2.0
+device-login flow, obtains proxy-capable locations from Express's API, and returns an
+authenticated HTTPS proxy. The device login runs once; after that the cached refresh token
+keeps the session alive headlessly.
 
-ExpressVPN **auto-loads** if its cookie file exists, so once the cookie is in place you do
-not strictly need a YAML block, but you can add one to pin regions or servers.
+Enable it and run a download interactively once:
 
-**Default file locations:**
+```yaml title="unshackle.yaml"
+proxy_providers:
+  expressvpn:
+    enable: true
+```
 
-| File | Default path |
-|---|---|
-| Browser cookies | `{cookies}/vpn/expressvpn.txt` |
-| Token cache | `{cache}/global/expressvpn_tokens.json` |
-
-Where `{cookies}` and `{cache}` are your configured cookie and cache directories. The
-cookie file may be a Netscape `cookies.txt`, a JSON cookie array, or a JSON dict. Export
-your ExpressVPN session cookies from a logged-in browser into one of those forms.
+With `enable: true` and an interactive terminal, unshackle prints a code and a URL to
+enter it at. Once approved, the tokens are cached and reused automatically, so later runs
+need no terminal. ExpressVPN also **auto-loads** once its token cache exists, so you can
+drop `enable` after the first login, but you can keep a YAML block to pin regions or
+servers:
 
 ```yaml title="unshackle.yaml (optional)"
 proxy_providers:
@@ -375,6 +375,14 @@ proxy_providers:
     server_map:
       myserver: usny-newyork-2
 ```
+
+**Default file location:**
+
+| File | Default path |
+|---|---|
+| Token cache | `{cache}/vpn/expressvpn_tokens.json` |
+
+Where `{cache}` is your configured cache directory.
 
 **Query forms:**
 
