@@ -497,6 +497,7 @@ class ISM:
             and isinstance(track, Subtitle)
             and track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML)
         )
+        progress(downloaded="Merging", completed=0, total=None)
         with open(save_path, "wb") as f:
             first_segment = segments_to_merge[0].read_bytes() if segments_to_merge else None
             init_segment = ISM._init_segment(track, session_drm, first_segment)
@@ -526,11 +527,11 @@ class ISM:
         events.emit(events.Types.TRACK_DOWNLOADED, track=track)
 
         if session_drm:
-            progress(downloaded="Decrypting", completed=0, total=100)
+            progress(downloaded="Decrypting", completed=0, total=None)
             session_drm.decrypt(save_path)
             track.drm = None
             events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=session_drm, segment=None)
-            progress(downloaded="Decrypting", advance=100)
+            progress(downloaded="Decrypted", completed=100, total=100)
 
         try:
             save_dir.rmdir()

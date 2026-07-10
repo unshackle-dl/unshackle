@@ -374,11 +374,11 @@ class Track:
                         events.emit(events.Types.TRACK_DOWNLOADED, track=self)
 
                         if drm:
-                            progress(downloaded="Decrypting", completed=0, total=100)
+                            progress(downloaded="Decrypting", completed=0, total=None)
                             drm.decrypt(save_path)
                             self.drm = None
                             events.emit(events.Types.TRACK_DECRYPTED, track=self, drm=drm, segment=None)
-                            progress(downloaded="Decrypted", completed=100)
+                            progress(downloaded="Decrypted", completed=100, total=100)
 
                         if track_type == "Subtitle" and self.codec.name not in ("fVTT", "fTTML"):
                             track_data = self.path.read_bytes()

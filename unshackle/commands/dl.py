@@ -29,10 +29,9 @@ from click.core import ParameterSource
 from langcodes import Language
 from pymediainfo import MediaInfo
 from rich.console import Group
-from rich.live import Live
 from rich.padding import Padding
 from rich.panel import Panel
-from rich.progress import BarColumn, Progress, SpinnerColumn, TaskID, TextColumn, TimeRemainingColumn
+from rich.progress import Progress, SpinnerColumn, TaskID, TextColumn, TimeRemainingColumn
 from rich.rule import Rule
 from rich.spinner import Spinner
 from rich.table import Table
@@ -43,7 +42,7 @@ from unshackle.core import binaries, providers
 from unshackle.core.cdm import DecryptLabsRemoteCDM
 from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 from unshackle.core.config import config, resolve_cdm_name, resolve_decryption
-from unshackle.core.console import console
+from unshackle.core.console import GradientPulseBarColumn, SyncLive, console
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack, context_settings
 from unshackle.core.credential import Credential
 from unshackle.core.drm import DRM_T, ClearKeyCENC, MonaLisa, PlayReady, Widevine
@@ -1680,7 +1679,7 @@ class dl:
                     track = song.tracks.audio[0]
                     progress = Progress(
                         SpinnerColumn(finished_text=""),
-                        BarColumn(),
+                        GradientPulseBarColumn(),
                         " | ",
                         TimeRemainingColumn(compact=True, elapsed_when_finished=True),
                         " | ",
@@ -1692,17 +1691,25 @@ class dl:
                     state = {"total": 100.0}
 
                     def update_track_progress(
-                        task_id: int = task,
+                        task_id: TaskID = task,
                         _state: dict[str, float] = state,
                         _progress: Progress = progress,
-                        **kwargs,
+                        **kwargs: Any,
                     ) -> None:
-                        if "total" in kwargs and kwargs["total"] is not None:
-                            _state["total"] = kwargs["total"]
+                        if "total" in kwargs:
+                            if kwargs["total"] is None:
+                                # Progress.update() ignores total=None; an un-started task pulses
+                                del kwargs["total"]
+                                _progress.reset(task_id, start=False)
+                            else:
+                                _state["total"] = kwargs["total"]
+                                _progress.start_task(task_id)
 
                         downloaded_state = kwargs.get("downloaded")
                         if downloaded_state in {"Downloaded", "Decrypted", "[yellow]SKIPPED"}:
                             kwargs["completed"] = _state["total"]
+                            kwargs["total"] = _state["total"]
+                            _progress.start_task(task_id)
                         _progress.update(task_id=task_id, **kwargs)
 
                     track_table = Table.grid()
@@ -1720,7 +1727,7 @@ class dl:
                 download_table.add_row(music_tree)
 
                 try:
-                    with Live(Padding(download_table, (1, 5)), console=console, refresh_per_second=5):
+                    with SyncLive(Padding(download_table, (1, 5)), console=console, refresh_per_second=20):
                         with ThreadPoolExecutor(downloads) as pool:
                             download_futures = [
                                 pool.submit(
@@ -2065,7 +2072,7 @@ class dl:
             if slow and i != 0:
                 delay = random.randint(slow[0], slow[1])
                 spinner = Spinner("dots", text=f"Delaying by {delay} seconds...")
-                with Live(Padding(spinner, (0, 5)), console=console, refresh_per_second=12.5, transient=True):
+                with SyncLive(Padding(spinner, (0, 5)), console=console, refresh_per_second=12.5, transient=True):
                     for remaining in range(delay, 0, -1):
                         spinner.update(text=f"Delaying by {remaining} seconds...")
                         time.sleep(1)
@@ -2825,7 +2832,7 @@ class dl:
             dl_start_time = time.time()
 
             try:
-                with Live(Padding(download_table, (1, 5)), console=console, refresh_per_second=5):
+                with SyncLive(Padding(download_table, (1, 5)), console=console, refresh_per_second=20):
 
                     def download_track(track: AnyTrack, i: int) -> None:
                         track.download(
@@ -3104,7 +3111,7 @@ class dl:
                     progress = Progress(
                         TextColumn("[progress.description]{task.description}"),
                         SpinnerColumn(finished_text=""),
-                        BarColumn(),
+                        GradientPulseBarColumn(),
                         "•",
                         TimeRemainingColumn(compact=True, elapsed_when_finished=True),
                         "•",
@@ -3252,10 +3259,9 @@ class dl:
                             {"phase": "muxing", "progress": 96.0, "status": "downloading", "active_tracks": []}
                         )
                     try:
-                        with Live(Padding(progress, (0, 5, 1, 5)), console=console):
+                        with SyncLive(Padding(progress, (0, 5, 1, 5)), console=console, refresh_per_second=20):
                             mux_index = 0
                             for task_id, task_tracks, audio_codec in multiplex_tasks:
-                                progress.start_task(task_id)  # TODO: Needed?
                                 audio_expected = not video_only and not no_audio
                                 muxed_path, return_code, errors = task_tracks.mux(
                                     str(title),
@@ -3265,6 +3271,8 @@ class dl:
                                     title_language=title.language,
                                     skip_subtitles=skip_subtitle_mux,
                                 )
+                                progress.start_task(task_id)
+                                progress.update(task_id, total=100, completed=100)
                                 if muxed_path.exists():
                                     mux_index += 1
                                     unique_path = muxed_path.with_name(

@@ -5,16 +5,16 @@ import subprocess
 import time
 from functools import partial
 from pathlib import Path
-from typing import Callable, Iterator, Optional, Sequence, Union
+from typing import Any, Callable, Iterator, Optional, Sequence, Union
 
 from langcodes import Language, closest_supported_match
-from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
+from rich.progress import Progress, SpinnerColumn, TaskID, TextColumn, TimeRemainingColumn
 from rich.table import Table
 from rich.tree import Tree
 
 from unshackle.core import binaries
 from unshackle.core.config import config
-from unshackle.core.console import console
+from unshackle.core.console import GradientPulseBarColumn, console
 from unshackle.core.constants import LANGUAGE_EXACT_DISTANCE, LANGUAGE_MAX_DISTANCE, AnyTrack, TrackT
 from unshackle.core.events import events
 from unshackle.core.tracks.attachment import Attachment
@@ -114,7 +114,7 @@ class Tracks:
                     if add_progress and track_type not in (Chapter, Attachment):
                         progress = Progress(
                             SpinnerColumn(finished_text=""),
-                            BarColumn(),
+                            GradientPulseBarColumn(),
                             "•",
                             TimeRemainingColumn(compact=True, elapsed_when_finished=True),
                             "•",
@@ -126,10 +126,10 @@ class Tracks:
                         state = {"total": 100.0}
 
                         def update_track_progress(
-                            task_id: int = task,
+                            task_id: TaskID = task,
                             _state: dict[str, float] = state,
                             _progress: Progress = progress,
-                            **kwargs,
+                            **kwargs: Any,
                         ) -> None:
                             """
                             Ensure terminal status states render as a fully completed bar.
@@ -137,12 +137,20 @@ class Tracks:
                             Some downloaders can report completed slightly below total
                             before emitting the final "Downloaded" state.
                             """
-                            if "total" in kwargs and kwargs["total"] is not None:
-                                _state["total"] = kwargs["total"]
+                            if "total" in kwargs:
+                                if kwargs["total"] is None:
+                                    # Progress.update() ignores total=None; an un-started task pulses
+                                    del kwargs["total"]
+                                    _progress.reset(task_id, start=False)
+                                else:
+                                    _state["total"] = kwargs["total"]
+                                    _progress.start_task(task_id)
 
                             downloaded_state = kwargs.get("downloaded")
                             if downloaded_state in {"Downloaded", "Decrypted", "[yellow]SKIPPED"}:
                                 kwargs["completed"] = _state["total"]
+                                kwargs["total"] = _state["total"]
+                                _progress.start_task(task_id)
                             _progress.update(task_id=task_id, **kwargs)
 
                         progress_callables.append(update_track_progress)
