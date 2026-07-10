@@ -3788,7 +3788,7 @@ the full provider guide. Recognised providers and their exit ports:</p>
 <tr>
 <td>ExpressVPN</td>
 <td><code>expressvpn</code></td>
-<td>browser cookies / token cache</td>
+<td>device login (<code>enable: true</code>) / token cache</td>
 <td><code>https://cat:...@...:443</code></td>
 </tr>
 <tr>
@@ -3825,7 +3825,7 @@ the full provider guide. Recognised providers and their exit ports:</p>
 <p class="admonition-title">Provider loading differs between CLI and REST server</p>
 <p>The <code>dl</code> CLI loads all providers, including <code>windscribevpn</code> and <code>gluetun</code>. The REST API /
 remote-client path uses a separate resolver that does <strong>not</strong> load <code>windscribevpn</code> or
-<code>gluetun</code>. ExpressVPN and ProtonVPN also auto-load when their cookie file exists, and Hola
+<code>gluetun</code>. ExpressVPN and ProtonVPN also auto-load when their cached session exists, and Hola
 auto-loads whenever the <code>hola-proxy</code> binary is present.</p>
 </div>
 <hr />

@@ -2250,8 +2250,8 @@ provider, prefix the query (<code>--proxy nordvpn:us</code>).</p>
 <div class="admonition note">
 <p class="admonition-title">Auto-loading providers</p>
 <p>Most providers only load when you configure them under <code>proxy_providers:</code>. Three are
-special: <strong>ExpressVPN</strong> and <strong>Proton VPN</strong> also load automatically if their cookie
-file already exists on disk (even with no YAML), and <strong>Hola</strong> loads automatically
+special: <strong>ExpressVPN</strong> and <strong>Proton VPN</strong> also load automatically once their cached
+session file exists on disk (even with no YAML), and <strong>Hola</strong> loads automatically
 whenever the <code>hola-proxy</code> binary is found on your <code>PATH</code>.</p>
 </div>
 <h3 id="connection-feedback">Connection feedback<a class="headerlink" href="#connection-feedback" title="Permanent link">&para;</a></h3>
@@ -2539,13 +2539,29 @@ it manually with <code>docker rm -f</code>.</p>
 </ul>
 </div>
 <h2 id="expressvpn">ExpressVPN<a class="headerlink" href="#expressvpn" title="Permanent link">&para;</a></h2>
-<p>ExpressVPN emulates the flow used by the ExpressVPN browser extension: it authenticates
-with cookies (or a cached token), obtains proxy-capable locations from ExpressVPN's API,
-and returns an authenticated HTTPS proxy. Because it relies on browser cookies rather than
-service credentials, setup is slightly more involved than the credential-based providers.</p>
-<p>ExpressVPN <strong>auto-loads</strong> if its cookie file exists, so once the cookie is in place you do
-not strictly need a YAML block, but you can add one to pin regions or servers.</p>
-<p><strong>Default file locations:</strong></p>
+<p>ExpressVPN mirrors the ExpressVPN Android TV app: it signs in through Express's OAuth 2.0
+device-login flow, obtains proxy-capable locations from Express's API, and returns an
+authenticated HTTPS proxy. The device login runs once; after that the cached refresh token
+keeps the session alive headlessly.</p>
+<p>Enable it and run a download interactively once:</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">expressvpn</span><span class="p">:</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="nt">enable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span></code></pre></div>
+<p>With <code>enable: true</code> and an interactive terminal, unshackle prints a code and a URL to
+enter it at. Once approved, the tokens are cached and reused automatically, so later runs
+need no terminal. ExpressVPN also <strong>auto-loads</strong> once its token cache exists, so you can
+drop <code>enable</code> after the first login, but you can keep a YAML block to pin regions or
+servers:</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml (optional)</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span><span class="nt">expressvpn</span><span class="p">:</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span><span class="nt">region_map</span><span class="p">:</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">      </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ny-02</span><span class="w">       </span><span class="c1"># prefer New York, server 02 for the US</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">      </span><span class="nt">gb</span><span class="p">:</span><span class="w">             </span><span class="c1"># empty = smart random location</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">    </span><span class="nt">server_map</span><span class="p">:</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">      </span><span class="nt">myserver</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">usny-newyork-2</span>
+</span></code></pre></div>
+<p><strong>Default file location:</strong></p>
 <table>
 <thead>
 <tr>
@@ -2555,26 +2571,12 @@ not strictly need a YAML block, but you can add one to pin regions or servers.</
 </thead>
 <tbody>
 <tr>
-<td>Browser cookies</td>
-<td><code>{cookies}/vpn/expressvpn.txt</code></td>
-</tr>
-<tr>
 <td>Token cache</td>
-<td><code>{cache}/global/expressvpn_tokens.json</code></td>
+<td><code>{cache}/vpn/expressvpn_tokens.json</code></td>
 </tr>
 </tbody>
 </table>
-<p>Where <code>{cookies}</code> and <code>{cache}</code> are your configured cookie and cache directories. The
-cookie file may be a Netscape <code>cookies.txt</code>, a JSON cookie array, or a JSON dict. Export
-your ExpressVPN session cookies from a logged-in browser into one of those forms.</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml (optional)</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">expressvpn</span><span class="p">:</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="nt">region_map</span><span class="p">:</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">      </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ny-02</span><span class="w">       </span><span class="c1"># prefer New York, server 02 for the US</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">      </span><span class="nt">gb</span><span class="p">:</span><span class="w">             </span><span class="c1"># empty = smart random location</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">    </span><span class="nt">server_map</span><span class="p">:</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">      </span><span class="nt">myserver</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">usny-newyork-2</span>
-</span></code></pre></div>
+<p>Where <code>{cache}</code> is your configured cache directory.</p>
 <p><strong>Query forms:</strong></p>
 <table>
 <thead>
@@ -2617,13 +2619,13 @@ never briefly world-readable.</p>
 <p>NordVPN uses your <strong>Service Credentials</strong>, not your normal NordVPN login. Generate them
 from the <a href="https://my.nordaccount.com/dashboard/nordvpn/">NordVPN dashboard</a> under manual
 setup; they are a long random username/password pair, not your email and password.</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span><span class="nt">nordvpn</span><span class="p">:</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_USERNAME</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_PASSWORD</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">    </span><span class="nt">server_map</span><span class="p">:</span><span class="w">                </span><span class="c1"># optional: pin specific server IDs</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">      </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1234</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">      </span><span class="nt">us:seattle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5678</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="nt">nordvpn</span><span class="p">:</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_USERNAME</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_PASSWORD</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">    </span><span class="nt">server_map</span><span class="p">:</span><span class="w">                </span><span class="c1"># optional: pin specific server IDs</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">      </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1234</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">      </span><span class="nt">us:seattle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5678</span>
 </span></code></pre></div>
 <p><strong>Required keys:</strong> <code>username</code>, <code>password</code>. unshackle validates them up front: the
 combined username and password must be exactly 48 lowercase alphanumeric characters, and
@@ -2668,7 +2670,7 @@ country-code confusion that <code>uk</code> invites.</p>
 </table>
 <p>The returned proxy is HTTPS on <strong>port 89</strong> (NordVPN disabled its plain-HTTP proxies on
 port 80 in 2021).</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>nordvpn:us:seattle<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>nordvpn:us:seattle<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <h2 id="proton-vpn">Proton VPN<a class="headerlink" href="#proton-vpn" title="Permanent link">&para;</a></h2>
 <p>Proton VPN supports two authentication methods, and unshackle can work with either. Note
@@ -2679,9 +2681,9 @@ that free Proton accounts work but are limited to Proton's free-tier exit countr
 <p>A self-sustaining, refreshable session obtained through Proton's TV device-login flow.
 This is the only method that can refresh itself headlessly, so it keeps working without
 re-exporting anything. Enable it and run a download interactively once:</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">protonvpn</span><span class="p">:</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">    </span><span class="nt">enable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">protonvpn</span><span class="p">:</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span><span class="nt">enable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 <p>With <code>enable: true</code> and an interactive terminal, unshackle prints a code and asks you
 to enter it at <a href="https://account.proton.me/vpn/tv/code">account.proton.me/vpn/tv/code</a>.
@@ -2774,7 +2776,7 @@ previous run's log line (e.g. <code>DE#203</code>) instead.</p>
 <a href="https://github.com/Snawoot/hola-proxy"><code>hola-proxy</code></a> binary, and <strong>auto-loads</strong> whenever
 that binary is found on your <code>PATH</code>. If you query Hola but the binary is missing, the
 provider raises an error telling you to install it.</p>
-<div class="language-shell highlight"><span class="filename">Install hola-proxy, then just query a country</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>hola:us<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Install hola-proxy, then just query a country</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>hola:us<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p><strong>Query forms:</strong> a two-letter country code (e.g. <code>us</code>, <code>gb</code>). unshackle asks <code>hola-proxy</code>
 for available proxies in that country and picks one at random, returning an HTTP proxy.</p>
@@ -2787,12 +2789,12 @@ only datacenter proxies.</p>
 <h2 id="surfshark">Surfshark<a class="headerlink" href="#surfshark" title="Permanent link">&para;</a></h2>
 <p>Surfshark, like NordVPN, uses <strong>Service Credentials</strong> rather than your login. Generate
 them from the <a href="https://my.surfshark.com/vpn/manual-setup/main/openvpn">Surfshark manual-setup page</a>.</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="nt">surfsharkvpn</span><span class="p">:</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_USERNAME</span>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_PASSWORD</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">    </span><span class="nt">server_map</span><span class="p">:</span><span class="w">                </span><span class="c1"># optional</span>
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">      </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1234</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">surfsharkvpn</span><span class="p">:</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_USERNAME</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_PASSWORD</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">    </span><span class="nt">server_map</span><span class="p">:</span><span class="w">                </span><span class="c1"># optional</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">      </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1234</span>
 </span></code></pre></div>
 <p><strong>Required keys:</strong> <code>username</code>, <code>password</code>, validated with the same 48-character rule as
 NordVPN (combined username+password must be 48 lowercase alphanumeric characters, no <code>@</code>).
@@ -2825,13 +2827,13 @@ NordVPN (combined username+password must be 48 lowercase alphanumeric characters
 <p>Windscribe uses <strong>Service Credentials</strong> from its
 <a href="https://windscribe.com/getconfig/openvpn">OpenVPN config page</a>. Only the presence of a
 username and password is checked (there is no 48-character rule).</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">windscribevpn</span><span class="p">:</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_USERNAME</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_PASSWORD</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">    </span><span class="nt">server_map</span><span class="p">:</span><span class="w">                       </span><span class="c1"># optional: alias -&gt; hostname</span>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">      </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">us-east.totallyacdn.com</span>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">      </span><span class="nt">us:seattle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">us-seattle.totallyacdn.com</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="nt">windscribevpn</span><span class="p">:</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_USERNAME</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_PASSWORD</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">    </span><span class="nt">server_map</span><span class="p">:</span><span class="w">                       </span><span class="c1"># optional: alias -&gt; hostname</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">      </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">us-east.totallyacdn.com</span>
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="w">      </span><span class="nt">us:seattle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">us-seattle.totallyacdn.com</span>
 </span></code></pre></div>
 <p><strong>Required keys:</strong> <code>username</code>, <code>password</code>. <code>server_map</code> optionally maps a region (or
 <code>region:city</code>) directly to a hostname.</p>
