@@ -543,6 +543,11 @@ class Video(Track):
                     e.returncode,
                     duration_ms=round((time.monotonic() - cc_start) * 1000, 1),
                 )
+                if e.returncode < 0:
+                    logging.getLogger("Video").warning(
+                        f"ccextractor crashed (signal {-e.returncode}) on {self.path.name}; skipping CC extraction"
+                    )
+                    return out_path.exists()
                 if e.returncode != 10:  # 10 = No captions found
                     raise
                 return out_path.exists()
