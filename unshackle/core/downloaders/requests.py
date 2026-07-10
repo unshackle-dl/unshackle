@@ -30,6 +30,9 @@ READ_TIMEOUT = 30
 HEDGE_FACTOR = 3
 HEDGE_MIN_WAIT = 5.0
 
+# racers read per network arrival (read1) so superseded hedge losers exit promptly
+RACER_READ1 = True
+
 # Adaptive chunk sizing — benchmarked optimal range
 MIN_CHUNK = 524_288  # 512KB
 MAX_CHUNK = 4_194_304  # 4MB
@@ -548,7 +551,11 @@ def download(
                 if use_rnet:
                     chunks = stream.stream()
                 elif use_raw:
-                    chunks = iter(lambda: stream.raw.read(chunk_size), b"")
+                    _read1 = getattr(stream.raw, "read1", None) if claimed is not None and RACER_READ1 else None
+                    if _read1 is not None:
+                        chunks = iter(lambda: _read1(chunk_size), b"")
+                    else:
+                        chunks = iter(lambda: stream.raw.read(chunk_size), b"")
                 else:
                     chunks = stream.iter_content(chunk_size=chunk_size)
 
@@ -558,6 +565,13 @@ def download(
                 for chunk in chunks:
                     if DOWNLOAD_CANCELLED.is_set() or (abort is not None and abort.is_set()):
                         break
+                    if claimed is not None and claimed():
+                        # close the handle or Windows can't delete the stray .!dev at merge (WinError 32)
+                        try:
+                            stream.close()
+                        except Exception:
+                            pass
+                        return
                     _write(chunk)
                     download_size = len(chunk)
                     written += download_size
@@ -612,11 +626,11 @@ def download(
                 stream.close()
             except Exception:
                 pass
+            # a superseded loser's error must not retry or kill the batch
+            if claimed is not None and claimed():
+                return
             cancelled = DOWNLOAD_CANCELLED.is_set() or (abort is not None and abort.is_set())
             if cancelled or attempts == MAX_ATTEMPTS:
-                # a hedged loser whose file was already delivered must not kill the batch
-                if claimed is not None and claimed():
-                    return
                 # cancel/abort is not an error, but a genuine retry-exhaustion is, so surface it
                 # so the caller fails fast instead of hitting a missing segment at merge time
                 if not cancelled:
@@ -1126,7 +1140,9 @@ def requests(
             yield dict(downloaded="[yellow]CANCELLED")
             raise
         finally:
-            pool.shutdown(wait=False, cancel_futures=True)
+            # losers must close their handles before merge sweeps *.!dev (WinError 32);
+            # no wait on cancel/fail: merge never runs and workers may be blocked in reads
+            pool.shutdown(wait=not DOWNLOAD_CANCELLED.is_set(), cancel_futures=True)
 
         # Drain remaining events
         while True:
