@@ -1,6 +1,7 @@
-"""Unit tests for the opt-in adaptive worker controller (AIMD hill-climb over segment
-concurrency) and the plumbing that carries the flag into the downloader. Pure controller
-tests only. No threads, sockets, or real downloads; the clock is supplied explicitly."""
+"""Unit tests for the opt-in adaptive worker controller (slow-start then AIMD hill-climb
+over segment concurrency) and the plumbing that carries the flag into the downloader. Pure
+controller tests only. No threads, sockets, or real downloads; the clock is supplied
+explicitly."""
 
 from __future__ import annotations
 
@@ -54,15 +55,15 @@ def test_starts_at_min_six_cap() -> None:
     assert AdaptiveWorkerController(cap=1).target == 2  # clamped up to ADAPTIVE_MIN
 
 
-def test_no_op_before_full_window() -> None:
+def test_no_op_before_warmup() -> None:
     c = AdaptiveWorkerController(cap=16, tick=TICK, window=WINDOW)
     assert c.update(0.0) == 6  # arms last_tick before any samples are recorded
-    c.record_bytes(500_000, 0.0)
-    c.record_bytes(500_000, 5.0)
-    # a full tick has elapsed, but only 5s of window exists -> hold
-    assert c.update(5.0) == 6
-    c.record_bytes(500_000, 8.0)
-    assert c.update(9.0) == 6
+    c.record_bytes(500_000, 3.0)
+    # a full tick has elapsed since arming, but under half a tick of samples exists -> hold
+    assert c.update(4.5) == 6
+    c.record_bytes(500_000, 6.5)
+    # warmed up (first sample 3.0, now 8.5) -> slow-start probe fires
+    assert c.update(8.5) == 12
 
 
 def test_ramps_up_while_speed_improves() -> None:
@@ -71,7 +72,7 @@ def test_ramps_up_while_speed_improves() -> None:
     c.update(now)  # arm
     rate = 1_000_000.0
     now = _fill_window(c, rate, now)
-    targets = [c.update(now)]  # first evaluation: 6 -> 8
+    targets = [c.update(now)]  # first evaluation: slow-start doubles 6 -> 12
     for _ in range(6):
         rate *= 2  # sustained >10% windowed gain each tick
         target, now = _run_tick(c, rate, now)
@@ -81,16 +82,19 @@ def test_ramps_up_while_speed_improves() -> None:
     assert max(targets) <= 16
 
 
-def test_reverts_on_plateau() -> None:
+def test_reverts_on_plateau_and_ends_slow_start() -> None:
     c = AdaptiveWorkerController(cap=16, tick=TICK, window=WINDOW)
     now = 0.0
     c.update(now)
     rate = 1_000_000.0
     now = _fill_window(c, rate, now)
-    assert c.update(now) == 8  # first increase 6 -> 8
-    # hold the rate flat: <10% gain -> the increase is reverted and held
+    assert c.update(now) == 12  # first increase slow-starts 6 -> 12
+    # hold the rate flat: <10% gain -> the tick reverts the increase to its restore point
     target, now = _run_tick(c, rate, now)
     assert target == 6
+    # slow-start is over: the next successful probe is additive (+2), not a double
+    target, now = _run_tick(c, rate * 4, now)
+    assert target == 8
 
 
 def test_halves_and_cooldown_on_error_burst() -> None:
@@ -152,7 +156,7 @@ def test_tail_guard_none_path_unchanged() -> None:
     now = 0.0
     c.update(now)
     now = _fill_window(c, 1_000_000.0, now)
-    assert c.update(now) == 8  # unchanged: first evaluation 6 -> 8
+    assert c.update(now) == 12  # first evaluation slow-starts 6 -> 12
 
 
 def test_tail_guard_still_halves_on_error_burst() -> None:

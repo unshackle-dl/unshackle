@@ -54,10 +54,10 @@ def _adaptive_chunk_size(content_length: int) -> int:
     return min(MAX_CHUNK, max(MIN_CHUNK, content_length // 4))
 
 
-# Adaptive worker controller (opt-in): AIMD hill-climb over segment concurrency
+# Adaptive worker controller (opt-in): slow-start then AIMD hill-climb over segment concurrency
 ADAPTIVE_TICK = 4.0  # seconds between target re-evaluations
 ADAPTIVE_START = 6  # initial worker target, clamped to cap
-ADAPTIVE_STEP = 2  # additive increase per tick
+ADAPTIVE_STEP = 2  # additive increase per tick once slow-start ends
 ADAPTIVE_MIN = 2  # never drop below this many workers
 ADAPTIVE_ERROR_BURST = 3  # errors within a tick that trigger multiplicative decrease
 ADAPTIVE_PLATEAU_GAIN = 1.10  # min speed ratio to justify keeping an increase
@@ -66,12 +66,12 @@ ADAPTIVE_PLATEAU_GAIN = 1.10  # min speed ratio to justify keeping an increase
 class AdaptiveWorkerController:
     """CDN-aware segment concurrency governor.
 
-    Pure and synchronous (no threads or sockets), so the AIMD policy is unit-testable.
-    ``update`` is evaluated once per ``tick`` and only after a full ``window`` of
-    throughput samples exists: it ramps the worker target up while the CDN keeps
-    rewarding extra concurrency, reverts the last increase on a plateau, and halves
-    (with a one-tick cooldown) on an error burst. Target is always clamped to
-    ``[ADAPTIVE_MIN, cap]``.
+    Pure and synchronous (no threads or sockets), so the policy is unit-testable.
+    ``update`` is evaluated once per ``tick``, starting once half a tick of throughput
+    samples exists. It slow-starts (doubles the target) while every probe keeps paying
+    off, then drops to AIMD (+``ADAPTIVE_STEP``) after the first plateau or error burst:
+    a plateau reverts the last increase, an error burst halves the target with a
+    one-tick cooldown. Target is always clamped to ``[ADAPTIVE_MIN, cap]``.
     """
 
     def __init__(
@@ -88,7 +88,9 @@ class AdaptiveWorkerController:
         self._last_tick: Optional[float] = None
         self._last_action: Optional[str] = None  # "increase" once we have probed upward
         self._speed_before_increase = 0.0
+        self._target_before_increase = self.target  # restore point for a plateau revert
         self._cooldown = False
+        self._ramping = True  # slow-start: double per probe until the first plateau or error burst
 
     def _prune(self, now: float) -> None:
         cutoff = now - self.window
@@ -114,11 +116,11 @@ class AdaptiveWorkerController:
             return 0.0
         return sum(n for _, n in self._samples) / span
 
-    def _full_window(self, now: float) -> bool:
-        # true once we have been observing for at least a full window; measured from the
-        # first-ever sample so continuous pruning (which keeps span just under window) does
-        # not perpetually starve the controller of a "full" window in real timing
-        return self._first_sample is not None and (now - self._first_sample) >= self.window
+    def _warmed_up(self, now: float) -> bool:
+        # half a tick of samples gives enough of a baseline to probe against; waiting for
+        # a full speed window would idle the ramp at the start of every download.
+        # measured from the first-ever sample so pruning cannot starve the check
+        return self._first_sample is not None and (now - self._first_sample) >= self.tick / 2
 
     def update(self, now: float, inflight_plus_remaining: Optional[int] = None) -> int:
         """Evaluate the policy at most once per tick; return the current target.
@@ -136,8 +138,8 @@ class AdaptiveWorkerController:
             return self.target
         self._last_tick = now
 
-        # hold until a full window of throughput history has accumulated
-        if not self._full_window(now):
+        # hold until half a tick of throughput history has accumulated
+        if not self._warmed_up(now):
             self._errors = 0
             return self.target
 
@@ -157,19 +159,24 @@ class AdaptiveWorkerController:
             self.target = max(ADAPTIVE_MIN, self.target // 2)
             self._cooldown = True
             self._last_action = None
+            self._ramping = False
             reason = "error_burst"
         elif inflight_plus_remaining is not None and inflight_plus_remaining < self.target:
             # tail guard: too little work to saturate the target, so a low measured speed
             # here reflects starvation rather than a plateau, so hold and skip the probe/revert this tick
             pass
         elif self._last_action == "increase" and speed_now < ADAPTIVE_PLATEAU_GAIN * self._speed_before_increase:
-            # last probe upward did not pay off, so revert it and hold
-            self.target = max(ADAPTIVE_MIN, self.target - ADAPTIVE_STEP)
+            # last probe upward did not pay off: revert it and hold. step size varies
+            # during slow-start, hence the recorded restore point rather than -STEP
+            self.target = max(ADAPTIVE_MIN, self._target_before_increase)
             self._last_action = None
+            self._ramping = False
             reason = "plateau"
         elif self.target < self.cap:
             self._speed_before_increase = speed_now
-            self.target = min(self.cap, self.target + ADAPTIVE_STEP)
+            self._target_before_increase = self.target
+            step = self.target if self._ramping else ADAPTIVE_STEP
+            self.target = min(self.cap, self.target + step)
             self._last_action = "increase"
             reason = "increase"
         else:
