@@ -497,7 +497,7 @@ class ISM:
             and isinstance(track, Subtitle)
             and track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML)
         )
-        progress(downloaded="Merging", completed=0, total=None)
+        progress(downloaded="Merging", completed=0, total=len(segments_to_merge))
         with open(save_path, "wb") as f:
             first_segment = segments_to_merge[0].read_bytes() if segments_to_merge else None
             init_segment = ISM._init_segment(track, session_drm, first_segment)

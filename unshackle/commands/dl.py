@@ -3262,6 +3262,7 @@ class dl:
                         with SyncLive(Padding(progress, (0, 5, 1, 5)), console=console, refresh_per_second=20):
                             mux_index = 0
                             for task_id, task_tracks, audio_codec in multiplex_tasks:
+                                progress.start_task(task_id)
                                 audio_expected = not video_only and not no_audio
                                 muxed_path, return_code, errors = task_tracks.mux(
                                     str(title),
@@ -3271,8 +3272,6 @@ class dl:
                                     title_language=title.language,
                                     skip_subtitles=skip_subtitle_mux,
                                 )
-                                progress.start_task(task_id)
-                                progress.update(task_id, total=100, completed=100)
                                 if muxed_path.exists():
                                     mux_index += 1
                                     unique_path = muxed_path.with_name(

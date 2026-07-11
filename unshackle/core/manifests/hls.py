@@ -701,7 +701,7 @@ class HLS:
         for control_file in segment_save_dir.glob("*.!dev"):
             control_file.unlink(missing_ok=True)
 
-        progress(downloaded="Merging", completed=0, total=None)
+        progress(total=total_segments, completed=0, downloaded="Merging")
 
         name_len = len(str(total_segments))
         discon_i = 0

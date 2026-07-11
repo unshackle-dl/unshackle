@@ -547,7 +547,7 @@ class DASH:
             if init_data:
                 f.write(init_data)
             if len(segments_to_merge) > 1:
-                progress(downloaded="Merging", completed=0, total=None)
+                progress(downloaded="Merging", completed=0, total=len(segments_to_merge))
             for segment_file in segments_to_merge:
                 if is_text_subtitle:
                     segment_data = try_ensure_utf8(segment_file.read_bytes())
