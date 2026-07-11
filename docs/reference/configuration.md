@@ -37,7 +37,7 @@ This page assumes you already know the basics and want precise details.
 | [DRM & CDM](#drm-cdm) | `cdm`, `remote_cdm`, `decryption` |
 | [Network & proxy](#network-proxy) | `network`, `headers`, `proxy_providers` |
 | [Key vaults](#key-vaults) | `key_vaults`, `vault_timeout` |
-| [External API keys](#external-api-keys) | `imdb_api_enabled`, `tmdb_api_key`, `simkl_client_id`, `decrypt_labs_api_key`, `ipinfo_api_key` |
+| [External API keys](#external-api-keys) | `imdb_api_enabled`, `omdb_api_key`, `tmdb_api_key`, `simkl_client_id`, `decrypt_labs_api_key`, `ipinfo_api_key` |
 | [Caching & updates](#caching-updates) | `title_cache_enabled`, `title_cache_time`, `title_cache_max_retention`, `update_checks`, `update_check_interval` |
 | [Logging, privacy & debug](#logging-privacy-debug) | `redact_paths`, `debug`, `debug_keys`, `debug_requests`, `set_terminal_bg` |
 | [Deprecated & removed](#deprecated-removed-keys) | `curl_impersonate`, `downloader`, `scene_naming` |
@@ -749,6 +749,7 @@ All default to an empty string and enable optional metadata/geolocation features
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `imdb_api_enabled` | bool | `false` | Use the free imdbapi.dev metadata provider, which needs no API key. Off by default since the site has been unreliable. |
+| `omdb_api_key` | str | `""` | [OMDb](https://www.omdbapi.com/) API key for IMDb metadata lookups; a more reliable alternative to imdbapi.dev. Free keys are available on the OMDb site. |
 | `tmdb_api_key` | str | `""` | TMDB API key for metadata enrichment and external-ID tags. |
 | `simkl_client_id` | str | `""` | SIMKL client ID for metadata lookups; an alternative/fallback source to TMDB. |
 | `decrypt_labs_api_key` | str | `""` | Global Decrypt Labs API key (used by remote CDM / vault). |
@@ -872,6 +873,7 @@ proxy_providers:
   basic:
     us: http://user:pass@1.2.3.4:8080
 
+omdb_api_key: "your-omdb-key"
 tmdb_api_key: "your-tmdb-key"
 title_cache_time: 3600
 redact_paths: true

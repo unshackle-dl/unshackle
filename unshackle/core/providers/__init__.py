@@ -6,14 +6,15 @@ import requests
 
 from unshackle.core.providers._base import ExternalIds, MetadataProvider, MetadataResult, fuzzy_match, log
 from unshackle.core.providers.imdbapi import IMDBApiProvider
+from unshackle.core.providers.omdb import OMDBProvider
 from unshackle.core.providers.simkl import SimklProvider
 from unshackle.core.providers.tmdb import TMDBProvider
 
 if TYPE_CHECKING:
     from unshackle.core.title_cacher import TitleCacher
 
-# Ordered by priority: IMDBApi (free), SIMKL, TMDB
-ALL_PROVIDERS: list[type[MetadataProvider]] = [IMDBApiProvider, SimklProvider, TMDBProvider]
+# Ordered by priority: IMDBApi (free), OMDb, SIMKL, TMDB
+ALL_PROVIDERS: list[type[MetadataProvider]] = [IMDBApiProvider, OMDBProvider, SimklProvider, TMDBProvider]
 
 
 def get_available_providers() -> list[MetadataProvider]:
@@ -388,6 +389,24 @@ def _cached_to_result(cached: dict, provider_name: str, kind: str) -> Optional[M
                 tvdb_id=ids.get("tvdb"),
             ),
             source="simkl",
+            raw=cached,
+        )
+    elif provider_name == "omdb":
+        title = cached.get("Title")
+        year_str = cached.get("Year")
+        year = int(year_str[:4]) if year_str and len(year_str) >= 4 and year_str[:4].isdigit() else None
+        enriched = cached.get("_enriched_ids", {})
+        return MetadataResult(
+            title=title,
+            year=year,
+            kind=kind,
+            external_ids=ExternalIds(
+                imdb_id=cached.get("imdbID"),
+                tmdb_id=enriched.get("tmdb_id"),
+                tmdb_kind=enriched.get("tmdb_kind"),
+                tvdb_id=enriched.get("tvdb_id"),
+            ),
+            source="omdb",
             raw=cached,
         )
     elif provider_name == "imdbapi":
