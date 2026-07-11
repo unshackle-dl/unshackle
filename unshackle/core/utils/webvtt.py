@@ -93,7 +93,7 @@ class WebVTTReaderExt(WebVTTReader):
                 if found_timing:
                     if nodes:
                         nodes.append(CaptionNode.create_break())
-                    nodes.append(CaptionNode.create_text(self._decode(line)))
+                    nodes.append(CaptionNode.create_text(self._decode_entities(line)))
                 else:
                     # it's a comment or some metadata; ignore it
                     pass
