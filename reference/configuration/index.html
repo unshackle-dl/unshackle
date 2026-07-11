@@ -2623,7 +2623,7 @@ file means <em>all</em> defaults apply.</p>
 </tr>
 <tr>
 <td><a href="#external-api-keys">External API keys</a></td>
-<td><code>tmdb_api_key</code>, <code>simkl_client_id</code>, <code>decrypt_labs_api_key</code>, <code>ipinfo_api_key</code></td>
+<td><code>imdb_api_enabled</code>, <code>tmdb_api_key</code>, <code>simkl_client_id</code>, <code>decrypt_labs_api_key</code>, <code>ipinfo_api_key</code></td>
 </tr>
 <tr>
 <td><a href="#caching-updates">Caching &amp; updates</a></td>
@@ -3915,6 +3915,12 @@ constructor accepts a <code>timeout</code> parameter (a per-vault <code>timeout<
 </tr>
 </thead>
 <tbody>
+<tr>
+<td><code>imdb_api_enabled</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Use the free imdbapi.dev metadata provider, which needs no API key. Off by default since the site has been unreliable.</td>
+</tr>
 <tr>
 <td><code>tmdb_api_key</code></td>
 <td>str</td>
