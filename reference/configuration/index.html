@@ -2623,7 +2623,7 @@ file means <em>all</em> defaults apply.</p>
 </tr>
 <tr>
 <td><a href="#external-api-keys">External API keys</a></td>
-<td><code>imdb_api_enabled</code>, <code>tmdb_api_key</code>, <code>simkl_client_id</code>, <code>decrypt_labs_api_key</code>, <code>ipinfo_api_key</code></td>
+<td><code>imdb_api_enabled</code>, <code>omdb_api_key</code>, <code>tmdb_api_key</code>, <code>simkl_client_id</code>, <code>decrypt_labs_api_key</code>, <code>ipinfo_api_key</code></td>
 </tr>
 <tr>
 <td><a href="#caching-updates">Caching &amp; updates</a></td>
@@ -3922,6 +3922,12 @@ constructor accepts a <code>timeout</code> parameter (a per-vault <code>timeout<
 <td>Use the free imdbapi.dev metadata provider, which needs no API key. Off by default since the site has been unreliable.</td>
 </tr>
 <tr>
+<td><code>omdb_api_key</code></td>
+<td>str</td>
+<td><code>""</code></td>
+<td><a href="https://www.omdbapi.com/">OMDb</a> API key for IMDb metadata lookups; a more reliable alternative to imdbapi.dev. Free keys are available on the OMDb site.</td>
+</tr>
+<tr>
 <td><code>tmdb_api_key</code></td>
 <td>str</td>
 <td><code>""</code></td>
@@ -4153,9 +4159,10 @@ setting, and KIDs, key counts, and other metadata are always logged either way.<
 </span><span id="__span-22-35"><a id="__codelineno-22-35" name="__codelineno-22-35" href="#__codelineno-22-35"></a><span class="w">  </span><span class="nt">basic</span><span class="p">:</span>
 </span><span id="__span-22-36"><a id="__codelineno-22-36" name="__codelineno-22-36" href="#__codelineno-22-36"></a><span class="w">    </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://user:pass@1.2.3.4:8080</span>
 </span><span id="__span-22-37"><a id="__codelineno-22-37" name="__codelineno-22-37" href="#__codelineno-22-37"></a>
-</span><span id="__span-22-38"><a id="__codelineno-22-38" name="__codelineno-22-38" href="#__codelineno-22-38"></a><span class="nt">tmdb_api_key</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;your-tmdb-key&quot;</span>
-</span><span id="__span-22-39"><a id="__codelineno-22-39" name="__codelineno-22-39" href="#__codelineno-22-39"></a><span class="nt">title_cache_time</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3600</span>
-</span><span id="__span-22-40"><a id="__codelineno-22-40" name="__codelineno-22-40" href="#__codelineno-22-40"></a><span class="nt">redact_paths</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-22-38"><a id="__codelineno-22-38" name="__codelineno-22-38" href="#__codelineno-22-38"></a><span class="nt">omdb_api_key</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;your-omdb-key&quot;</span>
+</span><span id="__span-22-39"><a id="__codelineno-22-39" name="__codelineno-22-39" href="#__codelineno-22-39"></a><span class="nt">tmdb_api_key</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;your-tmdb-key&quot;</span>
+</span><span id="__span-22-40"><a id="__codelineno-22-40" name="__codelineno-22-40" href="#__codelineno-22-40"></a><span class="nt">title_cache_time</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3600</span>
+</span><span id="__span-22-41"><a id="__codelineno-22-41" name="__codelineno-22-41" href="#__codelineno-22-41"></a><span class="nt">redact_paths</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 <p>For how these interact at runtime, continue to <a href="../../guide/downloading/">Downloading</a>,
 <a href="../../guide/drm-and-cdm/">DRM &amp; CDM</a>, and <a href="../../guide/output-and-naming/">Output &amp; naming</a>.</p>
