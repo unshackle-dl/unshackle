@@ -5,6 +5,7 @@ from typing import Optional, Union
 
 import requests
 
+from unshackle.core.config import config
 from unshackle.core.providers._base import ExternalIds, MetadataProvider, MetadataResult, _clean, fuzzy_match
 
 # Mapping from our kind ("movie"/"tv") to imdbapi.dev title types
@@ -22,7 +23,7 @@ class IMDBApiProvider(MetadataProvider):
     BASE_URL = "https://api.imdbapi.dev"
 
     def is_available(self) -> bool:
-        return True  # no key needed
+        return config.imdb_api_enabled
 
     def search(self, title: str, year: Optional[int], kind: str) -> Optional[MetadataResult]:
         self.log.debug("Searching IMDBApi for %r (%s, %s)", title, kind, year)

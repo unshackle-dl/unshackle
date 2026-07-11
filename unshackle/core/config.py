@@ -114,6 +114,7 @@ class Config:
         self.tag: str = kwargs.get("tag") or ""
         self.tag_group_name: bool = kwargs.get("tag_group_name", True)
         self.tag_imdb_tmdb: bool = kwargs.get("tag_imdb_tmdb", True)
+        self.imdb_api_enabled: bool = kwargs.get("imdb_api_enabled", False)
         self.tmdb_api_key: str = kwargs.get("tmdb_api_key") or ""
         self.simkl_client_id: str = kwargs.get("simkl_client_id") or ""
         self.decrypt_labs_api_key: str = kwargs.get("decrypt_labs_api_key") or ""
