@@ -2700,9 +2700,8 @@ class dl:
                                         exact_match=exact_lang,
                                     )
                                     desc_audio = [a for a in title.tracks.audio if a.descriptive]
-                                    # Include all descriptive tracks for the requested languages.
                                     selected_descs = title.tracks.by_language(
-                                        desc_audio, processed_lang, per_language=0, exact_match=exact_lang
+                                        desc_audio, processed_lang, per_language=per_language, exact_match=exact_lang
                                     )
                                     title.tracks.audio = selected_standards + selected_descs
                                 else:
