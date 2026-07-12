@@ -47,8 +47,16 @@ from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, 
 from unshackle.core.credential import Credential
 from unshackle.core.drm import DRM_T, ClearKeyCENC, MonaLisa, PlayReady, Widevine
 from unshackle.core.events import events
-from unshackle.core.music import (MusicAudioIntegrityError, MusicMetadataResult, MusicPlanner, MusicRenderer,
-                                  file_md5, verify_music_audio, write_music_manifest, write_music_metadata)
+from unshackle.core.music import (
+    MusicAudioIntegrityError,
+    MusicMetadataResult,
+    MusicPlanner,
+    MusicRenderer,
+    file_md5,
+    verify_music_audio,
+    write_music_manifest,
+    write_music_metadata,
+)
 from unshackle.core.proxies import Basic, ExpressVPN, Gluetun, Hola, NordVPN, ProtonVPN, SurfsharkVPN, WindscribeVPN
 from unshackle.core.service import Service
 from unshackle.core.services import Services
@@ -59,14 +67,30 @@ from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.dv_fixup import apply_dv_fixup
 from unshackle.core.tracks.hybrid import Hybrid
-from unshackle.core.utilities import (find_font_with_fallbacks, find_missing_langs, get_debug_logger,
-                                      get_system_fonts, init_debug_logger, is_close_match, log_event,
-                                      suggest_font_packages, time_elapsed_since)
+from unshackle.core.utilities import (
+    find_font_with_fallbacks,
+    find_missing_langs,
+    get_debug_logger,
+    get_system_fonts,
+    init_debug_logger,
+    is_close_match,
+    log_event,
+    suggest_font_packages,
+    time_elapsed_since,
+)
 from unshackle.core.utils import tags
 from unshackle.core.utils.bitrate import apply_real_bitrates
-from unshackle.core.utils.click_types import (AUDIO_CODEC_LIST, LANGUAGE_RANGE, QUALITY_LIST, SEASON_RANGE,
-                                              SLOW_DELAY_RANGE, ContextData, MultipleChoice, MultipleVideoCodecChoice,
-                                              SubtitleCodecChoice)
+from unshackle.core.utils.click_types import (
+    AUDIO_CODEC_LIST,
+    LANGUAGE_RANGE,
+    QUALITY_LIST,
+    SEASON_RANGE,
+    SLOW_DELAY_RANGE,
+    ContextData,
+    MultipleChoice,
+    MultipleVideoCodecChoice,
+    SubtitleCodecChoice,
+)
 from unshackle.core.utils.collections import ci_get, merge_dict
 from unshackle.core.utils.selector import select_multiple
 from unshackle.core.utils.subprocess import ffprobe
@@ -842,25 +866,41 @@ class dl:
                             if name == "shaka_packager":
                                 r = subprocess.run(
                                     [str(binary), "--version"],
-                                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+                                    capture_output=True,
+                                    text=True,
+                                    encoding="utf-8",
+                                    errors="replace",
+                                    timeout=5,
                                 )
                                 version = (r.stdout or r.stderr or "").strip()
                             elif name in ("ffmpeg", "ffprobe"):
                                 r = subprocess.run(
                                     [str(binary), "-version"],
-                                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+                                    capture_output=True,
+                                    text=True,
+                                    encoding="utf-8",
+                                    errors="replace",
+                                    timeout=5,
                                 )
                                 version = (r.stdout or "").split("\n")[0].strip()
                             elif name == "mkvmerge":
                                 r = subprocess.run(
                                     [str(binary), "--version"],
-                                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+                                    capture_output=True,
+                                    text=True,
+                                    encoding="utf-8",
+                                    errors="replace",
+                                    timeout=5,
                                 )
                                 version = (r.stdout or "").strip()
                             elif name == "mp4decrypt":
                                 r = subprocess.run(
                                     [str(binary)],
-                                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+                                    capture_output=True,
+                                    text=True,
+                                    encoding="utf-8",
+                                    errors="replace",
+                                    timeout=5,
                                 )
                                 output = (r.stdout or "") + (r.stderr or "")
                                 lines = [line.strip() for line in output.split("\n") if line.strip()]
@@ -1303,7 +1343,9 @@ class dl:
         else:
             vaults_only = not cdm_only
 
-        config.decryption = resolve_decryption(config.decryption_map, config.decryption, service.__class__.__name__.upper())
+        config.decryption = resolve_decryption(
+            config.decryption_map, config.decryption, service.__class__.__name__.upper()
+        )
 
         log_event(
             "drm_mode_config",
@@ -2134,32 +2176,8 @@ class dl:
                 events.subscribe(events.Types.TRACK_REPACKED, service.on_track_repacked)
                 events.subscribe(events.Types.TRACK_MULTIPLEX, service.on_track_multiplex)
 
-            if hasattr(service, "NO_SUBTITLES") and service.NO_SUBTITLES:
-                console.log("Skipping subtitles - service does not support subtitle downloads")
-                no_subs = True
-                s_lang = None
-                title.tracks.subtitles = []
-            elif no_subs:
-                console.log("Skipped subtitles as --no-subs was used...")
-                s_lang = None
-                title.tracks.subtitles = []
-
-            if no_video:
-                console.log("Skipped video as --no-video was used...")
-                v_lang = None
-                title.tracks.videos = []
-
-            if no_audio:
-                console.log("Skipped audio as --no-audio was used...")
-                a_lang = None
-                title.tracks.audio = []
-
-            if no_chapters:
-                console.log("Skipped chapters as --no-chapters was used...")
-                title.tracks.chapters = []
-
-            if no_proxy_download and any(service.session.proxies.values()):
-                console.log("Bypassing proxy for downloads as --no-proxy-download was used...")
+            # The no_xxx guards are handled later right before track selection.
+            pass
 
             tracks_label = "Getting Remote Tracks..." if self.is_remote else "Getting Tracks..."
             with console.status(tracks_label, spinner="dots"):
@@ -2292,10 +2310,58 @@ class dl:
                 console.print(Padding(Panel(available_tracks, title="Available Tracks"), (0, 5)))
                 continue
 
+            # Determine which tracks to keep
+            keep_videos = True
+            keep_audio = True
+            keep_subtitles = True
+            keep_chapters = True
+
+            if video_only or audio_only or subs_only or chapters_only:
+                keep_videos = video_only
+                keep_audio = audio_only
+                keep_subtitles = subs_only
+                keep_chapters = chapters_only
+
+            if hasattr(service, "NO_SUBTITLES") and service.NO_SUBTITLES:
+                console.log("Skipping subtitles - service does not support subtitle downloads")
+                keep_subtitles = False
+                s_lang = None
+            elif no_subs:
+                console.log("Skipped subtitles as --no-subs was used...")
+                keep_subtitles = False
+                s_lang = None
+
+            if no_video:
+                console.log("Skipped video as --no-video was used...")
+                keep_videos = False
+                v_lang = None
+
+            if no_audio:
+                console.log("Skipped audio as --no-audio was used...")
+                keep_audio = False
+                a_lang = None
+
+            if no_chapters:
+                console.log("Skipped chapters as --no-chapters was used...")
+                keep_chapters = False
+
+            if no_proxy_download and any(service.session.proxies.values()):
+                console.log("Bypassing proxy for downloads as --no-proxy-download was used...")
+
+            # Clear unwanted tracks
+            if not keep_videos:
+                title.tracks.videos = []
+            if not keep_audio:
+                title.tracks.audio = []
+            if not keep_subtitles:
+                title.tracks.subtitles = []
+            if not keep_chapters:
+                title.tracks.chapters = []
+
             with console.status("Selecting tracks...", spinner="dots"):
                 if isinstance(title, (Movie, Episode)):
                     # filter video tracks
-                    if vcodec:
+                    if keep_videos and vcodec:
                         title.tracks.select_video(lambda x: x.codec in vcodec)
                         missing_codecs = [c for c in vcodec if not any(x.codec == c for x in title.tracks.videos)]
                         for codec in missing_codecs:
@@ -2304,7 +2370,7 @@ class dl:
                             self.log.error(f"There's no {', '.join(c.name for c in vcodec)} Video Track...")
                             sys.exit(1)
 
-                    if range_:
+                    if keep_videos and range_:
                         # Special handling for HYBRID - don't filter, keep all HDR10 and DV tracks
                         if Video.Range.HYBRID not in range_:
                             title.tracks.select_video(lambda x: x.range in range_)
@@ -2315,7 +2381,7 @@ class dl:
                                 self.log.error(f"There's no {', '.join(r.name for r in range_)} Video Track...")
                                 sys.exit(1)
 
-                    if vbitrate:
+                    if keep_videos and vbitrate:
                         if any(r == Video.Range.HYBRID for r in range_):
                             # In HYBRID mode, only apply bitrate filter to non-DV tracks
                             # DV tracks are kept regardless since they're only used for RPU metadata
@@ -2331,7 +2397,7 @@ class dl:
                                 self.log.error(f"There's no {vbitrate}kbps Video Track...")
                                 sys.exit(1)
 
-                    if vbitrate_min is not None and vbitrate_max is not None:
+                    if keep_videos and vbitrate_min is not None and vbitrate_max is not None:
                         title.tracks.select_video(
                             lambda x: x.bitrate and vbitrate_min <= x.bitrate // 1000 <= vbitrate_max
                         )
@@ -2344,7 +2410,7 @@ class dl:
                     video_multi_lang = (
                         "best" in effective_video_lang or "all" in effective_video_lang or len(video_languages) > 1
                     )
-                    if video_languages and "all" not in video_languages:
+                    if keep_videos and video_languages and "all" not in video_languages:
                         processed_video_lang = []
                         for language in video_languages:
                             if language == "orig":
@@ -2367,9 +2433,7 @@ class dl:
                         if missing_v_langs:
                             missing_str = ", ".join(missing_v_langs)
                             if best_available:
-                                remaining_v_langs = [
-                                    tok for tok in processed_video_lang if tok not in missing_v_langs
-                                ]
+                                remaining_v_langs = [tok for tok in processed_video_lang if tok not in missing_v_langs]
                                 if remaining_v_langs:
                                     self.log.warning(
                                         f"{missing_str} not found in video tracks, "
@@ -2377,9 +2441,7 @@ class dl:
                                     )
                                     processed_video_lang = remaining_v_langs
                                 else:
-                                    self.log.error(
-                                        f"{missing_str} not found in video tracks and no fallback available"
-                                    )
+                                    self.log.error(f"{missing_str} not found in video tracks and no fallback available")
                                     sys.exit(1)
                             else:
                                 self.log.error(missing_str + " not found in video tracks")
@@ -2394,7 +2456,7 @@ class dl:
                     has_hybrid = any(r == Video.Range.HYBRID for r in range_)
                     non_hybrid_ranges = [r for r in range_ if r != Video.Range.HYBRID]
                     effective_quality = quality
-                    if quality:
+                    if keep_videos and quality:
                         missing_resolutions = []
                         if has_hybrid:
                             hybrid_candidate_tracks, non_hybrid_tracks = Tracks.partition_hybrid_videos(
@@ -2468,7 +2530,7 @@ class dl:
 
                     # choose best track by range and quality
                     pre_hybrid_videos: list[Video] = list(title.tracks.videos) if has_hybrid else []
-                    if has_hybrid:
+                    if keep_videos and has_hybrid:
                         # Apply hybrid selection for HYBRID tracks
                         hybrid_candidate_tracks, non_hybrid_tracks = Tracks.partition_hybrid_videos(
                             title.tracks.videos, non_hybrid_ranges
@@ -2522,7 +2584,7 @@ class dl:
                         # the lowest DV) so the standalone mux loop skips them. Tracks also
                         # picked as explicit deliverables stay unflagged.
                         Tracks.flag_hybrid_ingredients(hybrid_selected, non_hybrid_selected)
-                    else:
+                    elif keep_videos:
                         selected_videos: list[Video] = []
                         if video_multi_lang:
                             unique_video_langs = list(dict.fromkeys(str(v.language) for v in title.tracks.videos))
@@ -2549,7 +2611,7 @@ class dl:
                         title.tracks.videos = selected_videos
 
                     # validate hybrid mode requirements
-                    if any(r == Video.Range.HYBRID for r in range_):
+                    if keep_videos and any(r == Video.Range.HYBRID for r in range_):
                         base_tracks = [
                             v for v in title.tracks.videos if v.range in (Video.Range.HDR10, Video.Range.HDR10P)
                         ]
@@ -2613,7 +2675,7 @@ class dl:
                                 sys.exit(1)
 
                     # filter subtitle tracks
-                    if require_subs:
+                    if keep_subtitles and require_subs:
                         missing_langs = [
                             lang
                             for lang in require_subs
@@ -2627,7 +2689,7 @@ class dl:
                         self.log.info(
                             f"Required languages found ({', '.join(require_subs)}), downloading all available subtitles"
                         )
-                    elif s_lang and "all" not in s_lang:
+                    elif keep_subtitles and s_lang and "all" not in s_lang:
                         from unshackle.core.utilities import is_exact_match
 
                         match_func = is_exact_match if exact_lang else is_close_match
@@ -2661,12 +2723,12 @@ class dl:
                                 self.log.error(f"There's no {s_lang} Subtitle Track...")
                                 sys.exit(1)
 
-                    if not forced_subs:
+                    if keep_subtitles and not forced_subs:
                         title.tracks.select_subtitles(lambda x: not x.forced)
 
                 # filter audio tracks
                 # might have no audio tracks if part of the video, e.g. transport stream hls
-                if len(title.tracks.audio) > 0:
+                if keep_audio and len(title.tracks.audio) > 0:
                     if not audio_description:
                         title.tracks.select_audio(lambda x: not x.descriptive)  # exclude descriptive audio
                     if acodec:
@@ -2747,57 +2809,19 @@ class dl:
                             self.log.error(f"There's no {processed_lang} Audio Track, cannot continue...")
                             sys.exit(1)
 
-                if (
-                    video_only
-                    or audio_only
-                    or subs_only
-                    or chapters_only
-                    or no_subs
-                    or no_audio
-                    or no_chapters
-                    or no_video
-                ):
-                    keep_videos = False
-                    keep_audio = False
-                    keep_subtitles = False
-                    keep_chapters = False
+                # Reconstruct track set to only include kept tracks
+                kept_tracks = []
+                if keep_videos:
+                    kept_tracks.extend(title.tracks.videos)
+                if keep_audio:
+                    kept_tracks.extend(title.tracks.audio)
+                if keep_subtitles:
+                    kept_tracks.extend(title.tracks.subtitles)
+                if keep_chapters:
+                    kept_tracks.extend(title.tracks.chapters)
+                kept_tracks.extend(title.tracks.attachments)
 
-                    if video_only or audio_only or subs_only or chapters_only:
-                        if video_only:
-                            keep_videos = True
-                        if audio_only:
-                            keep_audio = True
-                        if subs_only:
-                            keep_subtitles = True
-                        if chapters_only:
-                            keep_chapters = True
-                    else:
-                        keep_videos = True
-                        keep_audio = True
-                        keep_subtitles = True
-                        keep_chapters = True
-
-                    if no_subs:
-                        keep_subtitles = False
-                    if no_audio:
-                        keep_audio = False
-                    if no_chapters:
-                        keep_chapters = False
-                    if no_video:
-                        keep_videos = False
-
-                    kept_tracks = []
-                    if keep_videos:
-                        kept_tracks.extend(title.tracks.videos)
-                    if keep_audio:
-                        kept_tracks.extend(title.tracks.audio)
-                    if keep_subtitles:
-                        kept_tracks.extend(title.tracks.subtitles)
-                    if keep_chapters:
-                        kept_tracks.extend(title.tracks.chapters)
-                    kept_tracks.extend(title.tracks.attachments)
-
-                    title.tracks = Tracks(kept_tracks, manifest_url=title.tracks.manifest_url)
+                title.tracks = Tracks(kept_tracks, manifest_url=title.tracks.manifest_url)
 
             selected_tracks, tracks_progress_callables = title.tracks.tree(add_progress=True)
 
