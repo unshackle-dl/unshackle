@@ -47,8 +47,16 @@ from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, 
 from unshackle.core.credential import Credential
 from unshackle.core.drm import DRM_T, ClearKeyCENC, MonaLisa, PlayReady, Widevine
 from unshackle.core.events import events
-from unshackle.core.music import (MusicAudioIntegrityError, MusicMetadataResult, MusicPlanner, MusicRenderer,
-                                  file_md5, verify_music_audio, write_music_manifest, write_music_metadata)
+from unshackle.core.music import (
+    MusicAudioIntegrityError,
+    MusicMetadataResult,
+    MusicPlanner,
+    MusicRenderer,
+    file_md5,
+    verify_music_audio,
+    write_music_manifest,
+    write_music_metadata,
+)
 from unshackle.core.proxies import Basic, ExpressVPN, Gluetun, Hola, NordVPN, ProtonVPN, SurfsharkVPN, WindscribeVPN
 from unshackle.core.service import Service
 from unshackle.core.services import Services
@@ -59,14 +67,30 @@ from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.dv_fixup import apply_dv_fixup
 from unshackle.core.tracks.hybrid import Hybrid
-from unshackle.core.utilities import (find_font_with_fallbacks, find_missing_langs, get_debug_logger,
-                                      get_system_fonts, init_debug_logger, is_close_match, log_event,
-                                      suggest_font_packages, time_elapsed_since)
+from unshackle.core.utilities import (
+    find_font_with_fallbacks,
+    find_missing_langs,
+    get_debug_logger,
+    get_system_fonts,
+    init_debug_logger,
+    is_close_match,
+    log_event,
+    suggest_font_packages,
+    time_elapsed_since,
+)
 from unshackle.core.utils import tags
 from unshackle.core.utils.bitrate import apply_real_bitrates
-from unshackle.core.utils.click_types import (AUDIO_CODEC_LIST, LANGUAGE_RANGE, QUALITY_LIST, SEASON_RANGE,
-                                              SLOW_DELAY_RANGE, ContextData, MultipleChoice, MultipleVideoCodecChoice,
-                                              SubtitleCodecChoice)
+from unshackle.core.utils.click_types import (
+    AUDIO_CODEC_LIST,
+    LANGUAGE_RANGE,
+    QUALITY_LIST,
+    SEASON_RANGE,
+    SLOW_DELAY_RANGE,
+    ContextData,
+    MultipleChoice,
+    MultipleVideoCodecChoice,
+    SubtitleCodecChoice,
+)
 from unshackle.core.utils.collections import ci_get, merge_dict
 from unshackle.core.utils.selector import select_multiple
 from unshackle.core.utils.subprocess import ffprobe
@@ -842,25 +866,41 @@ class dl:
                             if name == "shaka_packager":
                                 r = subprocess.run(
                                     [str(binary), "--version"],
-                                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+                                    capture_output=True,
+                                    text=True,
+                                    encoding="utf-8",
+                                    errors="replace",
+                                    timeout=5,
                                 )
                                 version = (r.stdout or r.stderr or "").strip()
                             elif name in ("ffmpeg", "ffprobe"):
                                 r = subprocess.run(
                                     [str(binary), "-version"],
-                                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+                                    capture_output=True,
+                                    text=True,
+                                    encoding="utf-8",
+                                    errors="replace",
+                                    timeout=5,
                                 )
                                 version = (r.stdout or "").split("\n")[0].strip()
                             elif name == "mkvmerge":
                                 r = subprocess.run(
                                     [str(binary), "--version"],
-                                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+                                    capture_output=True,
+                                    text=True,
+                                    encoding="utf-8",
+                                    errors="replace",
+                                    timeout=5,
                                 )
                                 version = (r.stdout or "").strip()
                             elif name == "mp4decrypt":
                                 r = subprocess.run(
                                     [str(binary)],
-                                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+                                    capture_output=True,
+                                    text=True,
+                                    encoding="utf-8",
+                                    errors="replace",
+                                    timeout=5,
                                 )
                                 output = (r.stdout or "") + (r.stderr or "")
                                 lines = [line.strip() for line in output.split("\n") if line.strip()]
@@ -1303,7 +1343,9 @@ class dl:
         else:
             vaults_only = not cdm_only
 
-        config.decryption = resolve_decryption(config.decryption_map, config.decryption, service.__class__.__name__.upper())
+        config.decryption = resolve_decryption(
+            config.decryption_map, config.decryption, service.__class__.__name__.upper()
+        )
 
         log_event(
             "drm_mode_config",
@@ -2295,305 +2337,221 @@ class dl:
             with console.status("Selecting tracks...", spinner="dots"):
                 if isinstance(title, (Movie, Episode)):
                     # filter video tracks
-                    if vcodec:
-                        title.tracks.select_video(lambda x: x.codec in vcodec)
-                        missing_codecs = [c for c in vcodec if not any(x.codec == c for x in title.tracks.videos)]
-                        for codec in missing_codecs:
-                            self.log.warning(f"Skipping {codec.name} video tracks as none are available.")
-                        if not title.tracks.videos:
-                            self.log.error(f"There's no {', '.join(c.name for c in vcodec)} Video Track...")
-                            sys.exit(1)
-
-                    if range_:
-                        # Special handling for HYBRID - don't filter, keep all HDR10 and DV tracks
-                        if Video.Range.HYBRID not in range_:
-                            title.tracks.select_video(lambda x: x.range in range_)
-                            missing_ranges = [r for r in range_ if not any(x.range == r for x in title.tracks.videos)]
-                            for color_range in missing_ranges:
-                                self.log.warning(f"Skipping {color_range.name} video tracks as none are available.")
+                    if no_video:
+                        title.tracks.videos = []
+                    else:
+                        if vcodec:
+                            title.tracks.select_video(lambda x: x.codec in vcodec)
+                            missing_codecs = [c for c in vcodec if not any(x.codec == c for x in title.tracks.videos)]
+                            for codec in missing_codecs:
+                                self.log.warning(f"Skipping {codec.name} video tracks as none are available.")
                             if not title.tracks.videos:
-                                self.log.error(f"There's no {', '.join(r.name for r in range_)} Video Track...")
+                                self.log.error(f"There's no {', '.join(c.name for c in vcodec)} Video Track...")
                                 sys.exit(1)
 
-                    if vbitrate:
-                        if any(r == Video.Range.HYBRID for r in range_):
-                            # In HYBRID mode, only apply bitrate filter to non-DV tracks
-                            # DV tracks are kept regardless since they're only used for RPU metadata
-                            title.tracks.select_video(
-                                lambda x: x.range == Video.Range.DV or (x.bitrate and x.bitrate // 1000 == vbitrate)
-                            )
-                            if not any(x.range != Video.Range.DV for x in title.tracks.videos):
-                                self.log.error(f"There's no {vbitrate}kbps Video Track...")
-                                sys.exit(1)
-                        else:
-                            title.tracks.select_video(lambda x: x.bitrate and x.bitrate // 1000 == vbitrate)
-                            if not title.tracks.videos:
-                                self.log.error(f"There's no {vbitrate}kbps Video Track...")
-                                sys.exit(1)
-
-                    if vbitrate_min is not None and vbitrate_max is not None:
-                        title.tracks.select_video(
-                            lambda x: x.bitrate and vbitrate_min <= x.bitrate // 1000 <= vbitrate_max
-                        )
-                        if not title.tracks.videos:
-                            self.log.error(f"No Video Track in {vbitrate_min}-{vbitrate_max}kbps range...")
-                            sys.exit(1)
-
-                    effective_video_lang = v_lang or lang
-                    video_languages = [lang for lang in effective_video_lang if lang != "best"]
-                    video_multi_lang = (
-                        "best" in effective_video_lang or "all" in effective_video_lang or len(video_languages) > 1
-                    )
-                    if video_languages and "all" not in video_languages:
-                        processed_video_lang = []
-                        for language in video_languages:
-                            if language == "orig":
-                                if title.language:
-                                    orig_lang = str(title.language)
-                                    if orig_lang not in processed_video_lang:
-                                        processed_video_lang.append(orig_lang)
-                                else:
-                                    self.log.warning(
-                                        "Original language not available for title, skipping 'orig' selection for video"
-                                    )
-                            else:
-                                if language not in processed_video_lang:
-                                    processed_video_lang.append(language)
-                        missing_v_langs = find_missing_langs(
-                            processed_video_lang,
-                            [v.language for v in title.tracks.videos],
-                            exact=exact_lang,
-                        )
-                        if missing_v_langs:
-                            missing_str = ", ".join(missing_v_langs)
-                            if best_available:
-                                remaining_v_langs = [
-                                    tok for tok in processed_video_lang if tok not in missing_v_langs
+                        if range_:
+                            # Special handling for HYBRID - don't filter, keep all HDR10 and DV tracks
+                            if Video.Range.HYBRID not in range_:
+                                title.tracks.select_video(lambda x: x.range in range_)
+                                missing_ranges = [
+                                    r for r in range_ if not any(x.range == r for x in title.tracks.videos)
                                 ]
-                                if remaining_v_langs:
-                                    self.log.warning(
-                                        f"{missing_str} not found in video tracks, "
-                                        f"continuing with: {', '.join(remaining_v_langs)}"
-                                    )
-                                    processed_video_lang = remaining_v_langs
-                                else:
-                                    self.log.error(
-                                        f"{missing_str} not found in video tracks and no fallback available"
-                                    )
+                                for color_range in missing_ranges:
+                                    self.log.warning(f"Skipping {color_range.name} video tracks as none are available.")
+                                if not title.tracks.videos:
+                                    self.log.error(f"There's no {', '.join(r.name for r in range_)} Video Track...")
+                                    sys.exit(1)
+
+                        if vbitrate:
+                            if any(r == Video.Range.HYBRID for r in range_):
+                                # In HYBRID mode, only apply bitrate filter to non-DV tracks
+                                # DV tracks are kept regardless since they're only used for RPU metadata
+                                title.tracks.select_video(
+                                    lambda x: x.range == Video.Range.DV or (x.bitrate and x.bitrate // 1000 == vbitrate)
+                                )
+                                if not any(x.range != Video.Range.DV for x in title.tracks.videos):
+                                    self.log.error(f"There's no {vbitrate}kbps Video Track...")
                                     sys.exit(1)
                             else:
-                                self.log.error(missing_str + " not found in video tracks")
-                                sys.exit(1)
-                        title.tracks.videos = title.tracks.by_language(
-                            title.tracks.videos, processed_video_lang, exact_match=exact_lang
-                        )
-                        if not title.tracks.videos:
-                            self.log.error(f"There's no {processed_video_lang} Video Track...")
-                            sys.exit(1)
+                                title.tracks.select_video(lambda x: x.bitrate and x.bitrate // 1000 == vbitrate)
+                                if not title.tracks.videos:
+                                    self.log.error(f"There's no {vbitrate}kbps Video Track...")
+                                    sys.exit(1)
 
-                    has_hybrid = any(r == Video.Range.HYBRID for r in range_)
-                    non_hybrid_ranges = [r for r in range_ if r != Video.Range.HYBRID]
-                    effective_quality = quality
-                    if quality:
-                        missing_resolutions = []
+                        if vbitrate_min is not None and vbitrate_max is not None:
+                            title.tracks.select_video(
+                                lambda x: x.bitrate and vbitrate_min <= x.bitrate // 1000 <= vbitrate_max
+                            )
+                            if not title.tracks.videos:
+                                self.log.error(f"No Video Track in {vbitrate_min}-{vbitrate_max}kbps range...")
+                                sys.exit(1)
+
+                        effective_video_lang = v_lang or lang
+                        video_languages = [lang for lang in effective_video_lang if lang != "best"]
+                        video_multi_lang = (
+                            "best" in effective_video_lang or "all" in effective_video_lang or len(video_languages) > 1
+                        )
+                        if video_languages and "all" not in video_languages:
+                            processed_video_lang = []
+                            for language in video_languages:
+                                if language == "orig":
+                                    if title.language:
+                                        orig_lang = str(title.language)
+                                        if orig_lang not in processed_video_lang:
+                                            processed_video_lang.append(orig_lang)
+                                    else:
+                                        self.log.warning(
+                                            "Original language not available for title, skipping 'orig' selection for video"
+                                        )
+                                else:
+                                    if language not in processed_video_lang:
+                                        processed_video_lang.append(language)
+                            missing_v_langs = find_missing_langs(
+                                processed_video_lang,
+                                [v.language for v in title.tracks.videos],
+                                exact=exact_lang,
+                            )
+                            if missing_v_langs:
+                                missing_str = ", ".join(missing_v_langs)
+                                if best_available:
+                                    remaining_v_langs = [
+                                        tok for tok in processed_video_lang if tok not in missing_v_langs
+                                    ]
+                                    if remaining_v_langs:
+                                        self.log.warning(
+                                            f"{missing_str} not found in video tracks, "
+                                            f"continuing with: {', '.join(remaining_v_langs)}"
+                                        )
+                                        processed_video_lang = remaining_v_langs
+                                    else:
+                                        self.log.error(
+                                            f"{missing_str} not found in video tracks and no fallback available"
+                                        )
+                                        sys.exit(1)
+                                else:
+                                    self.log.error(missing_str + " not found in video tracks")
+                                    sys.exit(1)
+                            title.tracks.videos = title.tracks.by_language(
+                                title.tracks.videos, processed_video_lang, exact_match=exact_lang
+                            )
+                            if not title.tracks.videos:
+                                self.log.error(f"There's no {processed_video_lang} Video Track...")
+                                sys.exit(1)
+
+                        has_hybrid = any(r == Video.Range.HYBRID for r in range_)
+                        non_hybrid_ranges = [r for r in range_ if r != Video.Range.HYBRID]
+                        effective_quality = quality
+                        if quality:
+                            missing_resolutions = []
+                            if has_hybrid:
+                                hybrid_candidate_tracks, non_hybrid_tracks = Tracks.partition_hybrid_videos(
+                                    title.tracks.videos, non_hybrid_ranges
+                                )
+                                # only ranges that can actually be delivered count towards "present"
+                                deliverable_pool = hybrid_candidate_tracks + [
+                                    v for v in non_hybrid_tracks if v.range in non_hybrid_ranges
+                                ]
+                                for resolution in quality:
+                                    if any(v.height == resolution for v in deliverable_pool):
+                                        continue
+                                    if any(v.width and int(v.width * 9 / 16) == resolution for v in deliverable_pool):
+                                        continue
+                                    missing_resolutions.append(resolution)
+
+                                if len(missing_resolutions) == len(quality) and best_available:
+                                    # every requested resolution missing: leave the pool untouched so the
+                                    # best-available hybrid pass below selects the top resolution instead
+                                    effective_quality = []
+                                else:
+                                    hybrid_filter = title.tracks.select_hybrid(
+                                        hybrid_candidate_tracks, quality, worst=worst
+                                    )
+                                    hybrid_selected = list(filter(hybrid_filter, hybrid_candidate_tracks))
+
+                                    if non_hybrid_ranges and non_hybrid_tracks:
+                                        non_hybrid_selected = [
+                                            v
+                                            for v in non_hybrid_tracks
+                                            if any(
+                                                v.height == res or (v.width and int(v.width * (9 / 16)) == res)
+                                                for res in quality
+                                            )
+                                        ]
+                                        title.tracks.videos = Tracks.merge_video_selections(
+                                            hybrid_selected, non_hybrid_selected
+                                        )
+                                    else:
+                                        title.tracks.videos = hybrid_selected
+                            else:
+                                pre_quality_videos = list(title.tracks.videos)
+                                title.tracks.by_resolutions(quality)
+
+                                for resolution in quality:
+                                    if any(v.height == resolution for v in title.tracks.videos):
+                                        continue
+                                    if any(
+                                        v.width and int(v.width * 9 / 16) == resolution for v in title.tracks.videos
+                                    ):
+                                        continue
+                                    missing_resolutions.append(resolution)
+
+                                if len(missing_resolutions) == len(quality) and best_available:
+                                    # every requested resolution missing: fall back to the best available
+                                    title.tracks.videos = pre_quality_videos
+                                    effective_quality = []
+
+                            if missing_resolutions:
+                                res_list = ""
+                                if len(missing_resolutions) > 1:
+                                    res_list = ", ".join([f"{x}p" for x in missing_resolutions[:-1]]) + " or "
+                                res_list = f"{res_list}{missing_resolutions[-1]}p"
+                                plural = "s" if len(missing_resolutions) > 1 else ""
+
+                                if best_available:
+                                    self.log.warning(
+                                        f"There's no {res_list} Video Track{plural}, continuing with available qualities..."
+                                    )
+                                else:
+                                    self.log.error(f"There's no {res_list} Video Track{plural}...")
+                                    sys.exit(1)
+
+                        # choose best track by range and quality
+                        pre_hybrid_videos: list[Video] = list(title.tracks.videos) if has_hybrid else []
                         if has_hybrid:
+                            # Apply hybrid selection for HYBRID tracks
                             hybrid_candidate_tracks, non_hybrid_tracks = Tracks.partition_hybrid_videos(
                                 title.tracks.videos, non_hybrid_ranges
                             )
-                            # only ranges that can actually be delivered count towards "present"
-                            deliverable_pool = hybrid_candidate_tracks + [
-                                v for v in non_hybrid_tracks if v.range in non_hybrid_ranges
-                            ]
-                            for resolution in quality:
-                                if any(v.height == resolution for v in deliverable_pool):
-                                    continue
-                                if any(v.width and int(v.width * 9 / 16) == resolution for v in deliverable_pool):
-                                    continue
-                                missing_resolutions.append(resolution)
 
-                            if len(missing_resolutions) == len(quality) and best_available:
-                                # every requested resolution missing: leave the pool untouched so the
-                                # best-available hybrid pass below selects the top resolution instead
-                                effective_quality = []
-                            else:
-                                hybrid_filter = title.tracks.select_hybrid(
-                                    hybrid_candidate_tracks, quality, worst=worst
-                                )
-                                hybrid_selected = list(filter(hybrid_filter, hybrid_candidate_tracks))
-
-                                if non_hybrid_ranges and non_hybrid_tracks:
-                                    non_hybrid_selected = [
-                                        v
-                                        for v in non_hybrid_tracks
-                                        if any(
-                                            v.height == res or (v.width and int(v.width * (9 / 16)) == res)
-                                            for res in quality
-                                        )
-                                    ]
-                                    title.tracks.videos = Tracks.merge_video_selections(
-                                        hybrid_selected, non_hybrid_selected
+                            if not effective_quality:
+                                best_resolution = max((v.height for v in hybrid_candidate_tracks), default=None)
+                                if best_resolution:
+                                    hybrid_filter = title.tracks.select_hybrid(
+                                        hybrid_candidate_tracks, [best_resolution], worst=worst
                                     )
+                                    hybrid_selected = list(filter(hybrid_filter, hybrid_candidate_tracks))
                                 else:
-                                    title.tracks.videos = hybrid_selected
-                        else:
-                            pre_quality_videos = list(title.tracks.videos)
-                            title.tracks.by_resolutions(quality)
-
-                            for resolution in quality:
-                                if any(v.height == resolution for v in title.tracks.videos):
-                                    continue
-                                if any(v.width and int(v.width * 9 / 16) == resolution for v in title.tracks.videos):
-                                    continue
-                                missing_resolutions.append(resolution)
-
-                            if len(missing_resolutions) == len(quality) and best_available:
-                                # every requested resolution missing: fall back to the best available
-                                title.tracks.videos = pre_quality_videos
-                                effective_quality = []
-
-                        if missing_resolutions:
-                            res_list = ""
-                            if len(missing_resolutions) > 1:
-                                res_list = ", ".join([f"{x}p" for x in missing_resolutions[:-1]]) + " or "
-                            res_list = f"{res_list}{missing_resolutions[-1]}p"
-                            plural = "s" if len(missing_resolutions) > 1 else ""
-
-                            if best_available:
-                                self.log.warning(
-                                    f"There's no {res_list} Video Track{plural}, continuing with available qualities..."
-                                )
+                                    hybrid_selected = []
                             else:
-                                self.log.error(f"There's no {res_list} Video Track{plural}...")
-                                sys.exit(1)
-
-                    # choose best track by range and quality
-                    pre_hybrid_videos: list[Video] = list(title.tracks.videos) if has_hybrid else []
-                    if has_hybrid:
-                        # Apply hybrid selection for HYBRID tracks
-                        hybrid_candidate_tracks, non_hybrid_tracks = Tracks.partition_hybrid_videos(
-                            title.tracks.videos, non_hybrid_ranges
-                        )
-
-                        if not effective_quality:
-                            best_resolution = max((v.height for v in hybrid_candidate_tracks), default=None)
-                            if best_resolution:
                                 hybrid_filter = title.tracks.select_hybrid(
-                                    hybrid_candidate_tracks, [best_resolution], worst=worst
+                                    hybrid_candidate_tracks, effective_quality, worst=worst
                                 )
                                 hybrid_selected = list(filter(hybrid_filter, hybrid_candidate_tracks))
-                            else:
-                                hybrid_selected = []
-                        else:
-                            hybrid_filter = title.tracks.select_hybrid(
-                                hybrid_candidate_tracks, effective_quality, worst=worst
-                            )
-                            hybrid_selected = list(filter(hybrid_filter, hybrid_candidate_tracks))
 
-                        # For non-hybrid ranges, apply Cartesian product selection
-                        non_hybrid_selected: list[Video] = []
-                        if non_hybrid_ranges and non_hybrid_tracks:
-                            # Include language dimension when multiple video languages were requested
-                            if video_multi_lang:
-                                non_hybrid_langs = list(dict.fromkeys(str(v.language) for v in non_hybrid_tracks))
-                            else:
-                                non_hybrid_langs = [None]
-                            for resolution, color_range, codec, vlang in product(
-                                effective_quality or [None], non_hybrid_ranges, vcodec or [None], non_hybrid_langs
-                            ):
-                                candidates = [
-                                    t
-                                    for t in non_hybrid_tracks
-                                    if (
-                                        not resolution
-                                        or t.height == resolution
-                                        or (t.width and int(t.width * (9 / 16)) == resolution)
-                                    )
-                                    and (not color_range or t.range == color_range)
-                                    and (not codec or t.codec == codec)
-                                    and (vlang is None or str(t.language) == vlang)
-                                ]
-                                match = candidates[-1] if worst and candidates else next(iter(candidates), None)
-                                if match and match not in non_hybrid_selected:
-                                    non_hybrid_selected.append(match)
-
-                        title.tracks.videos = Tracks.merge_video_selections(hybrid_selected, non_hybrid_selected)
-
-                        # Flag tracks selected only as hybrid ingredients (the HDR base and/or
-                        # the lowest DV) so the standalone mux loop skips them. Tracks also
-                        # picked as explicit deliverables stay unflagged.
-                        Tracks.flag_hybrid_ingredients(hybrid_selected, non_hybrid_selected)
-                    else:
-                        selected_videos: list[Video] = []
-                        if video_multi_lang:
-                            unique_video_langs = list(dict.fromkeys(str(v.language) for v in title.tracks.videos))
-                        else:
-                            unique_video_langs = [None]
-                        for resolution, color_range, codec, vlang in product(
-                            effective_quality or [None], range_ or [None], vcodec or [None], unique_video_langs
-                        ):
-                            candidates = [
-                                t
-                                for t in title.tracks.videos
-                                if (
-                                    not resolution
-                                    or t.height == resolution
-                                    or (t.width and int(t.width * (9 / 16)) == resolution)
-                                )
-                                and (not color_range or t.range == color_range)
-                                and (not codec or t.codec == codec)
-                                and (vlang is None or str(t.language) == vlang)
-                            ]
-                            match = candidates[-1] if worst and candidates else next(iter(candidates), None)
-                            if match and match not in selected_videos:
-                                selected_videos.append(match)
-                        title.tracks.videos = selected_videos
-
-                    # validate hybrid mode requirements
-                    if any(r == Video.Range.HYBRID for r in range_):
-                        base_tracks = [
-                            v for v in title.tracks.videos if v.range in (Video.Range.HDR10, Video.Range.HDR10P)
-                        ]
-                        dv_tracks = [v for v in title.tracks.videos if v.range == Video.Range.DV]
-
-                        hybrid_failed = False
-                        if not base_tracks and not dv_tracks:
-                            available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
-                            msg = "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but neither is available"
-                            msg_detail = (
-                                f"Available ranges: {', '.join(available_ranges) if available_ranges else 'none'}"
-                            )
-                            hybrid_failed = True
-                        elif not base_tracks:
-                            available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
-                            msg = "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but only DV is available"
-                            msg_detail = f"Available ranges: {', '.join(available_ranges)}"
-                            hybrid_failed = True
-                        elif not dv_tracks:
-                            available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
-                            msg = "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but only HDR10 is available"
-                            msg_detail = f"Available ranges: {', '.join(available_ranges)}"
-                            hybrid_failed = True
-
-                        if hybrid_failed:
-                            other_ranges = [r for r in range_ if r != Video.Range.HYBRID]
-                            if best_available and other_ranges:
-                                self.log.warning(msg)
-                                self.log.warning(
-                                    f"Continuing with remaining range(s): {', '.join(r.name for r in other_ranges)}"
-                                )
-                                range_ = other_ranges
-                                fallback_pool = pre_hybrid_videos
+                            # For non-hybrid ranges, apply Cartesian product selection
+                            non_hybrid_selected: list[Video] = []
+                            if non_hybrid_ranges and non_hybrid_tracks:
+                                # Include language dimension when multiple video languages were requested
                                 if video_multi_lang:
-                                    fallback_langs = list(dict.fromkeys(str(v.language) for v in fallback_pool))
+                                    non_hybrid_langs = list(dict.fromkeys(str(v.language) for v in non_hybrid_tracks))
                                 else:
-                                    fallback_langs = [None]
-                                fallback_selected: list[Video] = []
+                                    non_hybrid_langs = [None]
                                 for resolution, color_range, codec, vlang in product(
-                                    effective_quality or [None], other_ranges, vcodec or [None], fallback_langs
+                                    effective_quality or [None], non_hybrid_ranges, vcodec or [None], non_hybrid_langs
                                 ):
                                     candidates = [
                                         t
-                                        for t in fallback_pool
+                                        for t in non_hybrid_tracks
                                         if (
                                             not resolution
                                             or t.height == resolution
@@ -2604,148 +2562,247 @@ class dl:
                                         and (vlang is None or str(t.language) == vlang)
                                     ]
                                     match = candidates[-1] if worst and candidates else next(iter(candidates), None)
-                                    if match and match not in fallback_selected:
-                                        fallback_selected.append(match)
-                                title.tracks.videos = fallback_selected
+                                    if match and match not in non_hybrid_selected:
+                                        non_hybrid_selected.append(match)
+
+                            title.tracks.videos = Tracks.merge_video_selections(hybrid_selected, non_hybrid_selected)
+
+                            # Flag tracks selected only as hybrid ingredients (the HDR base and/or
+                            # the lowest DV) so the standalone mux loop skips them. Tracks also
+                            # picked as explicit deliverables stay unflagged.
+                            Tracks.flag_hybrid_ingredients(hybrid_selected, non_hybrid_selected)
+                        else:
+                            selected_videos: list[Video] = []
+                            if video_multi_lang:
+                                unique_video_langs = list(dict.fromkeys(str(v.language) for v in title.tracks.videos))
                             else:
-                                self.log.error(msg)
-                                self.log.error(msg_detail)
-                                sys.exit(1)
+                                unique_video_langs = [None]
+                            for resolution, color_range, codec, vlang in product(
+                                effective_quality or [None], range_ or [None], vcodec or [None], unique_video_langs
+                            ):
+                                candidates = [
+                                    t
+                                    for t in title.tracks.videos
+                                    if (
+                                        not resolution
+                                        or t.height == resolution
+                                        or (t.width and int(t.width * (9 / 16)) == resolution)
+                                    )
+                                    and (not color_range or t.range == color_range)
+                                    and (not codec or t.codec == codec)
+                                    and (vlang is None or str(t.language) == vlang)
+                                ]
+                                match = candidates[-1] if worst and candidates else next(iter(candidates), None)
+                                if match and match not in selected_videos:
+                                    selected_videos.append(match)
+                            title.tracks.videos = selected_videos
+
+                        # validate hybrid mode requirements
+                        if any(r == Video.Range.HYBRID for r in range_):
+                            base_tracks = [
+                                v for v in title.tracks.videos if v.range in (Video.Range.HDR10, Video.Range.HDR10P)
+                            ]
+                            dv_tracks = [v for v in title.tracks.videos if v.range == Video.Range.DV]
+
+                            hybrid_failed = False
+                            if not base_tracks and not dv_tracks:
+                                available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
+                                msg = "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but neither is available"
+                                msg_detail = (
+                                    f"Available ranges: {', '.join(available_ranges) if available_ranges else 'none'}"
+                                )
+                                hybrid_failed = True
+                            elif not base_tracks:
+                                available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
+                                msg = "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but only DV is available"
+                                msg_detail = f"Available ranges: {', '.join(available_ranges)}"
+                                hybrid_failed = True
+                            elif not dv_tracks:
+                                available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
+                                msg = (
+                                    "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but only HDR10 is available"
+                                )
+                                msg_detail = f"Available ranges: {', '.join(available_ranges)}"
+                                hybrid_failed = True
+
+                            if hybrid_failed:
+                                other_ranges = [r for r in range_ if r != Video.Range.HYBRID]
+                                if best_available and other_ranges:
+                                    self.log.warning(msg)
+                                    self.log.warning(
+                                        f"Continuing with remaining range(s): {', '.join(r.name for r in other_ranges)}"
+                                    )
+                                    range_ = other_ranges
+                                    fallback_pool = pre_hybrid_videos
+                                    if video_multi_lang:
+                                        fallback_langs = list(dict.fromkeys(str(v.language) for v in fallback_pool))
+                                    else:
+                                        fallback_langs = [None]
+                                    fallback_selected: list[Video] = []
+                                    for resolution, color_range, codec, vlang in product(
+                                        effective_quality or [None], other_ranges, vcodec or [None], fallback_langs
+                                    ):
+                                        candidates = [
+                                            t
+                                            for t in fallback_pool
+                                            if (
+                                                not resolution
+                                                or t.height == resolution
+                                                or (t.width and int(t.width * (9 / 16)) == resolution)
+                                            )
+                                            and (not color_range or t.range == color_range)
+                                            and (not codec or t.codec == codec)
+                                            and (vlang is None or str(t.language) == vlang)
+                                        ]
+                                        match = candidates[-1] if worst and candidates else next(iter(candidates), None)
+                                        if match and match not in fallback_selected:
+                                            fallback_selected.append(match)
+                                    title.tracks.videos = fallback_selected
+                                else:
+                                    self.log.error(msg)
+                                    self.log.error(msg_detail)
+                                    sys.exit(1)
 
                     # filter subtitle tracks
-                    if require_subs:
-                        missing_langs = [
-                            lang
-                            for lang in require_subs
-                            if not any(is_close_match(lang, [sub.language]) for sub in title.tracks.subtitles)
-                        ]
+                    if no_subs:
+                        title.tracks.subtitles = []
+                    else:
+                        if require_subs:
+                            missing_langs = [
+                                lang
+                                for lang in require_subs
+                                if not any(is_close_match(lang, [sub.language]) for sub in title.tracks.subtitles)
+                            ]
 
-                        if missing_langs:
-                            self.log.error(f"Required subtitle language(s) not found: {', '.join(missing_langs)}")
-                            sys.exit(1)
+                            if missing_langs:
+                                self.log.error(f"Required subtitle language(s) not found: {', '.join(missing_langs)}")
+                                sys.exit(1)
 
-                        self.log.info(
-                            f"Required languages found ({', '.join(require_subs)}), downloading all available subtitles"
-                        )
-                    elif s_lang and "all" not in s_lang:
-                        from unshackle.core.utilities import is_exact_match
+                            self.log.info(
+                                f"Required languages found ({', '.join(require_subs)}), downloading all available subtitles"
+                            )
+                        elif s_lang and "all" not in s_lang:
+                            from unshackle.core.utilities import is_exact_match
 
-                        match_func = is_exact_match if exact_lang else is_close_match
+                            match_func = is_exact_match if exact_lang else is_close_match
 
-                        missing_langs = find_missing_langs(
-                            s_lang,
-                            [sub.language for sub in title.tracks.subtitles],
-                            exact=exact_lang,
-                        )
-                        if missing_langs:
-                            missing_str = ", ".join(missing_langs)
-                            if best_available:
-                                remaining = [tok for tok in s_lang if tok not in missing_langs]
-                                if remaining:
-                                    self.log.warning(
-                                        f"{missing_str} not found in subtitle tracks, continuing with: {', '.join(remaining)}"
-                                    )
-                                    s_lang = remaining
+                            missing_langs = find_missing_langs(
+                                s_lang,
+                                [sub.language for sub in title.tracks.subtitles],
+                                exact=exact_lang,
+                            )
+                            if missing_langs:
+                                missing_str = ", ".join(missing_langs)
+                                if best_available:
+                                    remaining = [tok for tok in s_lang if tok not in missing_langs]
+                                    if remaining:
+                                        self.log.warning(
+                                            f"{missing_str} not found in subtitle tracks, continuing with: {', '.join(remaining)}"
+                                        )
+                                        s_lang = remaining
+                                    else:
+                                        self.log.warning(
+                                            f"{missing_str} not found in subtitle tracks, continuing without subtitles"
+                                        )
+                                        title.tracks.subtitles = []
                                 else:
-                                    self.log.warning(
-                                        f"{missing_str} not found in subtitle tracks, continuing without subtitles"
-                                    )
-                                    title.tracks.subtitles = []
-                            else:
-                                self.log.error(missing_str + " not found in tracks")
-                                sys.exit(1)
+                                    self.log.error(missing_str + " not found in tracks")
+                                    sys.exit(1)
 
-                        if s_lang and title.tracks.subtitles:
-                            title.tracks.select_subtitles(lambda x: match_func(x.language, s_lang))
-                            if not title.tracks.subtitles and not best_available:
-                                self.log.error(f"There's no {s_lang} Subtitle Track...")
-                                sys.exit(1)
+                            if s_lang and title.tracks.subtitles:
+                                title.tracks.select_subtitles(lambda x: match_func(x.language, s_lang))
+                                if not title.tracks.subtitles and not best_available:
+                                    self.log.error(f"There's no {s_lang} Subtitle Track...")
+                                    sys.exit(1)
 
-                    if not forced_subs:
-                        title.tracks.select_subtitles(lambda x: not x.forced)
+                        if not forced_subs:
+                            title.tracks.select_subtitles(lambda x: not x.forced)
 
                 # filter audio tracks
                 # might have no audio tracks if part of the video, e.g. transport stream hls
-                if len(title.tracks.audio) > 0:
-                    if not audio_description:
-                        title.tracks.select_audio(lambda x: not x.descriptive)  # exclude descriptive audio
-                    if acodec:
-                        title.tracks.select_audio(lambda x: x.codec in acodec)
-                        if not title.tracks.audio:
-                            codec_names = ", ".join(c.name for c in acodec)
-                            self.log.error(f"No audio tracks matching codecs: {codec_names}")
-                            sys.exit(1)
-                    if channels:
-                        title.tracks.select_audio(
-                            lambda x: bool(x.channels and math.ceil(x.channels) == math.ceil(channels))
-                        )
-                        if not title.tracks.audio:
-                            self.log.error(f"There's no {channels} Audio Track...")
-                            sys.exit(1)
-                    if no_atmos:
-                        title.tracks.audio = [x for x in title.tracks.audio if not x.atmos]
-                        if not title.tracks.audio:
-                            self.log.error("No non-Atmos audio tracks available...")
-                            sys.exit(1)
-                    if abitrate:
-                        title.tracks.select_audio(lambda x: x.bitrate and x.bitrate // 1000 == abitrate)
-                        if not title.tracks.audio:
-                            self.log.error(f"There's no {abitrate}kbps Audio Track...")
-                            sys.exit(1)
-                    if abitrate_min is not None and abitrate_max is not None:
-                        title.tracks.select_audio(
-                            lambda x: x.bitrate and abitrate_min <= x.bitrate // 1000 <= abitrate_max
-                        )
-                        if not title.tracks.audio:
-                            self.log.error(f"No Audio Track in {abitrate_min}-{abitrate_max}kbps range...")
-                            sys.exit(1)
-                    audio_languages = a_lang or lang
-                    if audio_languages:
-                        processed_lang = []
-                        for language in audio_languages:
-                            if language == "orig":
-                                if title.language:
-                                    orig_lang = str(title.language)
-                                    if orig_lang not in processed_lang:
-                                        processed_lang.append(orig_lang)
-                                else:
-                                    self.log.warning(
-                                        "Original language not available for title, skipping 'orig' selection"
-                                    )
-                            else:
-                                if language not in processed_lang:
-                                    processed_lang.append(language)
-
-                        if not any(tok in processed_lang for tok in ("best", "all")):
-                            missing_a_langs = find_missing_langs(
-                                processed_lang,
-                                [a.language for a in title.tracks.audio],
-                                exact=exact_lang,
+                if no_audio:
+                    title.tracks.audio = []
+                else:
+                    if len(title.tracks.audio) > 0:
+                        if not audio_description:
+                            title.tracks.select_audio(lambda x: not x.descriptive)  # exclude descriptive audio
+                        if acodec:
+                            title.tracks.select_audio(lambda x: x.codec in acodec)
+                            if not title.tracks.audio:
+                                codec_names = ", ".join(c.name for c in acodec)
+                                self.log.error(f"No audio tracks matching codecs: {codec_names}")
+                                sys.exit(1)
+                        if channels:
+                            title.tracks.select_audio(
+                                lambda x: bool(x.channels and math.ceil(x.channels) == math.ceil(channels))
                             )
-                            if missing_a_langs:
-                                missing_str = ", ".join(missing_a_langs)
-                                if best_available:
-                                    remaining = [tok for tok in processed_lang if tok not in missing_a_langs]
-                                    if remaining:
-                                        self.log.warning(
-                                            f"{missing_str} not found in audio tracks, continuing with: {', '.join(remaining)}"
-                                        )
-                                        processed_lang = remaining
+                            if not title.tracks.audio:
+                                self.log.error(f"There's no {channels} Audio Track...")
+                                sys.exit(1)
+                        if no_atmos:
+                            title.tracks.audio = [x for x in title.tracks.audio if not x.atmos]
+                            if not title.tracks.audio:
+                                self.log.error("No non-Atmos audio tracks available...")
+                                sys.exit(1)
+                        if abitrate:
+                            title.tracks.select_audio(lambda x: x.bitrate and x.bitrate // 1000 == abitrate)
+                            if not title.tracks.audio:
+                                self.log.error(f"There's no {abitrate}kbps Audio Track...")
+                                sys.exit(1)
+                        if abitrate_min is not None and abitrate_max is not None:
+                            title.tracks.select_audio(
+                                lambda x: x.bitrate and abitrate_min <= x.bitrate // 1000 <= abitrate_max
+                            )
+                            if not title.tracks.audio:
+                                self.log.error(f"No Audio Track in {abitrate_min}-{abitrate_max}kbps range...")
+                                sys.exit(1)
+                        audio_languages = a_lang or lang
+                        if audio_languages:
+                            processed_lang = []
+                            for language in audio_languages:
+                                if language == "orig":
+                                    if title.language:
+                                        orig_lang = str(title.language)
+                                        if orig_lang not in processed_lang:
+                                            processed_lang.append(orig_lang)
                                     else:
-                                        self.log.error(
-                                            f"{missing_str} not found in audio tracks and no fallback available"
+                                        self.log.warning(
+                                            "Original language not available for title, skipping 'orig' selection"
                                         )
-                                        sys.exit(1)
                                 else:
-                                    self.log.error(missing_str + " not found in audio tracks")
-                                    sys.exit(1)
+                                    if language not in processed_lang:
+                                        processed_lang.append(language)
 
-                        title.tracks.audio = select_best_audio(
-                            title.tracks.audio, processed_lang, acodec, audio_description, exact_lang
-                        )
-                        if not title.tracks.audio:
-                            self.log.error(f"There's no {processed_lang} Audio Track, cannot continue...")
-                            sys.exit(1)
+                            if not any(tok in processed_lang for tok in ("best", "all")):
+                                missing_a_langs = find_missing_langs(
+                                    processed_lang,
+                                    [a.language for a in title.tracks.audio],
+                                    exact=exact_lang,
+                                )
+                                if missing_a_langs:
+                                    missing_str = ", ".join(missing_a_langs)
+                                    if best_available:
+                                        remaining = [tok for tok in processed_lang if tok not in missing_a_langs]
+                                        if remaining:
+                                            self.log.warning(
+                                                f"{missing_str} not found in audio tracks, continuing with: {', '.join(remaining)}"
+                                            )
+                                            processed_lang = remaining
+                                        else:
+                                            self.log.error(
+                                                f"{missing_str} not found in audio tracks and no fallback available"
+                                            )
+                                            sys.exit(1)
+                                    else:
+                                        self.log.error(missing_str + " not found in audio tracks")
+                                        sys.exit(1)
+
+                            title.tracks.audio = select_best_audio(
+                                title.tracks.audio, processed_lang, acodec, audio_description, exact_lang
+                            )
+                            if not title.tracks.audio:
+                                self.log.error(f"There's no {processed_lang} Audio Track, cannot continue...")
+                                sys.exit(1)
 
                 if (
                     video_only
