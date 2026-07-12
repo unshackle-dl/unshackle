@@ -87,6 +87,18 @@ def test_subtitleedit_ranks_first_when_available(monkeypatch):
     assert chain[0] == "subtitleedit"
 
 
+def test_styled_ass_to_ttml_vtt_prefers_pysubs2_over_subtitleedit(monkeypatch):
+    # Measured: SE flattens ASS inline styling to TTML/VTT; pysubs2 keeps i/b/u.
+    monkeypatch.setattr(binaries, "SubtitleEdit", "/usr/bin/seconv")
+    for target in (Codec.TimedTextMarkupLang, Codec.WebVTT):
+        chain = [b.name for b in sc.resolve_backends(Codec.SubStationAlphav4, target)]
+        assert chain[0] == "pysubs2", f"expected pysubs2 first for ASS->{target.name}, got {chain}"
+        assert "subtitleedit" in chain  # still a fallback
+    # ASS->SRT keeps SE first (only backend that keeps colour there).
+    chain = [b.name for b in sc.resolve_backends(Codec.SubStationAlphav4, Codec.SubRip)]
+    assert chain[0] == "subtitleedit"
+
+
 def test_pin_then_fallback_orders_pin_first():
     chain = [b.name for b in sc.resolve_backends(Codec.WebVTT, Codec.SubRip, pin="pysubs2")]
     assert chain[0] == "pysubs2"

@@ -226,6 +226,47 @@ With `conversion_method: auto`, unshackle ranks these automatically per conversi
 Setting it to a specific value pins that backend as the first choice, falling back to
 others only if the pin cannot handle the pair.
 
+#### What each backend actually preserves
+
+The table below comes from round-tripping a subtitle that carries italics, bold,
+underline, positioning, and colour through every backend. Each cell lists the
+styling that survives; `—` means the backend cannot handle that pair.
+
+| Conversion | `subtitleedit` | `pysubs2` | `subby` | `pycaption` |
+| --- | --- | --- | --- | --- |
+| WebVTT → SRT | italic, bold, underline, position | italic, underline | italic, position | *(strips all)* |
+| WebVTT → ASS | italic, bold, underline, position | italic, bold, underline | — | — |
+| WebVTT → TTML | italic, bold, underline, position | italic, bold, underline | position | *(strips all)* |
+| ASS/SSA → SRT | all (+ colour) | italic, underline | — | — |
+| ASS/SSA → TTML | position only | italic, bold, underline | — | — |
+| ASS/SSA → VTT | position only | italic, underline | — | — |
+
+Reading the table:
+
+- **Keep the original**: leaving `--sub-format` unset (or set to `original`) never
+  round-trips the file, so every style survives. Only convert when your player cannot
+  read the source format.
+- **`subtitleedit`** (SubtitleEdit / `seconv`): the best choice for anything → SRT. It
+  is the only backend that carries colour, and it embeds `{\an8}` tags to preserve
+  positioning. When writing TTML or WebVTT from ASS it flattens inline styling to plain
+  text and keeps only positioning, so avoid it there.
+- **`pysubs2`**: keeps inline italic/underline on every pair, and bold except when
+  writing SRT or WebVTT. It never carries positioning or colour. SSA/ASS is its native
+  model, which makes it the best pick for SSA↔ASS.
+- **`subby`**: reads only WebVTT/fVTT/SAMI (never ASS) and is tuned for → SRT, where it
+  uniquely converts WebVTT cue settings into `{\an8}` positioning. Its
+  `CommonIssuesFixer` may also drop near-duplicate cues.
+- **`pycaption`**: strips all styling; last-resort fallback only.
+
+!!! tip "What `auto` picks"
+    `auto` prefers `subtitleedit` first when it is installed, then falls back to `subby`
+    for → SRT and `pysubs2` otherwise. The one exception comes from the table above:
+    for ASS/SSA → TTML or WebVTT it picks `pysubs2` even when SubtitleEdit is
+    installed, since SubtitleEdit flattens inline styling on those pairs. Most installs
+    do not ship SubtitleEdit, so in practice `auto` means `subby` (→ SRT) or `pysubs2`.
+    Install [SubtitleEdit / `seconv`](#subtitle-configuration) if you need colour or the
+    highest → SRT fidelity.
+
 !!! note "Config wins over a service's preference"
     A service may set a `preferred_conversion_method` on its own tracks (for example when
     it ships subtitles that a particular backend handles best). An explicit
