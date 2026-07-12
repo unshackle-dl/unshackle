@@ -1031,6 +1031,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="How the conversion backend is chosen">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-each-backend-actually-preserves" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What each backend actually preserves
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
       </ul>
@@ -1964,6 +1981,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="How the conversion backend is chosen">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-each-backend-actually-preserves" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What each backend actually preserves
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
       </ul>
@@ -2342,6 +2376,92 @@ formats involved:</p>
 <p>With <code>conversion_method: auto</code>, unshackle ranks these automatically per conversion.
 Setting it to a specific value pins that backend as the first choice, falling back to
 others only if the pin cannot handle the pair.</p>
+<h4 id="what-each-backend-actually-preserves">What each backend actually preserves<a class="headerlink" href="#what-each-backend-actually-preserves" title="Permanent link">&para;</a></h4>
+<p>The table below comes from round-tripping a subtitle that carries italics, bold,
+underline, positioning, and colour through every backend. Each cell lists the
+styling that survives; <code>—</code> means the backend cannot handle that pair.</p>
+<table>
+<thead>
+<tr>
+<th>Conversion</th>
+<th><code>subtitleedit</code></th>
+<th><code>pysubs2</code></th>
+<th><code>subby</code></th>
+<th><code>pycaption</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>WebVTT → SRT</td>
+<td>italic, bold, underline, position</td>
+<td>italic, underline</td>
+<td>italic, position</td>
+<td><em>(strips all)</em></td>
+</tr>
+<tr>
+<td>WebVTT → ASS</td>
+<td>italic, bold, underline, position</td>
+<td>italic, bold, underline</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>WebVTT → TTML</td>
+<td>italic, bold, underline, position</td>
+<td>italic, bold, underline</td>
+<td>position</td>
+<td><em>(strips all)</em></td>
+</tr>
+<tr>
+<td>ASS/SSA → SRT</td>
+<td>all (+ colour)</td>
+<td>italic, underline</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>ASS/SSA → TTML</td>
+<td>position only</td>
+<td>italic, bold, underline</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>ASS/SSA → VTT</td>
+<td>position only</td>
+<td>italic, underline</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>Reading the table:</p>
+<ul>
+<li><strong>Keep the original</strong>: leaving <code>--sub-format</code> unset (or set to <code>original</code>) never
+  round-trips the file, so every style survives. Only convert when your player cannot
+  read the source format.</li>
+<li><strong><code>subtitleedit</code></strong> (SubtitleEdit / <code>seconv</code>): the best choice for anything → SRT. It
+  is the only backend that carries colour, and it embeds <code>{\an8}</code> tags to preserve
+  positioning. When writing TTML or WebVTT from ASS it flattens inline styling to plain
+  text and keeps only positioning, so avoid it there.</li>
+<li><strong><code>pysubs2</code></strong>: keeps inline italic/underline on every pair, and bold except when
+  writing SRT or WebVTT. It never carries positioning or colour. SSA/ASS is its native
+  model, which makes it the best pick for SSA↔ASS.</li>
+<li><strong><code>subby</code></strong>: reads only WebVTT/fVTT/SAMI (never ASS) and is tuned for → SRT, where it
+  uniquely converts WebVTT cue settings into <code>{\an8}</code> positioning. Its
+  <code>CommonIssuesFixer</code> may also drop near-duplicate cues.</li>
+<li><strong><code>pycaption</code></strong>: strips all styling; last-resort fallback only.</li>
+</ul>
+<div class="admonition tip">
+<p class="admonition-title">What <code>auto</code> picks</p>
+<p><code>auto</code> prefers <code>subtitleedit</code> first when it is installed, then falls back to <code>subby</code>
+for → SRT and <code>pysubs2</code> otherwise. The one exception comes from the table above:
+for ASS/SSA → TTML or WebVTT it picks <code>pysubs2</code> even when SubtitleEdit is
+installed, since SubtitleEdit flattens inline styling on those pairs. Most installs
+do not ship SubtitleEdit, so in practice <code>auto</code> means <code>subby</code> (→ SRT) or <code>pysubs2</code>.
+Install <a href="#subtitle-configuration">SubtitleEdit / <code>seconv</code></a> if you need colour or the
+highest → SRT fidelity.</p>
+</div>
 <div class="admonition note">
 <p class="admonition-title">Config wins over a service's preference</p>
 <p>A service may set a <code>preferred_conversion_method</code> on its own tracks (for example when
