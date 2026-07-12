@@ -244,11 +244,11 @@ class Tracks:
             log.debug(f" - Found and skipped {duplicates} duplicate tracks...")
 
     def sort_videos(self, by_language: Optional[Sequence[Union[str, Language]]] = None) -> None:
-        """Sort video tracks by bitrate, and optionally language."""
+        """Sort video tracks by resolution then bitrate, and optionally language."""
         if not self.videos:
             return
-        # bitrate
-        self.videos.sort(key=lambda x: float(x.bitrate or 0.0), reverse=True)
+        # resolution first, then bitrate (unknown-bitrate tracks still rank by resolution)
+        self.videos.sort(key=lambda x: (x.height or 0, float(x.bitrate or 0.0)), reverse=True)
         # language
         for language in reversed(by_language or []):
             if str(language) in ("all", "best"):
@@ -396,7 +396,9 @@ class Tracks:
         base_tracks = []
         for range_type in base_ranges:
             base_tracks = [
-                v for v in tracks if v.range == range_type and (v.height in quality or int(v.width * 9 / 16) in quality)
+                v
+                for v in tracks
+                if v.range == range_type and (v.height in quality or (v.width and int(v.width * 9 / 16) in quality))
             ]
             if base_tracks:
                 break
@@ -404,7 +406,7 @@ class Tracks:
         pick = min if worst else max
         base_selected = []
         for res in quality:
-            candidates = [v for v in base_tracks if v.height == res or int(v.width * 9 / 16) == res]
+            candidates = [v for v in base_tracks if v.height == res or (v.width and int(v.width * 9 / 16) == res)]
             if candidates:
                 chosen = pick(candidates, key=lambda v: v.bitrate)
                 base_selected.append(chosen)
@@ -431,7 +433,7 @@ class Tracks:
             ]
             if not matches:
                 matches = [  # 16:9 canvas matches
-                    x for x in self.videos if int(x.width * (9 / 16)) == resolution
+                    x for x in self.videos if x.width and int(x.width * (9 / 16)) == resolution
                 ]
             selected.extend(matches[: per_resolution or None])
         self.videos = selected

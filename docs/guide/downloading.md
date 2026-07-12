@@ -93,7 +93,7 @@ By default a missing requested resolution is an error. Two flags change that:
 
 | Flag | Behaviour |
 | --- | --- |
-| `--best-available` | If the requested resolution(s) aren't present, continue with the best that *is* available instead of failing. Also softens missing audio/subtitle languages and hybrid fallbacks. |
+| `--best-available` | If the requested resolution(s) aren't present, continue with the best that *is* available instead of failing. Also softens missing video/audio/subtitle languages and hybrid fallbacks. |
 | `--worst` | Within the specified quality, pick the **lowest** bitrate rendition. **Requires `-q/--quality`.** |
 
 ```shell title="Never fail on a missing resolution"
