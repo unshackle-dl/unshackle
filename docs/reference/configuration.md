@@ -748,8 +748,8 @@ All default to an empty string and enable optional metadata/geolocation features
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `imdb_api_enabled` | bool | `false` | Use the free imdbapi.dev metadata provider, which needs no API key. Off by default since the site has been unreliable. |
-| `omdb_api_key` | str | `""` | [OMDb](https://www.omdbapi.com/) API key for IMDb metadata lookups; a more reliable alternative to imdbapi.dev. Free keys are available on the OMDb site. |
+| `imdb_api_enabled` | bool | `false` | Use the free IMDxAPI (api.tiffara.com) metadata provider, which needs no API key. Off by default since the site has been unreliable. |
+| `omdb_api_key` | str | `""` | [OMDb](https://www.omdbapi.com/) API key for IMDb metadata lookups; a more reliable alternative to IMDxAPI. Free keys are available on the OMDb site. |
 | `tmdb_api_key` | str | `""` | TMDB API key for metadata enrichment and external-ID tags. |
 | `simkl_client_id` | str | `""` | SIMKL client ID for metadata lookups; an alternative/fallback source to TMDB. |
 | `decrypt_labs_api_key` | str | `""` | Global Decrypt Labs API key (used by remote CDM / vault). |
