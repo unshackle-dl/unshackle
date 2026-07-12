@@ -2236,7 +2236,7 @@ requires-dist = [
     { name = "lxml", specifier = ">=5.2.1,<7" },
     { name = "mutagen", specifier = ">=1.47.0,<2" },
     { name = "protobuf", specifier = ">=4.25.3,<7" },
-    { name = "pycaption", specifier = ">=2.2.6,<3" },
+    { name = "pycaption", specifier = ">=2.2.6,<2.2.27" },
     { name = "pycountry", specifier = ">=24.6.1" },
     { name = "pycryptodomex", specifier = ">=3.20.0,<4" },
     { name = "pyexecjs", specifier = ">=1.5.1,<2" },
