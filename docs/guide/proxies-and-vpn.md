@@ -418,7 +418,7 @@ proxy_providers:
 ```
 
 **Required keys:** `username`, `password`. unshackle validates them up front: the
-combined username and password must be exactly 48 lowercase alphanumeric characters, and
+combined username and password must be exactly 48 alphanumeric characters (case-insensitive), and
 the username must not contain an `@`. If validation fails, you have almost certainly used
 your login credentials instead of your service credentials.
 
@@ -555,7 +555,7 @@ proxy_providers:
 ```
 
 **Required keys:** `username`, `password`, validated with the same 48-character rule as
-NordVPN (combined username+password must be 48 lowercase alphanumeric characters, no `@`).
+NordVPN (combined username+password must be 48 alphanumeric characters, case-insensitive, no `@`).
 `server_map` optionally pins server IDs per region.
 
 **Query forms:**

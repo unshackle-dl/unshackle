@@ -71,8 +71,8 @@ The differences that matter to you are:
   [Widevine and PlayReady on the same title](#widevine-and-playready-on-the-same-title)).
 
 To download a Widevine-protected title you need a `.wvd` device; for PlayReady you
-need a `.prd` device. You can hold both and let unshackle choose, or force one with
-the `--drm` flag.
+need a `.prd` device. You can hold both, and unshackle automatically selects the
+appropriate one for each track.
 
 !!! info "Obtaining device files"
     A `.wvd` or `.prd` encodes the private keys of a real client device. unshackle
@@ -205,12 +205,7 @@ cdm:
   EXAMPLE2: sm_g935f_l1
 ```
 
-Lookups are case-insensitive. On the command line you can override the configured
-device for a single run:
-
-```console
-$ unshackle dl -w chromecdm_l3 EXAMPLE1 B0ABCDEF
-```
+Lookups are case-insensitive.
 
 !!! tip "The device name is the file name"
     A device named `chromecdm_l3` in the config resolves to `chromecdm_l3.wvd` in the
@@ -238,8 +233,9 @@ profile.
 
 === "By DRM system"
 
-    Keys `widevine` and `playready` select a device per system. This pairs with the
-    `--drm` flag, which accepts `wv`/`widevine` or `pr`/`playready`.
+    Keys `widevine` and `playready` select a device per system. unshackle applies
+    these automatically, using the `widevine` device for Widevine tracks and the
+    `playready` device for PlayReady tracks.
 
     ```yaml
     cdm:
@@ -471,8 +467,8 @@ Title needs a Widevine CDM but SOMESERVICE is configured with PlayReady.
 ```
 
 Use the `cdm` mapping's [DRM-based selection](#advanced-selection-by-quality-drm-or-profile)
-to configure a device for each system, or force one system with `--drm` on the
-command line.
+to configure a device for each system; unshackle selects the right one per track
+automatically.
 
 ## Keys, vaults, and caching
 

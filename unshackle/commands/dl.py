@@ -1104,7 +1104,11 @@ class dl:
                     with console.status(status_msg, spinner="dots"):
                         if requested_provider:
                             proxy_provider = next(
-                                (x for x in self.proxy_providers if x.__class__.__name__.lower() == requested_provider),
+                                (
+                                    x
+                                    for x in self.proxy_providers
+                                    if x.__class__.__name__.lower() == requested_provider.lower()
+                                ),
                                 None,
                             )
                             if not proxy_provider:
