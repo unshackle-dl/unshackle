@@ -2132,7 +2132,7 @@
 </span></code></pre></div>
 <ul>
 <li><strong>Output directory</strong>: <code>directories.downloads</code> from your config, or whatever you pass to <code>-o/--output</code> on the command line for a single run.</li>
-<li><strong>Folder template</strong>: an optional per-title subfolder. TV episodes and music tracks are <strong>always</strong> placed in a folder; movies only get one if you define a <code>movies</code> folder template (see <a href="#folder-templates">Folder templates</a>).</li>
+<li><strong>Folder template</strong>: an optional per-title subfolder. TV episodes and music tracks are <strong>always</strong> placed in a folder; movies only get one if you define a <code>movies</code> folder template, or a single-string <code>folder</code> template that applies to all title kinds (see <a href="#folder-templates">Folder templates</a>).</li>
 <li><strong>Filename template</strong>: the <code>output_template</code> for the title kind (movie, series, or song).</li>
 <li><strong>Extension</strong>: chosen by the muxer: <code>.mkv</code> for video, <code>.mka</code> for audio-only, <code>.mks</code> for subtitle-only.</li>
 </ul>
@@ -2481,17 +2481,17 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 <p><strong>Fallback behavior:</strong></p>
 <ul>
 <li>A per-kind folder template wins if present; otherwise the single <code>folder</code> string is used; otherwise unshackle falls back to a built-in default.</li>
-<li>Built-in defaults when no folder template is set: movies get no folder at all unless a <code>movies</code> folder template exists; series fall back to a folder <em>derived</em> from the <code>series</code> output template (stripping <code>{episode}</code>, <code>{episode_name}</code>, and collapsing <code>{season_episode}</code> down to <code>{season}</code>); music albums fall back to <code>{artist} - {album} ({year})</code>.</li>
+<li>Built-in defaults when no folder template is set: movies get no folder at all unless a <code>movies</code> folder template (or a single-string <code>folder</code> template) exists; series fall back to a folder <em>derived</em> from the <code>series</code> output template (stripping <code>{episode}</code>, <code>{episode_name}</code>, and collapsing <code>{season_episode}</code> down to <code>{season}</code>); music albums fall back to <code>{artist} - {album} ({year})</code>.</li>
 </ul>
 <div class="admonition note">
 <p class="admonition-title">Movies are flat by default</p>
-<p>Episodes and songs are always foldered. Movies are written directly into the output directory <em>unless</em> you define a <code>movies</code> folder template. Set one if you want each movie in its own directory.</p>
+<p>Episodes and songs are always foldered. Movies are written directly into the output directory <em>unless</em> you define a <code>movies</code> folder template (or a single-string <code>folder</code> template, which folders every kind). Set one if you want each movie in its own directory.</p>
 </div>
 <h2 id="muxing-options">Muxing options<a class="headerlink" href="#muxing-options" title="Permanent link">&para;</a></h2>
 <p>Muxing (combining video, audio, subtitle, chapter and attachment tracks into a single Matroska file with <code>mkvmerge</code>) is configured under the <code>muxing</code> key.</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">muxing</span><span class="p">:</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">set_title</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nt">merge_video</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nt">merge_video</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span><span class="nt">merge_audio</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span><span class="nt">default_language</span><span class="p">:</span>
 </span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">    </span><span class="nt">audio</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
@@ -2516,7 +2516,7 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 <tr>
 <td><code>merge_video</code></td>
 <td>bool</td>
-<td><code>true</code></td>
+<td><code>false</code></td>
 <td>Group video tracks that share the same resolution, range, and codec into one file so only language varies inside it.</td>
 </tr>
 <tr>

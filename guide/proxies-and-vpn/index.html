@@ -2628,7 +2628,7 @@ setup; they are a long random username/password pair, not your email and passwor
 </span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">      </span><span class="nt">us:seattle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5678</span>
 </span></code></pre></div>
 <p><strong>Required keys:</strong> <code>username</code>, <code>password</code>. unshackle validates them up front: the
-combined username and password must be exactly 48 lowercase alphanumeric characters, and
+combined username and password must be exactly 48 alphanumeric characters (case-insensitive), and
 the username must not contain an <code>@</code>. If validation fails, you have almost certainly used
 your login credentials instead of your service credentials.</p>
 <p><code>server_map</code> is optional and maps a region (or <code>code:city</code>) to a pinned NordVPN server ID.
@@ -2797,7 +2797,7 @@ them from the <a href="https://my.surfshark.com/vpn/manual-setup/main/openvpn">S
 </span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">      </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1234</span>
 </span></code></pre></div>
 <p><strong>Required keys:</strong> <code>username</code>, <code>password</code>, validated with the same 48-character rule as
-NordVPN (combined username+password must be 48 lowercase alphanumeric characters, no <code>@</code>).
+NordVPN (combined username+password must be 48 alphanumeric characters, case-insensitive, no <code>@</code>).
 <code>server_map</code> optionally pins server IDs per region.</p>
 <p><strong>Query forms:</strong></p>
 <table>
