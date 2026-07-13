@@ -9,7 +9,7 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import requests
 
@@ -91,16 +91,33 @@ class ExpressVPN(Proxy):
         self.cache_path = Path(cache_path).expanduser() if cache_path else self.default_cache_path()
 
     def __repr__(self) -> str:
-        if self.locations is not None:
+        if self.locations is None and self.has_silent_session():
+            try:
+                self.get_locations()
+            except (requests.RequestException, ValueError) as error:
+                log.debug("ExpressVPN: could not fetch locations for status line: %s", error)
+        if self.locations:
             countries = len({str(x.get("country_code") or "").upper() for x in self.locations if x.get("country_code")})
-            servers = len(self.locations)
+            locations = len(self.locations)
             return (
-                f"{countries} Countr{'ies' if countries != 1 else 'y'} ({servers} Server{'s' if servers != 1 else ''})"
+                f"{countries} Countr{'ies' if countries != 1 else 'y'} "
+                f"({locations} Location{'s' if locations != 1 else ''})"
             )
         aliases = len(self.region_map) + len(self.server_map)
         if aliases:
             return f"{aliases} Region Alias{'es' if aliases != 1 else ''} (ExpressVPN HTTPS Proxy)"
         return "ExpressVPN HTTPS Proxy"
+
+    def has_silent_session(self) -> bool:
+        """Whether tokens can be obtained without the interactive device login."""
+        return bool(
+            self.tokens
+            or self.access_token
+            or self.refresh_token
+            or self.connection_token
+            or (self.account_json and self.account_json.is_file())
+            or self.load_cache()
+        )
 
     def get_proxy(self, query: str) -> Optional[str]:
         endpoint = self.resolve_endpoint(query.strip().lower())
@@ -441,7 +458,7 @@ class ExpressVPN(Proxy):
         except OSError as error:
             log.error("ExpressVPN: failed to save token cache %s: %s", self.cache_path, error)
 
-    def request(self, method: str, url: str, allow_error: bool = False, **kwargs) -> requests.Response:
+    def request(self, method: str, url: str, allow_error: bool = False, **kwargs: Any) -> requests.Response:
         kwargs.setdefault("timeout", self.timeout)
         response = requests.request(method, url, **kwargs)
         if response.ok or allow_error:
