@@ -67,6 +67,20 @@ unshackle dl EX 20914          # via an ALIAS
     placeholders while the secrets that fill them stay out of it. Both halves
     read back through the same `self.config[...]`.
 
+!!! warning "Split across files? Use relative imports"
+    If your service grows beyond a single `__init__.py`, import your own
+    modules **relatively**:
+
+    ```python
+    from .helpers import parse_manifest        # correct
+    from unshackle.services.TAG.helpers import parse_manifest   # breaks from a repo
+    ```
+
+    A service loaded from a remote repo lives outside the `unshackle` package,
+    so the absolute `unshackle.services.<TAG>.*` path does not resolve and the
+    import fails with `no known parent package`. Relative imports work both
+    locally and from a cloned repo.
+
 ---
 
 ## The Service base class
@@ -629,6 +643,7 @@ unshackle dl MYSVC https://myservice.com/watch/abc123
 - [ ] Tracks come from a manifest parser with `to_tracks(language=title.language)`; no filtering by quality/language.
 - [ ] Encrypted tracks are marked with DRM; the license callbacks you need return responses **unmodified**.
 - [ ] URLs, user agents, and certificates live in `config.yaml`, read via `self.config[...]`.
+- [ ] Multi-file services import their own modules relatively (`from .helpers import x`), so they work when loaded from a repo.
 
 Read `unshackle/services/EXAMPLE/` end to end; it annotates every feature
 touched above in one place.
