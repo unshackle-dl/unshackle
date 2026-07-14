@@ -13,6 +13,22 @@ from typing import Any, Optional
 log = logging.getLogger("cdm")
 
 
+def _stamp_remote(cdm: Any, drm: str) -> Any:
+    """Record a remote CDM's DRM type and mark it as remote.
+
+    The loader knows the DRM type from config, so it sets it here as the value
+    `detect.py` reads before it falls back to class or module checks. Setting the
+    attributes is best effort: a third-party CDM object that rejects them still
+    works, since detect.py keeps its existing checks.
+    """
+    try:
+        cdm.drm = drm
+        cdm.is_remote_cdm = True
+    except (AttributeError, TypeError):
+        pass
+    return cdm
+
+
 def load_cdm(
     cdm_name: str,
     *,
@@ -63,35 +79,43 @@ def _load_remote_cdm(
                     f"No secret provided for DecryptLabs CDM '{cdm_name}' and no global decrypt_labs_api_key configured"
                 )
 
-        return DecryptLabsRemoteCDM(service_name=service_name, vaults=vaults, **cdm_api)
+        cdm: Any = DecryptLabsRemoteCDM(service_name=service_name, vaults=vaults, **cdm_api)
+        return _stamp_remote(cdm, "playready" if cdm.is_playready else "widevine")
 
     if cdm_type == "custom_api":
         from unshackle.core.cdm.custom_remote_cdm import CustomRemoteCDM
 
         del cdm_api["name"]
         del cdm_api["type"]
-        return CustomRemoteCDM(service_name=service_name, vaults=vaults, **cdm_api)
+        cdm = CustomRemoteCDM(service_name=service_name, vaults=vaults, **cdm_api)
+        return _stamp_remote(cdm, "playready" if cdm.is_playready else "widevine")
 
     device_type = cdm_api.get("Device Type", cdm_api.get("device_type", ""))
     if str(device_type).upper() == "PLAYREADY":
         from pyplayready.remote.remotecdm import RemoteCdm as PlayReadyRemoteCdm
 
-        return PlayReadyRemoteCdm(
-            security_level=cdm_api.get("Security Level", cdm_api.get("security_level", 3000)),
-            host=cdm_api.get("Host", cdm_api.get("host")),
-            secret=cdm_api.get("Secret", cdm_api.get("secret")),
-            device_name=cdm_api.get("Device Name", cdm_api.get("device_name")),
+        return _stamp_remote(
+            PlayReadyRemoteCdm(
+                security_level=cdm_api.get("Security Level", cdm_api.get("security_level", 3000)),
+                host=cdm_api.get("Host", cdm_api.get("host")),
+                secret=cdm_api.get("Secret", cdm_api.get("secret")),
+                device_name=cdm_api.get("Device Name", cdm_api.get("device_name")),
+            ),
+            "playready",
         )
 
     from pywidevine.remotecdm import RemoteCdm
 
-    return RemoteCdm(
-        device_type=cdm_api.get("Device Type", cdm_api.get("device_type", "")),
-        system_id=cdm_api.get("System ID", cdm_api.get("system_id", "")),
-        security_level=cdm_api.get("Security Level", cdm_api.get("security_level", 3000)),
-        host=cdm_api.get("Host", cdm_api.get("host")),
-        secret=cdm_api.get("Secret", cdm_api.get("secret")),
-        device_name=cdm_api.get("Device Name", cdm_api.get("device_name")),
+    return _stamp_remote(
+        RemoteCdm(
+            device_type=cdm_api.get("Device Type", cdm_api.get("device_type", "")),
+            system_id=cdm_api.get("System ID", cdm_api.get("system_id", "")),
+            security_level=cdm_api.get("Security Level", cdm_api.get("security_level", 3000)),
+            host=cdm_api.get("Host", cdm_api.get("host")),
+            secret=cdm_api.get("Secret", cdm_api.get("secret")),
+            device_name=cdm_api.get("Device Name", cdm_api.get("device_name")),
+        ),
+        "widevine",
     )
 
 

@@ -134,7 +134,9 @@ class DecryptLabsRemoteCDM:
         if device_type:
             self.device_type = self._get_device_type_enum(device_type)
 
-        self._is_playready = (device_type and device_type.upper() == "PLAYREADY") or (device_name in ["SL2", "SL3"])
+        self._is_playready = (device_type and device_type.upper() == "PLAYREADY") or (
+            bool(device_name) and device_name.upper().startswith("SL")
+        )
 
         if self._is_playready:
             self.system_id = system_id or 0
