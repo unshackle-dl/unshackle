@@ -443,13 +443,26 @@ class Tracks:
         tracks: list[TrackT], languages: list[str], per_language: int = 0, exact_match: bool = False
     ) -> list[TrackT]:
         distance = LANGUAGE_EXACT_DISTANCE if exact_match else LANGUAGE_MAX_DISTANCE
-        selected = []
+        selected: list[TrackT] = []
+        seen_ids: set[str] = set()
         for language in languages:
-            selected.extend(
-                [x for x in tracks if closest_supported_match(str(x.language), [language], distance)][
-                    : per_language or None
-                ]
-            )
+            matches = [x for x in tracks if closest_supported_match(str(x.language), [language], distance)]
+            if exact_match and len(matches) > 1:
+                # CLDR tag_distance measures intelligibility, not tag identity: it rates a base
+                # language and its "paradigm" regional variant as the same language (distance 0
+                # for ar/ar-EG, en/en-US, pt/pt-BR), so exact mode alone cannot separate them.
+                # Follow RFC 4647 Lookup: prefer the most specific (string-equal) tag, and fall
+                # back to the fuzzy match only when none exists (e.g. zh matches cmn).
+                want = Language.get(language).to_tag().casefold()
+                exact_hits = [x for x in matches if Language.get(str(x.language)).to_tag().casefold() == want]
+                if exact_hits:
+                    matches = exact_hits
+            # Overlapping tags can still resolve to the same physical track; dedupe by id so
+            # callers never get duplicate tracks.
+            for track in matches[: per_language or None]:
+                if track.id not in seen_ids:
+                    seen_ids.add(track.id)
+                    selected.append(track)
         return selected
 
     def mux(
@@ -694,7 +707,7 @@ class Tracks:
         log_event(
             "mux_start",
             level="INFO",
-            message=(f"Muxing {len(self.videos)}V/{len(self.audio)}A/{len(self.subtitles)}S " f"-> {output_path.name}"),
+            message=(f"Muxing {len(self.videos)}V/{len(self.audio)}A/{len(self.subtitles)}S -> {output_path.name}"),
             context={
                 "title": title,
                 "output_path": str(output_path),

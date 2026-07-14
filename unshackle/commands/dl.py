@@ -1622,7 +1622,10 @@ class dl:
                             selected.append(descs[0])
                     else:
                         selected.append(candidates[0])
-            return selected
+            # Built via per-tag by_language calls, so overlapping tags can append
+            # the same track across iterations; dedupe by id.
+            seen_ids: set[str] = set()
+            return [t for t in selected if not (t.id in seen_ids or seen_ids.add(t.id))]
 
         music_group_download = (
             bool(music_titles)
