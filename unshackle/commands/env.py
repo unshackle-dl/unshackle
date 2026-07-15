@@ -89,6 +89,8 @@ def get_dependencies() -> list[dict]:
         },
         {"name": "Caddy", "binary": binaries.Caddy, "required": False, "desc": "Web server", "cat": "Network"},
         {"name": "Docker", "binary": binaries.Docker, "required": False, "desc": "Gluetun VPN", "cat": "Network"},
+        {"name": "xray", "binary": binaries.Xray, "required": False, "desc": "V2Ray proxy", "cat": "Network"},
+        {"name": "v2ray", "binary": binaries.V2Ray, "required": False, "desc": "V2Ray proxy (fallback)", "cat": "Network"},
         {"name": "git", "binary": binaries.Git, "required": False, "desc": "Service repos", "cat": "Network"},
     ]
 

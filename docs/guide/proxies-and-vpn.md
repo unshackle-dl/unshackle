@@ -604,6 +604,74 @@ The returned proxy is HTTPS on **port 443**.
     or Gluetun exits, resolve the proxy on the CLI side or use a different provider for API
     jobs. See the developer note below.
 
+## V2Ray / Xray
+
+V2Ray / Xray is a generic proxy platform that supports VMess, VLESS, Trojan, and
+Shadowsocks protocols with extensive transport options (TCP, WebSocket, gRPC, HTTP/2,
+QUIC, HTTPUpgrade) and TLS / XTLS-Reality security layers. The `v2ray` provider spins up
+a local V2Ray or Xray subprocess with an ephemeral SOCKS5 inbound on `127.0.0.1` and
+routes traffic through a user-selected outbound — letting unshackle use any
+V2Ray-compatible server as a proxy.
+
+### Prerequisites
+
+Install **either** [Xray-core](https://github.com/XTLS/Xray-core) **or**
+[V2Ray-core](https://github.com/v2fly/v2ray-core) and make sure the binary is on your
+`PATH`. Xray is the modern, fully-compatible fork and is preferred when both are
+installed; the original `v2ray` binary is used as a fallback.
+
+### Configuration
+
+V2Ray is **config-gated**: a `v2ray:` block under `proxy_providers:` is required to opt
+in (even an empty one). This avoids instantiating a provider for users who have xray
+installed for unrelated reasons.
+
+```yaml
+proxy_providers:
+  v2ray:
+    subscription_url: https://your-provider.example/sub.yaml
+```
+
+Servers can be supplied in four ways (all can coexist):
+
+| Source | Key | Description |
+|--------|-----|-------------|
+| Subscription | `subscription_url` | base64/plain subscription endpoint(s) |
+| Config file | `config_path` | pre-built V2Ray/Xray JSON config file |
+| Inline list | `servers` | list of `vmess://` / `vless://` / `trojan://` / `ss://` URIs |
+| Per-country map | `countries` | `basic`-style country → URI assignment |
+
+### Query format
+
+```shell title="Any server assigned to / detected as US"
+unshackle dl --proxy v2ray:us EXAMPLE 81234567
+```
+
+```shell title="First US server (1-indexed)"
+unshackle dl --proxy v2ray:us:1 EXAMPLE 81234567
+```
+
+```shell title="Server whose remark contains 'tokyo'"
+unshackle dl --proxy v2ray:tokyo EXAMPLE 81234567
+```
+
+```shell title="Direct-URI one-shot (works with an empty v2ray: {} block)"
+unshackle dl --proxy v2ray:vmess://eyJ2IjoiMiIs... EXAMPLE 81234567
+```
+
+### Direct-URI mode
+
+A `vmess://`, `vless://`, `trojan://`, or `ss://` URI can be passed directly after
+`v2ray:` and a one-shot subprocess is spawned for that exact server. This requires a
+minimal `v2ray:` config entry (an empty `v2ray: {}` block is enough) but no server list.
+The same URI passed twice reuses the existing subprocess.
+
+### Auto-loading
+
+V2Ray is loaded whenever a `v2ray:` block exists under `proxy_providers:`. Unlike Hola
+(which auto-loads on binary detection), V2Ray requires this explicit opt-in so users
+with xray installed for unrelated reasons don't get a V2Ray provider on every run.
+
 ## Developer notes
 
 !!! note "Two resolution paths (developers)"
