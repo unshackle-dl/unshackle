@@ -15,8 +15,15 @@ from types import SimpleNamespace
 import pytest
 
 from unshackle.core.cdm import loader as loader_mod
-from unshackle.core.cdm.detect import (cdm_location, is_local_cdm, is_playready_cdm, is_remote_cdm,
-                                       is_remote_playready_cdm, is_remote_widevine_cdm, is_widevine_cdm)
+from unshackle.core.cdm.detect import (
+    cdm_location,
+    is_local_cdm,
+    is_playready_cdm,
+    is_remote_cdm,
+    is_remote_playready_cdm,
+    is_remote_widevine_cdm,
+    is_widevine_cdm,
+)
 from unshackle.core.cdm.loader import _stamp_remote
 
 pytestmark = pytest.mark.unit

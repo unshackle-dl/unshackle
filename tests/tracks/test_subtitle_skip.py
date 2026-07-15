@@ -90,8 +90,11 @@ def test_failed_subtitle_does_not_truncate_video_or_audio():
     h = Harness(fail_ids={"s-he"})
 
     download_tracks_in_passes(
-        [video, audio, sub], 4, h.run_one,
-        skip_subtitle_errors=True, on_subtitle_skipped=h.on_subtitle_skipped,
+        [video, audio, sub],
+        4,
+        h.run_one,
+        skip_subtitle_errors=True,
+        on_subtitle_skipped=h.on_subtitle_skipped,
     )
 
     assert set(h.completed) == {"v", "a"}  # both fatal tracks fully downloaded
@@ -105,8 +108,11 @@ def test_good_subtitle_kept_bad_subtitle_skipped():
     h = Harness(fail_ids={"s-fr"})
 
     download_tracks_in_passes(
-        [video, good, bad], 4, h.run_one,
-        skip_subtitle_errors=True, on_subtitle_skipped=h.on_subtitle_skipped,
+        [video, good, bad],
+        4,
+        h.run_one,
+        skip_subtitle_errors=True,
+        on_subtitle_skipped=h.on_subtitle_skipped,
     )
 
     assert "s-en" in h.completed  # the available subtitle still downloaded
@@ -121,8 +127,11 @@ def test_subtitle_failure_stays_fatal_without_flag():
 
     with pytest.raises(RuntimeError):
         download_tracks_in_passes(
-            [video, sub], 4, h.run_one,
-            skip_subtitle_errors=False, on_subtitle_skipped=h.on_subtitle_skipped,
+            [video, sub],
+            4,
+            h.run_one,
+            skip_subtitle_errors=False,
+            on_subtitle_skipped=h.on_subtitle_skipped,
         )
 
     assert not DOWNLOAD_CANCELLED.is_set()  # the finally clears the event even on the fatal path
@@ -135,8 +144,11 @@ def test_cancel_event_is_reset_between_titles():
     h = Harness(fail_ids=set())
 
     download_tracks_in_passes(
-        [video, audio], 4, h.run_one,
-        skip_subtitle_errors=True, on_subtitle_skipped=h.on_subtitle_skipped,
+        [video, audio],
+        4,
+        h.run_one,
+        skip_subtitle_errors=True,
+        on_subtitle_skipped=h.on_subtitle_skipped,
     )
 
     assert set(h.completed) == {"v", "a"}
@@ -150,8 +162,11 @@ def test_cancel_event_cleared_after_failed_final_subtitle():
     h = Harness(fail_ids={"s-he"})
 
     download_tracks_in_passes(
-        [video, sub], 4, h.run_one,
-        skip_subtitle_errors=True, on_subtitle_skipped=h.on_subtitle_skipped,
+        [video, sub],
+        4,
+        h.run_one,
+        skip_subtitle_errors=True,
+        on_subtitle_skipped=h.on_subtitle_skipped,
     )
 
     assert not DOWNLOAD_CANCELLED.is_set()  # the helper clears it on exit for any later code
@@ -164,8 +179,11 @@ def test_all_subtitles_skipped_video_audio_kept():
     h = Harness(fail_ids={"s-en", "s-he"})
 
     download_tracks_in_passes(
-        [video, audio, s1, s2], 4, h.run_one,
-        skip_subtitle_errors=True, on_subtitle_skipped=h.on_subtitle_skipped,
+        [video, audio, s1, s2],
+        4,
+        h.run_one,
+        skip_subtitle_errors=True,
+        on_subtitle_skipped=h.on_subtitle_skipped,
     )
 
     assert set(h.completed) == {"v", "a"}  # both fatal tracks survived
@@ -179,8 +197,11 @@ def test_duplicate_language_subtitles_distinguished_by_id():
     h = Harness(fail_ids={"en-forced", "en-sdh"})
 
     download_tracks_in_passes(
-        [make_video(), forced, sdh], 4, h.run_one,
-        skip_subtitle_errors=True, on_subtitle_skipped=h.on_subtitle_skipped,
+        [make_video(), forced, sdh],
+        4,
+        h.run_one,
+        skip_subtitle_errors=True,
+        on_subtitle_skipped=h.on_subtitle_skipped,
     )
 
     assert [t.id for t in h.skipped] == ["en-forced", "en-sdh"]  # same language, distinct ids

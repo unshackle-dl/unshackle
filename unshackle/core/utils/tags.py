@@ -10,8 +10,16 @@ from xml.sax.saxutils import escape
 
 from unshackle.core import binaries
 from unshackle.core.config import config
-from unshackle.core.providers import (ExternalIds, MetadataResult, enrich_ids, fetch_external_ids, fuzzy_match,
-                                      get_available_providers, get_provider, search_metadata)
+from unshackle.core.providers import (
+    ExternalIds,
+    MetadataResult,
+    enrich_ids,
+    fetch_external_ids,
+    fuzzy_match,
+    get_available_providers,
+    get_provider,
+    search_metadata,
+)
 from unshackle.core.titles.episode import Episode
 from unshackle.core.titles.movie import Movie
 from unshackle.core.titles.title import Title

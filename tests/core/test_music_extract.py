@@ -6,9 +6,17 @@ from typing import Any, Optional
 
 import pytest
 
-from unshackle.core.music.extract import (build_music_from_songs, classify_release_kind, dedupe_track_options,
-                                          duration_seconds, first_number, first_text, format_duration, format_names,
-                                          year_from_value)
+from unshackle.core.music.extract import (
+    build_music_from_songs,
+    classify_release_kind,
+    dedupe_track_options,
+    duration_seconds,
+    first_number,
+    first_text,
+    format_duration,
+    format_names,
+    year_from_value,
+)
 from unshackle.core.music.models import MusicTrackOption
 from unshackle.core.titles.music import Music, Song
 

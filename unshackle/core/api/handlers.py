@@ -929,9 +929,7 @@ def enforce_download_gates(params: Dict[str, Any]) -> None:
     requested_cdm = params.get("cdm")
     if requested_cdm:
         allowed = (config.serve or {}).get("cdm_overrides")
-        permitted = allowed is True or (
-            isinstance(allowed, (list, tuple, set)) and requested_cdm in allowed
-        )
+        permitted = allowed is True or (isinstance(allowed, (list, tuple, set)) and requested_cdm in allowed)
         if not permitted:
             raise APIError(
                 APIErrorCode.FORBIDDEN,
@@ -1005,9 +1003,7 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
             **service_specific_defaults,
             **filtered_params,
         }
-        job = manager.create_job(
-            normalized_service, title_id, owner_key=caller_key(request), **params_with_defaults
-        )
+        job = manager.create_job(normalized_service, title_id, owner_key=caller_key(request), **params_with_defaults)
 
         return web.json_response(
             {"job_id": job.job_id, "status": job.status.value, "created_time": job.created_time.isoformat()}, status=202
@@ -1225,7 +1221,11 @@ async def retry_download_job_handler(job_id: str, request: Optional[web.Request]
         new_job = manager.create_job(job.service, job.title_id, owner_key=caller_key(request), **job.parameters)
 
         return web.json_response(
-            {"job_id": new_job.job_id, "status": new_job.status.value, "created_time": new_job.created_time.isoformat()},
+            {
+                "job_id": new_job.job_id,
+                "status": new_job.status.value,
+                "created_time": new_job.created_time.isoformat(),
+            },
             status=202,
         )
 

@@ -12,12 +12,24 @@ import struct
 
 import pytest
 
-from unshackle.core.manifests.ism_init import (NAL_START_CODE, PIFF_SENC_UUID, box, build_avcc, build_dec3,
-                                               build_hvcc, build_init_segment, full_box,
-                                               parse_codec_private_data_colour, parse_codec_private_data_vui,
-                                               parse_hevc_sps_format, read_per_sample_iv_size, read_track_id,
-                                               remove_emulation_prevention, split_nal_units,
-                                               synthesize_aac_codec_private_data)
+from unshackle.core.manifests.ism_init import (
+    NAL_START_CODE,
+    PIFF_SENC_UUID,
+    box,
+    build_avcc,
+    build_dec3,
+    build_hvcc,
+    build_init_segment,
+    full_box,
+    parse_codec_private_data_colour,
+    parse_codec_private_data_vui,
+    parse_hevc_sps_format,
+    read_per_sample_iv_size,
+    read_track_id,
+    remove_emulation_prevention,
+    split_nal_units,
+    synthesize_aac_codec_private_data,
+)
 
 # Real CodecPrivateData taken from a Smooth Streaming manifest.
 VIDEO_HEVC_CPD = (

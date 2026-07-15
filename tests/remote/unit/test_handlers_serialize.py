@@ -5,9 +5,16 @@ from __future__ import annotations
 import pytest
 from langcodes import Language
 
-from unshackle.core.api.handlers import (sanitize_log, serialize_audio_track, serialize_drm, serialize_subtitle_track,
-                                         serialize_title, serialize_video_track, validate_download_parameters,
-                                         validate_service)
+from unshackle.core.api.handlers import (
+    sanitize_log,
+    serialize_audio_track,
+    serialize_drm,
+    serialize_subtitle_track,
+    serialize_title,
+    serialize_video_track,
+    validate_download_parameters,
+    validate_service,
+)
 from unshackle.core.titles.episode import Episode
 from unshackle.core.titles.movie import Movie
 from unshackle.core.tracks import Audio, Subtitle, Video

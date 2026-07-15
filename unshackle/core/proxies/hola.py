@@ -33,9 +33,9 @@ class Hola(Proxy):
         """
         query = query.lower()
 
-        p = subprocess.check_output(
-            [self.binary, "-country", query, "-list-proxies"], stderr=subprocess.STDOUT
-        ).decode("utf-8", errors="replace")
+        p = subprocess.check_output([self.binary, "-country", query, "-list-proxies"], stderr=subprocess.STDOUT).decode(
+            "utf-8", errors="replace"
+        )
 
         if "Transaction error: temporary ban detected." in p:
             raise ConnectionError("Hola banned your IP temporarily from it's services. Try change your IP.")

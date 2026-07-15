@@ -982,7 +982,9 @@ class DebugLogger:
         """
         message = kwargs.pop("message", "")
         level = kwargs.pop("level", "DEBUG")
-        self.log(level=level, operation="service_call", message=message, request={"method": method, "url": url, **kwargs})
+        self.log(
+            level=level, operation="service_call", message=message, request={"method": method, "url": url, **kwargs}
+        )
 
     def log_drm_operation(self, drm_type: str, operation: str, **kwargs):
         """

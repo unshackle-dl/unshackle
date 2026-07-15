@@ -9,8 +9,13 @@ from pathlib import Path
 
 import pytest
 
-from unshackle.core.utilities import (close_debug_logger, get_debug_logger, init_debug_logger, log_event,
-                                      timed_operation)
+from unshackle.core.utilities import (
+    close_debug_logger,
+    get_debug_logger,
+    init_debug_logger,
+    log_event,
+    timed_operation,
+)
 from unshackle.core.utils.redact import redact_all, redact_path, redact_text, redact_url, safe_display_url
 from unshackle.core.utils.subprocess import log_tool_run
 

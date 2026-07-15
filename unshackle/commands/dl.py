@@ -47,8 +47,16 @@ from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, 
 from unshackle.core.credential import Credential
 from unshackle.core.drm import DRM_T, ClearKeyCENC, MonaLisa, PlayReady, Widevine
 from unshackle.core.events import events
-from unshackle.core.music import (MusicAudioIntegrityError, MusicMetadataResult, MusicPlanner, MusicRenderer,
-                                  file_md5, verify_music_audio, write_music_manifest, write_music_metadata)
+from unshackle.core.music import (
+    MusicAudioIntegrityError,
+    MusicMetadataResult,
+    MusicPlanner,
+    MusicRenderer,
+    file_md5,
+    verify_music_audio,
+    write_music_manifest,
+    write_music_metadata,
+)
 from unshackle.core.proxies import Basic, ExpressVPN, Gluetun, Hola, NordVPN, ProtonVPN, SurfsharkVPN, WindscribeVPN
 from unshackle.core.service import Service
 from unshackle.core.services import Services
@@ -59,14 +67,30 @@ from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.dv_fixup import apply_dv_fixup
 from unshackle.core.tracks.hybrid import Hybrid
-from unshackle.core.utilities import (find_font_with_fallbacks, find_missing_langs, get_debug_logger,
-                                      get_system_fonts, init_debug_logger, is_close_match, log_event,
-                                      suggest_font_packages, time_elapsed_since)
+from unshackle.core.utilities import (
+    find_font_with_fallbacks,
+    find_missing_langs,
+    get_debug_logger,
+    get_system_fonts,
+    init_debug_logger,
+    is_close_match,
+    log_event,
+    suggest_font_packages,
+    time_elapsed_since,
+)
 from unshackle.core.utils import tags
 from unshackle.core.utils.bitrate import apply_real_bitrates
-from unshackle.core.utils.click_types import (AUDIO_CODEC_LIST, LANGUAGE_RANGE, QUALITY_LIST, SEASON_RANGE,
-                                              SLOW_DELAY_RANGE, ContextData, MultipleChoice, MultipleVideoCodecChoice,
-                                              SubtitleCodecChoice)
+from unshackle.core.utils.click_types import (
+    AUDIO_CODEC_LIST,
+    LANGUAGE_RANGE,
+    QUALITY_LIST,
+    SEASON_RANGE,
+    SLOW_DELAY_RANGE,
+    ContextData,
+    MultipleChoice,
+    MultipleVideoCodecChoice,
+    SubtitleCodecChoice,
+)
 from unshackle.core.utils.collections import ci_get, merge_dict
 from unshackle.core.utils.selector import select_multiple
 from unshackle.core.utils.subprocess import ffprobe

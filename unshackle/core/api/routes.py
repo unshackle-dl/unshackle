@@ -10,17 +10,36 @@ from aiohttp_swagger3 import SwaggerDocs, SwaggerInfo, SwaggerUiSettings
 
 from unshackle.core import __version__
 from unshackle.core.api.errors import APIError, APIErrorCode, build_error_response, handle_api_exception
-from unshackle.core.api.handlers import (cancel_download_job_handler, clear_cache_handler,
-                                         clear_finished_download_jobs_handler, clear_temp_handler,
-                                         delete_history_handler, download_handler, download_history_handler,
-                                         env_check_handler, get_allowed_services, get_download_job_handler,
-                                         list_download_jobs_handler, list_titles_handler, list_tracks_handler,
-                                         prioritize_download_job_handler, profiles_handler, refresh_services_handler,
-                                         retry_download_job_handler, search_handler, server_config_handler,
-                                         session_create_handler, session_delete_handler, session_info_handler,
-                                         session_license_handler, session_prompt_get_handler,
-                                         session_prompt_post_handler, session_segments_handler,
-                                         session_titles_handler, session_tracks_handler)
+from unshackle.core.api.handlers import (
+    cancel_download_job_handler,
+    clear_cache_handler,
+    clear_finished_download_jobs_handler,
+    clear_temp_handler,
+    delete_history_handler,
+    download_handler,
+    download_history_handler,
+    env_check_handler,
+    get_allowed_services,
+    get_download_job_handler,
+    list_download_jobs_handler,
+    list_titles_handler,
+    list_tracks_handler,
+    prioritize_download_job_handler,
+    profiles_handler,
+    refresh_services_handler,
+    retry_download_job_handler,
+    search_handler,
+    server_config_handler,
+    session_create_handler,
+    session_delete_handler,
+    session_info_handler,
+    session_license_handler,
+    session_prompt_get_handler,
+    session_prompt_post_handler,
+    session_segments_handler,
+    session_titles_handler,
+    session_tracks_handler,
+)
 from unshackle.core.services import Services
 from unshackle.core.update_checker import UpdateChecker
 

@@ -115,9 +115,7 @@ def hand_built_ctx(body: dict[str, Any]) -> click.Context:
     ctx = click.Context(parsed.command)
     ctx.params = {"repack": body.get("repack", False)}
     for name in ctx.params:
-        ctx.set_parameter_source(
-            name, ParameterSource.COMMANDLINE if name in body else ParameterSource.DEFAULT
-        )
+        ctx.set_parameter_source(name, ParameterSource.COMMANDLINE if name in body else ParameterSource.DEFAULT)
     return ctx
 
 

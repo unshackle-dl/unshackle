@@ -21,7 +21,8 @@ class MusicPlanner:
         plan = MusicDownloadPlan(
             kind=getattr(music, "kind", "music"),
             title=getattr(music, "title", None) or (first_song.album if first_song else ""),
-            artist=getattr(music, "artist", None) or (first_song.album_artist or first_song.artist if first_song else ""),
+            artist=getattr(music, "artist", None)
+            or (first_song.album_artist or first_song.artist if first_song else ""),
             album_artist=(first_song.album_artist if first_song else "") or "",
             year=getattr(music, "year", None) or (first_song.year if first_song else None),
             released=self._first_text(
@@ -180,9 +181,14 @@ class MusicPlanner:
 
         if any(option.atmos for option in options):
             return "Dolby Atmos"
-        if any(option.hires and (option.lossless or str(option.codec or "").upper() in {"FLAC", "ALAC", "WAV", "AIFF"}) for option in options):
+        if any(
+            option.hires and (option.lossless or str(option.codec or "").upper() in {"FLAC", "ALAC", "WAV", "AIFF"})
+            for option in options
+        ):
             return "Hi-Res Lossless"
-        if any(option.lossless or str(option.codec or "").upper() in {"FLAC", "ALAC", "WAV", "AIFF"} for option in options):
+        if any(
+            option.lossless or str(option.codec or "").upper() in {"FLAC", "ALAC", "WAV", "AIFF"} for option in options
+        ):
             return "Lossless"
         if "AAC" in codecs:
             return "AAC"

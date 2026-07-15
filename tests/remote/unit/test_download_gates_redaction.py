@@ -9,8 +9,13 @@ import pytest
 from aiohttp import web
 
 from unshackle.core.api import handlers
-from unshackle.core.api.download_manager import (DownloadJob, JobStatus, _redact_parameters, _redact_text,
-                                                 _secret_values)
+from unshackle.core.api.download_manager import (
+    DownloadJob,
+    JobStatus,
+    _redact_parameters,
+    _redact_text,
+    _secret_values,
+)
 from unshackle.core.api.errors import APIError, APIErrorCode
 
 pytestmark = pytest.mark.unit
@@ -116,9 +121,7 @@ async def test_cdm_override_allowed_when_enabled(stub_handler):
 
 async def test_cdm_override_allowlist_permits_only_named_device(stub_handler):
     stub_handler.setattr(handlers.config, "serve", {"cdm_overrides": ["good"]})
-    assert isinstance(
-        await handlers.download_handler({"service": "ATV", "title_id": "t", "cdm": "good"}), web.Response
-    )
+    assert isinstance(await handlers.download_handler({"service": "ATV", "title_id": "t", "cdm": "good"}), web.Response)
     with pytest.raises(APIError) as ei:
         await handlers.download_handler({"service": "ATV", "title_id": "t", "cdm": "other"})
     assert ei.value.error_code == APIErrorCode.FORBIDDEN

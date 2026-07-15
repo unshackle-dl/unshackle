@@ -17,15 +17,15 @@ def get_firefox_root() -> Path:
     """Locates the operating system specific root directory for Firefox profiles."""
     system = platform.system()
     home = Path.home()
-    if system == 'Windows':
-        return Path(os.getenv('APPDATA', '')) / 'Mozilla' / 'Firefox'
-    elif system == 'Darwin':
-        return home / 'Library' / 'Application Support' / 'Firefox'
-    elif system == 'Linux':
+    if system == "Windows":
+        return Path(os.getenv("APPDATA", "")) / "Mozilla" / "Firefox"
+    elif system == "Darwin":
+        return home / "Library" / "Application Support" / "Firefox"
+    elif system == "Linux":
         paths = [
-            home / '.mozilla' / 'firefox',
-            home / 'snap' / 'firefox' / 'common' / '.mozilla' / 'firefox',
-            home / '.var' / 'app' / 'org.mozilla.firefox' / '.mozilla' / 'firefox'
+            home / ".mozilla" / "firefox",
+            home / "snap" / "firefox" / "common" / ".mozilla" / "firefox",
+            home / ".var" / "app" / "org.mozilla.firefox" / ".mozilla" / "firefox",
         ]
         for p in paths:
             if p.exists():
@@ -36,16 +36,16 @@ def get_firefox_root() -> Path:
 
 def get_latest_profile_path(ff_root: Path) -> Path:
     """Finds the most recently modified valid Firefox profile subdirectory."""
-    search_dirs = [ff_root / 'Profiles', ff_root]
+    search_dirs = [ff_root / "Profiles", ff_root]
     valid_profiles = []
     for base in search_dirs:
         if base.exists():
-            valid_profiles.extend([p for p in base.iterdir() if p.is_dir() and (p / 'cookies.sqlite').exists()])
+            valid_profiles.extend([p for p in base.iterdir() if p.is_dir() and (p / "cookies.sqlite").exists()])
 
     if not valid_profiles:
         raise FileNotFoundError("No active Firefox profiles detected.")
 
-    return max(valid_profiles, key=lambda p: (p / 'cookies.sqlite').stat().st_mtime)
+    return max(valid_profiles, key=lambda p: (p / "cookies.sqlite").stat().st_mtime)
 
 
 def get_local_storage_data(profile_path: Path, hosts: List[str], tmp_dir_path: Path) -> Dict[str, str]:
@@ -53,7 +53,7 @@ def get_local_storage_data(profile_path: Path, hosts: List[str], tmp_dir_path: P
     Extracts LocalStorage tokens from webappsstore.sqlite with strict origin matching.
     Operates within a secure temporary directory.
     """
-    ls_db = profile_path / 'webappsstore.sqlite'
+    ls_db = profile_path / "webappsstore.sqlite"
     if not ls_db.exists():
         return {}
 
@@ -87,10 +87,10 @@ def get_firefox_cookies(service_settings: dict) -> Optional[CookieJar]:
     Extracts cookies and optionally localStorage from Firefox based on provided host patterns.
     Implements security hardening and data consistency (WAL support) as per PR review.
     """
-    raw_hosts = service_settings.get('hosts', [])
+    raw_hosts = service_settings.get("hosts", [])
     # Filter empty or dangerously short hosts to prevent full store dumps (Finding #3)
     priority_hosts = [h.strip().lower() for h in raw_hosts if h and len(h.strip()) >= 3]
-    use_local_storage = service_settings.get('local_storage', False)
+    use_local_storage = service_settings.get("local_storage", False)
 
     if not priority_hosts:
         return None
@@ -112,8 +112,8 @@ def get_firefox_cookies(service_settings: dict) -> Optional[CookieJar]:
 
         try:
             # Copy main DB and its WAL log to ensure fresh data capture (Finding #5)
-            shutil.copy2(profile_path / 'cookies.sqlite', temp_db)
-            wal_path = profile_path / 'cookies.sqlite-wal'
+            shutil.copy2(profile_path / "cookies.sqlite", temp_db)
+            wal_path = profile_path / "cookies.sqlite-wal"
             if wal_path.exists():
                 shutil.copy2(wal_path, temp_wal)
 
@@ -134,11 +134,23 @@ def get_firefox_cookies(service_settings: dict) -> Optional[CookieJar]:
                     # Final validation to ensure proper domain suffix
                     if h == host or h.endswith(f".{host}"):
                         c = Cookie(
-                            version=0, name=n, value=v, port=None, port_specified=False,
-                            domain=h, domain_specified=True, domain_initial_dot=h.startswith('.'),
-                            path=p, path_specified=True, secure=bool(secure), expires=e,
-                            discard=False, comment=None, comment_url=None,
-                            rest={'HttpOnly': str(bool(httponly))}, rfc2109=False
+                            version=0,
+                            name=n,
+                            value=v,
+                            port=None,
+                            port_specified=False,
+                            domain=h,
+                            domain_specified=True,
+                            domain_initial_dot=h.startswith("."),
+                            path=p,
+                            path_specified=True,
+                            secure=bool(secure),
+                            expires=e,
+                            discard=False,
+                            comment=None,
+                            comment_url=None,
+                            rest={"HttpOnly": str(bool(httponly))},
+                            rfc2109=False,
                         )
                         cookie_jar.set_cookie(c)
             conn.close()
@@ -148,10 +160,23 @@ def get_firefox_cookies(service_settings: dict) -> Optional[CookieJar]:
                 storage_data = get_local_storage_data(profile_path, priority_hosts, tmp_dir_path)
                 for key, val in storage_data.items():
                     c = Cookie(
-                        version=0, name=key, value=val, port=None, port_specified=False,
-                        domain=".localstorage", domain_specified=True, domain_initial_dot=False,
-                        path='/', path_specified=True, secure=False, expires=None,
-                        discard=True, comment=None, comment_url=None, rest={}, rfc2109=False
+                        version=0,
+                        name=key,
+                        value=val,
+                        port=None,
+                        port_specified=False,
+                        domain=".localstorage",
+                        domain_specified=True,
+                        domain_initial_dot=False,
+                        path="/",
+                        path_specified=True,
+                        secure=False,
+                        expires=None,
+                        discard=True,
+                        comment=None,
+                        comment_url=None,
+                        rest={},
+                        rfc2109=False,
                     )
                     cookie_jar.set_cookie(c)
 

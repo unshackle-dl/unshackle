@@ -103,11 +103,7 @@ def test_merge_dedupes_repeated_style_blocks_before_cues():
 
 
 def test_merge_skips_malformed_timing_line():
-    vtt = (
-        "WEBVTT\n\n"
-        "garbage --> not-a-time\nBroken\n\n"
-        "00:00:01.000 --> 00:00:02.000\nGood\n"
-    )
+    vtt = "WEBVTT\n\ngarbage --> not-a-time\nBroken\n\n00:00:01.000 --> 00:00:02.000\nGood\n"
     out = merge_segmented_webvtt(vtt)
     assert "Good" in out
     assert "Broken" not in out

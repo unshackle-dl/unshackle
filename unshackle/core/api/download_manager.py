@@ -620,9 +620,7 @@ class DownloadQueueManager:
             f"Initialized download queue manager: max_concurrent={max_concurrent_downloads}, retention_hours={job_retention_hours}"
         )
 
-    def create_job(
-        self, service: str, title_id: str, owner_key: Optional[str] = None, **parameters
-    ) -> DownloadJob:
+    def create_job(self, service: str, title_id: str, owner_key: Optional[str] = None, **parameters) -> DownloadJob:
         """Create a new download job and add it to the queue."""
         job_id = str(uuid.uuid4())
         job = DownloadJob(

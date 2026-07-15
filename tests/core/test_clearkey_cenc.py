@@ -16,6 +16,7 @@ from typing import Any, Optional
 from uuid import UUID
 
 import pytest
+
 # lxml.etree: XML parser used to build ContentProtection fixtures for DASH.get_drm
 from lxml import etree
 

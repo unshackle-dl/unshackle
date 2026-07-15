@@ -29,9 +29,13 @@ s32 = struct.Struct(">i")
 
 # 3x3 transformation matrix (identity), as stored in tkhd/mvhd.
 UNITY_MATRIX = (
-    s32.pack(0x10000) + s32.pack(0) * 3
-    + s32.pack(0) + s32.pack(0x10000) + s32.pack(0) * 2
-    + s32.pack(0) * 2 + s32.pack(0x40000000)
+    s32.pack(0x10000)
+    + s32.pack(0) * 3
+    + s32.pack(0)
+    + s32.pack(0x10000)
+    + s32.pack(0) * 2
+    + s32.pack(0) * 2
+    + s32.pack(0x40000000)
 )
 
 TRACK_ENABLED = 0x1
@@ -635,27 +639,54 @@ def build_init_segment(
 
     # --- mvhd ---
     mvhd = full_box(
-        b"mvhd", 1, 0,
-        u64.pack(EPOCH) + u64.pack(EPOCH) + u32.pack(timescale) + u64.pack(duration)
-        + s1616.pack(1) + s88.pack(1) + u16.pack(0) + u32.pack(0) * 2
-        + UNITY_MATRIX + u32.pack(0) * 6 + u32.pack(0xFFFFFFFF),
+        b"mvhd",
+        1,
+        0,
+        u64.pack(EPOCH)
+        + u64.pack(EPOCH)
+        + u32.pack(timescale)
+        + u64.pack(duration)
+        + s1616.pack(1)
+        + s88.pack(1)
+        + u16.pack(0)
+        + u32.pack(0) * 2
+        + UNITY_MATRIX
+        + u32.pack(0) * 6
+        + u32.pack(0xFFFFFFFF),
     )
 
     # --- tkhd ---
     tkhd = full_box(
-        b"tkhd", 1, TRACK_ENABLED | TRACK_IN_MOVIE | TRACK_IN_PREVIEW,
-        u64.pack(EPOCH) + u64.pack(EPOCH) + u32.pack(track_id) + u32.pack(0)
-        + u64.pack(duration) + u32.pack(0) * 2 + s16.pack(0) + s16.pack(0)
-        + s88.pack(1 if stream_type == "audio" else 0) + u16.pack(0) + UNITY_MATRIX
-        + u1616.pack(width) + u1616.pack(height),
+        b"tkhd",
+        1,
+        TRACK_ENABLED | TRACK_IN_MOVIE | TRACK_IN_PREVIEW,
+        u64.pack(EPOCH)
+        + u64.pack(EPOCH)
+        + u32.pack(track_id)
+        + u32.pack(0)
+        + u64.pack(duration)
+        + u32.pack(0) * 2
+        + s16.pack(0)
+        + s16.pack(0)
+        + s88.pack(1 if stream_type == "audio" else 0)
+        + u16.pack(0)
+        + UNITY_MATRIX
+        + u1616.pack(width)
+        + u1616.pack(height),
     )
 
     # --- mdhd + hdlr ---
     packed_lang = ((ord(lang[0]) - 0x60) << 10) | ((ord(lang[1]) - 0x60) << 5) | (ord(lang[2]) - 0x60)
     mdhd = full_box(
-        b"mdhd", 1, 0,
-        u64.pack(EPOCH) + u64.pack(EPOCH) + u32.pack(timescale) + u64.pack(duration)
-        + u16.pack(packed_lang) + u16.pack(0),
+        b"mdhd",
+        1,
+        0,
+        u64.pack(EPOCH)
+        + u64.pack(EPOCH)
+        + u32.pack(timescale)
+        + u64.pack(duration)
+        + u16.pack(packed_lang)
+        + u16.pack(0),
     )
     if stream_type == "audio":
         hdlr = full_box(b"hdlr", 0, 0, u32.pack(0) + b"soun" + u32.pack(0) * 3 + b"SoundHandler\0")
@@ -675,10 +706,18 @@ def build_init_segment(
     sample_entry_payload = u8.pack(0) * 6 + u16.pack(1)  # reserved + data reference index
     if stream_type == "video":
         sample_entry_payload += (
-            u16.pack(0) + u16.pack(0) + u32.pack(0) * 3
-            + u16.pack(width) + u16.pack(height)
-            + u1616.pack(0x48) + u1616.pack(0x48) + u32.pack(0) + u16.pack(1)
-            + u8.pack(0) * 32 + u16.pack(0x18) + s16.pack(-1)
+            u16.pack(0)
+            + u16.pack(0)
+            + u32.pack(0) * 3
+            + u16.pack(width)
+            + u16.pack(height)
+            + u1616.pack(0x48)
+            + u1616.pack(0x48)
+            + u32.pack(0)
+            + u16.pack(1)
+            + u8.pack(0) * 32
+            + u16.pack(0x18)
+            + s16.pack(-1)
         )
         if fourcc in ("H264", "AVC1", "DAVC"):
             config_box = build_avcc(cpd, nal_length_size)
@@ -702,8 +741,12 @@ def build_init_segment(
         # samplerate is 16.16 fixed-point; rates above 65535 Hz are written as 0
         # (decoders read the real rate from the codec config), matching ffmpeg.
         sample_entry_payload += (
-            u32.pack(0) * 2 + u16.pack(channels) + u16.pack(bits_per_sample)
-            + u16.pack(0) + u16.pack(0) + u32.pack((sampling_rate if sampling_rate <= 0xFFFF else 0) << 16)
+            u32.pack(0) * 2
+            + u16.pack(channels)
+            + u16.pack(bits_per_sample)
+            + u16.pack(0)
+            + u16.pack(0)
+            + u32.pack((sampling_rate if sampling_rate <= 0xFFFF else 0) << 16)
         )
         if fourcc in ("AACL", "AACH", "AAC"):
             if not cpd:
@@ -749,7 +792,9 @@ def build_init_segment(
     # --- mvex (mehd + trex) signals a fragmented file ---
     mehd = full_box(b"mehd", 1, 0, u64.pack(duration))
     trex = full_box(
-        b"trex", 0, 0,
+        b"trex",
+        0,
+        0,
         u32.pack(track_id) + u32.pack(1) + u32.pack(0) + u32.pack(0) + u32.pack(0),
     )
     mvex = box(b"mvex", mehd + trex)

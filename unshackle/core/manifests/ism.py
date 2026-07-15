@@ -19,8 +19,12 @@ from requests import Session
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
 from unshackle.core.events import events
-from unshackle.core.manifests.ism_init import (build_init_segment, parse_codec_private_data_vui,
-                                               read_per_sample_iv_size, read_track_id)
+from unshackle.core.manifests.ism_init import (
+    build_init_segment,
+    parse_codec_private_data_vui,
+    read_per_sample_iv_size,
+    read_track_id,
+)
 from unshackle.core.session import RnetSession
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Track, Tracks, Video
 from unshackle.core.utilities import log_event, try_ensure_utf8

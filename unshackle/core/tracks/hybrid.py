@@ -338,7 +338,7 @@ class Hybrid:
         for crop in crop_results:
             crop_counts[crop] = crop_counts.get(crop, 0) + 1
         most_common = max(crop_counts, key=crop_counts.get)
-        left, top, right, bottom = most_common      # frame instead of leaving phantom bars from the source.
+        left, top, right, bottom = most_common  # frame instead of leaving phantom bars from the source.
 
         l5_json = {
             "active_area": {
