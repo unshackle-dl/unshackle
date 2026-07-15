@@ -215,9 +215,9 @@ def skip_hevc_st_ref_pic_set(r: BitReader, idx: int, num_delta_pocs: list[int]) 
     return num_negative + num_positive
 
 
-def parse_hevc_sps_colour(sps_rbsp: bytes) -> Optional[tuple[int, int, int]]:
-    """VUI (colour_primaries, transfer_characteristics, matrix_coeffs) from a
-    de-emulated HEVC SPS, or None when no colour description is present."""
+def parse_hevc_sps_vui(sps_rbsp: bytes) -> tuple[Optional[tuple[int, int, int]], Optional[float]]:
+    """((colour_primaries, transfer_characteristics, matrix_coeffs), fps) from a
+    de-emulated HEVC SPS VUI; either element is None when absent."""
     r = BitReader(sps_rbsp)
     _, _, _, max_sub_layers_minus1 = read_hevc_sps_to_bit_depth(r)
     log2_max_poc_lsb_minus4 = r.read_ue()
@@ -245,37 +245,62 @@ def parse_hevc_sps_colour(sps_rbsp: bytes) -> Optional[tuple[int, int, int]]:
             r.read_bits(1)  # used_by_curr_pic_lt_sps_flag
     r.read_bits(2)  # sps_temporal_mvp_enabled + strong_intra_smoothing_enabled
     if not r.read_bits(1):  # vui_parameters_present_flag
-        return None
+        return None, None
     if r.read_bits(1):  # aspect_ratio_info_present_flag
         if r.read_bits(8) == 255:  # aspect_ratio_idc == EXTENDED_SAR
             r.read_bits(32)  # sar_width + sar_height
     if r.read_bits(1):  # overscan_info_present_flag
         r.read_bits(1)  # overscan_appropriate_flag
-    if not r.read_bits(1):  # video_signal_type_present_flag
-        return None
-    r.read_bits(3)  # video_format
-    r.read_bits(1)  # video_full_range_flag
-    if not r.read_bits(1):  # colour_description_present_flag
-        return None
-    return r.read_bits(8), r.read_bits(8), r.read_bits(8)
+    colour: Optional[tuple[int, int, int]] = None
+    if r.read_bits(1):  # video_signal_type_present_flag
+        r.read_bits(4)  # video_format + video_full_range_flag
+        if r.read_bits(1):  # colour_description_present_flag
+            colour = (r.read_bits(8), r.read_bits(8), r.read_bits(8))
+    fps: Optional[float] = None
+    try:
+        if r.read_bits(1):  # chroma_loc_info_present_flag
+            r.read_ue()  # chroma_sample_loc_type_top_field
+            r.read_ue()  # chroma_sample_loc_type_bottom_field
+        r.read_bits(3)  # neutral_chroma_indication + field_seq + frame_field_info flags
+        if r.read_bits(1):  # default_display_window_flag
+            for _ in range(4):
+                r.read_ue()  # def_disp_win offsets
+        if r.read_bits(1):  # vui_timing_info_present_flag
+            num_units_in_tick = r.read_bits(32)
+            time_scale = r.read_bits(32)
+            if num_units_in_tick:
+                fps = time_scale / num_units_in_tick
+    except (IndexError, ValueError):
+        pass  # truncated VUI: keep whatever colour info was already read
+    return colour, fps
 
 
 HEVC_FOURCCS = frozenset(("HVC1", "HEV1", "HEVC", "H265", "DVHE", "DVH1"))
 
 
-def parse_codec_private_data_colour(fourcc: str, codec_private_data: bytes) -> Optional[tuple[int, int, int]]:
-    """SPS VUI colour triple from HEVC CodecPrivateData; None when the codec
-    is unsupported, no colour description, or malformed data."""
+def parse_codec_private_data_vui(
+    fourcc: str, codec_private_data: bytes
+) -> tuple[Optional[tuple[int, int, int]], Optional[float]]:
+    """(colour triple, fps) from the SPS VUI in HEVC CodecPrivateData; (None, None)
+    when the codec is unsupported or the data is malformed. H.264 is excluded
+    on purpose: its VUI timing is field-based and often misdeclared, so fps
+    read from it can't be trusted."""
     if (fourcc or "").upper() not in HEVC_FOURCCS:
-        return None
+        return None, None
     try:
         nals = split_nal_units(codec_private_data)
         sps = next((n for n in nals if (n[0] >> 1) & 0x3F == 33), None)
         if sps is None:
-            return None
-        return parse_hevc_sps_colour(remove_emulation_prevention(sps))
+            return None, None
+        return parse_hevc_sps_vui(remove_emulation_prevention(sps))
     except (IndexError, ValueError):
-        return None
+        return None, None
+
+
+def parse_codec_private_data_colour(fourcc: str, codec_private_data: bytes) -> Optional[tuple[int, int, int]]:
+    """SPS VUI colour triple from HEVC CodecPrivateData; None when the codec
+    is unsupported, no colour description, or malformed data."""
+    return parse_codec_private_data_vui(fourcc, codec_private_data)[0]
 
 
 def iter_boxes(data: bytes, start: int, end: int) -> Iterator[tuple[bytes, Optional[bytes], int, int]]:

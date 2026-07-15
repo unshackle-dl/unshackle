@@ -14,9 +14,10 @@ import pytest
 
 from unshackle.core.manifests.ism_init import (NAL_START_CODE, PIFF_SENC_UUID, box, build_avcc, build_dec3,
                                                build_hvcc, build_init_segment, full_box,
-                                               parse_codec_private_data_colour, parse_hevc_sps_format,
-                                               read_per_sample_iv_size, read_track_id, remove_emulation_prevention,
-                                               split_nal_units, synthesize_aac_codec_private_data)
+                                               parse_codec_private_data_colour, parse_codec_private_data_vui,
+                                               parse_hevc_sps_format, read_per_sample_iv_size, read_track_id,
+                                               remove_emulation_prevention, split_nal_units,
+                                               synthesize_aac_codec_private_data)
 
 # Real CodecPrivateData taken from a Smooth Streaming manifest.
 VIDEO_HEVC_CPD = (
@@ -470,6 +471,15 @@ def test_parse_colour_absent_or_unknown_returns_none():
     assert parse_codec_private_data_colour("H264", bytes.fromhex(VIDEO_AVC_CPD)) is None
     assert parse_codec_private_data_colour("WVC1", bytes.fromhex(VIDEO_AVC_CPD)) is None
     assert parse_codec_private_data_colour("HVC1", b"\x00\x00\x00\x01\x42") is None
+
+
+def test_parse_vui_fps():
+    assert parse_codec_private_data_vui("HVC1", bytes.fromhex(VIDEO_HEVC_CPD))[1] == pytest.approx(24000 / 1001)
+    assert parse_codec_private_data_vui("HVC1", bytes.fromhex(VIDEO_HEVC_PQ_CPD))[1] == 25.0
+    # VUI timing can be present even when colour info is absent.
+    assert parse_codec_private_data_vui("HVC1", bytes.fromhex(VIDEO_HEVC10_CPD)) == (None, 25.0)
+    # AVC is deliberately untrusted for fps (field-based VUI timing).
+    assert parse_codec_private_data_vui("H264", bytes.fromhex(VIDEO_AVC_CPD)) == (None, None)
 
 
 def test_hvcc_profile_tier_level_is_nonzero():
