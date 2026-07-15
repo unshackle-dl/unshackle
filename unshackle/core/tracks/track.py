@@ -568,7 +568,7 @@ class Track:
         Load DRM information for this track if it was deferred during parsing.
 
         Args:
-            service: Service instance that can fetch track-specific DRM info
+            service (Service | None): Service instance that can fetch track-specific DRM info
 
         Returns:
             True if DRM was loaded or already present, False if failed

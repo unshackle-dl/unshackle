@@ -80,8 +80,8 @@ class Widevine:
         headers and more.
 
         Raises:
-            PSSHNotFound - If the PSSH was not found within the data.
-            KIDNotFound - If the KID was not found within the data or PSSH.
+            PSSHNotFound: If the PSSH was not found within the data.
+            KIDNotFound: If the KID was not found within the data or PSSH.
         """
         if not session:
             session = Session()
@@ -131,8 +131,8 @@ class Widevine:
         It is *rare* to need to use this.
 
         Raises:
-            PSSHNotFound - If the PSSH was not found within the data.
-            KIDNotFound - If the KID was not found within the data or PSSH.
+            PSSHNotFound: If the PSSH was not found within the data.
+            KIDNotFound: If the KID was not found within the data or PSSH.
         """
         if not init_data:
             raise ValueError("Init data should be provided.")
@@ -379,8 +379,13 @@ class Widevine:
 
         try:
             subprocess.run(
-                cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-                encoding="utf-8", errors="replace",
+                cmd,
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
             )
         except subprocess.CalledProcessError as e:
             error_msg = e.stderr if e.stderr else f"mp4decrypt failed with exit code {e.returncode}"
