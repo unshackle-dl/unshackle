@@ -4102,9 +4102,10 @@ the content has already been decrypted and muxed into a container.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                <code>path</code>
+                <code>_path</code>
             </td>
             <td>
+                  <code><span title="pathlib.Path">Path</span></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4531,6 +4532,39 @@ It is <em>rare</em> to need to use this.</p>
 headers and more.</p>
 
 
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="PSSHNotFound">PSSHNotFound</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If the PSSH was not found within the data.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="KIDNotFound">KIDNotFound</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If the KID was not found within the data or PSSH.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
     </div>
 
 </div>
@@ -4555,6 +4589,39 @@ headers and more.</p>
         <p>Get PSSH and KID from within Initialization Segment Data.</p>
 <p>This should only be used if a PSSH could not be provided directly.
 It is <em>rare</em> to need to use this.</p>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="PSSHNotFound">PSSHNotFound</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If the PSSH was not found within the data.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="KIDNotFound">KIDNotFound</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If the KID was not found within the data or PSSH.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
 
 
     </div>
