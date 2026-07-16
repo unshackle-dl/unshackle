@@ -191,7 +191,9 @@ def test_byte_range_slice_segments_never_probed_or_boosted(tmp_path: Path, monke
 
     probed: list[str] = []
     real_probe = dl._probe_ranged
-    monkeypatch.setattr(dl, "_probe_ranged", lambda url, session, **kw: probed.append(url) or real_probe(url, session, **kw))
+    monkeypatch.setattr(
+        dl, "_probe_ranged", lambda url, session, **kw: probed.append(url) or real_probe(url, session, **kw)
+    )
 
     url = f"http://{host}:{port}/media.mp4"
     urls = [{"url": url, "headers": {"Range": f"bytes={i * seg}-{(i + 1) * seg - 1}"}} for i in range(nseg)]
