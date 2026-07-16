@@ -59,6 +59,7 @@ class DownloadContext:
     proxy: Optional[str] = None
     max_workers: Optional[int] = None
     adaptive_workers: bool = False
+    download_processes: int = 1
     license_widevine: Optional[Callable] = None
     cdm: Optional[object] = None
 
@@ -234,6 +235,7 @@ class Track:
         cdm: Optional[object] = None,
         no_proxy_download: bool = False,
         adaptive_workers: bool = False,
+        download_processes: int = 1,
     ):
         """Download and optionally Decrypt this Track."""
         from unshackle.core.manifests import DASH, HLS, ISM
@@ -296,6 +298,7 @@ class Track:
                     proxy=proxy,
                     max_workers=max_workers,
                     adaptive_workers=adaptive_workers,
+                    download_processes=download_processes,
                     license_widevine=prepare_drm,
                     cdm=cdm,
                 )
@@ -366,6 +369,7 @@ class Track:
                             max_workers=max_workers,
                             session=dl_session,
                             adaptive=adaptive_workers,
+                            processes=download_processes,
                         ):
                             file_downloaded = status_update.get("file_downloaded")
                             if not file_downloaded:

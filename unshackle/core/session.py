@@ -568,6 +568,19 @@ class RnetSession:
         if "proxies" in session_kwargs:
             self.proxies.update(session_kwargs.pop("proxies"))
 
+    @property
+    def impersonate_name(self) -> Optional[str]:
+        """Preset name (e.g. 'Chrome131') for rebuilding this session in another process.
+
+        rnet enums stringify as 'Impersonate.Chrome131'; return the trailing name, or None
+        when no preset was set (then the session is not cheaply rebuildable across processes).
+        """
+        preset = self._client_kwargs.get("impersonate")
+        if preset is None:
+            return None
+        name = str(preset).rsplit(".", 1)[-1]
+        return name or None
+
     def _ensure_client(self) -> rnet.BlockingClient:
         """Lazily create the rnet client on first use, flushing any buffered state."""
         if self._client is None:

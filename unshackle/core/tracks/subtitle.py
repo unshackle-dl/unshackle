@@ -247,6 +247,7 @@ class Subtitle(Track):
         cdm: Optional[object] = None,
         no_proxy_download: bool = False,
         adaptive_workers: bool = False,
+        download_processes: int = 1,
     ):
         super().download(
             session,
@@ -256,6 +257,7 @@ class Subtitle(Track):
             cdm=cdm,
             no_proxy_download=no_proxy_download,
             adaptive_workers=adaptive_workers,
+            download_processes=download_processes,
         )
         if not self.path:
             return

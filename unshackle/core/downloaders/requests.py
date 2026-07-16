@@ -1,15 +1,17 @@
 import math
+import multiprocessing
 import os
 import statistics
 import threading
 import time
+import traceback
 from collections import deque
 from concurrent.futures import FIRST_COMPLETED, wait
 from concurrent.futures.thread import ThreadPoolExecutor
 from http.cookiejar import CookieJar
 from pathlib import Path
 from queue import Empty, Queue
-from typing import Any, Callable, Generator, MutableMapping, Optional, Union
+from typing import Any, Callable, Generator, MutableMapping, Optional, Union, cast
 
 from requests import Session
 from requests.adapters import HTTPAdapter
@@ -41,6 +43,11 @@ SPEED_ROLLING_WINDOW = 10  # seconds of history to keep for speed calculation
 
 RANGE_PARALLEL_MIN_SIZE = 64 * 1024 * 1024
 RANGE_PARALLEL_PART_SIZE = 16 * 1024 * 1024
+
+# One CPython interpreter caps sustained segment throughput (GIL in the ssl read path);
+# fan a big segment batch across spawned children to reach line rate. Below this count the
+# spawn/rebuild overhead outweighs the win, so keep the in-process path.
+MP_MIN_SEGMENTS = 24
 
 # Tail-end boost (opt-in, adaptive only): when only a few segments remain and workers
 # would otherwise idle, split each remaining segment into intra-segment range parts so
@@ -657,6 +664,195 @@ def download(
             attempts += 1
 
 
+def _build_session_spec(session: Optional[Any]) -> Optional[dict[str, Any]]:
+    """Picklable spec to rebuild ``session`` in a child process; None if not cheaply rebuildable.
+
+    Live sessions (sockets, TLS state, threads) can't cross a process boundary, so each child
+    reconstructs its own from cheap state. RnetSession needs a resolvable impersonate preset;
+    without one it is not cheaply rebuildable and the caller falls back to a single process.
+    """
+    if session is None:
+        return {"kind": "none"}
+    if _is_requests_session(session):
+        return {
+            "kind": "requests",
+            "headers": dict(session.headers),
+            "cookies": session.cookies,  # RequestsCookieJar pickles cleanly
+            "proxies": dict(session.proxies),
+        }
+    if _is_rnet_session(session):
+        name = session.impersonate_name
+        if not name:
+            return None
+        return {
+            "kind": "rnet",
+            "impersonate": name,
+            "headers": dict(session.headers),
+            "cookies": session.cookies.get_dict(),
+            "proxy": session.proxies.get("all") or session.proxies.get("https") or session.proxies.get("http"),
+        }
+    return None
+
+
+def _rebuild_session(spec: dict[str, Any]) -> Optional[Any]:
+    """Reconstruct a session inside a child process from a spec built by ``_build_session_spec``."""
+    kind = spec["kind"]
+    if kind == "requests":
+        rs = Session()
+        rs.headers.update(spec["headers"])
+        if spec.get("cookies"):
+            rs.cookies.update(spec["cookies"])
+        if spec.get("proxies"):
+            rs.proxies.update(spec["proxies"])
+        return rs
+    if kind == "rnet":
+        from unshackle.core.session import session as make_session
+
+        ns = make_session(spec["impersonate"])
+        if spec.get("headers"):
+            ns.headers.update(spec["headers"])
+        if spec.get("cookies"):
+            ns.cookies.update(spec["cookies"])
+        if spec.get("proxy"):
+            ns.proxies.update({"all": spec["proxy"]})
+        return ns
+    return None  # "none": child builds its own Session from the passed headers/cookies/proxy
+
+
+def _mp_worker(queue: Any, kwargs: dict[str, Any]) -> None:
+    """Child entry point (top-level so ``spawn`` can pickle it).
+
+    Rebuilds the session, iterates ``requests()`` for its url chunk, and relays every event over
+    the shared queue. Errors travel as a ``__mp_error__`` sentinel; a ``__mp_done__`` sentinel is
+    always sent last so the parent knows this child is finished.
+    """
+    try:
+        spec = kwargs.pop("_session_spec")
+        kwargs["session"] = _rebuild_session(spec)
+        for event in requests(**kwargs):
+            queue.put(event)
+    except Exception:
+        queue.put({"__mp_error__": traceback.format_exc()})
+    finally:
+        queue.put({"__mp_done__": True})
+
+
+def _download_multiprocess(
+    urls: list[Any],
+    output_dir: Path,
+    filename: str,
+    headers: Optional[MutableMapping[str, Union[str, bytes]]],
+    cookies: Optional[Union[MutableMapping[str, str], CookieJar]],
+    proxy: Optional[str],
+    max_workers: int,
+    adaptive: bool,
+    spec: dict[str, Any],
+    processes: int,
+    debug_logger: Any,
+) -> Generator[dict[str, Any], None, None]:
+    """Fan segments across spawned children, each running ``requests()`` on a contiguous chunk.
+
+    Chunks keep their original global indices via ``index_offset`` so file names are unchanged.
+    The parent owns aggregate progress: it emits ``total`` once and computes one speed string from
+    written bytes, dropping the children's own ``total`` and speed events.
+    """
+    n = len(urls)
+    processes = max(1, min(processes, n))
+    chunk_size = math.ceil(n / processes)
+    per_child_workers = max(1, max_workers // processes)
+    # only the "none" spec relies on headers/cookies/proxy pass-through; a rebuilt session
+    # already carries them and requests() ignores these args when a session is provided
+    pass_through = spec["kind"] == "none"
+
+    chunks: list[tuple[int, list[Any]]] = []
+    for offset in range(0, n, chunk_size):
+        chunks.append((offset, urls[offset : offset + chunk_size]))
+
+    if debug_logger:
+        debug_logger.log(
+            level="DEBUG",
+            operation="downloader_mp_start",
+            message="Starting multiprocess segment download",
+            context={
+                "url_count": n,
+                "processes": len(chunks),
+                "workers_per_child": per_child_workers,
+                "chunk_sizes": [len(c) for _, c in chunks],
+                "session_kind": spec["kind"],
+                "adaptive": adaptive,
+            },
+        )
+
+    mp_ctx = multiprocessing.get_context("spawn")
+    queue: Any = mp_ctx.Queue()
+    procs: list[Any] = []
+    for offset, chunk in chunks:
+        child_kwargs = dict(
+            urls=chunk,
+            output_dir=output_dir,
+            filename=filename,
+            headers=headers if pass_through else None,
+            cookies=cookies if pass_through else None,
+            proxy=proxy if pass_through else None,
+            max_workers=per_child_workers,
+            adaptive=adaptive,
+            processes=1,
+            index_offset=offset,
+            _session_spec=spec,
+        )
+        p = mp_ctx.Process(target=_mp_worker, args=(queue, child_kwargs), daemon=True)
+        p.start()
+        procs.append(p)
+
+    yield dict(total=n)
+
+    total_bytes = 0
+    start_time = time.time()
+    last_speed_report = start_time
+    done_count = 0
+
+    try:
+        while done_count < len(procs):
+            try:
+                event = queue.get(timeout=0.1)
+            except Empty:
+                event = None
+            if event is not None:
+                if "__mp_done__" in event:
+                    done_count += 1
+                    continue
+                if "__mp_error__" in event:
+                    for p in procs:
+                        p.terminate()
+                    raise RuntimeError(f"segment download child failed:\n{event['__mp_error__']}")
+                if "total" in event:
+                    continue  # parent owns the aggregate total
+                if "downloaded" in event:
+                    continue  # child speed/status string; parent computes its own aggregate speed
+                written = event.get("written")
+                if written:
+                    total_bytes += written
+                yield event
+
+            now = time.time()
+            if now - last_speed_report > 0.5 and total_bytes > 0:
+                elapsed = now - start_time
+                if elapsed > 0:
+                    yield dict(downloaded=f"{filesize.decimal(math.ceil(total_bytes / elapsed))}/s")
+                last_speed_report = now
+    except KeyboardInterrupt:
+        DOWNLOAD_CANCELLED.set()
+        for p in procs:
+            p.terminate()
+        yield dict(downloaded="[yellow]CANCELLED")
+        raise
+    finally:
+        for p in procs:
+            p.join(timeout=1)
+            if p.is_alive():
+                p.terminate()
+
+
 def requests(
     urls: Union[str, list[str], dict[str, Any], list[dict[str, Any]]],
     output_dir: Path,
@@ -667,6 +863,8 @@ def requests(
     max_workers: Optional[int] = None,
     session: Optional[Any] = None,
     adaptive: bool = False,
+    processes: int = 1,
+    index_offset: int = 0,
 ) -> Generator[dict[str, Any], None, None]:
     """
     Download files with optimized I/O and adaptive chunk sizing.
@@ -707,6 +905,13 @@ def requests(
             or backs off based on measured throughput and CDN errors, capped at
             max_workers. When False (default) all segments are submitted upfront using a
             fixed worker count, matching the non-adaptive behaviour exactly.
+        processes: Split a large segment batch across this many spawned child processes to
+            beat the single-interpreter throughput cap (GIL in the ssl read path). Engaged
+            only when > 1 and there are at least MP_MIN_SEGMENTS urls; otherwise the behaviour
+            is byte-identical to a single process. Each child runs its own worker pool.
+        index_offset: Added to each url's enumerate index when formatting ``filename`` so a
+            child handling a contiguous chunk keeps its urls' original global indices/names.
+            Internal: set by the multiprocess path, leave at 0 otherwise.
     """
     if not urls:
         raise ValueError("urls must be provided and not empty")
@@ -735,6 +940,9 @@ def requests(
     if not isinstance(max_workers, (int, type(None))):
         raise TypeError(f"Expected max_workers to be {int}, not {type(max_workers)}")
 
+    if not isinstance(processes, int):
+        raise TypeError(f"Expected processes to be {int}, not {type(processes)}")
+
     debug_logger = get_debug_logger()
 
     if not isinstance(urls, list):
@@ -743,11 +951,39 @@ def requests(
     if not max_workers:
         max_workers = min(16, (os.cpu_count() or 1) + 4)
 
+    # Process fan-out: split a large segment batch across spawned children. Single-URL and small
+    # batches keep the in-process path (a lone file is already parallelized by ranged parts).
+    if processes > 1 and len(urls) >= MP_MIN_SEGMENTS:
+        spec = _build_session_spec(session)
+        if spec is not None:
+            yield from _download_multiprocess(
+                urls=cast("list[Any]", urls),  # normalized to a list above
+                output_dir=output_dir,
+                filename=filename,
+                headers=headers,
+                cookies=cookies,
+                proxy=proxy,
+                max_workers=max_workers,
+                adaptive=adaptive,
+                spec=spec,
+                processes=processes,
+                debug_logger=debug_logger,
+            )
+            return
+        if debug_logger:
+            debug_logger.log(
+                level="DEBUG",
+                operation="downloader_mp_fallback",
+                message="Session not rebuildable across processes; using a single process",
+                context={"session_type": type(session).__name__, "url_count": len(urls)},
+            )
+
     urls = [
         dict(save_path=save_path, **url) if isinstance(url, dict) else dict(url=url, save_path=save_path)
         for i, url in enumerate(urls)
         for save_path in [
-            output_dir / filename.format(i=i, ext=get_extension(url["url"] if isinstance(url, dict) else url))
+            output_dir
+            / filename.format(i=i + index_offset, ext=get_extension(url["url"] if isinstance(url, dict) else url))
         ]
     ]
     # once per batch; download() skips it for segments

@@ -524,6 +524,7 @@ class HLS:
         proxy = ctx.proxy
         max_workers = ctx.max_workers
         adaptive = ctx.adaptive_workers
+        processes = ctx.download_processes
         license_widevine = ctx.license_widevine
         cdm = ctx.cdm
 
@@ -674,6 +675,7 @@ class HLS:
             max_workers=max_workers,
             session=session,
             adaptive=adaptive,
+            processes=processes,
         )
 
         log_event(
