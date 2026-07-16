@@ -1084,6 +1084,9 @@ def requests(
         total_bytes = 0
         start_time = time.time()
         last_speed_report = start_time
+        last_hedge_check = 0.0
+        hedge_median = 0.0
+        hedge_median_len = 0
 
         pool = ThreadPoolExecutor(max_workers=max_workers)
         event_queue: Queue[dict[str, Any]] = Queue()
@@ -1362,8 +1365,18 @@ def requests(
                         last_speed_report = now
 
                 # hedge stuck segments once spare workers exist within the active target
-                if len(pending) < target and seg_durations and not DOWNLOAD_CANCELLED.is_set():
-                    threshold = max(HEDGE_FACTOR * statistics.median(seg_durations), HEDGE_MIN_WAIT)
+                if (
+                    len(pending) < target
+                    and seg_durations
+                    and now - last_hedge_check > 0.5
+                    and not DOWNLOAD_CANCELLED.is_set()
+                ):
+                    last_hedge_check = now
+                    cur_len = len(seg_durations)  # len() is safe here even though workers append under seg_lock
+                    if cur_len != hedge_median_len:
+                        hedge_median = statistics.median(seg_durations)
+                        hedge_median_len = cur_len
+                    threshold = max(HEDGE_FACTOR * hedge_median, HEDGE_MIN_WAIT)
                     with seg_lock:
                         stuck = [
                             i

@@ -8,7 +8,7 @@ import re
 import shutil
 import sys
 from copy import deepcopy
-from functools import partial
+from functools import lru_cache, partial
 from typing import Any, Callable, Optional, Union
 from urllib.parse import urljoin, urlparse
 from uuid import UUID
@@ -448,21 +448,45 @@ class DASH:
 
         downloader = track.downloader
 
-        downloader_args = dict(
-            urls=[
-                {"url": url, "headers": {"Range": f"bytes={bytes_range}"} if bytes_range else {}}
-                for url, bytes_range in segments
-            ],
-            output_dir=save_dir,
-            filename="{i:0%d}.mp4" % (len(str(len(segments)))),
-            headers=session.headers,
-            cookies=session.cookies,
-            proxy=proxy,
-            max_workers=max_workers,
-            session=session,
-            adaptive=adaptive,
-            processes=processes,
+        # When every segment is a byte range of one parent resource and init is its [0, len)
+        # prefix, the whole resource is itself a valid MP4, so one direct download to save_path
+        # replaces the per-segment files, init write and merge pass.
+        collapse_single_url = DASH._collapsible_single_url(
+            isinstance(track, Subtitle),
+            segments,
+            len(init_data) if init_data is not None else None,
         )
+
+        if collapse_single_url:
+            # must carry no Range header, or the downloader would skip its ranged-parallel path
+            downloader_args = dict(
+                urls=[{"url": segments[0][0]}],
+                output_dir=save_path.parent,
+                filename=save_path.name,
+                headers=session.headers,
+                cookies=session.cookies,
+                proxy=proxy,
+                max_workers=max_workers,
+                session=session,
+                adaptive=adaptive,
+                processes=processes,
+            )
+        else:
+            downloader_args = dict(
+                urls=[
+                    {"url": url, "headers": {"Range": f"bytes={bytes_range}"} if bytes_range else {}}
+                    for url, bytes_range in segments
+                ],
+                output_dir=save_dir,
+                filename="{i:0%d}.mp4" % (len(str(len(segments)))),
+                headers=session.headers,
+                cookies=session.cookies,
+                proxy=proxy,
+                max_workers=max_workers,
+                session=session,
+                adaptive=adaptive,
+                processes=processes,
+            )
 
         log_event(
             "manifest_dash_download_start",
@@ -489,84 +513,87 @@ class DASH:
                     status_update["downloaded"] = f"DASH {downloaded}"
                 progress(**status_update)
 
-        # Verify output directory exists and contains files
-        if not save_dir.exists():
-            error_msg = f"Output directory does not exist: {save_dir}"
+        if not collapse_single_url:
+            # Verify output directory exists and contains files
+            if not save_dir.exists():
+                error_msg = f"Output directory does not exist: {save_dir}"
+                log_event(
+                    "manifest_dash_download_output_missing",
+                    level="ERROR",
+                    message=error_msg,
+                    context={
+                        "track_id": getattr(track, "id", None),
+                        "track_type": track.__class__.__name__,
+                        "save_dir": str(save_dir),
+                        "save_path": str(save_path),
+                        "downloader": "requests",
+                    },
+                )
+                raise FileNotFoundError(error_msg)
+
+            for control_file in save_dir.glob("*.!dev"):
+                control_file.unlink(missing_ok=True)
+
+            segments_to_merge = [x for x in sorted(save_dir.iterdir()) if x.is_file()]
+
             log_event(
-                "manifest_dash_download_output_missing",
-                level="ERROR",
-                message=error_msg,
+                "manifest_dash_download_complete",
+                level="DEBUG",
+                message="DASH download complete, preparing to merge",
                 context={
                     "track_id": getattr(track, "id", None),
                     "track_type": track.__class__.__name__,
                     "save_dir": str(save_dir),
-                    "save_path": str(save_path),
+                    "save_dir_exists": save_dir.exists(),
+                    "segments_found": len(segments_to_merge),
+                    "segment_files": [f.name for f in segments_to_merge[:10]],  # Limit to first 10
                     "downloader": "requests",
                 },
             )
-            raise FileNotFoundError(error_msg)
 
-        for control_file in save_dir.glob("*.!dev"):
-            control_file.unlink(missing_ok=True)
+            if not segments_to_merge:
+                error_msg = f"No segment files found in output directory: {save_dir}"
+                # List all contents of the directory for debugging
+                all_contents = list(save_dir.iterdir()) if save_dir.exists() else []
+                log_event(
+                    "manifest_dash_download_no_segments",
+                    level="ERROR",
+                    message=error_msg,
+                    context={
+                        "track_id": getattr(track, "id", None),
+                        "track_type": track.__class__.__name__,
+                        "save_dir": str(save_dir),
+                        "directory_contents": [str(p) for p in all_contents],
+                        "downloader": "requests",
+                    },
+                )
+                raise FileNotFoundError(error_msg)
 
-        segments_to_merge = [x for x in sorted(save_dir.iterdir()) if x.is_file()]
-
-        log_event(
-            "manifest_dash_download_complete",
-            level="DEBUG",
-            message="DASH download complete, preparing to merge",
-            context={
-                "track_id": getattr(track, "id", None),
-                "track_type": track.__class__.__name__,
-                "save_dir": str(save_dir),
-                "save_dir_exists": save_dir.exists(),
-                "segments_found": len(segments_to_merge),
-                "segment_files": [f.name for f in segments_to_merge[:10]],  # Limit to first 10
-                "downloader": "requests",
-            },
-        )
-
-        if not segments_to_merge:
-            error_msg = f"No segment files found in output directory: {save_dir}"
-            # List all contents of the directory for debugging
-            all_contents = list(save_dir.iterdir()) if save_dir.exists() else []
-            log_event(
-                "manifest_dash_download_no_segments",
-                level="ERROR",
-                message=error_msg,
-                context={
-                    "track_id": getattr(track, "id", None),
-                    "track_type": track.__class__.__name__,
-                    "save_dir": str(save_dir),
-                    "directory_contents": [str(p) for p in all_contents],
-                    "downloader": "requests",
-                },
+            is_text_subtitle = (
+                not drm
+                and isinstance(track, Subtitle)
+                and track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML)
             )
-            raise FileNotFoundError(error_msg)
-
-        is_text_subtitle = (
-            not drm and isinstance(track, Subtitle) and track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML)
-        )
-        with open(save_path, "wb") as f:
-            if init_data:
-                f.write(init_data)
-            if len(segments_to_merge) > 1:
-                progress(downloaded="Merging", completed=0, total=len(segments_to_merge))
-            for segment_file in segments_to_merge:
-                if is_text_subtitle:
-                    segment_data = try_ensure_utf8(segment_file.read_bytes())
-                    segment_data = (
-                        segment_data.decode("utf8")
-                        .replace("&lrm;", html.unescape("&lrm;"))
-                        .replace("&rlm;", html.unescape("&rlm;"))
-                        .encode("utf8")
-                    )
-                    f.write(segment_data)
-                else:
-                    with open(segment_file, "rb") as src:
-                        shutil.copyfileobj(src, f, 1024 * 1024)
-                segment_file.unlink()
-                progress(advance=1)
+            with open(save_path, "wb") as f:
+                if init_data:
+                    f.write(init_data)
+                if len(segments_to_merge) > 1:
+                    progress(downloaded="Merging", completed=0, total=len(segments_to_merge))
+                for segment_file in segments_to_merge:
+                    if is_text_subtitle:
+                        segment_data = try_ensure_utf8(segment_file.read_bytes())
+                        segment_data = (
+                            segment_data.decode("utf8")
+                            .replace("&lrm;", html.unescape("&lrm;"))
+                            .replace("&rlm;", html.unescape("&rlm;"))
+                            .encode("utf8")
+                        )
+                        f.write(segment_data)
+                    else:
+                        with open(segment_file, "rb") as src:
+                            shutil.copyfileobj(src, f, 1024 * 1024)
+                    segment_file.unlink()
+                    progress(advance=1)
 
         track.path = save_path
         events.emit(events.Types.TRACK_DOWNLOADED, track=track)
@@ -587,6 +614,49 @@ class DASH:
                 shutil.rmtree(save_dir, ignore_errors=True)
 
         progress(downloaded="Downloaded")
+
+    @staticmethod
+    def _collapsible_single_url(
+        is_subtitle: bool,
+        segments: list[tuple[str, Optional[str]]],
+        init_len: Optional[int],
+    ) -> bool:
+        """
+        Whether every segment is a byte range of one parent resource whose [0, init_len)
+        prefix is the init segment, so the whole resource can be downloaded in one pass.
+
+        Returns False for subtitle tracks, an unknown init length, mixed URLs, malformed
+        ranges, a gap between the init prefix and the first media byte, and ranges that
+        overlap or regress in document order.
+        """
+        if is_subtitle or init_len is None or not segments:
+            return False
+
+        first_url = segments[0][0]
+        ranges: list[tuple[int, int]] = []
+        for url, bytes_range in segments:
+            if url != first_url or not bytes_range:
+                return False
+            parts = bytes_range.split("-")
+            if len(parts) != 2 or not parts[0] or not parts[1]:
+                return False
+            try:
+                start, end = int(parts[0]), int(parts[1])
+            except ValueError:
+                return False
+            if end < start:
+                return False
+            ranges.append((start, end))
+
+        if min(start for start, _ in ranges) != init_len:
+            return False
+
+        prev_end = init_len - 1
+        for start, end in ranges:
+            if start <= prev_end:
+                return False
+            prev_end = end
+        return True
 
     @staticmethod
     def _is_content_period(period: Element, filtered_period_ids: list[str]) -> bool:
@@ -1108,10 +1178,18 @@ class DASH:
         return sum(float(x[0:-1]) * {"H": 60 * 60, "M": 60, "S": 1}[x[-1].upper()] for x in m)
 
     @staticmethod
+    @lru_cache(maxsize=None)
+    def _field_format_pattern(field: str) -> re.Pattern:
+        # matches printf-style `$Field%fmt$` format tokens
+        return re.compile(rf"\${re.escape(field)}%([a-z0-9]+)\$", flags=re.I)
+
+    @staticmethod
     def replace_fields(url: str, **kwargs: Any) -> str:
+        if "$" not in url:
+            return url
         for field, value in kwargs.items():
             url = url.replace(f"${field}$", str(value))
-            m = re.search(rf"\${re.escape(field)}%([a-z0-9]+)\$", url, flags=re.I)
+            m = DASH._field_format_pattern(field).search(url)
             if m:
                 url = url.replace(m.group(), f"{value:{m.group(1)}}")
         return url
