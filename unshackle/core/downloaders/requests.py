@@ -770,23 +770,26 @@ def _download_multiprocess(
     processes: int,
     debug_logger: Any,
 ) -> Generator[dict[str, Any], None, None]:
-    """Fan segments across spawned children, each running ``requests()`` on a contiguous chunk.
+    """Fan segments across spawned children, each running ``requests()`` on a strided chunk.
 
-    Chunks keep their original global indices via ``index_offset`` so file names are unchanged.
-    The parent owns aggregate progress: it emits ``total`` once and computes one speed string from
-    written bytes, dropping the children's own ``total`` and speed events.
+    Child ``k`` takes segments ``k, k+processes, k+2*processes, ...``: slow segments tend to
+    cluster by position (a cold edge, a throttled range region), and striding spreads such a
+    cluster across all children instead of trapping it in one child whose few workers would
+    bound the tail. Children keep their original global indices via ``index_offset`` and
+    ``index_stride`` so file names are unchanged. The parent owns aggregate progress: it emits
+    ``total`` once and computes one speed string from written bytes, dropping the children's
+    own ``total`` and speed events.
     """
     n = len(urls)
     processes = max(1, min(processes, n))
-    chunk_size = math.ceil(n / processes)
     per_child_workers = max(1, max_workers // processes)
     # only the "none" spec relies on headers/cookies/proxy pass-through; a rebuilt session
     # already carries them and requests() ignores these args when a session is provided
     pass_through = spec["kind"] == "none"
 
     chunks: list[tuple[int, list[Any]]] = []
-    for offset in range(0, n, chunk_size):
-        chunks.append((offset, urls[offset : offset + chunk_size]))
+    for k in range(processes):
+        chunks.append((k, urls[k::processes]))
 
     if debug_logger:
         debug_logger.log(
@@ -818,6 +821,7 @@ def _download_multiprocess(
             adaptive=adaptive,
             processes=1,
             index_offset=offset,
+            index_stride=processes,
             _session_spec=spec,
         )
         p = mp_ctx.Process(target=_mp_worker, args=(queue, child_kwargs), daemon=True)
@@ -900,6 +904,7 @@ def requests(
     adaptive: bool = False,
     processes: int = 1,
     index_offset: int = 0,
+    index_stride: int = 1,
 ) -> Generator[dict[str, Any], None, None]:
     """
     Download files with optimized I/O and adaptive chunk sizing.
@@ -944,9 +949,13 @@ def requests(
             beat the single-interpreter throughput cap (GIL in the ssl read path). Engaged
             only when > 1 and there are at least MP_MIN_SEGMENTS urls; otherwise the behaviour
             is byte-identical to a single process. Each child runs its own worker pool.
-        index_offset: Added to each url's enumerate index when formatting ``filename`` so a
-            child handling a contiguous chunk keeps its urls' original global indices/names.
-            Internal: set by the multiprocess path, leave at 0 otherwise.
+        index_offset: Added to each url's enumerate index (after ``index_stride`` scaling)
+            when formatting ``filename`` so a child handling part of a larger batch keeps
+            its urls' original global indices/names. Internal: set by the multiprocess
+            path, leave at 0 otherwise.
+        index_stride: Multiplies each url's enumerate index before ``index_offset`` is
+            added, mapping a strided chunk (``urls[k::stride]``) back to global indices.
+            Internal: set by the multiprocess path, leave at 1 otherwise.
     """
     if not urls:
         raise ValueError("urls must be provided and not empty")
@@ -1018,7 +1027,9 @@ def requests(
         for i, url in enumerate(urls)
         for save_path in [
             output_dir
-            / filename.format(i=i + index_offset, ext=get_extension(url["url"] if isinstance(url, dict) else url))
+            / filename.format(
+                i=i * index_stride + index_offset, ext=get_extension(url["url"] if isinstance(url, dict) else url)
+            )
         ]
     ]
     # once per batch; download() skips it for segments
