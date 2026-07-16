@@ -161,7 +161,7 @@ If the key is missing or wrong, you get a `401` with a plain body:
 ```
 
 !!! warning "Two error shapes exist"
-    The authentication middleware returns the short `{"status": 401, "message": "..."}` shape shown above. Every **other** error the API produces uses the richer structured shape (`error_code`, `timestamp`, `details`, …) described in [Error handling](#error-handling). A robust client should handle both.
+    The authentication middleware returns the short `{"status": 401, "message": "..."}` shape shown above. Every **other** error the API produces uses the richer structured shape (`error_code`, `timestamp`, `details`, ...) described in [Error handling](#error-handling). A robust client should handle both.
 
 The `tag` value for the service you want is the identifier you pass as `service` in the calls below.
 
@@ -225,8 +225,8 @@ The request body accepts the full download parameter set. A few of the most usef
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `service` | — | Service tag (required) |
-| `title_id` | — | Title identifier (required) |
+| `service` | - | Service tag (required) |
+| `title_id` | - | Title identifier (required) |
 | `profile` | `null` | Named credential/cookie profile to use |
 | `quality` | `[]` | Resolution(s), e.g. `[1080]`; empty means best available |
 | `vcodec` | `null` | Video codec, e.g. `"H265"` |

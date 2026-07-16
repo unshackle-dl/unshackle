@@ -4,11 +4,11 @@ undecidable from the manifest; the post-mux bitstream probe names it."""
 
 from __future__ import annotations
 
+from tests.core.test_ism_init import VIDEO_HEVC10_CPD, VIDEO_HEVC_DV_CPD, VIDEO_HEVC_PQ_CPD, VIDEO_HEVC_SDR_CPD
 from unshackle.core.manifests import ISM
 from unshackle.core.tracks import Video
 
-from tests.core.test_ism_init import (VIDEO_HEVC10_CPD, VIDEO_HEVC_DV_CPD, VIDEO_HEVC_HLG_CPD,  # isort: skip
-                                      VIDEO_HEVC_PQ_CPD, VIDEO_HEVC_SDR_CPD)
+from tests.core.test_ism_init import VIDEO_HEVC_HLG_CPD  # isort: skip
 
 
 def manifest_xml(cpd: str, fourcc: str = "HVC1") -> str:

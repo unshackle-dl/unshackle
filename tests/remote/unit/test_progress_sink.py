@@ -9,8 +9,12 @@ from __future__ import annotations
 
 import pytest
 
-from unshackle.core.api.progress import (DOWNLOAD_PROGRESS_CEILING, build_job_progress_callables,
-                                         track_progress_label, track_progress_weight)
+from unshackle.core.api.progress import (
+    DOWNLOAD_PROGRESS_CEILING,
+    build_job_progress_callables,
+    track_progress_label,
+    track_progress_weight,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -76,9 +80,7 @@ def test_weighting_makes_video_dominate_progress():
 
 def test_active_tracks_labels_reported_and_cleared_on_done():
     updates: list[dict] = []
-    cbs = build_job_progress_callables(
-        [Video(2160, "DV"), Audio("en-US", "2.0")], [_noop, _noop], updates.append
-    )
+    cbs = build_job_progress_callables([Video(2160, "DV"), Audio("en-US", "2.0")], [_noop, _noop], updates.append)
 
     cbs[0](total=100, completed=10)  # video downloading
     assert updates[-1]["active_tracks"] == ["video 2160p DV"]

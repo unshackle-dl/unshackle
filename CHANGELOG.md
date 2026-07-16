@@ -6,7 +6,55 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 This changelog is automatically generated using [git-cliff](https://git-cliff.org).
 
-## [5.3.0] - 2026-06-30
+## [Unreleased]
+
+### Features
+
+- *api*: Report per-episode and per-track progress on download jobs
+- *api*: Add job retry/priority/clear, history, config and maintenance endpoints
+- *api*: Expose choice values and multiple flag in service cli_params
+- *core*: Add debug logging for rnet requests
+- *tracks*: Add subtitle.type_priority config for variant ordering
+- *proxies*: [**breaking**] Rewrite ExpressVPN provider to Android device login
+- *dl*: Animate merge/decrypt/mux stages with gradient pulse bars
+- *tags*: Add imdb_api_enabled toggle, off by default
+- *tags*: Add OMDb metadata provider with omdb_api_key config
+
+### Bug Fixes
+
+- *api*: Use PBKDF2 instead of SHA256 for cache-namespace hashing
+- *api*: Pass track-selection params to service context
+- *remote*: Add missing get_clearkey_license to RemoteService
+- *remote*: Harden serve API access control and input handling
+- *core*: Decode subprocess output as UTF-8 with replacement
+- *tracks*: Treat ccextractor signal-crash as non-fatal
+- *downloader*: Release hedge loser file handles before merge sweep
+- *dl*: Restore real progress bars where progression is trackable
+- *dl*: Select only best descriptive audio track per language
+- *dl*: [**breaking**] Make audio/video track selection consistent and crash-safe
+- *tags*: Point IMDbApi provider at api.tiffara.com (IMDxAPI)
+- *gitignore*: Add memory directory to .gitignore
+- *dl*: Prevent missing tracks error when excluding track types
+- *subs*: Stop segmented WebVTT merge from stripping formatting
+
+### Documentation
+
+- Restructure documentation into MkDocs Material site
+- Expand config reference and genericize service names
+
+### Performance Improvements
+
+- *downloader*: Cut per-segment overhead, bound stalled connections
+
+### Changes
+
+- *core*: [**breaking**] Bundle download_track args into DownloadContext
+
+### Builds
+
+- *deps*: Cap pycaption below 2.2.27
+
+## [5.3.0] - 2026-07-01
 
 ### Features
 
@@ -770,6 +818,8 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - Reorganize Planned Features section in README for clarity
 - Improve track selection logic in dl.py
 
+[unreleased]: https://github.com/unshackle-dl/unshackle/compare/5.3.0..HEAD
+[5.3.0]: https://github.com/unshackle-dl/unshackle/compare/5.2.0..5.3.0
 [5.2.0]: https://github.com/unshackle-dl/unshackle/compare/5.1.0..5.2.0
 [5.1.0]: https://github.com/unshackle-dl/unshackle/compare/5.0.0..5.1.0
 [5.0.0]: https://github.com/unshackle-dl/unshackle/compare/4.0.0..5.0.0

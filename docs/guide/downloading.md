@@ -26,23 +26,23 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGUMENTS]
 - `unshackle`: the root command.
 - `dl`: the download command. **All of the options on this page are parsed here**, so
   they go *before* the service tag.
-- `SERVICE`: a service tag such as `NF`, `DSNP`, `AMZN`. Service tags are
-  case-insensitive and honour each service's aliases (for example `disney+` resolves to
+- `SERVICE`: a service tag such as `EXAMPLE1`, `EXAMPLE2`, `EXAMPLE3`. Service tags are
+  case-insensitive and honour each service's aliases (for example `example+` resolves to
   its real tag).
 - `SERVICE ARGUMENTS`: usually a title ID or URL. This positional argument belongs to
   the **service**, not to `dl`, so it comes *after* the tag.
 
 ```shell title="A minimal download"
-unshackle dl NF 81234567
+unshackle dl EXAMPLE 81234567
 ```
 
 ```shell title="Flags belong to dl, the title belongs to the service"
-unshackle dl -q 1080 -v H.265 -r HDR10 --lang en DSNP 'https://www.disneyplus.com/…'
+unshackle dl -q 1080 -v H.265 -r HDR10 --lang en EXAMPLE 'https://www.example.com/...'
 ```
 
 !!! tip "See what a service accepts"
     Because the positional argument is defined by each service, run
-    `unshackle dl SERVICE --help` (e.g. `unshackle dl NF --help`) to see that service's
+    `unshackle dl SERVICE --help` (e.g. `unshackle dl EXAMPLE --help`) to see that service's
     own argument and any service-specific options.
 
 ## The download flow
@@ -75,11 +75,11 @@ downloaded. `--skip-dl` runs the license step but skips the actual segment downl
 list. Without it, unshackle picks the **best available** resolution.
 
 ```shell title="Single resolution"
-unshackle dl -q 1080 NF 81234567
+unshackle dl -q 1080 EXAMPLE 81234567
 ```
 
 ```shell title="Multiple resolutions in one run"
-unshackle dl -q 2160,1080,720 NF 81234567
+unshackle dl -q 2160,1080,720 EXAMPLE 81234567
 ```
 
 !!! note "16:9 canvas matching"
@@ -93,11 +93,11 @@ By default a missing requested resolution is an error. Two flags change that:
 
 | Flag | Behaviour |
 | --- | --- |
-| `--best-available` | If the requested resolution(s) aren't present, continue with the best that *is* available instead of failing. Also softens missing audio/subtitle languages and hybrid fallbacks. |
+| `--best-available` | If the requested resolution(s) aren't present, continue with the best that *is* available instead of failing. Also softens missing video/audio/subtitle languages and hybrid fallbacks. |
 | `--worst` | Within the specified quality, pick the **lowest** bitrate rendition. **Requires `-q/--quality`.** |
 
 ```shell title="Never fail on a missing resolution"
-unshackle dl -q 2160 --best-available AMZN 0ABC123
+unshackle dl -q 2160 --best-available EXAMPLE 0ABC123
 ```
 
 ## Video codec and color range
@@ -117,9 +117,9 @@ either enum **names** or their **values**, comma-separated.
 | `AV1` | `AV1` |
 
 ```shell title="Either spelling works"
-unshackle dl -v HEVC   NF 81234567
-unshackle dl -v H.265  NF 81234567
-unshackle dl -v hevc,avc NF 81234567
+unshackle dl -v HEVC   EXAMPLE 81234567
+unshackle dl -v H.265  EXAMPLE 81234567
+unshackle dl -v hevc,avc EXAMPLE 81234567
 ```
 
 ### Color range
@@ -136,7 +136,7 @@ unshackle dl -v hevc,avc NF 81234567
 | `HYBRID` | Fetch both an HDR10/HDR10+ base and a DV track, then merge them |
 
 ```shell title="Grab HDR10 and Dolby Vision in one run"
-unshackle dl -q 2160 -r HDR10,DV DSNP '…'
+unshackle dl -q 2160 -r HDR10,DV EXAMPLE '...'
 ```
 
 !!! warning "HYBRID requires dovi_tool"
@@ -215,7 +215,7 @@ Names, values, and a few aliases are accepted: `eac3` and `ddp` both resolve to 
 and `vorbis` resolves to `OGG`.
 
 ```shell title="Prefer Dolby Digital Plus, fall back to AAC"
-unshackle dl -a EC3,AAC NF 81234567
+unshackle dl -a EC3,AAC EXAMPLE 81234567
 ```
 
 ### Channels and Atmos
@@ -225,7 +225,7 @@ unshackle dl -a EC3,AAC NF 81234567
 - `-naa` / `--noatmos`: exclude Dolby Atmos audio tracks from selection.
 
 ```shell title="5.1 audio, no Atmos"
-unshackle dl -c 5.1 --noatmos AMZN 0ABC123
+unshackle dl -c 5.1 --noatmos EXAMPLE 0ABC123
 ```
 
 ## Languages
@@ -236,7 +236,7 @@ unshackle dl -c 5.1 --noatmos AMZN 0ABC123
 `orig`, the title's original language.
 
 ```shell title="Original language plus English"
-unshackle dl -l orig,en NF 81234567
+unshackle dl -l orig,en EXAMPLE 81234567
 ```
 
 The special token `orig` is resolved to the title's actual original language everywhere
@@ -247,7 +247,7 @@ it is used. You can override each stream type independently:
 - `-al` / `--a-lang`: language for **audio only** (overrides `-l` for audio).
 
 ```shell title="English audio over the original video"
-unshackle dl -al en NF 81234567
+unshackle dl -al en EXAMPLE 81234567
 ```
 
 ### Exact vs fuzzy matching
@@ -269,7 +269,7 @@ matches only `es-419`, not `es-ES`.
 every available subtitle language is downloaded.
 
 ```shell title="Only English and Spanish subtitles"
-unshackle dl -sl en,es NF 81234567
+unshackle dl -sl en,es EXAMPLE 81234567
 ```
 
 ### Requiring subtitles
@@ -299,7 +299,7 @@ download on the presence of a specific subtitle track.
 | `original` | Keep the source format, no conversion |
 
 ```shell title="Convert subtitles to SRT"
-unshackle dl --sub-format srt NF 81234567
+unshackle dl --sub-format srt EXAMPLE 81234567
 ```
 
 !!! note "SDH stripping happens by default"
@@ -321,24 +321,24 @@ with `-` to exclude it.
 === "Whole seasons"
 
     ```shell
-    unshackle dl -w S01 NF 81234567
-    unshackle dl -w S01-S03 NF 81234567
-    unshackle dl -w S01,S03,S05 NF 81234567
+    unshackle dl -w S01 EXAMPLE 81234567
+    unshackle dl -w S01-S03 EXAMPLE 81234567
+    unshackle dl -w S01,S03,S05 EXAMPLE 81234567
     ```
 
 === "Specific episodes"
 
     ```shell
-    unshackle dl -w S01E01 NF 81234567
-    unshackle dl -w S01E01-S01E05 NF 81234567
-    unshackle dl -w S01E01-S02E03 NF 81234567
+    unshackle dl -w S01E01 EXAMPLE 81234567
+    unshackle dl -w S01E01-S01E05 EXAMPLE 81234567
+    unshackle dl -w S01E01-S02E03 EXAMPLE 81234567
     ```
 
 === "Exclusions"
 
     ```shell
     # Seasons 1 through 5, but not season 3
-    unshackle dl -w S01-S05,-S03 NF 81234567
+    unshackle dl -w S01-S05,-S03 EXAMPLE 81234567
     ```
 
 ### Other selection flags
@@ -350,7 +350,7 @@ with `-` to exclude it.
 | `--list-titles` | List the titles that would be downloaded, then stop. |
 
 ```shell title="Grab just the newest episode"
-unshackle dl --latest-episode NF 81234567
+unshackle dl --latest-episode EXAMPLE 81234567
 ```
 
 ## Including and excluding track types
@@ -380,11 +380,11 @@ Additional track-type flags:
   than aborting the whole title. Video and audio failures remain fatal.
 
 ```shell title="Subtitles only"
-unshackle dl -S -sl en NF 81234567
+unshackle dl -S -sl en EXAMPLE 81234567
 ```
 
 ```shell title="Everything except chapters"
-unshackle dl -nc NF 81234567
+unshackle dl -nc EXAMPLE 81234567
 ```
 
 !!! note
@@ -403,7 +403,7 @@ Before committing to a long download, inspect what unshackle *would* do:
 | `--skip-dl` | Skip downloading but still acquire the decryption keys. |
 
 ```shell title="See the track selection without downloading"
-unshackle dl -q 1080 -v H.265 -r HDR10 --list NF 81234567
+unshackle dl -q 1080 -v H.265 -r HDR10 --list EXAMPLE 81234567
 ```
 
 ## Output and muxing
@@ -416,7 +416,7 @@ unshackle dl -q 1080 -v H.265 -r HDR10 --list NF 81234567
 - `--no-source`: remove the service source tag from the filename and path.
 
 ```shell title="Send this download somewhere specific"
-unshackle dl -o ~/Videos/incoming NF 81234567
+unshackle dl -o ~/Videos/incoming EXAMPLE 81234567
 ```
 
 ### Muxing behaviour
@@ -426,7 +426,7 @@ flags change how the output is assembled:
 
 | Flag | Behaviour | Default source |
 | --- | --- | --- |
-| `--no-mux` | Do not mux; keep the individual track files. | — |
+| `--no-mux` | Do not mux; keep the individual track files. | - |
 | `--split-audio` | Write a separate output file per audio codec instead of merging all audio. | config `muxing.merge_audio` (on) |
 | `--merge-video` | Mux all selected video tracks into one file. | config `muxing.merge_video` (off) |
 
@@ -436,7 +436,7 @@ flags change how the output is assembled:
 - `--repack`: add a `REPACK` tag to the output filename.
 
 ```shell title="Custom group tag and a REPACK label"
-unshackle dl --tag MYGRP --repack NF 81234567
+unshackle dl --tag MYGRP --repack EXAMPLE 81234567
 ```
 
 ## Proxies
@@ -445,9 +445,9 @@ unshackle dl --tag MYGRP --repack NF 81234567
 configured proxy providers), or a `provider:region` form.
 
 ```shell title="Proxy forms"
-unshackle dl --proxy us NF 81234567
-unshackle dl --proxy nordvpn:ca NF 81234567
-unshackle dl --proxy 'http://user:pass@host:8080' NF 81234567
+unshackle dl --proxy us EXAMPLE 81234567
+unshackle dl --proxy nordvpn:ca EXAMPLE 81234567
+unshackle dl --proxy 'http://user:pass@host:8080' EXAMPLE 81234567
 ```
 
 Two related flags:
@@ -470,11 +470,11 @@ Two related flags:
 | `--reset-cache` | Clear the title cache before fetching. |
 
 ```shell title="Two tracks at a time, eight threads each"
-unshackle dl --downloads 2 --workers 8 NF 81234567
+unshackle dl --downloads 2 --workers 8 EXAMPLE 81234567
 ```
 
 ```shell title="Space out a season download"
-unshackle dl -w S01 --slow 30-60 NF 81234567
+unshackle dl -w S01 --slow 30-60 EXAMPLE 81234567
 ```
 
 ## Keys, vaults, and export
@@ -486,7 +486,7 @@ a key when the vault misses. You can force one side or the other:
 - `--vaults-only`: only use key vaults (never license via the CDM); a missing key fails.
 
 ```shell title="Fetch keys only, no download"
-unshackle dl --skip-dl NF 81234567
+unshackle dl --skip-dl EXAMPLE 81234567
 ```
 
 `--export` writes a JSON file, into the configured exports directory, containing track
@@ -494,7 +494,7 @@ info and the acquired content keys for each title. This is the format consumed b
 `unshackle import` to reconstruct a download later.
 
 ```shell title="Export track info and keys"
-unshackle dl --skip-dl --export NF 81234567
+unshackle dl --skip-dl --export EXAMPLE 81234567
 ```
 
 !!! note "Region is recorded only with a proxy"
@@ -511,10 +511,10 @@ tagging and naming:
 | `--tmdb` | `--tmdb 27205` | Use this TMDB ID instead of automatic lookup. |
 | `--imdb` | `--imdb tt1375666` | Use this IMDb ID. |
 | `--animeapi` | `--animeapi mal:12345` | Resolve via AnimeAPI (`mal:`/`anilist:` prefix; defaults to MAL). |
-| `--enrich` | — | Override the show title and year from an external source. **Requires** one of `--tmdb`, `--imdb`, or `--animeapi`. |
+| `--enrich` | - | Override the show title and year from an external source. **Requires** one of `--tmdb`, `--imdb`, or `--animeapi`. |
 
 ```shell title="Force the right IMDb match and enrich the title"
-unshackle dl --imdb tt1375666 --enrich NF 81234567
+unshackle dl --imdb tt1375666 --enrich EXAMPLE 81234567
 ```
 
 ## Configuration defaults

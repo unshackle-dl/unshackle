@@ -225,6 +225,8 @@ class Hybrid:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
 
             if result_duration.returncode != 0:
@@ -257,6 +259,8 @@ class Hybrid:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
 
             if result_streams.returncode != 0:
@@ -300,6 +304,8 @@ class Hybrid:
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                 )
 
                 # cropdetect outputs crop=w:h:x:y
@@ -332,7 +338,7 @@ class Hybrid:
         for crop in crop_results:
             crop_counts[crop] = crop_counts.get(crop, 0) + 1
         most_common = max(crop_counts, key=crop_counts.get)
-        left, top, right, bottom = most_common      # frame instead of leaving phantom bars from the source.
+        left, top, right, bottom = most_common  # frame instead of leaving phantom bars from the source.
 
         l5_json = {
             "active_area": {
@@ -603,6 +609,8 @@ class Hybrid:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
 
         max_mdl = 1000

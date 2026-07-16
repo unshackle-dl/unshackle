@@ -64,7 +64,7 @@ The debug log is created during a `dl` run (and by [`import`](cli-reference.md#i
 <logs directory>/unshackle_debug_<service>_<timestamp>.jsonl
 ```
 
-For example, `unshackle_debug_NETFLIX_20260703-142530.jsonl`. The `<service>` tag and the timestamp mean each download gets its own file, so runs never overwrite each other.
+For example, `unshackle_debug_EXAMPLE_20260703-142530.jsonl`. The `<service>` tag and the timestamp mean each download gets its own file, so runs never overwrite each other.
 
 !!! tip "Find your logs directory"
     The logs directory defaults to a `logs` folder inside the package data directory, but it can be relocated with the `directories.logs` config key. To see the exact resolved path on your machine, run [`unshackle env info`](#env-info) and read the **Directories** table.
@@ -99,16 +99,16 @@ Because each line is independent JSON, `jq` is the natural tool:
 
 ```console
 # Show only error-level entries
-jq 'select(.level == "ERROR")' unshackle_debug_NETFLIX_20260703-142530.jsonl
+jq 'select(.level == "ERROR")' unshackle_debug_EXAMPLE_20260703-142530.jsonl
 
 # List every operation and whether it succeeded
-jq -c '{operation, success}' unshackle_debug_NETFLIX_20260703-142530.jsonl
+jq -c '{operation, success}' unshackle_debug_EXAMPLE_20260703-142530.jsonl
 
 # Pull the traceback out of the first error
-jq -r 'select(.error) | .error.traceback[]' unshackle_debug_NETFLIX_20260703-142530.jsonl
+jq -r 'select(.error) | .error.traceback[]' unshackle_debug_EXAMPLE_20260703-142530.jsonl
 
 # Show only DRM / licensing operations
-jq 'select(.operation | startswith("drm_"))' unshackle_debug_NETFLIX_20260703-142530.jsonl
+jq 'select(.operation | startswith("drm_"))' unshackle_debug_EXAMPLE_20260703-142530.jsonl
 ```
 
 The session's binary-tool versions (Shaka Packager, mp4decrypt, mkvmerge, FFmpeg, FFprobe) are logged near the start of a `dl` run, which is often the fastest way to confirm a muxing or decryption failure is really a wrong-version problem.
@@ -168,7 +168,7 @@ unshackle redacts logged strings so that debug output is safe to share. Three pa
 Path redaction is controlled by the `redact_paths` config key, which is **on by default**:
 
 ```yaml
-redact_paths: true   # default — mask local base directories in logged paths
+redact_paths: true   # default - mask local base directories in logged paths
 ```
 
 Set `redact_paths: false` if you are debugging a path problem locally and want to see full, unmasked paths in the console and logs. Secret and URL redaction in the JSON debug log are always applied and are not affected by this toggle.
@@ -223,7 +223,7 @@ Stale cache or leftover temp files can cause confusing behaviour (an old cached 
 
 ```console
 unshackle env clear cache            # clear the whole cache directory
-unshackle env clear cache NETFLIX    # clear just one service's cache subdirectory
+unshackle env clear cache EXAMPLE    # clear just one service's cache subdirectory
 unshackle env clear temp             # clear the temp working directory
 ```
 
@@ -287,7 +287,7 @@ The debug log is tuned for **developers troubleshooting pipeline flow** (maximum
 
     ```console
     # Read the pipeline's high-level flow, one line per stage
-    jq 'select(.level == "INFO")' unshackle_debug_NETFLIX_20260703-142530.jsonl
+    jq 'select(.level == "INFO")' unshackle_debug_EXAMPLE_20260703-142530.jsonl
     ```
 
 !!! warning "No raw dumps"

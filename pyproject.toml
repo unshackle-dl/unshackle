@@ -37,7 +37,7 @@ dependencies = [
     "langcodes>=3.4.0,<4",
     "lxml>=5.2.1,<7",
     "protobuf>=4.25.3,<7",
-    "pycaption>=2.2.6,<3",
+    "pycaption>=2.2.6,<2.2.27",
     "pycryptodomex>=3.20.0,<4",
     "pyjwt>=2.12.0,<3",
     "pymediainfo>=6.1.0,<8",
@@ -56,7 +56,7 @@ dependencies = [
     "chardet>=5.2.0,<6",
     "pyplayready>=0.8.3,<0.9",
     "cryptography>=45.0.0,<47",
-    "subby",
+    "subby @ git+https://github.com/vevv/subby.git@a057280f31acd3a0ba5c6dc69eaefbb88aea974e",
     "aiohttp>=3.14.0,<4",
     "aiohttp-swagger3>=0.9.0,<1",
     "pysubs2>=1.7.0,<2",
@@ -92,7 +92,7 @@ dev = [
     "types-PyMySQL>=1.1.0.1,<2",
     "types-requests>=2.31.0.20240406,<3",
     "isort>=5.13.2,<8",
-    "ruff>=0.3.7,<0.15",
+    "ruff>=0.15.12,<0.16",
 ]
 test = [
     "pytest>=8.3.0,<9",
@@ -120,11 +120,15 @@ filterwarnings = [
 ]
 addopts = "-ra --strict-markers"
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["unshackle"]
 
 [tool.hatch.build.targets.sdist]
 include = [
+    "unshackle",
     "CHANGELOG.md",
     "README.md",
     "LICENSE",
@@ -137,12 +141,19 @@ line-length = 120
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "W"]
 
+[tool.ruff.lint.per-file-ignores]
+# binaries are resolved lazily via module-level __getattr__ (PEP 562), so the
+# names in __all__ are intentionally not defined statically.
+"unshackle/core/binaries.py" = ["F822"]
+
 [tool.isort]
+profile = "black"
 line_length = 118
 
 [tool.mypy]
 check_untyped_defs = true
 disallow_incomplete_defs = true
+explicit_package_bases = true
 disallow_untyped_defs = true
 follow_imports = "silent"
 ignore_missing_imports = true
@@ -160,4 +171,3 @@ skips = [
 
 [tool.uv.sources]
 unshackle = { workspace = true }
-subby = { git = "https://github.com/vevv/subby.git", rev = "a057280f31acd3a0ba5c6dc69eaefbb88aea974e" }

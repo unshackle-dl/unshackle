@@ -211,7 +211,7 @@ every request except `/api/health`:
 curl -X POST http://127.0.0.1:8786/api/search \
   -H "X-Secret-Key: your-api-secret" \
   -H "Content-Type: application/json" \
-  -d '{"service": "NF", "query": "example"}'
+  -d '{"service": "EXAMPLE", "query": "example"}'
 ```
 
 A missing or unknown key returns `401`. The full model, including per-key service

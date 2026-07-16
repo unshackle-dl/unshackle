@@ -57,9 +57,7 @@ class MusicRenderer:
                 metadata.get("released_at"),
             )
         )
-        length = self._format_total_duration(
-            getattr(music, "total_duration", None) or self._sum_duration(music)
-        )
+        length = self._format_total_duration(getattr(music, "total_duration", None) or self._sum_duration(music))
         quality = self._quality_summary(
             self._first_text(
                 getattr(music, "quality", None),

@@ -40,7 +40,9 @@ class MusicAudioIntegrityResult:
         }
 
 
-def verify_music_audio(path: Path, *, song: Any = None, track: Any = None, media_info: Optional[MediaInfo] = None) -> MusicAudioIntegrityResult:
+def verify_music_audio(
+    path: Path, *, song: Any = None, track: Any = None, media_info: Optional[MediaInfo] = None
+) -> MusicAudioIntegrityResult:
     """Verify a downloaded music audio file after it is playable/decrypted."""
     path = Path(path)
     if not path.exists():

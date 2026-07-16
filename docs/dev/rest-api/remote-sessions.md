@@ -65,7 +65,7 @@ remote_services:
     server_cdm: false
     # Optional: per-service config overrides applied locally (title_map, cdm, etc.)
     services:
-      AMZN:
+      EXAMPLE:
         title_map:
           "0ABCDEF": "The Show (Renamed Locally)"
 ```
@@ -87,13 +87,13 @@ remote_services:
 If exactly one server is configured, unshackle uses it implicitly:
 
 ```bash
-unshackle dl AMZN 0ABCDEF
+unshackle dl EXAMPLE 0ABCDEF
 ```
 
 If **more than one** server is configured, you must pick one with `--server`:
 
 ```bash
-unshackle dl --server my_server AMZN 0ABCDEF
+unshackle dl --server my_server EXAMPLE 0ABCDEF
 ```
 
 With no `remote_services` configured at all, unshackle raises a clear error telling
@@ -280,10 +280,10 @@ All routes are exposed even in `--remote-only` server mode. Paths use the
 The response returns **before** authentication finishes:
 
 ```json
-{ "session_id": "…uuid4…", "service": "AMZN", "status": "authenticating" }
+{ "session_id": "...uuid4...", "service": "EXAMPLE", "status": "authenticating" }
 ```
 
-Authentication runs on a background thread (`asyncio.to_thread(authenticate, …)`).
+Authentication runs on a background thread (`asyncio.to_thread(authenticate, ...)`).
 The session starts in `AUTHENTICATING`; the client must poll the prompt endpoint
 until it reaches `authenticated` (or `failed`).
 
@@ -306,11 +306,11 @@ layer.
 { "status": "authenticated" }
 { "status": "authenticating" }
 { "status": "pending_input", "prompt": "Enter code: " }
-{ "status": "failed", "error": "…message…" }
+{ "status": "failed", "error": "...message..." }
 ```
 
 A missing session returns `404 SESSION_NOT_FOUND`; an IP mismatch returns
-`403 FORBIDDEN`. `POST /api/session/{id}/prompt` takes `{ "response": "…" }` and
+`403 FORBIDDEN`. `POST /api/session/{id}/prompt` takes `{ "response": "..." }` and
 returns `{ "status": "accepted" }`; posting with no pending prompt is an
 `INVALID_INPUT` error.
 
@@ -364,7 +364,7 @@ and base64-encoding, **excluding** `titles_*` files) and returns them under a
 `cache` key so the client can persist refreshed tokens:
 
 ```json
-{ "status": "ok", "cache": { "tokens": "…base64(zlib(bytes))…" } }
+{ "status": "ok", "cache": { "tokens": "...base64(zlib(bytes))..." } }
 ```
 
 ### Session info response
@@ -373,8 +373,8 @@ and base64-encoding, **excluding** `titles_*` files) and returns them under a
 
 ```json
 {
-  "session_id": "…",
-  "service": "AMZN",
+  "session_id": "...",
+  "service": "EXAMPLE",
   "valid": true,
   "expires_in": 300,
   "track_count": 12,
@@ -410,7 +410,7 @@ session API and a good template for any client.
 
 ## Troubleshooting
 
-!!! example "\"Could not connect to remote server … Is it running?\""
+!!! example "\"Could not connect to remote server ... Is it running?\""
     The client couldn't reach the URL. Confirm `unshackle serve` is running on the
     server, the `url`/port in `remote_services` are correct (default port `8786`),
     and any firewall or reverse proxy allows the connection.
@@ -426,6 +426,6 @@ session API and a good template for any client.
     prompts you, check that credentials/cookies forwarded from the client are valid
     for the service.
 
-!!! example "\"Multiple remote services configured. Use --server …\""
+!!! example "\"Multiple remote services configured. Use --server ...\""
     You have more than one entry under `remote_services`. Pass `--server <name>`
     to pick one.

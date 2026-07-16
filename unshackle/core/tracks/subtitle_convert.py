@@ -154,6 +154,11 @@ class SubtitleEditBackend:
         return source in self.reads and target in self.writes
 
     def rank(self, source: Codec, target: Codec) -> int:
+        if source in (Codec.SubStationAlpha, Codec.SubStationAlphav4) and target in (
+            Codec.TimedTextMarkupLang,
+            Codec.WebVTT,
+        ):
+            return 3
         return 0
 
     def convert(self, source: Codec, src: Path, target: Codec, out: Path) -> None:

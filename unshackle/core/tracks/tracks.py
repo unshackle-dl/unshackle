@@ -5,16 +5,16 @@ import subprocess
 import time
 from functools import partial
 from pathlib import Path
-from typing import Callable, Iterator, Optional, Sequence, Union
+from typing import Any, Callable, Iterator, Optional, Sequence, Union
 
 from langcodes import Language, closest_supported_match
-from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
+from rich.progress import Progress, SpinnerColumn, TaskID, TextColumn, TimeRemainingColumn
 from rich.table import Table
 from rich.tree import Tree
 
 from unshackle.core import binaries
 from unshackle.core.config import config
-from unshackle.core.console import console
+from unshackle.core.console import GradientPulseBarColumn, console
 from unshackle.core.constants import LANGUAGE_EXACT_DISTANCE, LANGUAGE_MAX_DISTANCE, AnyTrack, TrackT
 from unshackle.core.events import events
 from unshackle.core.tracks.attachment import Attachment
@@ -114,7 +114,7 @@ class Tracks:
                     if add_progress and track_type not in (Chapter, Attachment):
                         progress = Progress(
                             SpinnerColumn(finished_text=""),
-                            BarColumn(),
+                            GradientPulseBarColumn(),
                             "•",
                             TimeRemainingColumn(compact=True, elapsed_when_finished=True),
                             "•",
@@ -126,10 +126,10 @@ class Tracks:
                         state = {"total": 100.0}
 
                         def update_track_progress(
-                            task_id: int = task,
+                            task_id: TaskID = task,
                             _state: dict[str, float] = state,
                             _progress: Progress = progress,
-                            **kwargs,
+                            **kwargs: Any,
                         ) -> None:
                             """
                             Ensure terminal status states render as a fully completed bar.
@@ -137,12 +137,20 @@ class Tracks:
                             Some downloaders can report completed slightly below total
                             before emitting the final "Downloaded" state.
                             """
-                            if "total" in kwargs and kwargs["total"] is not None:
-                                _state["total"] = kwargs["total"]
+                            if "total" in kwargs:
+                                if kwargs["total"] is None:
+                                    # Progress.update() ignores total=None; an un-started task pulses
+                                    del kwargs["total"]
+                                    _progress.reset(task_id, start=False)
+                                else:
+                                    _state["total"] = kwargs["total"]
+                                    _progress.start_task(task_id)
 
                             downloaded_state = kwargs.get("downloaded")
                             if downloaded_state in {"Downloaded", "Decrypted", "[yellow]SKIPPED"}:
                                 kwargs["completed"] = _state["total"]
+                                kwargs["total"] = _state["total"]
+                                _progress.start_task(task_id)
                             _progress.update(task_id=task_id, **kwargs)
 
                         progress_callables.append(update_track_progress)
@@ -236,11 +244,11 @@ class Tracks:
             log.debug(f" - Found and skipped {duplicates} duplicate tracks...")
 
     def sort_videos(self, by_language: Optional[Sequence[Union[str, Language]]] = None) -> None:
-        """Sort video tracks by bitrate, and optionally language."""
+        """Sort video tracks by resolution then bitrate, and optionally language."""
         if not self.videos:
             return
-        # bitrate
-        self.videos.sort(key=lambda x: float(x.bitrate or 0.0), reverse=True)
+        # resolution first, then bitrate (unknown-bitrate tracks still rank by resolution)
+        self.videos.sort(key=lambda x: (x.height or 0, float(x.bitrate or 0.0)), reverse=True)
         # language
         for language in reversed(by_language or []):
             if str(language) in ("all", "best"):
@@ -277,7 +285,11 @@ class Tracks:
                 continue
             self.audio.sort(key=lambda x: not is_close_match(language, [x.language]))
 
-    def sort_subtitles(self, by_language: Optional[Sequence[Union[str, Language]]] = None) -> None:
+    def sort_subtitles(
+        self,
+        by_language: Optional[Sequence[Union[str, Language]]] = None,
+        type_priority: Optional[Sequence[str]] = None,
+    ) -> None:
         """
         Sort subtitle tracks by various track attributes to a common P2P standard.
         You may optionally provide a sequence of languages to prioritize to the top.
@@ -292,13 +304,25 @@ class Tracks:
           - Normal
           - Hard of Hearing (SDH/CC)
           (Least to most captions expected in the subtitle)
+
+        type_priority overrides the Language Group Order with an explicit ranking of
+        "forced", "normal", and "sdh" (cc counts as sdh); unlisted types fall to the end.
+        The first track after sorting receives the default flag at mux time, so this also
+        controls which subtitle type becomes default.
         """
         if not self.subtitles:
             return
         # language groups
         self.subtitles.sort(key=lambda x: str(x.language))
-        self.subtitles.sort(key=lambda x: x.sdh or x.cc)
-        self.subtitles.sort(key=lambda x: x.forced, reverse=True)
+        if type_priority:
+            rank = {str(t).lower(): i for i, t in enumerate(type_priority)}
+            default_rank = len(rank)
+            self.subtitles.sort(
+                key=lambda x: rank.get("forced" if x.forced else "sdh" if (x.sdh or x.cc) else "normal", default_rank)
+            )
+        else:
+            self.subtitles.sort(key=lambda x: x.sdh or x.cc)
+            self.subtitles.sort(key=lambda x: x.forced, reverse=True)
         # sections
         for language in reversed(by_language or []):
             if str(language) == "all":
@@ -372,7 +396,9 @@ class Tracks:
         base_tracks = []
         for range_type in base_ranges:
             base_tracks = [
-                v for v in tracks if v.range == range_type and (v.height in quality or int(v.width * 9 / 16) in quality)
+                v
+                for v in tracks
+                if v.range == range_type and (v.height in quality or (v.width and int(v.width * 9 / 16) in quality))
             ]
             if base_tracks:
                 break
@@ -380,7 +406,7 @@ class Tracks:
         pick = min if worst else max
         base_selected = []
         for res in quality:
-            candidates = [v for v in base_tracks if v.height == res or int(v.width * 9 / 16) == res]
+            candidates = [v for v in base_tracks if v.height == res or (v.width and int(v.width * 9 / 16) == res)]
             if candidates:
                 chosen = pick(candidates, key=lambda v: v.bitrate)
                 base_selected.append(chosen)
@@ -407,7 +433,7 @@ class Tracks:
             ]
             if not matches:
                 matches = [  # 16:9 canvas matches
-                    x for x in self.videos if int(x.width * (9 / 16)) == resolution
+                    x for x in self.videos if x.width and int(x.width * (9 / 16)) == resolution
                 ]
             selected.extend(matches[: per_resolution or None])
         self.videos = selected
@@ -417,13 +443,26 @@ class Tracks:
         tracks: list[TrackT], languages: list[str], per_language: int = 0, exact_match: bool = False
     ) -> list[TrackT]:
         distance = LANGUAGE_EXACT_DISTANCE if exact_match else LANGUAGE_MAX_DISTANCE
-        selected = []
+        selected: list[TrackT] = []
+        seen_ids: set[str] = set()
         for language in languages:
-            selected.extend(
-                [x for x in tracks if closest_supported_match(str(x.language), [language], distance)][
-                    : per_language or None
-                ]
-            )
+            matches = [x for x in tracks if closest_supported_match(str(x.language), [language], distance)]
+            if exact_match and len(matches) > 1:
+                # CLDR tag_distance measures intelligibility, not tag identity: it rates a base
+                # language and its "paradigm" regional variant as the same language (distance 0
+                # for ar/ar-EG, en/en-US, pt/pt-BR), so exact mode alone cannot separate them.
+                # Follow RFC 4647 Lookup: prefer the most specific (string-equal) tag, and fall
+                # back to the fuzzy match only when none exists (e.g. zh matches cmn).
+                want = Language.get(language).to_tag().casefold()
+                exact_hits = [x for x in matches if Language.get(str(x.language)).to_tag().casefold() == want]
+                if exact_hits:
+                    matches = exact_hits
+            # Overlapping tags can still resolve to the same physical track; dedupe by id so
+            # callers never get duplicate tracks.
+            for track in matches[: per_language or None]:
+                if track.id not in seen_ids:
+                    seen_ids.add(track.id)
+                    selected.append(track)
         return selected
 
     def mux(
@@ -668,7 +707,7 @@ class Tracks:
         log_event(
             "mux_start",
             level="INFO",
-            message=(f"Muxing {len(self.videos)}V/{len(self.audio)}A/{len(self.subtitles)}S " f"-> {output_path.name}"),
+            message=(f"Muxing {len(self.videos)}V/{len(self.audio)}A/{len(self.subtitles)}S -> {output_path.name}"),
             context={
                 "title": title,
                 "output_path": str(output_path),
@@ -697,7 +736,7 @@ class Tracks:
             errors = []
             warnings = []
             mux_start_time = time.monotonic()
-            p = subprocess.Popen(full_command, text=True, stdout=subprocess.PIPE)
+            p = subprocess.Popen(full_command, text=True, encoding="utf-8", errors="replace", stdout=subprocess.PIPE)
             for line in iter(p.stdout.readline, ""):
                 if line.startswith("#GUI#error") or line.startswith("#GUI#warning"):
                     errors.append(line)

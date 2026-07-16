@@ -1,6 +1,15 @@
 from .display import MusicHeaderInfo, TrackRow, render_album_header, render_artwork_preview, render_track_panel
-from .extract import (build_music_from_songs, classify_release_kind, dedupe_track_options, duration_seconds,
-                      first_number, first_text, format_duration, format_names, year_from_value)
+from .extract import (
+    build_music_from_songs,
+    classify_release_kind,
+    dedupe_track_options,
+    duration_seconds,
+    first_number,
+    first_text,
+    format_duration,
+    format_names,
+    year_from_value,
+)
 from .hasher import file_md5
 from .integrity import MusicAudioIntegrityError, MusicAudioIntegrityResult, verify_music_audio
 from .manifest import write_music_manifest

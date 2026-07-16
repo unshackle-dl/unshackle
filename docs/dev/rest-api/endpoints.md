@@ -130,8 +130,8 @@ Search a service for titles by query string. The service must implement `search(
 
 | Field | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `service` | string | yes | — | Service tag. |
-| `query` | string | yes | — | Search query. |
+| `service` | string | yes | - | Service tag. |
+| `query` | string | yes | - | Search query. |
 | `profile` | string | no | `null` | Credential/cookie profile to use. |
 | `proxy` | string | no | `null` | Proxy URI or country code. |
 | `no_proxy` | boolean | no | `false` | Force-disable all proxy use. |
@@ -164,7 +164,7 @@ Search a service for titles by query string. The service must implement `search(
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
-| `200` | — | Search completed. |
+| `200` | - | Search completed. |
 | `400` | `INVALID_PARAMETERS` | Missing `query`. |
 | `400` | `INVALID_SERVICE` | Unknown or disallowed service. |
 | `400` | `INVALID_PROXY` | Proxy could not be resolved. |
@@ -222,7 +222,7 @@ Each serialized title carries `type` (`"episode"`, `"movie"`, or `"other"`), `na
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
-| `200` | — | Titles returned. |
+| `200` | - | Titles returned. |
 | `400` | `INVALID_INPUT` | Missing `service` or `title_id`. |
 | `400` | `INVALID_SERVICE` | Unknown or disallowed service. |
 | `401` | `AUTH_FAILED` | Authentication with the service failed. |
@@ -242,7 +242,7 @@ List the video, audio, and subtitle tracks for a title. For series, you can scop
 | `wanted` | string | no | Episode/season range (e.g. `"S01E01-S01E03"`). |
 | `season` | int/string | no | Season number (combined with `episode`). |
 | `episode` | int/string | no | Episode number (combined with `season`). |
-| `profile`, `proxy`, `no_proxy`, `cdm_type` | — | no | As on `list-titles`. |
+| `profile`, `proxy`, `no_proxy`, `cdm_type` | - | no | As on `list-titles`. |
 
 When both `season` and `episode` are given, they are combined into a `"{season}x{episode}"` selector.
 
@@ -297,7 +297,7 @@ The `drm` array on a track is a list of `{type, pssh?, kids?, content_keys?, lic
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
-| `200` | — | Tracks returned. |
+| `200` | - | Tracks returned. |
 | `400` | `INVALID_INPUT` | Missing `service` or `title_id`. |
 | `400` | `INVALID_PARAMETERS` | Invalid `wanted` range. |
 | `400` | `INVALID_SERVICE` | Unknown or disallowed service. |
@@ -378,7 +378,7 @@ Create a download job. Requires `service` and `title_id`; every other field is a
 | `best_available` | boolean | `false` | Fall back to best available. |
 | `repack` | boolean | `false` | Add REPACK tag. |
 | `tag` | string | `null` | Release group tag. |
-| `tmdb_id` / `imdb_id` / `animeapi_id` | — | `null` | External ID overrides for tagging. |
+| `tmdb_id` / `imdb_id` / `animeapi_id` | - | `null` | External ID overrides for tagging. |
 | `enrich` | boolean | `false` | Override title/year from external source. |
 | `output_dir` | string | `null` | Override output directory. |
 | `no_cache` / `reset_cache` | boolean | `false` | Title cache controls. |
@@ -395,7 +395,7 @@ Create a download job. Requires `service` and `title_id`; every other field is a
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
-| `202` | — | Job queued. |
+| `202` | - | Job queued. |
 | `400` | `INVALID_INPUT` | Missing `service`/`title_id` or malformed JSON. |
 | `400` | `INVALID_PARAMETERS` | A parameter failed validation. |
 | `400` | `INVALID_SERVICE` | Unknown or disallowed service. |
@@ -409,8 +409,8 @@ List download jobs, with optional filtering and sorting.
 
 | Param | Values | Default | Description |
 | --- | --- | --- | --- |
-| `status` | `queued`, `downloading`, `completed`, `failed`, `cancelled` | — | Filter by status. |
-| `service` | service tag | — | Filter by service. |
+| `status` | `queued`, `downloading`, `completed`, `failed`, `cancelled` | - | Filter by status. |
+| `service` | service tag | - | Filter by service. |
 | `sort_by` | `created_time`, `started_time`, `completed_time`, `progress`, `status`, `service` | `created_time` | Sort field. |
 | `sort_order` | `asc`, `desc` | `desc` | Sort direction. |
 | `full` | `true`, `false` | `false` | Include full per-job details. |
@@ -454,7 +454,7 @@ With `full=true`, each job additionally includes `parameters` (with secrets reda
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
-| `200` | — | Jobs returned. |
+| `200` | - | Jobs returned. |
 | `400` | `INVALID_PARAMETERS` | Invalid `sort_by` or `sort_order`. |
 
 ### `GET /api/download/jobs/{job_id}`
@@ -463,7 +463,7 @@ Fetch a single job with full details (equivalent to a `full=true` list entry).
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
-| `200` | — | Job returned. |
+| `200` | - | Job returned. |
 | `404` | `JOB_NOT_FOUND` | No such job. |
 
 ### `DELETE /api/download/jobs/{job_id}`
@@ -478,8 +478,8 @@ Cancel or remove a job. The behaviour depends on the job's current state:
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
-| `200` | — | Job cancelled. |
-| `204` | — | Terminal job removed (empty body). |
+| `200` | - | Job cancelled. |
+| `204` | - | Terminal job removed (empty body). |
 | `400` | `INVALID_PARAMETERS` | Job is in a state that cannot be cancelled. |
 | `404` | `JOB_NOT_FOUND` | No such job. |
 
@@ -512,7 +512,7 @@ Enqueue a **new** job that reuses a terminal job's service, title, and parameter
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
-| `202` | — | New job queued. |
+| `202` | - | New job queued. |
 | `404` | `JOB_NOT_FOUND` | No such job. |
 | `409` | `CONFLICT` | Job is not in a terminal state. |
 | `400` | `INVALID_SERVICE` | Service is no longer allowed. |
@@ -530,7 +530,7 @@ Move a queued job to the front of the download queue.
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
-| `200` | — | Job moved to front. |
+| `200` | - | Job moved to front. |
 | `404` | `JOB_NOT_FOUND` | No such job. |
 | `409` | `CONFLICT` | Job is not queued. |
 
@@ -593,7 +593,7 @@ Read the persisted history of jobs that reached a terminal state, newest first. 
 | Param | Type | Default | Description |
 | --- | --- | --- | --- |
 | `limit` | int (≥ 1) | `100` | Maximum entries to return. |
-| `service` | string | — | Case-insensitive service filter. |
+| `service` | string | - | Case-insensitive service filter. |
 
 === "Response `200`"
 
@@ -619,7 +619,7 @@ Read the persisted history of jobs that reached a terminal state, newest first. 
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
-| `200` | — | History returned. |
+| `200` | - | History returned. |
 | `400` | `INVALID_PARAMETERS` | Invalid `limit`. |
 
 ### `DELETE /api/history/{job_id}`
@@ -628,7 +628,7 @@ Remove a single persisted history entry. Returns **`204 No Content`** (empty bod
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
-| `204` | — | Entry removed (empty body). |
+| `204` | - | Entry removed (empty body). |
 | `404` | `NOT_FOUND` | No such entry (or outside your allowlist). |
 
 ### `POST /api/maintenance/clear-cache` and `POST /api/maintenance/clear-temp`
@@ -648,7 +648,7 @@ The `409` guard is about active file I/O, not an arbitrary lock: an in-flight jo
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
-| `200` | — | Directory cleared. |
+| `200` | - | Directory cleared. |
 | `409` | `CONFLICT` | A download is currently active. |
 
 ### `POST /api/maintenance/refresh-services`
@@ -718,7 +718,7 @@ Create a session for a service and title. Authentication runs asynchronously in 
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
-| `200` | — | Session created; authentication in progress. |
+| `200` | - | Session created; authentication in progress. |
 | `400` | `INVALID_INPUT` | Missing `service` or `title_id`. |
 | `400` | `INVALID_SERVICE` | Unknown or disallowed service. |
 
@@ -752,7 +752,7 @@ Poll for the authentication status and any pending interactive prompt (OTP, PIN,
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
-| `200` | — | Status returned. |
+| `200` | - | Status returned. |
 | `403` | `FORBIDDEN` | Request IP differs from the session creator. |
 | `404` | `SESSION_NOT_FOUND` | No such session. |
 
@@ -768,7 +768,7 @@ Submit a response to a pending prompt. Body: `{ "response": "..." }` (required).
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
-| `200` | — | Response accepted. |
+| `200` | - | Response accepted. |
 | `400` | `INVALID_INPUT` | Missing `response`, or no prompt is pending. |
 | `404` | `SESSION_NOT_FOUND` | No such session. |
 
@@ -810,7 +810,7 @@ Get tracks and chapters for a specific title within the session. Body: `{ "title
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
-| `200` | — | Tracks returned. |
+| `200` | - | Tracks returned. |
 | `400` | `INVALID_INPUT` | Missing or unknown `title_id`. |
 | `404` | `SESSION_NOT_FOUND` | No such session. |
 
@@ -830,7 +830,7 @@ Resolve the download URL, DRM info, headers, cookies, and raw track data for sel
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
-| `200` | — | Segment info returned. |
+| `200` | - | Segment info returned. |
 | `400` | `INVALID_INPUT` | Missing `track_ids`. |
 | `404` | `TRACK_NOT_FOUND` | An unknown track ID was requested. |
 
@@ -876,7 +876,7 @@ Acquire DRM keys. Two modes are supported via the `mode` field.
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
-| `200` | — | License/keys returned. |
+| `200` | - | License/keys returned. |
 | `400` | `INVALID_INPUT` | Missing challenge/PSSH, or no CDM device configured for the key. |
 | `400` | `INVALID_PARAMETERS` | Unsupported `drm_type`. |
 | `404` | `TRACK_NOT_FOUND` | Unknown track ID. |

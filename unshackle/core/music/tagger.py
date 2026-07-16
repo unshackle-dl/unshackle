@@ -15,8 +15,23 @@ except ImportError:  # pragma: no cover - optional artwork enhancement
 
 try:
     from mutagen.flac import FLAC, Picture
-    from mutagen.id3 import (APIC, COMM, TALB, TCOM, TCON, TCOP, TDRC, TIT2, TPE1, TPE2, TPOS, TRCK, TSRC, TXXX,
-                             ID3NoHeaderError)
+    from mutagen.id3 import (
+        APIC,
+        COMM,
+        TALB,
+        TCOM,
+        TCON,
+        TCOP,
+        TDRC,
+        TIT2,
+        TPE1,
+        TPE2,
+        TPOS,
+        TRCK,
+        TSRC,
+        TXXX,
+        ID3NoHeaderError,
+    )
     from mutagen.mp3 import MP3
     from mutagen.mp4 import MP4, MP4Cover
 except ImportError:  # pragma: no cover - optional tagging dependency

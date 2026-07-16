@@ -71,11 +71,11 @@ Every download is three parts: the `dl` command, a **service tag**, and the
 service's title argument (a URL, ID, or slug).
 
 ```shell title="Download a 1080p title with English audio and subtitles"
-unshackle dl -q 1080 -l en NF 81234567
+unshackle dl -q 1080 -l en EXAMPLE 81234567
 ```
 
 The `dl` command carries all the quality, language, and output flags; the service
-tag (`NF` above) selects which streaming service to talk to, and the value after it
+tag (`EXAMPLE` above) selects which streaming service to talk to, and the value after it
 is passed to that service. See the [Quickstart](getting-started/quickstart.md) to go from a fresh
 install to your first file.
 

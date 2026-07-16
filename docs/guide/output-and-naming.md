@@ -13,15 +13,15 @@ When a download finishes muxing, unshackle builds the final path from three piec
 ```
 
 - **Output directory**: `directories.downloads` from your config, or whatever you pass to `-o/--output` on the command line for a single run.
-- **Folder template**: an optional per-title subfolder. TV episodes and music tracks are **always** placed in a folder; movies only get one if you define a `movies` folder template (see [Folder templates](#folder-templates)).
+- **Folder template**: an optional per-title subfolder. TV episodes and music tracks are **always** placed in a folder; movies only get one if you define a `movies` folder template, or a single-string `folder` template that applies to all title kinds (see [Folder templates](#folder-templates)).
 - **Filename template**: the `output_template` for the title kind (movie, series, or song).
 - **Extension**: chosen by the muxer: `.mkv` for video, `.mka` for audio-only, `.mks` for subtitle-only.
 
 !!! example "A typical episode path"
     ```text
     /home/user/Downloads/
-      └─ Show Name S01 1080p AMZN WEB-DL DDP5.1 H.264/
-         └─ Show.Name.S01E01.Pilot.1080p.AMZN.WEB-DL.DDP5.1.H.264-TAG.mkv
+      └─ Show Name S01 1080p EXAMPLE WEB-DL DDP5.1 H.264/
+         └─ Show.Name.S01E01.Pilot.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
     ```
     The folder name comes from the `series` folder template and the file from the `series` output template.
 
@@ -51,7 +51,7 @@ The recognized kinds are:
 | `movies` | Movies | *(required for movie downloads to be named, no built-in default)* |
 | `series` | TV episodes | *(required for episode downloads to be named)* |
 | `songs` | Music tracks | `"{track_number}. {title}"` |
-| `albums` | Album **folders** only (see below) | — |
+| `albums` | Album **folders** only (see below) | - |
 
 !!! note
     `movies` and `series` have no hardcoded filename fallback. If you download those title types, define their templates. `songs` falls back to `"{track_number}. {title}"` when omitted.
@@ -80,7 +80,7 @@ unshackle looks at the characters you place *between* variables to decide the fi
       movies: "{title}.{year}.{quality}.{source}.WEB-DL.{audio_full}.{video}-{tag}"
     ```
     ```text
-    The.Movie.2024.1080p.NF.WEB-DL.DDP5.1.H.264-TAG.mkv
+    The.Movie.2024.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
     ```
 
 === "Readable style (spaces)"
@@ -90,7 +90,7 @@ unshackle looks at the characters you place *between* variables to decide the fi
       movies: "{title} ({year}) {quality} {source} WEB-DL {audio_full} {video}"
     ```
     ```text
-    The Movie (2024) 1080p NF WEB-DL DDP5.1 H.264.mkv
+    The Movie (2024) 1080p EXAMPLE WEB-DL DDP5.1 H.264.mkv
     ```
 
 ## Template variables
@@ -103,7 +103,7 @@ Every variable below is valid in both output and folder templates. Values are de
 |---|---|---|
 | `title` | Title name (movie/show/song name; `$` is rendered as `S`) | `The Show` |
 | `year` | Release year | `2024` |
-| `source` | Service tag / class name (empty with `--no-source`) | `NF` |
+| `source` | Service tag / class name (empty with `--no-source`) | `EXAMPLE` |
 | `quality` | Resolution with scan suffix | `1080p`, `2160p`, `576i` |
 | `resolution` | Resolution number only | `1080` |
 | `video` | Video codec | `H.264`, `H.265` |
@@ -188,10 +188,10 @@ The per-kind folder keys are `movies`, `series`, `songs`, and `albums`. Any othe
 **Fallback behavior:**
 
 - A per-kind folder template wins if present; otherwise the single `folder` string is used; otherwise unshackle falls back to a built-in default.
-- Built-in defaults when no folder template is set: movies get no folder at all unless a `movies` folder template exists; series fall back to a folder *derived* from the `series` output template (stripping `{episode}`, `{episode_name}`, and collapsing `{season_episode}` down to `{season}`); music albums fall back to `{artist} - {album} ({year})`.
+- Built-in defaults when no folder template is set: movies get no folder at all unless a `movies` folder template (or a single-string `folder` template) exists; series fall back to a folder *derived* from the `series` output template (stripping `{episode}`, `{episode_name}`, and collapsing `{season_episode}` down to `{season}`); music albums fall back to `{artist} - {album} ({year})`.
 
 !!! note "Movies are flat by default"
-    Episodes and songs are always foldered. Movies are written directly into the output directory *unless* you define a `movies` folder template. Set one if you want each movie in its own directory.
+    Episodes and songs are always foldered. Movies are written directly into the output directory *unless* you define a `movies` folder template (or a single-string `folder` template, which folders every kind). Set one if you want each movie in its own directory.
 
 ## Muxing options
 
@@ -200,7 +200,7 @@ Muxing (combining video, audio, subtitle, chapter and attachment tracks into a s
 ```yaml title="unshackle.yaml"
 muxing:
   set_title: true
-  merge_video: true
+  merge_video: false
   merge_audio: true
   default_language:
     audio: en
@@ -210,7 +210,7 @@ muxing:
 | Key | Type | Default | Effect |
 |---|---|---|---|
 | `set_title` | bool | `true` | Write the title name into the MKV container title with `--title`. Set to `false` to omit it. |
-| `merge_video` | bool | `true` | Group video tracks that share the same resolution, range, and codec into one file so only language varies inside it. |
+| `merge_video` | bool | `false` | Group video tracks that share the same resolution, range, and codec into one file so only language varies inside it. |
 | `merge_audio` | bool | `true` | Merge audio tracks of the same kind so multiple languages sit in one file. |
 | `default_language` | map | *(unset)* | Preferred language per track type (`video` / `audio` / `subtitle`). A track in the preferred language is flagged as the default track. |
 
@@ -249,13 +249,13 @@ tag_imdb_tmdb: true
 You can override the tag per run without editing config:
 
 ```bash
-unshackle dl --tag OTHERGROUP AMZN "..."
+unshackle dl --tag OTHERGROUP EXAMPLE "..."
 ```
 
 The `--repack` flag adds the `REPACK` marker (surfaced through the `{repack}` variable) to the filename for that run:
 
 ```bash
-unshackle dl --repack NF "..."
+unshackle dl --repack EXAMPLE "..."
 ```
 
 !!! note "Empty tags collapse cleanly"
@@ -349,7 +349,7 @@ The fallback supports two placeholders: `{i}` (chapter number, starting at 1) an
     ```
     ```text
     The Movie (2024)/
-      └─ The.Movie.2024.1080p.NF.WEB-DL.DDP5.1.Atmos.H.265.HDR-TAG.mkv
+      └─ The.Movie.2024.1080p.EXAMPLE.WEB-DL.DDP5.1.Atmos.H.265.HDR-TAG.mkv
     ```
 
 === "TV series"
@@ -362,7 +362,7 @@ The fallback supports two placeholders: `{i}` (chapter number, starting at 1) an
     ```
     ```text
     The Show (2023)/Season S02/
-      └─ The.Show.S02E04.The.Reckoning.2160p.AMZN.WEB-DL.DDP5.1.H.265-TAG.mkv
+      └─ The.Show.S02E04.The.Reckoning.2160p.EXAMPLE.WEB-DL.DDP5.1.H.265-TAG.mkv
     ```
 
 === "Music"

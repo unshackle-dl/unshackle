@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import html
+import re
 import shutil
 import struct
 import urllib.parse
@@ -18,13 +19,23 @@ from requests import Session
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
 from unshackle.core.events import events
-from unshackle.core.manifests.ism_init import (build_init_segment, parse_codec_private_data_colour,
-                                               read_per_sample_iv_size, read_track_id)
+from unshackle.core.manifests.ism_init import (
+    build_init_segment,
+    parse_codec_private_data_vui,
+    read_per_sample_iv_size,
+    read_track_id,
+)
 from unshackle.core.session import RnetSession
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Track, Tracks, Video
 from unshackle.core.utilities import log_event, try_ensure_utf8
 from unshackle.core.utils.redact import safe_display_url
 from unshackle.core.utils.xml import load_xml
+
+# MS-SSTR: FourCC may be absent; AudioTag carries the WAVE format tag instead.
+AUDIO_TAG_FOURCC = {"255": "AACL", "65534": "EC-3"}
+
+# Smooth FourCCs that Codec.from_mime (RFC 6381 names) doesn't know directly.
+FOURCC_MIME = {"H264": "avc1", "H265": "hvc1", "HEVC": "hvc1", "AACL": "mp4a", "AACH": "mp4a", "AACP": "mp4a"}
 
 
 class ISM:
@@ -88,20 +99,25 @@ class ISM:
         return drm
 
     @staticmethod
-    def get_video_range(fourcc: str, codec_private_data: str) -> Video.Range:
-        """Derive colour range from the SPS VUI in CodecPrivateData — Smooth
-        manifests carry no range attributes. Soft-fails to SDR."""
+    def get_video_range_and_fps(fourcc: str, codec_private_data: str) -> tuple[Video.Range, Optional[float]]:
+        """Derive colour range and fps from the SPS VUI in CodecPrivateData,
+        since Smooth manifests carry neither as attributes. Range soft-fails to
+        SDR; fps is None for non-HEVC codecs and VUIs without timing info."""
         fourcc = (fourcc or "").upper()
-        if fourcc in ("DVHE", "DVH1"):
-            return Video.Range.DV
         try:
             cpd = bytes.fromhex(codec_private_data or "")
         except ValueError:
-            return Video.Range.SDR
-        cicp = parse_codec_private_data_colour(fourcc, cpd)
+            cpd = b""
+        cicp, fps = parse_codec_private_data_vui(fourcc, cpd)
+        if fourcc in ("DVHE", "DVH1"):
+            return Video.Range.DV, fps
         if not cicp:
-            return Video.Range.SDR
-        return Video.Range.from_cicp(*cicp)
+            return Video.Range.SDR, fps
+        return Video.Range.from_cicp(*cicp), fps
+
+    @staticmethod
+    def get_video_range(fourcc: str, codec_private_data: str) -> Video.Range:
+        return ISM.get_video_range_and_fps(fourcc, codec_private_data)[0]
 
     @staticmethod
     def _init_segment(
@@ -121,7 +137,7 @@ class ISM:
         # CodecPrivateData may legitimately be empty (AAC config is synthesized,
         # EC-3 decoders sync from the frames); the builder handles each case.
         cpd = quality_level.get("CodecPrivateData") or ""
-        fourcc = quality_level.get("FourCC") or ""
+        fourcc = quality_level.get("FourCC") or AUDIO_TAG_FOURCC.get(quality_level.get("AudioTag") or "") or ""
 
         root_timescale = manifest.get("TimeScale") if manifest is not None else None
         timescale = int(stream_index.get("TimeScale") or root_timescale or 10000000)
@@ -202,6 +218,8 @@ class ISM:
             return None
 
     def to_tracks(self, language: Optional[Union[str, Language]] = None) -> Tracks:
+        if (self.manifest.get("IsLive") or "").upper() == "TRUE":
+            raise ValueError("Live Smooth Streaming manifests are not supported")
         tracks = Tracks()
         base_url = self.url
         duration = int(self.manifest.get("Duration") or 0)
@@ -212,17 +230,30 @@ class ISM:
             if not content_type:
                 raise ValueError("No content type value could be found")
             for ql in stream_index.findall("QualityLevel"):
-                codec = ql.get("FourCC")
+                codec = ql.get("FourCC") or AUDIO_TAG_FOURCC.get(ql.get("AudioTag") or "")
                 if codec == "TTML":
                     codec = "STPP"
                 track_lang = None
                 lang = (stream_index.get("Language") or "").strip()
                 if lang and tag_is_valid(lang) and not lang.startswith("und"):
                     track_lang = Language.get(lang)
+                if not track_lang and not language:
+                    # Language is optional in MS-SSTR; video streams commonly omit it.
+                    raise ValueError(
+                        "Language information could not be derived from the manifest and no fallback "
+                        "language was provided when calling ISM.to_tracks()."
+                    )
 
                 track_urls: list[str] = []
                 fragment_time = 0
                 fragments = stream_index.findall("c")
+                # MS-SSTR UrlPattern; regex over str.format so {Bitrate}/{start_time}
+                # spellings work and unknown placeholders like {CustomAttributes}
+                # or stray braces in query strings don't raise.
+                url_template = urllib.parse.urljoin(
+                    base_url,
+                    re.sub(r"\{[Bb]itrate\}", str(ql.get("Bitrate") or 0), stream_index.get("Url") or ""),
+                )
                 # Some manifests omit the first fragment in the <c> list but
                 # still expect a request for start time 0 which contains the
                 # initialization segment. If the first declared fragment is not
@@ -230,17 +261,7 @@ class ISM:
                 if fragments:
                     first_time = int(fragments[0].get("t") or 0)
                     if first_time != 0:
-                        track_urls.append(
-                            urllib.parse.urljoin(
-                                base_url,
-                                stream_index.get("Url").format_map(
-                                    {
-                                        "bitrate": ql.get("Bitrate"),
-                                        "start time": "0",
-                                    }
-                                ),
-                            )
-                        )
+                        track_urls.append(re.sub(r"\{start[ _]time\}", "0", url_template))
 
                 for idx, frag in enumerate(fragments):
                     fragment_time = int(frag.get("t", fragment_time))
@@ -251,19 +272,11 @@ class ISM:
                             next_time = int(fragments[idx + 1].get("t"))
                         except (IndexError, AttributeError):
                             next_time = duration
-                        duration_frag = (next_time - fragment_time) / repeat
+                        # floor division: float times would corrupt segment URLs;
+                        # any drift is reset by the next fragment's explicit t.
+                        duration_frag = (next_time - fragment_time) // repeat
                     for _ in range(repeat):
-                        track_urls.append(
-                            urllib.parse.urljoin(
-                                base_url,
-                                stream_index.get("Url").format_map(
-                                    {
-                                        "bitrate": ql.get("Bitrate"),
-                                        "start time": str(fragment_time),
-                                    }
-                                ),
-                            )
-                        )
+                        track_urls.append(re.sub(r"\{start[ _]time\}", str(fragment_time), url_template))
                         fragment_time += duration_frag
 
                 track_id = hashlib.md5(
@@ -288,20 +301,25 @@ class ISM:
 
                 if content_type == "video":
                     try:
-                        vcodec = Video.Codec.from_mime(codec) if codec else None
+                        vcodec = Video.Codec.from_mime(FOURCC_MIME.get(codec.upper(), codec)) if codec else None
                     except ValueError:
                         vcodec = None
+                    range_, fps = self.get_video_range_and_fps(codec or "", ql.get("CodecPrivateData") or "")
                     tracks.add(
                         Video(
                             id_=track_id,
                             url=self.url,
                             codec=vcodec,
-                            range_=self.get_video_range(codec or "", ql.get("CodecPrivateData") or ""),
+                            range_=range_,
+                            fps=fps,
                             language=track_lang or language,
                             is_original_lang=bool(language and track_lang and str(track_lang) == str(language)),
                             bitrate=ql.get("Bitrate"),
-                            width=int(ql.get("MaxWidth") or 0) or int(stream_index.get("MaxWidth") or 0),
-                            height=int(ql.get("MaxHeight") or 0) or int(stream_index.get("MaxHeight") or 0),
+                            # Width/Height are non-spec but common when Max* are absent
+                            width=int(ql.get("MaxWidth") or ql.get("Width") or 0)
+                            or int(stream_index.get("MaxWidth") or stream_index.get("Width") or 0),
+                            height=int(ql.get("MaxHeight") or ql.get("Height") or 0)
+                            or int(stream_index.get("MaxHeight") or stream_index.get("Height") or 0),
                             descriptor=Video.Descriptor.ISM,
                             drm=drm,
                             data=data,
@@ -309,7 +327,7 @@ class ISM:
                     )
                 elif content_type == "audio":
                     try:
-                        acodec = Audio.Codec.from_mime(codec) if codec else None
+                        acodec = Audio.Codec.from_mime(FOURCC_MIME.get(codec.upper(), codec)) if codec else None
                     except ValueError:
                         acodec = None
                     tracks.add(
@@ -501,6 +519,7 @@ class ISM:
             and isinstance(track, Subtitle)
             and track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML)
         )
+        progress(downloaded="Merging", completed=0, total=len(segments_to_merge))
         with open(save_path, "wb") as f:
             first_segment = segments_to_merge[0].read_bytes() if segments_to_merge else None
             init_segment = ISM._init_segment(track, session_drm, first_segment)
@@ -530,11 +549,11 @@ class ISM:
         events.emit(events.Types.TRACK_DOWNLOADED, track=track)
 
         if session_drm:
-            progress(downloaded="Decrypting", completed=0, total=100)
+            progress(downloaded="Decrypting", completed=0, total=None)
             session_drm.decrypt(save_path)
             track.drm = None
             events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=session_drm, segment=None)
-            progress(downloaded="Decrypting", advance=100)
+            progress(downloaded="Decrypted", completed=100, total=100)
 
         try:
             save_dir.rmdir()

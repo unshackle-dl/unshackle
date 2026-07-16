@@ -599,11 +599,11 @@ class DASH:
         events.emit(events.Types.TRACK_DOWNLOADED, track=track)
 
         if drm:
-            progress(downloaded="Decrypting", completed=0, total=100)
+            progress(downloaded="Decrypting", completed=0, total=None)
             drm.decrypt(save_path)
             track.drm = None
             events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=drm, segment=None)
-            progress(downloaded="Decrypting", advance=100)
+            progress(downloaded="Decrypted", completed=100, total=100)
 
         # Clean up empty segment directory
         if save_dir.exists() and save_dir.name.endswith("_segments"):
@@ -1180,7 +1180,7 @@ class DASH:
     @staticmethod
     @lru_cache(maxsize=None)
     def _field_format_pattern(field: str) -> re.Pattern:
-        # matches printf-style `$Field%fmt$` format tokens
+        # printf-style `$Field%fmt$` matcher, compiled once per field name
         return re.compile(rf"\${re.escape(field)}%([a-z0-9]+)\$", flags=re.I)
 
     @staticmethod

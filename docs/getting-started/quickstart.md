@@ -79,7 +79,7 @@ full set of valid variables, including `resolution`, `video`, `audio`, `hdr`,
 
 ## 3. Add a service
 
-The service tag you pass to `dl` (like `NF`) maps to a **service module**, a small
+The service tag you pass to `dl` (like `EXAMPLE`) maps to a **service module**, a small
 plugin that knows how to talk to one streaming platform. unshackle ships without
 any bundled services, so you add the one(s) you want.
 
@@ -90,14 +90,14 @@ that exact same name.
 
 === "Local folder"
 
-    Drop a service folder into your services directory. A service tagged `NF`
+    Drop a service folder into your services directory. A service tagged `EXAMPLE`
     lives at:
 
     ```
-    <services>/NF/__init__.py     # defines a class named NF
+    <services>/EXAMPLE/__init__.py     # defines a class named EXAMPLE
     ```
 
-    Once the folder is in place, the tag `NF` is immediately available to `dl`,
+    Once the folder is in place, the tag `EXAMPLE` is immediately available to `dl`,
     `search`, and the other service-aware commands.
 
 === "Git repository"
@@ -140,7 +140,7 @@ covers everything else:
 ```yaml title="unshackle.yaml"
 cdm:
   default: my_device        # the .wvd file's name, without the extension
-  NF: my_other_device       # override for a specific service
+  EXAMPLE: my_other_device       # override for a specific service
 ```
 
 PlayReady works the same way with `.prd` files created and managed by the
@@ -157,14 +157,14 @@ Services that require a login read either **cookies** or **credentials**.
 - **Cookies**: export the service's cookies to a Netscape-format text file and
   place it in your cookies directory. unshackle looks for, in order:
   `cookies/{SERVICE}.txt`, then `cookies/{SERVICE}/{profile}.txt`, then
-  `cookies/{SERVICE}/default.txt`. So a file at `cookies/NF.txt` is picked up
-  automatically for the `NF` service.
+  `cookies/{SERVICE}/default.txt`. So a file at `cookies/EXAMPLE.txt` is picked up
+  automatically for the `EXAMPLE` service.
 
 - **Credentials**: store a username and password per service in your config:
 
     ```yaml title="unshackle.yaml"
     credentials:
-      NF: "email@example.com:your-password"
+      EXAMPLE: "email@example.com:your-password"
     ```
 
 Use the `-p/--profile` flag to switch between multiple accounts for the same
@@ -177,14 +177,14 @@ If you have a URL or ID already, skip this. Otherwise, search the service for a
 title and note the `id` it prints, since that is what you feed to `dl`:
 
 ```shell
-unshackle search NF "The Office"
+unshackle search EXAMPLE "My Show"
 ```
 
 You can also list what a service exposes for a given title without downloading:
 
 ```shell
-unshackle dl --list-titles NF 81234567     # show seasons/episodes
-unshackle dl --list NF 81234567            # show available tracks
+unshackle dl --list-titles EXAMPLE 81234567     # show seasons/episodes
+unshackle dl --list EXAMPLE 81234567            # show available tracks
 ```
 
 ## 7. Run your first download
@@ -196,13 +196,13 @@ unshackle dl  <FLAGS>  <SERVICE-TAG>  <TITLE>
 ```
 
 - **`dl`** carries every quality, language, track, and output flag.
-- **`<SERVICE-TAG>`** picks which service to talk to (`NF`, `DSNP`, …).
+- **`<SERVICE-TAG>`** picks which service to talk to (e.g. `EXAMPLE`).
 - **`<TITLE>`** is the URL, ID, or slug the service understands.
 
 A good first command asks for 1080p with English audio and subtitles:
 
 ```shell title="Your first download"
-unshackle dl -q 1080 -l en NF 81234567
+unshackle dl -q 1080 -l en EXAMPLE 81234567
 ```
 
 unshackle will fetch the title, select the tracks matching your flags, acquire
@@ -224,13 +224,13 @@ keys through your CDM (and any key vaults), then decrypt, mux, and tag the resul
 !!! example "A few realistic variations"
     ```shell
     # A whole first season in the best available quality
-    unshackle dl -w S01 NF 81234567
+    unshackle dl -w S01 EXAMPLE 81234567
 
     # 2160p HDR10 with the original-language audio plus English subtitles
-    unshackle dl -q 2160 -r HDR10 -l orig -sl en NF 81234567
+    unshackle dl -q 2160 -r HDR10 -l orig -sl en EXAMPLE 81234567
 
     # Just the newest episode of an ongoing show
-    unshackle dl --latest-episode NF 81234567
+    unshackle dl --latest-episode EXAMPLE 81234567
     ```
 
 See [Downloading](../guide/downloading.md) for the complete flag reference, including
@@ -243,7 +243,7 @@ By default, finished files are written to the `downloads` directory
 folder alongside the project). Override it per run with `-o`:
 
 ```shell
-unshackle dl -q 1080 -o /mnt/media/incoming NF 81234567
+unshackle dl -q 1080 -o /mnt/media/incoming EXAMPLE 81234567
 ```
 
 - **Movies** are written as a single `.mkv` file named from your `movies` template.

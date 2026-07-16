@@ -41,7 +41,9 @@ for _dir in _service_dirs:
     for _path in _dir.glob("*/__init__.py"):
         tag = _path.parent.stem
         if tag in _seen:
-            SHADOWED.append(f"{tag}: using {redact_path(str(_seen[tag]))}, ignoring duplicate {redact_path(str(_path))}")
+            SHADOWED.append(
+                f"{tag}: using {redact_path(str(_seen[tag]))}, ignoring duplicate {redact_path(str(_path))}"
+            )
         else:
             _seen[tag] = _path
 _SERVICES = sorted(_seen.values(), key=lambda x: x.parent.stem)

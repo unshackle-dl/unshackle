@@ -33,9 +33,9 @@ class Hola(Proxy):
         """
         query = query.lower()
 
-        p = subprocess.check_output(
-            [self.binary, "-country", query, "-list-proxies"], stderr=subprocess.STDOUT
-        ).decode()
+        p = subprocess.check_output([self.binary, "-country", query, "-list-proxies"], stderr=subprocess.STDOUT).decode(
+            "utf-8", errors="replace"
+        )
 
         if "Transaction error: temporary ban detected." in p:
             raise ConnectionError("Hola banned your IP temporarily from it's services. Try change your IP.")
@@ -55,6 +55,6 @@ class Hola(Proxy):
 
     def get_countries(self) -> list[dict[str, str]]:
         """Get a list of available Countries."""
-        p = subprocess.check_output([self.binary, "-list-countries"]).decode("utf8")
+        p = subprocess.check_output([self.binary, "-list-countries"]).decode("utf-8", errors="replace")
 
         return [{code: name} for country in p.splitlines() for (code, name) in [country.split(" - ", maxsplit=1)]]

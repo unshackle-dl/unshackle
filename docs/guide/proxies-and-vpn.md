@@ -31,15 +31,15 @@ Proxying is controlled at download time by three options on the `dl` command:
 | `--no-proxy-download` | Use the proxy for the manifest, licence, and authentication, but bypass it for the **segment downloads** themselves. |
 
 ```shell title="Explicit proxy URI"
-unshackle dl --proxy http://user:pass@1.2.3.4:8080 NF 81234567
+unshackle dl --proxy http://user:pass@1.2.3.4:8080 EXAMPLE 81234567
 ```
 
 ```shell title="Resolve a US server from your configured providers"
-unshackle dl --proxy us NF 81234567
+unshackle dl --proxy us EXAMPLE 81234567
 ```
 
 ```shell title="Target a specific provider"
-unshackle dl --proxy nordvpn:us NF 81234567
+unshackle dl --proxy nordvpn:us EXAMPLE 81234567
 ```
 
 !!! tip "Set a default proxy in config"
@@ -55,7 +55,7 @@ proxy where it matters (passing the geo-check for the manifest and the licence) 
 pulling the actual audio and video segments over your normal connection for full speed.
 
 ```shell title="Proxy the manifest and licence, download segments direct"
-unshackle dl --proxy gb --no-proxy-download ITV 10a1234
+unshackle dl --proxy gb --no-proxy-download EXAMPLE 10a1234
 ```
 
 !!! warning "When this is unsafe"
@@ -78,8 +78,8 @@ flowchart TD
     D -- no --> F["Ask every provider in order,<br/>first match wins"]
 ```
 
-1. **An explicit URI.** Anything shaped like `http://…`, `https://…`, or a `socks…`
-   URI is used exactly as given. unshackle logs `Using explicit Proxy: …` and does no
+1. **An explicit URI.** Anything shaped like `http://...`, `https://...`, or a `socks...`
+   URI is used exactly as given. unshackle logs `Using explicit Proxy: ...` and does no
    lookup.
 2. **A provider-prefixed query**: `provider:query`, for example `nordvpn:us` or
    `gluetun:windscribe:us`. unshackle finds the provider whose name matches the prefix
@@ -107,8 +107,8 @@ provider, prefix the query (`--proxy nordvpn:us`).
 
 !!! note "Auto-loading providers"
     Most providers only load when you configure them under `proxy_providers:`. Three are
-    special: **ExpressVPN** and **Proton VPN** also load automatically if their cookie
-    file already exists on disk (even with no YAML), and **Hola** loads automatically
+    special: **ExpressVPN** and **Proton VPN** also load automatically once their cached
+    session file exists on disk (even with no YAML), and **Hola** loads automatically
     whenever the `hola-proxy` binary is found on your `PATH`.
 
 ### Connection feedback
@@ -154,7 +154,7 @@ proxy_providers:
   malformed URI is rejected up front rather than failing mid-download.
 
 ```shell
-unshackle dl --proxy de2 NF 81234567
+unshackle dl --proxy de2 EXAMPLE 81234567
 ```
 
 ## Gluetun
@@ -187,11 +187,11 @@ gluetun:<vpn-provider>:<region>
 ```
 
 ```shell title="A Windscribe US exit via Gluetun"
-unshackle dl --proxy gluetun:windscribe:us NF 81234567
+unshackle dl --proxy gluetun:windscribe:us EXAMPLE 81234567
 ```
 
 ```shell title="A NordVPN Germany exit via Gluetun"
-unshackle dl --proxy gluetun:nordvpn:de NF 81234567
+unshackle dl --proxy gluetun:nordvpn:de EXAMPLE 81234567
 ```
 
 After unshackle strips the leading `gluetun:`, the provider receives exactly
@@ -347,24 +347,24 @@ Understanding what Gluetun does behind the scenes helps when something goes wron
 
 ## ExpressVPN
 
-ExpressVPN emulates the flow used by the ExpressVPN browser extension: it authenticates
-with cookies (or a cached token), obtains proxy-capable locations from ExpressVPN's API,
-and returns an authenticated HTTPS proxy. Because it relies on browser cookies rather than
-service credentials, setup is slightly more involved than the credential-based providers.
+ExpressVPN mirrors the ExpressVPN Android TV app: it signs in through Express's OAuth 2.0
+device-login flow, obtains proxy-capable locations from Express's API, and returns an
+authenticated HTTPS proxy. The device login runs once; after that the cached refresh token
+keeps the session alive headlessly.
 
-ExpressVPN **auto-loads** if its cookie file exists, so once the cookie is in place you do
-not strictly need a YAML block, but you can add one to pin regions or servers.
+Enable it and run a download interactively once:
 
-**Default file locations:**
+```yaml title="unshackle.yaml"
+proxy_providers:
+  expressvpn:
+    enable: true
+```
 
-| File | Default path |
-|---|---|
-| Browser cookies | `{cookies}/vpn/expressvpn.txt` |
-| Token cache | `{cache}/global/expressvpn_tokens.json` |
-
-Where `{cookies}` and `{cache}` are your configured cookie and cache directories. The
-cookie file may be a Netscape `cookies.txt`, a JSON cookie array, or a JSON dict. Export
-your ExpressVPN session cookies from a logged-in browser into one of those forms.
+With `enable: true` and an interactive terminal, unshackle prints a code and a URL to
+enter it at. Once approved, the tokens are cached and reused automatically, so later runs
+need no terminal. ExpressVPN also **auto-loads** once its token cache exists, so you can
+drop `enable` after the first login, but you can keep a YAML block to pin regions or
+servers:
 
 ```yaml title="unshackle.yaml (optional)"
 proxy_providers:
@@ -375,6 +375,14 @@ proxy_providers:
     server_map:
       myserver: usny-newyork-2
 ```
+
+**Default file location:**
+
+| File | Default path |
+|---|---|
+| Token cache | `{cache}/vpn/expressvpn_tokens.json` |
+
+Where `{cache}` is your configured cache directory.
 
 **Query forms:**
 
@@ -410,7 +418,7 @@ proxy_providers:
 ```
 
 **Required keys:** `username`, `password`. unshackle validates them up front: the
-combined username and password must be exactly 48 lowercase alphanumeric characters, and
+combined username and password must be exactly 48 alphanumeric characters (case-insensitive), and
 the username must not contain an `@`. If validation fails, you have almost certainly used
 your login credentials instead of your service credentials.
 
@@ -437,7 +445,7 @@ The returned proxy is HTTPS on **port 89** (NordVPN disabled its plain-HTTP prox
 port 80 in 2021).
 
 ```shell
-unshackle dl --proxy nordvpn:us:seattle NF 81234567
+unshackle dl --proxy nordvpn:us:seattle EXAMPLE 81234567
 ```
 
 ## Proton VPN
@@ -521,7 +529,7 @@ that binary is found on your `PATH`. If you query Hola but the binary is missing
 provider raises an error telling you to install it.
 
 ```shell title="Install hola-proxy, then just query a country"
-unshackle dl --proxy hola:us NF 81234567
+unshackle dl --proxy hola:us EXAMPLE 81234567
 ```
 
 **Query forms:** a two-letter country code (e.g. `us`, `gb`). unshackle asks `hola-proxy`
@@ -547,7 +555,7 @@ proxy_providers:
 ```
 
 **Required keys:** `username`, `password`, validated with the same 48-character rule as
-NordVPN (combined username+password must be 48 lowercase alphanumeric characters, no `@`).
+NordVPN (combined username+password must be 48 alphanumeric characters, case-insensitive, no `@`).
 `server_map` optionally pins server IDs per region.
 
 **Query forms:**

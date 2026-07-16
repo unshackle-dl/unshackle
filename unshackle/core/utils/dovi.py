@@ -84,7 +84,9 @@ def info_summary(rpu: Path) -> str:
     """Return the textual summary (`dovi_tool info -i ... -s`) for an RPU file."""
     tool = _require_dovi_tool()
     info_start = time.monotonic()
-    p = subprocess.run([tool, "info", "-i", str(rpu), "-s"], capture_output=True, text=True)
+    p = subprocess.run(
+        [tool, "info", "-i", str(rpu), "-s"], capture_output=True, text=True, encoding="utf-8", errors="replace"
+    )
     log_tool_run(
         "dovi_tool info",
         "dovi_tool",

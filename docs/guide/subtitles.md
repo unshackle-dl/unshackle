@@ -82,7 +82,7 @@ By default (`--s-lang all`) unshackle keeps every subtitle language the service 
 To narrow it down, pass a comma-separated list of language tags:
 
 ```shell title="English and Spanish subtitles only"
-unshackle dl --s-lang en,es NF 81234567
+unshackle dl --s-lang en,es EXAMPLE 81234567
 ```
 
 Language matching is fuzzy by default: `en` will match `en-US`, `en-GB`, and similar
@@ -93,7 +93,7 @@ For strict matching, where `es-419` matches only `es-419` and never `es-ES`, add
 `--exact-lang`:
 
 ```shell title="Only Latin-American Spanish, no other Spanish variants"
-unshackle dl --s-lang es-419 --exact-lang DSNP 'https://www.disneyplus.com/…'
+unshackle dl --s-lang es-419 --exact-lang EXAMPLE 'https://www.example.com/...'
 ```
 
 ### Requiring languages before downloading
@@ -104,7 +104,7 @@ errors out. This is useful for batch jobs where a title without your must-have l
 should fail loudly rather than silently produce a partial result.
 
 ```shell title="Fail unless both English and French subs exist, then grab everything"
-unshackle dl --require-subs en,fr AMZN B0ABCDEFGH
+unshackle dl --require-subs en,fr EXAMPLE B0ABCDEFGH
 ```
 
 !!! warning "`--require-subs` and `--s-lang` are mutually exclusive"
@@ -118,7 +118,7 @@ to display even when you are watching in your own language. They are **excluded 
 default**. Add `-fs` / `--forced-subs` to include them:
 
 ```shell title="Include forced tracks alongside full subtitles"
-unshackle dl --s-lang en --forced-subs NF 81234567
+unshackle dl --s-lang en --forced-subs EXAMPLE 81234567
 ```
 
 ## Track types: forced, SDH, and CC
@@ -181,7 +181,7 @@ TTML to WebVTT for muxing, as noted above). To force a specific output format, u
 `--sub-format`:
 
 ```shell title="Convert every subtitle to SRT"
-unshackle dl --s-lang en,es --sub-format srt NF 81234567
+unshackle dl --s-lang en,es --sub-format srt EXAMPLE 81234567
 ```
 
 `--sub-format` accepts the common format names and aliases, including `srt`, `vtt`,
@@ -189,7 +189,7 @@ unshackle dl --s-lang en,es --sub-format srt NF 81234567
 all conversion:
 
 ```shell title="Keep whatever the service delivered"
-unshackle dl --sub-format original DSNP 'https://www.disneyplus.com/…'
+unshackle dl --sub-format original EXAMPLE 'https://www.example.com/...'
 ```
 
 Conversion only runs when the source format differs from the target, so
@@ -218,13 +218,54 @@ formats involved:
 | Backend | Best at | Requires |
 | --- | --- | --- |
 | `subtitleedit` | Highest fidelity; preserves positioning and italics | SubtitleEdit installed |
-| `subby` | Native SRT output with clean-up | — |
-| `pysubs2` | Best fidelity for styled SSA/ASS | — (pure Python, always available) |
-| `pycaption` | Last-resort fallback; flattens styling | — |
+| `subby` | Native SRT output with clean-up | - |
+| `pysubs2` | Best fidelity for styled SSA/ASS | - (pure Python, always available) |
+| `pycaption` | Last-resort fallback; flattens styling | - |
 
 With `conversion_method: auto`, unshackle ranks these automatically per conversion.
 Setting it to a specific value pins that backend as the first choice, falling back to
 others only if the pin cannot handle the pair.
+
+#### What each backend actually preserves
+
+The table below comes from round-tripping a subtitle that carries italics, bold,
+underline, positioning, and colour through every backend. Each cell lists the
+styling that survives; `—` means the backend cannot handle that pair.
+
+| Conversion | `subtitleedit` | `pysubs2` | `subby` | `pycaption` |
+| --- | --- | --- | --- | --- |
+| WebVTT → SRT | italic, bold, underline, position | italic, underline | italic, position | *(strips all)* |
+| WebVTT → ASS | italic, bold, underline, position | italic, bold, underline | — | — |
+| WebVTT → TTML | italic, bold, underline, position | italic, bold, underline | position | *(strips all)* |
+| ASS/SSA → SRT | all (+ colour) | italic, underline | — | — |
+| ASS/SSA → TTML | position only | italic, bold, underline | — | — |
+| ASS/SSA → VTT | position only | italic, underline | — | — |
+
+Reading the table:
+
+- **Keep the original**: leaving `--sub-format` unset (or set to `original`) never
+  round-trips the file, so every style survives. Only convert when your player cannot
+  read the source format.
+- **`subtitleedit`** (SubtitleEdit / `seconv`): the best choice for anything → SRT. It
+  is the only backend that carries colour, and it embeds `{\an8}` tags to preserve
+  positioning. When writing TTML or WebVTT from ASS it flattens inline styling to plain
+  text and keeps only positioning, so avoid it there.
+- **`pysubs2`**: keeps inline italic/underline on every pair, and bold except when
+  writing SRT or WebVTT. It never carries positioning or colour. SSA/ASS is its native
+  model, which makes it the best pick for SSA↔ASS.
+- **`subby`**: reads only WebVTT/fVTT/SAMI (never ASS) and is tuned for → SRT, where it
+  uniquely converts WebVTT cue settings into `{\an8}` positioning. Its
+  `CommonIssuesFixer` may also drop near-duplicate cues.
+- **`pycaption`**: strips all styling; last-resort fallback only.
+
+!!! tip "What `auto` picks"
+    `auto` prefers `subtitleedit` first when it is installed, then falls back to `subby`
+    for → SRT and `pysubs2` otherwise. The one exception comes from the table above:
+    for ASS/SSA → TTML or WebVTT it picks `pysubs2` even when SubtitleEdit is
+    installed, since SubtitleEdit flattens inline styling on those pairs. Most installs
+    do not ship SubtitleEdit, so in practice `auto` means `subby` (→ SRT) or `pysubs2`.
+    Install [SubtitleEdit / `seconv`](#subtitle-configuration) if you need colour or the
+    highest → SRT fidelity.
 
 !!! note "Config wins over a service's preference"
     A service may set a `preferred_conversion_method` on its own tracks (for example when

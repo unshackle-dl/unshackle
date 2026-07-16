@@ -45,16 +45,16 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 ```
 
 - `OPTIONS`: every flag below, parsed at the `dl` level.
-- `SERVICE`: a service tag (e.g. `NF`, `DSNP`). Tags are case-insensitive and honour each service's aliases (`disney+`, `DSNP`, etc. all resolve to the same tag).
+- `SERVICE`: a service tag (e.g. `EXAMPLE1`, `EXAMPLE2`). Tags are case-insensitive and honour each service's aliases (`example+`, `EXAMPLE2`, etc. all resolve to the same tag).
 - `SERVICE ARGS`: the title, URL, or ID, plus any service-specific options. These belong to the service, not to `dl`.
 
 !!! example "Typical downloads"
     ```shell
-    # Best available 1080p SDR of a Netflix title
-    unshackle dl -q 1080 NF 81234567
+    # Best available 1080p SDR of a title
+    unshackle dl -q 1080 EXAMPLE 81234567
 
     # 4K HDR10, English audio + subs, from a URL
-    unshackle dl -q 2160 -r HDR10 -l en DSNP "https://www.disneyplus.com/…"
+    unshackle dl -q 2160 -r HDR10 -l en EXAMPLE "https://www.example.com/..."
 
     # A season range, HEVC video, EC3 audio
     unshackle dl -w S01-S03 -v H.265 -a EC3 SERVICE TITLE-ID
@@ -67,16 +67,16 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 
 | Flag | Default | Description |
 |---|---|---|
-| `-p`, `--profile` | — | Profile for credentials and cookies. |
+| `-p`, `--profile` | - | Profile for credentials and cookies. |
 | `-q`, `--quality` | best | Resolution(s), comma-separated, e.g. `1080,720`. `-q 1080` also matches anamorphic tracks by 16:9 canvas. |
 | `-v`, `--vcodec` | any | Video codec(s). Accepts names or values: `AVC`/`H.264`, `HEVC`/`H.265`, `VC1`, `VP8`, `VP9`, `AV1`. |
 | `-a`, `--acodec` | any | Audio codec(s), comma-separated. Accepts `AAC`, `AC3`/`DD`, `EC3`/`DD+`/`eac3`/`ddp`, `AC4`, `OPUS`, `OGG`/`vorbis`, `DTS`, `ALAC`, `FLAC`. |
 | `-vb`, `--vbitrate` | highest | Exact video bitrate in kbps. |
 | `-ab`, `--abitrate` | highest | Exact audio bitrate in kbps. |
-| `-vb-range`, `--vbitrate-range` | — | Video bitrate range in kbps, e.g. `6000-7000`; picks highest within. Mutually exclusive with `--vbitrate`. |
-| `-ab-range`, `--abitrate-range` | — | Audio bitrate range in kbps, e.g. `128-256`. Mutually exclusive with `--abitrate`. |
+| `-vb-range`, `--vbitrate-range` | - | Video bitrate range in kbps, e.g. `6000-7000`; picks highest within. Mutually exclusive with `--vbitrate`. |
+| `-ab-range`, `--abitrate-range` | - | Audio bitrate range in kbps, e.g. `128-256`. Mutually exclusive with `--abitrate`. |
 | `-r`, `--range` | `SDR` | Colour range(s): `SDR`, `HLG`, `HDR10`, `HDR10P` (HDR10+), `DV`, `HYBRID`. |
-| `-c`, `--channels` | — | Audio channels; matches sub-layouts (5.1 ≈ 6.0). |
+| `-c`, `--channels` | - | Audio channels; matches sub-layouts (5.1 ≈ 6.0). |
 | `-naa`, `--noatmos` | off | Exclude Dolby Atmos audio tracks. |
 | `--worst` | off | Pick the lowest bitrate within the requested quality. **Requires `-q`.** |
 | `--best-available` | off | Continue with the best available if a requested resolution/language is absent, instead of failing. |
@@ -91,13 +91,13 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 | Flag | Default | Description |
 |---|---|---|
 | `-l`, `--lang` | `orig` | Language(s) for **both** video and audio. `orig` = the title's original language; e.g. `orig,en`. |
-| `-vl`, `--v-lang` | — | Video-only language (overrides `-l` for video). |
-| `-al`, `--a-lang` | — | Audio-only language (overrides `-l` for audio). |
+| `-vl`, `--v-lang` | - | Video-only language (overrides `-l` for video). |
+| `-al`, `--a-lang` | - | Audio-only language (overrides `-l` for audio). |
 | `-sl`, `--s-lang` | `all` | Subtitle language(s). |
-| `--require-subs` | — | Required subtitle langs; keeps **all** subs only if these exist. **Cannot combine with `--s-lang`.** |
+| `--require-subs` | - | Required subtitle langs; keeps **all** subs only if these exist. **Cannot combine with `--s-lang`.** |
 | `-fs`, `--forced-subs` | off | Include forced subtitle tracks. |
 | `--exact-lang` | off | Exact matching only: `-l es-419` matches `es-419`, not `es-ES`. |
-| `--sub-format` | — | Output subtitle format (`SRT`/`srt`, `VTT`/`webvtt`, `ASS`/`ssa`, `TTML`, `SMI`, …), or `original` to keep the source format. |
+| `--sub-format` | - | Output subtitle format (`SRT`/`srt`, `VTT`/`webvtt`, `ASS`/`ssa`, `TTML`, `SMI`, ...), or `original` to keep the source format. |
 
 The special language tokens `orig`, `all`, and `best` are honoured everywhere a language is expected.
 
@@ -177,7 +177,7 @@ Keep only certain track types, or skip certain track types. Attachments are alwa
 | `--no-cache` | off | Bypass the title cache. |
 | `--reset-cache` | off | Clear the title cache. |
 | `--list` | off | List available/would-be-downloaded tracks; do not download. |
-| `--slow` | — | Inter-title delay. Bare `--slow` = 60-120s; `--slow 20-40` = custom range (minimum 20s). |
+| `--slow` | - | Inter-title delay. Bare `--slow` = 60-120s; `--slow 20-40` = custom range (minimum 20s). |
 
 !!! warning "Some flags cannot be combined"
     `--require-subs` and `--s-lang`; `--select-titles` and `--wanted`; `--worst` requires `--quality`; `--vbitrate` and `--vbitrate-range` (and the audio equivalents) are mutually exclusive.
@@ -202,8 +202,8 @@ The query syntax is defined per service. Results are printed as a tree of titles
 
 !!! example
     ```shell
-    unshackle search NF "The Office"
-    unshackle search -p myprofile NF "breaking bad"
+    unshackle search EXAMPLE "My Show"
+    unshackle search -p myprofile EXAMPLE "Another Show"
     unshackle search --proxy nordvpn:ca SERVICE "query"
     ```
 
@@ -308,7 +308,7 @@ Clear an environment directory. The directory is emptied and recreated, and the 
     unshackle env check
     unshackle env info
     unshackle env clear cache
-    unshackle env clear cache NF     # one service only
+    unshackle env clear cache EXAMPLE   # one service only
     unshackle env clear temp
     ```
 
@@ -358,10 +358,10 @@ Create service tables on vaults that use tables, for every installed service, wh
 !!! example
     ```shell
     unshackle kv copy main backup1 backup2
-    unshackle kv copy main backup -s NF
+    unshackle kv copy main backup -s EXAMPLE
     unshackle kv sync main mysql_vault
-    unshackle kv add keys.txt NF main backup
-    unshackle kv search 0123456789abcdef0123456789abcdef -s NF -v main
+    unshackle kv add keys.txt EXAMPLE main backup
+    unshackle kv search 0123456789abcdef0123456789abcdef -s EXAMPLE -v main
     unshackle kv prepare main mysql_vault
     ```
 
@@ -523,7 +523,7 @@ Losslessly set the video range flag to full or limited at the bitstream level.
 
 | Option | Default | Description |
 |---|---|---|
-| `--full` / `--limited` | — | Full (0-255) or limited (16-235) range. |
+| `--full` / `--limited` | - | Full (0-255) or limited (16-235) range. |
 | `-p`, `--preview` | off | Preview instead of writing a file. |
 
 ### `util test PATH`

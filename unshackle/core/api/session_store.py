@@ -35,6 +35,7 @@ class SessionEntry:
     tracks_by_title: Dict[str, Dict[str, Track]] = field(default_factory=dict)  # title_key -> {track_id -> Track}
     chapters_by_title: Dict[str, List[Any]] = field(default_factory=dict)  # title_key -> [Chapter]
     creator_ip: Optional[str] = None
+    owner_key: Optional[str] = None  # X-Secret-Key that owns this session
     cache_tag: Optional[str] = None  # per-session cache directory tag
     input_bridge: Optional[InputBridge] = None
     auth_status: AuthStatus = AuthStatus.AUTHENTICATED
@@ -98,9 +99,7 @@ class SessionStore:
             if entry.auth_status not in (AuthStatus.AUTHENTICATING, AuthStatus.PENDING_INPUT):
                 elapsed = (datetime.now(timezone.utc) - entry.last_accessed).total_seconds()
                 if elapsed > self._ttl:
-                    log.info(
-                        f"Session {sanitize_log(session_id)} expired (elapsed={elapsed:.0f}s, ttl={self._ttl}s)"
-                    )
+                    log.info(f"Session {sanitize_log(session_id)} expired (elapsed={elapsed:.0f}s, ttl={self._ttl}s)")
                     del self._sessions[session_id]
                     return None
 

@@ -282,6 +282,8 @@ def test(path: Path, map_: str) -> None:
             ],
             stderr=subprocess.PIPE,
             universal_newlines=True,
+            encoding="utf-8",
+            errors="replace",
         )
         reached_output = False
         errors = 0

@@ -86,6 +86,14 @@ def _wait_for_health(url: str, timeout: float = 60.0) -> bool:
     return False
 
 
+@pytest.fixture(autouse=True)
+def _isolated_job_history(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Redirect job history writes to tmp_path so tests don't append to the server's api_history.jsonl."""
+    from unshackle.core.api import download_manager
+
+    monkeypatch.setattr(download_manager, "_history_path", lambda: tmp_path / "api_history.jsonl")
+
+
 @pytest.fixture(scope="session")
 def secret_key(request: pytest.FixtureRequest) -> str:
     return str(request.config.getoption("--secret-key"))

@@ -20,6 +20,7 @@ class DirtyServiceRepo(Exception):
         self.path = path
         super().__init__(str(path))
 
+
 DEFAULT_TTL = 24 * 60 * 60  # refresh at most once a day (mirrors UpdateChecker)
 STAMP_SUFFIX = ".fetch"  # last-fetch unix time, kept beside (not inside) the clone
 
@@ -27,6 +28,7 @@ STAMP_SUFFIX = ".fetch"  # last-fetch unix time, kept beside (not inside) the cl
 def stamp_for(dest: Path) -> Path:
     """Fetch-timestamp file path, kept OUTSIDE the clone so it never shows up in `git status`."""
     return dest.parent / f"{dest.name}{STAMP_SUFFIX}"
+
 
 # owner/repo shorthand: exactly two path-like segments, no scheme
 SHORTHAND_RE = re.compile(r"^[\w.-]+/[\w.-]+$")
@@ -125,9 +127,7 @@ def _pull(dest: Path, stamp: Path) -> None:
     if _is_dirty(dest):
         raise DirtyServiceRepo(dest)
     try:
-        subprocess.run(
-            [str(binaries.Git), "-C", str(dest), "pull", "--ff-only"], check=True, capture_output=True
-        )  # nosec B603
+        subprocess.run([str(binaries.Git), "-C", str(dest), "pull", "--ff-only"], check=True, capture_output=True)  # nosec B603
     except subprocess.CalledProcessError as e:
         log.warning("could not update service repo at %s, using existing copy: %s", dest, _stderr(e))
     _write_stamp(stamp)  # stamp regardless so a flaky remote can't trigger a fetch every run (force overrides)
@@ -172,9 +172,7 @@ def _changed_services(dest: Path, old: Optional[str], new: Optional[str]) -> lis
     if not old or not new or old == new:
         return []
     git = str(binaries.Git)
-    name_status = subprocess.run(
-        [git, "-C", str(dest), "diff", "--name-status", f"{old}..{new}"], capture_output=True
-    )  # nosec B603
+    name_status = subprocess.run([git, "-C", str(dest), "diff", "--name-status", f"{old}..{new}"], capture_output=True)  # nosec B603
     by_dir: dict[str, set[str]] = {}
     if name_status.returncode == 0:
         for raw in name_status.stdout.decode(errors="ignore").splitlines():
@@ -223,9 +221,7 @@ def _is_dirty(dest: Path) -> bool:
     if status.returncode == 0 and status.stdout.strip():
         return True
     # local commits ahead of upstream (committed but not pushed); no upstream → treat as clean
-    ahead = subprocess.run(
-        [git, "-C", str(dest), "rev-list", "--count", "@{u}..HEAD"], capture_output=True
-    )  # nosec B603
+    ahead = subprocess.run([git, "-C", str(dest), "rev-list", "--count", "@{u}..HEAD"], capture_output=True)  # nosec B603
     if ahead.returncode == 0:
         try:
             return int(ahead.stdout.strip() or b"0") > 0

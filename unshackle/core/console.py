@@ -1,17 +1,21 @@
 import logging
+import math
 from datetime import datetime
 from types import ModuleType
-from typing import IO, Callable, Iterable, List, Literal, Mapping, Optional, TextIO, Union
+from typing import IO, Any, Callable, Iterable, List, Literal, Mapping, Optional, TextIO, Union
 
 from rich._log_render import FormatTimeCallable, LogRender
-from rich.console import Console, ConsoleRenderable, HighlighterType, RenderableType
+from rich.color import Color, blend_rgb
+from rich.console import Console, ConsoleOptions, ConsoleRenderable, HighlighterType, RenderableType, RenderResult
 from rich.emoji import EmojiVariant
 from rich.highlighter import Highlighter, ReprHighlighter
 from rich.live import Live
 from rich.logging import RichHandler
+from rich.measure import Measurement
 from rich.padding import Padding, PaddingDimensions
+from rich.progress import BarColumn, Task
 from rich.status import Status
-from rich.style import StyleType
+from rich.style import Style, StyleType
 from rich.table import Table
 from rich.text import Text, TextType
 from rich.theme import Theme
@@ -279,7 +283,7 @@ class ComfyConsole(Console):
 
             padding = Padding(status_renderable, (top, right, bottom, left))
 
-            return Live(padding, console=self, transient=True)
+            return SyncLive(padding, console=self, transient=True)
 
         return status_renderable
 
@@ -349,6 +353,60 @@ if config.set_terminal_bg:
     custom_colors["ascii.art"] += f" on {primary_scheme['bg']}"
 
 
+class SyncLive(Live):
+    """Live that wraps each repaint in DEC 2026 begin/end-sync so the terminal draws it as one atomic frame."""
+
+    def refresh(self) -> None:
+        if not self.console.is_terminal:
+            super().refresh()
+            return
+        self.console.file.write("\x1b[?2026h")
+        try:
+            super().refresh()
+        finally:
+            self.console.file.write("\x1b[?2026l")
+            self.console.file.flush()
+
+
+class GradientPulseBarColumn(BarColumn):
+    _LUT_SIZE = 32
+
+    def __init__(self, *args: Any, pulse_period: float = 40.0, pulse_speed: float = 15.0, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.pulse_period = pulse_period
+        self.pulse_speed = pulse_speed
+        lo = Color.parse(primary_scheme["dark_gray"]).triplet
+        hi = Color.parse(primary_scheme["pink"]).triplet
+        assert lo and hi
+        self._lut = [
+            Style(color=Color.from_triplet(blend_rgb(lo, hi, i / (self._LUT_SIZE - 1)))) for i in range(self._LUT_SIZE)
+        ]
+
+    def render(self, task: Task) -> RenderableType:  # type: ignore[override]
+        if task.started and task.total is not None:
+            return super().render(task)
+        return _GradientPulse(self._lut, task.get_time() * self.pulse_speed, self.pulse_period, self.bar_width)
+
+
+class _GradientPulse:
+    def __init__(self, lut: list[Style], offset: float, period: float, width: Optional[int]) -> None:
+        self.lut = lut
+        self.offset = offset
+        self.period = period
+        self.width = width
+
+    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
+        width = min(self.width or options.max_width, options.max_width)
+        bar = Text()
+        for i in range(width):
+            fade = (math.cos((i - self.offset) * math.tau / self.period) + 1) / 2
+            bar.append("━", self.lut[int(fade * (len(self.lut) - 1))])
+        yield bar
+
+    def __rich_measure__(self, console: Console, options: ConsoleOptions) -> Measurement:
+        return Measurement(4, self.width or options.max_width)
+
+
 console = ComfyConsole(
     log_time=False,
     log_path=False,
@@ -358,7 +416,7 @@ console = ComfyConsole(
             "bar.back": primary_scheme["dark_gray"],
             "bar.complete": primary_scheme["pink"],
             "bar.finished": primary_scheme["green"],
-            "bar.pulse": primary_scheme["bright_black"],
+            "bar.pulse": primary_scheme["pink"],
             "black": primary_scheme["black"],
             "inspect.async_def": f"italic {primary_scheme['cyan']}",
             "progress.data.speed": "dark_orange",
@@ -377,4 +435,4 @@ console = ComfyConsole(
 )
 
 
-__all__ = ("ComfyLogRenderer", "ComfyRichHandler", "ComfyConsole", "console")
+__all__ = ("ComfyLogRenderer", "ComfyRichHandler", "ComfyConsole", "GradientPulseBarColumn", "SyncLive", "console")

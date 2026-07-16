@@ -1003,7 +1003,7 @@ class HLS:
         if len(segments_to_merge) == 1:
             shutil.move(segments_to_merge[0], save_path)
         else:
-            progress(downloaded="Merging")
+            progress(downloaded="Merging", completed=0, total=None)
             if isinstance(track, (Video, Audio)):
                 HLS.merge_segments(segments=segments_to_merge, save_path=save_path)
             else:
@@ -1023,7 +1023,7 @@ class HLS:
                 # Directory might not be empty, try removing recursively
                 shutil.rmtree(save_dir, ignore_errors=True)
 
-        progress(downloaded="Downloaded")
+        progress(downloaded="Downloaded", completed=100, total=100)
 
         track.path = save_path
 

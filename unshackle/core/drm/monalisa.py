@@ -247,6 +247,8 @@ class MonaLisa:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 startupinfo=startupinfo,
                 timeout=worker_timeout_s,
             )
@@ -294,6 +296,6 @@ class MonaLisa:
         the content has already been decrypted and muxed into a container.
 
         Args:
-            path: Path to the file (ignored).
+            _path: Path to the file (ignored).
         """
         pass

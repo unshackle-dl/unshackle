@@ -1085,7 +1085,7 @@ def requests(
         start_time = time.time()
         last_speed_report = start_time
         last_hedge_check = 0.0
-        hedge_median = 0.0
+        hedge_median = 0.0  # cached; recomputed only when seg_durations grows
         hedge_median_len = 0
 
         pool = ThreadPoolExecutor(max_workers=max_workers)
@@ -1364,7 +1364,8 @@ def requests(
                             yield dict(downloaded=f"{filesize.decimal(download_speed)}/s")
                         last_speed_report = now
 
-                # hedge stuck segments once spare workers exist within the active target
+                # hedge stuck segments once spare workers exist within the active target;
+                # throttled to ~0.5s and median recomputed only when seg_durations grows
                 if (
                     len(pending) < target
                     and seg_durations
@@ -1372,7 +1373,7 @@ def requests(
                     and not DOWNLOAD_CANCELLED.is_set()
                 ):
                     last_hedge_check = now
-                    cur_len = len(seg_durations)  # len() is safe here even though workers append under seg_lock
+                    cur_len = len(seg_durations)  # atomic read; appended under seg_lock by workers
                     if cur_len != hedge_median_len:
                         hedge_median = statistics.median(seg_durations)
                         hedge_median_len = cur_len

@@ -12,8 +12,14 @@ from typing import Any, Optional
 from rich.console import Console, RenderableType
 from rich.panel import Panel
 
-from unshackle.core.music.display import (MusicHeaderInfo, TrackRow, format_track_detail_quality, render_album_header,
-                                          render_artwork_preview, render_track_panel)
+from unshackle.core.music.display import (
+    MusicHeaderInfo,
+    TrackRow,
+    format_track_detail_quality,
+    render_album_header,
+    render_artwork_preview,
+    render_track_panel,
+)
 from unshackle.core.titles.music import Song
 
 
@@ -97,8 +103,20 @@ def test_format_track_detail_quality_passthrough() -> None:
 
 def test_render_track_panel_returns_panel() -> None:
     rows = [
-        TrackRow(song=make_song(track=1, name="First"), quality_label="FLAC 16-bit/44.1kHz", layout="Stereo", duration_str="3:00", cd=True),
-        TrackRow(song=make_song(track=2, name="Second"), quality_label="OGG 320", layout="Stereo", duration_str="4:00", hires=True),
+        TrackRow(
+            song=make_song(track=1, name="First"),
+            quality_label="FLAC 16-bit/44.1kHz",
+            layout="Stereo",
+            duration_str="3:00",
+            cd=True,
+        ),
+        TrackRow(
+            song=make_song(track=2, name="Second"),
+            quality_label="OGG 320",
+            layout="Stereo",
+            duration_str="4:00",
+            hires=True,
+        ),
     ]
     panel = render_track_panel(rows, total=len(rows))
     assert isinstance(panel, Panel)
@@ -112,7 +130,9 @@ def test_render_track_panel_returns_panel() -> None:
 
 
 def test_render_track_panel_singular_label() -> None:
-    rows = [TrackRow(song=make_song(name="Only"), quality_label="FLAC 16-bit/44.1kHz", layout="Stereo", duration_str="3:00")]
+    rows = [
+        TrackRow(song=make_song(name="Only"), quality_label="FLAC 16-bit/44.1kHz", layout="Stereo", duration_str="3:00")
+    ]
     text = render_to_text(render_track_panel(rows, total=1))
     # The count node reads "1 Track" (singular); the panel title is always
     # "Available Tracks", so we only check the count node phrasing here.

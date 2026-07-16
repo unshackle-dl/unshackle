@@ -61,9 +61,7 @@ class Title:
         returned dict with their specific fields (e.g., season/episode).
         """
         primary_video_track = next(iter(media_info.video_tracks), None)
-        original_lang_tag = (
-            str(self.language).split("-")[0].lower() if self.language else ""
-        )
+        original_lang_tag = str(self.language).split("-")[0].lower() if self.language else ""
         primary_audio_track = None
         if original_lang_tag:
             primary_audio_track = next(
@@ -170,9 +168,7 @@ class Title:
                 channel_count = primary_audio_track.channel_s or primary_audio_track.channels or 0
                 channels = float(channel_count)
 
-            has_atmos = any(
-                "JOC" in (t.format_additionalfeatures or "") or t.joc for t in media_info.audio_tracks
-            )
+            has_atmos = any("JOC" in (t.format_additionalfeatures or "") or t.joc for t in media_info.audio_tracks)
 
             context.update(
                 {

@@ -66,7 +66,7 @@ def ffprobe(uri: Union[bytes, Path]) -> dict:
                 context={"tool": "ffprobe", "duration_ms": round((time.monotonic() - start) * 1000, 1)},
             )
         return {}
-    result = json.loads(ff.stdout.decode("utf8"))
+    result = json.loads(ff.stdout.decode("utf-8", errors="replace"))
     if dl:
         dl.log(
             level="DEBUG",

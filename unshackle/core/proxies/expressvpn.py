@@ -1,17 +1,15 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 import json
 import logging
 import os
 import random
 import re
-import secrets
+import sys
 import time
 from pathlib import Path
-from typing import Optional
-from urllib.parse import parse_qs, urlparse
+from typing import Any, Optional
 
 import requests
 
@@ -25,27 +23,25 @@ class ExpressVPN(Proxy):
     """
     ExpressVPN HTTPS proxy provider.
 
-    This provider follows the browser extension proxy flow:
-    browser cookies or a cached refresh token are exchanged for API tokens,
-    those tokens are used to resolve proxy-capable locations, and get_proxy()
-    returns an authenticated HTTPS proxy URL.
+    Mirrors the ExpressVPN Android TV app: an OAuth 2.0 device authorization grant obtains
+    API tokens (interactive on first run, silent via cached refresh token afterwards), a
+    subscription receipt (SRT) resolves proxy-capable locations, and get_proxy() returns an
+    authenticated HTTPS proxy URL (https://cat:<token>@server:443).
 
-    Query format:
-        country                   -- smart connection (random location)
-        country-city              -- specific city
-        country-city-N / cityN   -- pinned server by position
-        full-slug                 -- ExpressVPN location slug
-        hostname.expressprovider.com -- direct hostname
+    Query format (after the provider prefix, e.g. "expressvpn:ca"):
+        ca              random location in the country (smart connection)
+        us-ny           city
+        us-ny-2 / usny2 pinned server by position
+        usa-new-york    full ExpressVPN location slug
+        host.expressprovider.com  direct hostname
     """
 
-    CLIENT_ID = "f457fed092a54b9e9f1e2113782d74a2"
-    AUTH_BASE = "https://auth.expressvpn.com/realms/xvpn/protocol/openid-connect"
+    CLIENT_ID = "8V18PnFYlrYnnYvRlnxKwifxxhYKfjIG"
+    AUTH_BASE = "https://auth.expressvpn.com/oauth"
     API_BASE = "https://cp.expressapisv2.net"
-    EXTENSION_REDIRECT_URI = "chrome-extension://fgddmllnllkalaagkghckoinaemmogpe/src/html/auth-callback.html"
-    USER_AGENT = (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    )
+    SCOPE = "openid profile email offline_access"
+    DEVICE_POLL_TIMEOUT = 600
+    USER_AGENT = "okhttp/5.3.2"
 
     def __init__(
         self,
@@ -55,436 +51,246 @@ class ExpressVPN(Proxy):
         access_token: Optional[str] = None,
         connection_token: Optional[str] = None,
         account_json: Optional[str] = None,
-        cookie_path: Optional[str] = None,
         cache_path: Optional[str] = None,
         timeout: float = 10.0,
+        enable: bool = False,
     ):
         """
-        Proxy Service using ExpressVPN browser-extension proxy credentials.
+        Proxy Service using ExpressVPN app proxy credentials.
 
-        Args:
-            region_map: Optional country-to-preset mapping. Keys are country
-                codes (e.g. ``"us"``), values are optional city/server presets
-                (e.g. ``"ny-02"``). When a key is used without a city in the
-                CLI query, the preset is applied. Empty/null values enable
-                smart connection (random location in that country).
-            server_map: Optional aliases using the same convention as other
-                proxy providers. Values may be ExpressVPN location slugs or
-                concrete .expressprovider.com hosts.
-            refresh_token: Optional OAuth refresh token. If omitted, cached
-                tokens or browser cookies are used.
-            access_token: Optional OAuth access token for advanced/manual use.
-            connection_token: Optional cached connection authorization token.
-            account_json: Optional path to ExpressVPN desktop account.json.
-            cookie_path: Optional path to exported ExpressVPN browser cookies.
-            cache_path: Optional path for cached ExpressVPN tokens.
-            timeout: Request timeout in seconds.
+        region_map maps a country code to an optional city/server preset (e.g. "us": "ny-02")
+        applied when the CLI query names only the country; empty values mean smart connection.
+        server_map maps aliases to location slugs or concrete .expressprovider.com hosts.
+        Tokens are optional: without them, cached tokens are used, else account_json is read.
+        Set enable: true to run the one-time interactive device login when no session exists.
         """
         if region_map is not None and not isinstance(region_map, dict):
             raise TypeError(f"Expected region_map to be a dict mapping aliases to locations, not '{region_map!r}'.")
         if server_map is not None and not isinstance(server_map, dict):
             raise TypeError(f"Expected server_map to be a dict mapping aliases to locations, not '{server_map!r}'.")
 
-        # region_map: country code → optional preset (city[-server])
         self.region_map = {
-            str(k).lower().strip(): (str(v).lower().strip() if v else None)
-            for k, v in (region_map or {}).items()
+            str(k).lower().strip(): (str(v).lower().strip() if v else None) for k, v in (region_map or {}).items()
         }
-        # server_map: legacy alias → location slug or direct hostname
-        self.server_map = {
-            str(k).lower().strip(): str(v).lower().strip()
-            for k, v in (server_map or {}).items()
-        }
+        self.server_map = {str(k).lower().strip(): str(v).lower().strip() for k, v in (server_map or {}).items()}
         self.refresh_token = refresh_token or None
         self.access_token = access_token or None
         self.connection_token = connection_token or None
         self.account_json = Path(account_json).expanduser() if account_json else None
         self.timeout = timeout
-        self._tokens: Optional[dict] = None
-        self._srt: Optional[str] = None
-        self._locations: Optional[list[dict]] = None
+        self.enable = enable
 
-        # Display info set during _resolve_endpoint for log messages
-        self._last_location_name: Optional[str] = None
-        self._last_server_index: Optional[int] = None
-        self._last_server_total: Optional[int] = None
-        self._last_endpoint_host: Optional[str] = None
+        self.tokens: Optional[dict] = None
+        self.srt: Optional[str] = None
+        self.locations: Optional[list[dict]] = None
+        self.last_name: Optional[str] = None
+        self.last_index: Optional[int] = None
+        self.last_total: Optional[int] = None
+        self.last_host: Optional[str] = None
 
-        self.cookie_path = Path(cookie_path).expanduser() if cookie_path else self._default_cookie_path()
-        self.cache_path = Path(cache_path).expanduser() if cache_path else self._default_cache_path()
+        self.cache_path = Path(cache_path).expanduser() if cache_path else self.default_cache_path()
 
     def __repr__(self) -> str:
-        if self._locations is not None:
-            locations = self._locations
-            countries = len({
-                str(loc.get("country_code") or "").upper()
-                for loc in locations if loc.get("country_code")
-            })
-            servers = len(locations)
+        if self.locations is None and self.has_silent_session():
+            try:
+                self.get_locations()
+            except (requests.RequestException, ValueError) as error:
+                log.debug("ExpressVPN: could not fetch locations for status line: %s", error)
+        if self.locations:
+            countries = len({str(x.get("country_code") or "").upper() for x in self.locations if x.get("country_code")})
+            locations = len(self.locations)
             return (
                 f"{countries} Countr{'ies' if countries != 1 else 'y'} "
-                f"({servers} Server{'s' if servers != 1 else ''})"
+                f"({locations} Location{'s' if locations != 1 else ''})"
             )
-        alias_count = len(self.region_map) + len(self.server_map)
-        if alias_count:
-            return f"{alias_count} Region Alias{'es' if alias_count != 1 else ''} (ExpressVPN HTTPS Proxy)"
+        aliases = len(self.region_map) + len(self.server_map)
+        if aliases:
+            return f"{aliases} Region Alias{'es' if aliases != 1 else ''} (ExpressVPN HTTPS Proxy)"
         return "ExpressVPN HTTPS Proxy"
 
+    def has_silent_session(self) -> bool:
+        """Whether tokens can be obtained without the interactive device login."""
+        return bool(
+            self.tokens
+            or self.access_token
+            or self.refresh_token
+            or self.connection_token
+            or (self.account_json and self.account_json.is_file())
+            or self.load_cache()
+        )
+
     def get_proxy(self, query: str) -> Optional[str]:
-        query = query.strip().lower()
-        endpoint = self._resolve_endpoint(query)
+        endpoint = self.resolve_endpoint(query.strip().lower())
         if not endpoint:
             return None
 
-        connection_token = self._get_connection_token()
+        connection_token = self.get_connection_token()
         if not connection_token:
             log.error("ExpressVPN: connection token was not available")
             return None
 
-        display = self.last_connection_display()
-        log.debug("ExpressVPN proxy ready: %s", display or f"https://cat:***@{endpoint}:443")
+        log.debug("ExpressVPN proxy ready: %s", self.last_connection_display() or endpoint)
         return f"https://cat:{connection_token}@{endpoint}:443"
 
     def last_connection_display(self) -> Optional[str]:
-        """Return a human-readable string describing the last resolved connection.
-
-        Used by the download/search commands to display a friendly log message
-        instead of a raw sanitized proxy URL.
-
-        Returns:
-            A string like ``"(USA - New York, #3 of 5): .214"`` or None if
-            no connection has been resolved yet.
-        """
-        if not self._last_location_name or not self._last_endpoint_host:
+        if not self.last_name or not self.last_host:
             return None
+        parts = [self.last_name]
+        if self.last_index is not None and self.last_total is not None:
+            parts.append(f"#{self.last_index} of {self.last_total}")
+        return f"({', '.join(parts)}): {self.last_host.replace('.expressprovider.com', '')}"
 
-        # Strip the .expressprovider.com suffix for readability
-        short_host = self._last_endpoint_host.replace(".expressprovider.com", "")
+    def resolve_endpoint(self, query: str) -> Optional[str]:
+        self.last_name = self.last_index = self.last_total = self.last_host = None
+        query = self.server_map.get(query) or query
 
-        parts = [self._last_location_name]
-        if self._last_server_index is not None and self._last_server_total is not None:
-            parts.append(f"#{self._last_server_index} of {self._last_server_total}")
-
-        return f"({', '.join(parts)}): {short_host}"
-
-    # ------------------------------------------------------------------
-    # Endpoint Resolution
-    # ------------------------------------------------------------------
-
-    def _resolve_endpoint(self, query: str) -> Optional[str]:
-        # Reset display info
-        self._last_location_name = None
-        self._last_server_index = None
-        self._last_server_total = None
-        self._last_endpoint_host = None
-
-        # 1) Check legacy server_map first (direct hostname / slug aliases)
-        mapped = self.server_map.get(query)
-        if mapped:
-            query = mapped
-
-        # 2) Direct hostname pass-through
         if "expressprovider" in query:
-            host = query if query.endswith(".expressprovider.com") else f"{query}.expressprovider.com"
-            self._last_endpoint_host = host
-            return host
+            self.last_host = query if query.endswith(".expressprovider.com") else f"{query}.expressprovider.com"
+            return self.last_host
 
-        # 3) Parse the query into (country, city, server_num)
-        country, city, server_num = self._parse_query(query)
+        country, city, server_num = self.parse_query(query)
+        if country and not city and (preset := self.region_map.get(country)):
+            _, city, server_num = self.parse_query(f"{country}-{preset}")
 
-        # 4) If the query matched a country in region_map and no city was
-        #    specified in the CLI, apply the preset from region_map
-        if country and not city:
-            preset = self.region_map.get(country)
-            if preset:
-                # Preset is like "ny-02" or "ny" or "ny2"
-                _, preset_city, preset_server = self._parse_query(f"{country}-{preset}")
-                city = preset_city
-                server_num = preset_server
-
-        # 5) Resolve the location
         if country:
-            location = self._resolve_location_by_country(country, city)
+            location = self.resolve_location(country, city)
         else:
-            # Fallback: try the full query as a location slug
-            location = self._resolve_location_by_slug(query)
-
+            location = self.resolve_slug(query)
         if not location:
             log.warning("ExpressVPN: no location matched query '%s'", query)
             return None
 
-        self._last_location_name = location.get("name")
-
-        # 6) Get endpoints and pick server
-        endpoints = self._get_endpoints_for_location(location)
+        self.last_name = location.get("name")
+        endpoints = self.get_endpoints(location)
         if not endpoints:
             log.error("ExpressVPN: no proxy endpoints returned for %s", location.get("name") or query)
             return None
+        return self.pick_endpoint(endpoints, server_num)
 
-        host = self._pick_endpoint(endpoints, server_num)
-        return host
-
-    def _parse_query(self, query: str) -> tuple[Optional[str], Optional[str], Optional[int]]:
-        """Parse a query string into (country_code, city_query, server_number).
-
-        Supported formats::
-
-            us                  -> ("us", None, None)
-            us-ny               -> ("us", "ny", None)
-            us-ny-2             -> ("us", "ny", 2)
-            us-ny2              -> ("us", "ny", 2)
-            us-ny-02            -> ("us", "ny", 2)
-            usa-new-york        -> (None, None, None)  -- treated as slug
-            mx                  -> ("mx", None, None)
-
-        When the query doesn't look like a country[-city] pattern, all
-        fields are returned as None and the caller falls back to slug
-        resolution.
-        """
-        # Try to extract a trailing server number: "us-ny-2" or "us-ny2"
+    def parse_query(self, query: str) -> tuple[Optional[str], Optional[str], Optional[int]]:
+        """Parse "us", "us-ny", "us-ny-2"/"us-ny2" into (country, city, server number)."""
         server_num = None
-        base_query = query
-
-        # Match trailing -N or trailing digits glued to alpha
         num_match = re.match(r"^(.+?)[-]?(\d+)$", query)
-        if num_match:
-            candidate_base = num_match.group(1).rstrip("-")
-            candidate_num = int(num_match.group(2))
-            # Only treat as server number if the base contains alpha characters
-            # and the number is reasonable (1-99)
-            if re.search(r"[a-z]", candidate_base) and 1 <= candidate_num <= 99:
-                base_query = candidate_base
-                server_num = candidate_num
+        if num_match and re.search(r"[a-z]", num_match.group(1).rstrip("-")) and 1 <= int(num_match.group(2)) <= 99:
+            query = num_match.group(1).rstrip("-")
+            server_num = int(num_match.group(2))
 
-        # Try to split as country-city
-        # Country codes are 2 letters; city is the rest
-        country_match = re.match(r"^([a-z]{2})(?:-(.+))?$", base_query)
-        if country_match:
-            country = country_match.group(1)
-            city = country_match.group(2)  # may be None
+        match = re.match(r"^([a-z]{2})(?:-(.+))?$", query)
+        if match:
+            valid = {str(x.get("country_code") or "").lower() for x in self.get_locations()}
+            if match.group(1) in valid:
+                return match.group(1), match.group(2) or None, server_num
 
-            # Verify this is a valid country code by checking locations
-            locations = self._get_locations()
-            valid_countries = {str(loc.get("country_code") or "").lower() for loc in locations}
-            if country in valid_countries:
-                return country, city or None, server_num
-
-        # Not a country-city pattern; return None to trigger slug fallback
+        # not a country[-city] pattern; caller falls back to slug resolution
         return None, None, None
 
-    def _resolve_location_by_country(
-        self, country_code: str, city_query: Optional[str] = None
-    ) -> Optional[dict]:
-        """Find a location by country code and optional city query.
-
-        If *city_query* is None, a random location in the country is selected
-        (smart connection). Otherwise, the city is matched against location
-        names using abbreviation, prefix, and substring strategies.
-        """
-        locations = self._get_locations()
-        if not locations:
-            return None
-
-        # Filter locations for this country
-        country_locations = [
-            loc for loc in locations
-            if str(loc.get("country_code") or "").lower() == country_code
-        ]
-        if not country_locations:
+    def resolve_location(self, country_code: str, city_query: Optional[str] = None) -> Optional[dict]:
+        pool = [x for x in self.get_locations() if str(x.get("country_code") or "").lower() == country_code]
+        if not pool:
             log.warning("ExpressVPN: no locations found for country '%s'", country_code.upper())
             return None
-
         if not city_query:
-            # Smart connection: random location in the country
-            return random.choice(country_locations)
+            return random.choice(pool)
+        return self.match_city(pool, city_query)
 
-        # Match city query against location names
-        return self._match_city(country_locations, city_query)
-
-    def _match_city(self, locations: list[dict], city_query: str) -> Optional[dict]:
-        """Match a short city query against a list of locations.
-
-        Matching strategies (in priority order):
-        1. First-letter abbreviation: ``"ny"`` matches ``"New York"``
-        2. Exact slug match: ``"miami"`` matches ``"miami"``
-        3. Prefix match on slug: ``"mia"`` matches ``"miami"``
-        4. Substring match on slug: ``"york"`` matches ``"new-york"``
-
-        Returns the first match from the highest-priority non-empty bucket.
-        """
+    def match_city(self, locations: list[dict], city_query: str) -> Optional[dict]:
+        """Match a city query by abbreviation ("ny"), exact slug, slug prefix, then substring."""
         city_query = city_query.strip().lower()
-        abbreviation_hits: list[dict] = []
-        exact_hits: list[dict] = []
-        prefix_hits: list[dict] = []
-        substring_hits: list[dict] = []
-
+        abbrev, exact, prefix, substring = [], [], [], []
         for loc in locations:
-            full_name = str(loc.get("name") or "")
-            # Extract city part: strip country prefix like "USA - "
-            city_part = re.sub(r"^[A-Z]{2,}(?:\s*-\s*)", "", full_name, count=1).strip()
-            if not city_part:
-                city_part = full_name
-
-            city_slug = _slugify(city_part)
-
-            # Strategy 1: first-letter abbreviation
-            words = re.findall(r"[a-zA-Z]+", city_part)
-            abbreviation = "".join(w[0] for w in words).lower() if words else ""
+            # location names look like "USA - New York"; keep the city part
+            city = re.sub(r"^[A-Z]{2,}(?:\s*-\s*)", "", str(loc.get("name") or ""), count=1).strip()
+            slug = slugify(city)
+            abbreviation = "".join(w[0] for w in re.findall(r"[a-zA-Z]+", city)).lower()
             if city_query == abbreviation:
-                abbreviation_hits.append(loc)
-                continue
+                abbrev.append(loc)
+            elif city_query == slug:
+                exact.append(loc)
+            elif slug.startswith(city_query):
+                prefix.append(loc)
+            elif city_query in slug:
+                substring.append(loc)
 
-            # Strategy 2: exact slug match
-            if city_query == city_slug:
-                exact_hits.append(loc)
-                continue
-
-            # Strategy 3: prefix match on slug
-            if city_slug.startswith(city_query):
-                prefix_hits.append(loc)
-                continue
-
-            # Strategy 4: substring match on slug
-            if city_query in city_slug:
-                substring_hits.append(loc)
-
-        # Return the first match from the highest-priority non-empty bucket
-        candidates = abbreviation_hits or exact_hits or prefix_hits or substring_hits
+        candidates = abbrev or exact or prefix or substring
         if not candidates:
             log.warning("ExpressVPN: no city matched '%s' in available locations", city_query)
             return None
-
         if len(candidates) > 1:
-            names = [c.get("name") for c in candidates]
-            log.debug("ExpressVPN: city '%s' matched %d locations: %s", city_query, len(candidates), names)
-
+            log.debug("ExpressVPN: city '%s' matched %d locations", city_query, len(candidates))
         return candidates[0]
 
-    def _resolve_location_by_slug(self, query: str) -> Optional[dict]:
-        """Resolve a location by matching the full query against slugified names, IDs, or country codes."""
-        target = query.strip().lower()
-        locations = self._get_locations()
-        if not locations:
-            return None
-
-        for location in locations:
-            location_id = str(location.get("id") or "").lower()
-            location_name = str(location.get("name") or "").lower()
-            country_code = str(location.get("country_code") or "").lower()
-            slug = _slugify(location_name)
-            if target in (location_id, location_name, country_code, slug):
-                return location
+    def resolve_slug(self, query: str) -> Optional[dict]:
+        for loc in self.get_locations():
+            name = str(loc.get("name") or "").lower()
+            keys = (str(loc.get("id") or "").lower(), name, str(loc.get("country_code") or "").lower(), slugify(name))
+            if query in keys:
+                return loc
         return None
 
-    def _pick_endpoint(self, endpoints: list[dict], server_num: Optional[int] = None) -> Optional[str]:
-        """Select an endpoint host from the list, optionally by position index.
-
-        Args:
-            endpoints: List of endpoint dicts with ``"host"`` keys.
-            server_num: 1-based server position index, or None for random.
-
-        Returns:
-            The selected hostname, or None if no endpoints are available.
-        """
-        hosts = [str(ep.get("host") or "").lower() for ep in endpoints if ep.get("host")]
+    def pick_endpoint(self, endpoints: list[dict], server_num: Optional[int] = None) -> Optional[str]:
+        hosts = [str(x.get("host") or "").lower() for x in endpoints if x.get("host")]
         if not hosts:
             return None
 
-        total = len(hosts)
-        self._last_server_total = total
+        self.last_total = total = len(hosts)
+        if server_num is not None and not 1 <= server_num <= total:
+            log.warning(
+                "ExpressVPN: server #%d not available (%d server%s), picking random",
+                server_num,
+                total,
+                "s" if total != 1 else "",
+            )
+            server_num = None
+        self.last_index = server_num if server_num is not None else random.randint(1, total)
+        self.last_host = hosts[self.last_index - 1]
+        return self.last_host
 
-        if server_num is not None:
-            if server_num < 1 or server_num > total:
-                log.warning(
-                    "ExpressVPN: server #%d is not available (only %d server%s), selecting random",
-                    server_num, total, "s" if total != 1 else "",
-                )
-                chosen = random.choice(hosts)
-                self._last_server_index = hosts.index(chosen) + 1
-            else:
-                chosen = hosts[server_num - 1]
-                self._last_server_index = server_num
-        else:
-            chosen = random.choice(hosts)
-            self._last_server_index = hosts.index(chosen) + 1
+    def get_locations(self) -> list[dict]:
+        if self.locations is None:
+            srt = self.get_srt()
+            if not srt:
+                return []
+            response = self.request(
+                "GET", f"{self.API_BASE}/ids2/locations", headers=self.api_headers(srt), params={"protocols": "proxy"}
+            )
+            self.locations = response.json().get("locations", [])
+        return self.locations
 
-        self._last_endpoint_host = chosen
-        return chosen
-
-    # ------------------------------------------------------------------
-    # Locations & Endpoints API
-    # ------------------------------------------------------------------
-
-    def _get_locations(self) -> list[dict]:
-        if self._locations is not None:
-            return self._locations
-
-        srt = self._get_srt()
+    def get_endpoints(self, location: dict) -> list[dict]:
+        srt = self.get_srt()
         if not srt:
             return []
-
-        response = self._request(
-            "GET",
-            f"{self.API_BASE}/ids2/locations",
-            headers=self._api_headers(srt),
-            params={"protocols": "proxy"},
-        )
-        self._locations = response.json().get("locations", [])
-        return self._locations
-
-    def _get_endpoints_for_location(self, location: dict) -> list[dict]:
-        srt = self._get_srt()
-        if not srt:
-            return []
-
-        location_id = location.get("id")
-        response = self._request(
+        response = self.request(
             "POST",
-            f"{self.API_BASE}/ids2/locations/{location_id}/instances",
-            headers=self._api_headers(srt),
+            f"{self.API_BASE}/ids2/locations/{location.get('id')}/instances",
+            headers=self.api_headers(srt),
             params={"protocols": "proxy"},
             json={},
         )
         return response.json().get("endpoints", [])
 
-    # ------------------------------------------------------------------
-    # Token Management
-    # ------------------------------------------------------------------
+    def get_tokens(self) -> dict:
+        if self.tokens and not jwt_expired(self.tokens.get("access_token")):
+            return self.tokens
 
-    def _get_tokens(self) -> dict:
-        # Return in-memory cache if access_token is still valid
-        if self._tokens:
-            access_token = self._tokens.get("access_token")
-            if access_token and not self._is_jwt_expired(access_token):
-                return self._tokens
-
-        cached = self._load_cached_tokens()
-        tokens = {
-            **cached,
-            **{k: v for k, v in {
-                "access_token": self.access_token,
-                "refresh_token": self.refresh_token,
-                "connection_token": self.connection_token,
-            }.items() if v},
+        overrides = {
+            "access_token": self.access_token,
+            "refresh_token": self.refresh_token,
+            "connection_token": self.connection_token,
         }
+        tokens = {**self.load_cache(), **{k: v for k, v in overrides.items() if v}}
 
-        access_token = tokens.get("access_token")
-        if access_token and not self._is_jwt_expired(access_token):
-            self._tokens = tokens
+        if tokens.get("access_token") and not jwt_expired(tokens["access_token"]):
+            self.tokens = tokens
             return tokens
 
-        refresh_token = tokens.get("refresh_token")
-        if refresh_token:
-            refreshed = self._refresh_access_token(refresh_token)
+        if refresh_token := tokens.get("refresh_token"):
+            refreshed = self.refresh_access_token(refresh_token)
             if refreshed:
-                tokens.update(
-                    {
-                        "access_token": refreshed.get("access_token"),
-                        "refresh_token": refreshed.get("refresh_token") or refresh_token,
-                    }
-                )
-                self._save_cached_tokens(tokens)
-                self._tokens = tokens
+                # refresh tokens rotate; keep the new one, fall back to the old if omitted
+                tokens["access_token"] = refreshed.get("access_token")
+                tokens["refresh_token"] = refreshed.get("refresh_token") or refresh_token
+                self.save_cache(tokens)
                 return tokens
             log.warning("ExpressVPN: refresh token failed or session expired")
 
@@ -495,43 +301,34 @@ class ExpressVPN(Proxy):
                 log.error("ExpressVPN: failed to read account_json %s: %s", self.account_json, error)
             else:
                 tokens.update(
-                    {
-                        "access_token": data.get("accessToken"),
-                        "connection_token": data.get("connectionToken"),
-                        "subscription_id": data.get("subscriptionId"),
-                    }
+                    access_token=data.get("accessToken"),
+                    connection_token=data.get("connectionToken"),
+                    subscription_id=data.get("subscriptionId"),
                 )
-                tokens = {k: v for k, v in tokens.items() if v}
-                self._tokens = tokens
+                self.tokens = {k: v for k, v in tokens.items() if v}
+                return self.tokens
+
+        if self.enable and sys.stdin.isatty():
+            if bootstrapped := self.device_login():
+                tokens["access_token"] = bootstrapped.get("access_token")
+                tokens["refresh_token"] = bootstrapped.get("refresh_token") or tokens.get("refresh_token")
+                self.save_cache(tokens)
                 return tokens
+        elif not tokens.get("access_token"):
+            log.error(
+                "ExpressVPN: no session available; set proxy_providers.expressvpn.enable: true "
+                "for the one-time device login"
+            )
 
-        if self.cookie_path.is_file():
-            bootstrapped = self._run_pkce_bootstrap()
-            if bootstrapped:
-                tokens.update(
-                    {
-                        "access_token": bootstrapped.get("access_token"),
-                        "refresh_token": bootstrapped.get("refresh_token"),
-                    }
-                )
-                self._save_cached_tokens(tokens)
-                self._tokens = tokens
-                return tokens
+        self.tokens = {k: v for k, v in tokens.items() if v}
+        return self.tokens
 
-        tokens = {k: v for k, v in tokens.items() if v}
-        self._tokens = tokens
-        return tokens
-
-    def _refresh_access_token(self, refresh_token: str) -> Optional[dict]:
-        response = self._request(
+    def refresh_access_token(self, refresh_token: str) -> Optional[dict]:
+        response = self.request(
             "POST",
             f"{self.AUTH_BASE}/token",
-            data={
-                "grant_type": "refresh_token",
-                "client_id": self.CLIENT_ID,
-                "refresh_token": refresh_token,
-            },
-            headers=self._form_headers(),
+            data={"grant_type": "refresh_token", "client_id": self.CLIENT_ID, "refresh_token": refresh_token},
+            headers=self.form_headers(),
             allow_error=True,
         )
         if not response.ok:
@@ -539,165 +336,111 @@ class ExpressVPN(Proxy):
             return None
         return response.json()
 
-    def _run_pkce_bootstrap(self) -> Optional[dict]:
-        cookies = self._load_cookies()
-        keycloak_identity = cookies.get("KEYCLOAK_IDENTITY")
-        keycloak_session = cookies.get("KEYCLOAK_SESSION")
-        auth_session_id = cookies.get("AUTH_SESSION_ID")
-        if not keycloak_identity or not keycloak_session:
-            log.error("ExpressVPN: KEYCLOAK_IDENTITY or KEYCLOAK_SESSION is missing from %s", self.cookie_path)
-            return None
-
-        verifier = base64.urlsafe_b64encode(
-            secrets.token_bytes(32)
-        ).decode("utf-8").rstrip("=")
-        challenge = base64.urlsafe_b64encode(
-            hashlib.sha256(verifier.encode("utf-8")).digest()
-        ).decode("utf-8").rstrip("=")
-        auth_cookies = requests.cookies.RequestsCookieJar()
-        auth_cookies.set("KEYCLOAK_IDENTITY", keycloak_identity, domain="auth.expressvpn.com")
-        auth_cookies.set("KEYCLOAK_SESSION", keycloak_session, domain="auth.expressvpn.com")
-        if auth_session_id:
-            auth_cookies.set("AUTH_SESSION_ID", auth_session_id, domain="auth.expressvpn.com")
-
-        response = self._request(
-            "GET",
-            f"{self.AUTH_BASE}/auth",
-            params={
-                "client_id": self.CLIENT_ID,
-                "response_type": "code",
-                "redirect_uri": self.EXTENSION_REDIRECT_URI,
-                "scope": "profile offline_access",
-                "code_challenge": challenge,
-                "code_challenge_method": "S256",
-                "ui_locales": "en",
-            },
-            headers=self._browser_headers(),
-            cookies=auth_cookies,
-            allow_redirects=False,
-            allow_error=True,
-        )
-
-        redirect_url = response.headers.get("Location", "")
-        code = parse_qs(urlparse(redirect_url).query).get("code", [None])[0]
-        if not code:
-            log.error("ExpressVPN: OAuth bootstrap did not return an authorization code")
-            return None
-
-        token_response = self._request(
+    def device_login(self) -> Optional[dict]:
+        """One-time interactive bootstrap via the OAuth 2.0 device authorization grant (RFC 8628)."""
+        response = self.request(
             "POST",
-            f"{self.AUTH_BASE}/token",
-            data={
-                "grant_type": "authorization_code",
-                "client_id": self.CLIENT_ID,
-                "code": code,
-                "redirect_uri": self.EXTENSION_REDIRECT_URI,
-                "code_verifier": verifier,
-            },
-            headers=self._form_headers(),
+            f"{self.AUTH_BASE}/device/code",
+            data={"client_id": self.CLIENT_ID, "scope": self.SCOPE, "audience": ""},
+            headers=self.form_headers(),
             allow_error=True,
         )
-        if not token_response.ok:
-            log.error("ExpressVPN: OAuth token exchange failed with HTTP %s", token_response.status_code)
+        if not response.ok:
+            log.error("ExpressVPN: device code request failed with HTTP %s", response.status_code)
             return None
-        return token_response.json()
+        data = response.json()
 
-    def _get_srt(self) -> Optional[str]:
-        if self._srt and not self._is_jwt_expired(self._srt):
-            return self._srt
+        log.info(
+            "ExpressVPN: sign in to authorize this device: open %s and enter code %s",
+            data.get("verification_uri", f"{self.AUTH_BASE}/../realms/xvpn/device"),
+            data.get("user_code"),
+        )
 
-        tokens = self._get_tokens()
-        cached_srt = tokens.get("srt")
-        if cached_srt and not self._is_jwt_expired(cached_srt):
-            self._srt = cached_srt
-            return self._srt
+        interval = int(data.get("interval") or 5)
+        deadline = time.time() + int(data.get("expires_in") or self.DEVICE_POLL_TIMEOUT)
+        while time.time() < deadline:
+            time.sleep(interval)
+            poll = self.request(
+                "POST",
+                f"{self.AUTH_BASE}/token",
+                data={
+                    "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+                    "client_id": self.CLIENT_ID,
+                    "device_code": data.get("device_code"),
+                },
+                headers=self.form_headers(),
+                allow_error=True,
+            )
+            if poll.ok:
+                return poll.json()
+            error = poll.json().get("error")
+            if error == "slow_down":
+                interval += 5
+            elif error != "authorization_pending":
+                log.error("ExpressVPN: device authorization failed: %s", error)
+                return None
+        log.error("ExpressVPN: device authorization timed out before approval")
+        return None
+
+    def get_srt(self) -> Optional[str]:
+        if self.srt and not jwt_expired(self.srt):
+            return self.srt
+
+        tokens = self.get_tokens()
+        if (cached := tokens.get("srt")) and not jwt_expired(cached):
+            self.srt = cached
+            return cached
 
         access_token = tokens.get("access_token")
         if not access_token:
             log.error("ExpressVPN: access token was not available")
             return None
 
-        response = self._request(
-            "POST",
-            f"{self.API_BASE}/srs2/subscription_receipts",
-            headers=self._api_headers(access_token),
-            json={},
+        response = self.request(
+            "POST", f"{self.API_BASE}/srs2/subscription_receipts", headers=self.api_headers(access_token), json={}
         )
-        receipts = response.json().get("srts", [])
-        active_subscription_id = tokens.get("subscription_id")
-        srt = self._select_srt(receipts, active_subscription_id)
+        srt = self.select_srt(response.json().get("srts", []), tokens.get("subscription_id"))
         if not srt:
             log.error("ExpressVPN: no active subscription receipt was found")
             return None
 
-        self._srt = srt
-        tokens["srt"] = srt
-        self._save_cached_tokens(tokens)
+        self.srt = tokens["srt"] = srt
+        self.save_cache(tokens)
         return srt
 
-    def _get_connection_token(self) -> Optional[str]:
-        tokens = self._get_tokens()
+    def get_connection_token(self) -> Optional[str]:
+        tokens = self.get_tokens()
         connection_token = tokens.get("connection_token")
-        if connection_token and not self._is_jwt_expired(connection_token):
+        if connection_token and not jwt_expired(connection_token):
             return connection_token
 
-        auth_token = self._get_srt() or tokens.get("access_token")
+        auth_token = self.get_srt() or tokens.get("access_token")
         if not auth_token:
             return connection_token
 
-        response = self._request(
-            "POST",
-            f"{self.API_BASE}/srs2/connection_token",
-            headers=self._api_headers(auth_token),
-            json={},
+        response = self.request(
+            "POST", f"{self.API_BASE}/srs2/connection_token", headers=self.api_headers(auth_token), json={}
         )
         body = response.json()
-        connection_token = body.get("connection_token") or body.get("token")
+        # the API returns the token under "cat"
+        connection_token = body.get("cat") or body.get("connection_token") or body.get("token")
         if connection_token:
             tokens["connection_token"] = connection_token
-            self._save_cached_tokens(tokens)
+            self.save_cache(tokens)
         return connection_token
 
-    # ------------------------------------------------------------------
-    # Cookies & Cache
-    # ------------------------------------------------------------------
+    def select_srt(self, receipts: list[dict], subscription_id: Optional[str]) -> Optional[str]:
+        for receipt in receipts:
+            srt = receipt.get("srt")
+            if "xv.vpn" in jwt_payload(srt).get("entitlements", {}):
+                return srt
+        if subscription_id:
+            for receipt in receipts:
+                if receipt.get("subscription_id") == subscription_id:
+                    return receipt.get("srt")
+        return receipts[0].get("srt") if receipts else None
 
-    def _load_cookies(self) -> dict[str, str]:
-        if not self.cookie_path.is_file():
-            return {}
-
-        try:
-            content = self.cookie_path.read_text(encoding="utf-8").strip()
-        except OSError as error:
-            log.error("ExpressVPN: failed to read cookies file %s: %s", self.cookie_path, error)
-            return {}
-
-        cookies: dict[str, str] = {}
-        try:
-            data = json.loads(content)
-        except json.JSONDecodeError:
-            for line in content.splitlines():
-                if not line.strip() or line.startswith("#"):
-                    continue
-                parts = line.rstrip("\n").split("\t")
-                if len(parts) >= 7 and "expressvpn.com" in parts[0]:
-                    cookies[parts[5]] = parts[6]
-                elif "=" in line:
-                    name, value = line.split("=", maxsplit=1)
-                    cookies[name.strip()] = value.strip()
-        else:
-            if isinstance(data, list):
-                for cookie in data:
-                    if isinstance(cookie, dict) and "expressvpn.com" in str(cookie.get("domain", "")):
-                        name = cookie.get("name")
-                        value = cookie.get("value")
-                        if name and value is not None:
-                            cookies[str(name)] = str(value)
-            elif isinstance(data, dict):
-                cookies.update({str(k): str(v) for k, v in data.items()})
-        return cookies
-
-    def _load_cached_tokens(self) -> dict:
+    def load_cache(self) -> dict:
         if not self.cache_path.is_file():
             return {}
         try:
@@ -707,129 +450,72 @@ class ExpressVPN(Proxy):
             return {}
         return data if isinstance(data, dict) else {}
 
-    def _save_cached_tokens(self, tokens: dict) -> None:
-        # Invalidate in-memory cache so next _get_tokens() re-reads
-        self._tokens = tokens.copy()
+    def save_cache(self, tokens: dict) -> None:
+        self.tokens = tokens.copy()
         try:
             self.cache_path.parent.mkdir(parents=True, exist_ok=True)
-            payload = json.dumps({k: v for k, v in tokens.items() if v}, indent=2)
-            _write_private(self.cache_path, payload)
+            write_private(self.cache_path, json.dumps({k: v for k, v in tokens.items() if v}, indent=2))
         except OSError as error:
             log.error("ExpressVPN: failed to save token cache %s: %s", self.cache_path, error)
 
-    # ------------------------------------------------------------------
-    # HTTP & Helpers
-    # ------------------------------------------------------------------
-
-    def _request(self, method: str, url: str, allow_error: bool = False, **kwargs) -> requests.Response:
+    def request(self, method: str, url: str, allow_error: bool = False, **kwargs: Any) -> requests.Response:
         kwargs.setdefault("timeout", self.timeout)
         response = requests.request(method, url, **kwargs)
         if response.ok or allow_error:
             return response
         raise ValueError(f"ExpressVPN request failed with HTTP {response.status_code}: {url}")
 
-    def _api_headers(self, token: str) -> dict[str, str]:
+    def api_headers(self, token: str) -> dict[str, str]:
         return {
             "Authorization": f"Bearer {token}",
             "Accept": "application/json",
             "Content-Type": "application/json",
             "User-Agent": self.USER_AGENT,
-            "X-Client-App-Version": "12.0.0",
-            "X-Client-OS": "Windows",
-            "X-Client-Device-Model": "Browser Extension",
+            "X-Client-App-Version": "12.69.0",
+            "X-Client-OS": "Android",
+            "X-Client-Device-Model": "SHIELD Android TV",
         }
 
-    def _browser_headers(self) -> dict[str, str]:
-        return {
-            "User-Agent": self.USER_AGENT,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-        }
-
-    def _form_headers(self) -> dict[str, str]:
+    def form_headers(self) -> dict[str, str]:
         return {
             "Content-Type": "application/x-www-form-urlencoded",
             "Accept": "application/json",
             "User-Agent": self.USER_AGENT,
         }
 
-    def _select_srt(self, receipts: list[dict], active_subscription_id: Optional[str]) -> Optional[str]:
-        for receipt in receipts:
-            srt = receipt.get("srt")
-            if "xv.vpn" in self._decode_jwt_payload(srt).get("entitlements", {}):
-                return srt
-
-        if active_subscription_id:
-            for receipt in receipts:
-                if receipt.get("subscription_id") == active_subscription_id:
-                    return receipt.get("srt")
-
-        if receipts:
-            return receipts[0].get("srt")
-        return None
-
-    def _decode_jwt_payload(self, token: Optional[str]) -> dict:
-        if not token:
-            return {}
-        try:
-            parts = token.split(".")
-            if len(parts) < 2:
-                return {}
-            payload = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)
-            return json.loads(base64.urlsafe_b64decode(payload).decode("utf-8"))
-        except (ValueError, json.JSONDecodeError):
-            return {}
-
-    def _is_jwt_expired(self, token: str) -> bool:
-        expires_at = self._decode_jwt_payload(token).get("exp")
-        if not expires_at:
-            # Tokens without ``exp`` are treated as non-expiring.  Keycloak
-            # access/refresh tokens always carry ``exp``; proprietary SRT/
-            # connection tokens may omit it — they are refreshed via the
-            # normal SRT → connection_token flow anyway.
-            return False
-        return time.time() >= (int(expires_at) - 300)
-
-    def _default_cookie_path(self) -> Path:
-        cookies_dir = Path(config.directories.cookies)
-        for folder in ("vpn", "vpns"):
-            candidate = cookies_dir / folder / "expressvpn.txt"
-            if candidate.is_file():
-                return candidate
-        return cookies_dir / "vpn" / "expressvpn.txt"
-
-    def _default_cache_path(self) -> Path:
-        cache_dir = Path(config.directories.cache)
-        for folder in ("vpn", "vpns"):
-            candidate = cache_dir / "global" / f"{folder}_expressvpn_tokens.json"
-            if candidate.is_file():
-                return candidate
-        candidate = cache_dir / "global" / "expressvpn_tokens.json"
-        if candidate.is_file():
-            return candidate
-        return cache_dir / "global" / "expressvpn_tokens.json"
-
-    def close(self) -> None:
-        pass
-
-    def __enter__(self) -> ExpressVPN:
-        return self
-
-    def __exit__(self, *_: object) -> None:
-        self.close()
+    def default_cache_path(self) -> Path:
+        return Path(config.directories.cache) / "vpn" / "expressvpn_tokens.json"
 
 
-def _slugify(value: str) -> str:
+def slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
 
 
-def _write_private(path: Path, content: str) -> None:
-    """Write *content* to *path* with owner-only permissions (0600).
+def jwt_payload(token: Optional[str]) -> dict:
+    if not token:
+        return {}
+    try:
+        parts = token.split(".")
+        if len(parts) < 2:
+            return {}
+        payload = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)
+        return json.loads(base64.urlsafe_b64decode(payload).decode("utf-8"))
+    except (ValueError, json.JSONDecodeError):
+        return {}
 
-    Opens with ``os.open`` so the file is **created** at 0600 — no window
-    where it is world-readable.  On Windows ``os.fchmod`` is unavailable,
-    so we fall back to ``path.chmod`` after close.
-    """
+
+def jwt_expired(token: Optional[str]) -> bool:
+    """Treat tokens without an exp claim (proprietary SRT/connection tokens) as non-expiring."""
+    if not token:
+        return True
+    expires_at = jwt_payload(token).get("exp")
+    if not expires_at:
+        return False
+    return time.time() >= (int(expires_at) - 300)
+
+
+def write_private(path: Path, content: str) -> None:
+    """Write content to path created with owner-only (0600) permissions."""
     if hasattr(os, "fchmod"):
         fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         try:

@@ -31,7 +31,7 @@ def initialize_proxy_providers() -> List[Any]:
             proxy_providers.append(Basic(**proxy_config["basic"]))
         # ExpressVPN/ProtonVPN auto-load when their default cookie file exists (no yaml needed)
         expressvpn = ExpressVPN(**(proxy_config.get("expressvpn") or {}))
-        if proxy_config.get("expressvpn") or expressvpn.cookie_path.is_file():
+        if proxy_config.get("expressvpn") or expressvpn.cache_path.is_file():
             proxy_providers.append(expressvpn)
         if proxy_config.get("nordvpn"):
             proxy_providers.append(NordVPN(**proxy_config["nordvpn"]))

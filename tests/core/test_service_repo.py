@@ -240,9 +240,7 @@ def test_refresh_reports_discarded_local_edits(monkeypatch, tmp_path):
 def test_changed_services_up_to_date(monkeypatch):
     monkeypatch.setattr(service_repo.binaries, "Git", "git")
     # same HEAD before/after → no diff computed at all
-    monkeypatch.setattr(
-        service_repo.subprocess, "run", lambda *a, **k: pytest.fail("no git diff when HEAD unchanged")
-    )
+    monkeypatch.setattr(service_repo.subprocess, "run", lambda *a, **k: pytest.fail("no git diff when HEAD unchanged"))
     assert service_repo._changed_services(Path("/x"), "same", "same") == []
 
 
