@@ -2,6 +2,7 @@ import math
 import multiprocessing
 import os
 import statistics
+import sys
 import threading
 import time
 import traceback
@@ -739,6 +740,13 @@ def _mp_worker(queue: Any, kwargs: dict[str, Any]) -> None:
     always sent last so the parent knows this child is finished.
     """
     try:
+        # spawn re-imports this module, dropping any timing constants the bench patched in
+        # the parent (--fast-timeouts); the bench relays them via env as "NAME=SECONDS,..."
+        overrides = os.environ.get("UNSHACKLE_DL_TIMING_OVERRIDES")
+        if overrides:
+            for pair in overrides.split(","):
+                name, _, value = pair.partition("=")
+                setattr(sys.modules[__name__], name, float(value))
         spec = kwargs.pop("_session_spec")
         kwargs["session"] = _rebuild_session(spec)
         for event in requests(**kwargs):
@@ -823,13 +831,25 @@ def _download_multiprocess(
     last_speed_report = start_time
     done_count = 0
 
+    dead_ticks = 0
     try:
         while done_count < len(procs):
             try:
                 event = queue.get(timeout=0.1)
             except Empty:
                 event = None
+                # a child that dies without its __mp_done__ sentinel (hard crash, OOM/AV kill)
+                # would leave this loop waiting forever. nonzero exitcode means its finally never
+                # ran; a few empty ticks of grace let any feeder-flushed messages arrive first
+                if any(p.exitcode not in (None, 0) for p in procs):
+                    dead_ticks += 1
+                    if dead_ticks >= 3:
+                        for p in procs:
+                            p.terminate()
+                        codes = [p.exitcode for p in procs]
+                        raise RuntimeError(f"segment download child died without result (exitcodes: {codes})")
             if event is not None:
+                dead_ticks = 0
                 if "__mp_done__" in event:
                     done_count += 1
                     continue
@@ -863,6 +883,9 @@ def _download_multiprocess(
             p.join(timeout=1)
             if p.is_alive():
                 p.terminate()
+                # terminate is async: a dying child can still hold segment handles for a
+                # beat, so wait for the kill to land before the caller cleans up (WinError 32)
+                p.join(timeout=5)
 
 
 def requests(
@@ -1098,6 +1121,10 @@ def requests(
         seg_done: set[int] = set()
         seg_durations: list[float] = []
         hedged: set[int] = set()
+        # batch-local cancel, set at teardown: a worker leaked past a no-wait shutdown must
+        # never retry once DOWNLOAD_CANCELLED is cleared for the next track (it would reopen
+        # its .!dev mid-cleanup -> WinError 32)
+        batch_abort = threading.Event()
 
         # start at the cap and adapt downward under CDN pressure: ramping up from a low target
         # can at best converge to the throughput the cap already gives, so there is nothing to
@@ -1134,6 +1161,7 @@ def requests(
                 # it has been hedged. `hedged` is read here without seg_lock; CPython set
                 # membership is atomic and a one-iteration stale read is harmless.
                 racing=(lambda: True) if hedge else (lambda: index in hedged),
+                abort=batch_abort,
                 on_retry=on_retry_cb,
                 **item,
             ):
@@ -1277,7 +1305,8 @@ def requests(
                     f.truncate(size)
                 seg_start[index] = time.time()
                 tail_boosted.add(index)
-                abort = threading.Event()
+                # a failed part fails the whole batch anyway, so parts share batch_abort
+                abort = batch_abort
                 parts_left = [len(parts)]
                 part_lock = threading.Lock()
                 for start, end in parts:
@@ -1426,7 +1455,10 @@ def requests(
             raise
         finally:
             # losers must close their handles before merge sweeps *.!dev (WinError 32);
-            # no wait on cancel/fail: merge never runs and workers may be blocked in reads
+            # no wait on cancel/fail: merge never runs and workers may be blocked in reads.
+            # batch_abort outlives the shutdown so a leaked worker exits at its next
+            # arrival/timeout instead of retrying after the global flag is cleared
+            batch_abort.set()
             pool.shutdown(wait=not DOWNLOAD_CANCELLED.is_set(), cancel_futures=True)
 
         # Drain remaining events
