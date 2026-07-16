@@ -262,10 +262,7 @@ def _plan_tail_parts(size: int, spare: int) -> list[tuple[int, int]]:
     n_parts = max(1, min(spare, math.ceil(size / TAIL_BOOST_PART_SIZE)))
     part_size = math.ceil(size / n_parts)
     return [
-        (s, e)
-        for i in range(n_parts)
-        for s, e in [(i * part_size, min(size - 1, (i + 1) * part_size - 1))]
-        if s <= e
+        (s, e) for i in range(n_parts) for s, e in [(i * part_size, min(size - 1, (i + 1) * part_size - 1))] if s <= e
     ]
 
 
@@ -460,6 +457,10 @@ def download(
 
     _time = time.time
     use_raw = _is_requests_session(session)
+    # item carries its own Range (DASH SegmentBase / HLS EXT-X-BYTERANGE slice): never
+    # overwrite it with a resume Range (that would fetch the parent's tail, not the slice);
+    # retries rewrite the whole slice in "wb" mode instead
+    item_range = _has_range_header(kwargs)
 
     attempts = 1
     written = 0
@@ -480,18 +481,19 @@ def download(
                 request_kwargs.setdefault("max_retries", 0)
             else:
                 request_kwargs.setdefault("timeout", (CONNECT_TIMEOUT, READ_TIMEOUT))
+            req_headers = dict(request_kwargs.get("headers", {}) or {})
+            # media bytes must arrive unrecoded: transparent CDN (de)compression breaks
+            # Content-Length accounting and is meaningless on ranged requests
+            req_headers.setdefault("Accept-Encoding", "identity")
             if part_mode:
-                req_headers = dict(request_kwargs.get("headers", {}) or {})
                 req_headers["Range"] = f"bytes={part_offset + written}-{part_end}"
-                request_kwargs["headers"] = req_headers
-            elif resume_offset > 0:
-                req_headers = dict(request_kwargs.get("headers", {}) or {})
+            elif resume_offset > 0 and not item_range:
                 req_headers["Range"] = f"bytes={resume_offset}-"
-                request_kwargs["headers"] = req_headers
+            request_kwargs["headers"] = req_headers
 
             stream = session.get(url, stream=True, **request_kwargs)
 
-            if (not part_mode) and resume_offset > 0 and stream.status_code == 416:
+            if (not part_mode) and (not item_range) and resume_offset > 0 and stream.status_code == 416:
                 # our Range started past the end (a stale or oversized .!dev from a prior run).
                 # discard it and restart clean rather than raise_for_status → burn retries.
                 try:
@@ -505,13 +507,21 @@ def download(
 
             stream.raise_for_status()
 
-            resumed = (not part_mode) and resume_offset > 0 and stream.status_code == 206
+            # item_range 206s reflect the slice's own Range, not a resume; those retries rewrite in "wb"
+            resumed = (not part_mode) and (not item_range) and resume_offset > 0 and stream.status_code == 206
             if (not part_mode) and resume_offset > 0 and not resumed:
                 resume_offset = 0
             if part_mode and stream.status_code != 206:
                 raise IOError(f"expected 206 for ranged part, got {stream.status_code}")
+            if item_range and not part_mode and stream.status_code != 206:
+                # server ignored the slice's Range and sent the whole parent; writing that
+                # as the segment would silently corrupt the merge, so fail the attempt
+                raise IOError(f"expected 206 for byte-range segment, got {stream.status_code}")
             if use_rnet:
                 content_length = stream.content_length or 0
+                ce = (stream.headers.get("Content-Encoding") or stream.headers.get("content-encoding") or "").lower()
+                if ce in ("gzip", "deflate", "br"):
+                    content_length = 0
             else:
                 try:
                     content_length = int(stream.headers.get("Content-Length", "0"))
@@ -838,7 +848,10 @@ def requests(
         seg_durations: list[float] = []
         hedged: set[int] = set()
 
-        controller = AdaptiveWorkerController(cap=max_workers) if adaptive else None
+        # start at the cap and adapt downward under CDN pressure: ramping up from a low target
+        # can at best converge to the throughput the cap already gives, so there is nothing to
+        # gain by starting low. error-burst backoff and AIMD recovery still apply from there.
+        controller = AdaptiveWorkerController(cap=max_workers, start=max_workers) if adaptive else None
         # feed CDN error signals (429/timeout/reset) from each retrying segment into the controller
         on_retry_cb = (lambda _exc: controller.record_error(time.time())) if controller else None
 
@@ -967,6 +980,12 @@ def requests(
             # of the worker target; probe at most TAIL_BOOST_MAX_PER_CYCLE per cycle so a run of
             # blocking range probes can't stall the drain loop.
             if DOWNLOAD_CANCELLED.is_set() or not _tail_boost_engages(len(remaining), len(pending), target):
+                return
+            # completed segments predict the tail's sizes: below the min every probe would
+            # decline anyway, and at real-CDN RTT those sequential probes cost seconds on the
+            # main loop, so skip probing and release the tail through the normal path
+            if seg_done and (total_bytes / len(seg_done)) < TAIL_BOOST_MIN_SEGMENT_SIZE:
+                tail_skipped.update(index for index, _ in remaining)
                 return
             boosted = 0
             for index, url_item in list(remaining):
