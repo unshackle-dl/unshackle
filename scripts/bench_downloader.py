@@ -29,6 +29,7 @@ from __future__ import annotations
 import http.server
 import importlib
 import math
+import multiprocessing
 import os
 import socket
 import socketserver
@@ -223,7 +224,18 @@ def run_batch(
     except BaseException as exc:  # noqa: BLE001 - bench records failure, keeps sweeping
         err = exc
     wall = time.perf_counter() - start
-    # measured immediately at completion: this is the exact moment merge would sweep
+    if err is not None:
+        # a failed batch shuts down without waiting, so a leaked racer may sit in one last
+        # blocked read (<= READ_TIMEOUT) holding its .!dev handle. merge never sweeps after
+        # a failure; what races the leak is the cleanup that runs once the error propagates,
+        # so drain before measuring. a handle still held past the deadline is a real leak.
+        deadline = time.monotonic() + dl_mod.READ_TIMEOUT + dl_mod.RETRY_WAIT + 2
+        while time.monotonic() < deadline and (
+            any(t.name.startswith("ThreadPoolExecutor") for t in threading.enumerate())
+            or multiprocessing.active_children()
+        ):
+            time.sleep(0.1)
+    # on success this is the exact moment merge would sweep
     strays, locked = sweep_strays(out_dir)
     pool_threads = sum(1 for t in threading.enumerate() if t.name.startswith("ThreadPoolExecutor"))
     return wall, completions, err, strays, locked, pool_threads
@@ -319,7 +331,9 @@ def sweep(
                 out_dir = Path(tempfile.mkdtemp(prefix="run_", dir=root))
                 secs, comps, err, strays, locked, pool_threads = run_batch(urls, out_dir, w, session, adaptive, procs)
                 bad = incomplete_segments(out_dir, len(urls), expected_bytes)
-                samples.append((secs, comps, downloaded_mib(out_dir), bad, err is not None, strays, locked, pool_threads))
+                samples.append(
+                    (secs, comps, downloaded_mib(out_dir), bad, err is not None, strays, locked, pool_threads)
+                )
                 rmtree(out_dir, ignore_errors=True)
             median_s = statistics.median(s[0] for s in samples)
             best = min(samples, key=lambda s: abs(s[0] - median_s))  # representative run near the median
@@ -327,8 +341,19 @@ def sweep(
             mbps = best[2] / best[0] if best[0] else 0.0
             # sweep safety reports the WORST run: one locked handle in any run is the bug
             rows.append(
-                (w, median_s, mbps, bucket, tail_s, tail_pct, best[3], best[4],
-                 max(s[5] for s in samples), max(s[6] for s in samples), max(s[7] for s in samples))
+                (
+                    w,
+                    median_s,
+                    mbps,
+                    bucket,
+                    tail_s,
+                    tail_pct,
+                    best[3],
+                    best[4],
+                    max(s[5] for s in samples),
+                    max(s[6] for s in samples),
+                    max(s[7] for s in samples),
+                )
             )
     return rows
 
@@ -370,11 +395,17 @@ def print_report(rows: list[Row], runs: int, total_segments: int) -> None:
 @click.option("--seg-size", default=2 * MIB, show_default=True, help="Bytes per synthetic segment.")
 @click.option("--workers", default="1,2,4,8,16", show_default=True, help="Comma list of max_workers to sweep.")
 @click.option("--runs", default=1, show_default=True, help="Runs per worker count; median reported.")
-@click.option("--latency", "latency_ms", default=0, show_default=True, help="Per-response delay before first byte (ms).")
-@click.option("--rate", "rate_kib", default=0, show_default=True, help="Per-response throttle in KiB/s (0 = unthrottled).")
+@click.option(
+    "--latency", "latency_ms", default=0, show_default=True, help="Per-response delay before first byte (ms)."
+)
+@click.option(
+    "--rate", "rate_kib", default=0, show_default=True, help="Per-response throttle in KiB/s (0 = unthrottled)."
+)
 @click.option("--fault-stall", default=0, show_default=True, help="First N segments stall forever mid-body.")
 @click.option("--fault-reset", default=0, show_default=True, help="First N segments RST mid-body on attempt 1.")
-@click.option("--fault-503", "fault_503", default=0, show_default=True, help="First N segments return 503 on attempt 1.")
+@click.option(
+    "--fault-503", "fault_503", default=0, show_default=True, help="First N segments return 503 on attempt 1."
+)
 @click.option(
     "--fault-tail-slow", default=0, show_default=True, help=f"Last N segments throttled to {TAIL_SLOW_KIB} KiB/s."
 )
@@ -391,7 +422,9 @@ def print_report(rows: list[Row], runs: int, total_segments: int) -> None:
 @click.option("--impersonate", help="rnet browser preset (e.g. Chrome131); uses RnetSession in either mode.")
 @click.option("--adaptive", is_flag=True, help="Use the adaptive worker controller (max_workers becomes the cap).")
 @click.option("--procs", default=1, show_default=True, help="Fan segments across N processes (multiprocess path).")
-@click.option("--no-read1", is_flag=True, help="A/B: force racers back to blocking full-chunk reads (pre-fix behavior).")
+@click.option(
+    "--no-read1", is_flag=True, help="A/B: force racers back to blocking full-chunk reads (pre-fix behavior)."
+)
 def main(
     segments: int,
     seg_size: int,
@@ -424,6 +457,8 @@ def main(
         saved = {k: getattr(dl_mod, k) for k in fast}
         for k, v in fast.items():
             setattr(dl_mod, k, v)
+        # --procs children are spawned fresh and would otherwise keep the real timeouts
+        os.environ["UNSHACKLE_DL_TIMING_OVERRIDES"] = ",".join(f"{k}={v}" for k, v in fast.items())
 
     if no_read1:
         if hasattr(dl_mod, "RACER_READ1"):
@@ -478,6 +513,7 @@ def main(
             server.shutdown()
         for k, v in saved.items():
             setattr(dl_mod, k, v)
+        os.environ.pop("UNSHACKLE_DL_TIMING_OVERRIDES", None)
 
 
 if __name__ == "__main__":
