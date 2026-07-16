@@ -52,6 +52,13 @@ def install_guard_spy() -> bool:
     return True
 
 
+def _major_brand(path: Path) -> str:
+    # ftyp box: [4-byte size][b"ftyp"][4-byte major brand]; empty if not an ftyp file
+    with open(path, "rb") as f:
+        head = f.read(12)
+    return head[8:12].decode("latin-1") if head[4:8] == b"ftyp" else ""
+
+
 def ffprobe(path: Path) -> str:
     if not path.exists() or not shutil.which("ffprobe"):
         return "n/a"
@@ -60,7 +67,13 @@ def ffprobe(path: Path) -> str:
         capture_output=True,
         text=True,
     )
-    return f"{float(r.stdout.strip()):.0f}s" if r.stdout.strip() else "INVALID"
+    if r.stdout.strip():
+        return f"{float(r.stdout.strip()):.0f}s"
+    # Sony's senvu-profile MP4s use major brand "senv", which ffmpeg can't parse
+    # ("Not yet implemented in FFmpeg"). The download is intact, so verify by size.
+    if _major_brand(path) == "senv":
+        return f"senv ok ({path.stat().st_size} B)"
+    return "INVALID"
 
 
 def run_one(label: str, url: str, which: str, workers: int, has_guard: bool) -> str:
