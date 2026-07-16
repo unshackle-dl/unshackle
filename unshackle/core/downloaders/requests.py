@@ -398,6 +398,7 @@ def download(
     part_offset: Optional[int] = None,
     part_end: Optional[int] = None,
     claimed: Optional[Callable[[], bool]] = None,
+    racing: Optional[Callable[[], bool]] = None,
     abort: Optional[threading.Event] = None,
     on_retry: Optional[Callable[[Exception], None]] = None,
     **kwargs: Any,
@@ -430,6 +431,12 @@ def download(
         part_end: Inclusive end byte of the part. Required when `part_offset` is set.
         claimed: Optional predicate checked before every attempt; when it returns True
             the download stops silently (another worker already delivered this file).
+        racing: Optional predicate selecting read granularity per iteration. When None,
+            read1 (per-network-arrival reads) is used whenever `claimed` is set and
+            RACER_READ1 is on. When provided, read1 is used only
+            on iterations where it returns True (this segment is being hedge-raced, so a
+            superseded loser must notice `claimed()` mid-stream); otherwise a blocking
+            full-chunk read is used, avoiding the per-record read tax on non-racing segments.
         abort: Optional local cancel signal. When set, the download stops like a cancel
             (keeps its partial, returns silently, does not raise). Used by ranged-parallel
             downloads to abort sibling parts without touching the process-global cancel.
@@ -569,7 +576,12 @@ def download(
                     chunks = stream.stream()
                 elif use_raw:
                     _read1 = getattr(stream.raw, "read1", None) if claimed is not None and RACER_READ1 else None
-                    if _read1 is not None:
+                    if _read1 is not None and racing is not None:
+                        # only pay the per-arrival read1 tax while this segment is actually
+                        # racing; a blocking full-chunk read otherwise (the common case)
+                        _raw_read = stream.raw.read
+                        chunks = iter(lambda: _read1(chunk_size) if racing() else _raw_read(chunk_size), b"")
+                    elif _read1 is not None:
                         chunks = iter(lambda: _read1(chunk_size), b"")
                     else:
                         chunks = iter(lambda: stream.raw.read(chunk_size), b"")
@@ -1115,6 +1127,10 @@ def requests(
                 segmented=segmented_batch,
                 save_path=target,
                 claimed=lambda: index in seg_done,
+                # read1 only while racing: a hedge racer always races; a primary races once
+                # it has been hedged. `hedged` is read here without seg_lock; CPython set
+                # membership is atomic and a one-iteration stale read is harmless.
+                racing=(lambda: True) if hedge else (lambda: index in hedged),
                 on_retry=on_retry_cb,
                 **item,
             ):
