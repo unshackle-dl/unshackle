@@ -8,7 +8,7 @@ import re
 import shutil
 import sys
 from copy import deepcopy
-from functools import partial
+from functools import lru_cache, partial
 from typing import Any, Callable, Optional, Union
 from urllib.parse import urljoin, urlparse
 from uuid import UUID
@@ -1104,10 +1104,18 @@ class DASH:
         return sum(float(x[0:-1]) * {"H": 60 * 60, "M": 60, "S": 1}[x[-1].upper()] for x in m)
 
     @staticmethod
+    @lru_cache(maxsize=None)
+    def _field_format_pattern(field: str) -> re.Pattern:
+        # printf-style `$Field%fmt$` matcher, compiled once per field name
+        return re.compile(rf"\${re.escape(field)}%([a-z0-9]+)\$", flags=re.I)
+
+    @staticmethod
     def replace_fields(url: str, **kwargs: Any) -> str:
+        if "$" not in url:
+            return url
         for field, value in kwargs.items():
             url = url.replace(f"${field}$", str(value))
-            m = re.search(rf"\${re.escape(field)}%([a-z0-9]+)\$", url, flags=re.I)
+            m = DASH._field_format_pattern(field).search(url)
             if m:
                 url = url.replace(m.group(), f"{value:{m.group(1)}}")
         return url

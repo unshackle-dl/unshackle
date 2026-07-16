@@ -3141,9 +3141,13 @@ class dl:
                     )
                 with console.status("Repackaging tracks with FFMPEG..."):
                     has_repacked = False
+                    # Video tracks whose VUI was folded into the repack pass; skipped in the VUI loop below.
+                    vui_folded = set()
                     for track in title.tracks:
                         if track.needs_repack:
-                            track.repackage()
+                            bsf = track.vui_bsf() if isinstance(track, Video) else None
+                            if track.repackage(bsf_v=bsf):
+                                vui_folded.add(id(track))
                             has_repacked = True
                             events.emit(events.Types.TRACK_REPACKED, track=track)
                     if has_repacked:
@@ -3152,6 +3156,8 @@ class dl:
 
                 with console.status("Normalizing video VUI..."):
                     for track in title.tracks.videos:
+                        if id(track) in vui_folded:
+                            continue
                         try:
                             track.normalize_vui()
                         except Exception as e:  # noqa: BLE001

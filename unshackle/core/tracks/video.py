@@ -410,20 +410,19 @@ class Video(Track):
         self.path = output_path
         original_path.unlink()
 
-    def normalize_vui(self) -> bool:
-        """Rewrite SPS VUI colour metadata to match ``self.range``.
+    def vui_bsf(self) -> Optional[str]:
+        """Return the ``-bsf:v`` value that rewrites SPS VUI colour metadata to match ``self.range``.
 
-        Some services ship HDR10/HLG bitstreams with stale BT.709 VUI, which makes
-        downstream tools mis-classify the file. The manifest-derived range is the
-        source of truth. Skips SDR, DV, and HYBRID. Returns True if the bitstream
-        was rewritten.
+        Returns None when no rewrite is needed: SDR/DV/HYBRID ranges, non-AVC/HEVC codecs, a
+        missing file, or when the bitstream already ships the correct colour metadata. Otherwise
+        returns a ``{h264,hevc}_metadata=...`` string suitable for ffmpeg ``-bsf:v``.
         """
         if not self.path or not self.path.exists():
-            return False
+            return None
         if self.codec not in (Video.Codec.AVC, Video.Codec.HEVC):
-            return False
+            return None
         if self.range in (Video.Range.SDR, Video.Range.DV, Video.Range.HYBRID):
-            return False
+            return None
 
         vui = {
             Video.Range.HDR10: (9, 16, 9),
@@ -431,7 +430,7 @@ class Video(Track):
             Video.Range.HLG: (9, 18, 9),
         }.get(self.range)
         if not vui:
-            return False
+            return None
 
         # Skip the rewrite when the bitstream VUI already matches the target — avoids a full
         # bitstream pass on services that already ship correct colour metadata
@@ -462,18 +461,31 @@ class Video(Track):
             vals = dict(line.split("=", 1) for line in probe.stdout.splitlines() if "=" in line)
             current = (vals.get("color_primaries"), vals.get("color_transfer"), vals.get("color_space"))
             if current == expected:
-                return False
-
-        if not binaries.FFMPEG:
-            raise EnvironmentError('FFmpeg executable "ffmpeg" was not found but is required for this call.')
+                return None
 
         primaries, transfer, matrix = vui
         filter_key = {Video.Codec.AVC: "h264_metadata", Video.Codec.HEVC: "hevc_metadata"}[self.codec]
-        bsf = (
+        return (
             f"{filter_key}=colour_primaries={primaries}"
             f":transfer_characteristics={transfer}"
             f":matrix_coefficients={matrix}"
         )
+
+    def normalize_vui(self) -> bool:
+        """Rewrite SPS VUI colour metadata to match ``self.range``.
+
+        Some services ship HDR10/HLG bitstreams with stale BT.709 VUI, which makes
+        downstream tools mis-classify the file. The manifest-derived range is the
+        source of truth. Skips SDR, DV, and HYBRID. Returns True if the bitstream
+        was rewritten.
+        """
+        bsf = self.vui_bsf()
+        if bsf is None:
+            return False
+        assert self.path is not None  # vui_bsf() returns None when path is unset
+
+        if not binaries.FFMPEG:
+            raise EnvironmentError('FFmpeg executable "ffmpeg" was not found but is required for this call.')
 
         original_path = self.path
         output_path = original_path.with_stem(f"{original_path.stem}_vui")
@@ -508,7 +520,7 @@ class Video(Track):
             context={
                 "codec": str(self.codec),
                 "range": str(self.range),
-                "vui": {"primaries": primaries, "transfer": transfer, "matrix": matrix},
+                "vui": bsf,
                 "id": self.id,
             },
         )

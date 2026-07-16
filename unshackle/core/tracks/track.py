@@ -723,7 +723,16 @@ class Track:
 
         return init_data
 
-    def repackage(self) -> None:
+    def repackage(self, bsf_v: Optional[str] = None) -> bool:
+        """Remux the track with ffmpeg ``-c copy``.
+
+        When ``bsf_v`` is given it is folded into the same pass as ``-bsf:v`` (used to
+        normalize video VUI colour metadata without a second full-file remux). Repackaging
+        is mandatory; the bitstream filter is best-effort. If the combined run fails (and it
+        isn't the AAC-retry case) it is retried once without ``bsf_v`` so the remux still
+        succeeds. Returns True if the requested ``bsf_v`` was applied (always False when
+        ``bsf_v`` is None, since nothing was requested).
+        """
         if not self.path or not self.path.exists():
             raise ValueError("Cannot repackage a Track that has not been downloaded.")
 
@@ -733,7 +742,7 @@ class Track:
         original_path = self.path
         output_path = original_path.with_stem(f"{original_path.stem}_repack")
 
-        def _ffmpeg(extra_args: list[str] = None):
+        def _ffmpeg(extra_args: list[str] = None, bsf: Optional[str] = None):
             args = [
                 binaries.FFMPEG,
                 "-hide_banner",
@@ -767,9 +776,11 @@ class Track:
                     "bitexact",  # only have minimal tag data, reproducible mux
                     "-codec",
                     "copy",
-                    str(output_path),
                 ]
             )
+            if bsf:
+                args.extend(["-bsf:v", bsf])
+            args.append(str(output_path))
 
             subprocess.run(
                 args,
@@ -785,12 +796,20 @@ class Track:
             context={"track_type": self.__class__.__name__, "id": self.id, "file": original_path.name},
         )
 
+        bsf_applied = False
         try:
-            _ffmpeg()
+            _ffmpeg(bsf=bsf_v)
+            bsf_applied = bsf_v is not None
         except subprocess.CalledProcessError as e:
             if b"Malformed AAC bitstream detected" in e.stderr:
                 # e.g., TruTV's dodgy encodes
-                _ffmpeg(["-y", "-bsf:a", "aac_adtstoasc"])
+                _ffmpeg(["-y", "-bsf:a", "aac_adtstoasc"], bsf=bsf_v)
+                bsf_applied = bsf_v is not None
+            elif bsf_v is not None:
+                # Repack is mandatory, the VUI bitstream filter is best-effort: retry
+                # without it so the remux still succeeds; caller falls back to normalize_vui.
+                output_path.unlink(missing_ok=True)
+                _ffmpeg()
             else:
                 raise
 
@@ -808,6 +827,7 @@ class Track:
                 "output_size": output_path.stat().st_size if output_path.exists() else 0,
             },
         )
+        return bsf_applied
 
 
 __all__ = ("Track", "DownloadContext")

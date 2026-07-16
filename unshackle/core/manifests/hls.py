@@ -1106,7 +1106,7 @@ class HLS:
         with open(save_path, "wb") as output_file:
             for segment in segments:
                 with open(segment, "rb") as segment_file:
-                    output_file.write(segment_file.read())
+                    shutil.copyfileobj(segment_file, output_file, 1024 * 1024)
 
         cleanup_segments_and_dirs()
         return save_path.stat().st_size
