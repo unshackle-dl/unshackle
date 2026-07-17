@@ -48,6 +48,7 @@ function Run($a) {
     # (e.g. "2Gbe -> ~1900 Mbps expected ceiling"). Uses whatever CLI exists.
     Write-Output ""
     Write-Output "==================== speedtest baseline ===================="
+    $global:LASTEXITCODE = 0
     if (Get-Command speedtest -ErrorAction SilentlyContinue) {
         & speedtest --accept-license --accept-gdpr 2>&1 | ForEach-Object { "$_" }
     } elseif (Get-Command npx -ErrorAction SilentlyContinue) {
@@ -57,6 +58,9 @@ function Run($a) {
         & speedtest-cli --simple 2>&1 | ForEach-Object { "$_" }
     } else {
         Write-Output "no speedtest CLI found (install Ookla 'speedtest', have npx, or 'pip install speedtest-cli') - skipping"
+    }
+    if ($LASTEXITCODE -ne 0) {
+        Write-Output ("(speedtest CLI failed - exit code " + $LASTEXITCODE + "; numbers above may be missing)")
     }
 
     # 1. Synthetic downloader benchmark (offline, deterministic)
@@ -101,6 +105,7 @@ function Run($a) {
 
     Write-Output ""
     Write-Output ("report saved: " + $out)
-} | Tee-Object -Variable report
-# utf8 (not Tee-Object's utf16) so reports diff and grep cleanly across machines
-$report | Out-File -FilePath $out -Encoding utf8
+} | Tee-Object -FilePath $out
+# progressive tee keeps a partial report if the run dies; rewrite as utf8 at the end
+# (Tee-Object only writes utf16) so reports diff and grep cleanly across machines
+(Get-Content $out) | Out-File -FilePath $out -Encoding utf8
