@@ -257,6 +257,18 @@ def _has_range_header(item: dict[str, Any]) -> bool:
     return any(k.lower() == "range" for k in (item.get("headers") or {}))
 
 
+def _split_ranges(size: int, max_parts: int, part_target: int) -> list[tuple[int, int]]:
+    """Split ``[0, size)`` into inclusive ``[start, end]`` byte ranges with no gaps or overlaps.
+
+    At most ``max_parts`` parts of ~``part_target`` bytes each. Pure, with no I/O, so testable.
+    """
+    n_parts = max(1, min(max_parts, math.ceil(size / part_target)))
+    part_size = math.ceil(size / n_parts)
+    return [
+        (s, e) for i in range(n_parts) for s, e in [(i * part_size, min(size - 1, (i + 1) * part_size - 1))] if s <= e
+    ]
+
+
 def _plan_tail_parts(size: int, spare: int) -> list[tuple[int, int]]:
     """Plan intra-segment range parts for a tail segment.
 
@@ -267,11 +279,7 @@ def _plan_tail_parts(size: int, spare: int) -> list[tuple[int, int]]:
     """
     if size < TAIL_BOOST_MIN_SEGMENT_SIZE or spare < 2:
         return []
-    n_parts = max(1, min(spare, math.ceil(size / TAIL_BOOST_PART_SIZE)))
-    part_size = math.ceil(size / n_parts)
-    return [
-        (s, e) for i in range(n_parts) for s, e in [(i * part_size, min(size - 1, (i + 1) * part_size - 1))] if s <= e
-    ]
+    return _split_ranges(size, spare, TAIL_BOOST_PART_SIZE)
 
 
 def _tail_boost_engages(remaining: int, pending: int, target: int) -> bool:
@@ -297,14 +305,7 @@ def _dispatch_parts(
     save_path.parent.mkdir(parents=True, exist_ok=True)
     control_file = save_path.with_name(f"{save_path.name}.!dev")
 
-    n_parts = max(1, min(max_workers, math.ceil(total_size / RANGE_PARALLEL_PART_SIZE)))
-    part_size = math.ceil(total_size / n_parts)
-    parts = [
-        (s, e)
-        for i in range(n_parts)
-        for s, e in [(i * part_size, min(total_size - 1, (i + 1) * part_size - 1))]
-        if s <= e
-    ]
+    parts = _split_ranges(total_size, max_workers, RANGE_PARALLEL_PART_SIZE)
 
     control_file.write_bytes(b"")
     with open(save_path, "wb") as f:
