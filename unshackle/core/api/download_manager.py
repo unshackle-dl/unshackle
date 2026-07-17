@@ -905,6 +905,7 @@ class DownloadQueueManager:
 
         stdout_bytes = b""
         stderr_bytes = b""
+        last_progress_stat: Optional[tuple[int, int]] = None  # (st_mtime_ns, st_size) of last parse
 
         try:
             while True:
@@ -913,9 +914,12 @@ class DownloadQueueManager:
                     stdout_bytes, stderr_bytes = communicate_task.result()
                     break
 
-                # Check for progress updates
+                # Check for progress updates (skip re-parse when the file hasn't changed since last tick)
                 try:
-                    if os.path.exists(progress_path):
+                    stat = os.stat(progress_path)
+                    stat_key = (stat.st_mtime_ns, stat.st_size)
+                    if stat_key != last_progress_stat:
+                        last_progress_stat = stat_key
                         with open(progress_path, "r", encoding="utf-8") as handle:
                             progress_data = json.load(handle)
                             if progress_data.get("phase") and progress_data["phase"] != job.phase:
