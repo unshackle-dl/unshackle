@@ -79,6 +79,17 @@ def test_merge_splices_triple_duplicate_into_one():
     assert "00:00:01.000 --> 00:00:04.000" in out
 
 
+def test_merge_duplicate_ending_earlier_keeps_later_end():
+    # A boundary duplicate that ends BEFORE the kept cue must not shorten it: the
+    # splice extends only. Here the kept cue runs to 00:00:05.000 and the duplicate
+    # is a brief 00:00:04.900 -> 00:00:04.950 re-emission of the same payload.
+    vtt = "WEBVTT\n\n00:00:01.000 --> 00:00:05.000\n[music]\n\nWEBVTT\n\n00:00:04.900 --> 00:00:04.950\n[music]\n"
+    out = merge_segmented_webvtt(vtt)
+    assert out.count("[music]") == 1
+    assert "00:00:01.000 --> 00:00:05.000" in out, f"kept cue was truncated:\n{out}"
+    assert "00:00:04.950" not in out
+
+
 def test_merge_drops_cue_ids_and_notes_keeps_style():
     vtt = (
         "WEBVTT\n\n"
