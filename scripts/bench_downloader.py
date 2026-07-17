@@ -133,6 +133,9 @@ class SegmentHandler(http.server.BaseHTTPRequestHandler):
         rate = server.rate_kib
         if f["tail_slow"] and idx >= server.total_segments - f["tail_slow"]:
             rate = TAIL_SLOW_KIB
+        # first attempt only: models a bad CDN connection, so a hedge racer gets full speed
+        if f["tail_slow_once"] and attempt == 1 and idx >= server.total_segments - f["tail_slow_once"]:
+            rate = TAIL_SLOW_KIB
         self._serve(rate=rate)
 
     def _serve(self, rate: int = 0, stall: bool = False, reset: bool = False) -> None:
@@ -410,6 +413,12 @@ def print_report(rows: list[Row], runs: int, total_segments: int) -> None:
     "--fault-tail-slow", default=0, show_default=True, help=f"Last N segments throttled to {TAIL_SLOW_KIB} KiB/s."
 )
 @click.option(
+    "--fault-tail-slow-once",
+    default=0,
+    show_default=True,
+    help=f"Last N segments throttled to {TAIL_SLOW_KIB} KiB/s on attempt 1 only; a hedge/retry runs full speed.",
+)
+@click.option(
     "--fast-timeouts",
     is_flag=True,
     help="Bench-only: shrink READ_TIMEOUT/RETRY_WAIT/HEDGE_MIN_WAIT so fault runs finish fast.",
@@ -436,6 +445,7 @@ def main(
     fault_reset: int,
     fault_503: int,
     fault_tail_slow: int,
+    fault_tail_slow_once: int,
     fast_timeouts: bool,
     urls_file: Optional[str],
     impersonate: Optional[str],
@@ -445,7 +455,13 @@ def main(
 ) -> None:
     """Benchmark downloader throughput vs worker count, with optional fault injection."""
     worker_counts = [int(w) for w in workers.split(",") if w.strip()]
-    faults = {"stall": fault_stall, "reset": fault_reset, "http503": fault_503, "tail_slow": fault_tail_slow}
+    faults = {
+        "stall": fault_stall,
+        "reset": fault_reset,
+        "http503": fault_503,
+        "tail_slow": fault_tail_slow,
+        "tail_slow_once": fault_tail_slow_once,
+    }
     server: Optional[SegmentServer] = None
     session: Optional[Any] = None
     saved: dict[str, Any] = {}
