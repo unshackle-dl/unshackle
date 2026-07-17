@@ -1,6 +1,7 @@
 import math
 import multiprocessing
 import os
+import socket
 import statistics
 import sys
 import threading
@@ -257,6 +258,21 @@ def _has_range_header(item: dict[str, Any]) -> bool:
     return any(k.lower() == "range" for k in (item.get("headers") or {}))
 
 
+def _force_unblock_stream(stream: Any) -> None:
+    """Best-effort: shut the stream's socket so a thread parked in a blocking read returns now.
+
+    A superseded hedge loser can sit in a full-chunk ``raw.read`` on a slow connection; the
+    batch's wait-gated shutdown (which guarantees handles are released before the merge sweep)
+    would otherwise drain that whole slow read. ``socket.shutdown`` makes the read return at once
+    so the loser unwinds and closes its ``.!dev`` handle immediately. Requests/urllib3 only (rnet
+    exposes no reachable socket); any failure is swallowed and the caller falls back to waiting.
+    """
+    try:
+        stream.raw._fp.fp.raw._sock.shutdown(socket.SHUT_RDWR)
+    except Exception:
+        pass
+
+
 def _split_ranges(size: int, max_parts: int, part_target: int) -> list[tuple[int, int]]:
     """Split ``[0, size)`` into inclusive ``[start, end]`` byte ranges with no gaps or overlaps.
 
@@ -403,6 +419,7 @@ def download(
     racing: Optional[Callable[[], bool]] = None,
     abort: Optional[threading.Event] = None,
     on_retry: Optional[Callable[[Exception], None]] = None,
+    register: Optional[Callable[[Any, bool], None]] = None,
     **kwargs: Any,
 ) -> Generator[dict[str, Any], None, None]:
     """
@@ -445,6 +462,10 @@ def download(
         on_retry: Optional callback invoked with the raised exception before each retry
             wait (not on cancel or final exhaustion). Used to feed CDN error signals to
             the adaptive worker controller. Callback errors are swallowed.
+        register: Optional callback ``(stream, active)`` invoked with active=True while a
+            response is being read and active=False when that read ends. Lets the batch reach
+            a superseded loser's socket to unblock its in-flight read at teardown (see
+            _force_unblock_stream) instead of waiting the slow read out.
         kwargs: Any extra keyword arguments to pass to the session.get() call. Use this
             for one-time request changes like a header, cookie, or proxy. For example,
             to request Byte-ranges use e.g., `headers={"Range": "bytes=0-128"}`.
@@ -593,11 +614,15 @@ def download(
                 _data_accumulated = 0
                 _bytes_since_yield = 0
                 emit_progress = (not segmented) or part_mode
+                if register is not None:
+                    register(stream, True)
                 for chunk in chunks:
                     if DOWNLOAD_CANCELLED.is_set() or (abort is not None and abort.is_set()):
                         break
                     if claimed is not None and claimed():
                         # close the handle or Windows can't delete the stray .!dev at merge (WinError 32)
+                        if register is not None:
+                            register(stream, False)
                         try:
                             stream.close()
                         except Exception:
@@ -624,6 +649,8 @@ def download(
                 if emit_progress and _bytes_since_yield > 0:
                     yield dict(advance=_bytes_since_yield)
 
+                if register is not None:
+                    register(stream, False)
                 try:
                     stream.close()
                 except Exception:
@@ -1138,6 +1165,18 @@ def requests(
         # its .!dev mid-cleanup -> WinError 32)
         batch_abort = threading.Event()
 
+        # streams currently being read, so teardown can unblock a superseded loser parked in a
+        # slow read instead of the wait-gated shutdown draining it (see _force_unblock_stream)
+        active_streams: set = set()
+        active_lock = threading.Lock()
+
+        def _register_stream(stream: Any, active: bool) -> None:
+            with active_lock:
+                if active:
+                    active_streams.add(stream)
+                else:
+                    active_streams.discard(stream)
+
         # start at the cap and adapt downward under CDN pressure: ramping up from a low target
         # can at best converge to the throughput the cap already gives, so there is nothing to
         # gain by starting low. error-burst backoff and AIMD recovery still apply from there.
@@ -1175,6 +1214,7 @@ def requests(
                 racing=(lambda: True) if hedge else (lambda: index in hedged),
                 abort=batch_abort,
                 on_retry=on_retry_cb,
+                register=_register_stream,
                 **item,
             ):
                 if "file_downloaded" in event:
@@ -1471,6 +1511,14 @@ def requests(
             # batch_abort outlives the shutdown so a leaked worker exits at its next
             # arrival/timeout instead of retrying after the global flag is cleared
             batch_abort.set()
+            # batch_abort is set, so a loser whose read we unblock here sees it and exits without
+            # retrying; unblock only on the success path (the wait below still guarantees handles
+            # are released before merge sweeps). rnet streams have no reachable socket -> no-op.
+            if not DOWNLOAD_CANCELLED.is_set():
+                with active_lock:
+                    losers = list(active_streams)
+                for stream in losers:
+                    _force_unblock_stream(stream)
             pool.shutdown(wait=not DOWNLOAD_CANCELLED.is_set(), cancel_futures=True)
 
         # Drain remaining events
