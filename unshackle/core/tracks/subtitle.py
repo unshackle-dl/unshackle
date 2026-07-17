@@ -1067,8 +1067,9 @@ class Subtitle(Track):
             )
         else:
             if config.subtitle.get("convert_before_strip", True) and self.codec != Subtitle.Codec.SubRip:
-                self.path = self.convert(Subtitle.Codec.SubRip)
-                self.codec = Subtitle.Codec.SubRip
+                # Filter reads SRT only; force the (possibly lossy) conversion so content and
+                # codec label stay in sync. convert() relabels path/codec only on real conversion.
+                self.convert(Subtitle.Codec.SubRip, forced=True)
 
             try:
                 sub = Subtitles(self.path)
