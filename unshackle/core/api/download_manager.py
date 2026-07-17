@@ -298,6 +298,21 @@ def to_enum(values: List[str], enum_cls: type[Enum]) -> List[Enum]:
     return [lookup[v.upper()] for v in values if v.upper() in lookup]
 
 
+def _normalize_sub_format(sub_format_raw: str) -> Any:
+    """Normalize an API sub_format string to what dl.py expects.
+
+    "original" is a sentinel meaning "keep source format" (dl.py skips conversion), so it must
+    pass through unchanged to match the CLI (SubtitleCodecChoice returns the same string). Any
+    other value maps to a Subtitle.Codec, or None when unrecognized.
+    """
+    from unshackle.core.tracks import Subtitle
+
+    if sub_format_raw.lower() == "original":
+        return "original"
+    mapped = to_enum([sub_format_raw], Subtitle.Codec)
+    return mapped[0] if mapped else None
+
+
 def _perform_download(
     job_id: str,
     service: str,
@@ -318,7 +333,7 @@ def _perform_download(
     from unshackle.core.api.errors import APIError, APIErrorCode
     from unshackle.core.config import config
     from unshackle.core.services import Services
-    from unshackle.core.tracks import Subtitle, Video
+    from unshackle.core.tracks import Video
     from unshackle.core.utils.click_types import ContextData
     from unshackle.core.utils.collections import merge_dict
 
@@ -357,8 +372,7 @@ def _perform_download(
 
     sub_format_raw = params.get("sub_format")
     if sub_format_raw and isinstance(sub_format_raw, str):
-        mapped = to_enum([sub_format_raw], Subtitle.Codec)
-        params["sub_format"] = mapped[0] if mapped else None
+        params["sub_format"] = _normalize_sub_format(sub_format_raw)
 
     if params.get("export"):
         params["export"] = bool(params["export"])

@@ -118,3 +118,26 @@ def test_job_status_values() -> None:
         "failed",
         "cancelled",
     }
+
+
+def test_normalize_sub_format_preserves_original_sentinel() -> None:
+    """An API job asking for sub_format="original" must keep the "original" sentinel.
+
+    dl.py treats "original" as "keep source format" (skip conversion). If it were normalized to
+    None (as to_enum(["original"]) yields, since there is no such enum member), dl.py would fall
+    into the default branch and re-encode TTML -> WebVTT, contradicting the CLI.
+    """
+    from unshackle.core.api.download_manager import _normalize_sub_format
+    from unshackle.core.tracks import Subtitle
+    from unshackle.core.utils.click_types import SubtitleCodecChoice
+
+    # API path keeps the sentinel, case-insensitively.
+    assert _normalize_sub_format("original") == "original"
+    assert _normalize_sub_format("ORIGINAL") == "original"
+
+    # The CLI produces the exact same sentinel value, so dl.py's `== "original"` branch handles both.
+    assert SubtitleCodecChoice(Subtitle.Codec).convert("original") == "original"
+
+    # A real codec still maps to its enum member; unknowns collapse to None.
+    assert _normalize_sub_format("srt") is Subtitle.Codec.SubRip
+    assert _normalize_sub_format("nonsense") is None
