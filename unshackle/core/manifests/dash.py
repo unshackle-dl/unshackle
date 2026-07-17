@@ -425,8 +425,8 @@ class DASH:
         if track.drm:
             track_kid = track_kid or track.get_key_id(url=segments[0][0], session=session)
             drm = track.get_drm_for_cdm(cdm)
-            if isinstance(drm, (Widevine, PlayReady)):
-                # license and grab content keys
+            if isinstance(drm, (Widevine, PlayReady, ClearKeyCENC)):
+                # license and grab content keys (ClearKeyCENC uses no CDM)
                 try:
                     if not license_widevine:
                         raise ValueError("license_widevine func must be supplied to use DRM")
