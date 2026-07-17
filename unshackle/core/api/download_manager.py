@@ -189,8 +189,12 @@ def _history_limit() -> int:
         return 100
 
 
+_history_appends_since_trim = 0  # module-level; record_job_history runs serialized on the event loop
+
+
 def record_job_history(job: DownloadJob) -> None:
     """Append a terminal job's summary as one JSON line to the history file (best effort)."""
+    global _history_appends_since_trim
     if job.history_recorded or job.status not in TERMINAL_STATUSES:
         return
     job.history_recorded = True
@@ -211,14 +215,18 @@ def record_job_history(job: DownloadJob) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         line = json.dumps(entry)
         limit = _history_limit()
-        # Serialized on the manager's event loop, so read-append-trim doesn't race.
-        if limit > 0 and path.exists():
-            existing = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
-            existing.append(line)
-            path.write_text("\n".join(existing[-limit:]) + "\n", encoding="utf-8")  # keep newest N
-        else:
-            with open(path, "a", encoding="utf-8") as handle:
-                handle.write(line + "\n")
+        # Serialized on the manager's event loop, so append + periodic trim doesn't race.
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
+        # Appending is O(1); only pay the full read-rewrite once appends drift past a slack
+        # margin, keeping the newest N.
+        if limit > 0:
+            _history_appends_since_trim += 1
+            if _history_appends_since_trim >= max(16, limit // 4):
+                _history_appends_since_trim = 0
+                existing = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+                if len(existing) > limit:
+                    path.write_text("\n".join(existing[-limit:]) + "\n", encoding="utf-8")  # keep newest N
     except OSError as e:
         log.warning(f"Could not write job history: {e}")
 
