@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -2221,6 +2221,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Track.repackage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;repackage
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2398,6 +2409,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;change_color_range
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Video.vui_bsf" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;vui_bsf
       
     </span>
   </a>
@@ -3221,6 +3243,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Track.repackage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;repackage
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3398,6 +3431,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;change_color_range
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Video.vui_bsf" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;vui_bsf
       
     </span>
   </a>
@@ -6223,6 +6267,32 @@ is larger than it. A value of 20000 (20KB) or higher is recommended.</p>
 
 </div>
 
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Track.repackage" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">repackage</span>
+
+
+<a href="#unshackle.core.tracks.Track.repackage" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">repackage</span><span class="p">(</span><span class="n">bsf_v</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Remux the track with ffmpeg <code>-c copy</code>.</p>
+<p>When <code>bsf_v</code> is given it is folded into the same pass as <code>-bsf:v</code> (used to
+normalize video VUI colour metadata without a second full-file remux). Repackaging
+is mandatory; the bitstream filter is best-effort. If the combined run fails (and it
+isn't the AAC-retry case) it is retried once without <code>bsf_v</code> so the remux still
+succeeds. Returns True if the requested <code>bsf_v</code> was applied (always False when
+<code>bsf_v</code> is None, since nothing was requested).</p>
+
+
+    </div>
+
+</div>
+
 
 
   </div>
@@ -6928,6 +6998,29 @@ verified against FFmpeg's AVColorPrimaries/AVColorTransferCharacteristic enums.<
 <div class="doc doc-object doc-function">
 
 
+<h3 id="unshackle.core.tracks.Video.vui_bsf" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">vui_bsf</span>
+
+
+<a href="#unshackle.core.tracks.Video.vui_bsf" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">vui_bsf</span><span class="p">()</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return the <code>-bsf:v</code> value that rewrites SPS VUI colour metadata to match <code>self.range</code>.</p>
+<p>Returns None when no rewrite is needed: SDR/DV/HYBRID ranges, non-AVC/HEVC codecs, a
+missing file, or when the bitstream already ships the correct colour metadata. Otherwise
+returns a <code>{h264,hevc}_metadata=...</code> string suitable for ffmpeg <code>-bsf:v</code>.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h3 id="unshackle.core.tracks.Video.normalize_vui" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">normalize_vui</span>
 
@@ -7141,7 +7234,7 @@ obscurity on the MDAT mp4 box structure. Therefore, we need to use hacky regex.<
       <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["content.code.annotate", "content.code.copy", "content.tabs.link", "content.tooltips", "navigation.footer", "navigation.indexes", "navigation.sections", "navigation.tabs", "navigation.top", "navigation.tracking", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>
