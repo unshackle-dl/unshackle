@@ -107,7 +107,7 @@ Every variable below is valid in both output and folder templates. Values are de
 | `quality` | Resolution with scan suffix | `1080p`, `2160p`, `576i` |
 | `resolution` | Resolution number only | `1080` |
 | `video` | Video codec | `H.264`, `H.265` |
-| `hdr` | Dynamic-range label | `HDR`, `HDR10P`, `DV`, `DV.HDR10`, `HLG` |
+| `hdr` | Dynamic-range label | `HDR`, `HDR10P`, `DV`, `DV.HDR`, `DV.HDR10P`, `HLG` |
 | `hfr` | High frame rate marker (frame rate > 30) | `HFR` |
 | `edition` | Edition label from the track, if any | `Directors Cut` |
 | `tag` | Release-group tag (from `config.tag` or `--tag`) | `TAG` |
@@ -138,8 +138,9 @@ Every variable below is valid in both output and folder templates. Values are de
 | `audio_channels` | Channel layout | `5.1`, `2.0` |
 | `audio_full` | Codec + channels combined | `DDP5.1` |
 | `atmos` | `Atmos` when any track carries JOC | `Atmos` |
-| `dual` | `DUAL` for exactly two distinct audio languages | `DUAL` |
+| `dual` | `DUAL` for two audio languages (see [`dual_multi_mode`](../reference/configuration.md#dual_multi_mode)) | `DUAL` |
 | `multi` | `MULTi` for more than two audio languages | `MULTi` |
+| `dubbed` | `DUBBED` for a single audio language that is not the original (strict mode only) | `DUBBED` |
 
 ### Music-specific
 
@@ -339,6 +340,9 @@ The fallback supports two placeholders: `{i}` (chapter number, starting at 1) an
 
 ## Worked examples
 
+Each tab shows a template and what it produces for a few different downloads, so you can see
+how the optional (`?`) variables appear and disappear.
+
 === "Movies"
 
     ```yaml
@@ -347,9 +351,27 @@ The fallback supports two placeholders: `{i}` (chapter number, starting at 1) an
       folder:
         movies: "{title} ({year})"
     ```
+
+    A 4K Atmos HDR download fills every placeholder:
+
     ```text
     The Movie (2024)/
-      └─ The.Movie.2024.1080p.EXAMPLE.WEB-DL.DDP5.1.Atmos.H.265.HDR-TAG.mkv
+      └─ The.Movie.2024.2160p.EXAMPLE.WEB-DL.DDP5.1.Atmos.H.265.HDR-TAG.mkv
+    ```
+
+    The same template on a plain 1080p SDR stereo download, where `{edition?}`, `{atmos?}`
+    and `{hdr?}` collapse along with their dots:
+
+    ```text
+    The Movie (2024)/
+      └─ The.Movie.2024.1080p.EXAMPLE.WEB-DL.AAC2.0.H.264-TAG.mkv
+    ```
+
+    A director's cut fills `{edition?}`:
+
+    ```text
+    The Movie (2024)/
+      └─ The.Movie.2024.Directors.Cut.2160p.EXAMPLE.WEB-DL.DDP5.1.Atmos.H.265.DV.HDR-TAG.mkv
     ```
 
 === "TV series"
@@ -361,9 +383,79 @@ The fallback supports two placeholders: `{i}` (chapter number, starting at 1) an
         series: "{title} ({year})/Season {season}"
     ```
     ```text
-    The Show (2023)/Season S02/
+    The Show (2023)/Season.S02/
       └─ The.Show.S02E04.The.Reckoning.2160p.EXAMPLE.WEB-DL.DDP5.1.H.265-TAG.mkv
     ```
+
+    Each folder segment picks its separator style independently: `{title} ({year})` has
+    spaces around its variables, but `Season {season}` alone counts as dot style, so its
+    space becomes a dot.
+
+    When an episode has no on-screen name, `{episode_name?}` disappears cleanly:
+
+    ```text
+    The Show (2023)/Season.S02/
+      └─ The.Show.S02E05.2160p.EXAMPLE.WEB-DL.DDP5.1.H.265-TAG.mkv
+    ```
+
+=== "Multi-language"
+
+    Place `{dual?}`, `{multi?}` and `{dubbed?}` next to each other. At most one of them is
+    ever set (see [`dual_multi_mode`](../reference/configuration.md#dual_multi_mode)), and the
+    empty ones collapse:
+
+    ```yaml
+    output_template:
+      movies: "{title}.{year}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{dubbed?}.{audio_full}.{video}-{tag}"
+    ```
+
+    Original English audio plus a French dub (`-l en,fr`):
+
+    ```text
+    The.Movie.2024.1080p.EXAMPLE.WEB-DL.DUAL.DDP5.1.H.264-TAG.mkv
+    ```
+
+    Original plus several dubs (`-l en,fr,de,es`):
+
+    ```text
+    The.Movie.2024.1080p.EXAMPLE.WEB-DL.MULTi.DDP5.1.H.264-TAG.mkv
+    ```
+
+    Only a dub, original audio left out (`-l de` on an English-original title):
+
+    ```text
+    The.Movie.2024.1080p.EXAMPLE.WEB-DL.DUBBED.DDP5.1.H.264-TAG.mkv
+    ```
+
+    Two dialects of one language (`en-US` + `en-GB`) count as a single language, so none of the
+    three variables is set:
+
+    ```text
+    The.Movie.2024.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
+    ```
+
+    For finer control (e.g. a `SUBBED` tag driven by subtitle languages), use `{lang_tag?}`
+    with [`language_tags` rules](../reference/configuration.md#language_tags) instead.
+
+=== "Daily shows"
+
+    Dated content needs no special template. When an episode carries an air date,
+    `{season_episode}` becomes the date automatically and `{episode}` and `{year}` clear:
+
+    ```yaml
+    output_template:
+      series: "{title}.{season_episode}.{episode_name?}.{quality}.{source}.WEB-DL.{audio_full}.{video}-{tag}"
+    ```
+
+    A normal episode and a dated one, same template:
+
+    ```text
+    The.Daily.Show.S28E101.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
+    The.Daily.Show.2024.06.01.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
+    ```
+
+    The date separator follows your template style: dots here, spaces if your `series`
+    template uses spaces.
 
 === "Music"
 
@@ -375,7 +467,25 @@ The fallback supports two placeholders: `{i}` (chapter number, starting at 1) an
     ```
     ```text
     The Artist - The Album (2024)/
-      └─ 01. Opening Track.mka
+      └─ 01.Opening.Track.mka
+    ```
+
+    In `"{track_number}. {title}"` dots and spaces are tied, and ties go to dot style; add
+    more spaces between variables (as below) if you want space-separated names.
+
+    A multi-disc album with explicit tracks, using more of the music variables. `{disc}` is
+    empty on disc 1, so `{disc?}` and its separator only appear from disc 2 onward:
+
+    ```yaml
+    output_template:
+      songs: "{disc?}-{track_number}. {title} {explicit?}"
+      folder:
+        albums: "{album_artist} - {album} ({year}) [{label?}]"
+    ```
+    ```text
+    The Artist - The Album (2024) [The Label]/
+      ├─ 01. Opening Track.mka
+      └─ 02-03. Closing Track Explicit.mka
     ```
 
 ## See also

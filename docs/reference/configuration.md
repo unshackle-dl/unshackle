@@ -459,6 +459,36 @@ language_tags:
       tag: "SUBBED"
 ```
 
+### `dual_multi_mode`
+
+- **Type:** `str` &nbsp;·&nbsp; **Default:** `strict`
+
+Rule set for the `{dual}`, `{multi}`, and `{dubbed}` filename variables.
+
+=== "`strict` (default)"
+
+    | Variable | Set when |
+    |----------|----------|
+    | `{dual}` | Exactly two audio languages **and one is the title's original language**. |
+    | `{multi}` | Three or more audio languages, even without the original. |
+    | `{dubbed}` | A single audio language that is not the title's original language (requires a known original). |
+
+=== "`count` (legacy)"
+
+    | Variable | Set when |
+    |----------|----------|
+    | `{dual}` | Exactly two audio languages (original language ignored). |
+    | `{multi}` | Three or more audio languages. |
+    | `{dubbed}` | Never set. |
+
+```yaml
+dual_multi_mode: strict
+```
+
+!!! note "Dialects count as one language"
+    Regional variants of the same base language (e.g. `en-US` and `en-GB`) collapse to a single
+    language in both modes, so they never trigger `{dual}` on their own.
+
 ---
 
 ## Output & naming { #output-naming }
@@ -500,7 +530,7 @@ folder-kind keys.
     `quality`, `resolution`, `source`, `tag`, `track_number`, `artist`, `album_artist`,
     `album`, `disc`, `track_total`, `disc_total`, `release_type`, `genre`, `explicit`,
     `isrc`, `upc`, `label`, `audio`, `audio_channels`, `audio_full`, `atmos`, `dual`,
-    `multi`, `video`, `hdr`, `hfr`, `edition`, `repack`, `lang_tag`.
+    `multi`, `dubbed`, `video`, `hdr`, `hfr`, `edition`, `repack`, `lang_tag`.
 
 ### Tagging & naming keys
 

@@ -9,18 +9,19 @@
 # Group or username appended to download filenames after a dash.
 tag: "NOGRP"
 
-# --- Output filename & folder templates --- docs/OUTPUT_CONFIG.md
-# Full variable list (35 vars incl. music) and all naming options are
-# documented in docs/OUTPUT_CONFIG.md. If omitted, scene-style defaults are
-# used (with a warning). Conditional variables take a ? suffix, e.g. {year?}.
+# --- Output filename & folder templates --- docs/guide/output-and-naming.md
+# The full variable list and all naming options are documented there.
+# movies/series have no built-in fallback (define them to download those kinds);
+# songs falls back to "{track_number}. {title}". Conditional variables take a
+# ? suffix, e.g. {year?}.
 output_template:
   # Scene-style naming (dot-separated)
-  movies: "{title}.{year?}.{repack?}.{edition?}.{lang_tag?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}"
-  series: "{title}.{year?}.{season_episode}.{episode_name?}.{repack?}.{edition?}.{lang_tag?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}"
+  movies: "{title}.{year?}.{repack?}.{edition?}.{lang_tag?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{dubbed?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}"
+  series: "{title}.{year?}.{season_episode}.{episode_name?}.{repack?}.{edition?}.{lang_tag?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{dubbed?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}"
   songs: "{track_number}.{title}.{repack?}.{edition?}.{lang_tag?}.{source?}.WEB-DL.{audio_full}.{atmos?}-{tag}"
   folder:
-    movies: "{title}.{year?}.{repack?}.{edition?}.{lang_tag?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}"
-    series: "{title}.{year?}.{repack?}.{edition?}.{lang_tag?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}"
+    movies: "{title}.{year?}.{repack?}.{edition?}.{lang_tag?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{dubbed?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}"
+    series: "{title}.{year?}.{repack?}.{edition?}.{lang_tag?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{dubbed?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}"
     albums: "{album_artist} - {album} ({year?})"
 
   #
