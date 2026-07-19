@@ -16,6 +16,7 @@ from email.utils import parsedate_to_datetime
 from http.cookiejar import CookieJar
 from pathlib import Path
 from queue import Empty, Queue
+from string import Formatter
 from typing import Any, Callable, Generator, MutableMapping, Optional, Union, cast
 
 from requests import Session
@@ -1118,13 +1119,17 @@ def requests(
                 context={"session_type": type(session).__name__, "url_count": len(urls)},
             )
 
+    # only resolve each URL's extension when the template actually references {ext};
+    # DASH/ISM use "{i}.mp4" (no ext), so this skips a urlparse per segment for them
+    needs_ext = any(name == "ext" for _, name, _, _ in Formatter().parse(filename))
     urls = [
         dict(save_path=save_path, **url) if isinstance(url, dict) else dict(url=url, save_path=save_path)
         for i, url in enumerate(urls)
         for save_path in [
             output_dir
             / filename.format(
-                i=i * index_stride + index_offset, ext=get_extension(url["url"] if isinstance(url, dict) else url)
+                i=i * index_stride + index_offset,
+                ext=get_extension(url["url"] if isinstance(url, dict) else url) if needs_ext else "",
             )
         ]
     ]

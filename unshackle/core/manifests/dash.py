@@ -339,6 +339,7 @@ class DASH:
         # Collect segments from all content periods in the manifest
         all_periods = manifest.findall("Period")
         segments: list[tuple[str, Optional[str]]] = []
+        seen_segments: set[tuple[str, Optional[str]]] = set()  # dedupe segments across periods in O(1)
         segment_durations: list[int] = []
         segment_timescale: float = 0
         init_data: Optional[bytes] = None
@@ -390,7 +391,8 @@ class DASH:
                     log.debug(f"Period {content_period.get('id', period_idx)} has different KID: {p_kid}")
 
             for seg in p_segments:
-                if seg not in segments:
+                if seg not in seen_segments:
+                    seen_segments.add(seg)
                     segments.append(seg)
             segment_durations.extend(p_durations)
 
@@ -1187,11 +1189,15 @@ class DASH:
     def replace_fields(url: str, **kwargs: Any) -> str:
         if "$" not in url:
             return url
+        # printf-style `$Field%fmt$` padding always contains a literal '%'; skip the
+        # per-field regex entirely for the common case (plain `$Field$` templates)
+        has_fmt = "%" in url
         for field, value in kwargs.items():
             url = url.replace(f"${field}$", str(value))
-            m = DASH._field_format_pattern(field).search(url)
-            if m:
-                url = url.replace(m.group(), f"{value:{m.group(1)}}")
+            if has_fmt:
+                m = DASH._field_format_pattern(field).search(url)
+                if m:
+                    url = url.replace(m.group(), f"{value:{m.group(1)}}")
         return url
 
 
