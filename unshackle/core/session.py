@@ -701,7 +701,7 @@ class RnetSession:
 
                 if response.status_code not in self.status_forcelist:
                     return response
-                last_exception = HTTPError(f"Received status code: {response.status_code}")
+                last_exception = HTTPError(f"Received status code: {response.status_code}", response=response)
                 self.log.warning(
                     f"{response.status_code} {response.reason}({urlparse(url).path}). Retrying... "
                     f"({attempt + 1}/{max_retries})"

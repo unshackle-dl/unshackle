@@ -11,9 +11,16 @@ from pathlib import Path
 
 import pytest
 
-from unshackle.core.downloaders.requests import (TAIL_BOOST_MIN_SEGMENT_SIZE, TAIL_BOOST_PART_SIZE,
-                                                 AdaptiveWorkerController, _has_range_header, _plan_tail_parts,
-                                                 _tail_boost_engages, requests)
+from unshackle.core.downloaders.requests import (
+    TAIL_BOOST_MIN_SEGMENT_SIZE,
+    TAIL_BOOST_PART_SIZE,
+    AdaptiveWorkerController,
+    _has_range_header,
+    _plan_tail_parts,
+    _split_ranges,
+    _tail_boost_engages,
+    requests,
+)
 from unshackle.core.tracks.track import DownloadContext
 
 pytestmark = pytest.mark.unit
@@ -200,6 +207,22 @@ def test_plan_tail_parts_skips_small_or_no_spare() -> None:
     assert _plan_tail_parts(TAIL_BOOST_MIN_SEGMENT_SIZE - 1, spare=8) == []  # too small
     assert _plan_tail_parts(20 * 1024 * 1024, spare=1) == []  # not enough spare workers
     assert _plan_tail_parts(20 * 1024 * 1024, spare=0) == []
+
+
+def test_split_ranges_covers_exactly_no_gaps_no_overlaps() -> None:
+    for size in (1, 100, 4 * 1024 * 1024, 16 * 1024 * 1024 + 7, 64 * 1024 * 1024):
+        parts = _split_ranges(size, max_parts=8, part_target=4 * 1024 * 1024)
+        assert parts[0][0] == 0 and parts[-1][1] == size - 1
+        for (_, prev_end), (start, _) in zip(parts, parts[1:]):
+            assert start == prev_end + 1
+        assert all(start <= end for start, end in parts)
+        assert sum(end - start + 1 for start, end in parts) == size
+
+
+def test_split_ranges_respects_max_parts_and_target() -> None:
+    assert len(_split_ranges(100 * 1024 * 1024, max_parts=4, part_target=16 * 1024 * 1024)) == 4  # capped
+    assert len(_split_ranges(10 * 1024 * 1024, max_parts=8, part_target=16 * 1024 * 1024)) == 1  # below one target
+    assert _split_ranges(1, max_parts=8, part_target=16 * 1024 * 1024) == [(0, 0)]
 
 
 def test_tail_boost_engages_on_idle_capacity() -> None:

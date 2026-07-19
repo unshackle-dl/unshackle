@@ -1,6 +1,7 @@
 import math
 import multiprocessing
 import os
+import random
 import socket
 import statistics
 import sys
@@ -10,6 +11,8 @@ import traceback
 from collections import deque
 from concurrent.futures import FIRST_COMPLETED, wait
 from concurrent.futures.thread import ThreadPoolExecutor
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from http.cookiejar import CookieJar
 from pathlib import Path
 from queue import Empty, Queue
@@ -33,9 +36,6 @@ READ_TIMEOUT = 30
 # re-request a tail segment stuck past max(HEDGE_FACTOR * median segment time, HEDGE_MIN_WAIT)
 HEDGE_FACTOR = 3
 HEDGE_MIN_WAIT = 5.0
-
-# racers read per network arrival (read1) so superseded hedge losers exit promptly
-RACER_READ1 = True
 
 # Adaptive chunk sizing — benchmarked optimal range
 MIN_CHUNK = 524_288  # 512KB
@@ -205,6 +205,43 @@ class AdaptiveWorkerController:
                     context={"old": old, "new": self.target, "speed_bps": round(speed_now), "reason": reason},
                 )
         return self.target
+
+
+def _retry_sleep(exc: Exception, attempts: int) -> float:
+    """Seconds to wait before retry number ``attempts``.
+
+    download() owns segment retries (session-level retries are suppressed), so backoff
+    lives here: honor the server's Retry-After when the failure carries a response,
+    else exponential growth from RETRY_WAIT with jitter so concurrently rate-limited
+    segments don't retry in lockstep. Capped at session.MAX_BACKOFF either way.
+    """
+    from unshackle.core.session import MAX_BACKOFF
+
+    response = getattr(exc, "response", None)
+    if response is None:
+        # RnetSession wraps forcelist failures in MaxRetriesError with the HTTPError as __cause__
+        response = getattr(getattr(exc, "__cause__", None), "response", None)
+    if response is not None:
+        try:
+            retry_after = response.headers.get("Retry-After")
+        except Exception:
+            retry_after = None
+        if retry_after:
+            wait: Optional[float] = None
+            try:
+                wait = float(retry_after)
+            except ValueError:
+                try:
+                    retry_date = parsedate_to_datetime(retry_after)
+                    if retry_date.tzinfo is None:
+                        retry_date = retry_date.replace(tzinfo=timezone.utc)
+                    wait = (retry_date - datetime.now(timezone.utc)).total_seconds()
+                except Exception:
+                    wait = None
+            if wait is not None and math.isfinite(wait):
+                return min(max(wait, 0.0), MAX_BACKOFF)
+    backoff = RETRY_WAIT * (2 ** (attempts - 1))
+    return min(backoff + random.uniform(0, backoff * 0.1), MAX_BACKOFF)
 
 
 def _is_requests_session(session: Any) -> bool:
@@ -396,6 +433,11 @@ def _dispatch_parts(
             total_bytes += advance
             yield {"advance": advance}
 
+        if DOWNLOAD_CANCELLED.is_set() or abort.is_set():
+            # a cross-track cancel makes part workers return silently with partials, so
+            # every future completes without error; finalizing here would strip the .!dev
+            # control file and pass off a hole-filled pre-truncated file as complete
+            return
         yield {"file_downloaded": save_path, "written": total_size}
         completed = True
     except KeyboardInterrupt:
@@ -450,12 +492,11 @@ def download(
         part_end: Inclusive end byte of the part. Required when `part_offset` is set.
         claimed: Optional predicate checked before every attempt; when it returns True
             the download stops silently (another worker already delivered this file).
-        racing: Optional predicate selecting read granularity per iteration. When None,
-            read1 (per-network-arrival reads) is used whenever `claimed` is set and
-            RACER_READ1 is on. When provided, read1 is used only
-            on iterations where it returns True (this segment is being hedge-raced, so a
-            superseded loser must notice `claimed()` mid-stream); otherwise a blocking
-            full-chunk read is used, avoiding the per-record read tax on non-racing segments.
+        racing: Optional predicate selecting read granularity per iteration. Requires
+            `claimed`. read1 (per-network-arrival reads) is used only on iterations where
+            it returns True (this segment is being hedge-raced, so a superseded loser must
+            notice `claimed()` mid-stream); otherwise a blocking full-chunk read is used,
+            avoiding the per-record read tax on non-racing segments.
         abort: Optional local cancel signal. When set, the download stops like a cancel
             (keeps its partial, returns silently, does not raise). Used by ranged-parallel
             downloads to abort sibling parts without touching the process-global cancel.
@@ -503,6 +544,10 @@ def download(
     written = 0
     while True:
         if claimed is not None and claimed():
+            return
+        if DOWNLOAD_CANCELLED.is_set() or (abort is not None and abort.is_set()):
+            # a worker waking from a retry nap after cancel/batch-abort must exit here,
+            # before opening a new request or the .!dev handle mid-teardown
             return
         if not part_mode:
             written = 0
@@ -598,14 +643,12 @@ def download(
                 if use_rnet:
                     chunks = stream.stream()
                 elif use_raw:
-                    _read1 = getattr(stream.raw, "read1", None) if claimed is not None and RACER_READ1 else None
+                    _read1 = getattr(stream.raw, "read1", None) if claimed is not None else None
                     if _read1 is not None and racing is not None:
                         # only pay the per-arrival read1 tax while this segment is actually
                         # racing; a blocking full-chunk read otherwise (the common case)
                         _raw_read = stream.raw.read
                         chunks = iter(lambda: _read1(chunk_size) if racing() else _raw_read(chunk_size), b"")
-                    elif _read1 is not None:
-                        chunks = iter(lambda: _read1(chunk_size), b"")
                     else:
                         chunks = iter(lambda: stream.raw.read(chunk_size), b"")
                 else:
@@ -701,7 +744,15 @@ def download(
                     pass
             if not part_mode:
                 resume_offset = tmp_file.stat().st_size if tmp_file.exists() else 0
-            time.sleep(RETRY_WAIT)
+            delay = _retry_sleep(exc, attempts)
+            if abort is not None:
+                # interruptible nap: backoff can reach MAX_BACKOFF, and teardown always
+                # sets the batch abort, so a parked worker must wake and exit at once
+                # instead of stalling shutdown (or the merge) for the full delay
+                if abort.wait(delay):
+                    return
+            else:
+                time.sleep(delay)
             attempts += 1
 
 
@@ -774,7 +825,10 @@ def _mp_worker(queue: Any, kwargs: dict[str, Any]) -> None:
         if overrides:
             for pair in overrides.split(","):
                 name, _, value = pair.partition("=")
-                setattr(sys.modules[__name__], name, float(value))
+                # only the timing constants the bench relays; a stale/foreign env var
+                # must not be able to rewrite arbitrary module globals in every child
+                if name in ("READ_TIMEOUT", "RETRY_WAIT", "HEDGE_MIN_WAIT"):
+                    setattr(sys.modules[__name__], name, float(value))
         spec = kwargs.pop("_session_spec")
         kwargs["session"] = _rebuild_session(spec)
         for event in requests(**kwargs):
@@ -866,6 +920,13 @@ def _download_multiprocess(
     dead_ticks = 0
     try:
         while done_count < len(procs):
+            if DOWNLOAD_CANCELLED.is_set():
+                # cross-track cancel (e.g. a sibling track failed): spawned children carry
+                # their own fresh flag and can't see it, so terminate them like KeyboardInterrupt
+                for p in procs:
+                    p.terminate()
+                yield dict(downloaded="[yellow]CANCELLED")
+                return
             try:
                 event = queue.get(timeout=0.1)
             except Empty:
@@ -893,9 +954,16 @@ def _download_multiprocess(
                     continue  # parent owns the aggregate total
                 if "downloaded" in event:
                     continue  # child speed/status string; parent computes its own aggregate speed
+                if "advance" in event:
+                    # children report mixed granularity (segment counts, or raw bytes when a
+                    # length-1 strided chunk routes through the single-file path); the parent
+                    # bar counts segments, so advance=1 is emitted per file_downloaded instead
+                    continue
                 written = event.get("written")
                 if written:
                     total_bytes += written
+                if "file_downloaded" in event:
+                    yield dict(advance=1)
                 yield event
 
             now = time.time()

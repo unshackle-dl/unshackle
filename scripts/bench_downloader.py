@@ -43,6 +43,7 @@ from shutil import rmtree
 from typing import Any, Optional
 
 import click
+import fault_server  # local sibling (scripts/): fault-injection server + payload verifier
 from rich.console import Console
 from rich.table import Table
 
@@ -393,6 +394,174 @@ def print_report(rows: list[Row], runs: int, total_segments: int) -> None:
         )
 
 
+def fault_integrity(out_dir: Path, segments: int, seg_size: int) -> tuple[list[int], list[int]]:
+    """Verify every output file byte-for-byte against its seeded expected payload.
+
+    Returns (missing, corrupt). ``corrupt`` (present but not byte-identical) is the loud
+    CORRUPTION signal: a fault path that finalizes wrong bytes must fail the run, not pass.
+    """
+    missing: list[int] = []
+    corrupt: list[int] = []
+    for i in range(segments):
+        p = out_dir / f"seg_{i}.bin"
+        if not p.exists():
+            missing.append(i)
+            continue
+        if p.read_bytes() != fault_server.segment_payload(f"/seg/{i}", seg_size):
+            corrupt.append(i)
+    return missing, corrupt
+
+
+# per worker-count under a fault profile: workers, median_s, MB/s, missing, corrupt, raised,
+# requests seen, amplification (requests/segments), retries (requests-segments), status_counts,
+# then worst-across-runs sweep safety: strays, locked handles, live pool threads
+FaultRow = tuple[int, float, float, list[int], list[int], bool, int, float, int, dict[int, int], int, int, int]
+
+
+def print_fault_report(rows: list[FaultRow], runs: int, segments: int, profile: str) -> None:
+    plural = "s" if runs != 1 else ""
+    table = Table(title=f"fault profile '{profile}': {segments} segments (median of {runs} run{plural})")
+    table.add_column("workers", justify="right")
+    table.add_column("seconds", justify="right")
+    table.add_column("MB/s", justify="right")
+    table.add_column("status", justify="left")
+    table.add_column("requests", justify="right")
+    table.add_column("amp", justify="right")
+    table.add_column("sweep", justify="left")
+    for w, secs, mbps, missing, corrupt, raised, requests_seen, amp, _retries, _codes, strays, locked, threads in rows:
+        if corrupt:
+            status = f"[red]CORRUPTION {len(corrupt)} segs[/]"
+        elif missing:
+            status = f"[red]FAIL {len(missing)} incomplete[/]"
+        elif raised:
+            status = "[yellow]raised (all present)[/]"
+        else:
+            status = "[green]ok[/]"
+        if locked:
+            sweep_status = f"[red]{locked} LOCKED (WinError 32)[/]"
+        elif threads:
+            sweep_status = f"[yellow]{threads} pool threads live[/]"
+        elif strays:
+            sweep_status = f"{strays} strays"
+        else:
+            sweep_status = "[green]clean[/]"
+        table.add_row(str(w), f"{secs:.3f}", f"{mbps:.1f}", status, str(requests_seen), f"{amp:.2f}x", sweep_status)
+    console.print(table)
+    for w, _secs, _mbps, _missing, _corrupt, _raised, requests_seen, amp, retries, codes, *_rest in rows:
+        code_str = ", ".join(f"{c}:{n}" for c, n in codes.items()) or "none"
+        console.print(
+            f"amplification  workers={w:<3} {requests_seen} requests for {segments} segments "
+            f"({amp:.2f}x, {retries} excess requests (retries/hedges/probes/parts)), statuses [{code_str}]"
+        )
+
+
+def _procs_notice(procs: int, n_urls: int, session: Optional[Any]) -> None:
+    """Warn loudly when --procs cannot engage, so a run is never mistaken for a multiprocess test."""
+    if procs <= 1:
+        return
+    if n_urls < dl_mod.MP_MIN_SEGMENTS:
+        console.print(
+            f"[yellow]--procs {procs} will NOT engage: {n_urls} segments < MP_MIN_SEGMENTS "
+            f"({dl_mod.MP_MIN_SEGMENTS}); the single-process path runs instead[/]"
+        )
+    elif dl_mod._build_session_spec(session) is None:
+        console.print(
+            f"[yellow]--procs {procs} will NOT engage: session not rebuildable in child processes; "
+            f"the single-process path runs instead[/]"
+        )
+
+
+def run_fault_mode(
+    profile_name: str,
+    segments: int,
+    seg_size: int,
+    worker_counts: list[int],
+    runs: int,
+    session: Optional[Any],
+    adaptive: bool,
+    procs: int,
+    seed: int,
+) -> None:
+    """Start a FaultServer in-process, sweep worker counts, and report reliability + overhead.
+
+    Reuses run_batch/tail_droop/sweep_strays (via run_batch) and the report conventions, adding
+    request amplification and byte-exact integrity, the metrics that catch retry/hedge storms
+    and silent corruption against a misbehaving host.
+    """
+    profile = fault_server.resolve_profile(profile_name)
+    server = fault_server.FaultServer(profile, seg_size, segments, seed)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    host, port = str(server.server_address[0]), int(server.server_address[1])
+    urls = [f"http://{host}:{port}/seg/{i}" for i in range(segments)]
+    console.print(
+        f"[cyan]Fault mode:[/] profile={profile_name} seed={seed} "
+        f"{segments} x {seg_size / MIB:.2f} MiB, impersonate={getattr(session, 'impersonate_name', None) or 'none'}"
+    )
+
+    rows: list[FaultRow] = []
+    try:
+        with tempfile.TemporaryDirectory(prefix="faultbench_") as root_str:
+            root = Path(root_str)
+            for w in worker_counts:
+                samples: list[tuple[float, float, list[int], list[int], bool, int, dict[int, int], int, int, int]] = []
+                for _ in range(runs):
+                    server.reset_counters()
+                    out_dir = Path(tempfile.mkdtemp(prefix="run_", dir=root))
+                    secs, _comps, err, strays, locked, pool_threads = run_batch(
+                        urls, out_dir, w, session, adaptive, procs
+                    )
+                    missing, corrupt = fault_integrity(out_dir, segments, seg_size)
+                    stats = server.stats()
+                    samples.append(
+                        (
+                            secs,
+                            downloaded_mib(out_dir),
+                            missing,
+                            corrupt,
+                            err is not None,
+                            stats["requests"],
+                            stats["status_counts"],
+                            strays,
+                            locked,
+                            pool_threads,
+                        )
+                    )
+                    rmtree(out_dir, ignore_errors=True)
+                median_s = statistics.median(s[0] for s in samples)
+                best = min(samples, key=lambda s: abs(s[0] - median_s))  # representative run near the median
+                mbps = best[1] / best[0] if best[0] else 0.0
+                requests_seen = best[5]
+                amp = requests_seen / segments if segments else 0.0
+                retries = max(0, requests_seen - segments)
+                rows.append(
+                    (
+                        w,
+                        median_s,
+                        mbps,
+                        best[2],
+                        best[3],
+                        best[4],
+                        requests_seen,
+                        amp,
+                        retries,
+                        best[6],
+                        max(s[7] for s in samples),
+                        max(s[8] for s in samples),
+                        max(s[9] for s in samples),
+                    )
+                )
+    finally:
+        server.stall_event.set()  # release any stalled handler threads before shutdown
+        server.shutdown()
+
+    print_fault_report(rows, runs, segments, profile_name)
+
+    broken = {row[0]: (row[3], row[4]) for row in rows if row[3] or row[4]}
+    if broken:
+        detail = "; ".join(f"workers={w}: missing {miss} corrupt {corr}" for w, (miss, corr) in broken.items())
+        raise click.ClickException(f"incomplete/corrupt downloads under fault profile: {detail}")
+
+
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option("--segments", default=64, show_default=True, help="Synthetic segment count.")
 @click.option("--seg-size", default=2 * MIB, show_default=True, help="Bytes per synthetic segment.")
@@ -434,6 +603,12 @@ def print_report(rows: list[Row], runs: int, total_segments: int) -> None:
 @click.option(
     "--no-read1", is_flag=True, help="A/B: force racers back to blocking full-chunk reads (pre-fix behavior)."
 )
+@click.option(
+    "--fault-profile",
+    type=click.Choice(sorted(fault_server.PROFILES)),
+    help="Reliability mode: serve via the fault-injection server (fault_server.py) and verify integrity + amplification.",
+)
+@click.option("--seed", default=fault_server.DEFAULT_SEED, show_default=True, help="Fault RNG seed (--fault-profile).")
 def main(
     segments: int,
     seg_size: int,
@@ -452,6 +627,8 @@ def main(
     adaptive: bool,
     procs: int,
     no_read1: bool,
+    fault_profile: Optional[str],
+    seed: int,
 ) -> None:
     """Benchmark downloader throughput vs worker count, with optional fault injection."""
     worker_counts = [int(w) for w in workers.split(",") if w.strip()]
@@ -481,7 +658,7 @@ def main(
             saved["RACER_READ1"] = dl_mod.RACER_READ1
             dl_mod.RACER_READ1 = False
         else:
-            console.print("[yellow]--no-read1 ignored: this checkout has no RACER_READ1 (pre-fix behavior anyway)[/]")
+            console.print("[yellow]--no-read1 ignored: only applies to older checkouts that still have RACER_READ1[/]")
 
     if impersonate:
         from unshackle.core.session import session as make_session
@@ -489,6 +666,14 @@ def main(
         session = make_session(impersonate)
 
     try:
+        if fault_profile:
+            if urls_file:
+                console.print("[yellow]--urls-file ignored in --fault-profile mode[/]")
+            if any(faults.values()):
+                console.print("[yellow]--fault-* flags ignored in --fault-profile mode (use the profile knobs)[/]")
+            _procs_notice(procs, segments, session)
+            run_fault_mode(fault_profile, segments, seg_size, worker_counts, runs, session, adaptive, procs, seed)
+            return
         if urls_file:
             if any(faults.values()):
                 console.print("[yellow]fault flags ignored in --urls-file mode[/]")
@@ -496,6 +681,7 @@ def main(
             if not urls:
                 raise click.ClickException("--urls-file contained no URLs")
             total = len(urls)
+            _procs_notice(procs, len(urls), session)
             console.print(f"[cyan]URL-file mode:[/] {len(urls)} URLs, impersonate={impersonate or 'none'}")
         else:
             # deterministic shared buffer; generated once, served for every segment, and
@@ -507,6 +693,7 @@ def main(
             host, port = str(server.server_address[0]), int(server.server_address[1])
             urls = [f"http://{host}:{port}/seg/{i}" for i in range(segments)]
             active = {k: v for k, v in faults.items() if v}
+            _procs_notice(procs, segments, session)
             console.print(
                 f"[cyan]Synthetic mode:[/] {segments} x {seg_size / MIB:.2f} MiB "
                 f"(latency={latency_ms}ms, rate={rate_kib or 'unbounded'} KiB/s, "

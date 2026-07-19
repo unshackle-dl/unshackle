@@ -73,6 +73,16 @@ run scripts/bench_downloader.py --fault-503 2 --fast-timeouts --segments 8
 run scripts/bench_downloader.py --fault-reset 2 --fast-timeouts --segments 8
 run scripts/bench_downloader.py --fault-stall 1 --fast-timeouts --segments 8 || true
 
+# 2b. Fault-injection reliability + request amplification (fault_server.py; every run is
+# byte-integrity verified, so a CORRUPTION line here is a real finalize-wrong-bytes bug).
+# loopback is the zero-fault python-overhead ceiling; the rest exercise retry/hedge/tail paths.
+run scripts/bench_downloader.py --fault-profile loopback --segments 64 --workers 8,16 --runs 3
+run scripts/bench_downloader.py --fault-profile rate-limit --segments 32 --workers 8
+run scripts/bench_downloader.py --fault-profile flaky-first --segments 16 --workers 8 --fast-timeouts
+run scripts/bench_downloader.py --fault-profile reset --segments 16 --workers 8 --fast-timeouts
+run scripts/bench_downloader.py --fault-profile stall --segments 16 --workers 8 --fast-timeouts
+run scripts/bench_downloader.py --fault-profile tail-slow --segments 32 --workers 8 --adaptive --fast-timeouts
+
 # 3. Multiprocess path (>=24 segments engages spawned children; strided chunk split).
 # big batch: at small sizes the fixed spawn cost drowns the throughput signal
 run scripts/bench_downloader.py --segments 128 --workers 8 --procs 2
@@ -90,6 +100,18 @@ run scripts/bench_downloader.py --segments 32 --workers 8 --impersonate Chrome13
 # 6. Leak regression tests (locked handles / leaked workers; unlink checks bite on Windows)
 echo; echo "==================== pytest tests/test_downloader_leaks.py ===================="
 uv run pytest tests/test_downloader_leaks.py -q || echo "(pytest failed or missing - run 'uv sync' to install dev deps)"
+
+# 6b. Low-core variant: pin to two cores to emulate a small box, so the python-overhead
+# ceiling and one fault profile can be read against the full-core numbers above. taskset is
+# util-linux (Linux only); skipped cleanly elsewhere.
+if command -v taskset >/dev/null 2>&1 && taskset -c 0-1 true 2>/dev/null; then
+  echo; echo "==================== low-core variant (taskset -c 0-1, 2 cores) ===================="
+  run_lowcore() { echo; echo "-------------------- taskset -c 0-1 $* --------------------"; taskset -c 0-1 uv run python "$@"; }
+  run_lowcore scripts/bench_downloader.py --fault-profile loopback --segments 64 --workers 8,16 --runs 3
+  run_lowcore scripts/bench_downloader.py --fault-profile rate-limit --segments 32 --workers 8
+else
+  echo; echo "==================== low-core variant skipped (taskset missing or CPUs 0-1 not schedulable) ===================="
+fi
 
 # 7. Live network tests (opt-in)
 if [[ "${1:-}" == "--live" ]]; then
