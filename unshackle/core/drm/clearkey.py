@@ -53,7 +53,16 @@ class ClearKey:
             file=path.name,
         )
 
-        decrypted = AES.new(self.key, AES.MODE_CBC, self.iv).decrypt(path.read_bytes())
+        data = path.read_bytes()
+
+        # Guard mislabeled-clear: EXT-X-KEY says AES-128 but the segment is plaintext MPEG-TS.
+        # CBC ciphertext is 16-aligned, but so are some clear TS runs (752 bytes = 4 packets),
+        # so also sniff the 0x47 sync byte at packet 0 and 1.
+        is_ts = data[:1] == b"\x47" and data[188:189] == b"\x47"
+        if len(data) % AES.block_size != 0 or is_ts:
+            return
+
+        decrypted = AES.new(self.key, AES.MODE_CBC, self.iv).decrypt(data)
 
         try:
             decrypted = unpad(decrypted, AES.block_size)
