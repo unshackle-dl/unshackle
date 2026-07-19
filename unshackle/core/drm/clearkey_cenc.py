@@ -132,14 +132,33 @@ class ClearKeyCENC:
             raise ValueError(f"Expected the ClearKey license to be bytes, str, or dict, not {response!r}")
 
         for jwk in document.get("keys") or []:
-            if jwk.get("kty") not in (None, "oct"):
+            kty = jwk.get("kty")
+            if kty not in (None, "oct"):
                 continue
+            if kty is None:
+                log_event(
+                    "drm_license_warning",
+                    level="WARNING",
+                    message="ClearKey JWK is missing 'kty'; assuming 'oct' per W3C EME",
+                    drm_type="ClearKeyCENC",
+                )
             kid_b64 = jwk.get("kid")
             key_b64 = jwk.get("k")
             if not kid_b64 or not key_b64:
                 continue
             kid = UUID(bytes=b64url_decode(kid_b64))
-            self.content_keys[kid] = b64url_decode(key_b64).hex()
+            key = b64url_decode(key_b64)
+            if len(key) != 16:
+                # A CENC content key is always 16 bytes; a wrong-length key would make the
+                # external tool fail opaquely. Skip it rather than pass it through.
+                log_event(
+                    "drm_license_warning",
+                    level="WARNING",
+                    message=f"ClearKey JWK for KID {kid.hex} has a {len(key)}-byte key (expected 16); skipping",
+                    drm_type="ClearKeyCENC",
+                )
+                continue
+            self.content_keys[kid] = key.hex()
 
         if not self.content_keys:
             raise ClearKeyCENC.Exceptions.EmptyLicense("No Content Keys were within the License")

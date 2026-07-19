@@ -709,6 +709,9 @@ class HLS:
         # First segment's Media Sequence Number - used as the AES-128 IV when EXT-X-KEY has
         # no explicit IV (RFC 8216 §5.2), where each segment's IV is its sequence number.
         media_sequence_start = getattr(master, "media_sequence", None) or 0
+        # Downloaded segment files are named by post-filter index; map that back to the wanted
+        # segment so the IV uses the absolute media sequence number, not the download index.
+        wanted_segments = [seg for seg in master.segments if seg not in unwanted_segments]
         map_data: Optional[tuple[m3u8.model.InitializationSection, bytes]] = None
         if session_drm:
             encryption_data: Optional[tuple[Optional[m3u8.Key], DRM_T]] = (initial_drm_key, session_drm)
@@ -802,7 +805,11 @@ class HLS:
                     seq_iv = isinstance(drm, ClearKey) and not (key_obj and key_obj.iv)
                     for file in files:
                         if seq_iv and file.stem.isdigit():
-                            drm.iv = (media_sequence_start + int(file.stem)).to_bytes(16, "big")
+                            download_i = int(file.stem)
+                            seq = getattr(wanted_segments[download_i], "media_sequence", None)
+                            if seq is None:
+                                seq = media_sequence_start + download_i
+                            drm.iv = int(seq).to_bytes(16, "big")
                         drm.decrypt(file)
                     merge(to=merged_path, via=files, delete=True, include_map_data=True)
 

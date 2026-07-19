@@ -1851,6 +1851,7 @@ class dl:
                                         cdm_only=cdm_only,
                                         vaults_only=vaults_only,
                                         export=export_path,
+                                        service_session=service.session,
                                     ),
                                     cdm=self.cdm,
                                     max_workers=workers,
@@ -2921,6 +2922,7 @@ class dl:
                                 cdm_only=cdm_only,
                                 vaults_only=vaults_only,
                                 export=export_path,
+                                service_session=service.session,
                             ),
                             cdm=self.cdm,
                             max_workers=workers,
@@ -3645,6 +3647,7 @@ class dl:
         cdm_only: bool = False,
         vaults_only: bool = False,
         export: Optional[Path] = None,
+        service_session: Optional[Any] = None,
     ) -> None:
         """
         Prepare the DRM by getting decryption data like KIDs, Keys, and such.
@@ -4175,7 +4178,7 @@ class dl:
                     from_vaults = drm.content_keys.copy()
 
                     try:
-                        drm.get_content_keys(licence=clearkey_licence or (lambda **_: None))
+                        drm.get_content_keys(licence=clearkey_licence or (lambda **_: None), session=service_session)
                     except Exception as e:
                         if drm.content_keys:
                             self.log.debug(f"License call failed but keys already in content_keys: {e}")
