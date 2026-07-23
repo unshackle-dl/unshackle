@@ -841,6 +841,20 @@ ERRORS: dict[int, tuple[str, str]] = {
 }
 
 
+REVOCATION_CODES = frozenset(
+    {
+        0x8004C065,  # DRM_E_DEVCERT_REVOKED
+        0x8004C053,  # DRM_E_CERTIFICATE_REVOKED
+        0x8004C07D,  # DRM_E_ACTIVATION_GROUP_CERT_REVOKED_ERROR
+    }
+)
+
+
+def is_revocation(code: int) -> bool:
+    """True if the HRESULT means a device or certificate was revoked (signed or unsigned)."""
+    return code is not None and (code & 0xFFFFFFFF) in REVOCATION_CODES
+
+
 def describe(code: int) -> str | None:
     """Human string for a PlayReady/DRM HRESULT, or None if unknown.
 
@@ -862,4 +876,10 @@ if __name__ == "__main__":
     assert describe(0x8004C065) == describe(-2147172251)
     assert "DEVCERT_REVOKED" in describe(-2147172251)
     assert describe(-1021) is None  # non-DRM_E service code
+    assert is_revocation(0x8004C065) and is_revocation(-2147172251)  # DEVCERT_REVOKED, both forms
+    assert not is_revocation(0x8004C006)  # INVALIDLICENSE is not revocation
+    assert is_revocation(0x8004C07D)  # activation group cert revoked
+    assert not is_revocation(0x8004A013)  # metering sig, not revocation
+    assert not is_revocation(0x8004C0C4)  # rev-list-not-available, not revocation
+    assert not is_revocation(0x8004C0C2)  # content license revoked, not device
     print("ok")
