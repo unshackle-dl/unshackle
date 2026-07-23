@@ -48,6 +48,58 @@ def direct_session(session: Union[Session, "RnetSession"]) -> Session:
     return new
 
 
+def _read_top_level_box(path: Path, box_type: bytes) -> Optional[bytes]:
+    # seek through top-level box headers; only the wanted box's bytes are read into RAM
+    file_size = path.stat().st_size
+    with path.open("rb") as f:
+        start = 0
+        while start + 8 <= file_size:
+            header = f.read(8)
+            if len(header) < 8:
+                return None
+            size = int.from_bytes(header[:4], "big")
+            if size == 1:  # 64-bit largesize
+                large = f.read(8)
+                if len(large) < 8:
+                    return None
+                size = int.from_bytes(large, "big")
+            elif size == 0:  # box runs to EOF
+                size = file_size - start
+            if size < 8:
+                return None
+            if header[4:8] == box_type:
+                f.seek(start)
+                return f.read(size)
+            start += size
+            f.seek(start)
+    return None
+
+
+def has_encrypted_sample_entry(path: Path) -> bool:
+    """True if the MP4's moov still carries an encrypted sample entry (encv/enca).
+
+    A faithful decrypt rewrites encv/enca back to the real codec 4CC via frma, so a
+    survivor means the decrypt tool skipped/failed the track. This is a 4CC scan
+    scoped to the moov box (where sample entries live), not a structural parse;
+    scoping avoids chance byte collisions in mdat. Any read error -> False.
+    """
+    try:
+        moov = _read_top_level_box(path, b"moov")
+    except Exception:
+        return False
+    if not moov:
+        return False
+    for tok in (b"encv", b"enca"):
+        i = moov.find(tok, 4)
+        while i != -1:
+            # require a plausible sample-entry box size right before the 4CC
+            size = int.from_bytes(moov[i - 4 : i], "big")
+            if 16 <= size <= len(moov) - (i - 4):
+                return True
+            i = moov.find(tok, i + 1)
+    return False
+
+
 @dataclass
 class DownloadContext:
     """Shared arguments passed to each manifest's ``download_track``."""
@@ -379,6 +431,10 @@ class Track:
                             self.drm = None
                             events.emit(events.Types.TRACK_DECRYPTED, track=self, drm=drm, segment=None)
                             progress(downloaded="Decrypted", completed=100, total=100)
+                            # residual encv/enca => decrypt tool skipped/failed; force a repack so the
+                            # muxer isn't first-FourCC-locked to a generic (encrypted) codec. OR-in only.
+                            if has_encrypted_sample_entry(save_path):
+                                self.needs_repack = True
 
                         if track_type == "Subtitle" and self.codec.name not in ("fVTT", "fTTML"):
                             track_data = self.path.read_bytes()

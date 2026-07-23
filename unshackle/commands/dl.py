@@ -67,6 +67,7 @@ from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.dv_fixup import apply_dv_fixup
 from unshackle.core.tracks.hybrid import Hybrid
+from unshackle.core.tracks.track import has_encrypted_sample_entry
 from unshackle.core.utilities import (
     find_font_with_fallbacks,
     find_missing_langs,
@@ -1895,6 +1896,12 @@ class dl:
                                 if track.needs_repack:
                                     track.repackage()
                                     events.emit(events.Types.TRACK_REPACKED, track=track)
+                                    # residual encrypted sample entry after repack => never decrypted
+                                    if has_encrypted_sample_entry(track.path):
+                                        self.log.warning(
+                                            f"Track {track.id} still has an encrypted sample entry after repacking, so "
+                                            "decryption likely failed and the muxed output may be unplayable."
+                                        )
 
                                 media_info = MediaInfo.parse(track.path)
                                 media_infos[id(track)] = media_info
@@ -3152,6 +3159,11 @@ class dl:
                                 vui_folded.add(id(track))
                             has_repacked = True
                             events.emit(events.Types.TRACK_REPACKED, track=track)
+                            if has_encrypted_sample_entry(track.path):
+                                self.log.warning(
+                                    f"Track {track.id} still has an encrypted sample entry after repacking, so "
+                                    "decryption likely failed and the muxed output may be unplayable."
+                                )
                     if has_repacked:
                         # we don't want to fill up the log with "Repacked x track"
                         self.log.info("Repacked one or more tracks with FFMPEG")
