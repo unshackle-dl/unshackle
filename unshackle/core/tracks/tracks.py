@@ -473,6 +473,7 @@ class Tracks:
         audio_expected: bool = True,
         title_language: Optional[Language] = None,
         skip_subtitles: bool = False,
+        output_path: Optional[Path] = None,
     ) -> tuple[Path, int, list[str]]:
         """
         Multiplex all the Tracks into a Matroska Container file.
@@ -488,6 +489,9 @@ class Tracks:
             title_language: The title's intended language. Used to select the best video track
                 for audio metadata when multiple video tracks exist.
             skip_subtitles: Skip muxing subtitle tracks into the container.
+            output_path: Explicit destination for the muxed container. When None (default) the
+                path is derived from the first track, so callers muxing several track groups that
+                share a video list must pass distinct paths to avoid clobbering each other.
         """
         if self.videos and not self.audio and audio_expected:
             video_track = None
@@ -688,17 +692,18 @@ class Tracks:
                 ]
             )
 
-        output_path = (
-            self.videos[0].path.with_suffix(".muxed.mkv")
-            if self.videos
-            else self.audio[0].path.with_suffix(".muxed.mka")
-            if self.audio
-            else self.subtitles[0].path.with_suffix(".muxed.mks")
-            if self.subtitles
-            else chapters_path.with_suffix(".muxed.mkv")
-            if self.chapters
-            else None
-        )
+        if output_path is None:
+            output_path = (
+                self.videos[0].path.with_suffix(".muxed.mkv")
+                if self.videos
+                else self.audio[0].path.with_suffix(".muxed.mka")
+                if self.audio
+                else self.subtitles[0].path.with_suffix(".muxed.mks")
+                if self.subtitles
+                else chapters_path.with_suffix(".muxed.mkv")
+                if self.chapters
+                else None
+            )
         if not output_path:
             raise ValueError("No tracks provided, at least one track must be provided.")
 

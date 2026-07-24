@@ -734,6 +734,7 @@ class dl:
         return dl(ctx, **kwargs)
 
     DRM_TABLE_LOCK = Lock()
+    VAULT_WRITE_LOCK = Lock()
     EXPORT_LOCK = Lock()
     LICENSE_KEY_CACHE: dict[UUID, str] = {}
 
@@ -3337,10 +3338,25 @@ class dl:
                         progress_sink(
                             {"phase": "muxing", "progress": 96.0, "status": "downloading", "active_tracks": []}
                         )
+
+                    def unique_mux_output(task_tracks: Tracks, index: int) -> Optional[Path]:
+                        src: Optional[Path] = None
+                        ext = ".muxed.mkv"
+                        if task_tracks.videos:
+                            src = task_tracks.videos[0].path
+                        elif task_tracks.audio:
+                            src, ext = task_tracks.audio[0].path, ".muxed.mka"
+                        elif task_tracks.subtitles:
+                            src, ext = task_tracks.subtitles[0].path, ".muxed.mks"
+                        if src is None:
+                            return None
+                        base = src.with_suffix(ext)
+                        return base.with_name(f"{base.stem}.{index}{base.suffix}")
+
                     try:
                         with SyncLive(Padding(progress, (0, 5, 1, 5)), console=console, refresh_per_second=20):
-                            mux_index = 0
-                            for task_id, task_tracks, audio_codec in multiplex_tasks:
+                            mux_failed = False
+                            for mux_index, (task_id, task_tracks, audio_codec) in enumerate(multiplex_tasks, start=1):
                                 progress.start_task(task_id)
                                 audio_expected = not video_only and not no_audio
                                 muxed_path, return_code, errors = task_tracks.mux(
@@ -3350,15 +3366,8 @@ class dl:
                                     audio_expected=audio_expected,
                                     title_language=title.language,
                                     skip_subtitles=skip_subtitle_mux,
+                                    output_path=unique_mux_output(task_tracks, mux_index),
                                 )
-                                if muxed_path.exists():
-                                    mux_index += 1
-                                    unique_path = muxed_path.with_name(
-                                        f"{muxed_path.stem}.{mux_index}{muxed_path.suffix}"
-                                    )
-                                    if unique_path != muxed_path:
-                                        shutil.move(muxed_path, unique_path)
-                                        muxed_path = unique_path
                                 muxed_paths.append(muxed_path)
                                 muxed_audio_codecs[muxed_path] = audio_codec
                                 if return_code >= 2:
@@ -3371,7 +3380,10 @@ class dl:
                                     else:
                                         self.log.warning(line)
                                 if return_code >= 2:
-                                    sys.exit(1)
+                                    mux_failed = True
+                                    break
+                            if mux_failed:
+                                sys.exit(1)
 
                             # Output sidecar subtitles before deleting track files
                             if sidecar_subtitles and not no_mux:
@@ -3646,6 +3658,21 @@ class dl:
 
             export.write_text(json.dumps(doc, indent=4, ensure_ascii=False), encoding="utf8")
 
+    def flush_vault_writes(self, pending: list[Callable[[], Any]]) -> None:
+        if not pending:
+            return
+        with self.VAULT_WRITE_LOCK:
+            for write in pending:
+                write()
+        pending.clear()
+
+    def cache_keys_to_vaults(self, content_keys: dict[UUID, str]) -> None:
+        successful_caches = self.vaults.add_keys(content_keys)
+        self.log.info(
+            f"Cached {len(content_keys)} Key{'' if len(content_keys) == 1 else 's'} to "
+            f"{successful_caches}/{len(self.vaults)} Vaults"
+        )
+
     def prepare_drm(
         self,
         drm: DRM_T,
@@ -3766,6 +3793,7 @@ class dl:
                     },
                 )
 
+            pending_vault_writes: list[Callable[[], Any]] = []
             with self.DRM_TABLE_LOCK:
                 pssh_display = self.truncate_pssh_for_display(drm.pssh.dumps(), "Widevine")
                 cek_tree = Tree(Text.assemble(("Widevine", "cyan"), (f"({pssh_display})", "text"), overflow="fold"))
@@ -3817,7 +3845,9 @@ class dl:
                             label = f"[text2]{kid.hex}:{content_key}{is_track_kid} from {vault_used}"
                             if not any(f"{kid.hex}:{content_key}" in x.label for x in cek_tree.children):
                                 cek_tree.add(label)
-                            self.vaults.add_key(kid, content_key, excluding=vault_used)
+                            pending_vault_writes.append(
+                                partial(self.vaults.add_key, kid, content_key, excluding=vault_used)
+                            )
                             self.LICENSE_KEY_CACHE[kid] = content_key
 
                             if self.debug_logger:
@@ -3844,6 +3874,7 @@ class dl:
                                 message=msg,
                                 context={"kid": kid.hex, "track": str(track)},
                             )
+                            self.flush_vault_writes(pending_vault_writes)
                             raise Widevine.Exceptions.CEKNotFound(msg)
                         else:
                             need_license = True
@@ -3891,6 +3922,7 @@ class dl:
                                     service=self.service,
                                     context={"track": str(track), "exception_type": type(e).__name__},
                                 )
+                            self.flush_vault_writes(pending_vault_writes)
                             raise e
 
                     log_event(
@@ -3922,17 +3954,14 @@ class dl:
 
                     self.LICENSE_KEY_CACHE.update(drm.content_keys)
 
-                    successful_caches = self.vaults.add_keys(drm.content_keys)
-                    self.log.info(
-                        f"Cached {len(drm.content_keys)} Key{'' if len(drm.content_keys) == 1 else 's'} to "
-                        f"{successful_caches}/{len(self.vaults)} Vaults"
-                    )
+                    pending_vault_writes.append(partial(self.cache_keys_to_vaults, drm.content_keys))
 
                 if track_kid and track_kid not in drm.content_keys:
                     msg = f"No Content Key for KID {track_kid.hex} was returned in the License"
                     cek_tree.add(f"[logging.level.error]{msg}")
                     if not pre_existing_tree:
                         table.add_row(cek_tree)
+                    self.flush_vault_writes(pending_vault_writes)
                     raise Widevine.Exceptions.CEKNotFound(msg)
 
                 if cek_tree.children and not pre_existing_tree:
@@ -3941,6 +3970,8 @@ class dl:
 
                 if export:
                     self.write_export(export, title, track, drm)
+
+            self.flush_vault_writes(pending_vault_writes)
 
         elif isinstance(drm, PlayReady):
             if self.debug_logger:
@@ -3957,6 +3988,7 @@ class dl:
                     },
                 )
 
+            pending_vault_writes = []
             with self.DRM_TABLE_LOCK:
                 pssh_display = self.truncate_pssh_for_display(drm.pssh_b64 or "", "PlayReady")
                 cek_tree = Tree(
@@ -4014,7 +4046,9 @@ class dl:
                             label = f"[text2]{kid.hex}:{content_key}{is_track_kid} from {vault_used}"
                             if not any(f"{kid.hex}:{content_key}" in x.label for x in cek_tree.children):
                                 cek_tree.add(label)
-                            self.vaults.add_key(kid, content_key, excluding=vault_used)
+                            pending_vault_writes.append(
+                                partial(self.vaults.add_key, kid, content_key, excluding=vault_used)
+                            )
                             self.LICENSE_KEY_CACHE[kid] = content_key
 
                             if self.debug_logger:
@@ -4042,6 +4076,7 @@ class dl:
                                 message=msg,
                                 context={"kid": kid.hex, "track": str(track), "drm_type": "PlayReady"},
                             )
+                            self.flush_vault_writes(pending_vault_writes)
                             raise PlayReady.Exceptions.CEKNotFound(msg)
                         else:
                             need_license = True
@@ -4079,6 +4114,7 @@ class dl:
                                         "drm_type": "PlayReady",
                                     },
                                 )
+                            self.flush_vault_writes(pending_vault_writes)
                             raise e
 
                     for kid_, key in drm.content_keys.items():
@@ -4091,17 +4127,14 @@ class dl:
 
                     self.LICENSE_KEY_CACHE.update(drm.content_keys)
 
-                    successful_caches = self.vaults.add_keys(drm.content_keys)
-                    self.log.info(
-                        f"Cached {len(drm.content_keys)} Key{'' if len(drm.content_keys) == 1 else 's'} to "
-                        f"{successful_caches}/{len(self.vaults)} Vaults"
-                    )
+                    pending_vault_writes.append(partial(self.cache_keys_to_vaults, drm.content_keys))
 
                 if track_kid and track_kid not in drm.content_keys:
                     msg = f"No Content Key for KID {track_kid.hex} was returned in the License"
                     cek_tree.add(f"[logging.level.error]{msg}")
                     if not pre_existing_tree:
                         table.add_row(cek_tree)
+                    self.flush_vault_writes(pending_vault_writes)
                     raise PlayReady.Exceptions.CEKNotFound(msg)
 
                 if cek_tree.children and not pre_existing_tree:
@@ -4111,7 +4144,10 @@ class dl:
                 if export:
                     self.write_export(export, title, track, drm)
 
+            self.flush_vault_writes(pending_vault_writes)
+
         elif isinstance(drm, ClearKeyCENC):
+            pending_vault_writes = []
             with self.DRM_TABLE_LOCK:
                 cek_tree = Tree(Text.assemble(("ClearKey", "cyan"), overflow="fold"))
                 pre_existing_tree = next(
@@ -4162,7 +4198,9 @@ class dl:
                             label = f"[text2]{kid.hex}:{content_key}{is_track_kid} from {vault_used}"
                             if not any(f"{kid.hex}:{content_key}" in x.label for x in cek_tree.children):
                                 cek_tree.add(label)
-                            self.vaults.add_key(kid, content_key, excluding=vault_used)
+                            pending_vault_writes.append(
+                                partial(self.vaults.add_key, kid, content_key, excluding=vault_used)
+                            )
                             self.LICENSE_KEY_CACHE[kid] = content_key
                         elif vaults_only:
                             msg = f"No Vault has a Key for {kid.hex} and --vaults-only was used"
@@ -4176,6 +4214,7 @@ class dl:
                                 message=msg,
                                 context={"kid": kid.hex, "track": str(track), "drm_type": "ClearKeyCENC"},
                             )
+                            self.flush_vault_writes(pending_vault_writes)
                             raise ClearKeyCENC.Exceptions.CEKNotFound(msg)
                         else:
                             need_license = True
@@ -4215,6 +4254,7 @@ class dl:
                                         "drm_type": "ClearKeyCENC",
                                     },
                                 )
+                            self.flush_vault_writes(pending_vault_writes)
                             raise e
 
                     for kid_, key in drm.content_keys.items():
@@ -4227,17 +4267,14 @@ class dl:
 
                     self.LICENSE_KEY_CACHE.update(drm.content_keys)
 
-                    successful_caches = self.vaults.add_keys(drm.content_keys)
-                    self.log.info(
-                        f"Cached {len(drm.content_keys)} Key{'' if len(drm.content_keys) == 1 else 's'} to "
-                        f"{successful_caches}/{len(self.vaults)} Vaults"
-                    )
+                    pending_vault_writes.append(partial(self.cache_keys_to_vaults, drm.content_keys))
 
                 if track_kid and track_kid not in drm.content_keys:
                     msg = f"No Content Key for KID {track_kid.hex} was returned in the License"
                     cek_tree.add(f"[logging.level.error]{msg}")
                     if not pre_existing_tree:
                         table.add_row(cek_tree)
+                    self.flush_vault_writes(pending_vault_writes)
                     raise ClearKeyCENC.Exceptions.CEKNotFound(msg)
 
                 if cek_tree.children and not pre_existing_tree:
@@ -4246,6 +4283,8 @@ class dl:
 
                 if export:
                     self.write_export(export, title, track, drm)
+
+            self.flush_vault_writes(pending_vault_writes)
 
         elif isinstance(drm, MonaLisa):
             with self.DRM_TABLE_LOCK:

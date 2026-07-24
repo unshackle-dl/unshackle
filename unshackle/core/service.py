@@ -328,6 +328,7 @@ class Service(metaclass=ABCMeta):
             "https://",
             HTTPAdapter(
                 max_retries=Retry(total=5, backoff_factor=0.2, status_forcelist=[429, 500, 502, 503, 504]),
+                pool_maxsize=64,
                 pool_block=True,
             ),
         )

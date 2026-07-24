@@ -504,9 +504,8 @@ def requests(
     # once per batch; download() skips it for segments
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Use provided session or create a new optimized requests.Session
-    # When a session is provided (e.g., service's RnetSession), don't mutate headers/cookies/proxy —
-    # they're already set and the session may be shared across tracks.
+    # Provided sessions may be shared across tracks: don't mutate or remount them. Remounting
+    # drops the service's 429/5xx Retry config and races get_adapter() in other track threads.
     if session is None:
         session = Session()
         if headers:
@@ -516,10 +515,6 @@ def requests(
             session.cookies.update(cookies)
         if proxy:
             session.proxies.update({"all": proxy})
-
-    # Mount HTTPAdapter with connection pooling sized to worker count.
-    # Safe to do on any requests.Session — improves connection reuse for parallel downloads.
-    if _is_requests_session(session):
         adapter = HTTPAdapter(pool_connections=max_workers, pool_maxsize=max_workers, pool_block=True)
         session.mount("https://", adapter)
         session.mount("http://", adapter)
