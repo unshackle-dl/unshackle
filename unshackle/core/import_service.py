@@ -9,6 +9,7 @@ from uuid import UUID
 
 import click
 import requests
+from langcodes import tag_is_valid
 
 from unshackle.core.config import config
 from unshackle.core.constants import AnyTrack
@@ -24,6 +25,18 @@ from unshackle.core.tracks.track import Track
 log = logging.getLogger("import")
 
 PARSERS = {"DASH": DASH, "HLS": HLS, "ISM": ISM}
+
+
+def _fallback_language(language: Any) -> Optional[Any]:
+    """The title language if the parsers would accept it, else None so they raise.
+
+    DASH drops an und/invalid fallback but ISM does not, and a truthy 'und' there silently
+    labels every track und instead of failing.
+    """
+    tag = str(language or "").strip()
+    if not tag or not tag_is_valid(tag) or tag.startswith("und"):
+        return None
+    return language
 
 
 class ImportService:
@@ -132,9 +145,12 @@ class ImportService:
         """Reconstruct the title's tracks from the export.
 
         DASH/ISM: re-fetch and re-parse the manifest and return the full ladder (the importer
-        picks quality with normal dl flags; keys are injected by KID later). HLS/URL: rebuild
-        from the stored per-track dicts, since the variant is re-fetched from track.url at
-        download time and ATV-style master playlists carry unstable per-fetch tokens.
+        picks quality with normal dl flags; keys are injected by KID later), then merge in the
+        exported URL tracks. A service side-loads its own subtitles when the manifest's are the
+        worse copy, so any direct-URL subtitle in the export means the whole re-parsed subtitle
+        set is dropped in favour of the exported one.
+        HLS/URL: rebuild from the stored per-track dicts, since the variant is re-fetched from
+        track.url at download time and ATV-style master playlists carry unstable per-fetch tokens.
         """
         title_id = str(title.id)
         if title_id in self.tracks_by_title:
@@ -151,21 +167,41 @@ class ImportService:
         parser = PARSERS.get(manifest_type or "")
         if manifest_url and parser is not None and manifest_type in ("DASH", "ISM"):
             try:
-                parsed = parser.from_url(url=manifest_url, session=self.session).to_tracks(language=title.language)
+                manifest = parser.from_url(url=manifest_url, session=self.session)
             except Exception as e:
                 raise click.ClickException(
-                    f"Failed to re-fetch/parse the {manifest_type} manifest for '{title}'. "
+                    f"Failed to fetch the {manifest_type} manifest for '{title}'. "
                     f"The manifest URL may have expired since export. ({e})"
                 )
+            try:
+                parsed = manifest.to_tracks(language=_fallback_language(title.language))
+            except ValueError as e:
+                if "Language information could not be derived" in str(e):
+                    raise click.ClickException(
+                        f"No language for '{title}': the {manifest_type} manifest has none and the "
+                        f"service did not set Title.language."
+                    )
+                raise click.ClickException(f"Failed to parse the {manifest_type} manifest for '{title}'. ({e})")
+            except Exception as e:
+                raise click.ClickException(f"Failed to parse the {manifest_type} manifest for '{title}'. ({e})")
             for track in parsed:
                 tracks.add(track)
+            track_dicts = [t for t in tracks_map.values() if t.get("descriptor", "URL") == "URL"]
+            if any(t.get("type") == "Subtitle" for t in track_dicts):
+                tracks.subtitles.clear()
         else:
-            for track_dict in tracks_map.values():
+            track_dicts = list(tracks_map.values())
+
+        for track_dict in track_dicts:
+            try:
                 track = Track.from_dict(track_dict)
-                drm = self.rebuild_drm(track_dict)
-                if drm:
-                    track.drm = drm
-                tracks.add(track)
+            except Exception as e:
+                self.log.warning(f"Skipping exported track {track_dict.get('id')!r}: {e}")
+                continue
+            drm = self.rebuild_drm(track_dict)
+            if drm:
+                track.drm = drm
+            tracks.add(track, warn_only=True)
 
         for attachment in entry.get("attachments") or []:
             url = attachment.get("url")

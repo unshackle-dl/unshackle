@@ -499,6 +499,13 @@ unshackle dl --skip-dl --export EXAMPLE 81234567
     When `--proxy` is used, the export records the region so an import can reproduce the
     correct geofence. Without a proxy, no region is stored.
 
+!!! warning "Some DASH and Smooth exports need a title language"
+    An import re-fetches the DASH or ISM manifest and parses it again. Most manifests label
+    their own streams, and those import fine. When a manifest labels nothing, the parse falls
+    back to the title's original language, which comes from `Title.language` on the exporting
+    service. If a service never sets it, importing that export fails with a message naming
+    the service. Neither end guesses a language for you, so the fix belongs in the service.
+
 ## Metadata and tagging
 
 unshackle looks up metadata automatically, but you can override the identifiers used for
