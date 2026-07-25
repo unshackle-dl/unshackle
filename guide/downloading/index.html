@@ -3171,6 +3171,14 @@ info and the acquired content keys for each title. This is the format consumed b
 <p>When <code>--proxy</code> is used, the export records the region so an import can reproduce the
 correct geofence. Without a proxy, no region is stored.</p>
 </div>
+<div class="admonition warning">
+<p class="admonition-title">Some DASH and Smooth exports need a title language</p>
+<p>An import re-fetches the DASH or ISM manifest and parses it again. Most manifests label
+their own streams, and those import fine. When a manifest labels nothing, the parse falls
+back to the title's original language, which comes from <code>Title.language</code> on the exporting
+service. If a service never sets it, importing that export fails with a message naming
+the service. Neither end guesses a language for you, so the fix belongs in the service.</p>
+</div>
 <h2 id="metadata-and-tagging">Metadata and tagging<a class="headerlink" href="#metadata-and-tagging" title="Permanent link">&para;</a></h2>
 <p>unshackle looks up metadata automatically, but you can override the identifiers used for
 tagging and naming:</p>
