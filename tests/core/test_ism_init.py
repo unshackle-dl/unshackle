@@ -111,6 +111,82 @@ def test_hevc_init_structure():
     assert b"encv" not in init and b"sinf" not in init
 
 
+# Boxes whose payload is purely child boxes, so their size must span the children
+# exactly. stsd is excluded: its payload starts with a count, and sample entries
+# carry a fixed prefix before any child box.
+CONTAINER_BOXES = {"moov", "trak", "mdia", "minf", "stbl", "dinf", "mvex", "sinf", "schi"}
+
+
+def walk_box(data: bytes, start: int, end: int, path: str = "") -> None:
+    """Assert every container's declared size spans its children exactly."""
+    offset = start
+    while offset < end:
+        size = struct.unpack_from(">I", data, offset)[0]
+        name = data[offset + 4 : offset + 8].decode("latin1")
+        where = f"{path}/{name}"
+        assert size >= 8, f"{where}: size {size}"
+        assert offset + size <= end, f"{where}: overruns its parent"
+        if name in CONTAINER_BOXES:
+            walk_box(data, offset + 8, offset + size, where)
+        offset += size
+    assert offset == end, f"{path or '/'}: children do not span the parent exactly"
+
+
+def find_stsd(init: bytes) -> int:
+    """Offset of the stsd box, found by walking the box tree."""
+    offset, end = 0, len(init)
+    for name in ("moov", "trak", "mdia", "minf", "stbl", "stsd"):
+        cursor = offset
+        while cursor < end:
+            size = struct.unpack_from(">I", init, cursor)[0]
+            if init[cursor + 4 : cursor + 8].decode("latin1") == name:
+                offset, end = cursor + 8, cursor + size
+                break
+            cursor += size
+        else:
+            raise AssertionError(f"{name} not found")
+    return offset - 8
+
+
+# The two-entry stsd is unconditional, so every stream type and codec the builder
+# emits needs covering, encrypted and clear alike.
+STSD_CASES = [
+    ("video", "HVC1", VIDEO_HEVC_CPD, KID, b"encv", {"width": 3840, "height": 2160}),
+    ("video", "HVC1", VIDEO_HEVC_CPD, None, b"hvc1", {"width": 3840, "height": 2160}),
+    ("video", "H264", VIDEO_AVC_CPD, None, b"avc1", {"width": 1280, "height": 720}),
+    ("audio", "AACL", AAC_LC_CPD, None, b"mp4a", {"channels": 2}),
+    ("audio", "EC-3", EC3_CPD, KID, b"enca", {"channels": 6}),
+    ("text", "TTML", "", None, b"stpp", {}),
+]
+
+
+@pytest.mark.parametrize("stream_type,fourcc,cpd,kid,expected_4cc,extra", STSD_CASES)
+def test_stsd_carries_two_entries_for_sample_description_index_2(stream_type, fourcc, cpd, kid, expected_4cc, extra):
+    # A single entry leaves tfhd sample_description_index=2 dangling, and mp4decrypt
+    # skips those fragments without a word: exit 0, empty stderr, still encrypted.
+    init = build_init_segment(
+        stream_type=stream_type,
+        fourcc=fourcc,
+        codec_private_data=cpd,
+        timescale=10000000,
+        kid=kid,
+        **extra,
+    )
+    offset = find_stsd(init)
+    assert struct.unpack_from(">I", init, offset + 12)[0] == 2, "index 2 would dangle"
+
+    entries, cursor = [], offset + 16
+    for _ in range(2):
+        size = struct.unpack_from(">I", init, cursor)[0]
+        entries.append(init[cursor : cursor + size])
+        cursor += size
+    assert [e[4:8] for e in entries] == [expected_4cc, expected_4cc]
+    # stsd must span its header, count and both entries exactly.
+    assert struct.unpack_from(">I", init, offset)[0] == 16 + sum(len(e) for e in entries)
+    # The same has to hold for every container box wrapping it.
+    walk_box(init, 0, len(init))
+
+
 def test_avc_init_structure():
     init = build_init_segment(
         stream_type="video",

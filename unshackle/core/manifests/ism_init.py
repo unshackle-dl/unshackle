@@ -773,7 +773,10 @@ def build_init_segment(
         else:
             raise NotImplementedError(f"Unsupported text FourCC: {fourcc}")
 
-    stsd = full_box(b"stsd", 0, 0, u32.pack(1) + sample_entry_box)
+    # Fragments may set tfhd sample_description_index=2 (server inits carry a second,
+    # identical entry). A lone entry leaves that dangling: mp4decrypt skips those
+    # fragments and demuxers stop after the first.
+    stsd = full_box(b"stsd", 0, 0, u32.pack(2) + sample_entry_box * 2)
 
     # --- empty sample tables (fragmented: real samples live in moof/traf) ---
     stbl = box(
