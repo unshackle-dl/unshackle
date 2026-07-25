@@ -24,6 +24,7 @@ from unshackle.core.manifests.ism_init import (
     parse_codec_private_data_colour,
     parse_codec_private_data_vui,
     parse_hevc_sps_format,
+    piff_senc_to_cenc,
     read_per_sample_iv_size,
     read_track_id,
     remove_emulation_prevention,
@@ -578,3 +579,240 @@ def test_hvcc_profile_tier_level_is_nonzero():
     level_idc = payload[12]
     assert profile_idc != 0
     assert level_idc != 0
+
+
+def _piff_fragment(flags: int = 0x0, override: bool = False) -> bytes:
+    """Minimal moof+mdat fragment carrying sample encryption in the PIFF uuid box."""
+    ivs = b"".join(bytes([i]) * 8 for i in range(1, 3))
+    senc_payload = struct.pack(">I", 2) + ivs
+    if override:
+        flags |= 0x1
+        senc_payload = b"\x00\x00\x01" + bytes([8]) + KID + senc_payload  # AlgorithmID + IV_size + KID
+    uuid_box = box(b"uuid", PIFF_SENC_UUID + bytes([0]) + flags.to_bytes(3, "big") + senc_payload)
+    tfhd = full_box(b"tfhd", 0, 0x20000, struct.pack(">I", 1))
+    trun = full_box(b"trun", 0, 0x1, struct.pack(">II", 2, 0))  # data_offset placeholder
+    traf = box(b"traf", tfhd + trun + uuid_box)
+    moof = box(b"moof", full_box(b"mfhd", 0, 0, struct.pack(">I", 1)) + traf)
+    # patch trun data_offset to the real moof-relative start of the mdat payload
+    moof = moof.replace(struct.pack(">II", 2, 0), struct.pack(">II", 2, len(moof) + 8), 1)
+    return moof + box(b"mdat", b"\xab" * 64)
+
+
+def test_piff_senc_rewritten_to_cenc_senc():
+    frag = _piff_fragment()
+    out = piff_senc_to_cenc(frag)
+    # trun's data_offset is moof-relative; shrinking the box misaims decryption
+    assert len(out) == len(frag)
+    assert PIFF_SENC_UUID not in out
+    assert b"senc" in out and b"free" in out
+    assert struct.pack(">I", 2) + b"".join(bytes([i]) * 8 for i in range(1, 3)) in out
+    # moof size unchanged => the recorded data_offset still resolves
+    assert out[:8] == frag[:8]
+    assert out[len(out) - 72 :] == frag[len(frag) - 72 :]  # mdat untouched
+
+
+def test_piff_senc_override_header_stripped():
+    frag = _piff_fragment(override=True)
+    out = piff_senc_to_cenc(frag)
+    assert len(out) == len(frag)
+    assert PIFF_SENC_UUID not in out
+    senc = out.index(b"senc")
+    assert out[senc + 4] == 0  # version
+    assert int.from_bytes(out[senc + 5 : senc + 8], "big") & 0x1 == 0  # override flag cleared
+    assert out[senc + 8 : senc + 12] == struct.pack(">I", 2)  # sample_count directly follows
+
+
+def test_piff_subsample_flag_survives_override_strip():
+    # losing 0x2 is silent: no subsample map, so clear NAL headers get encrypted too
+    frag = _piff_fragment(flags=0x2, override=True)
+    out = piff_senc_to_cenc(frag)
+    senc = out.index(b"senc")
+    flags = int.from_bytes(out[senc + 5 : senc + 8], "big")
+    assert flags & 0x2, "subsample-encryption flag must survive"
+    assert not flags & 0x1, "override flag must be cleared"
+
+
+def test_piff_rewrite_leaves_non_piff_fragments_alone():
+    plain = box(b"moof", box(b"traf", full_box(b"tfhd", 0, 0, struct.pack(">I", 1)))) + box(b"mdat", b"\x00" * 16)
+    assert piff_senc_to_cenc(plain) is plain
+    assert piff_senc_to_cenc(b"") == b""
+
+
+def test_piff_rewrite_skips_traf_that_already_has_senc():
+    # a second senc would leave the decrypter to choose between them
+    ivs = b"".join(bytes([i]) * 8 for i in range(1, 3))
+    senc = full_box(b"senc", 0, 0, struct.pack(">I", 2) + ivs)
+    uuid_box = box(b"uuid", PIFF_SENC_UUID + bytes([0]) + (0).to_bytes(3, "big") + struct.pack(">I", 2) + ivs)
+    frag = box(b"moof", box(b"traf", senc + uuid_box)) + box(b"mdat", b"\x00" * 16)
+    assert piff_senc_to_cenc(frag) is frag
+
+
+def test_piff_rewrite_covers_every_moof_and_traf():
+    frag = _piff_fragment() + _piff_fragment()
+    out = piff_senc_to_cenc(frag)
+    assert len(out) == len(frag)
+    assert PIFF_SENC_UUID not in out
+    assert out.count(b"senc") == 2
+
+
+def test_piff_rewrite_refuses_non_ctr_algorithm_id():
+    # AlgorithmID 2 is AES-CBC but the sample entry says 'cenc'; rewriting yields garbage
+    ivs = b"".join(bytes([i]) * 8 for i in range(1, 3))
+    payload = (2).to_bytes(3, "big") + bytes([8]) + KID + struct.pack(">I", 2) + ivs
+    uuid_box = box(b"uuid", PIFF_SENC_UUID + bytes([0]) + (0x1).to_bytes(3, "big") + payload)
+    frag = box(b"moof", box(b"traf", uuid_box)) + box(b"mdat", b"\x00" * 16)
+    assert piff_senc_to_cenc(frag) is frag
+
+
+def traf_children_tile_exactly(frag: bytes) -> bool:
+    """Every traf child's declared size must chain exactly to the traf end."""
+    moof_size = struct.unpack(">I", frag[:4])[0]
+    traf_start = 8
+    while frag[traf_start + 4 : traf_start + 8] != b"traf":
+        traf_start += struct.unpack(">I", frag[traf_start : traf_start + 4])[0]
+    traf_end = traf_start + struct.unpack(">I", frag[traf_start : traf_start + 4])[0]
+    assert traf_end <= moof_size
+    offset = traf_start + 8
+    while offset < traf_end:
+        size = struct.unpack(">I", frag[offset : offset + 4])[0]
+        if size < 8 or offset + size > traf_end:
+            return False
+        offset += size
+    return offset == traf_end
+
+
+def test_piff_rewrite_keeps_traf_children_tiling_exactly():
+    # a mis-sized senc still "decrypts", just off the wrong bytes, so assert the sizes too
+    assert traf_children_tile_exactly(_piff_fragment())
+    for frag in (_piff_fragment(), _piff_fragment(flags=0x2), _piff_fragment(flags=0x2, override=True)):
+        assert traf_children_tile_exactly(piff_senc_to_cenc(frag)), "rewritten traf no longer tiles"
+
+
+def test_piff_rewrite_refuses_override_iv_size_mismatch():
+    # tenc is the only IV width a decrypter consults; a disagreeing override misparses silently
+    ivs = b"".join(bytes([i]) * 16 for i in range(1, 3))
+    payload = (1).to_bytes(3, "big") + bytes([16]) + KID + struct.pack(">I", 2) + ivs
+    uuid_box = box(b"uuid", PIFF_SENC_UUID + bytes([0]) + (0x1).to_bytes(3, "big") + payload)
+    frag = box(b"moof", box(b"traf", uuid_box)) + box(b"mdat", b"\x00" * 16)
+    assert piff_senc_to_cenc(frag, iv_size=8) is frag, "8-byte tenc must reject a 16-byte override"
+    assert piff_senc_to_cenc(frag, iv_size=16) is not frag, "matching width must still rewrite"
+
+
+def test_piff_rewrite_never_grows_output_on_malformed_boxes():
+    # A declared size running past the buffer would extend the output over the mdat.
+    good = _piff_fragment()
+    truncations = [good[:n] for n in range(8, len(good), 7)]
+    oversized = bytearray(good)
+    struct.pack_into(">I", oversized, 0, len(good) + 4096)  # moof claims more than exists
+    for frag in [*truncations, bytes(oversized), b"", b"\x00" * 12]:
+        out = piff_senc_to_cenc(frag)  # must not raise
+        assert len(out) == len(frag), f"output grew: {len(frag)} -> {len(out)}"
+
+
+def _text_fragment(seq: int, begin: str, end: str, text: str, sdi: int) -> bytes:
+    """A single-sample fTTML moof+mdat, mirroring what a Smooth text stream serves."""
+    payload = (
+        "<?xml version='1.0' encoding='utf-8'?>"
+        "<tt xmlns='http://www.w3.org/ns/ttml' xml:lang='en'><body><div>"
+        f"<p begin='{begin}' end='{end}'>{text}</p>"
+        "</div></body></tt>"
+    ).encode()
+    mfhd = full_box(b"mfhd", 0, 0, struct.pack(">I", seq))
+    tfhd = full_box(b"tfhd", 0, 0x020002, struct.pack(">I", 1) + struct.pack(">I", sdi))
+    tfdt = full_box(b"tfdt", 1, 0, struct.pack(">Q", 0))
+    trun = full_box(b"trun", 0, 0x000201, struct.pack(">I", 1) + struct.pack(">i", 0) + struct.pack(">I", len(payload)))
+    return box(b"moof", mfhd + box(b"traf", tfhd + tfdt + trun)) + box(b"mdat", payload)
+
+
+def test_unity_matrix_is_nine_int32s():
+    # extras shift every later field (mvhd next_track_ID, tkhd width/height) and desync pymp4
+    from unshackle.core.manifests.ism_init import UNITY_MATRIX
+
+    assert len(UNITY_MATRIX) == 36
+
+
+@pytest.mark.parametrize("stream_type", ["video", "audio", "text"])
+def test_mvhd_tkhd_sizes_match_iso_layout(stream_type):
+    # a declared size over the spec payload makes parsers under-read and stop at the moov
+    kwargs = {
+        "video": dict(fourcc="H264", codec_private_data=VIDEO_AVC_CPD, width=1920, height=1080),
+        "audio": dict(fourcc="AACL", codec_private_data=AAC_LC_CPD),
+        "text": dict(fourcc="TTML", codec_private_data=""),
+    }[stream_type]
+    init = build_init_segment(stream_type=stream_type, duration=6_000_000_000, language="eng", **kwargs)
+
+    sizes = {}
+    for name in (b"mvhd", b"tkhd"):
+        at = init.index(name) - 4
+        sizes[name] = struct.unpack(">I", init[at : at + 4])[0]
+    # version-1 mvhd: 8 header + 4 version/flags + 28 time fields + 80 trailer
+    assert sizes[b"mvhd"] == 120
+    # version-1 tkhd: 8 header + 4 version/flags + 32 time fields + 60 trailer
+    assert sizes[b"tkhd"] == 104
+
+
+def test_tkhd_carries_video_dimensions():
+    # width/height sit after the matrix, so a mis-sized matrix silently zeroes them
+    init = build_init_segment(
+        stream_type="video", fourcc="H264", codec_private_data=VIDEO_AVC_CPD, width=1920, height=1080
+    )
+    at = init.index(b"tkhd") - 4
+    tkhd = init[at : at + struct.unpack(">I", init[at : at + 4])[0]]
+    width, height = struct.unpack(">II", tkhd[-8:])
+    assert (width >> 16, height >> 16) == (1920, 1080)
+
+
+def test_pymp4_consumes_whole_init_and_reaches_fragments():
+    # pymp4 must reach the mdat here, or Subtitle.parse finds nothing to yield cues from
+    from io import BytesIO
+
+    from pymp4.parser import MP4
+
+    init = build_init_segment(
+        stream_type="text", fourcc="TTML", codec_private_data="", duration=6_000_000_000, language="eng"
+    )
+    data = init + _text_fragment(1, "00:00:01.000", "00:00:02.000", "first", sdi=1)
+    types = [b.type for b in MP4.parse_stream(BytesIO(data))]
+    assert types == [b"ftyp", b"moov", b"moof", b"mdat"]
+
+
+def test_fttml_subtitle_parse_yields_cues():
+    from unshackle.core.tracks.subtitle import Subtitle
+
+    init = build_init_segment(
+        stream_type="text", fourcc="TTML", codec_private_data="", duration=6_000_000_000, language="eng"
+    )
+    data = (
+        init
+        + _text_fragment(1, "00:00:01.000", "00:00:02.000", "first", sdi=1)
+        + _text_fragment(2, "00:00:03.000", "00:00:04.000", "second", sdi=2)
+    )
+    caption_set = Subtitle.parse(data, Subtitle.Codec.fTTML)
+    cues = [c for lang in caption_set.get_languages() for c in caption_set.get_captions(lang)]
+    assert len(cues) == 2
+    assert [c.get_text() for c in cues] == ["first", "second"]
+
+
+@pytest.mark.parametrize(
+    "fourcc,expected",
+    [("HEV1", b"hev1"), ("hev1", b"hev1"), ("HVC1", b"hvc1"), ("hvc1", b"hvc1"), ("HEVC", b"hvc1"), ("H265", b"hvc1")],
+)
+def test_hevc_sample_entry_honours_manifest_fourcc(fourcc, expected):
+    # hev1 permits in-band parameter sets where hvc1 requires them in the sample
+    # entry. Real Smooth manifests ship FourCC="hev1", so relabelling it hvc1
+    # misdescribes the stream.
+    init = build_init_segment(
+        stream_type="video", fourcc=fourcc, codec_private_data=VIDEO_HEVC_CPD, width=3840, height=2160
+    )
+    offset = find_stsd(init)
+    assert init[offset + 20 : offset + 24] == expected
+
+
+def test_encrypted_hev1_frma_carries_the_same_fourcc():
+    # frma names the original format the sinf wraps; if it drifts from the sample
+    # entry, a decrypter restores the wrong sample entry type.
+    init = build_init_segment(
+        stream_type="video", fourcc="HEV1", codec_private_data=VIDEO_HEVC_CPD, kid=KID, width=3840, height=2160
+    )
+    assert b"encv" in init
+    assert init[init.index(b"frma") + 4 : init.index(b"frma") + 8] == b"hev1"

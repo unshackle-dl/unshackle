@@ -33,6 +33,7 @@ from unshackle.core.drm import DRM_T, ClearKey, MonaLisa, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.session import RnetResponse, RnetSession
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video
+from unshackle.core.tracks.track import assert_fragments_decrypted
 from unshackle.core.utilities import get_extension, is_close_match, log_event, try_ensure_utf8
 from unshackle.core.utils.redact import safe_display_url
 from unshackle.core.utils.subprocess import log_tool_run
@@ -794,6 +795,7 @@ class HLS:
                     # with widevine we can merge all segments and decrypt once
                     merge(to=merged_path, via=files, delete=True, include_map_data=True)
                     drm.decrypt(merged_path)
+                    assert_fragments_decrypted(merged_path)
                     merged_path.rename(decrypted_path)
                 else:
                     # with other drm we must decrypt separately and then merge them

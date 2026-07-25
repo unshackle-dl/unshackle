@@ -22,11 +22,13 @@ from unshackle.core.events import events
 from unshackle.core.manifests.ism_init import (
     build_init_segment,
     parse_codec_private_data_vui,
+    piff_senc_to_cenc,
     read_per_sample_iv_size,
     read_track_id,
 )
 from unshackle.core.session import RnetSession
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Track, Tracks, Video
+from unshackle.core.tracks.track import assert_fragments_decrypted
 from unshackle.core.utilities import log_event, try_ensure_utf8
 from unshackle.core.utils.redact import safe_display_url
 from unshackle.core.utils.xml import load_xml
@@ -521,6 +523,7 @@ class ISM:
             init_segment = ISM._init_segment(track, session_drm, first_segment)
             if init_segment:
                 f.write(init_segment)
+            iv_size = (read_per_sample_iv_size(first_segment) if session_drm and first_segment else None) or 8
             for index, segment_file in enumerate(segments_to_merge):
                 if is_text_subtitle:
                     # first segment was already read for the init synthesis, reuse it
@@ -533,6 +536,9 @@ class ISM:
                         .encode("utf8")
                     )
                     f.write(segment_data)
+                elif session_drm:
+                    segment_data = first_segment if index == 0 and first_segment else segment_file.read_bytes()
+                    f.write(piff_senc_to_cenc(segment_data, iv_size))
                 elif index == 0 and first_segment:
                     f.write(first_segment)
                 else:
@@ -547,6 +553,7 @@ class ISM:
         if session_drm:
             progress(downloaded="Decrypting", completed=0, total=None)
             session_drm.decrypt(save_path)
+            assert_fragments_decrypted(save_path)
             track.drm = None
             events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=session_drm, segment=None)
             progress(downloaded="Decrypted", completed=100, total=100)

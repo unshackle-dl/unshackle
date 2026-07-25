@@ -100,6 +100,110 @@ def has_encrypted_sample_entry(path: Path) -> bool:
     return False
 
 
+def _senc_protects_samples(buf: bytes, body: int, end: int) -> bool:
+    """True if a senc/PIFF-uuid box describes protected samples.
+
+    An empty senc (sample_count 0) sits on a genuinely clear fragment, so treating it as
+    a skipped one would raise on a healthy file. Field order follows
+    read_per_sample_iv_size.
+    """
+    flags = int.from_bytes(buf[body + 1 : body + 4], "big")
+    pos = body + 4 + (20 if flags & 0x1 else 0)  # PIFF override: AlgorithmID(3)+IV_size(1)+KID(16)
+    if pos + 4 > end:
+        return False
+    return int.from_bytes(buf[pos : pos + 4], "big") > 0
+
+
+def _moof_still_encrypted(moof: bytes) -> bool:
+    # structural walk: a 4CC byte scan collides with trun payload
+    from unshackle.core.manifests.ism_init import PIFF_SENC_UUID, iter_boxes
+
+    body = 16 if int.from_bytes(moof[:4], "big") == 1 else 8
+    for box_type, _, traf_body, traf_end in iter_boxes(moof, body, len(moof)):
+        if box_type != b"traf":
+            continue
+        for child, usertype, child_body, child_end in iter_boxes(moof, traf_body, traf_end):
+            if child == b"senc" or (child == b"uuid" and usertype == PIFF_SENC_UUID):
+                if _senc_protects_samples(moof, child_body, child_end):
+                    return True
+    return False
+
+
+def assert_fragments_decrypted(path: Path) -> None:
+    """Raise if any fragment survived decryption still carrying a sample-encryption box.
+
+    mp4decrypt strips senc from every fragment it processes and leaves it on the ones it
+    skips, so a survivor marks a silent skip. One cause is a tfhd.sample_description_index
+    dangling past the stsd entry count, which mp4decrypt reports as success (exit 0, no
+    stderr) while leaving the payload as ciphertext. Unlike has_encrypted_sample_entry
+    (moov-scoped) this is fragment-scoped; the moov comes out clean in that failure.
+
+    The guarantee runs in one direction: a survivor proves a skip, while a clean pass is
+    only as good as the decrypter's own behaviour. shaka-packager (the default
+    `decryption` backend) remuxes into a single fragment and drops senc whether or not it
+    decrypted, so this cannot fire on shaka output. The walk is unbuffered and reads only
+    box headers; it seeks over mdat and never reads it. A malformed box size aborts the
+    walk with a warning and returns normally, so a file this function cannot parse is
+    never escalated into a raise. The logged warning is the only signal of that; a caller
+    sees the same silent return it gets from a verified clean file.
+    """
+    surviving = 0
+    total = 0
+    first_offset = None
+    try:
+        file_size = path.stat().st_size
+        with path.open("rb", buffering=0) as f:
+            start = 0
+            while start + 8 <= file_size:
+                f.seek(start)
+                header = f.read(8)
+                if len(header) < 8:
+                    break
+                size = int.from_bytes(header[:4], "big")
+                box_header = 8
+                if size == 1:  # 64-bit largesize
+                    large = f.read(8)
+                    if len(large) < 8:
+                        break
+                    size = int.from_bytes(large, "big")
+                    box_header = 16
+                elif size == 0:  # box runs to EOF
+                    size = file_size - start
+                # below the consumed header the cursor stalls and desyncs onto payload
+                if size < box_header or start + size > file_size:
+                    logging.getLogger("track").warning(
+                        f"{path.name}: malformed box size at offset {start}; cannot verify the "
+                        "remaining fragments were decrypted."
+                    )
+                    break
+                if header[4:8] == b"moof":
+                    total += 1
+                    f.seek(start)
+                    if _moof_still_encrypted(f.read(size)):
+                        surviving += 1
+                        if first_offset is None:
+                            first_offset = start
+                start += size
+    except Exception as e:
+        logging.getLogger("track").warning(f"{path.name}: fragment decryption check did not complete ({e}).")
+        return
+    if surviving:
+        log_event(
+            "decrypt_fragments_still_encrypted",
+            level="ERROR",
+            message=f"{surviving}/{total} fragments still encrypted after decryption",
+            file=path.name,
+            surviving=surviving,
+            total=total,
+            first_offset=first_offset,
+        )
+        raise ValueError(
+            f"{path.name}: {surviving}/{total} fragment(s) still encrypted after decryption (first at "
+            f"byte {first_offset}). The decrypt tool skipped them silently, so check "
+            f"tfhd.sample_description_index against the stsd entry count in the init segment."
+        )
+
+
 @dataclass
 class DownloadContext:
     """Shared arguments passed to each manifest's ``download_track``."""
@@ -428,6 +532,7 @@ class Track:
                         if drm:
                             progress(downloaded="Decrypting", completed=0, total=None)
                             drm.decrypt(save_path)
+                            assert_fragments_decrypted(save_path)
                             self.drm = None
                             events.emit(events.Types.TRACK_DECRYPTED, track=self, drm=drm, segment=None)
                             progress(downloaded="Decrypted", completed=100, total=100)

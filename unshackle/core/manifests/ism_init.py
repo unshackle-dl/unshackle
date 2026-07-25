@@ -8,6 +8,10 @@ sends a ``moov``. The init box must be reconstructed from the manifest's
 or decryptor such as shaka-packager can parse the stream. Ported from yt-dlp's
 ``write_piff_header`` and N_m3u8DL-RE's ``MSSMoovProcessor`` with HEVC, Dolby
 Vision, EC-3, TTML and CENC (PIFF) support.
+
+``piff_senc_to_cenc`` rewrites the fragments themselves, which neither port does:
+shaka-packager cannot read the PIFF sample-encryption box, so its payload is
+retagged as a standard ``senc``.
 """
 
 from __future__ import annotations
@@ -28,13 +32,14 @@ u1616 = struct.Struct(">Hxx")
 s32 = struct.Struct(">i")
 
 # 3x3 transformation matrix (identity), as stored in tkhd/mvhd.
+# Exactly 9 int32s; extras shift every field after it and desync pymp4.
 UNITY_MATRIX = (
     s32.pack(0x10000)
-    + s32.pack(0) * 3
+    + s32.pack(0) * 2
     + s32.pack(0)
     + s32.pack(0x10000)
     + s32.pack(0) * 2
-    + s32.pack(0) * 2
+    + s32.pack(0)
     + s32.pack(0x40000000)
 )
 
@@ -308,7 +313,13 @@ def parse_codec_private_data_colour(fourcc: str, codec_private_data: bytes) -> O
 
 
 def iter_boxes(data: bytes, start: int, end: int) -> Iterator[tuple[bytes, Optional[bytes], int, int]]:
-    """Yield (type, uuid_usertype, payload_start, box_end) for each child box."""
+    """Yield (type, uuid_usertype, payload_start, box_end) for each child box.
+
+    Stops silently at the first box whose declared size cannot be walked. A short
+    result therefore reports how far the walk got, and a caller counting survivors
+    should treat it as unverified. box_end may exceed end when the declared size
+    overruns; clamp it before slicing.
+    """
     offset = start
     while offset + 8 <= end:
         size = struct.unpack(">I", data[offset : offset + 4])[0]
@@ -319,7 +330,7 @@ def iter_boxes(data: bytes, start: int, end: int) -> Iterator[tuple[bytes, Optio
             header = 16
         if size == 0:
             size = end - offset
-        if size < 8:  # corrupt box header; stop rather than loop forever
+        if size < header:  # size below the consumed header desyncs the walk; stop
             return
         usertype = None
         if box_type == b"uuid" and offset + header + 16 <= end:
@@ -424,6 +435,74 @@ def read_per_sample_iv_size(fragment: bytes) -> Optional[int]:
     if not senc_has_subsamples and saiz_default in (8, 16):
         return saiz_default
     return None
+
+
+def piff_senc_to_cenc(fragment: bytes, iv_size: int = 8) -> bytes:
+    """Rewrite a fragment's moof/traf PIFF sample-encryption uuid boxes as standard 'senc'.
+
+    shaka-packager does not consume the PIFF uuid form. It finds no per-sample IVs, falls
+    through to the constant-IV path, and aborts with "IV cannot be empty". mp4decrypt
+    accepts either form, and the payloads are identical once the optional override header
+    is stripped, so emitting 'senc' serves both decrypters.
+
+    The rewrite preserves length: bytes reclaimed from the uuid header become a 'free' box.
+    The moof's byte length must stay the same. trun's data_offset resolves against tfhd's
+    base_data_offset (the moof start only when that field is absent), so moving the sample
+    data misaligns decryption and yields plausible garbage with no error.
+
+    iv_size is the default_Per_Sample_IV_Size the init segment's tenc declares, read from
+    the first fragment by read_per_sample_iv_size. This function skips any fragment whose
+    override disagrees, since tenc is the only IV width a CENC decrypter consults and a
+    mismatch misparses every IV.
+    """
+    out: Optional[bytearray] = None
+    limit = len(fragment)
+    trafs = [
+        (body, min(box_end, limit))
+        for moof_type, _, moof_body, moof_end in iter_boxes(fragment, 0, limit)
+        if moof_type == b"moof"
+        for box_type, _, body, box_end in iter_boxes(fragment, moof_body, min(moof_end, limit))
+        if box_type == b"traf"
+    ]
+    for traf_body, traf_end in trafs:
+        # a second senc would leave the decrypter to choose between them
+        if any(bt == b"senc" for bt, _, _, _ in iter_boxes(fragment, traf_body, traf_end)):
+            continue
+        offset = traf_body
+        while offset + 8 <= traf_end:
+            size = struct.unpack(">I", fragment[offset : offset + 4])[0]
+            if size < 8 or offset + size > traf_end:
+                break
+            if (
+                size >= 28
+                and fragment[offset + 4 : offset + 8] == b"uuid"
+                and fragment[offset + 8 : offset + 24] == PIFF_SENC_UUID
+            ):
+                version = fragment[offset + 24]
+                flags = int.from_bytes(fragment[offset + 25 : offset + 28], "big")
+                # flag 0x1 = PIFF override header: AlgorithmID(3) + IV_size(1) + KID(16)
+                strip = 20 if flags & 0x1 else 0
+                # AlgorithmID 2 is AES-CBC and a stray IV width misparses every IV; leave
+                # either alone so the decrypter fails loudly on a form it cannot handle
+                if (
+                    strip
+                    and (
+                        size < 28 + strip  # short-circuits before reading the override fields
+                        or int.from_bytes(fragment[offset + 28 : offset + 31], "big") != 1
+                        or fragment[offset + 31] != iv_size
+                    )
+                ):
+                    offset += size
+                    continue
+                if offset + 28 + strip <= offset + size:
+                    senc = full_box(b"senc", version, flags & ~0x1, fragment[offset + 28 + strip : offset + size])
+                    pad = size - len(senc)
+                    if pad >= 8:
+                        if out is None:
+                            out = bytearray(fragment)
+                        out[offset : offset + size] = senc + box(b"free", bytes(pad - 8))
+            offset += size
+    return bytes(out) if out is not None else fragment
 
 
 def build_avcc(codec_private_data: bytes, nal_length_size: int = 4) -> bytes:
@@ -582,7 +661,7 @@ def build_sinf(
     schm = full_box(b"schm", 0, 0, b"cenc" + u32.pack(0x00010000))
     tenc_payload = (
         u8.pack(0)  # reserved
-        + u8.pack(0)  # default_crypt_byte_block / skip_byte_block (cenc)
+        + u8.pack(0)  # reserved in v0 (crypt/skip nibbles are v1 only)
         + u8.pack(1)  # default_isProtected
         + u8.pack(0 if constant_iv else iv_size)  # default_Per_Sample_IV_Size
         + kid  # default_KID (16 bytes)
@@ -616,8 +695,10 @@ def build_init_segment(
     Build a complete ftyp + moov initialization segment.
 
     stream_type: "video" | "audio" | "text".
-    fourcc: Smooth FourCC ("H264"/"AVC1"/"DAVC", "HVC1"/"HEV1", "DVHE"/"DVH1",
-            "AACL"/"AACH", "EC-3", "TTML").
+    fourcc: Smooth FourCC ("H264"/"AVC1"/"DAVC", "HVC1"/"HEV1"/"HEVC"/"H265",
+            "DVHE"/"DVH1", "AACL"/"AACH"/"AAC", "EC-3", "TTML"/"STPP"/"DFXP").
+            Only "HEV1" yields an hev1 sample entry; the rest of that group yield
+            hvc1, which requires its parameter sets in the sample entry.
     codec_private_data: hex string from the manifest QualityLevel.
     nal_length_size: manifest NALUnitLengthField (bytes per NAL length prefix).
     kid: 16-byte default key id; when set, the sample entry is wrapped for CENC.
@@ -638,6 +719,7 @@ def build_init_segment(
     ftyp = box(b"ftyp", b"isml" + u32.pack(1) + b"iso5" + b"iso6" + b"piff" + b"msdh")
 
     # --- mvhd ---
+    # version 1: at the 10 MHz ISM timescale a 32-bit duration overflows after ~429s
     mvhd = full_box(
         b"mvhd",
         1,
@@ -724,7 +806,10 @@ def build_init_segment(
             codec_fourcc = b"avc1"
         elif fourcc in ("HVC1", "HEV1", "HEVC", "H265"):
             config_box = build_hvcc(cpd, nal_length_size)
-            codec_fourcc = b"hvc1"
+            # hev1 permits in-band parameter sets where hvc1 requires them in the
+            # sample entry, so relabelling hev1 as hvc1 misdescribes the stream
+            # (and the frma inside sinf).
+            codec_fourcc = b"hev1" if fourcc == "HEV1" else b"hvc1"
         elif fourcc in ("DVHE", "DVH1"):
             # Dolby Vision over HEVC: same hvcC config, dvh1 sample entry.
             config_box = build_hvcc(cpd, nal_length_size)
@@ -773,9 +858,10 @@ def build_init_segment(
         else:
             raise NotImplementedError(f"Unsupported text FourCC: {fourcc}")
 
-    # Fragments may set tfhd sample_description_index=2 (server inits carry a second,
-    # identical entry). A lone entry leaves that dangling: mp4decrypt skips those
-    # fragments and demuxers stop after the first.
+    # Fragments may set tfhd sample_description_index=2. A lone entry leaves that
+    # dangling: mp4decrypt skips those fragments and demuxers stop after the first.
+    # We duplicate entry 1; a manifest carries one CodecPrivateData, so there is no
+    # second config to build. The server's larger second entry only repeats its VPS.
     stsd = full_box(b"stsd", 0, 0, u32.pack(2) + sample_entry_box * 2)
 
     # --- empty sample tables (fragmented: real samples live in moof/traf) ---

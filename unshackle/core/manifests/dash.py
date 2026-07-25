@@ -28,6 +28,7 @@ from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.session import RnetSession
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video
+from unshackle.core.tracks.track import assert_fragments_decrypted
 from unshackle.core.utilities import is_close_match, log_event, try_ensure_utf8
 from unshackle.core.utils.redact import safe_display_url
 from unshackle.core.utils.xml import load_xml
@@ -570,6 +571,7 @@ class DASH:
         if drm:
             progress(downloaded="Decrypting", completed=0, total=None)
             drm.decrypt(save_path)
+            assert_fragments_decrypted(save_path)
             track.drm = None
             events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=drm, segment=None)
             progress(downloaded="Decrypted", completed=100, total=100)

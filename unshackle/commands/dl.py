@@ -67,7 +67,7 @@ from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.dv_fixup import apply_dv_fixup
 from unshackle.core.tracks.hybrid import Hybrid
-from unshackle.core.tracks.track import has_encrypted_sample_entry
+from unshackle.core.tracks.track import assert_fragments_decrypted, has_encrypted_sample_entry
 from unshackle.core.utilities import (
     find_font_with_fallbacks,
     find_missing_langs,
@@ -3088,6 +3088,8 @@ class dl:
                             if drm and hasattr(drm, "decrypt"):
                                 drm.decrypt(track.path)
                                 if not isinstance(drm, MonaLisa):
+                                    # MonaLisa decrypts per segment; its decrypt() here is a no-op
+                                    assert_fragments_decrypted(track.path)
                                     has_decrypted = True
                                 events.emit(events.Types.TRACK_REPACKED, track=track)
                             else:
