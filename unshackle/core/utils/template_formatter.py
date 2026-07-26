@@ -96,11 +96,13 @@ class TemplateFormatter:
             # Clean up multiple consecutive dots/separators and other artifacts
             result = re.sub(r"\.{2,}", ".", result)  # Multiple dots -> single dot
             result = re.sub(r"\s{2,}", " ", result)  # Multiple spaces -> single space
-            result = re.sub(r"-{2,}", "-", result)  # Multiple dashes -> single dash
-            result = re.sub(r"^[\.\s\-]+|[\.\s\-]+$", "", result)  # Remove leading/trailing dots, spaces, dashes
+            result = re.sub(r"(?:-\s*)+-", "-", result)  # Multiple dashes (with optional spaces) -> single dash
             result = re.sub(r"\.-", "-", result)  # Remove dots before dashes (for dot-based templates)
             result = re.sub(r"[\.\s]+\)", ")", result)  # Remove dots/spaces before closing parentheses
             result = re.sub(r"\(\s*\)", "", result)  # Remove empty parentheses (empty conditional)
+            result = re.sub(r"\s{2,}", " ", result)  # Multiple spaces after parenthesis removal -> single space
+            result = re.sub(r"(?:-\s*)+-", "-", result)  # Multiple dashes (with optional spaces) -> single dash
+            result = re.sub(r"^[\.\s\-]+|[\.\s\-]+$", "", result)  # Remove leading/trailing dots, spaces, dashes
 
             # Determine the appropriate separator based on template style
             # Count separator characters between variables (between } and {)
@@ -113,6 +115,8 @@ class TemplateFormatter:
                 result = sanitize_filename(result, spacer=" ")
             else:
                 result = sanitize_filename(result, spacer=".")
+
+            result = result.strip(" .")
 
             if not result or result.isspace():
                 log.warning("Template formatting resulted in empty filename, using fallback")
