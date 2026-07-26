@@ -12,7 +12,7 @@ from sortedcontainers import SortedKeyList
 from unshackle.core.config import config
 from unshackle.core.titles.title import Title
 from unshackle.core.utilities import sanitize_filename
-from unshackle.core.utils.template_formatter import TemplateFormatter
+from unshackle.core.utils.template_formatter import TemplateFormatter, detect_spacer
 
 
 class Episode(Title):
@@ -146,8 +146,11 @@ class Episode(Title):
                 context = self._build_template_context(media_info, show_service)
                 context["season"] = self._folder_season()
                 context["year"] = self.year or ""  # folders keep the year
+                spacer = detect_spacer(template)  # one style for the whole path
                 segments = [
-                    TemplateFormatter(seg).format(context) for seg in re.split(r"[\\/]", template) if seg.strip()
+                    TemplateFormatter(seg, spacer).format(context)
+                    for seg in re.split(r"[\\/]", template)
+                    if seg.strip()
                 ]
                 return "/".join(s for s in segments if s)
 

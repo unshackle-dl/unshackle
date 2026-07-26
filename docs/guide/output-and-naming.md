@@ -71,7 +71,7 @@ The recognized kinds are:
 
 ### Separator style (dots vs. spaces)
 
-unshackle looks at the characters you place *between* variables to decide the filename's separator style. If spaces outnumber dots in your template, it sanitizes with spaces; otherwise it uses dots (the scene-style default). This is also applied to the auto-generated date separators for daily/dated content.
+unshackle looks at the characters you place *between* variables to decide the filename's separator style. If spaces outnumber dots in your template, it sanitizes with spaces; otherwise it uses dots (the scene-style default). This is also applied to the auto-generated date separators for daily/dated content, and to every segment of a nested folder template.
 
 === "Scene style (dots)"
 
@@ -184,7 +184,7 @@ Folder templates are nested under a special `folder` key inside `output_template
         albums: "{artist} - {album} ({year})"
     ```
 
-The per-kind folder keys are `movies`, `series`, `songs`, and `albums`. Any other key produces a startup warning. Path separators (`/` or `\`) are allowed in folder templates. Each segment is formatted independently, so you can build nested directory structures like `Show/Season 01`.
+The per-kind folder keys are `movies`, `series`, `songs`, and `albums`. Any other key produces a startup warning. Path separators (`/` or `\`) are allowed in folder templates. Each segment is formatted independently, so you can build nested directory structures like `Show/Season 01`. unshackle reads the separator style from the whole template, so every segment is spaced alike.
 
 **Fallback behavior:**
 
@@ -383,18 +383,18 @@ how the optional (`?`) variables appear and disappear.
         series: "{title} ({year})/Season {season}"
     ```
     ```text
-    The Show (2023)/Season.S02/
+    The Show (2023)/Season S02/
       └─ The.Show.S02E04.The.Reckoning.2160p.EXAMPLE.WEB-DL.DDP5.1.H.265-TAG.mkv
     ```
 
-    Each folder segment picks its separator style independently: `{title} ({year})` has
-    spaces around its variables, but `Season {season}` alone counts as dot style, so its
-    space becomes a dot.
+    unshackle decides the separator style once for the whole folder template, and every
+    segment then follows it. Spaces outnumber dots in `{title} ({year})/Season {season}`,
+    so `Season {season}` keeps its space even though it holds only one variable.
 
     When an episode has no on-screen name, `{episode_name?}` disappears cleanly:
 
     ```text
-    The Show (2023)/Season.S02/
+    The Show (2023)/Season S02/
       └─ The.Show.S02E05.2160p.EXAMPLE.WEB-DL.DDP5.1.H.265-TAG.mkv
     ```
 
