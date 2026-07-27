@@ -2540,7 +2540,7 @@
 streaming service, selects exactly the tracks you asked for, acquires and applies
 decryption keys, and muxes everything into a finished Matroska file. The flags below
 cover quality and codec selection, language and subtitle handling, episode ranges, and
-the download flow itself, with examples throughout.</p>
+the download flow itself.</p>
 <div class="admonition note">
 <p class="admonition-title">Where the full flag list lives</p>
 <p>This page covers the flags you will use most and explains how they interact. It is
@@ -2593,8 +2593,9 @@ helps explain why, for example, <code>--list</code> stops early and why keys are
 <li><strong>Post-process</strong>: extract closed captions, convert subtitles, repack, mux with
    <code>mkvmerge</code>, and move the finished file to your downloads directory.</li>
 </ol>
-<p><code>--list</code> and <code>--list-titles</code> stop after selection/filtering and print what <em>would</em> be
-downloaded. <code>--skip-dl</code> runs the license step but skips the actual segment download.</p>
+<p><code>--list</code> prints the tracks a title exposes and stops before selection. <code>--list-titles</code>
+prints every title the service returned and stops before <code>--wanted</code>/<code>--latest-episode</code>
+filtering. <code>--skip-dl</code> runs the license step but skips the actual segment download.</p>
 <h2 id="choosing-quality">Choosing quality<a class="headerlink" href="#choosing-quality" title="Permanent link">&para;</a></h2>
 <h3 id="resolution">Resolution<a class="headerlink" href="#resolution" title="Permanent link">&para;</a></h3>
 <p><code>-q</code> / <code>--quality</code> takes one or more target resolutions (heights) as a comma-separated
@@ -2714,9 +2715,11 @@ either enum <strong>names</strong> or their <strong>values</strong>, comma-separ
 <div class="admonition warning">
 <p class="admonition-title">HYBRID requires dovi_tool</p>
 <p><code>-r HYBRID</code> produces a single hybrid stream by injecting the Dolby Vision RPU
-metadata onto an HDR10/HDR10+ base layer using <strong>dovi_tool</strong>. It requires the
-<code>dovi_tool</code> binary on your PATH and needs both an HDR10(+) <em>and</em> a DV track to be
-available, otherwise the title fails (unless <code>--best-available</code> lets it fall back).
+metadata onto an HDR10/HDR10+ base layer using <strong>dovi_tool</strong>.
+It requires the <code>dovi_tool</code> binary, resolved from unshackle's <code>binaries/</code> folder or
+your <code>PATH</code>. The normal case is a DV track plus an HDR10 or HDR10+ base. With HDR10+
+and no DV, unshackle converts the HDR10+ metadata to DV instead, which also needs
+<code>hdr10plus_tool</code>. With no DV and no HDR10+, the title fails.
 When HDR10+ is present it is preferred over HDR10 as the base layer.</p>
 <p>To keep an HDR10+ deliverable <em>alongside</em> the hybrid, request both ranges:
 <code>-r HYBRID,HDR10P</code>. <code>-r HYBRID</code> on its own muxes only the merged hybrid.</p>
@@ -2760,8 +2763,8 @@ pair. Pick one form.</p>
 <strong>peak</strong> or <strong>nominal</strong> bandwidth that is far from the stream's real average. This matters
 because a track's bitrate drives the track listing, the sort order, <em>and</em> the
 <code>--vbitrate</code>/<code>--vbitrate-range</code> selection above. A bogus declared value therefore makes
-unshackle pick the wrong track. These flags remove that risk by probing the actual media
-size to compute a true bitrate for the top renditions, overriding the manifest value:</p>
+unshackle pick the wrong track. These flags probe the actual media size to compute a true
+bitrate for the top renditions, overriding the manifest value:</p>
 <ul>
 <li><code>-rvb</code> / <code>--real-video-bitrate</code>: probe real video bitrates (per codec/range).</li>
 <li><code>-rab</code> / <code>--real-audio-bitrate</code>: probe real audio bitrates (per codec/channels/
@@ -2777,12 +2780,13 @@ That is the real <em>delivered</em> size, not an over-report or a bug.</p>
 </div>
 <div class="admonition tip">
 <p class="admonition-title">Why not every rendition is probed</p>
-<p>Probing does not touch every rendition. Only the top rendition of each quality tier is
-probed in parallel (video grouped by codec+range, audio by codec+channels+language),
-and the pass then reaches downward only as far as it must to keep the ranking correct.
-This keeps probing fast even when a service exposes dozens of renditions. Tracks whose
-duration can't be determined fall back to <code>ffprobe</code>, and a probe failure is non-fatal:
-the manifest value is simply left in place.</p>
+<p>Probing does not touch every rendition. Only the five highest declared-bitrate
+renditions of each quality tier are probed in parallel (video grouped by codec and
+range, audio by codec, channels, language, and descriptive flag), and unshackle
+extends a group downward while a lower unprobed rendition could still outrank a
+probed one. This keeps probing fast even when a service exposes dozens of renditions.
+Tracks whose duration can't be determined fall back to <code>ffprobe</code>, and a probe failure
+is non-fatal: the manifest value is simply left in place.</p>
 </div>
 <h2 id="audio-codec-channels-and-atmos">Audio codec, channels, and Atmos<a class="headerlink" href="#audio-codec-channels-and-atmos" title="Permanent link">&para;</a></h2>
 <h3 id="codec_1">Codec<a class="headerlink" href="#codec_1" title="Permanent link">&para;</a></h3>
@@ -2991,7 +2995,7 @@ with <code>-</code> to exclude it.</p>
 </tr>
 <tr>
 <td><code>--list-titles</code></td>
-<td>List the titles that would be downloaded, then stop.</td>
+<td>List every title the service returned, then stop. <code>-w</code>/<code>--latest-episode</code> are not applied to this listing.</td>
 </tr>
 </tbody>
 </table>
@@ -3043,11 +3047,11 @@ are always kept.</p>
 <tbody>
 <tr>
 <td><code>--list</code></td>
-<td>List the available tracks and which would be selected, then stop. No download.</td>
+<td>List the tracks the service exposes for each title, then stop. No selection, no download.</td>
 </tr>
 <tr>
 <td><code>--list-titles</code></td>
-<td>List the titles (episodes) that would be downloaded, then stop.</td>
+<td>List every title the service returned, then stop. <code>-w</code>/<code>--latest-episode</code> are not applied to this listing.</td>
 </tr>
 <tr>
 <td><code>--skip-dl</code></td>
@@ -3091,7 +3095,7 @@ flags change how the output is assembled:</p>
 </tr>
 <tr>
 <td><code>--merge-video</code></td>
-<td>Mux all selected video tracks into one file.</td>
+<td>Mux video tracks that share a height, range, and codec into one file, so only language varies inside a file.</td>
 <td>config <code>muxing.merge_video</code> (off)</td>
 </tr>
 </tbody>

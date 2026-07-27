@@ -2580,7 +2580,7 @@
 
 
 <h1 id="configuration-reference">Configuration Reference<a class="headerlink" href="#configuration-reference" title="Permanent link">&para;</a></h1>
-<p>This page is the exhaustive, authoritative reference for <strong>every</strong> key you can set in
+<p>This page documents every key you can set in
 <code>unshackle.yaml</code>. For each key you will find its name, expected type, default value, and
 what it does. Keys are grouped by area so you can jump straight to the part of unshackle
 you are configuring.</p>
@@ -2589,10 +2589,12 @@ edit it), start with <a href="../../getting-started/configuration-file/">The Con
 This page assumes you already know the basics and want precise details.</p>
 <div class="admonition info">
 <p class="admonition-title">How defaults work</p>
-<p>Every key is optional. If you omit a key, unshackle uses the built-in default listed
-here. There is <strong>no schema validation</strong>: unknown keys are silently ignored (they never
-become settings), and the file is parsed with <code>yaml.safe_load</code>. An empty or missing
-file means <em>all</em> defaults apply.</p>
+<p>Every key is optional except <a href="#output-naming"><code>output_template</code></a>, which <code>dl</code> requires.
+Without it, <code>dl</code> aborts with an error. If you omit any other key, unshackle uses
+the built-in default listed here. There is <strong>no schema validation</strong>: unknown keys are
+silently ignored (they never become settings), and the file is parsed with
+<code>yaml.safe_load</code>. An empty or missing file means every other key falls back to its
+default.</p>
 </div>
 <div class="admonition warning">
 <p class="admonition-title">Two keys behave specially on load</p>
@@ -2625,7 +2627,7 @@ file means <em>all</em> defaults apply.</p>
 </tr>
 <tr>
 <td><a href="#download-processing">Download &amp; processing</a></td>
-<td><code>dl</code>, <code>subtitle</code>, <code>audio</code>, <code>muxing</code>, <code>language_tags</code></td>
+<td><code>dl</code>, <code>subtitle</code>, <code>audio</code>, <code>muxing</code>, <code>language_tags</code>, <code>dual_multi_mode</code></td>
 </tr>
 <tr>
 <td><a href="#output-naming">Output &amp; naming</a></td>
@@ -2822,7 +2824,7 @@ paths are used as-is. <strong>List order is priority</strong>: the first source 
 tag wins, so put your own local service directories <strong>last</strong> to make them fallbacks.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">directories</span><span class="p">:</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">services</span><span class="p">:</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unshackle-dl/community-services</span><span class="w">   </span><span class="c1"># cloned from GitHub</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">you/your-services</span><span class="w">                 </span><span class="c1"># cloned from GitHub</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://example.com/private.git@stable</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/my-services</span><span class="w">                      </span><span class="c1"># local, lowest priority</span>
 </span></code></pre></div>
@@ -3030,7 +3032,7 @@ is the <a href="../../dev/rest-api/">REST API</a> section; these are the config 
 <td><code>remote_only</code></td>
 <td>bool</td>
 <td><code>false</code></td>
-<td>Run without a local <code>output_template</code> (CORS/Cloudflare-friendly).</td>
+<td>Expose only the remote service session endpoints (health, services, search, session) and disable the rest of the REST API.</td>
 </tr>
 <tr>
 <td><code>session_ttl</code></td>
@@ -3080,12 +3082,6 @@ is the <a href="../../dev/rest-api/">REST API</a> section; these are the config 
 <td><em>(auto)</em></td>
 <td>PlayReady devices; auto-filled from <code>directories.prds</code>.</td>
 </tr>
-<tr>
-<td><code>country</code> / <code>locations</code></td>
-<td>str / dict</td>
-<td><em>(unset)</em></td>
-<td>Advertised region metadata.</td>
-</tr>
 </tbody>
 </table>
 <p>Each entry under <code>users</code> is keyed by that user's API key and may set its own <code>services</code>,
@@ -3103,9 +3099,10 @@ is the <a href="../../dev/rest-api/">REST API</a> section; these are the config 
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Declaring <code>dl</code> defaults under <code>serve</code></p>
-<p>You can set any <a href="#dl"><code>dl</code></a> flag key (<code>downloads</code>, <code>workers</code>, <code>best_available</code>, and so on)
-directly inside <code>serve</code>. The point is to raise concurrency and behaviour defaults
-<strong>server-wide</strong> (every request the server handles picks them up) without having to change
+<p>You can set most <a href="#dl"><code>dl</code></a> flag keys (<code>downloads</code>, <code>workers</code>, <code>best_available</code>, and so on)
+directly inside <code>serve</code>; the server recognises a fixed subset of download parameters, so a
+few CLI-only flags are ignored here. This raises concurrency and behaviour defaults
+<strong>server-wide</strong> (every request the server handles picks them up) without changing
 each client call individually.</p>
 </div>
 <hr />
@@ -3163,7 +3160,7 @@ after the flag's internal destination rather than its visible name; set these ex
 </tr>
 </tbody>
 </table>
-<p><strong>Precedence</strong> (highest first): an explicit CLI flag or environment variable → a per-service
+<p><strong>Precedence</strong> (highest first): an explicit CLI flag → a per-service
 <a href="#services-auth"><code>services.&lt;TAG&gt;.dl</code></a> override → this global <code>dl:</code> block → the built-in
 default. In other words, config only fills in options you did not set on the command line.</p>
 <p>Common keys (a useful subset; every <code>dl</code> flag works):</p>
@@ -3364,7 +3361,7 @@ written as sidecar files. See <a href="../../guide/subtitles/">Subtitles</a> for
 <td><code>output_mode</code></td>
 <td>str</td>
 <td><code>"mux"</code></td>
-<td><code>mux</code> embeds subtitles in the MKV; <code>sidecar</code> writes separate files.</td>
+<td><code>mux</code> embeds subtitles in the MKV; <code>sidecar</code> writes separate files; <code>both</code> writes sidecars and still muxes.</td>
 </tr>
 <tr>
 <td><code>sidecar_format</code></td>
@@ -3408,9 +3405,9 @@ audio codecs used to break ties in track selection.</p>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title"><code>codec_priority</code> is a soft priority: nothing is dropped</p>
-<p><code>codec_priority</code> only breaks ties <strong>among tracks that share the same bitrate and language</strong>.
-Codecs not in the list keep their normal bitrate-based ordering and are simply placed after
-all listed codecs, and none are ever removed. Two higher-level rules still override it: <strong>Atmos
+<p><code>codec_priority</code> outranks bitrate: any listed codec sorts above every unlisted one, and among
+listed codecs the list order decides. Bitrate order survives only within a single codec rank.
+Nothing is ever removed. Two higher-level rules still override it: <strong>Atmos
 tracks always take precedence over <code>codec_priority</code></strong>, and <strong>audio-description tracks are
 always forced to the end</strong> regardless of it. When <code>codec_priority</code> is unset, tracks sort by
 bitrate alone, with those same Atmos/descriptive rules still applied.</p>
@@ -3452,7 +3449,7 @@ bitrate alone, with those same Atmos/descriptive rules still applied.</p>
 <td><code>merge_video</code></td>
 <td>bool</td>
 <td><code>false</code></td>
-<td>Merge all video tracks into one file. <code>--merge-video</code> on the CLI flips this on.</td>
+<td>Merge video tracks that share height, range, and codec into one file, so only language varies inside a file. <code>--merge-video</code> on the CLI flips this on.</td>
 </tr>
 </tbody>
 </table>
@@ -3493,12 +3490,9 @@ A rule may test:</p>
 </table>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">language_tags</span><span class="p">:</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span><span class="nt">rules</span><span class="p">:</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">audio</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">]</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">      </span><span class="nt">subs_contain_all</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">]</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">      </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="w">            </span><span class="c1"># native English release, no tag</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">audio</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">ja</span><span class="p p-Indicator">]</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">      </span><span class="nt">subs_contain</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">]</span>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">      </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;SUBBED&quot;</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">audio</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">ja</span><span class="p p-Indicator">]</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">      </span><span class="nt">subs_contain</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">]</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">      </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;SUBBED&quot;</span>
 </span></code></pre></div>
 <h3 id="dual_multi_mode"><code>dual_multi_mode</code><a class="headerlink" href="#dual_multi_mode" title="Permanent link">&para;</a></h3>
 <ul>
@@ -3570,7 +3564,7 @@ language in both modes, so they never trigger <code>{dual}</code> on their own.<
 <a href="../../guide/output-and-naming/">Output &amp; naming</a>. The keys are summarised here.</p>
 <h3 id="output_template"><code>output_template</code><a class="headerlink" href="#output_template" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
+<li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Required</strong> (no usable default; <code>dl</code> exits with an error if this is missing)</li>
 </ul>
 <p>Filename templates keyed by media kind, using <code>{variable}</code> placeholders. Recognised kinds are
 <code>movies</code>, <code>series</code>, and <code>songs</code> (and <code>albums</code> for folder templates). A trailing <code>?</code> on a
@@ -3737,7 +3731,7 @@ case-insensitively; <code>"mp4decrypt"</code> selects Bento4's mp4decrypt, and <
 <div class="tabbed-block">
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nt">decryption</span><span class="p">:</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shaka</span>
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">  </span><span class="nt">SOMESERVICE</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mp4decrypt</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">  </span><span class="nt">EXAMPLE1</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mp4decrypt</span>
 </span></code></pre></div>
 </div>
 </div>
@@ -3976,8 +3970,9 @@ keys instead of re-licensing. Each entry needs a <code>type</code> (the backend 
 <p class="admonition-title">Common per-entry options</p>
 <ul>
 <li><code>no_push: true</code> makes a vault read-only (keys are fetched but never written to it).</li>
-<li>A vault of <code>type: api</code> whose <code>name</code> contains <code>decrypt_labs</code> auto-fills its <code>token</code> from
-  <a href="#external-api-keys"><code>decrypt_labs_api_key</code></a> when not set inline.</li>
+<li>A vault of <code>type: API</code> whose <code>name</code> contains <code>decrypt_labs</code> auto-fills its <code>token</code> from
+  <a href="#external-api-keys"><code>decrypt_labs_api_key</code></a> when not set inline. Vault <code>type</code> values are
+  case-sensitive module names.</li>
 <li>An all-zero content key (32 zeros) is treated as "no key" everywhere and is never
   stored.</li>
 </ul>
@@ -4041,9 +4036,9 @@ constructor accepts a <code>timeout</code> parameter (a per-vault <code>timeout<
 </table>
 <div class="admonition tip">
 <p class="admonition-title">SIMKL is a fallback for TMDB</p>
-<p>SIMKL is positioned as an alternative metadata source, and it is most valuable precisely
-<strong>when no <code>tmdb_api_key</code> is configured</strong>. It improves title-matching and tagging
-reliability in that case rather than replacing TMDB where TMDB is available.</p>
+<p>SIMKL is an alternative metadata source. Use it when you have no <code>tmdb_api_key</code>
+configured; it improves title matching and tagging in that case rather than replacing
+TMDB.</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title"><code>ipinfo_api_key</code> never touches your service sessions</p>

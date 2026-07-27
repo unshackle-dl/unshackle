@@ -2080,8 +2080,8 @@ these entirely.</p>
 </div>
 <h2 id="external-tools-on-your-path">External tools on your PATH<a class="headerlink" href="#external-tools-on-your-path" title="Permanent link">&para;</a></h2>
 <p>unshackle shells out to a number of external command-line programs for media
-processing and DRM work. It looks for each one first in a <code>binaries/</code> folder
-next to the installed package, and then falls back to your system <code>PATH</code>, so
+processing and DRM work. It looks for each one first in the <code>binaries/</code> folder
+inside the installed package, and then falls back to your system <code>PATH</code>, so
 installing these tools system-wide (or dropping them into that folder) both
 work.</p>
 <h3 id="required-tools">Required tools<a class="headerlink" href="#required-tools" title="Permanent link">&para;</a></h3>
@@ -2126,7 +2126,7 @@ work.</p>
 <p class="admonition-title">shaka-packager is the default decryptor</p>
 <p>unshackle decrypts with shaka-packager unless you explicitly configure a
 different decryptor. If it is missing, protected downloads will fail at the
-decryption step. See the <a href="../configuration-file/">configuration reference</a> for the
+decryption step. See the <a href="../../reference/configuration/#decryption">configuration reference</a> for the
 <code>decryption</code> key if you want to switch to <code>mp4decrypt</code>.</p>
 </div>
 <h3 id="recommended-and-optional-tools">Recommended and optional tools<a class="headerlink" href="#recommended-and-optional-tools" title="Permanent link">&para;</a></h3>
@@ -2211,7 +2211,7 @@ it depends on.</p>
 <h3 id="confirm-the-command-is-available">Confirm the command is available<a class="headerlink" href="#confirm-the-command-is-available" title="Permanent link">&para;</a></h3>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>unshackle<span class="w"> </span>--help
 </span></code></pre></div>
-<p>This prints the banner and the list of available commands (<code>dl</code>, <code>env</code>, <code>kv</code>,
+<p>This prints the list of available commands (<code>dl</code>, <code>env</code>, <code>kv</code>,
 <code>serve</code>, <code>wvd</code>, <code>prd</code>, <code>search</code>, <code>util</code>, <code>cfg</code>, <code>import</code>). If your shell reports
 that <code>unshackle</code> is not found, the <code>uv tool</code> bin directory is probably not on
 your <code>PATH</code>. Run <code>uv tool update-shell</code> and open a new terminal.</p>

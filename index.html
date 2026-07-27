@@ -1777,17 +1777,19 @@
 media from streaming manifests, handles the DRM, and muxes everything into clean,
 well-tagged files, all driven from a single command-line tool, or served over a
 REST API for automation.</p>
-<p>It is a fork of <a href="https://github.com/devine-dl/devine">Devine</a> with first-class
-DASH, HLS, and Smooth Streaming (ISM) parsing, both <strong>Widevine</strong> and <strong>PlayReady</strong>
-DRM support, and a built-in HTTP server.</p>
+<p>It is a fork of <a href="https://github.com/devine-dl/devine">Devine</a> with DASH, HLS, and
+Smooth Streaming (ISM) parsing, both <strong>Widevine</strong> and <strong>PlayReady</strong> DRM support,
+and a built-in HTTP server.</p>
 <div class="admonition warning">
 <p class="admonition-title">Use responsibly</p>
-<p>unshackle is licensed under <a href="https://github.com/unshackle-dl/unshackle/blob/master/LICENSE">GPL-3.0</a>.
+<p>unshackle is licensed under <a href="https://github.com/unshackle-dl/unshackle/blob/main/LICENSE">GPL-3.0</a>.
 Do not use it for content you do not have the rights to. Keep the core free and
 open, keep service code private, and be kind.</p>
 </div>
 <h2 id="what-it-does">What it does<a class="headerlink" href="#what-it-does" title="Permanent link">&para;</a></h2>
-<p>Point unshackle at a title on a streaming service and it will:</p>
+<p>unshackle does everything except talk to the streaming platform. You write that part
+as a service module (<a href="dev/creating-a-service/">Creating a Service</a>). Point unshackle
+at a title and it will:</p>
 <ul>
 <li>Fetch the title metadata (movies, full series, seasons, episodes, albums, tracks).</li>
 <li>Parse the streaming manifest: <strong>DASH</strong>, <strong>HLS</strong>, or <strong>Smooth Streaming (ISM)</strong>.</li>
@@ -1842,7 +1844,7 @@ open, keep service code private, and be kind.</p>
 </tr>
 <tr>
 <td>Services</td>
-<td>Pluggable service modules, loadable from local folders or git repositories</td>
+<td>A plugin API for the service modules you write. unshackle includes none</td>
 </tr>
 <tr>
 <td>Automation</td>
@@ -1875,7 +1877,7 @@ open, keep service code private, and be kind.</p>
 <h2 id="a-first-download">A first download<a class="headerlink" href="#a-first-download" title="Permanent link">&para;</a></h2>
 <p>Every download is three parts: the <code>dl</code> command, a <strong>service tag</strong>, and the
 service's title argument (a URL, ID, or slug).</p>
-<div class="language-shell highlight"><span class="filename">Download a 1080p title with English audio and subtitles</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">1080</span><span class="w"> </span>-l<span class="w"> </span>en<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Download a 1080p title with English audio</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">1080</span><span class="w"> </span>-l<span class="w"> </span>en<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p>The <code>dl</code> command carries all the quality, language, and output flags; the service
 tag (<code>EXAMPLE</code> above) selects which streaming service to talk to, and the value after it
@@ -1886,7 +1888,7 @@ install to your first file.</p>
 <li><strong><a href="getting-started/installation/">Installation</a></strong>. Install unshackle and the external tools it depends on.</li>
 <li><strong><a href="getting-started/quickstart/">Quickstart</a></strong>. Configure <code>unshackle.yaml</code> and run your first download.</li>
 <li><strong><a href="guide/downloading/">Downloading</a></strong>. The full <code>dl</code> command guide: quality, codecs, languages, track selection, and output.</li>
-<li><strong><a href="getting-started/configuration-file/">Configuration</a></strong>. Every <code>unshackle.yaml</code> key, directories, vaults, proxies, and naming templates.</li>
+<li><strong><a href="getting-started/configuration-file/">Configuration</a></strong>. Where <code>unshackle.yaml</code> lives, the directory layout, and how to edit values. Full key list in the <a href="reference/configuration/">Configuration Reference</a>.</li>
 <li><strong><a href="dev/rest-api/">REST API</a></strong>. Run the <code>serve</code> HTTP server and drive downloads programmatically.</li>
 </ul>
 <div class="admonition tip">

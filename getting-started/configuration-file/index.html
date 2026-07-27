@@ -2025,7 +2025,7 @@ turned into underscores (<code>--best-available</code> → <code>best_available<
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">dl</span><span class="p">:</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">lang</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">]</span><span class="w">          </span><span class="c1"># -l en</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">quality</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">1080</span><span class="p p-Indicator">]</span><span class="w">     </span><span class="c1"># -q 1080</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">vcodec</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">H265</span><span class="p p-Indicator">]</span><span class="w">      </span><span class="c1"># -v H265</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">vcodec</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">H.265</span><span class="p p-Indicator">]</span><span class="w">     </span><span class="c1"># -v H.265</span>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span><span class="nt">sub_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">srt</span><span class="w">     </span><span class="c1"># convert subtitles to SRT</span>
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span><span class="nt">downloads</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span><span class="w">        </span><span class="c1"># two tracks at once</span>
 </span></code></pre></div>
@@ -2132,17 +2132,17 @@ and every available key.</p>
 </table>
 <div class="admonition note">
 <p class="admonition-title">Some directories cannot be moved</p>
-<p>A handful of internal locations are protected: the package root, the core directory, the user-config directory, and the data base. If you list them under <code>directories</code>, unshackle silently ignores the override. This is intentional; those paths are tied to where the package is installed.</p>
+<p>unshackle protects five internal entries: <code>app_dirs</code>, <code>core_dir</code>, <code>namespace_dir</code>, <code>user_configs</code>, and <code>data</code>. If you list any of them under <code>directories</code>, unshackle ignores the override. This is intentional; those paths are tied to where the package is installed.</p>
 </div>
 <h3 id="the-services-directory-is-special">The <code>services</code> directory is special<a class="headerlink" href="#the-services-directory-is-special" title="Permanent link">&para;</a></h3>
 <p>Unlike the other entries, <code>services</code> is a <strong>list</strong>, and each entry can be either a local folder or a remote repository. This lets you mix your own local service code with services pulled from Git:</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">directories</span><span class="p">:</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">services</span><span class="p">:</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unshackle-dl/services</span><span class="w">      </span><span class="c1"># a GitHub owner/repo shorthand</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/me/my-services.git</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">you/your-services</span><span class="w">          </span><span class="c1"># a GitHub owner/repo shorthand</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://example.com/private-services.git</span>
 </span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/code/local-services</span><span class="w">      </span><span class="c1"># a local folder</span>
 </span></code></pre></div>
-<p>Entries are searched in the order listed, and <strong>the first source to define a given service tag wins</strong>, so put local folders last if you want them to act as fallbacks rather than overrides. Remote repositories are cloned and periodically updated for you. See <a href="../../dev/creating-a-service/">Services</a> for the full details on how service discovery and repositories work.</p>
+<p>unshackle searches entries in the order listed, and <strong>the first source to define a given service tag wins</strong>, so put local folders last if you want them to act as fallbacks rather than overrides. unshackle clones remote repositories on first use and refreshes them at most once a day. See <a href="../../dev/creating-a-service/">Creating a Service</a> for how service discovery and repositories work.</p>
 <h2 id="the-filenames-key">The <code>filenames</code> key<a class="headerlink" href="#the-filenames-key" title="Permanent link">&para;</a></h2>
 <p>Alongside <code>directories</code>, the <code>filenames</code> key lets you override the templates unshackle uses when naming its own working and log files (for example the log filename or the temporary chapters file). Most users never need to touch this. The available names and their default templates are listed in the <a href="../../reference/configuration/#filenames">Configuration Reference</a>.</p>
 <h2 id="editing-the-config-with-unshackle-cfg">Editing the config with <code>unshackle cfg</code><a class="headerlink" href="#editing-the-config-with-unshackle-cfg" title="Permanent link">&para;</a></h2>
@@ -2155,8 +2155,8 @@ and every available key.</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>tag<span class="w"> </span>MYGRP
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>cdm.default<span class="w"> </span>my_device_l3
 </span></code></pre></div>
-<p>Values are parsed as Python literals where possible, so numbers, booleans, and lists work naturally, while bare text is treated as a string:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>update_checks<span class="w"> </span><span class="nb">false</span>
+<p>unshackle parses the value as a Python literal, so write booleans as <code>True</code>/<code>False</code> and quote the strings inside a list (<code>"['en']"</code>). Anything that is not valid Python literal syntax is stored as a plain string:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>update_checks<span class="w"> </span>False
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>vault_timeout<span class="w"> </span><span class="m">30</span>
 </span></code></pre></div>
 <p><strong>Remove a value</strong> with <code>--unset</code>:</p>
@@ -2165,7 +2165,7 @@ and every available key.</p>
 <p><strong>List everything</strong> currently set with <code>--list</code>:</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>--list
 </span></code></pre></div>
-<p>When it writes, <code>unshackle cfg</code> targets the config file that was loaded. If none exists yet, it creates <code>unshackle.yaml</code> in your OS user-config directory.</p>
+<p>When it writes, <code>unshackle cfg</code> targets the config file that was loaded. If none exists yet, it creates <code>unshackle.yaml</code> inside the <code>unshackle</code> package folder (search location 1), not your OS user-config directory. To keep the config outside the package, create the file at the user-config path yourself first, then <code>unshackle cfg</code> writes to it.</p>
 <div class="admonition warning">
 <p class="admonition-title">Editing with <code>cfg</code> strips comments</p>
 <p>Because <code>unshackle cfg</code> rewrites the whole file when it saves, any comments in <code>unshackle.yaml</code> are removed by a write. If you keep important notes as comments, edit the file by hand instead, or keep those notes elsewhere.</p>
@@ -2174,7 +2174,7 @@ and every available key.</p>
 <ul>
 <li>Browse the <a href="../../reference/configuration/">Configuration Reference</a> for every key and default.</li>
 <li>Set up your first download in <a href="../../guide/downloading/">Downloading</a>.</li>
-<li>Learn how services are discovered and updated in <a href="../../dev/creating-a-service/">Services</a>.</li>
+<li>Learn how services are discovered and updated in <a href="../../dev/creating-a-service/">Creating a Service</a>.</li>
 </ul>
 
 
