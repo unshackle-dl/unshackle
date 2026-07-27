@@ -2223,7 +2223,7 @@ The folder name comes from the <code>series</code> folder template and the file 
 For an episode with no on-screen name, <code>{episode_name?}</code> and its adjacent dot simply disappear.</p>
 </div>
 <h3 id="separator-style-dots-vs-spaces">Separator style (dots vs. spaces)<a class="headerlink" href="#separator-style-dots-vs-spaces" title="Permanent link">&para;</a></h3>
-<p>unshackle looks at the characters you place <em>between</em> variables to decide the filename's separator style. If spaces outnumber dots in your template, it sanitizes with spaces; otherwise it uses dots (the scene-style default). This is also applied to the auto-generated date separators for daily/dated content.</p>
+<p>unshackle looks at the characters you place <em>between</em> variables to decide the filename's separator style. If spaces outnumber dots in your template, it sanitizes with spaces; otherwise it uses dots (the scene-style default). This is also applied to the auto-generated date separators for daily/dated content, and to every segment of a nested folder template.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Scene style (dots)</label><label for="__tabbed_1_2">Readable style (spaces)</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -2482,7 +2482,7 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 </div>
 </div>
 </div>
-<p>The per-kind folder keys are <code>movies</code>, <code>series</code>, <code>songs</code>, and <code>albums</code>. Any other key produces a startup warning. Path separators (<code>/</code> or <code>\</code>) are allowed in folder templates. Each segment is formatted independently, so you can build nested directory structures like <code>Show/Season 01</code>.</p>
+<p>The per-kind folder keys are <code>movies</code>, <code>series</code>, <code>songs</code>, and <code>albums</code>. Any other key produces a startup warning. Path separators (<code>/</code> or <code>\</code>) are allowed in folder templates. Each segment is formatted independently, so you can build nested directory structures like <code>Show/Season 01</code>. unshackle reads the separator style from the whole template, so every segment is spaced alike.</p>
 <p><strong>Fallback behavior:</strong></p>
 <ul>
 <li>A per-kind folder template wins if present; otherwise the single <code>folder</code> string is used; otherwise unshackle falls back to a built-in default.</li>
@@ -2764,14 +2764,14 @@ and <code>{hdr?}</code> collapse along with their dots:</p>
 </span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="w">  </span><span class="nt">folder</span><span class="p">:</span>
 </span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="w">    </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}</span><span class="nv"> </span><span class="s">({year})/Season</span><span class="nv"> </span><span class="s">{season}&quot;</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>The Show (2023)/Season.S02/
+<div class="language-text highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>The Show (2023)/Season S02/
 </span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>  └─ The.Show.S02E04.The.Reckoning.2160p.EXAMPLE.WEB-DL.DDP5.1.H.265-TAG.mkv
 </span></code></pre></div></p>
-<p>Each folder segment picks its separator style independently: <code>{title} ({year})</code> has
-spaces around its variables, but <code>Season {season}</code> alone counts as dot style, so its
-space becomes a dot.</p>
+<p>unshackle decides the separator style once for the whole folder template, and every
+segment then follows it. Spaces outnumber dots in <code>{title} ({year})/Season {season}</code>,
+so <code>Season {season}</code> keeps its space even though it holds only one variable.</p>
 <p>When an episode has no on-screen name, <code>{episode_name?}</code> disappears cleanly:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>The Show (2023)/Season.S02/
+<div class="language-text highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>The Show (2023)/Season S02/
 </span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>  └─ The.Show.S02E05.2160p.EXAMPLE.WEB-DL.DDP5.1.H.265-TAG.mkv
 </span></code></pre></div>
 </div>
