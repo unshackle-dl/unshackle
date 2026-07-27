@@ -4,7 +4,7 @@
 streaming service, selects exactly the tracks you asked for, acquires and applies
 decryption keys, and muxes everything into a finished Matroska file. The flags below
 cover quality and codec selection, language and subtitle handling, episode ranges, and
-the download flow itself, with examples throughout.
+the download flow itself.
 
 !!! note "Where the full flag list lives"
     This page covers the flags you will use most and explains how they interact. It is
@@ -64,8 +64,9 @@ helps explain why, for example, `--list` stops early and why keys are fetched ev
 9. **Post-process**: extract closed captions, convert subtitles, repack, mux with
    `mkvmerge`, and move the finished file to your downloads directory.
 
-`--list` and `--list-titles` stop after selection/filtering and print what *would* be
-downloaded. `--skip-dl` runs the license step but skips the actual segment download.
+`--list` prints the tracks a title exposes and stops before selection. `--list-titles`
+prints every title the service returned and stops before `--wanted`/`--latest-episode`
+filtering. `--skip-dl` runs the license step but skips the actual segment download.
 
 ## Choosing quality
 
@@ -141,9 +142,11 @@ unshackle dl -q 2160 -r HDR10,DV EXAMPLE '...'
 
 !!! warning "HYBRID requires dovi_tool"
     `-r HYBRID` produces a single hybrid stream by injecting the Dolby Vision RPU
-    metadata onto an HDR10/HDR10+ base layer using **dovi_tool**. It requires the
-    `dovi_tool` binary on your PATH and needs both an HDR10(+) *and* a DV track to be
-    available, otherwise the title fails (unless `--best-available` lets it fall back).
+    metadata onto an HDR10/HDR10+ base layer using **dovi_tool**.
+    It requires the `dovi_tool` binary, resolved from unshackle's `binaries/` folder or
+    your `PATH`. The normal case is a DV track plus an HDR10 or HDR10+ base. With HDR10+
+    and no DV, unshackle converts the HDR10+ metadata to DV instead, which also needs
+    `hdr10plus_tool`. With no DV and no HDR10+, the title fails.
     When HDR10+ is present it is preferred over HDR10 as the base layer.
 
     To keep an HDR10+ deliverable *alongside* the hybrid, request both ranges:
@@ -171,8 +174,8 @@ Manifest-declared bitrates are sometimes rounded or wrong. Services often advert
 **peak** or **nominal** bandwidth that is far from the stream's real average. This matters
 because a track's bitrate drives the track listing, the sort order, *and* the
 `--vbitrate`/`--vbitrate-range` selection above. A bogus declared value therefore makes
-unshackle pick the wrong track. These flags remove that risk by probing the actual media
-size to compute a true bitrate for the top renditions, overriding the manifest value:
+unshackle pick the wrong track. These flags probe the actual media size to compute a true
+bitrate for the top renditions, overriding the manifest value:
 
 - `-rvb` / `--real-video-bitrate`: probe real video bitrates (per codec/range).
 - `-rab` / `--real-audio-bitrate`: probe real audio bitrates (per codec/channels/
@@ -186,12 +189,13 @@ size to compute a true bitrate for the top renditions, overriding the manifest v
     That is the real *delivered* size, not an over-report or a bug.
 
 !!! tip "Why not every rendition is probed"
-    Probing does not touch every rendition. Only the top rendition of each quality tier is
-    probed in parallel (video grouped by codec+range, audio by codec+channels+language),
-    and the pass then reaches downward only as far as it must to keep the ranking correct.
-    This keeps probing fast even when a service exposes dozens of renditions. Tracks whose
-    duration can't be determined fall back to `ffprobe`, and a probe failure is non-fatal:
-    the manifest value is simply left in place.
+    Probing does not touch every rendition. Only the five highest declared-bitrate
+    renditions of each quality tier are probed in parallel (video grouped by codec and
+    range, audio by codec, channels, language, and descriptive flag), and unshackle
+    extends a group downward while a lower unprobed rendition could still outrank a
+    probed one. This keeps probing fast even when a service exposes dozens of renditions.
+    Tracks whose duration can't be determined fall back to `ffprobe`, and a probe failure
+    is non-fatal: the manifest value is simply left in place.
 
 ## Audio codec, channels, and Atmos
 
@@ -347,7 +351,7 @@ with `-` to exclude it.
 | --- | --- |
 | `--select-titles` | Interactively pick episodes from a list (Series only). **Cannot combine with `-w`.** |
 | `--latest-episode` | Download only the single most recent episode. |
-| `--list-titles` | List the titles that would be downloaded, then stop. |
+| `--list-titles` | List every title the service returned, then stop. `-w`/`--latest-episode` are not applied to this listing. |
 
 ```shell title="Grab just the newest episode"
 unshackle dl --latest-episode EXAMPLE 81234567
@@ -398,8 +402,8 @@ Before committing to a long download, inspect what unshackle *would* do:
 
 | Flag | Effect |
 | --- | --- |
-| `--list` | List the available tracks and which would be selected, then stop. No download. |
-| `--list-titles` | List the titles (episodes) that would be downloaded, then stop. |
+| `--list` | List the tracks the service exposes for each title, then stop. No selection, no download. |
+| `--list-titles` | List every title the service returned, then stop. `-w`/`--latest-episode` are not applied to this listing. |
 | `--skip-dl` | Skip downloading but still acquire the decryption keys. |
 
 ```shell title="See the track selection without downloading"
@@ -428,7 +432,7 @@ flags change how the output is assembled:
 | --- | --- | --- |
 | `--no-mux` | Do not mux; keep the individual track files. | - |
 | `--split-audio` | Write a separate output file per audio codec instead of merging all audio. | config `muxing.merge_audio` (on) |
-| `--merge-video` | Mux all selected video tracks into one file. | config `muxing.merge_video` (off) |
+| `--merge-video` | Mux video tracks that share a height, range, and codec into one file, so only language varies inside a file. | config `muxing.merge_video` (off) |
 
 ### Naming tags
 

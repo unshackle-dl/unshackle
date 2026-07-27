@@ -105,7 +105,7 @@ turned into underscores (`--best-available` → `best_available`).
 dl:
   lang: [en]          # -l en
   quality: [1080]     # -q 1080
-  vcodec: [H265]      # -v H265
+  vcodec: [H.265]     # -v H.265
   sub_format: srt     # convert subtitles to SRT
   downloads: 2        # two tracks at once
 ```
@@ -159,7 +159,7 @@ The directories unshackle uses:
 | `fonts` | Bundled fonts | Yes |
 
 !!! note "Some directories cannot be moved"
-    A handful of internal locations are protected: the package root, the core directory, the user-config directory, and the data base. If you list them under `directories`, unshackle silently ignores the override. This is intentional; those paths are tied to where the package is installed.
+    unshackle protects five internal entries: `app_dirs`, `core_dir`, `namespace_dir`, `user_configs`, and `data`. If you list any of them under `directories`, unshackle ignores the override. This is intentional; those paths are tied to where the package is installed.
 
 ### The `services` directory is special
 
@@ -168,12 +168,12 @@ Unlike the other entries, `services` is a **list**, and each entry can be either
 ```yaml title="unshackle.yaml"
 directories:
   services:
-    - unshackle-dl/services      # a GitHub owner/repo shorthand
-    - https://github.com/me/my-services.git
+    - you/your-services          # a GitHub owner/repo shorthand
+    - https://example.com/private-services.git
     - ~/code/local-services      # a local folder
 ```
 
-Entries are searched in the order listed, and **the first source to define a given service tag wins**, so put local folders last if you want them to act as fallbacks rather than overrides. Remote repositories are cloned and periodically updated for you. See [Services](../dev/creating-a-service.md) for the full details on how service discovery and repositories work.
+unshackle searches entries in the order listed, and **the first source to define a given service tag wins**, so put local folders last if you want them to act as fallbacks rather than overrides. unshackle clones remote repositories on first use and refreshes them at most once a day. See [Creating a Service](../dev/creating-a-service.md) for how service discovery and repositories work.
 
 ## The `filenames` key
 
@@ -197,10 +197,10 @@ $ unshackle cfg tag MYGRP
 $ unshackle cfg cdm.default my_device_l3
 ```
 
-Values are parsed as Python literals where possible, so numbers, booleans, and lists work naturally, while bare text is treated as a string:
+unshackle parses the value as a Python literal, so write booleans as `True`/`False` and quote the strings inside a list (`"['en']"`). Anything that is not valid Python literal syntax is stored as a plain string:
 
 ```console
-$ unshackle cfg update_checks false
+$ unshackle cfg update_checks False
 $ unshackle cfg vault_timeout 30
 ```
 
@@ -216,7 +216,7 @@ $ unshackle cfg cdm.default --unset
 $ unshackle cfg --list
 ```
 
-When it writes, `unshackle cfg` targets the config file that was loaded. If none exists yet, it creates `unshackle.yaml` in your OS user-config directory.
+When it writes, `unshackle cfg` targets the config file that was loaded. If none exists yet, it creates `unshackle.yaml` inside the `unshackle` package folder (search location 1), not your OS user-config directory. To keep the config outside the package, create the file at the user-config path yourself first, then `unshackle cfg` writes to it.
 
 !!! warning "Editing with `cfg` strips comments"
     Because `unshackle cfg` rewrites the whole file when it saves, any comments in `unshackle.yaml` are removed by a write. If you keep important notes as comments, edit the file by hand instead, or keep those notes elsewhere.
@@ -225,4 +225,4 @@ When it writes, `unshackle cfg` targets the config file that was loaded. If none
 
 - Browse the [Configuration Reference](../reference/configuration.md) for every key and default.
 - Set up your first download in [Downloading](../guide/downloading.md).
-- Learn how services are discovered and updated in [Services](../dev/creating-a-service.md).
+- Learn how services are discovered and updated in [Creating a Service](../dev/creating-a-service.md).

@@ -1,6 +1,6 @@
 # Configuration Reference
 
-This page is the exhaustive, authoritative reference for **every** key you can set in
+This page documents every key you can set in
 `unshackle.yaml`. For each key you will find its name, expected type, default value, and
 what it does. Keys are grouped by area so you can jump straight to the part of unshackle
 you are configuring.
@@ -10,10 +10,12 @@ edit it), start with [The Configuration File](../getting-started/configuration-f
 This page assumes you already know the basics and want precise details.
 
 !!! info "How defaults work"
-    Every key is optional. If you omit a key, unshackle uses the built-in default listed
-    here. There is **no schema validation**: unknown keys are silently ignored (they never
-    become settings), and the file is parsed with `yaml.safe_load`. An empty or missing
-    file means *all* defaults apply.
+    Every key is optional except [`output_template`](#output-naming), which `dl` requires.
+    Without it, `dl` aborts with an error. If you omit any other key, unshackle uses
+    the built-in default listed here. There is **no schema validation**: unknown keys are
+    silently ignored (they never become settings), and the file is parsed with
+    `yaml.safe_load`. An empty or missing file means every other key falls back to its
+    default.
 
 !!! warning "Two keys behave specially on load"
     - `curl_impersonate` is a **deprecated** alias of [`network`](#network-proxy) and emits a
@@ -32,7 +34,7 @@ This page assumes you already know the basics and want precise details.
 |------|------|
 | [Directories](#directories) | `directories`, `filenames` |
 | [Services & authentication](#services-auth) | `services`, `credentials`, `firefox_cookies`, `remote_services`, `serve` |
-| [Download & processing](#download-processing) | `dl`, `subtitle`, `audio`, `muxing`, `language_tags` |
+| [Download & processing](#download-processing) | `dl`, `subtitle`, `audio`, `muxing`, `language_tags`, `dual_multi_mode` |
 | [Output & naming](#output-naming) | `output_template`, `tag`, `tag_group_name`, `tag_imdb_tmdb`, `chapter_fallback_name`, `unicode_filenames` |
 | [DRM & CDM](#drm-cdm) | `cdm`, `remote_cdm`, `decryption` |
 | [Network & proxy](#network-proxy) | `network`, `headers`, `proxy_providers` |
@@ -91,7 +93,7 @@ directories:
     ```yaml
     directories:
       services:
-        - unshackle-dl/community-services   # cloned from GitHub
+        - you/your-services                 # cloned from GitHub
         - https://example.com/private.git@stable
         - ~/my-services                      # local, lowest priority
     ```
@@ -238,7 +240,7 @@ is the [REST API](../dev/rest-api/index.md) section; these are the config keys.
 | `api_secret` | str | *(unset)* | Master secret accepted in the `X-Secret-Key` header. |
 | `users` | dict | `{}` | Per-user API keys and their allowlists (see below). |
 | `services` | list | *(unset)* | Global service allowlist. Omit to allow all. |
-| `remote_only` | bool | `false` | Run without a local `output_template` (CORS/Cloudflare-friendly). |
+| `remote_only` | bool | `false` | Expose only the remote service session endpoints (health, services, search, session) and disable the rest of the REST API. |
 | `session_ttl` | int (s) | `300` | Lifetime of an interactive auth session. |
 | `max_sessions` | int | `100` | Maximum concurrent sessions. |
 | `history_limit` | int | `100` | How many finished jobs to retain in history. |
@@ -247,7 +249,6 @@ is the [REST API](../dev/rest-api/index.md) section; these are the config keys.
 | `allow_job_credentials` | bool | `false` | Permit clients to supply credentials per job. |
 | `devices` | list | *(auto)* | Widevine devices offered; auto-filled from `directories.wvds`. |
 | `playready_devices` | list | *(auto)* | PlayReady devices; auto-filled from `directories.prds`. |
-| `country` / `locations` | str / dict | *(unset)* | Advertised region metadata. |
 
 Each entry under `users` is keyed by that user's API key and may set its own `services`,
 `devices`, and `playready_devices` allowlists, narrowing the global ones.
@@ -266,9 +267,10 @@ serve:
 ```
 
 !!! tip "Declaring `dl` defaults under `serve`"
-    You can set any [`dl`](#dl) flag key (`downloads`, `workers`, `best_available`, and so on)
-    directly inside `serve`. The point is to raise concurrency and behaviour defaults
-    **server-wide** (every request the server handles picks them up) without having to change
+    You can set most [`dl`](#dl) flag keys (`downloads`, `workers`, `best_available`, and so on)
+    directly inside `serve`; the server recognises a fixed subset of download parameters, so a
+    few CLI-only flags are ignored here. This raises concurrency and behaviour defaults
+    **server-wide** (every request the server handles picks them up) without changing
     each client call individually.
 
 ---
@@ -299,7 +301,7 @@ after the flag's internal destination rather than its visible name; set these ex
 | `-o` / `--output` | `output_dir` |
 | `--cdm-only` / `--vaults-only` | `cdm_only` |
 
-**Precedence** (highest first): an explicit CLI flag or environment variable → a per-service
+**Precedence** (highest first): an explicit CLI flag → a per-service
 [`services.<TAG>.dl`](#services-auth) override → this global `dl:` block → the built-in
 default. In other words, config only fills in options you did not set on the command line.
 
@@ -369,7 +371,7 @@ written as sidecar files. See [Subtitles](../guide/subtitles.md) for the full gu
 | `convert_before_strip` | bool | `true` | Convert to the working format before stripping SDH. |
 | `conversion_method` | str | `"auto"` | Subtitle conversion backend. |
 | `preferred_conversion_method` | str | *(unset)* | Preferred converter when several are available. |
-| `output_mode` | str | `"mux"` | `mux` embeds subtitles in the MKV; `sidecar` writes separate files. |
+| `output_mode` | str | `"mux"` | `mux` embeds subtitles in the MKV; `sidecar` writes separate files; `both` writes sidecars and still muxes. |
 | `sidecar_format` | str | `"srt"` | Format for sidecar files when `output_mode: sidecar`. |
 | `type_priority` | list | *(unset)* | Ordered ranking of subtitle types (`forced`, `normal`, `sdh`; CC counts as SDH) that sorts the variants within each language. Types you leave out fall to the end. |
 
@@ -406,9 +408,9 @@ audio:
 ```
 
 !!! note "`codec_priority` is a soft priority: nothing is dropped"
-    `codec_priority` only breaks ties **among tracks that share the same bitrate and language**.
-    Codecs not in the list keep their normal bitrate-based ordering and are simply placed after
-    all listed codecs, and none are ever removed. Two higher-level rules still override it: **Atmos
+    `codec_priority` outranks bitrate: any listed codec sorts above every unlisted one, and among
+    listed codecs the list order decides. Bitrate order survives only within a single codec rank.
+    Nothing is ever removed. Two higher-level rules still override it: **Atmos
     tracks always take precedence over `codec_priority`**, and **audio-description tracks are
     always forced to the end** regardless of it. When `codec_priority` is unset, tracks sort by
     bitrate alone, with those same Atmos/descriptive rules still applied.
@@ -424,7 +426,7 @@ Matroska (MKV) muxing options.
 | `set_title` | bool | `true` | Write a human-readable title into the MKV container. |
 | `default_language` | dict | `{}` | Force which language is flagged *default* per track type, e.g. `{audio: en, subtitle: en}`. |
 | `merge_audio` | bool | `true` | Merge all audio into one file. `--split-audio` on the CLI flips this off. |
-| `merge_video` | bool | `false` | Merge all video tracks into one file. `--merge-video` on the CLI flips this on. |
+| `merge_video` | bool | `false` | Merge video tracks that share height, range, and codec into one file, so only language varies inside a file. `--merge-video` on the CLI flips this on. |
 
 ```yaml
 muxing:
@@ -451,9 +453,6 @@ A rule may test:
 ```yaml
 language_tags:
   rules:
-    - audio: [en]
-      subs_contain_all: [en]
-      tag: ""            # native English release, no tag
     - audio: [ja]
       subs_contain: [en]
       tag: "SUBBED"
@@ -498,7 +497,7 @@ For the full picture of how templates render, see
 
 ### `output_template`
 
-- **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
+- **Type:** `dict` &nbsp;·&nbsp; **Required** (no usable default; `dl` exits with an error if this is missing)
 
 Filename templates keyed by media kind, using `{variable}` placeholders. Recognised kinds are
 `movies`, `series`, and `songs` (and `albums` for folder templates). A trailing `?` on a
@@ -627,7 +626,7 @@ case-insensitively; `"mp4decrypt"` selects Bento4's mp4decrypt, and **anything e
     ```yaml
     decryption:
       default: shaka
-      SOMESERVICE: mp4decrypt
+      EXAMPLE1: mp4decrypt
     ```
 
 ---
@@ -758,8 +757,9 @@ key_vaults:
 
 !!! tip "Common per-entry options"
     - `no_push: true` makes a vault read-only (keys are fetched but never written to it).
-    - A vault of `type: api` whose `name` contains `decrypt_labs` auto-fills its `token` from
-      [`decrypt_labs_api_key`](#external-api-keys) when not set inline.
+    - A vault of `type: API` whose `name` contains `decrypt_labs` auto-fills its `token` from
+      [`decrypt_labs_api_key`](#external-api-keys) when not set inline. Vault `type` values are
+      case-sensitive module names.
     - An all-zero content key (32 zeros) is treated as "no key" everywhere and is never
       stored.
 
@@ -786,9 +786,9 @@ All default to an empty string and enable optional metadata/geolocation features
 | `ipinfo_api_key` | str | `""` | ipinfo.io API key for IP/region lookups. |
 
 !!! tip "SIMKL is a fallback for TMDB"
-    SIMKL is positioned as an alternative metadata source, and it is most valuable precisely
-    **when no `tmdb_api_key` is configured**. It improves title-matching and tagging
-    reliability in that case rather than replacing TMDB where TMDB is available.
+    SIMKL is an alternative metadata source. Use it when you have no `tmdb_api_key`
+    configured; it improves title matching and tagging in that case rather than replacing
+    TMDB.
 
 !!! note "`ipinfo_api_key` never touches your service sessions"
     The token is only ever sent to `api.ipinfo.io` as a per-request `Authorization` header; it

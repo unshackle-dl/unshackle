@@ -88,8 +88,8 @@ uv run unshackle env check
 ## External tools on your PATH
 
 unshackle shells out to a number of external command-line programs for media
-processing and DRM work. It looks for each one first in a `binaries/` folder
-next to the installed package, and then falls back to your system `PATH`, so
+processing and DRM work. It looks for each one first in the `binaries/` folder
+inside the installed package, and then falls back to your system `PATH`, so
 installing these tools system-wide (or dropping them into that folder) both
 work.
 
@@ -108,7 +108,7 @@ These must be present for core downloading, decryption, and muxing to work:
 !!! warning "shaka-packager is the default decryptor"
     unshackle decrypts with shaka-packager unless you explicitly configure a
     different decryptor. If it is missing, protected downloads will fail at the
-    decryption step. See the [configuration reference](configuration-file.md) for the
+    decryption step. See the [configuration reference](../reference/configuration.md#decryption) for the
     `decryption` key if you want to switch to `mp4decrypt`.
 
 ### Recommended and optional tools
@@ -147,7 +147,7 @@ it depends on.
 unshackle --help
 ```
 
-This prints the banner and the list of available commands (`dl`, `env`, `kv`,
+This prints the list of available commands (`dl`, `env`, `kv`,
 `serve`, `wvd`, `prd`, `search`, `util`, `cfg`, `import`). If your shell reports
 that `unshackle` is not found, the `uv tool` bin directory is probably not on
 your `PATH`. Run `uv tool update-shell` and open a new terminal.

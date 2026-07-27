@@ -36,18 +36,18 @@ unshackle --help
 
 ### Requirements
 
-External tools on your `PATH` (recommended versions):
+External tools. (recommended versions):
 
 - [Python](https://www.python.org/) - 3.11 - 3.14
 - [uv](https://docs.astral.sh/uv/) - ≥ 0.5
 - [FFmpeg](https://ffmpeg.org/) - ≥ 6.0
 - [MKVToolNix](https://mkvtoolnix.download/) - ≥ 80
 - [shaka-packager](https://github.com/shaka-project/shaka-packager/releases/tag/v2.6.1) - 2.6.1
-- [Bento4](https://github.com/axiomatic-systems/Bento4) - ≥ 1.6.0-639
-- [dovi_tool](https://github.com/quietvoid/dovi_tool) - ≥ 2.1
 
 Optional:
 
+- [Bento4](https://github.com/axiomatic-systems/Bento4) - ≥ 1.6.0-639
+- [dovi_tool](https://github.com/quietvoid/dovi_tool) - ≥ 2.1
 - [SubtitleEdit](https://github.com/SubtitleEdit/subtitleedit/releases) - ≥ 5.0 (`SeConv` CLI)
 
 ## License
