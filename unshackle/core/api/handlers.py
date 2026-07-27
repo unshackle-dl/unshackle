@@ -1011,7 +1011,7 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
         if hasattr(service_module, "cli") and hasattr(service_module.cli, "params"):
             for param in service_module.cli.params:
                 if hasattr(param, "name") and param.default is not None and not isinstance(param.default, enum.Enum):
-                    # Store service-specific defaults (e.g., drm_system, hydrate_track, profile for NF)
+                    # Store service-specific defaults (e.g. drm_system, hydrate_track, profile)
                     service_specific_defaults[param.name] = param.default
 
         # Get download manager and start workers if needed
@@ -2072,7 +2072,7 @@ def _resolve_server_cdm(service: str, profile: Optional[str], cdm_type: Optional
     Checks the server's own CDM config (``config.cdm[service]``) to
     determine the CDM type without loading the full CDM object. This
     ensures that when ``server_cdm: true`` is used, the server's CDM
-    determines device selection (e.g. PlayReady vs Widevine for AMZN).
+    determines device selection (e.g. PlayReady vs Widevine).
 
     Falls back to a lightweight stub from *cdm_type* only if no server
     CDM is configured for the service.

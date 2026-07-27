@@ -824,7 +824,7 @@ class DebugLogger:
             operation: Name of the operation being performed
             message: Human-readable message
             context: Additional context information
-            service: Service name (e.g., DSNP, NF)
+            service: Service tag
             error: Exception object if an error occurred
             request: Request details (URL, method, headers, body)
             response: Response details (status, headers, body)

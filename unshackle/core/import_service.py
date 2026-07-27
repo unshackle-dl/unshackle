@@ -150,7 +150,7 @@ class ImportService:
         worse copy, so any direct-URL subtitle in the export means the whole re-parsed subtitle
         set is dropped in favour of the exported one.
         HLS/URL: rebuild from the stored per-track dicts, since the variant is re-fetched from
-        track.url at download time and ATV-style master playlists carry unstable per-fetch tokens.
+        track.url at download time and a master playlist can hand out a new token on every fetch.
         """
         title_id = str(title.id)
         if title_id in self.tracks_by_title:

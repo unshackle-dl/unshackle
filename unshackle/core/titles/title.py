@@ -211,7 +211,7 @@ class Title:
             media_info: MediaInfo object of the file this name will be used for.
             folder: This filename will be used as a folder name. Some changes may want to
                 be made if this is the case.
-            show_service: Show the service tag (e.g., iT, NF) in the filename.
+            show_service: Show the service tag in the filename.
         """
 
 
