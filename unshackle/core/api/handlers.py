@@ -17,7 +17,7 @@ from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_C
 from unshackle.core.proxies.resolve import initialize_proxy_providers, resolve_proxy
 from unshackle.core.services import Services
 from unshackle.core.titles import Episode, Movie, Title_T
-from unshackle.core.tracks import Audio, Subtitle, Video
+from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE
 
@@ -491,8 +491,31 @@ def serialize_video_track(track: Video, include_url: bool = False) -> Dict[str, 
     return result
 
 
-def serialize_audio_track(track: Audio, include_url: bool = False) -> Dict[str, Any]:
-    """Convert audio track to JSON-serializable dict."""
+def original_audio_ids(tracks: List[Audio], title: Title_T) -> set:
+    """Return the ids of the audio tracks 'orig' resolves to, empty when the title has no language.
+
+    This defers to Tracks.by_language so the flag agrees with the downloader. It asks
+    exact mode first because CLDR rates a base tag and its paradigm regional variant as
+    the same language, and only the RFC 4647 preference picks one ('en' over 'en-US'
+    when both exist, 'pt-BR' over 'pt-PT' for a 'pt' title). The fuzzy fallback then
+    catches the non-paradigm regionals exact mode drops, such as an 'es' title that
+    carries only 'es-419'.
+    """
+    language = getattr(title, "language", None)
+    if not language:
+        return set()
+    matches = Tracks.by_language(tracks, [str(language)], exact_match=True) or Tracks.by_language(
+        tracks, [str(language)]
+    )
+    return {t.id for t in matches}
+
+
+def serialize_audio_track(track: Audio, include_url: bool = False, is_original: bool = False) -> Dict[str, Any]:
+    """Convert audio track to JSON-serializable dict.
+
+    Resolve is_original with original_audio_ids so the flag always agrees with the
+    track 'orig' would actually download.
+    """
     codec_name = enum_name(track.codec)
 
     result = {
@@ -502,6 +525,7 @@ def serialize_audio_track(track: Audio, include_url: bool = False) -> Dict[str, 
         "bitrate": int(track.bitrate / 1000) if track.bitrate else None,
         "channels": track.channels if track.channels else None,
         "language": str(track.language) if track.language else None,
+        "is_original": is_original,
         "atmos": track.atmos if hasattr(track, "atmos") else False,
         "descriptive": track.descriptive if hasattr(track, "descriptive") else False,
         "drm": serialize_drm(track.drm) if hasattr(track, "drm") and track.drm else None,
@@ -746,10 +770,13 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                             video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
                             audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
 
+                            original_ids = original_audio_ids(audio_tracks, title)
                             episode_data = {
                                 "title": serialize_title(title),
                                 "video": [serialize_video_track(t) for t in video_tracks],
-                                "audio": [serialize_audio_track(t) for t in audio_tracks],
+                                "audio": [
+                                    serialize_audio_track(t, is_original=t.id in original_ids) for t in audio_tracks
+                                ],
                                 "subtitles": [serialize_subtitle_track(t) for t in tracks.subtitles],
                             }
                             episodes_data.append(episode_data)
@@ -793,10 +820,11 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
         video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
         audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
 
+        original_ids = original_audio_ids(audio_tracks, first_title)
         response = {
             "title": serialize_title(first_title),
             "video": [serialize_video_track(t) for t in video_tracks],
-            "audio": [serialize_audio_track(t) for t in audio_tracks],
+            "audio": [serialize_audio_track(t, is_original=t.id in original_ids) for t in audio_tracks],
             "subtitles": [serialize_subtitle_track(t) for t in tracks.subtitles],
         }
 
@@ -1916,11 +1944,15 @@ async def session_tracks_handler(
         else:
             server_cdm_type = "playready"
 
+        original_ids = original_audio_ids(audio_tracks, title)
+
         return web.json_response(
             {
                 "title": serialize_title(title),
                 "video": [serialize_video_track(t, include_url=True) for t in video_tracks],
-                "audio": [serialize_audio_track(t, include_url=True) for t in audio_tracks],
+                "audio": [
+                    serialize_audio_track(t, include_url=True, is_original=t.id in original_ids) for t in audio_tracks
+                ],
                 "subtitles": [serialize_subtitle_track(t, include_url=True) for t in tracks.subtitles],
                 "chapters": [
                     {"timestamp": ch.timestamp, "name": ch.name}

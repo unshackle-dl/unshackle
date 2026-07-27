@@ -69,6 +69,7 @@ from unshackle.core.tracks.dv_fixup import apply_dv_fixup
 from unshackle.core.tracks.hybrid import Hybrid
 from unshackle.core.tracks.track import assert_fragments_decrypted, has_encrypted_sample_entry
 from unshackle.core.utilities import (
+    as_requested,
     find_font_with_fallbacks,
     find_missing_langs,
     get_debug_logger,
@@ -1725,22 +1726,30 @@ class dl:
                     audio_languages = a_lang or lang
                     if audio_languages:
                         processed_lang = []
+                        s_orig_token: Optional[str] = None
                         for language in audio_languages:
                             if language == "orig":
                                 if song.language:
                                     orig_lang = str(song.language)
+                                    s_orig_token = orig_lang
                                     if orig_lang not in processed_lang:
                                         processed_lang.append(orig_lang)
                                 else:
                                     self.log.warning("Original language not available for music track, skipping 'orig'")
                             elif language not in processed_lang:
                                 processed_lang.append(language)
+                        if s_orig_token in audio_languages:
+                            s_orig_token = None
 
                         song.tracks.audio = select_best_audio(
                             song.tracks.audio, processed_lang, acodec, audio_description, exact_lang
                         )
                         if not song.tracks.audio:
-                            self.log.error(f"There's no {processed_lang} Audio Track for {song.name}...")
+                            # empty only when 'orig' was the sole request and did not resolve
+                            self.log.error(
+                                f"There's no {as_requested(processed_lang, s_orig_token) or 'orig'} "
+                                f"Audio Track for {song.name}..."
+                            )
                             sys.exit(1)
 
                 self.log.debug("Getting Tracks")
@@ -2425,10 +2434,12 @@ class dl:
                     )
                     if keep_videos and video_languages and "all" not in video_languages:
                         processed_video_lang = []
+                        v_orig_token: Optional[str] = None
                         for language in video_languages:
                             if language == "orig":
                                 if title.language:
                                     orig_lang = str(title.language)
+                                    v_orig_token = orig_lang
                                     if orig_lang not in processed_video_lang:
                                         processed_video_lang.append(orig_lang)
                                 else:
@@ -2438,19 +2449,21 @@ class dl:
                             else:
                                 if language not in processed_video_lang:
                                     processed_video_lang.append(language)
+                        if v_orig_token in video_languages:
+                            v_orig_token = None
                         missing_v_langs = find_missing_langs(
                             processed_video_lang,
                             [v.language for v in title.tracks.videos],
                             exact=exact_lang,
                         )
                         if missing_v_langs:
-                            missing_str = ", ".join(missing_v_langs)
+                            missing_str = as_requested(missing_v_langs, v_orig_token)
                             if best_available:
                                 remaining_v_langs = [tok for tok in processed_video_lang if tok not in missing_v_langs]
                                 if remaining_v_langs:
                                     self.log.warning(
                                         f"{missing_str} not found in video tracks, "
-                                        f"continuing with: {', '.join(remaining_v_langs)}"
+                                        f"continuing with: {as_requested(remaining_v_langs, v_orig_token)}"
                                     )
                                     processed_video_lang = remaining_v_langs
                                 else:
@@ -2463,7 +2476,10 @@ class dl:
                             title.tracks.videos, processed_video_lang, exact_match=exact_lang
                         )
                         if not title.tracks.videos:
-                            self.log.error(f"There's no {processed_video_lang} Video Track...")
+                            # empty only when 'orig' was the sole request and did not resolve
+                            self.log.error(
+                                f"There's no {as_requested(processed_video_lang, v_orig_token) or 'orig'} Video Track..."
+                            )
                             sys.exit(1)
 
                     has_hybrid = any(r == Video.Range.HYBRID for r in range_)
@@ -2777,10 +2793,12 @@ class dl:
                     audio_languages = a_lang or lang
                     if audio_languages:
                         processed_lang = []
+                        a_orig_token: Optional[str] = None
                         for language in audio_languages:
                             if language == "orig":
                                 if title.language:
                                     orig_lang = str(title.language)
+                                    a_orig_token = orig_lang
                                     if orig_lang not in processed_lang:
                                         processed_lang.append(orig_lang)
                                 else:
@@ -2790,6 +2808,8 @@ class dl:
                             else:
                                 if language not in processed_lang:
                                     processed_lang.append(language)
+                        if a_orig_token in audio_languages:
+                            a_orig_token = None
 
                         if not any(tok in processed_lang for tok in ("best", "all")):
                             missing_a_langs = find_missing_langs(
@@ -2798,12 +2818,13 @@ class dl:
                                 exact=exact_lang,
                             )
                             if missing_a_langs:
-                                missing_str = ", ".join(missing_a_langs)
+                                missing_str = as_requested(missing_a_langs, a_orig_token)
                                 if best_available:
                                     remaining = [tok for tok in processed_lang if tok not in missing_a_langs]
                                     if remaining:
                                         self.log.warning(
-                                            f"{missing_str} not found in audio tracks, continuing with: {', '.join(remaining)}"
+                                            f"{missing_str} not found in audio tracks, "
+                                            f"continuing with: {as_requested(remaining, a_orig_token)}"
                                         )
                                         processed_lang = remaining
                                     else:
@@ -2819,7 +2840,11 @@ class dl:
                             title.tracks.audio, processed_lang, acodec, audio_description, exact_lang
                         )
                         if not title.tracks.audio:
-                            self.log.error(f"There's no {processed_lang} Audio Track, cannot continue...")
+                            # empty only when 'orig' was the sole request and did not resolve
+                            self.log.error(
+                                f"There's no {as_requested(processed_lang, a_orig_token) or 'orig'} "
+                                f"Audio Track, cannot continue..."
+                            )
                             sys.exit(1)
 
                 # Reconstruct track set to only include kept tracks

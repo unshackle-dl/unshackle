@@ -175,6 +175,11 @@ def find_missing_langs(
     return [tok for tok in requested if tok not in skip and not match_func(tok, available)]
 
 
+def as_requested(tokens: Sequence[str], orig_token: Optional[str]) -> str:
+    """Return language tokens as the user wrote them, so 'orig' reads as 'orig' and not the language it resolved to."""
+    return ", ".join("orig" if tok == orig_token else tok for tok in tokens)
+
+
 def get_boxes(data: bytes, box_type: bytes, as_bytes: bool = False) -> Box:  # type: ignore
     """
     Scan a byte array for a wanted MP4/ISOBMFF box, then parse and yield each find.

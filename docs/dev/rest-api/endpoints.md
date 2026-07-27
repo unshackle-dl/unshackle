@@ -233,6 +233,9 @@ Each serialized title carries `type` (`"episode"`, `"movie"`, or `"other"`), `na
 
 List the video, audio, and subtitle tracks for a title. For series, you can scope to specific episodes.
 
+!!! tip "Spotting the original-language audio"
+    Each audio track carries `is_original`, which marks the track the default `lang` of `orig` selects. Unshackle resolves it with the same language matcher the downloader uses, so it stays correct for regional variants a client cannot separate from tag text alone (`pt` marks `pt-BR` rather than `pt-PT`). Services need not report a title's language, so every track can legitimately come back `false`.
+
 **Request body**
 
 | Field | Type | Required | Description |
@@ -262,7 +265,7 @@ When both `season` and `episode` are given, they are combined into a `"{season}x
       "audio": [
         {
           "id": "a-1", "codec": "EC3", "codec_display": "DD+",
-          "bitrate": 640, "channels": "5.1", "language": "en",
+          "bitrate": 640, "channels": "5.1", "language": "en", "is_original": true,
           "atmos": false, "descriptive": false, "drm": [], "descriptor": "DASH"
         }
       ],
