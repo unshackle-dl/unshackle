@@ -1,7 +1,9 @@
 """Self-check for ``assert_fragments_decrypted``: after decryption every moof must have lost
-its sample-encryption box. A survivor means the tool silently skipped that fragment (the
+its standard senc. A survivor means the tool silently skipped that fragment (the
 tfhd.sample_description_index ceiling bug), which the moov-scoped has_encrypted_sample_entry
-structurally cannot see. The guard never reads mdat, so stray byte runs there leave it unmoved.
+structurally cannot see. A leftover PIFF uuid survives a good decrypt too, because content
+shipping both boxes keeps it: a decrypter detaches only the atom it consumed.
+The guard never reads mdat, so stray byte runs there leave it unmoved.
 
 Run: uv run pytest tests/tracks/test_fragment_decrypted.py
 """
@@ -53,11 +55,11 @@ def test_all_fragments_decrypted_passes(tmp_path: Path) -> None:
     assert_fragments_decrypted(f)
 
 
-def test_surviving_piff_senc_raises(tmp_path: Path) -> None:
+def test_surviving_senc_raises(tmp_path: Path) -> None:
     # the real bug: fragment 1 (index 1) decrypted, the rest (index 2) silently skipped
     boxes = [FTYP, MOOV, _moof(), MDAT]
     for _ in range(3):
-        boxes += [_moof(_piff_senc(), sdi=2), MDAT]
+        boxes += [_moof(_senc(), sdi=2), MDAT]
     f = _write(tmp_path, "skipped.mp4", *boxes)
     with pytest.raises(ValueError, match=r"3/4 fragment"):
         assert_fragments_decrypted(f)
@@ -67,6 +69,16 @@ def test_surviving_cenc_senc_raises(tmp_path: Path) -> None:
     f = _write(tmp_path, "cenc.mp4", FTYP, MOOV, _moof(_senc()), MDAT)
     with pytest.raises(ValueError, match=r"1/1 fragment"):
         assert_fragments_decrypted(f)
+
+
+def test_leftover_piff_uuid_after_senc_removed_does_not_raise(tmp_path: Path) -> None:
+    # live DASH shape: the traf shipped senc+saiz+saio plus a duplicate PIFF uuid. mp4decrypt
+    # consumed senc, detached senc/saiz/saio, and left the uuid on a fully decrypted fragment.
+    boxes = [FTYP, MOOV]
+    for _ in range(3):
+        boxes += [_moof(_piff_senc()), MDAT]
+    f = _write(tmp_path, "piff_leftover.mp4", *boxes)
+    assert_fragments_decrypted(f)
 
 
 def test_stray_senc_bytes_in_mdat_ignored(tmp_path: Path) -> None:
@@ -93,16 +105,16 @@ def test_empty_senc_on_clear_fragment_ignored(tmp_path: Path) -> None:
     assert_fragments_decrypted(f)
 
 
-def _piff_override(sample_count: int) -> bytes:
+def _senc_override(sample_count: int) -> bytes:
     # flags&1 => AlgorithmID(3) + IV_size(1) + KID(16) precede sample_count
-    body = PIFF_SENC_UUID + b"\x00\x00\x00\x01" + b"\x00\x00\x08" + b"\x08" + b"\xaa" * 16
-    return _box(b"uuid", body + struct.pack(">I", sample_count) + b"\x00" * (8 * sample_count))
+    head = b"\x00\x00\x00\x01" + b"\x00\x00\x08" + b"\x08" + b"\xaa" * 16
+    return _box(b"senc", head + struct.pack(">I", sample_count) + b"\x00" * (8 * sample_count))
 
 
-def test_piff_override_flag_sample_count_offset(tmp_path: Path) -> None:
-    clear = _write(tmp_path, "ovr_clear.mp4", FTYP, MOOV, _moof(_piff_override(0)), MDAT)
+def test_override_flag_shifts_sample_count_offset(tmp_path: Path) -> None:
+    clear = _write(tmp_path, "ovr_clear.mp4", FTYP, MOOV, _moof(_senc_override(0)), MDAT)
     assert_fragments_decrypted(clear)
-    f = _write(tmp_path, "ovr.mp4", FTYP, MOOV, _moof(_piff_override(5)), MDAT)
+    f = _write(tmp_path, "ovr.mp4", FTYP, MOOV, _moof(_senc_override(5)), MDAT)
     with pytest.raises(ValueError, match=r"1/1 fragment"):
         assert_fragments_decrypted(f)
 
@@ -124,14 +136,14 @@ def test_undersized_largesize_box_does_not_desync_walk(tmp_path: Path, caplog: p
     # size==1 reads a 16-byte header, so a largesize of 12 clears the 8-byte floor but
     # still stalls the cursor onto payload; only a header-aware floor catches it
     runt = struct.pack(">I", 1) + b"free" + struct.pack(">Q", 12)
-    f = _write(tmp_path, "runt.mp4", FTYP, MOOV, runt, _moof(_piff_senc()), MDAT, _moof(_piff_senc()), MDAT)
+    f = _write(tmp_path, "runt.mp4", FTYP, MOOV, runt, _moof(_senc()), MDAT, _moof(_senc()), MDAT)
     with caplog.at_level("WARNING"):
         assert_fragments_decrypted(f)
     assert "malformed box size" in caplog.text
 
 
 def test_largesize_and_zero_size_boxes_walked(tmp_path: Path) -> None:
-    frag = _moof(_piff_senc())
+    frag = _moof(_senc())
     large = struct.pack(">I", 1) + b"mdat" + struct.pack(">Q", 16 + 64) + b"\x00" * 64
     trailing = struct.pack(">I", 0) + b"mdat" + b"\x00" * 64  # size 0 => runs to EOF
     f = _write(tmp_path, "large.mp4", FTYP, MOOV, frag, large, trailing)
@@ -142,7 +154,7 @@ def test_largesize_and_zero_size_boxes_walked(tmp_path: Path) -> None:
 def test_malformed_box_size_warns_and_does_not_raise(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     # failing open is deliberate, but the abort must be logged so it cannot pass as clean
     overrun = struct.pack(">I", 1 << 30) + b"free" + b"\x00" * 8
-    f = _write(tmp_path, "overrun.mp4", FTYP, MOOV, overrun, _moof(_piff_senc()), MDAT)
+    f = _write(tmp_path, "overrun.mp4", FTYP, MOOV, overrun, _moof(_senc()), MDAT)
     with caplog.at_level("WARNING"):
         assert_fragments_decrypted(f)
     assert "malformed box size" in caplog.text
@@ -151,5 +163,5 @@ def test_malformed_box_size_warns_and_does_not_raise(tmp_path: Path, caplog: pyt
 def test_missing_or_bogus_file_is_noop(tmp_path: Path) -> None:
     assert_fragments_decrypted(tmp_path / "nope.mp4")
     assert_fragments_decrypted(_write(tmp_path, "bogus.bin", b"\x00\x01\x02\x03not-an-mp4"))
-    truncated = _write(tmp_path, "cut.mp4", FTYP, MOOV, _moof(_piff_senc())[:20])
+    truncated = _write(tmp_path, "cut.mp4", FTYP, MOOV, _moof(_senc())[:20])
     assert_fragments_decrypted(truncated)

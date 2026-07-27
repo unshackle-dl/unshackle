@@ -115,17 +115,18 @@ def _senc_protects_samples(buf: bytes, body: int, end: int) -> bool:
 
 
 def _moof_still_encrypted(moof: bytes) -> bool:
+    # senc only: a decrypter detaches just the atom it consumed, so a PIFF uuid can
+    # outlive a good decrypt. ISM arrives as senc via piff_senc_to_cenc.
     # structural walk: a 4CC byte scan collides with trun payload
-    from unshackle.core.manifests.ism_init import PIFF_SENC_UUID, iter_boxes
+    from unshackle.core.manifests.ism_init import iter_boxes
 
     body = 16 if int.from_bytes(moof[:4], "big") == 1 else 8
     for box_type, _, traf_body, traf_end in iter_boxes(moof, body, len(moof)):
         if box_type != b"traf":
             continue
-        for child, usertype, child_body, child_end in iter_boxes(moof, traf_body, traf_end):
-            if child == b"senc" or (child == b"uuid" and usertype == PIFF_SENC_UUID):
-                if _senc_protects_samples(moof, child_body, child_end):
-                    return True
+        for child, _usertype, child_body, child_end in iter_boxes(moof, traf_body, traf_end):
+            if child == b"senc" and _senc_protects_samples(moof, child_body, child_end):
+                return True
     return False
 
 
@@ -137,6 +138,10 @@ def assert_fragments_decrypted(path: Path) -> None:
     dangling past the stsd entry count, which mp4decrypt reports as success (exit 0, no
     stderr) while leaving the payload as ciphertext. Unlike has_encrypted_sample_entry
     (moov-scoped) this is fragment-scoped; the moov comes out clean in that failure.
+
+    Only a standard senc counts as evidence. Some DASH content ships a PIFF uuid beside it,
+    and a decrypter detaches just the atom it consumed, so that uuid outlives a good
+    decrypt; counting it would condemn a healthy file.
 
     The guarantee runs in one direction: a survivor proves a skip, while a clean pass is
     only as good as the decrypter's own behaviour. shaka-packager (the default
