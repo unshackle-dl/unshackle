@@ -79,9 +79,7 @@ def _resolve_import_manifest_data(
                     f"No language for '{title}': the {manifest_type} manifest has none and the "
                     f"service did not set Title.language."
                 )
-            raise click.ClickException(
-                f"Failed to parse the {manifest_type} manifest for '{title}'. ({e})"
-            )
+            raise click.ClickException(f"Failed to parse the {manifest_type} manifest for '{title}'. ({e})")
         except Exception as e:
             raise click.ClickException(
                 f"Failed to fetch the {manifest_type} manifest for '{title}'. "
@@ -246,13 +244,22 @@ class ImportService:
             for track in parsed:
                 tracks.add(track)
             parsed_ids = {str(t.id) for t in tracks}
-            track_dicts = [t for t in tracks_map.values() if t.get("descriptor", "URL") == "URL"]
-            track_dicts.extend(
+            url_dicts = [t for t in tracks_map.values() if t.get("descriptor", "URL") == "URL"]
+            # Merge back only tracks from another manifest, such as a separate HEVC one; the
+            # re-parse already covers manifest_url's own. Query stripped when comparing, since a
+            # service can sign the URL it fetches and register the bare one for the same manifest.
+            manifest_base = str(manifest_url).split("?")[0]
+            foreign_dicts = [
                 t
                 for t in tracks_map.values()
-                if t.get("descriptor") == manifest_type and str(t.get("id")) not in parsed_ids
-            )
-            if any(t.get("type") == "Subtitle" for t in track_dicts):
+                if t.get("descriptor") == manifest_type
+                and str(t.get("url")).split("?")[0] != manifest_base
+                and str(t.get("id")) not in parsed_ids
+            ]
+            track_dicts = [*url_dicts, *foreign_dicts]
+            # Only a side-loaded subtitle replaces the re-parsed set, since the service chose its
+            # own copy over the manifest's. A subtitle on another manifest is an addition.
+            if any(t.get("type") == "Subtitle" for t in url_dicts):
                 tracks.subtitles.clear()
         else:
             track_dicts = list(tracks_map.values())
@@ -355,14 +362,25 @@ class ImportService:
 
     @staticmethod
     def track_is_encrypted(track: Any) -> bool:
-        """True if the track carries DRM or its DASH manifest declares ContentProtection."""
+        """True if the track carries DRM or its manifest declares protection.
+
+        ISM is checked as well as DASH because ISM.download_track reads only ``track.drm``. A rung
+        that misses key injection here downloads encrypted and muxes without error. DASH re-derives
+        its DRM from the manifest elements, so it survives the same omission.
+        """
         if track.drm:
             return True
-        dash = track.data.get("dash") if getattr(track, "data", None) else None
+        data = getattr(track, "data", None) or {}
+        dash = data.get("dash")
         if dash:
             for element in (dash.get("representation"), dash.get("adaptation_set")):
                 if element is not None and element.findall("ContentProtection"):
                     return True
+        ism = data.get("ism")
+        if ism:
+            manifest = ism.get("manifest")
+            if manifest is not None and manifest.findall(".//ProtectionHeader"):
+                return True
         return False
 
     def exported_drm_system(self) -> str:
