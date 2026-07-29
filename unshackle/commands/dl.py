@@ -503,7 +503,7 @@ class dl:
         "--select-titles",
         is_flag=True,
         default=False,
-        help="Interactively select downloads from a list. Only use with Series to select Episodes.",
+        help="Interactively select downloads from a list: episodes of a series, or films when a title has more than one.",
     )
     @click.option(
         "-w",
@@ -1516,6 +1516,28 @@ class dl:
 
         if music_titles and list_:
             return
+
+        if select_titles and isinstance(titles, Movies) and len(titles) > 1:
+            console.print(Padding(Rule("[rule.text]Select Titles"), (1, 2)))
+
+            selection_start = time.time()
+            selected_idx = select_multiple(
+                [str(movie) for movie in titles],
+                minimal_count=1,
+                page_size=8,
+                return_indices=True,
+            )
+            if not selected_idx:
+                console.print(Padding(":x: Selection Cancelled...", (0, 5, 1, 5)))
+                return
+            start_time += time.time() - selection_start
+
+            keep = set(selected_idx)
+            for i in range(len(titles) - 1, -1, -1):
+                if i not in keep:
+                    del titles[i]
+
+            console.print(Padding(f"[text]Total selected: {len(titles)}[/]", (0, 5)))
 
         # Enables manual selection for Series when --select-titles is set
         if select_titles and isinstance(titles, Series):

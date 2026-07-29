@@ -106,7 +106,7 @@ The special language tokens `orig`, `all`, and `best` are honoured everywhere a 
 | Flag | Description |
 |---|---|
 | `-w`, `--wanted` | Wanted episodes, e.g. `S01-S05,S07`, `S01E01-S02E03`. Supports exclusions with a leading `-` (e.g. `-S03`). |
-| `--select-titles` | Interactively select titles (series only). **Cannot combine with `-w`.** |
+| `--select-titles` | Interactively select what to download: episodes of a series, or films when a title has more than one. **Cannot combine with `-w`.** |
 | `--latest-episode` | Download only the single most recent episode. |
 | `--list-titles` | List titles only; do not download. |
 

@@ -349,7 +349,7 @@ with `-` to exclude it.
 
 | Flag | Behaviour |
 | --- | --- |
-| `--select-titles` | Interactively pick episodes from a list (Series only). **Cannot combine with `-w`.** |
+| `--select-titles` | Interactively pick episodes of a series, or films when a title has more than one. **Cannot combine with `-w`.** |
 | `--latest-episode` | Download only the single most recent episode. |
 | `--list-titles` | List every title the service returned, then stop. `-w`/`--latest-episode` are not applied to this listing. |
 
@@ -558,7 +558,7 @@ authoritative list.
 | `--forced-subs` | `-fs` | Include forced subtitles. |
 | `--sub-format` | | Output subtitle format. |
 | `--wanted` | `-w` | Episode/season range. |
-| `--select-titles` | | Interactively pick episodes. |
+| `--select-titles` | | Interactively pick episodes or films. |
 | `--latest-episode` | | Only the newest episode. |
 | `--video-only` / `--audio-only` / `--subs-only` | `-V` / `-A` / `-S` | Restrict track types. |
 | `--no-video` / `--no-audio` / `--no-subs` / `--no-chapters` | `-nv` / `-na` / `-ns` / `-nc` | Skip track types. |
