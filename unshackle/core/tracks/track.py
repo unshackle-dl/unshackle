@@ -16,6 +16,7 @@ from zlib import crc32
 
 from langcodes import Language
 from requests import Session
+from requests.adapters import HTTPAdapter, Retry
 
 from unshackle.core import binaries
 from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
@@ -30,7 +31,7 @@ from unshackle.core.utils.subprocess import ffprobe
 
 
 def direct_session(session: Union[Session, "RnetSession"]) -> Session:
-    """Vanilla requests.Session with copied headers/cookies, no proxy."""
+    """requests.Session with copied headers/cookies and no proxy."""
     new = Session()
     headers = getattr(session, "headers", None)
     if headers is not None:
@@ -45,6 +46,15 @@ def direct_session(session: Union[Session, "RnetSession"]) -> Session:
             new.cookies.update(jar if jar is not None else cookies)
         except Exception:
             pass
+    new.mount(
+        "https://",
+        HTTPAdapter(
+            max_retries=Retry(total=5, backoff_factor=0.2, status_forcelist=[429, 500, 502, 503, 504]),
+            pool_maxsize=64,
+            pool_block=True,
+        ),
+    )
+    new.mount("http://", new.adapters["https://"])
     return new
 
 
