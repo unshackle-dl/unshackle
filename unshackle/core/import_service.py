@@ -16,7 +16,7 @@ from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.drm import drm_from_dict
 from unshackle.core.manifests import DASH, HLS, ISM
-from unshackle.core.remote_service import RemoteService, _build_title, _resolve_proxy
+from unshackle.core.remote_service import RemoteService, _build_title, _match_track, _resolve_proxy
 from unshackle.core.titles import Episode, Movies, Series, Title_T, Titles_T, remap_titles
 from unshackle.core.tracks import Audio, Chapter, Chapters, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
@@ -25,6 +25,7 @@ from unshackle.core.tracks.track import Track
 log = logging.getLogger("import")
 
 PARSERS = {"DASH": DASH, "HLS": HLS, "ISM": ISM}
+MANIFEST_DATA_KEYS = {"DASH": "dash", "ISM": "ism"}
 
 
 def _fallback_language(language: Any) -> Optional[Any]:
@@ -37,6 +38,63 @@ def _fallback_language(language: Any) -> Optional[Any]:
     if not tag or not tag_is_valid(tag) or tag.startswith("und"):
         return None
     return language
+
+
+def _resolve_import_manifest_data(
+    tracks: Tracks,
+    manifest_type: Optional[str],
+    *,
+    session: requests.Session,
+    language: Any,
+    title: Title_T,
+) -> None:
+    """Populate ``track.data`` for DASH/ISM tracks rebuilt from export dicts.
+
+    Exports may omit ``manifest_url`` (e.g. when the service never set
+    ``title.tracks.manifest_url``) or carry one MPD per adaptation set. ``Track.from_dict``
+    does not serialise manifest XML, so each exported track's ``url`` is re-fetched and
+    matched to a locally parsed representation before download.
+    """
+    if manifest_type not in MANIFEST_DATA_KEYS:
+        return
+
+    parser = PARSERS[manifest_type]
+    data_key = MANIFEST_DATA_KEYS[manifest_type]
+    pending = [
+        track
+        for track in [*tracks.videos, *tracks.audio, *tracks.subtitles]
+        if track.descriptor.name == manifest_type and not track.data.get(data_key)
+    ]
+    if not pending:
+        return
+
+    fallback_lang = _fallback_language(language)
+    for url in {str(track.url) for track in pending if track.url}:
+        try:
+            manifest = parser.from_url(url=url, session=session)
+            parsed = manifest.to_tracks(language=fallback_lang)
+        except ValueError as e:
+            if "Language information could not be derived" in str(e):
+                raise click.ClickException(
+                    f"No language for '{title}': the {manifest_type} manifest has none and the "
+                    f"service did not set Title.language."
+                )
+            raise click.ClickException(
+                f"Failed to parse the {manifest_type} manifest for '{title}'. ({e})"
+            )
+        except Exception as e:
+            raise click.ClickException(
+                f"Failed to fetch the {manifest_type} manifest for '{title}'. "
+                f"The manifest URL may have expired since export. ({e})"
+            )
+
+        local_tracks = [*parsed.videos, *parsed.audio, *parsed.subtitles]
+        for track in pending:
+            if track.data.get(data_key) or str(track.url) != url:
+                continue
+            matched = _match_track(track, local_tracks)
+            if matched and matched.data.get(data_key):
+                track.data.update(matched.data)
 
 
 class ImportService:
@@ -144,11 +202,12 @@ class ImportService:
     def get_tracks(self, title: Title_T) -> Tracks:
         """Reconstruct the title's tracks from the export.
 
-        DASH/ISM: re-fetch and re-parse the manifest and return the full ladder (the importer
-        picks quality with normal dl flags; keys are injected by KID later), then merge in the
-        exported URL tracks. A service side-loads its own subtitles when the manifest's are the
-        worse copy, so any direct-URL subtitle in the export means the whole re-parsed subtitle
-        set is dropped in favour of the exported one.
+        DASH/ISM: re-fetch and re-parse ``manifest_url`` for the full ladder on that MPD (the importer
+        picks quality with normal dl flags; keys are injected by KID later), then merge in exported
+        DASH/ISM tracks from other MPDs (e.g. a separate HEVC manifest) and direct-URL side-loads.
+        A service side-loads its own subtitles when the manifest's are the worse copy, so any
+        direct-URL subtitle in the export means the whole re-parsed subtitle set is dropped in
+        favour of the exported one.
         HLS/URL: rebuild from the stored per-track dicts, since the variant is re-fetched from
         track.url at download time and a master playlist can hand out a new token on every fetch.
         """
@@ -186,7 +245,13 @@ class ImportService:
                 raise click.ClickException(f"Failed to parse the {manifest_type} manifest for '{title}'. ({e})")
             for track in parsed:
                 tracks.add(track)
+            parsed_ids = {str(t.id) for t in tracks}
             track_dicts = [t for t in tracks_map.values() if t.get("descriptor", "URL") == "URL"]
+            track_dicts.extend(
+                t
+                for t in tracks_map.values()
+                if t.get("descriptor") == manifest_type and str(t.get("id")) not in parsed_ids
+            )
             if any(t.get("type") == "Subtitle" for t in track_dicts):
                 tracks.subtitles.clear()
         else:
@@ -202,6 +267,14 @@ class ImportService:
             if drm:
                 track.drm = drm
             tracks.add(track, warn_only=True)
+
+        _resolve_import_manifest_data(
+            tracks,
+            manifest_type,
+            session=self.session,
+            language=title.language,
+            title=title,
+        )
 
         for attachment in entry.get("attachments") or []:
             url = attachment.get("url")
@@ -316,6 +389,11 @@ class ImportService:
     def get_playready_license(
         self, *, challenge: bytes, title: Title_T, track: AnyTrack
     ) -> Optional[Union[bytes, str]]:
+        raise RuntimeError("ImportService should not request a license; keys come from the export.")
+
+    def get_clearkey_license(
+        self, *, challenge: bytes, title: Title_T, track: AnyTrack
+    ) -> Optional[Union[bytes, str, dict]]:
         raise RuntimeError("ImportService should not request a license; keys come from the export.")
 
     def on_segment_downloaded(self, track: AnyTrack, segment: Any) -> None:
