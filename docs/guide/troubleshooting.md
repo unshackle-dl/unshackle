@@ -74,7 +74,7 @@ For example, `unshackle_debug_EXAMPLE_20260703-142530.jsonl`. The `<service>` ta
 Every line is a self-contained JSON object. The first line of a session records the environment:
 
 ```json
-{"timestamp":"2026-07-03T14:25:30.123456+00:00","session_id":"a1b2c3d4","level":"INFO","operation":"session_start","message":"Debug logging session started","context":{"unshackle_version":"5.3.0","python_version":"3.12.4 ...","platform":"Linux-6.18.5-x86_64","platform_system":"Linux","platform_release":"6.18.5"}}
+{"timestamp":"2026-07-03T14:25:30.123456+00:00","session_id":"a1b2c3d4","level":"INFO","operation":"session_start","message":"Debug logging session started","context":{"unshackle_version":"5.3.0","unshackle_commit":"a24c9b9","python_version":"3.12.4 ...","platform":"Linux-6.18.5-x86_64","platform_system":"Linux","platform_release":"6.18.5"}}
 ```
 
 Subsequent lines describe operations: service calls, DRM licence requests, vault lookups, downloader progress, and errors. Common fields include:

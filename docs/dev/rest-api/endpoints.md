@@ -43,6 +43,7 @@ Health check. **This is the only route exempt from authentication**: you can cal
     {
       "status": "ok",
       "version": "5.3.0",
+      "commit": "a24c9b9",
       "update_check": {
         "update_available": false,
         "current_version": "5.3.0",
@@ -50,6 +51,8 @@ Health check. **This is the only route exempt from authentication**: you can cal
       }
     }
     ```
+
+`commit` is the short git commit of the running checkout. It is `null` when the server cannot read one (for example, an installed package with no `.git` directory, or a host without git).
 
 If the update check fails (for example, no network), `update_available` and `latest_version` are `null` while `current_version` still reports the installed version.
 
