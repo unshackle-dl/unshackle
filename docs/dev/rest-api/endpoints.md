@@ -43,7 +43,7 @@ Health check. **This is the only route exempt from authentication**: you can cal
     {
       "status": "ok",
       "version": "5.3.0",
-      "commit": "a24c9b9",
+      "code_hash": "1d22a1e",
       "update_check": {
         "update_available": false,
         "current_version": "5.3.0",
@@ -52,7 +52,7 @@ Health check. **This is the only route exempt from authentication**: you can cal
     }
     ```
 
-`commit` is the short git commit of the running checkout. It is `null` when the server cannot read one (for example, an installed package with no `.git` directory, or a host without git).
+`code_hash` fingerprints the framework source the server is running, so it identifies the code itself rather than the release. It is the same value for a git checkout and for an installed package built from that checkout, and it changes if anything under `unshackle/core`, `unshackle/commands`, `unshackle/utils`, or `unshackle/vaults` is edited. Service modules are not included. The value is `null` only when the source files cannot be read.
 
 If the update check fails (for example, no network), `update_available` and `latest_version` are `null` while `current_version` still reports the installed version.
 

@@ -787,7 +787,7 @@ class DebugLogger:
         """Log the start of a new session with environment information."""
         import platform
 
-        from unshackle.core import __commit__, __version__
+        from unshackle.core import __code_hash__, __version__
 
         self.log(
             level="INFO",
@@ -795,7 +795,7 @@ class DebugLogger:
             message="Debug logging session started",
             context={
                 "unshackle_version": __version__,
-                "unshackle_commit": __commit__ or None,
+                "unshackle_code_hash": __code_hash__ or None,
                 "python_version": sys.version,
                 "platform": platform.platform(),
                 "platform_system": platform.system(),

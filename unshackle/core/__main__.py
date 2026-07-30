@@ -10,7 +10,7 @@ from rich.padding import Padding
 from rich.text import Text
 from urllib3.exceptions import InsecureRequestWarning
 
-from unshackle.core import __commit__, __version__
+from unshackle.core import __code_hash__, __version__
 from unshackle.core.commands import Commands
 from unshackle.core.config import config
 from unshackle.core.console import ComfyRichHandler, console
@@ -63,7 +63,7 @@ def main(version: bool, debug: bool) -> None:
                     r" ▀▀▀ ▀▀ █▪ ▀▀▀▀ ▀▀▀ · ▀  ▀ ·▀▀▀ ·▀  ▀.▀▀▀  ▀▀▀ ",
                     style="ascii.art",
                 ),
-                f"v [repr.number]{__version__}[/]{f' ({__commit__})' if __commit__ else ''}"
+                f"v [repr.number]{__version__}[/]{f' ({__code_hash__})' if __code_hash__ else ''}"
                 f" - © 2025-{datetime.now().year} - github.com/unshackle-dl/unshackle",
             ),
             (1, 11, 1, 10),

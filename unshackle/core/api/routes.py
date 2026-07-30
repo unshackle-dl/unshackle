@@ -8,7 +8,7 @@ import click
 from aiohttp import web
 from aiohttp_swagger3 import SwaggerDocs, SwaggerInfo, SwaggerUiSettings
 
-from unshackle.core import __commit__, __version__
+from unshackle.core import __code_hash__, __version__
 from unshackle.core.api.errors import APIError, APIErrorCode, build_error_response, handle_api_exception
 from unshackle.core.api.handlers import (
     cancel_download_job_handler,
@@ -105,10 +105,10 @@ async def health(request: web.Request) -> web.Response:
                 version:
                   type: string
                   example: "2.0.0"
-                commit:
+                code_hash:
                   type: string
                   nullable: true
-                  example: "a24c9b9"
+                  example: "1d22a1e"
                 update_check:
                   type: object
                   properties:
@@ -133,7 +133,7 @@ async def health(request: web.Request) -> web.Response:
         update_info = {"update_available": None, "current_version": __version__, "latest_version": None}
 
     return web.json_response(
-        {"status": "ok", "version": __version__, "commit": __commit__ or None, "update_check": update_info}
+        {"status": "ok", "version": __version__, "code_hash": __code_hash__ or None, "update_check": update_info}
     )
 
 
