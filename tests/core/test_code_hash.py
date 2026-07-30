@@ -16,7 +16,7 @@ pytestmark = pytest.mark.unit
 
 def test_is_hex_and_stable() -> None:
     first = code_hash()
-    assert len(first) == 32
+    assert len(first) == 40
     assert int(first, 16) >= 0
     assert first == code_hash()
 

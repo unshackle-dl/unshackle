@@ -16,12 +16,13 @@ def _raise(error: OSError) -> None:
 
 def code_files() -> list[str]:
     """Framework source paths relative to the package root, in a platform-stable order."""
+    pkg = str(_PKG)
     rels = ["__main__.py"]
     for name in _CODE_DIRS:
-        for root, dirs, files in os.walk(_PKG / name, onerror=_raise):
+        for root, dirs, files in os.walk(os.path.join(pkg, name), onerror=_raise):
             dirs[:] = [d for d in dirs if d != "__pycache__"]
-            rel = os.path.relpath(root, _PKG)
-            rels.extend(os.path.join(rel, f).replace(os.sep, "/") for f in files if f.endswith(".py"))
+            rel = os.path.relpath(root, pkg).replace(os.sep, "/")
+            rels.extend(f"{rel}/{f}" for f in files if f.endswith(".py"))
     return sorted(rels)
 
 
@@ -30,17 +31,19 @@ def code_hash(
     read: Optional[Callable[[str], bytes]] = None,
 ) -> str:
     """
-    md5 of the framework source. Identifies the running code, not the release it claims to be.
+    sha1 of the framework source. Two installs on the same version differ here if their code does.
 
     Pass `files` and `read` to digest a different byte source, such as blobs from git history
     (see tools/resolve_code_hash.py). Returns "" when the source cannot be read.
     """
     if read is None:
+        pkg = str(_PKG)
 
         def read(rel: str) -> bytes:
-            return (_PKG / rel).read_bytes()
+            with open(os.path.join(pkg, rel), "rb") as fh:
+                return fh.read()
 
-    digest = hashlib.md5(usedforsecurity=False)
+    digest = hashlib.sha1(usedforsecurity=False)
     try:
         for rel in code_files() if files is None else files:
             digest.update(rel.encode())
