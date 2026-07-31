@@ -3059,6 +3059,12 @@ is the <a href="../../dev/rest-api/">REST API</a> section; these are the config 
 <td>gzip level for responses.</td>
 </tr>
 <tr>
+<td><code>global_speed_limit</code></td>
+<td>str</td>
+<td><em>(unlimited)</em></td>
+<td>Server-wide download speed cap, e.g. <code>10M</code>, <code>1.5G</code> or plain bytes/sec (same format as <code>speed_limit</code>). One shared budget across all concurrent jobs; per-job speed limits are ignored while it is set.</td>
+</tr>
+<tr>
 <td><code>cdm_overrides</code></td>
 <td>dict</td>
 <td><em>(unset)</em></td>
@@ -3251,6 +3257,12 @@ default. In other words, config only fills in options you did not set on the com
 <td>int</td>
 <td><em>(downloader default)</em></td>
 <td>Threads per track.</td>
+</tr>
+<tr>
+<td><code>speed_limit</code></td>
+<td>str</td>
+<td><em>(unlimited)</em></td>
+<td>Total download speed cap across all downloads combined, e.g. <code>500k</code>, <code>5M</code>, <code>1.5G</code> or plain bytes/sec. Values are bytes, not bits (<code>5M</code> = 5.0 MB/s).</td>
 </tr>
 <tr>
 <td><code>slow</code></td>
