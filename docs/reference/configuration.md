@@ -245,6 +245,7 @@ is the [REST API](../dev/rest-api/index.md) section; these are the config keys.
 | `max_sessions` | int | `100` | Maximum concurrent sessions. |
 | `history_limit` | int | `100` | How many finished jobs to retain in history. |
 | `compression_level` | int | `1` | gzip level for responses. |
+| `global_speed_limit` | str | *(unlimited)* | Server-wide download speed cap, e.g. `10M`, `1.5G` or plain bytes/sec (same format as `speed_limit`). One shared budget across all concurrent jobs; per-job speed limits are ignored while it is set. |
 | `cdm_overrides` | dict | *(unset)* | Allowed per-request CDM overrides. |
 | `allow_job_credentials` | bool | `false` | Permit clients to supply credentials per job. |
 | `devices` | list | *(auto)* | Widevine devices offered; auto-filled from `directories.wvds`. |
@@ -322,6 +323,7 @@ Common keys (a useful subset; every `dl` flag works):
 | `no_subs` / `no_audio` / `no_chapters` | bool | `false` | Skip that track type. |
 | `downloads` | int | `1` | Tracks downloaded concurrently. |
 | `workers` | int | *(downloader default)* | Threads per track. |
+| `speed_limit` | str | *(unlimited)* | Total download speed cap across all downloads combined, e.g. `500k`, `5M`, `1.5G` or plain bytes/sec. Values are bytes, not bits (`5M` = 5.0 MB/s). |
 | `slow` | str | *(unset)* | Inter-title delay, e.g. `"20-40"`. |
 | `best_available` | bool | `false` | Fall back to best quality if the request is unavailable. |
 | `proxy` | str | *(unset)* | Default proxy URI or 2-letter country. |

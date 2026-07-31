@@ -10,6 +10,7 @@ from unshackle.core.api import cors_middleware, setup_routes, setup_swagger
 from unshackle.core.api.compression import compression_middleware
 from unshackle.core.config import config
 from unshackle.core.constants import context_settings
+from unshackle.core.downloaders import format_speed, parse_speed_limit, set_speed_limit
 
 
 @click.command(
@@ -145,6 +146,14 @@ def serve(
         remote_only = remote_only or config.serve.get("remote_only", False)
         if remote_only:
             api_only = True
+
+        try:
+            global_speed_limit = parse_speed_limit(config.serve.get("global_speed_limit"))
+        except ValueError as e:
+            raise click.ClickException(f"serve.global_speed_limit: {e}")
+        if global_speed_limit:
+            set_speed_limit(global_speed_limit, lock=True)
+            log.info(f"Global speed limit: {format_speed(global_speed_limit)} (shared by all jobs)")
 
         global_services = config.serve.get("services")
         if global_services:

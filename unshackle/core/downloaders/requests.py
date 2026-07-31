@@ -1,8 +1,10 @@
 import math
 import os
+import re
 import statistics
 import threading
 import time
+from collections import deque
 from concurrent.futures import FIRST_COMPLETED, wait
 from concurrent.futures.thread import ThreadPoolExecutor
 from http.cookiejar import CookieJar
@@ -40,6 +42,104 @@ SPEED_ROLLING_WINDOW = 10  # seconds of history to keep for speed calculation
 
 RANGE_PARALLEL_MIN_SIZE = 64 * 1024 * 1024
 RANGE_PARALLEL_PART_SIZE = 16 * 1024 * 1024
+
+
+class SpeedWindow:
+    """Rolling-window download rate over the last SPEED_ROLLING_WINDOW seconds."""
+
+    def __init__(self, start: float) -> None:
+        # zero-byte seed keeps early readings from exceeding the true rate
+        self.samples: deque[tuple[float, int]] = deque([(start, 0)])
+
+    def rate(self, now: float, total: int) -> Optional[float]:
+        self.samples.append((now, total))
+        while now - self.samples[0][0] > SPEED_ROLLING_WINDOW:
+            self.samples.popleft()
+        span = now - self.samples[0][0]
+        delta = total - self.samples[0][1]
+        if span <= 0 or delta <= 0:
+            return None
+        return delta / span
+
+
+class TokenBucket:
+    """Aggregate byte-rate limiter shared by every download thread."""
+
+    def __init__(self, rate: float) -> None:
+        self.rate = rate
+        self.capacity = rate
+        self.tokens = 0.0
+        self.ts = time.monotonic()
+        self.lock = threading.Lock()
+
+    def consume(self, n: int) -> None:
+        # tokens may go negative; waiting for n > capacity would deadlock
+        with self.lock:
+            now = time.monotonic()
+            self.tokens = min(self.capacity, self.tokens + (now - self.ts) * self.rate)
+            self.ts = now
+            self.tokens -= n
+            wait = -self.tokens / self.rate if self.tokens < 0 else 0.0
+        if wait > 0:
+            DOWNLOAD_CANCELLED.wait(wait)
+
+
+_speed_limiter: Optional[TokenBucket] = None
+_speed_limit_locked = False
+
+SPEED_UNITS = {
+    "": 1,
+    "b": 1,
+    "k": 1_000,
+    "kb": 1_000,
+    "m": 1_000_000,
+    "mb": 1_000_000,
+    "g": 1_000_000_000,
+    "gb": 1_000_000_000,
+}
+
+
+def parse_speed_limit(value: Union[str, int, float, None]) -> Optional[float]:
+    """
+    Parse a human-readable speed limit into bytes/sec, or None for unlimited.
+
+    Accepts plain numbers (exact bytes/sec) or a decimal suffix with optional
+    /s, case-insensitive: "500k", "5M", "10MB/s", "1.5G", 5000000. Suffixes
+    match the displayed speeds (5M = 5.0 MB/s); values are bytes, not bits.
+    "", 0, "off", "none" and "unlimited" mean no limit.
+    """
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        if not math.isfinite(value) or value < 0:
+            raise ValueError(f"Invalid speed limit {value!r}: must be a positive number of bytes/sec.")
+        return float(value) or None
+    text = value.strip().lower().removesuffix("/s")
+    if text in ("", "0", "off", "none", "unlimited"):
+        return None
+    match = re.fullmatch(r"(\d*\.?\d+)\s*([kmg]b?|b)?", text)
+    if not match:
+        raise ValueError(f"Invalid speed limit {value!r}: use e.g. 500k, 5M, 1.5G, plain bytes/sec, or 'off'.")
+    return float(match.group(1)) * SPEED_UNITS[match.group(2) or ""]
+
+
+def format_speed(bytes_per_sec: float) -> str:
+    """Format a byte rate in the same decimal units the progress bars show."""
+    return f"{filesize.decimal(int(bytes_per_sec))}/s"
+
+
+def set_speed_limit(bytes_per_sec: Optional[float], lock: bool = False) -> None:
+    """
+    Set (or clear) the global download speed limit shared by all threads.
+
+    A locked limit (serve's global_speed_limit) wins: later unlocked calls,
+    like the per-job one in dl.result(), become no-ops for the process.
+    """
+    global _speed_limiter, _speed_limit_locked
+    if _speed_limit_locked and not lock:
+        return
+    _speed_limit_locked = lock
+    _speed_limiter = TokenBucket(bytes_per_sec) if bytes_per_sec else None
 
 
 def _adaptive_chunk_size(content_length: int) -> int:
@@ -132,7 +232,8 @@ def _dispatch_parts(
     yield {"total": total_size}
 
     total_bytes = 0
-    start_time = last_report = time.time()
+    last_report = time.time()
+    speed_window = SpeedWindow(last_report)
     completed = False
     worker_error = False
 
@@ -153,7 +254,9 @@ def _dispatch_parts(
 
             now = time.time()
             if now - last_report > 0.5 and total_bytes > 0:
-                yield {"downloaded": f"{filesize.decimal(math.ceil(total_bytes / (now - start_time)))}/s"}
+                rate = speed_window.rate(now, total_bytes)
+                if rate:
+                    yield {"downloaded": f"{filesize.decimal(math.ceil(rate))}/s"}
                 last_report = now
 
             done, pending = wait(pending, timeout=0.1, return_when=FIRST_COMPLETED)
@@ -300,7 +403,10 @@ def download(
                 except ValueError:
                     content_length = 0
 
+            limiter = _speed_limiter
             chunk_size = _adaptive_chunk_size(content_length)
+            if limiter:
+                chunk_size = min(chunk_size, max(8192, int(limiter.rate / 4)))
             total_size = (resume_offset + content_length) if resumed and content_length > 0 else content_length
 
             if not segmented and not part_mode:
@@ -350,6 +456,8 @@ def download(
                         except Exception:
                             pass
                         return
+                    if limiter is not None:
+                        limiter.consume(len(chunk))
                     _write(chunk)
                     download_size = len(chunk)
                     written += download_size
@@ -543,7 +651,7 @@ def requests(
         url_item = urls[0]
         try:
             ranged_used = False
-            if max_workers > 1:
+            if max_workers > 1 and _speed_limiter is None:
                 total_size, supports_ranges = _probe_ranged(url_item["url"], session)
                 if supports_ranges and total_size >= RANGE_PARALLEL_MIN_SIZE:
                     try:
@@ -581,6 +689,7 @@ def requests(
         total_bytes = 0
         start_time = time.time()
         last_speed_report = start_time
+        speed_window = SpeedWindow(start_time)
         last_hedge_check = 0.0
         hedge_median = 0.0  # cached; recomputed only when seg_durations grows
         hedge_median_len = 0
@@ -664,10 +773,9 @@ def requests(
                 # Yield speed every 0.5s (throttled to avoid spamming Rich)
                 now = time.time()
                 if now - last_speed_report > 0.5 and total_bytes > 0:
-                    elapsed = now - start_time
-                    if elapsed > 0:
-                        download_speed = math.ceil(total_bytes / elapsed)
-                        yield dict(downloaded=f"{filesize.decimal(download_speed)}/s")
+                    rate = speed_window.rate(now, total_bytes)
+                    if rate:
+                        yield dict(downloaded=f"{filesize.decimal(math.ceil(rate))}/s")
                     last_speed_report = now
 
                 # hedge stuck segments once spare workers exist (pending < max_workers);
@@ -675,6 +783,7 @@ def requests(
                 if (
                     len(pending) < max_workers
                     and seg_durations
+                    and _speed_limiter is None
                     and now - last_hedge_check > 0.5
                     and not DOWNLOAD_CANCELLED.is_set()
                 ):
@@ -768,4 +877,4 @@ def requests(
         )
 
 
-__all__ = ("requests",)
+__all__ = ("requests", "format_speed", "parse_speed_limit", "set_speed_limit")

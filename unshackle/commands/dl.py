@@ -45,6 +45,7 @@ from unshackle.core.config import config, resolve_cdm_name, resolve_decryption
 from unshackle.core.console import GradientPulseBarColumn, SyncLive, console
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack, context_settings
 from unshackle.core.credential import Credential
+from unshackle.core.downloaders import format_speed, parse_speed_limit, set_speed_limit
 from unshackle.core.drm import DRM_T, ClearKeyCENC, MonaLisa, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.music import (
@@ -692,6 +693,16 @@ class dl:
     )
     @click.option("--downloads", type=int, default=1, help="Amount of tracks to download concurrently.")
     @click.option(
+        "--speed-limit",
+        "speed_limit",
+        type=str,
+        default=None,
+        metavar="SPEED",
+        help="Cap total download speed across all downloads combined, e.g. 500k, 5M, 1.5G or plain "
+        "bytes/sec (5M = 5.0 MB/s; bytes, not bits). "
+        "'off' disables a limit configured in the dl: config block.",
+    )
+    @click.option(
         "-o",
         "--output",
         "output_dir",
@@ -1258,6 +1269,7 @@ class dl:
         downloads: int,
         worst: bool,
         best_available: bool,
+        speed_limit: Optional[str] = None,
         split_audio: Optional[bool] = None,
         merge_video: Optional[bool] = None,
         real_video_bitrate: bool = False,
@@ -1274,6 +1286,15 @@ class dl:
 
         if skip_dl:
             DOWNLOAD_LICENCE_ONLY.set()
+
+        try:
+            speed_limit_bps = parse_speed_limit(speed_limit)
+        except ValueError as e:
+            self.log.error(str(e))
+            sys.exit(1)
+        set_speed_limit(speed_limit_bps)
+        if speed_limit_bps:
+            self.log.info(f"Speed limit: {format_speed(speed_limit_bps)}")
 
         if export:
             config.directories.exports.mkdir(parents=True, exist_ok=True)

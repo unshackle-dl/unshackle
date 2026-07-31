@@ -172,6 +172,7 @@ Keep only certain track types, or skip certain track types. Attachments are alwa
 |---|---|---|
 | `--workers` | downloader default | Per-track download threads. |
 | `--downloads` | `1` | Number of tracks downloaded concurrently. |
+| `--speed-limit` | unlimited | Cap total download speed across all threads and tracks, e.g. `500k`, `5M`, `1.5G` or plain bytes/sec. Values are bytes, not bits (`5M` = 5.0 MB/s). `off` disables a configured limit. |
 | `--no-cache` | off | Bypass the title cache. |
 | `--reset-cache` | off | Clear the title cache. |
 | `--list` | off | List available/would-be-downloaded tracks; do not download. |
