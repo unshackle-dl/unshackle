@@ -2185,7 +2185,7 @@ file lives and how it is loaded.</p>
 </tr>
 <tr>
 <td><code>--no-proxy-download</code></td>
-<td>Use the proxy for the manifest, licence, and authentication, but bypass it for the <strong>segment downloads</strong> themselves.</td>
+<td>Use the proxy for the manifest, licence, and authentication, but bypass it for the <strong>downloads</strong> themselves.</td>
 </tr>
 </tbody>
 </table>
@@ -2205,7 +2205,7 @@ do not have to pass it on every command. See
 <p>Segment downloads are usually the largest share of traffic, and a residential-grade VPN
 proxy is often the slowest link in the chain. <code>--no-proxy-download</code> lets you keep the
 proxy where it matters (passing the geo-check for the manifest and the licence) while
-pulling the actual audio and video segments over your normal connection for full speed.</p>
+pulling the files themselves over your normal connection at full speed.</p>
 <div class="language-shell highlight"><span class="filename">Proxy the manifest and licence, download segments direct</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>gb<span class="w"> </span>--no-proxy-download<span class="w"> </span>EXAMPLE<span class="w"> </span>10a1234
 </span></code></pre></div>
 <div class="admonition warning">

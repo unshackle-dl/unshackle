@@ -1586,6 +1586,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Attachment.download" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;download
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Attachment.to_dict" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2608,6 +2619,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Attachment.download" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;download
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Attachment.to_dict" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3574,7 +3596,7 @@
 
         <p>Create a new Attachment.</p>
 <p>If providing a path, the file must already exist.
-If providing a URL, the file will be downloaded to the temp directory.
+If providing a URL, download() fetches the file during the download phase.
 Either path or url must be provided.</p>
 <p>If name is not provided it will use the file name (without extension).
 If mime_type is not provided, it will try to guess it.</p>
@@ -3676,7 +3698,7 @@ If mime_type is not provided, it will try to guess it.</p>
                 <code>session</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="requests.Session">Session</span>]</code>
+                  <code><span title="typing.Optional">Optional</span>[<span title="unshackle.core.tracks.attachment.AnySession">AnySession</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -3734,6 +3756,26 @@ If mime_type is not provided, it will try to guess it.</p>
 
 
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Attachment.download" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">download</span>
+
+
+<a href="#unshackle.core.tracks.Attachment.download" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">download</span><span class="p">(</span><span class="n">session</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">no_proxy_download</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Download a URL-backed attachment to the temp directory.</p>
+
+
+    </div>
+
+</div>
 
 <div class="doc doc-object doc-function">
 
@@ -3861,7 +3903,7 @@ If mime_type is not provided, it will try to guess it.</p>
                 <code>session</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="requests.Session">Session</span>]</code>
+                  <code><span title="typing.Optional">Optional</span>[<span title="unshackle.core.tracks.attachment.AnySession">AnySession</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
