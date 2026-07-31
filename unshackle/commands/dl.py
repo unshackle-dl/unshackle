@@ -678,7 +678,7 @@ class dl:
         "--no-proxy-download",
         is_flag=True,
         default=False,
-        help="Bypass proxy for segment downloads only. Manifest, license, and auth still use proxy.",
+        help="Bypass proxy for all downloads. Manifest, license, and auth still use proxy.",
     )
     @click.option("--no-folder", is_flag=True, default=False, help="Disable folder creation for TV Shows.")
     @click.option(
@@ -3027,6 +3027,12 @@ class dl:
                         skip_subtitle_errors=skip_subtitle_errors,
                         on_subtitle_skipped=on_subtitle_skipped,
                     )
+
+                    for attachment in title.tracks.attachments:
+                        attachment.download(
+                            attachment.session or service.session,
+                            no_proxy_download=no_proxy_download,
+                        )
 
                     if (
                         len(self.skipped_subtitles) > skipped_before

@@ -28,7 +28,7 @@ Proxying is controlled at download time by three options on the `dl` command:
 |---|---|
 | `--proxy` | The proxy to use. Either an explicit URI, or a query that unshackle resolves against your configured providers. |
 | `--no-proxy` | Force **all** proxy use off. No providers are initialised and no proxy query is resolved. |
-| `--no-proxy-download` | Use the proxy for the manifest, licence, and authentication, but bypass it for the **segment downloads** themselves. |
+| `--no-proxy-download` | Use the proxy for the manifest, licence, and authentication, but bypass it for the **downloads** themselves. |
 
 ```shell title="Explicit proxy URI"
 unshackle dl --proxy http://user:pass@1.2.3.4:8080 EXAMPLE 81234567
@@ -52,7 +52,7 @@ unshackle dl --proxy nordvpn:us EXAMPLE 81234567
 Segment downloads are usually the largest share of traffic, and a residential-grade VPN
 proxy is often the slowest link in the chain. `--no-proxy-download` lets you keep the
 proxy where it matters (passing the geo-check for the manifest and the licence) while
-pulling the actual audio and video segments over your normal connection for full speed.
+pulling the files themselves over your normal connection at full speed.
 
 ```shell title="Proxy the manifest and licence, download segments direct"
 unshackle dl --proxy gb --no-proxy-download EXAMPLE 10a1234

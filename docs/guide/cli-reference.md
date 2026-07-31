@@ -162,7 +162,7 @@ Keep only certain track types, or skip certain track types. Attachments are alwa
 |---|---|
 | `--proxy` | Proxy URI, a 2-letter country code resolved from configured providers, or `provider:region` (e.g. `nordvpn:ca`, `gluetun:us`, `protonvpn:de:berlin`). |
 | `--no-proxy` | Force-disable all proxy use. |
-| `--no-proxy-download` | Bypass the proxy for **segment downloads only** (manifest, licence, and auth stay proxied). |
+| `--no-proxy-download` | Bypass the proxy for **all downloads** (manifest, licence, and auth stay proxied). |
 | `--remote` | Use a remote unshackle server. |
 | `--server` | Name a remote server from the `remote_services` config. |
 

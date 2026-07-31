@@ -12,6 +12,9 @@ import requests
 
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_LICENCE_ONLY
+from unshackle.core.session import RnetSession
+
+AnySession = Union[requests.Session, RnetSession]
 
 
 class Attachment:
@@ -22,13 +25,13 @@ class Attachment:
         name: Optional[str] = None,
         mime_type: Optional[str] = None,
         description: Optional[str] = None,
-        session: Optional[requests.Session] = None,
+        session: Optional[AnySession] = None,
     ):
         """
         Create a new Attachment.
 
         If providing a path, the file must already exist.
-        If providing a URL, the file will be downloaded to the temp directory.
+        If providing a URL, download() fetches the file during the download phase.
         Either path or url must be provided.
 
         If name is not provided it will use the file name (without extension).
@@ -46,12 +49,13 @@ class Attachment:
             raise ValueError("Either path or url must be provided.")
 
         self.url = url
+        self.session = session
+        self.file_name: Optional[str] = None
 
         if url:
             if not isinstance(url, str):
                 raise ValueError("The attachment URL must be a string.")
 
-            # If a URL is provided, download the file to the temp directory
             parsed_url = urlparse(url)
             file_name = os.path.basename(parsed_url.path) or "attachment"
 
@@ -60,30 +64,7 @@ class Attachment:
                 safe_name = re.sub(r'[<>:"/\\|?*]', "", name).replace(" ", "_")
                 file_name = f"{safe_name}{os.path.splitext(file_name)[1]}"
 
-            download_path = config.directories.temp / file_name
-
-            # Download the file unless we're in license-only mode
-            if DOWNLOAD_LICENCE_ONLY.is_set():
-                path = None
-            else:
-                try:
-                    if session is None:
-                        with requests.Session() as session:
-                            response = session.get(url, stream=True)
-                            response.raise_for_status()
-                    else:
-                        response = session.get(url, stream=True)
-                        response.raise_for_status()
-                    config.directories.temp.mkdir(parents=True, exist_ok=True)
-                    download_path.parent.mkdir(parents=True, exist_ok=True)
-
-                    with open(download_path, "wb") as f:
-                        for chunk in response.iter_content(chunk_size=8192):
-                            f.write(chunk)
-
-                    path = download_path
-                except Exception as e:
-                    raise ValueError(f"Failed to download attachment from URL: {e}")
+            self.file_name = file_name
 
         if path is not None and not isinstance(path, (str, Path)):
             raise ValueError(f"Invalid attachment path type: expected str or Path, got {type(path).__name__}.")
@@ -116,6 +97,35 @@ class Attachment:
         self.name = name
         self.mime_type = mime_type
         self.description = description
+
+    def download(
+        self,
+        session: Optional[AnySession] = None,
+        *,
+        no_proxy_download: bool = False,
+    ) -> None:
+        """Download a URL-backed attachment to the temp directory."""
+        if self.path is not None or not self.url or DOWNLOAD_LICENCE_ONLY.is_set():
+            return
+
+        from unshackle.core.tracks.track import direct_session
+
+        session = session or self.session or requests.Session()
+        if no_proxy_download and any(session.proxies.values()):
+            session = direct_session(session)
+
+        download_path = config.directories.temp / (self.file_name or "attachment")
+        try:
+            response = session.get(self.url, stream=True)
+            response.raise_for_status()
+            download_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(download_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+        except Exception as e:
+            raise ValueError(f"Failed to download attachment from URL: {e}")
+
+        self.path = download_path
 
     def __repr__(self) -> str:
         return "{name}({items})".format(
@@ -152,7 +162,7 @@ class Attachment:
         name: Optional[str] = None,
         mime_type: Optional[str] = None,
         description: Optional[str] = None,
-        session: Optional[requests.Session] = None,
+        session: Optional[AnySession] = None,
     ) -> "Attachment":
         """
         Create an attachment from a URL.

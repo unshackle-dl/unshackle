@@ -747,7 +747,7 @@ async def download(request: web.Request) -> web.Response:
                 description: Force disable all proxy use (default - false)
               no_proxy_download:
                 type: boolean
-                description: Bypass proxy for segment downloads only. Manifest, license, and auth still use proxy (default - false)
+                description: Bypass proxy for all downloads. Manifest, license, and auth still use proxy (default - false)
               tag:
                 type: string
                 description: Set the group tag to be used (default - None)

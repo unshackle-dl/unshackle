@@ -457,7 +457,7 @@ unshackle dl --proxy 'http://user:pass@host:8080' EXAMPLE 81234567
 Two related flags:
 
 - `--no-proxy`: force-disable all proxy use for this run.
-- `--no-proxy-download`: bypass the proxy for **segment downloads only**. The manifest,
+- `--no-proxy-download`: bypass the proxy for **all downloads**. The manifest,
   license, and authentication requests still go through the proxy. This is useful when the
   proxy is only needed to satisfy geo-checks, not to move the bulk of the data.
 
