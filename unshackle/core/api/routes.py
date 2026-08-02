@@ -787,6 +787,13 @@ async def download(request: web.Request) -> web.Response:
               imdb_id:
                 type: string
                 description: Use this IMDB ID (e.g. tt1375666) for tagging (default - None)
+              tvdb_id:
+                type: integer
+                description: Use this TVDB ID for tagging and episode ordering (default - None)
+              tvdb_order:
+                type: string
+                enum: [official, dvd, absolute, alternate, regional]
+                description: Renumber episodes to a TVDB season order (default - the tvdb_order config option)
               output_dir:
                 type: string
                 description: Override the output directory for this download (default - None)

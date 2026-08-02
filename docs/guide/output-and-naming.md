@@ -245,7 +245,11 @@ tag_imdb_tmdb: true
 |---|---|---|---|
 | `tag` | str | `""` | The release-group tag used for `{tag}`. |
 | `tag_group_name` | bool | `true` | Write the group name (`config.tag`) into the MKV `Group` metadata tag. |
-| `tag_imdb_tmdb` | bool | `true` | Look up and embed IMDb / TMDB / TVDB external-ID tags in the MKV metadata (uses `tmdb_api_key` / `simkl_client_id` when available). |
+| `tag_imdb_tmdb` | bool | `true` | Look up and embed IMDb / TMDB / TVDB external-ID tags in the MKV metadata (uses `tmdb_api_key` / `tvdb_api_key` / `simkl_client_id` when available). |
+
+The IDs are written as the Matroska `IMDB`, `TMDB`, and `TVDB2` tags. `TVDB2` values carry the
+entity prefix the [Matroska tagging spec](https://www.matroska.org/technical/tagging.html)
+requires: `series/73871` for a show, `movies/113` for a film.
 
 You can override the tag per run without editing config:
 

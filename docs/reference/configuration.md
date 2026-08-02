@@ -39,7 +39,7 @@ This page assumes you already know the basics and want precise details.
 | [DRM & CDM](#drm-cdm) | `cdm`, `remote_cdm`, `decryption` |
 | [Network & proxy](#network-proxy) | `network`, `headers`, `proxy_providers` |
 | [Key vaults](#key-vaults) | `key_vaults`, `vault_timeout` |
-| [External API keys](#external-api-keys) | `imdb_api_enabled`, `omdb_api_key`, `tmdb_api_key`, `simkl_client_id`, `decrypt_labs_api_key`, `ipinfo_api_key` |
+| [External API keys](#external-api-keys) | `imdb_api_enabled`, `omdb_api_key`, `tmdb_api_key`, `tvdb_api_key`, `tvdb_pin`, `tvdb_order`, `simkl_client_id`, `metadata_providers`, `decrypt_labs_api_key`, `ipinfo_api_key` |
 | [Caching & updates](#caching-updates) | `title_cache_enabled`, `title_cache_time`, `title_cache_max_retention`, `update_checks`, `update_check_interval` |
 | [Logging, privacy & debug](#logging-privacy-debug) | `redact_paths`, `debug`, `debug_keys`, `debug_requests`, `set_terminal_bg` |
 | [Deprecated & removed](#deprecated-removed-keys) | `curl_impersonate`, `downloader`, `scene_naming` |
@@ -784,13 +784,31 @@ All default to an empty string and enable optional metadata/geolocation features
 | `omdb_api_key` | str | `""` | [OMDb](https://www.omdbapi.com/) API key for IMDb metadata lookups; a more reliable alternative to IMDxAPI. Free keys are available on the OMDb site. |
 | `tmdb_api_key` | str | `""` | TMDB API key for metadata enrichment and external-ID tags. |
 | `simkl_client_id` | str | `""` | SIMKL client ID for metadata lookups; an alternative/fallback source to TMDB. |
+| `tvdb_api_key` | str | `""` | [TheTVDB v4](https://thetvdb.com/api-information) API key; a fallback source to TMDB, strongest on TV series. Free keys are available on the TVDB site. |
+| `tvdb_pin` | str | `""` | Subscriber PIN, only needed for a user-supported TVDB key. Leave empty for a normal project key. |
+| `tvdb_order` | str | `""` | Default for `--tvdb-order`: renumber episodes to a TVDB season order (`official`, `dvd`, `absolute`, `alternate`, `regional`). Empty keeps the numbering the service gives. |
+| `metadata_providers` | list | *(see below)* | Metadata providers to use, in the order they are tried. |
 | `decrypt_labs_api_key` | str | `""` | Global Decrypt Labs API key (used by remote CDM / vault). |
 | `ipinfo_api_key` | str | `""` | ipinfo.io API key for IP/region lookups. |
 
-!!! tip "SIMKL is a fallback for TMDB"
-    SIMKL is an alternative metadata source. Use it when you have no `tmdb_api_key`
-    configured; it improves title matching and tagging in that case rather than replacing
-    TMDB.
+!!! tip "Choosing and ordering metadata providers"
+    A lookup goes to each provider in turn and stops at the first good match, so the order
+    decides which source wins. `metadata_providers` sets that order:
+
+    ```yaml
+    metadata_providers: [tvdb, tmdb, simkl]
+    ```
+
+    Names not in the list are never used, so this both orders and filters. Unknown names are
+    ignored with a warning. Leave it unset for the default order:
+
+    ```yaml
+    metadata_providers: [imdbapi, omdb, simkl, tmdb, tvdb]
+    ```
+
+    A provider is skipped when its API key is missing, whatever the order. Available names are
+    `imdbapi`, `omdb`, `simkl`, `tmdb`, and `tvdb`. Put `tvdb` first to make TheTVDB your
+    primary source; leave it last to use it only as a fallback for TMDB.
 
 !!! note "`ipinfo_api_key` never touches your service sessions"
     The token is only ever sent to `api.ipinfo.io` as a per-request `Authorization` header; it
@@ -907,6 +925,7 @@ proxy_providers:
 
 omdb_api_key: "your-omdb-key"
 tmdb_api_key: "your-tmdb-key"
+tvdb_api_key: "your-tvdb-key"
 title_cache_time: 3600
 redact_paths: true
 ```

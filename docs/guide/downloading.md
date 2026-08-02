@@ -519,12 +519,34 @@ tagging and naming:
 | --- | --- | --- |
 | `--tmdb` | `--tmdb 27205` | Use this TMDB ID instead of automatic lookup. |
 | `--imdb` | `--imdb tt1375666` | Use this IMDb ID. |
+| `--tvdb` | `--tvdb 73871` | Use this TVDB ID instead of looking the series up. |
 | `--animeapi` | `--animeapi mal:12345` | Resolve via AnimeAPI (`mal:`/`anilist:` prefix; defaults to MAL). |
 | `--enrich` | - | Override the show title and year from an external source. **Requires** one of `--tmdb`, `--imdb`, or `--animeapi`. |
+| `--tvdb-order` | `--tvdb-order dvd` | Renumber episodes to a TVDB season order. Needs `tvdb_api_key`. |
 
 ```shell title="Force the right IMDb match and enrich the title"
 unshackle dl --imdb tt1375666 --enrich EXAMPLE 81234567
 ```
+
+### Episode ordering
+
+A service does not always number a series the way TVDB's aired order does. Some services list
+Futurama in TVDB's `alternate` (Streaming) order, for example, while TVDB's `official` order
+holds back four season-one episodes to the start of season two. `--tvdb-order` works out which
+order the service used, then renumbers the episodes into the order you asked for:
+
+```shell title="Download Futurama in DVD order"
+unshackle dl --tvdb-order dvd EXAMPLE 81234567
+```
+
+Available orders are `official` (aired), `dvd`, `absolute`, `alternate`, and `regional`. Set
+`tvdb_order` in your config to apply one by default.
+
+!!! warning "Orders that do not cover the whole series"
+    An order can leave out episodes the service carries. TVDB's `dvd` order does not list
+    Futurama's four movies. Those episodes keep their original numbering. If that would give
+    two episodes the same season/episode slot, and so the same filename, unshackle logs an
+    error and leaves the numbering untouched. Pick an order that covers the whole series.
 
 ## Configuration defaults
 
@@ -571,4 +593,5 @@ authoritative list.
 | `--list` / `--list-titles` / `--skip-dl` | | Dry runs. |
 | `--cdm-only` / `--vaults-only` | | Key source control. |
 | `--export` | | Export track info and keys to JSON. |
-| `--tmdb` / `--imdb` / `--animeapi` / `--enrich` | | Metadata overrides. |
+| `--tmdb` / `--imdb` / `--tvdb` / `--animeapi` / `--enrich` | | Metadata overrides. |
+| `--tvdb-order` | | Renumber episodes to a TVDB season order. |
