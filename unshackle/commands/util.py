@@ -135,7 +135,19 @@ def crop(path: Path, aspect: str, letter: bool, offset: int, preview: bool) -> N
             ]
 
         ffmpeg_call = subprocess.Popen(
-            [binaries.FFMPEG, "-y", "-i", str(video_path), "-map", "0:v:0", "-c", "copy", "-bsf:v", crop_filter]
+            [
+                binaries.FFMPEG,
+                "-nostdin",
+                "-y",
+                "-i",
+                str(video_path),
+                "-map",
+                "0:v:0",
+                "-c",
+                "copy",
+                "-bsf:v",
+                crop_filter,
+            ]
             + out_path,
             stdout=subprocess.PIPE,
         )
@@ -216,6 +228,7 @@ def range_(path: Path, full: bool, preview: bool) -> None:
         ffmpeg_call = subprocess.Popen(
             [
                 binaries.FFMPEG,
+                "-nostdin",
                 "-y",
                 "-i",
                 str(video_path),
@@ -267,6 +280,7 @@ def test(path: Path, map_: str) -> None:
         p = subprocess.Popen(
             [
                 binaries.FFMPEG,
+                "-nostdin",
                 "-hide_banner",
                 "-benchmark",
                 "-err_detect",

@@ -921,6 +921,7 @@ class Track:
         def _ffmpeg(extra_args: list[str] = None, bsf: Optional[str] = None):
             args = [
                 binaries.FFMPEG,
+                "-nostdin",
                 "-hide_banner",
                 "-loglevel",
                 "error",

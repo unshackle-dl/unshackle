@@ -385,6 +385,7 @@ class Video(Track):
         subprocess.run(
             [
                 binaries.FFMPEG,
+                "-nostdin",
                 "-hide_banner",
                 "-loglevel",
                 "panic",
@@ -493,6 +494,7 @@ class Video(Track):
             subprocess.run(
                 [
                     binaries.FFMPEG,
+                    "-nostdin",
                     "-hide_banner",
                     "-loglevel",
                     "error",
@@ -667,6 +669,7 @@ class Video(Track):
         subprocess.run(
             [
                 binaries.FFMPEG,
+                "-nostdin",
                 "-hide_banner",
                 "-loglevel",
                 "panic",

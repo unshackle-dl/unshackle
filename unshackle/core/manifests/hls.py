@@ -1074,6 +1074,7 @@ class HLS:
                 subprocess.check_call(
                     [
                         binaries.FFMPEG,
+                        "-nostdin",
                         "-hide_banner",
                         "-loglevel",
                         "error",
