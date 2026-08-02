@@ -375,7 +375,8 @@ written as sidecar files. See [Subtitles](../guide/subtitles.md) for the full gu
 | `preferred_conversion_method` | str | *(unset)* | Preferred converter when several are available. |
 | `output_mode` | str | `"mux"` | `mux` embeds subtitles in the MKV; `sidecar` writes separate files; `both` writes sidecars and still muxes. |
 | `sidecar_format` | str | `"srt"` | Format for sidecar files when `output_mode: sidecar`. |
-| `type_priority` | list | *(unset)* | Ordered ranking of subtitle types (`forced`, `normal`, `sdh`; CC counts as SDH) that sorts the variants within each language. Types you leave out fall to the end. |
+| `type_priority` | list | *(unset)* | Ordered ranking of subtitle types (`forced`, `normal`, `sdh`; CC counts as SDH). Types you leave out fall to the end. |
+| `group_by` | str | `"type"` | Which key groups the subtitle tracks. `type` puts all forced tracks together, then all normal, then all SDH. `language` keeps each language next to its own variants. |
 
 ```yaml
 subtitle:
@@ -384,11 +385,30 @@ subtitle:
   sidecar_format: srt
 ```
 
+!!! note "`group_by` puts a language next to its own SDH track"
+    The default `type` order groups by subtitle type first, so every normal track comes
+    before every SDH track. In a title with many languages, a track ends up far from its
+    own SDH version, for example Finnish at track 5 and Finnish SDH at track 42. Set
+    `group_by: language` to keep them together:
+
+    ```yaml
+    subtitle:
+      group_by: language
+    ```
+
+    | `group_by` | Result |
+    |---|---|
+    | `type` | Danish, Finnish, French, … Danish SDH, Finnish SDH, French SDH |
+    | `language` | Danish, Danish SDH, Finnish, Finnish SDH, French, French SDH |
+
+    `type_priority` still sets the order of the variants, so with `group_by: language` it
+    controls the order inside each language.
+
 !!! note "`type_priority` also picks the default subtitle"
-    `type_priority` sorts the tracks within each language, and at mux time the first track
-    in the default subtitle language gets the `default` flag. The built-in order is `forced`,
-    `normal`, `sdh`, which means a forced track becomes default whenever one exists. If you
-    want the full dialogue track as default instead, set:
+    At mux time the first track in the default subtitle language gets the `default` flag.
+    The built-in order is `forced`, `normal`, `sdh`, which means a forced track becomes
+    default whenever one exists. If you want the full dialogue track as default instead,
+    set:
 
     ```yaml
     subtitle:
