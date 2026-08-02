@@ -2397,7 +2397,11 @@ class dl:
                     by_language=processed_audio_sort_lang,
                     codec_priority=config.audio.get("codec_priority"),
                 )
-                title.tracks.sort_subtitles(by_language=s_lang, type_priority=config.subtitle.get("type_priority"))
+                title.tracks.sort_subtitles(
+                    by_language=s_lang,
+                    type_priority=config.subtitle.get("type_priority"),
+                    group_by=config.subtitle.get("group_by"),
+                )
 
             if list_:
                 available_tracks, _ = title.tracks.tree()
