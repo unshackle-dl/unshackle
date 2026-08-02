@@ -3344,10 +3344,16 @@
 <td>Release group tag.</td>
 </tr>
 <tr>
-<td><code>tmdb_id</code> / <code>imdb_id</code> / <code>animeapi_id</code></td>
+<td><code>tmdb_id</code> / <code>imdb_id</code> / <code>tvdb_id</code> / <code>animeapi_id</code></td>
 <td>-</td>
 <td><code>null</code></td>
 <td>External ID overrides for tagging.</td>
+</tr>
+<tr>
+<td><code>tvdb_order</code></td>
+<td><code>official</code>, <code>dvd</code>, <code>absolute</code>, <code>alternate</code>, <code>regional</code></td>
+<td><code>null</code></td>
+<td>Renumber episodes to a TVDB season order. Falls back to the <code>tvdb_order</code> config option.</td>
 </tr>
 <tr>
 <td><code>enrich</code></td>

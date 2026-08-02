@@ -846,6 +846,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Metadata &amp; tagging">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#episode-ordering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Episode ordering
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -2162,6 +2179,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Metadata &amp; tagging">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#episode-ordering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Episode ordering
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -2872,15 +2906,34 @@
 <td>IMDb ID, e.g. <code>tt1375666</code>.</td>
 </tr>
 <tr>
+<td><code>--tvdb</code></td>
+<td>TVDB ID (integer). Skips the series lookup that <code>--tvdb-order</code> would otherwise do.</td>
+</tr>
+<tr>
 <td><code>--animeapi</code></td>
-<td>AnimeAPI ID, e.g. <code>mal:12345</code> or <code>anilist:98765</code> (defaults to MAL). Back-fills TMDB/IMDb.</td>
+<td>AnimeAPI ID, e.g. <code>mal:12345</code> or <code>anilist:98765</code> (defaults to MAL). Back-fills TMDB/IMDb/TVDB.</td>
 </tr>
 <tr>
 <td><code>--enrich</code></td>
 <td>Override show title/year from the external source. <strong>Requires</strong> one of <code>--tmdb</code>, <code>--imdb</code>, or <code>--animeapi</code>.</td>
 </tr>
+<tr>
+<td><code>--tvdb-order</code></td>
+<td>Renumber episodes to a TVDB season order: <code>official</code> (aired), <code>dvd</code>, <code>absolute</code>, <code>alternate</code>, or <code>regional</code>. Needs <code>tvdb_api_key</code>.</td>
+</tr>
 </tbody>
 </table>
+<h4 id="episode-ordering">Episode ordering<a class="headerlink" href="#episode-ordering" title="Permanent link">&para;</a></h4>
+<p>A service does not always number a series the way TVDB's aired order does. Some services list
+Futurama in TVDB's <code>alternate</code> (Streaming) order, for example. <code>--tvdb-order</code> works out which
+order the service used, then renumbers the episodes into the order you asked for.</p>
+<div class="admonition note">
+<p class="admonition-title">Orders that do not cover the whole series</p>
+<p>An order can omit episodes the service carries; TVDB's <code>dvd</code> order for Futurama leaves out
+the four movies. Those episodes keep their original numbering. If that would give two
+episodes the same season/episode slot, and so the same filename, unshackle logs an error
+and keeps the service's numbering unchanged. Pick an order that covers the whole series.</p>
+</div>
 <h3 id="drm-keys-decryption">DRM, keys &amp; decryption<a class="headerlink" href="#drm-keys-decryption" title="Permanent link">&para;</a></h3>
 <table>
 <thead>

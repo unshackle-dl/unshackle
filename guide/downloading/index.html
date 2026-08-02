@@ -1140,6 +1140,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Metadata and tagging">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#episode-ordering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Episode ordering
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2491,6 +2508,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Metadata and tagging">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#episode-ordering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Episode ordering
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3206,6 +3240,11 @@ tagging and naming:</p>
 <td>Use this IMDb ID.</td>
 </tr>
 <tr>
+<td><code>--tvdb</code></td>
+<td><code>--tvdb 73871</code></td>
+<td>Use this TVDB ID instead of looking the series up.</td>
+</tr>
+<tr>
 <td><code>--animeapi</code></td>
 <td><code>--animeapi mal:12345</code></td>
 <td>Resolve via AnimeAPI (<code>mal:</code>/<code>anilist:</code> prefix; defaults to MAL).</td>
@@ -3215,10 +3254,31 @@ tagging and naming:</p>
 <td>-</td>
 <td>Override the show title and year from an external source. <strong>Requires</strong> one of <code>--tmdb</code>, <code>--imdb</code>, or <code>--animeapi</code>.</td>
 </tr>
+<tr>
+<td><code>--tvdb-order</code></td>
+<td><code>--tvdb-order dvd</code></td>
+<td>Renumber episodes to a TVDB season order. Needs <code>tvdb_api_key</code>.</td>
+</tr>
 </tbody>
 </table>
 <div class="language-shell highlight"><span class="filename">Force the right IMDb match and enrich the title</span><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--imdb<span class="w"> </span>tt1375666<span class="w"> </span>--enrich<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
+<h3 id="episode-ordering">Episode ordering<a class="headerlink" href="#episode-ordering" title="Permanent link">&para;</a></h3>
+<p>A service does not always number a series the way TVDB's aired order does. Some services list
+Futurama in TVDB's <code>alternate</code> (Streaming) order, for example, while TVDB's <code>official</code> order
+holds back four season-one episodes to the start of season two. <code>--tvdb-order</code> works out which
+order the service used, then renumbers the episodes into the order you asked for:</p>
+<div class="language-shell highlight"><span class="filename">Download Futurama in DVD order</span><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--tvdb-order<span class="w"> </span>dvd<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<p>Available orders are <code>official</code> (aired), <code>dvd</code>, <code>absolute</code>, <code>alternate</code>, and <code>regional</code>. Set
+<code>tvdb_order</code> in your config to apply one by default.</p>
+<div class="admonition warning">
+<p class="admonition-title">Orders that do not cover the whole series</p>
+<p>An order can leave out episodes the service carries. TVDB's <code>dvd</code> order does not list
+Futurama's four movies. Those episodes keep their original numbering. If that would give
+two episodes the same season/episode slot, and so the same filename, unshackle logs an
+error and leaves the numbering untouched. Pick an order that covers the whole series.</p>
+</div>
 <h2 id="configuration-defaults">Configuration defaults<a class="headerlink" href="#configuration-defaults" title="Permanent link">&para;</a></h2>
 <p>Every flag on this page can be set as a default in your configuration file so you don't
 have to type it each time, and defaults can be scoped per service. See
@@ -3373,9 +3433,14 @@ authoritative list.</p>
 <td>Export track info and keys to JSON.</td>
 </tr>
 <tr>
-<td><code>--tmdb</code> / <code>--imdb</code> / <code>--animeapi</code> / <code>--enrich</code></td>
+<td><code>--tmdb</code> / <code>--imdb</code> / <code>--tvdb</code> / <code>--animeapi</code> / <code>--enrich</code></td>
 <td></td>
 <td>Metadata overrides.</td>
+</tr>
+<tr>
+<td><code>--tvdb-order</code></td>
+<td></td>
+<td>Renumber episodes to a TVDB season order.</td>
 </tr>
 </tbody>
 </table>

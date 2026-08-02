@@ -2586,10 +2586,13 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 <td><code>tag_imdb_tmdb</code></td>
 <td>bool</td>
 <td><code>true</code></td>
-<td>Look up and embed IMDb / TMDB / TVDB external-ID tags in the MKV metadata (uses <code>tmdb_api_key</code> / <code>simkl_client_id</code> when available).</td>
+<td>Look up and embed IMDb / TMDB / TVDB external-ID tags in the MKV metadata (uses <code>tmdb_api_key</code> / <code>tvdb_api_key</code> / <code>simkl_client_id</code> when available).</td>
 </tr>
 </tbody>
 </table>
+<p>The IDs are written as the Matroska <code>IMDB</code>, <code>TMDB</code>, and <code>TVDB2</code> tags. <code>TVDB2</code> values carry the
+entity prefix the <a href="https://www.matroska.org/technical/tagging.html">Matroska tagging spec</a>
+requires: <code>series/73871</code> for a show, <code>movies/113</code> for a film.</p>
 <p>You can override the tag per run without editing config:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--tag<span class="w"> </span>OTHERGROUP<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s2">&quot;...&quot;</span>
 </span></code></pre></div>

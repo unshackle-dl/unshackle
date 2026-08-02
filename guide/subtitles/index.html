@@ -2277,9 +2277,15 @@ flags drive selection, sort order, output filenames, and the Matroska track flag
 </ul>
 <div class="admonition note">
 <p class="admonition-title">SDH and CC are treated together for sorting and stripping</p>
-<p>Within a language, unshackle orders subtitles from fewest to most captions:
-<strong>Forced → Normal → SDH/CC</strong>. For the purposes of hearing-impaired handling, SDH and
-CC tracks are grouped as the "most captions" variant.</p>
+<p>unshackle orders subtitles from fewest to most captions: <strong>Forced → Normal → SDH/CC</strong>.
+For the purposes of hearing-impaired handling, SDH and CC tracks are grouped as the
+"most captions" variant.</p>
+<p>By default this type order is the primary sort, so all forced tracks come first, then
+all normal tracks, then all SDH/CC tracks, each block sorted by language. To keep each
+language next to its own variants instead, set
+<a href="../../reference/configuration/#subtitle"><code>subtitle.group_by</code></a> to <code>language</code>. Use
+<a href="../../reference/configuration/#subtitle"><code>subtitle.type_priority</code></a> to change the
+Forced → Normal → SDH/CC order itself.</p>
 </div>
 <p>A single track cannot be both CC and SDH, and a forced track cannot also be flagged
 CC or SDH. These combinations are rejected as invalid.</p>
