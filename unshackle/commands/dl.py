@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import time
+from collections import Counter
 from collections.abc import Iterable
 from concurrent import futures
 from concurrent.futures import ThreadPoolExecutor
@@ -58,6 +59,7 @@ from unshackle.core.music import (
     write_music_manifest,
     write_music_metadata,
 )
+from unshackle.core.providers.tvdb import SEASON_TYPES
 from unshackle.core.proxies import Basic, ExpressVPN, Gluetun, Hola, NordVPN, ProtonVPN, SurfsharkVPN, WindscribeVPN
 from unshackle.core.service import Service
 from unshackle.core.services import Services
@@ -588,6 +590,20 @@ class dl:
         help="Use this TMDB ID for tagging instead of automatic lookup.",
     )
     @click.option(
+        "--tvdb",
+        "tvdb_id",
+        type=int,
+        default=None,
+        help="Use this TVDB ID for --tvdb-order instead of looking the series up automatically.",
+    )
+    @click.option(
+        "--tvdb-order",
+        type=click.Choice(SEASON_TYPES, case_sensitive=False),
+        default=None,
+        help="Renumber episodes to a TVDB season order. Services normally use 'official' (aired) order; "
+        "a series' Streaming Order is 'alternate'. Defaults to the tvdb_order config option.",
+    )
+    @click.option(
         "--animeapi",
         "animeapi_id",
         type=str,
@@ -760,6 +776,8 @@ class dl:
         tag: Optional[str] = None,
         tmdb_id: Optional[int] = None,
         imdb_id: Optional[str] = None,
+        tvdb_id: Optional[int] = None,
+        tvdb_order: Optional[str] = None,
         animeapi_id: Optional[str] = None,
         enrich: bool = False,
         output_dir: Optional[Path] = None,
@@ -798,6 +816,8 @@ class dl:
         tag = ctx.params.get("tag", tag)
         tmdb_id = ctx.params.get("tmdb_id", tmdb_id)
         imdb_id = ctx.params.get("imdb_id", imdb_id)
+        tvdb_id = ctx.params.get("tvdb_id", tvdb_id)
+        tvdb_order = ctx.params.get("tvdb_order", tvdb_order)
         animeapi_id = ctx.params.get("animeapi_id", animeapi_id)
         enrich = ctx.params.get("enrich", enrich)
         output_dir = ctx.params.get("output_dir", output_dir)
@@ -806,6 +826,10 @@ class dl:
         self.proxy_requested = bool(proxy)
         self.tmdb_id = tmdb_id
         self.imdb_id = imdb_id
+        self.tvdb_id = tvdb_id
+        self.tvdb_order = (tvdb_order or config.tvdb_order or "").lower()
+        if self.tvdb_order and self.tvdb_order not in SEASON_TYPES:
+            raise click.UsageError(f"tvdb_order must be one of {', '.join(SEASON_TYPES)}, not {self.tvdb_order!r}")
         self.enrich = enrich
         self.animeapi_title: Optional[str] = None
         self.output_dir = output_dir
@@ -819,6 +843,8 @@ class dl:
                 self.tmdb_id = anime_ids.tmdb_id
             if not self.imdb_id and anime_ids.imdb_id:
                 self.imdb_id = anime_ids.imdb_id
+            if not self.tvdb_id and anime_ids.tvdb_id:
+                self.tvdb_id = anime_ids.tvdb_id
 
         if self.enrich and not (self.tmdb_id or self.imdb_id or self.animeapi_title):
             raise click.UsageError("--enrich requires --tmdb, --imdb, or --animeapi to provide a metadata source.")
@@ -1500,6 +1526,9 @@ class dl:
                             titles.name = enrich_title
                     if enrich_year and not titles.year:
                         titles.year = enrich_year
+
+        if self.tvdb_order and isinstance(titles, Series):
+            titles = self.apply_tvdb_order(titles, title_cacher, cache_title_id, cache_region, cache_account_hash)
 
         music_mode = isinstance(titles, Music)
         music_collection_mode = (
@@ -3622,7 +3651,7 @@ class dl:
                             shutil.move(muxed_path, final_path)
                         used_final_paths.add(final_path)
                         self.completed_files.append(final_path)
-                        tags.tag_file(final_path, title, self.tmdb_id, self.imdb_id)
+                        tags.tag_file(final_path, title, self.tmdb_id, self.imdb_id, self.tvdb_id)
 
                 title_dl_time = time_elapsed_since(dl_start_time)
                 downloaded_label = "Track" if music_mode and isinstance(title, Song) else "Title"
@@ -3647,6 +3676,79 @@ class dl:
         dl_time = time_elapsed_since(start_time)
 
         console.print(Padding(f"Processed all titles in [progress.elapsed]{dl_time}", (0, 5, 1, 5)))
+
+    def apply_tvdb_order(
+        self,
+        titles: Series,
+        title_cacher: Any = None,
+        cache_title_id: Optional[str] = None,
+        cache_region: Optional[str] = None,
+        cache_account_hash: Optional[str] = None,
+    ) -> Series:
+        """Renumber episodes from the service's own numbering into a TVDB season order."""
+        tvdb = providers.get_provider("tvdb")
+        if not tvdb:
+            self.log.warning("--tvdb-order needs a tvdb_api_key in your config, skipping renumber.")
+            return titles
+
+        tvdb_id = self.tvdb_id
+        if not tvdb_id:
+            show = titles[0]
+            result = providers.search_metadata(
+                show.title, show.year, "tv", title_cacher, cache_title_id, cache_region, cache_account_hash
+            )
+            tvdb_id = result.external_ids.tvdb_id if result else None
+        if not tvdb_id:
+            self.log.warning("Could not resolve a TVDB ID for %r, skipping %s renumber.", str(titles), self.tvdb_order)
+            return titles
+        self.tvdb_id = tvdb_id  # keep the mux tag on the series the renumbering used
+
+        keys = [(t.season, t.number) for t in titles]
+        source_order = tvdb.detect_order(tvdb_id, keys)  # type: ignore[attr-defined]
+        if source_order == self.tvdb_order:
+            self.log.info("%s already lists this series in TVDB %s order.", self.service, self.tvdb_order)
+            return titles
+
+        mapping = tvdb.get_order_map(tvdb_id, self.tvdb_order, source_order)  # type: ignore[attr-defined]
+        if not mapping:
+            return titles
+
+        # an unmapped episode keeps its own numbering and can land on a remapped episode's slot
+        renumbered = [mapping.get(key, (*key, None))[:2] for key in keys]
+        unmapped = sum(1 for key in keys if key not in mapping)
+        collisions = [slot for slot, count in Counter(renumbered).items() if count > 1]
+        if collisions:
+            self.log.error(
+                "TVDB's %s order does not cover %d of this series' episodes, and renumbering the rest "
+                "would give %d season/episode slot(s) two episodes each. Keeping the %s numbering "
+                "%s uses. Pick an order that covers the whole series.",
+                self.tvdb_order,
+                unmapped,
+                len(collisions),
+                source_order,
+                self.service,
+            )
+            return titles
+
+        for title in titles:
+            entry = mapping.get((title.season, title.number))
+            if not entry:
+                continue
+            title.season, title.number, tvdb_name = entry
+            if tvdb_name and not title.name:
+                title.name = tvdb_name
+
+        if unmapped:
+            self.log.warning(
+                "%d episode(s) are not in TVDB's %s order and keep their %s numbering.",
+                unmapped,
+                self.tvdb_order,
+                source_order,
+            )
+        self.log.info("Renumbered episodes from TVDB %s to %s order (ID %s).", source_order, self.tvdb_order, tvdb_id)
+
+        # Series is a SortedKeyList; renumbering in place does not re-sort it
+        return type(titles)(list(titles))
 
     @staticmethod
     def title_to_meta(title: Title_T) -> dict[str, Any]:

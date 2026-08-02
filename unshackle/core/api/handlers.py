@@ -74,6 +74,8 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "tag": None,
     "tmdb_id": None,
     "imdb_id": None,
+    "tvdb_id": None,
+    "tvdb_order": None,
     "animeapi_id": None,
     "enrich": False,
     "output_dir": None,
