@@ -63,6 +63,7 @@ from unshackle.core.providers.tvdb import SEASON_TYPES
 from unshackle.core.proxies import Basic, ExpressVPN, Gluetun, Hola, NordVPN, ProtonVPN, SurfsharkVPN, WindscribeVPN
 from unshackle.core.service import Service
 from unshackle.core.services import Services
+from unshackle.core.temp import with_task_temp
 from unshackle.core.title_cacher import get_account_hash
 from unshackle.core.titles import Movie, Movies, Music, Series, Song, Title_T
 from unshackle.core.titles.episode import Episode
@@ -1246,6 +1247,7 @@ class dl:
         # able to keep `self` as the first positional
         self.cli._result_callback = self.result
 
+    @with_task_temp
     def result(
         self,
         service: Service,
