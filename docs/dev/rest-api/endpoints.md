@@ -384,7 +384,8 @@ Create a download job. Requires `service` and `title_id`; every other field is a
 | `best_available` | boolean | `false` | Fall back to best available. |
 | `repack` | boolean | `false` | Add REPACK tag. |
 | `tag` | string | `null` | Release group tag. |
-| `tmdb_id` / `imdb_id` / `animeapi_id` | - | `null` | External ID overrides for tagging. |
+| `tmdb_id` / `imdb_id` / `tvdb_id` / `animeapi_id` | - | `null` | External ID overrides for tagging. |
+| `tvdb_order` | `official`, `dvd`, `absolute`, `alternate`, `regional` | `null` | Renumber episodes to a TVDB season order. Falls back to the `tvdb_order` config option. |
 | `enrich` | boolean | `false` | Override title/year from external source. |
 | `output_dir` | string | `null` | Override output directory. |
 | `no_cache` / `reset_cache` | boolean | `false` | Title cache controls. |

@@ -145,8 +145,22 @@ Keep only certain track types, or skip certain track types. Attachments are alwa
 |---|---|
 | `--tmdb` | TMDB ID (integer). |
 | `--imdb` | IMDb ID, e.g. `tt1375666`. |
-| `--animeapi` | AnimeAPI ID, e.g. `mal:12345` or `anilist:98765` (defaults to MAL). Back-fills TMDB/IMDb. |
+| `--tvdb` | TVDB ID (integer). Skips the series lookup that `--tvdb-order` would otherwise do. |
+| `--animeapi` | AnimeAPI ID, e.g. `mal:12345` or `anilist:98765` (defaults to MAL). Back-fills TMDB/IMDb/TVDB. |
 | `--enrich` | Override show title/year from the external source. **Requires** one of `--tmdb`, `--imdb`, or `--animeapi`. |
+| `--tvdb-order` | Renumber episodes to a TVDB season order: `official` (aired), `dvd`, `absolute`, `alternate`, or `regional`. Needs `tvdb_api_key`. |
+
+#### Episode ordering
+
+A service does not always number a series the way TVDB's aired order does. Some services list
+Futurama in TVDB's `alternate` (Streaming) order, for example. `--tvdb-order` works out which
+order the service used, then renumbers the episodes into the order you asked for.
+
+!!! note "Orders that do not cover the whole series"
+    An order can omit episodes the service carries; TVDB's `dvd` order for Futurama leaves out
+    the four movies. Those episodes keep their original numbering. If that would give two
+    episodes the same season/episode slot, and so the same filename, unshackle logs an error
+    and keeps the service's numbering unchanged. Pick an order that covers the whole series.
 
 ### DRM, keys & decryption
 

@@ -85,7 +85,7 @@ The top-level keys group loosely into these areas:
 | Key vaults | `key_vaults`, `vault_timeout` |
 | Proxies & remote | `proxy_providers`, `remote_services`, `serve`, `services` |
 | Naming & tagging | `tag`, `output_template`, `chapter_fallback_name` |
-| External API keys | `tmdb_api_key`, `simkl_client_id`, `ipinfo_api_key` |
+| External API keys | `tmdb_api_key`, `tvdb_api_key`, `simkl_client_id`, `ipinfo_api_key`, `metadata_providers` |
 | Behavior & logging | `update_checks`, `redact_paths`, `debug`, `unicode_filenames` |
 | Paths | `directories`, `filenames` |
 
@@ -125,7 +125,7 @@ services:
 
 !!! tip "A few keys are named after the flag's internal name"
     Most keys are obvious, but set these exact ones: `range` (`-r`), `list` (`--list`),
-    `tmdb_id` (`--tmdb`), `imdb_id` (`--imdb`), `no_atmos` (`--noatmos`), and `output_dir`
+    `tmdb_id` (`--tmdb`), `imdb_id` (`--imdb`), `tvdb_id` (`--tvdb`), `no_atmos` (`--noatmos`), and `output_dir`
     (`-o`). The [Configuration Reference](../reference/configuration.md#dl) has the full list
     and every available key.
 

@@ -219,7 +219,7 @@ unshackle dl -q 1080 -o /mnt/media/incoming EXAMPLE 81234567
 - unshackle writes **movies** as a single `.mkv` file named from your `movies` template.
 - **TV episodes** are grouped into a per-show / per-season folder (from your
   `series` template) unless you pass `--no-folder`.
-- unshackle builds the filename from your `output_template` and adds IMDb/TMDB IDs to
+- unshackle builds the filename from your `output_template` and adds IMDb/TMDB/TVDB IDs to
   the file's metadata tags when available.
 
 To change the default output location permanently, set it in your config:
