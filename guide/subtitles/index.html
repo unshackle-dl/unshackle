@@ -2213,6 +2213,10 @@ format-appropriate clean-up to produce a single, valid file:</p>
 <td>Include forced subtitle tracks (excluded by default).</td>
 </tr>
 <tr>
+<td><code>-fsl</code>, <code>--forced-s-lang</code></td>
+<td>Language(s) wanted for forced subtitles; implies <code>-fs</code>.</td>
+</tr>
+<tr>
 <td><code>--exact-lang</code></td>
 <td>Exact language matching, with no regional variants.</td>
 </tr>
@@ -2264,6 +2268,14 @@ to display even when you are watching in your own language. They are <strong>exc
 default</strong>. Add <code>-fs</code> / <code>--forced-subs</code> to include them:</p>
 <div class="language-shell highlight"><span class="filename">Include forced tracks alongside full subtitles</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--s-lang<span class="w"> </span>en<span class="w"> </span>--forced-subs<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
+<p><code>-fs</code> keeps forced tracks in every selected language. If you only want forced tracks
+in certain languages, use <code>-fsl</code> / <code>--forced-s-lang</code> instead. It implies <code>-fs</code>, so
+you do not need both:</p>
+<div class="language-shell highlight"><span class="filename">All full subtitles, but only the English forced track</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--s-lang<span class="w"> </span>all<span class="w"> </span>--forced-s-lang<span class="w"> </span>en<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<p>If you pass both flags, <code>-fsl</code> wins and keeps only forced tracks in its languages.
+It also understands <code>orig</code> (the title's original language) and <code>all</code> (every forced
+track, same as plain <code>-fs</code>).</p>
 <h2 id="track-types-forced-sdh-and-cc">Track types: forced, SDH, and CC<a class="headerlink" href="#track-types-forced-sdh-and-cc" title="Permanent link">&para;</a></h2>
 <p>Every subtitle track carries flags describing what kind of captions it holds. These
 flags drive selection, sort order, output filenames, and the Matroska track flags.</p>
@@ -2321,12 +2333,12 @@ hearing-impaired cues survive the strip untouched.</p>
 <p>By default unshackle keeps each subtitle in its downloaded format (only auto-converting
 TTML to WebVTT for muxing, as noted above). To force a specific output format, use
 <code>--sub-format</code>:</p>
-<div class="language-shell highlight"><span class="filename">Convert every subtitle to SRT</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--s-lang<span class="w"> </span>en,es<span class="w"> </span>--sub-format<span class="w"> </span>srt<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Convert every subtitle to SRT</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--s-lang<span class="w"> </span>en,es<span class="w"> </span>--sub-format<span class="w"> </span>srt<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p><code>--sub-format</code> accepts the common format names and aliases, including <code>srt</code>, <code>vtt</code>,
 <code>ssa</code>, <code>ass</code>, and <code>ttml</code>. Pass <code>original</code> to explicitly keep the source format and skip
 all conversion:</p>
-<div class="language-shell highlight"><span class="filename">Keep whatever the service delivered</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--sub-format<span class="w"> </span>original<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s1">&#39;https://www.example.com/...&#39;</span>
+<div class="language-shell highlight"><span class="filename">Keep whatever the service delivered</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--sub-format<span class="w"> </span>original<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s1">&#39;https://www.example.com/...&#39;</span>
 </span></code></pre></div>
 <p>Conversion only runs when the source format differs from the target, so
 <code>--sub-format srt</code> on a track that is already SRT is a no-op.</p>
@@ -2483,23 +2495,23 @@ additionally) write them as separate sidecar files next to the video, controlled
 <div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">mux (default)</label><label for="__tabbed_1_2">sidecar</label><label for="__tabbed_1_3">both</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">subtitle</span><span class="p">:</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">output_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mux</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">subtitle</span><span class="p">:</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">output_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mux</span>
 </span></code></pre></div>
 <p>Subtitles are embedded in the Matroska file. Nothing is written separately.</p>
 </div>
 <div class="tabbed-block">
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">subtitle</span><span class="p">:</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">output_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sidecar</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">sidecar_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">srt</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">subtitle</span><span class="p">:</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">output_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sidecar</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">sidecar_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">srt</span>
 </span></code></pre></div>
 <p>Subtitles are written as standalone files and <strong>not</strong> muxed into the video (when
 there is a video or audio track to sit beside).</p>
 </div>
 <div class="tabbed-block">
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">subtitle</span><span class="p">:</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">output_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">both</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">sidecar_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">srt</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">subtitle</span><span class="p">:</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nt">output_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">both</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span><span class="nt">sidecar_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">srt</span>
 </span></code></pre></div>
 <p>Subtitles are muxed into the video <strong>and</strong> written as sidecar files.</p>
 </div>
@@ -2507,9 +2519,9 @@ there is a video or audio track to sit beside).</p>
 </div>
 <p>Sidecar files are named after the output file with the language and flags encoded in the
 name, so players and media managers can match them automatically:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>Show.S01E01.1080p.WEB.en.srt
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>Show.S01E01.1080p.WEB.en.forced.srt
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>Show.S01E01.1080p.WEB.en.sdh.srt
+<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>Show.S01E01.1080p.WEB.en.srt
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>Show.S01E01.1080p.WEB.en.forced.srt
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>Show.S01E01.1080p.WEB.en.sdh.srt
 </span></code></pre></div>
 <p>The pattern is <code>{base}.{language}[.forced][.sdh].{extension}</code>. The sidecar file format
 is set by <a href="#subtitle-configuration"><code>sidecar_format</code></a>; use a format name like <code>srt</code> or
@@ -2523,14 +2535,14 @@ relevant font packages.</p>
 <h2 id="subtitle-configuration">Subtitle configuration<a class="headerlink" href="#subtitle-configuration" title="Permanent link">&para;</a></h2>
 <p>All of the behaviour above can be defaulted in the <code>subtitle</code> block of your
 <a href="../../getting-started/configuration-file/">configuration file</a>:</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">subtitle</span><span class="p">:</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">strip_sdh</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nt">preserve_formatting</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span><span class="nt">conversion_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span><span class="nt">sdh_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span><span class="nt">convert_before_strip</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">  </span><span class="nt">output_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mux</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">  </span><span class="nt">sidecar_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">srt</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">subtitle</span><span class="p">:</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span><span class="nt">strip_sdh</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span><span class="nt">preserve_formatting</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span><span class="nt">conversion_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span><span class="nt">sdh_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">  </span><span class="nt">convert_before_strip</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">  </span><span class="nt">output_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mux</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">  </span><span class="nt">sidecar_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">srt</span>
 </span></code></pre></div>
 <table>
 <thead>
@@ -2583,6 +2595,18 @@ relevant font packages.</p>
 <td><code>srt</code></td>
 <td>a format name (e.g. <code>srt</code>, <code>vtt</code>) or <code>original</code></td>
 <td>Format used for sidecar files.</td>
+</tr>
+<tr>
+<td><code>group_by</code></td>
+<td><code>type</code></td>
+<td><code>type</code>, <code>language</code></td>
+<td>Whether all tracks of one type stay together, or each language stays next to its own variants.</td>
+</tr>
+<tr>
+<td><code>language_priority</code></td>
+<td><em>(unset)</em></td>
+<td>a list of languages</td>
+<td>Languages to sort to the top. The rest keep the default order. Nothing is removed.</td>
 </tr>
 </tbody>
 </table>
