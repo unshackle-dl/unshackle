@@ -10,13 +10,16 @@ from unshackle.core.vault import Vault
 class API(Vault):
     """Key Vault using a simple RESTful HTTP API call."""
 
-    def __init__(self, name: str, uri: str, token: str, no_push: bool = False, timeout: float = 10.0):
+    def __init__(self, name: str, uri: str, token: str, no_push: bool = False, headers: dict = None, timeout: float = 10.0):
         super().__init__(name, no_push)
         self.uri = uri.rstrip("/")
         self.timeout = timeout
         self.session = Session()
         self.session.headers.update({"User-Agent": f"unshackle v{__version__}"})
         self.session.headers.update({"Authorization": f"Bearer {token}"})
+
+        if headers:
+            self.session.headers.update(headers)
 
     def get_key(self, kid: Union[UUID, str], service: str) -> Optional[str]:
         if isinstance(kid, UUID):
