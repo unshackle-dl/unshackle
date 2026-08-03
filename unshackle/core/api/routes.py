@@ -689,6 +689,11 @@ async def download(request: web.Request) -> web.Response:
               forced_subs:
                 type: boolean
                 description: Include forced subtitle tracks (default - false)
+              forced_s_lang:
+                type: array
+                items:
+                  type: string
+                description: Languages wanted for forced subtitles, implies forced_subs (default - [])
               exact_lang:
                 type: boolean
                 description: Use exact language matching (no variants) (default - false)

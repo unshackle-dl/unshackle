@@ -80,6 +80,8 @@ from unshackle.core.utilities import (
     get_system_fonts,
     init_debug_logger,
     is_close_match,
+    is_exact_match,
+    keep_forced_subtitle,
     log_event,
     suggest_font_packages,
     time_elapsed_since,
@@ -551,6 +553,13 @@ class dl:
         help="Required subtitle languages. Downloads all subtitles only if these languages exist. Cannot be used with --s-lang.",
     )
     @click.option("-fs", "--forced-subs", is_flag=True, default=False, help="Include forced subtitle tracks.")
+    @click.option(
+        "-fsl",
+        "--forced-s-lang",
+        type=LANGUAGE_RANGE,
+        default=[],
+        help="Languages wanted for forced subtitles, implies -fs. Keeps forced subs only in these languages.",
+    )
     @click.option(
         "--exact-lang",
         is_flag=True,
@@ -1270,6 +1279,7 @@ class dl:
         s_lang: list[str],
         require_subs: list[str],
         forced_subs: bool,
+        forced_s_lang: list[str],
         exact_lang: bool,
         sub_format: Optional[Union[Subtitle.Codec, str]],
         video_only: bool,
@@ -1311,6 +1321,15 @@ class dl:
         self.server_cdm = getattr(service, "_server_cdm", False)
         self._remote_service = service if self.server_cdm else None
         start_time = time.time()
+
+        if forced_s_lang:
+            # services read forced_subs from raw ctx params, so the implication must be pushed there too
+            forced_subs = True
+            if "all" in forced_s_lang:
+                forced_s_lang = []
+            ctx = getattr(service, "ctx", None)
+            if ctx and ctx.parent:
+                ctx.parent.params["forced_subs"] = True
 
         if skip_dl:
             DOWNLOAD_LICENCE_ONLY.set()
@@ -2782,6 +2801,9 @@ class dl:
                                 sys.exit(1)
 
                     # filter subtitle tracks
+                    fsl = [t for t in forced_s_lang if t != "orig"]
+                    if "orig" in forced_s_lang and title.language:
+                        fsl.append(str(title.language))
                     if keep_subtitles and require_subs:
                         missing_langs = [
                             lang
@@ -2797,8 +2819,6 @@ class dl:
                             f"Required languages found ({', '.join(require_subs)}), downloading all available subtitles"
                         )
                     elif keep_subtitles and s_lang and "all" not in s_lang:
-                        from unshackle.core.utilities import is_exact_match
-
                         match_func = is_exact_match if exact_lang else is_close_match
 
                         missing_langs = find_missing_langs(
@@ -2819,19 +2839,38 @@ class dl:
                                     self.log.warning(
                                         f"{missing_str} not found in subtitle tracks, continuing without subtitles"
                                     )
-                                    title.tracks.subtitles = []
+                                    title.tracks.select_subtitles(
+                                        lambda x: (
+                                            x.forced and keep_forced_subtitle(x.forced, x.language, fsl, exact_lang)
+                                        )
+                                    )
                             else:
                                 self.log.error(missing_str + " not found in tracks")
                                 sys.exit(1)
 
                         if s_lang and title.tracks.subtitles:
-                            title.tracks.select_subtitles(lambda x: match_func(x.language, s_lang))
+                            title.tracks.select_subtitles(
+                                lambda x: (
+                                    match_func(x.language, s_lang)
+                                    or bool(x.forced and fsl and match_func(x.language, fsl))
+                                )
+                            )
                             if not title.tracks.subtitles and not best_available:
                                 self.log.error(f"There's no {s_lang} Subtitle Track...")
                                 sys.exit(1)
 
-                    if keep_subtitles and not forced_subs:
-                        title.tracks.select_subtitles(lambda x: not x.forced)
+                    if keep_subtitles:
+                        # fsl, not forced_s_lang: unresolvable orig must keep all forced, not drop them
+                        if fsl:
+                            title.tracks.select_subtitles(
+                                lambda x: keep_forced_subtitle(x.forced, x.language, fsl, exact_lang)
+                            )
+                            if not any(x.forced for x in title.tracks.subtitles):
+                                self.log.warning(
+                                    f"No forced subtitle tracks matched --forced-s-lang ({', '.join(forced_s_lang)})"
+                                )
+                        elif not forced_subs:
+                            title.tracks.select_subtitles(lambda x: not x.forced)
 
                 # filter audio tracks
                 # might have no audio tracks if part of the video, e.g. transport stream hls

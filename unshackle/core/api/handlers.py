@@ -44,6 +44,7 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "s_lang": ["all"],
     "require_subs": [],
     "forced_subs": False,
+    "forced_s_lang": [],
     "exact_lang": False,
     "sub_format": None,
     "video_only": False,

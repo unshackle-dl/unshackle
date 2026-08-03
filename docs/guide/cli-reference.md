@@ -96,6 +96,7 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 | `-sl`, `--s-lang` | `all` | Subtitle language(s). |
 | `--require-subs` | - | Required subtitle langs; keeps **all** subs only if these exist. **Cannot combine with `--s-lang`.** |
 | `-fs`, `--forced-subs` | off | Include forced subtitle tracks. |
+| `-fsl`, `--forced-s-lang` | none | Language(s) wanted for forced subtitles; implies `-fs`. |
 | `--exact-lang` | off | Exact matching only: `-l es-419` matches `es-419`, not `es-ES`. |
 | `--sub-format` | - | Output subtitle format (`SRT`/`srt`, `VTT`/`webvtt`, `ASS`/`ssa`, `TTML`, `SMI`, ...), or `original` to keep the source format. |
 

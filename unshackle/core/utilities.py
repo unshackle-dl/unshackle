@@ -163,6 +163,21 @@ def is_exact_match(language: Union[str, Language], languages: Sequence[Union[str
     return closest_match(language, list(map(str, languages)))[1] <= LANGUAGE_EXACT_DISTANCE
 
 
+def keep_forced_subtitle(
+    forced: bool,
+    language: Union[str, Language],
+    forced_s_lang: Sequence[str],
+    exact: bool = False,
+) -> bool:
+    """The -fsl filter: non-forced tracks always pass, forced tracks only if they match forced_s_lang."""
+    if not forced:
+        return True
+    if not forced_s_lang:
+        return False
+    match_func = is_exact_match if exact else is_close_match
+    return match_func(language, forced_s_lang)
+
+
 def find_missing_langs(
     requested: Sequence[str],
     available: Sequence[Union[str, Language, None]],

@@ -320,6 +320,7 @@ Common keys (a useful subset; every `dl` flag works):
 | `channels` | float | *(unset)* | Audio channels, e.g. `6` for 5.1. |
 | `sub_format` | str | *(unset)* | Convert subtitles to this format (`srt`, `vtt`, `original`, ...). |
 | `forced_subs` | bool | `false` | Include forced subtitle tracks. |
+| `forced_s_lang` | list | `[]` | Forced subtitle language(s); implies `forced_subs`. |
 | `no_subs` / `no_audio` / `no_chapters` | bool | `false` | Skip that track type. |
 | `downloads` | int | `1` | Tracks downloaded concurrently. |
 | `workers` | int | *(downloader default)* | Threads per track. |

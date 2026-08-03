@@ -289,6 +289,9 @@ download on the presence of a specific subtitle track.
 
 - `-fs` / `--forced-subs`: include forced subtitle tracks (signs/foreign dialogue).
   Without this flag, forced subs are dropped from selection.
+- `-fsl` / `--forced-s-lang`: keep forced subtitles only in these languages (implies
+  `-fs`). Works independently of `--s-lang`, so `-sl all -fsl en` grabs every full
+  subtitle but only the English forced track.
 - `--sub-format`: set the output subtitle format, converting only when necessary.
   Accepts codec names/values and common aliases (`srt`, `vtt`, `ass`, `ssa`, `ttml`,
   etc.), or the literal `original` to keep the source format.
@@ -578,6 +581,7 @@ authoritative list.
 | `--v-lang` | `-vl` | Video-only language override. |
 | `--s-lang` | `-sl` | Subtitle language(s); default `all`. |
 | `--forced-subs` | `-fs` | Include forced subtitles. |
+| `--forced-s-lang` | `-fsl` | Forced subtitle language(s); implies `-fs`. |
 | `--sub-format` | | Output subtitle format. |
 | `--wanted` | `-w` | Episode/season range. |
 | `--select-titles` | | Interactively pick episodes or films. |

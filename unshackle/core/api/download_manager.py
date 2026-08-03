@@ -536,6 +536,7 @@ def _perform_download(
                 s_lang=params.get("s_lang", ["all"]),
                 require_subs=params.get("require_subs", []),
                 forced_subs=params.get("forced_subs", False),
+                forced_s_lang=params.get("forced_s_lang", []),
                 exact_lang=params.get("exact_lang", False),
                 sub_format=params.get("sub_format"),
                 video_only=params.get("video_only", False),

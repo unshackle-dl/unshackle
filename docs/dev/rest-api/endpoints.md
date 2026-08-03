@@ -366,6 +366,7 @@ Create a download job. Requires `service` and `title_id`; every other field is a
 | `lang` / `v_lang` / `a_lang` / `s_lang` | string[] | `["orig"]` / `[]` / `[]` / `["all"]` | Language filters. |
 | `require_subs` | string[] | `[]` | Required subtitle languages. |
 | `forced_subs` | boolean | `false` | Include forced subtitles. |
+| `forced_s_lang` | string[] | `[]` | Forced subtitle language(s); implies `forced_subs`. |
 | `exact_lang` | boolean | `false` | Exact language matching. |
 | `sub_format` | string | `null` | Output subtitle format. |
 | `video_only` / `audio_only` / `subs_only` / `chapters_only` | boolean | `false` | Track-type restriction (at most one). |

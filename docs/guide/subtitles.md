@@ -70,6 +70,7 @@ Subtitle selection happens through `dl` flags. The most important is language se
 | `-sl`, `--s-lang` | Language(s) wanted for subtitles. Defaults to `all`. |
 | `--require-subs` | Require these languages to exist; if present, download **all** subtitles. Cannot be combined with `--s-lang`. |
 | `-fs`, `--forced-subs` | Include forced subtitle tracks (excluded by default). |
+| `-fsl`, `--forced-s-lang` | Language(s) wanted for forced subtitles; implies `-fs`. |
 | `--exact-lang` | Exact language matching, with no regional variants. |
 | `-S`, `--subs-only` | Download only subtitle tracks. |
 | `-ns`, `--no-subs` | Do not download subtitle tracks at all. |
@@ -120,6 +121,18 @@ default**. Add `-fs` / `--forced-subs` to include them:
 ```shell title="Include forced tracks alongside full subtitles"
 unshackle dl --s-lang en --forced-subs EXAMPLE 81234567
 ```
+
+`-fs` keeps forced tracks in every selected language. If you only want forced tracks
+in certain languages, use `-fsl` / `--forced-s-lang` instead. It implies `-fs`, so
+you do not need both:
+
+```shell title="All full subtitles, but only the English forced track"
+unshackle dl --s-lang all --forced-s-lang en EXAMPLE 81234567
+```
+
+If you pass both flags, `-fsl` wins and keeps only forced tracks in its languages.
+It also understands `orig` (the title's original language) and `all` (every forced
+track, same as plain `-fs`).
 
 ## Track types: forced, SDH, and CC
 
