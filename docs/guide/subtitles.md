@@ -376,6 +376,8 @@ subtitle:
 | `convert_before_strip` | `true` | `true` / `false` | Convert a subtitle to SRT before stripping SDH (for non-SubtitleEdit engines). |
 | `output_mode` | `mux` | `mux`, `sidecar`, `both` | Whether subtitles are embedded, written as sidecars, or both. |
 | `sidecar_format` | `srt` | a format name (e.g. `srt`, `vtt`) or `original` | Format used for sidecar files. |
+| `group_by` | `type` | `type`, `language` | Whether all tracks of one type stay together, or each language stays next to its own variants. |
+| `language_priority` | *(unset)* | a list of languages | Languages to sort to the top. The rest keep the default order. Nothing is removed. |
 
 !!! tip "SubtitleEdit is optional but recommended"
     Several high-fidelity paths (the best-quality conversions and the SubtitleEdit SDH

@@ -23,7 +23,7 @@ from unshackle.core.tracks.chapters import Chapter, Chapters
 from unshackle.core.tracks.subtitle import Subtitle
 from unshackle.core.tracks.track import Track
 from unshackle.core.tracks.video import Video
-from unshackle.core.utilities import is_close_match, log_event, sanitize_filename
+from unshackle.core.utilities import is_close_match, log_event, matching_languages, sanitize_filename
 from unshackle.core.utils.collections import as_list, flatten
 
 
@@ -243,7 +243,9 @@ class Tracks:
         if duplicates:
             log.debug(f" - Found and skipped {duplicates} duplicate tracks...")
 
-    def sort_videos(self, by_language: Optional[Sequence[Union[str, Language]]] = None) -> None:
+    def sort_videos(
+        self, by_language: Optional[Sequence[Union[str, Language]]] = None, exact_match: bool = False
+    ) -> None:
         """Sort video tracks by resolution then bitrate, and optionally language."""
         if not self.videos:
             return
@@ -255,13 +257,15 @@ class Tracks:
                 language = next((x.language for x in self.videos if x.is_original_lang), "")
             if not language:
                 continue
+            wanted = matching_languages(language, [x.language for x in self.videos], exact_match)
             self.videos.sort(key=lambda x: str(x.language))
-            self.videos.sort(key=lambda x: not is_close_match(language, [x.language]))
+            self.videos.sort(key=lambda x: str(x.language) not in wanted)
 
     def sort_audio(
         self,
         by_language: Optional[Sequence[Union[str, Language]]] = None,
         codec_priority: Optional[Sequence[str]] = None,
+        exact_match: bool = False,
     ) -> None:
         """Sort audio tracks by bitrate, codec priority, Atmos, descriptive, and optionally language."""
         if not self.audio:
@@ -283,13 +287,15 @@ class Tracks:
                 language = next((x.language for x in self.audio if x.is_original_lang), "")
             if not language:
                 continue
-            self.audio.sort(key=lambda x: not is_close_match(language, [x.language]))
+            wanted = matching_languages(language, [x.language for x in self.audio], exact_match)
+            self.audio.sort(key=lambda x: str(x.language) not in wanted)
 
     def sort_subtitles(
         self,
         by_language: Optional[Sequence[Union[str, Language]]] = None,
         type_priority: Optional[Sequence[str]] = None,
         group_by: Optional[str] = None,
+        exact_match: bool = False,
     ) -> None:
         """
         Sort subtitle tracks by various track attributes to a common P2P standard.
@@ -313,6 +319,9 @@ class Tracks:
         then every normal, then every SDH, each block ascending by language. "language"
         groups by language instead, so Finnish sits next to Finnish SDH, with the Type
         Order applied inside each language.
+
+        exact_match makes a by_language entry sort only its own tag. By default "en" also
+        sorts "en-US" and "en-GB".
         """
         if not self.subtitles:
             return
@@ -346,7 +355,8 @@ class Tracks:
                 language = next((x.language for x in self.subtitles if x.is_original_lang), "")
             if not language:
                 continue
-            self.subtitles.sort(key=lambda x: is_close_match(language, [x.language]), reverse=True)
+            wanted = matching_languages(language, [x.language for x in self.subtitles], exact_match)
+            self.subtitles.sort(key=lambda x: str(x.language) in wanted, reverse=True)
 
     def select_video(self, x: Callable[[Video], bool]) -> None:
         self.videos = list(filter(x, self.videos))

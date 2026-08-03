@@ -97,8 +97,14 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 | `--require-subs` | - | Required subtitle langs; keeps **all** subs only if these exist. **Cannot combine with `--s-lang`.** |
 | `-fs`, `--forced-subs` | off | Include forced subtitle tracks. |
 | `-fsl`, `--forced-s-lang` | none | Language(s) wanted for forced subtitles; implies `-fs`. |
-| `--exact-lang` | off | Exact matching only: `-l es-419` matches `es-419`, not `es-ES`. |
+| `--exact-lang` | off | Exact matching only: `-l es-419` matches `es-419`, not `es-ES`. Applies to selection and to sort order. |
 | `--sub-format` | - | Output subtitle format (`SRT`/`srt`, `VTT`/`webvtt`, `ASS`/`ssa`, `TTML`, `SMI`, ...), or `original` to keep the source format. |
+
+!!! tip "These flags select languages, they do not order them"
+    Naming languages with `-l` or `-sl` removes the others. To keep every language but put
+    your preferred ones first, use `audio.language_priority` and
+    [`subtitle.language_priority`](../reference/configuration.md#subtitle) in your
+    configuration file.
 
 The special language tokens `orig`, `all`, and `best` are honoured everywhere a language is expected.
 

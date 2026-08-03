@@ -254,6 +254,26 @@ it is used. You can override each stream type independently:
 unshackle dl -al en EXAMPLE 81234567
 ```
 
+### Sort order
+
+`-l` and `-sl` **select** languages: naming some removes the rest. To keep every language
+but decide which ones come first, set a priority list in your configuration file:
+
+```yaml title="unshackle.yaml"
+audio:
+  language_priority: [orig, en]
+subtitle:
+  group_by: language
+  language_priority: [en, es, fr]
+```
+
+Subtitles then start with English, Spanish, and French. The languages you leave out follow
+alphabetically, after the title's original language. Nothing is removed. Audio works the
+same way, but the languages you leave out keep their bitrate and codec order instead of an
+alphabetical one.
+
+See [`subtitle.language_priority`](../reference/configuration.md#subtitle) for the details.
+
 ### Exact vs fuzzy matching
 
 By default language matching is fuzzy: `-l en` also accepts `en-US`, `en-GB`, etc. (up

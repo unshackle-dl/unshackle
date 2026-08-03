@@ -83,6 +83,7 @@ from unshackle.core.utilities import (
     is_exact_match,
     keep_forced_subtitle,
     log_event,
+    resolve_sort_langs,
     suggest_font_packages,
     time_elapsed_since,
 )
@@ -1859,8 +1860,12 @@ class dl:
                         song.tracks.add(service.get_tracks(song), warn_only=True)
                         song.tracks.chapters = service.get_chapters(song)
                         song.tracks.sort_audio(
-                            by_language=a_lang or lang,
+                            by_language=resolve_sort_langs(
+                                [*(config.audio.get("language_priority") or []), *(a_lang or lang)],
+                                song.language,
+                            ),
                             codec_priority=config.audio.get("codec_priority"),
+                            exact_match=exact_lang,
                         )
                         select_music_audio(song)
                         if not song.tracks.audio:
@@ -2389,39 +2394,23 @@ class dl:
                     )
 
             with console.status("Sorting tracks by language and bitrate...", spinner="dots"):
-                video_sort_lang = v_lang or lang
-                processed_video_sort_lang = []
-                for language in video_sort_lang:
-                    if language == "orig":
-                        if title.language:
-                            orig_lang = str(title.language)
-                            if orig_lang not in processed_video_sort_lang:
-                                processed_video_sort_lang.append(orig_lang)
-                    else:
-                        if language not in processed_video_sort_lang:
-                            processed_video_sort_lang.append(language)
+                audio_priority = config.audio.get("language_priority") or []
+                subtitle_priority = config.subtitle.get("language_priority") or []
 
-                audio_sort_lang = a_lang or lang
-                processed_audio_sort_lang = []
-                for language in audio_sort_lang:
-                    if language == "orig":
-                        if title.language:
-                            orig_lang = str(title.language)
-                            if orig_lang not in processed_audio_sort_lang:
-                                processed_audio_sort_lang.append(orig_lang)
-                    else:
-                        if language not in processed_audio_sort_lang:
-                            processed_audio_sort_lang.append(language)
-
-                title.tracks.sort_videos(by_language=processed_video_sort_lang)
+                title.tracks.sort_videos(
+                    by_language=resolve_sort_langs(v_lang or lang, title.language),
+                    exact_match=exact_lang,
+                )
                 title.tracks.sort_audio(
-                    by_language=processed_audio_sort_lang,
+                    by_language=resolve_sort_langs([*audio_priority, *(a_lang or lang)], title.language),
                     codec_priority=config.audio.get("codec_priority"),
+                    exact_match=exact_lang,
                 )
                 title.tracks.sort_subtitles(
-                    by_language=s_lang,
+                    by_language=resolve_sort_langs([*subtitle_priority, *s_lang], title.language),
                     type_priority=config.subtitle.get("type_priority"),
                     group_by=config.subtitle.get("group_by"),
+                    exact_match=exact_lang,
                 )
 
             if list_:

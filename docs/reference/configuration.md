@@ -378,6 +378,7 @@ written as sidecar files. See [Subtitles](../guide/subtitles.md) for the full gu
 | `sidecar_format` | str | `"srt"` | Format for sidecar files when `output_mode: sidecar`. |
 | `type_priority` | list | *(unset)* | Ordered ranking of subtitle types (`forced`, `normal`, `sdh`; CC counts as SDH). Types you leave out fall to the end. |
 | `group_by` | str | `"type"` | Which key groups the subtitle tracks. `type` puts all forced tracks together, then all normal, then all SDH. `language` keeps each language next to its own variants. |
+| `language_priority` | list | *(unset)* | Languages to sort to the top, in the order you give. The rest keep the default order: original language first, then alphabetical. Nothing is removed. |
 
 ```yaml
 subtitle:
@@ -405,6 +406,33 @@ subtitle:
     `type_priority` still sets the order of the variants, so with `group_by: language` it
     controls the order inside each language.
 
+!!! note "`language_priority` sorts languages, it does not select them"
+    By default the title's original language comes first and every other language follows
+    alphabetically. For an English title that gives English, Arabic, Bulgarian, and the
+    rest. Give `language_priority` the languages you want first:
+
+    ```yaml
+    subtitle:
+      group_by: language
+      language_priority: [en, es, fr]
+    ```
+
+    | | Result for an English title |
+    |---|---|
+    | Default | English, Arabic, Bulgarian, Spanish, French, Japanese |
+    | With the list above | English, Spanish, French, Arabic, Bulgarian, Japanese |
+
+    This is only an order. Every other language is still downloaded, which is what makes
+    it different from `-sl`: `-sl en,es,fr` **removes** all other subtitles.
+
+    Use `orig` in the list for the title's original language. A base tag also covers its
+    regional forms, so `en` sorts `en-US` and `en-GB`, but `zh` does **not** cover
+    `zh-Hant`, which you must name. The sort ignores entries that match no track, and it
+    ignores entries that are not valid language tags.
+
+    `--exact-lang` applies here too: with it, `en` sorts only `en`, and `en-US` falls to
+    the alphabetical tail with the rest. Name each tag you want when you use that flag.
+
 !!! note "`type_priority` also picks the default subtitle"
     At mux time the first track in the default subtitle language gets the `default` flag.
     The built-in order is `forced`, `normal`, `sdh`, which means a forced track becomes
@@ -421,13 +449,17 @@ subtitle:
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
 
 Audio handling options. The most notable sub-key is **`codec_priority`**, an ordered list of
-audio codecs used to break ties in track selection.
+audio codecs used to break ties in track selection. **`language_priority`** is an ordered list
+of languages that sort to the top of the audio tracks.
 
 ```yaml
 audio:
   codec_priority:
     - EAC3
     - AC3
+  language_priority:
+    - orig
+    - en
 ```
 
 !!! note "`codec_priority` is a soft priority: nothing is dropped"

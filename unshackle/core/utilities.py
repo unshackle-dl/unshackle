@@ -25,6 +25,7 @@ import pycountry
 from construct import ValidationError
 from fontTools import ttLib
 from langcodes import Language, closest_match
+from langcodes.tag_parser import LanguageTagError
 from pymp4.parser import Box
 from unidecode import unidecode
 
@@ -193,6 +194,49 @@ def find_missing_langs(
 def as_requested(tokens: Sequence[str], orig_token: Optional[str]) -> str:
     """Return language tokens as the user wrote them, so 'orig' reads as 'orig' and not the language it resolved to."""
     return ", ".join("orig" if tok == orig_token else tok for tok in tokens)
+
+
+def matching_languages(
+    language: Union[str, Language],
+    available: Sequence[Union[str, Language, None]],
+    exact: bool = False,
+) -> set[str]:
+    """
+    The languages out of `available` that `language` asks for, by the rules Tracks.by_language uses.
+
+    In exact mode CLDR tag distance is not sufficient on its own: it rates a base language and
+    its "paradigm" regional variant as the same language (distance 0 for en/en-US, pt/pt-BR), so
+    it cannot separate en-US from en. Follow RFC 4647 Lookup: prefer the string-equal tag, and
+    fall back to the distance match only when no such tag is present (e.g. zh matches cmn).
+    """
+    tags = {str(x) for x in available if x}
+    try:
+        want = Language.get(str(language)).to_tag().casefold()
+    except LanguageTagError:
+        # e.g. a config typo in language_priority; an unparseable tag matches nothing
+        return set()
+    if not exact:
+        return {tag for tag in tags if is_close_match(language, [tag])}
+    string_equal = {tag for tag in tags if Language.get(tag).to_tag().casefold() == want}
+    return string_equal or {tag for tag in tags if is_exact_match(language, [tag])}
+
+
+def resolve_sort_langs(tokens: Sequence[str], original: Optional[Union[str, Language]] = None) -> list[str]:
+    """
+    Prepare language tokens for a Tracks.sort_* by_language argument.
+
+    "orig" becomes the title language, or is dropped when the title has none. "all" and
+    "best" pass through, because the sort methods resolve them against the tracks. The
+    result keeps the first position of each language and drops later repeats.
+    """
+    resolved: list[str] = []
+    for token in tokens:
+        language = str(original) if token == "orig" else str(token)
+        if token == "orig" and not original:
+            continue
+        if language not in resolved:
+            resolved.append(language)
+    return resolved
 
 
 def get_boxes(data: bytes, box_type: bytes, as_bytes: bool = False) -> Box:  # type: ignore
