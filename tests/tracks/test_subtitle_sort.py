@@ -180,9 +180,16 @@ def test_no_priority_leaves_order_unchanged(many: Tracks) -> None:
     assert langs(many) == ["ar", "bg", "en", "es", "fr", "ja"]
 
 
-def test_all_alone_still_floats_the_original_language(many: Tracks) -> None:
-    many.sort_subtitles(by_language=["all"], group_by="language")
+@pytest.mark.parametrize("token", ["all", "best"])
+def test_magic_token_alone_floats_the_original_language(many: Tracks, token: str) -> None:
+    many.sort_subtitles(by_language=[token], group_by="language")
     assert langs(many) == ["ja", "ar", "bg", "en", "es", "fr"]
+
+
+@pytest.mark.parametrize("token", ["all", "best"])
+def test_priority_outranks_either_magic_token(many: Tracks, token: str) -> None:
+    many.sort_subtitles(by_language=["en", "es", token], group_by="language")
+    assert langs(many) == ["en", "es", "ja", "ar", "bg", "fr"]
 
 
 @pytest.fixture
