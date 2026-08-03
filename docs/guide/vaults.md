@@ -218,6 +218,9 @@ key_vaults:
 | `token` | yes | Bearer token, sent as `Authorization: Bearer <token>`. |
 | `no_push` | no | If `true`, keys are read but never written. |
 | `timeout` | no | Request timeout in seconds; defaults to `vault_timeout`. |
+| `headers` | no | custom Headers Support for API Connection. |
+| `CF-Access-Client-Id` | no | Cloudflare Zero Trust Service Token Client ID. |
+| `CF-Access-Client-Secret` | no | Cloudflare Zero Trust Service Token Client Secret.
 
 The backend talks to endpoints under `uri` (for example `GET {uri}/{service}/{kid}` to look up a single key) and interprets a numeric `code` field in each JSON response to detect errors such as an invalid token, rate limiting, or an invalid service tag.
 
