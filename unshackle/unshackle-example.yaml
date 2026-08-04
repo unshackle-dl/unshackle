@@ -9,6 +9,12 @@
 # Group or username appended to download filenames after a dash.
 tag: "NOGRP"
 
+# Conditionally swap the tag above based on filename variables (first match wins).
+# See docs/reference/configuration.md#tag_rules for conditions and semantics.
+# tag_rules:
+#   - when: {lang_tag: SUBBED}
+#     tag: SUBGRP
+
 # --- Output filename & folder templates --- docs/guide/output-and-naming.md
 # The full variable list and all naming options are documented there.
 # movies/series have no built-in fallback (define them to download those kinds);
