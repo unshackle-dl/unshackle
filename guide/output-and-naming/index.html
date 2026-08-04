@@ -2260,6 +2260,11 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 <td><code>The Show</code></td>
 </tr>
 <tr>
+<td><code>title_type</code></td>
+<td>Media kind of the title</td>
+<td><code>movie</code>, <code>series</code>, <code>music</code></td>
+</tr>
+<tr>
 <td><code>year</code></td>
 <td>Release year</td>
 <td><code>2024</code></td>
@@ -2555,7 +2560,11 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 </ul>
 <p>The <code>--no-mux</code> flag skips muxing entirely and writes the individual track files, each with a track-type suffix, into the same output/folder structure.</p>
 <h2 id="tags-group-naming">Tags &amp; group naming<a class="headerlink" href="#tags-group-naming" title="Permanent link">&para;</a></h2>
-<p>The release-group tag is the <code>-TAG</code> portion at the end of scene-style names, produced by the <code>{tag}</code> variable.</p>
+<p>The release-group tag is the <code>-TAG</code> portion at the end of scene-style names, produced by the <code>{tag}</code> variable.
+It can be swapped per release with <a href="../../reference/configuration/#tag_rules"><code>tag_rules</code></a>: ordered rules that
+match on the release-attribute variables only (<code>quality</code>, <code>resolution</code>, <code>hdr</code>, <code>source</code>, <code>lang_tag</code>,
+<code>title_type</code>, and so on), first match wins. The title's own fields, such as <code>title</code> and <code>season_episode</code>,
+cannot be matched. See the <a href="../../reference/configuration/#tag_rules">reference page</a> for the exact list.</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;MYGROUP&quot;</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="nt">tag_group_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="nt">tag_imdb_tmdb</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>

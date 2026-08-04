@@ -1246,6 +1246,34 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#tag_rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tag_rules
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="tag_rules">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#operators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operators
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2332,6 +2360,34 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#tag_rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tag_rules
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="tag_rules">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#operators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operators
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2631,7 +2687,7 @@ default.</p>
 </tr>
 <tr>
 <td><a href="#output-naming">Output &amp; naming</a></td>
-<td><code>output_template</code>, <code>tag</code>, <code>tag_group_name</code>, <code>tag_imdb_tmdb</code>, <code>chapter_fallback_name</code>, <code>unicode_filenames</code></td>
+<td><code>output_template</code>, <code>tag</code>, <code>tag_rules</code>, <code>tag_group_name</code>, <code>tag_imdb_tmdb</code>, <code>chapter_fallback_name</code>, <code>unicode_filenames</code></td>
 </tr>
 <tr>
 <td><a href="#drm-cdm">DRM &amp; CDM</a></td>
@@ -3693,7 +3749,8 @@ folder-kind keys.</p>
 <code>quality</code>, <code>resolution</code>, <code>source</code>, <code>tag</code>, <code>track_number</code>, <code>artist</code>, <code>album_artist</code>,
 <code>album</code>, <code>disc</code>, <code>track_total</code>, <code>disc_total</code>, <code>release_type</code>, <code>genre</code>, <code>explicit</code>,
 <code>isrc</code>, <code>upc</code>, <code>label</code>, <code>audio</code>, <code>audio_channels</code>, <code>audio_full</code>, <code>atmos</code>, <code>dual</code>,
-<code>multi</code>, <code>dubbed</code>, <code>video</code>, <code>hdr</code>, <code>hfr</code>, <code>edition</code>, <code>repack</code>, <code>lang_tag</code>.</p>
+<code>multi</code>, <code>dubbed</code>, <code>video</code>, <code>hdr</code>, <code>hfr</code>, <code>edition</code>, <code>repack</code>, <code>lang_tag</code>,
+<code>title_type</code>.</p>
 </details>
 <h3 id="tagging-naming-keys">Tagging &amp; naming keys<a class="headerlink" href="#tagging-naming-keys" title="Permanent link">&para;</a></h3>
 <table>
@@ -3738,6 +3795,96 @@ folder-kind keys.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="tag_rules"><code>tag_rules</code><a class="headerlink" href="#tag_rules" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Type:</strong> <code>list</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>[]</code></li>
+</ul>
+<p>Conditionally replaces <a href="#output-naming"><code>tag</code></a> for a given download. Each rule pairs a <code>when</code>
+dict of conditions with the <code>tag</code> to use when they hold. Rules are evaluated in order and the
+first match wins; if no rule matches, the global <code>tag</code> is kept.</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">tag_rules</span><span class="p">:</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> title_type</span><span class="p">:</span><span class="w"> </span><span class="nv">movie</span><span class="p p-Indicator">,</span><span class="nt"> lang_tag</span><span class="p">:</span><span class="w"> </span><span class="nv">SUBBED</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SUBMOVIES</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> quality</span><span class="p">:</span><span class="w"> </span><span class="nv">2160p</span><span class="p p-Indicator">,</span><span class="nt"> hdr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">DV</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">DV.HDR</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">DV.HDR10P</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">HDR</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">HDR10P</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">UHDGROUP</span>
+</span></code></pre></div>
+<p>Rule semantics:</p>
+<ul>
+<li>Every condition in <code>when</code> must hold (they are AND-ed).</li>
+<li>A value may be a scalar or a list; a list matches if <strong>any</strong> entry matches.</li>
+<li>Comparison is case-insensitive string equality.</li>
+<li>The keys of <code>when</code> are the filename template variables that describe the release itself:
+  <code>title_type</code>, <code>quality</code>, <code>resolution</code>, <code>source</code>, <code>video</code>, <code>hdr</code>, <code>hfr</code>, <code>audio</code>,
+  <code>audio_channels</code>, <code>audio_full</code>, <code>atmos</code>, <code>dual</code>, <code>multi</code>, <code>dubbed</code>, <code>edition</code>, <code>repack</code>,
+  and <code>lang_tag</code>. Only these are available. The title's own fields (<code>title</code>, <code>year</code>, <code>season</code>,
+  <code>episode</code>, and so on) are added after the rules run and cannot be matched.</li>
+<li>An unknown key in <code>when</code> is a mistake: unshackle logs a warning that names the key and skips
+  that rule. A rule without conditions or without a <code>tag</code> is also warned about and skipped.</li>
+</ul>
+<p>Put the more specific rules first, because the first match ends the search.</p>
+<div class="admonition warning">
+<p class="admonition-title">Match <code>hdr</code> on the exact value</p>
+<p>Matching is exact, and <code>hdr</code> is a composite label for Dolby Vision titles: a DV title with
+an HDR10 base layer gives <code>DV.HDR</code>, and with an HDR10+ base layer <code>DV.HDR10P</code>. Plain <code>DV</code>
+does <strong>not</strong> match those. List every variant you want, as the example above does. Note
+also that HDR10 gives <code>HDR</code>, not <code>HDR10</code>. The full set of values is <code>HDR</code>, <code>HDR10P</code>, <code>DV</code>,
+<code>DV.HDR</code>, <code>DV.HDR10P</code>, and <code>HLG</code>, as listed in the
+<a href="../../guide/output-and-naming/#template-variables">variable table</a>.</p>
+</div>
+<h4 id="operators">Operators<a class="headerlink" href="#operators" title="Permanent link">&para;</a></h4>
+<p>A condition value may start with a comparison operator, which is applied to the rest of the
+value:</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nt">tag_rules</span><span class="p">:</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> resolution</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;1080&quot;</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SDGROUP</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> quality</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&gt;=2160&quot;</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">UHDGROUP</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> video</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;!=H.265&quot;</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AVCGROUP</span>
+</span></code></pre></div>
+<ul>
+<li><code>&gt;</code>, <code>&lt;</code>, <code>&gt;=</code>, <code>&lt;=</code> compare numbers. unshackle reads the first number out of the actual
+  value, so <code>"&gt;=2160"</code> matches a quality of <code>2160p</code>. If the actual value has no number, the
+  condition fails.</li>
+<li><code>=</code>, <code>==</code>, and <code>!=</code> compare text, case-insensitively, when the operand is not a number.
+  With a numeric operand they compare numbers like the operators above. A value with no number
+  in it is never equal to a number, so <code>"!=2160"</code> holds for it and <code>"==2160"</code> does not.</li>
+<li>An ordering operator with a text operand (for example <code>"&gt;DV"</code>) is a mistake: unshackle logs
+  a warning and the condition fails. So does an operator with nothing after it (<code>"&gt;="</code>).</li>
+<li>A value with no operator keeps the plain equality behaviour described above.</li>
+</ul>
+<div class="admonition warning">
+<p class="admonition-title">Quote operator values in YAML</p>
+<p>Two of these operators break an unquoted YAML value, and both stop the config from
+loading:</p>
+<ul>
+<li><code>&gt;</code> opens a folded block scalar, so <code>quality: &gt;=2160</code> fails with a "while scanning a
+  block scalar" error.</li>
+<li><code>!</code> starts a tag, so <code>hdr: !=DV</code> fails with a "could not determine a constructor"
+  error.</li>
+</ul>
+<p>Quote every operator value: <code>quality: "&gt;=2160"</code>, <code>resolution: "&lt;1080"</code>, <code>video: "!=H.265"</code>.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Keep a negation out of lists</p>
+<p>A list matches if any entry matches, so two or more <code>!=</code> entries in one list are always
+true. Give a negation as a single value, not as a list entry.</p>
+</div>
+<p><code>title_type</code> is the media kind of the title: <code>movie</code>, <code>series</code>, or <code>music</code>. It is useful to
+give each kind its own group:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nt">tag_rules</span><span class="p">:</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> title_type</span><span class="p">:</span><span class="w"> </span><span class="nv">movie</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MOVIEGRP</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> title_type</span><span class="p">:</span><span class="w"> </span><span class="nv">series</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TVGRP</span>
+</span></code></pre></div>
+<p>The resolved tag applies to the <code>{tag}</code> filename variable only. The <code>Group</code> metadata tag
+written into MKV and music files always uses <a href="#output-naming"><code>tag</code></a>.</p>
+<div class="admonition note">
+<p class="admonition-title"><code>--tag</code> wins</p>
+<p>An explicit <code>dl --tag</code> on the command line disables the rules completely and uses the
+given tag.</p>
+</div>
 <hr />
 <h2 id="drm-cdm">DRM &amp; CDM<a class="headerlink" href="#drm-cdm" title="Permanent link">&para;</a></h2>
 <p>The full conceptual guide lives at <a href="../../guide/drm-and-cdm/">DRM &amp; CDM</a>. These are the config
@@ -3750,19 +3897,19 @@ keys. Device files themselves live in <a href="#directories"><code>directories.w
 <p>Maps a service tag to the CDM (Widevine/PlayReady device) to use, with a <code>default</code> fallback.
 Resolution is case-insensitive: an explicit CLI override wins, then the per-service entry,
 then <code>default</code>.</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">cdm</span><span class="p">:</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span><span class="nt">EXAMPLE2</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nt">cdm</span><span class="p">:</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span><span class="nt">EXAMPLE2</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span>
 </span></code></pre></div>
 <p>A value may also be a <strong>nested dict</strong> for advanced selection by quality, DRM system, or
 profile:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nt">cdm</span><span class="p">:</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="nt">EXAMPLE1</span><span class="p">:</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">    </span><span class="s">&quot;&gt;=1080&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span><span class="w">        </span><span class="c1"># by track height</span>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">    </span><span class="s">&quot;&lt;1080&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">    </span><span class="nt">widevine</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span><span class="w">        </span><span class="c1"># by DRM system</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">    </span><span class="nt">playready</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sl3000</span>
-</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="nt">cdm</span><span class="p">:</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">  </span><span class="nt">EXAMPLE1</span><span class="p">:</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">    </span><span class="s">&quot;&gt;=1080&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span><span class="w">        </span><span class="c1"># by track height</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">    </span><span class="s">&quot;&lt;1080&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="w">    </span><span class="nt">widevine</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span><span class="w">        </span><span class="c1"># by DRM system</span>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="w">    </span><span class="nt">playready</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sl3000</span>
+</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
 </span></code></pre></div>
 <p>Quality keys support <code>1080</code>, <code>&gt;=1080</code>, <code>&gt;720</code>, <code>&lt;=576</code>, <code>&lt;480</code> style comparisons; DRM keys
 are <code>widevine</code> / <code>playready</code>.</p>
@@ -3803,17 +3950,17 @@ are <code>widevine</code> / <code>playready</code>.</p>
 </tr>
 </tbody>
 </table>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nt">remote_cdm</span><span class="p">:</span>
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keyxtractor</span>
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">decrypt_labs</span>
-</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">    </span><span class="nt">device_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">L1</span>
-</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_wv_server</span>
-</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://cdm.example.com</span>
-</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="w">    </span><span class="nt">secret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">s3cr3t</span>
-</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="w">    </span><span class="nt">device_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span>
-</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="w">    </span><span class="nt">device_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ANDROID</span>
-</span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="w">    </span><span class="nt">system_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">26830</span>
-</span><span id="__span-18-11"><a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a><span class="w">    </span><span class="nt">security_level</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nt">remote_cdm</span><span class="p">:</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keyxtractor</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">decrypt_labs</span>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="w">    </span><span class="nt">device_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">L1</span>
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_wv_server</span>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://cdm.example.com</span>
+</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="w">    </span><span class="nt">secret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">s3cr3t</span>
+</span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a><span class="w">    </span><span class="nt">device_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span>
+</span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a><span class="w">    </span><span class="nt">device_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ANDROID</span>
+</span><span id="__span-21-10"><a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a><span class="w">    </span><span class="nt">system_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">26830</span>
+</span><span id="__span-21-11"><a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a><span class="w">    </span><span class="nt">security_level</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
 </span></code></pre></div>
 <h3 id="decryption"><code>decryption</code><a class="headerlink" href="#decryption" title="Permanent link">&para;</a></h3>
 <ul>
@@ -3825,13 +3972,13 @@ case-insensitively; <code>"mp4decrypt"</code> selects Bento4's mp4decrypt, and <
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Global</label><label for="__tabbed_2_2">Per-service</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nt">decryption</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shaka</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="nt">decryption</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shaka</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="nt">decryption</span><span class="p">:</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shaka</span>
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">  </span><span class="nt">EXAMPLE1</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mp4decrypt</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="nt">decryption</span><span class="p">:</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shaka</span>
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="w">  </span><span class="nt">EXAMPLE1</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mp4decrypt</span>
 </span></code></pre></div>
 </div>
 </div>
@@ -3891,9 +4038,9 @@ case-insensitively; <code>"mp4decrypt"</code> selects Bento4's mp4decrypt, and <
 </tr>
 </tbody>
 </table>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nt">network</span><span class="p">:</span>
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="w">  </span><span class="nt">browser</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Firefox135</span>
-</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="w">  </span><span class="nt">http2_only</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="nt">network</span><span class="p">:</span>
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="w">  </span><span class="nt">browser</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Firefox135</span>
+</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="w">  </span><span class="nt">http2_only</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">When to force <code>http1_only</code></p>
@@ -3913,8 +4060,8 @@ honours it (only when <code>network</code> is absent) but emits a <code>Deprecat
 <li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
 </ul>
 <p>Default HTTP headers merged into every session unshackle creates.</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="nt">headers</span><span class="p">:</span>
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="w">  </span><span class="nt">Accept-Language</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en-US,en;q=0.9</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="nt">headers</span><span class="p">:</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="w">  </span><span class="nt">Accept-Language</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en-US,en;q=0.9</span>
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Don't set <code>Accept-Encoding</code> (and similar) here</p>
@@ -3991,15 +4138,15 @@ the full provider guide. Recognised providers and their exit ports:</p>
 </tr>
 </tbody>
 </table>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="w">  </span><span class="nt">basic</span><span class="p">:</span>
-</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="w">    </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://user:pass@1.2.3.4:8080</span>
-</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="w">    </span><span class="nt">de</span><span class="p">:</span>
-</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://a.example:8080</span>
-</span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">socks5://b.example:1080</span>
-</span><span id="__span-23-7"><a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a><span class="w">  </span><span class="nt">nordvpn</span><span class="p">:</span>
-</span><span id="__span-23-8"><a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;48-char service username&gt;</span>
-</span><span id="__span-23-9"><a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;48-char service password&gt;</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
+</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="w">  </span><span class="nt">basic</span><span class="p">:</span>
+</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="w">    </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://user:pass@1.2.3.4:8080</span>
+</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="w">    </span><span class="nt">de</span><span class="p">:</span>
+</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://a.example:8080</span>
+</span><span id="__span-26-6"><a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">socks5://b.example:1080</span>
+</span><span id="__span-26-7"><a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="w">  </span><span class="nt">nordvpn</span><span class="p">:</span>
+</span><span id="__span-26-8"><a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;48-char service username&gt;</span>
+</span><span id="__span-26-9"><a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;48-char service password&gt;</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Provider loading differs between CLI and REST server</p>
@@ -4054,17 +4201,17 @@ keys instead of re-licensing. Each entry needs a <code>type</code> (the backend 
 </tr>
 </tbody>
 </table>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="nt">key_vaults</span><span class="p">:</span>
-</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SQLite</span>
-</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Local</span>
-</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="w">    </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/.unshackle/keys.db</span>
-</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MySQL</span>
-</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Team</span>
-</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">db.example.com</span>
-</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a><span class="w">    </span><span class="nt">database</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keys</span>
-</span><span id="__span-24-9"><a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unshackle</span>
-</span><span id="__span-24-10"><a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hunter2</span>
-</span><span id="__span-24-11"><a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a><span class="w">    </span><span class="nt">no_push</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="nt">key_vaults</span><span class="p">:</span>
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SQLite</span>
+</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Local</span>
+</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="w">    </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/.unshackle/keys.db</span>
+</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MySQL</span>
+</span><span id="__span-27-6"><a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Team</span>
+</span><span id="__span-27-7"><a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a><span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">db.example.com</span>
+</span><span id="__span-27-8"><a id="__codelineno-27-8" name="__codelineno-27-8" href="#__codelineno-27-8"></a><span class="w">    </span><span class="nt">database</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keys</span>
+</span><span id="__span-27-9"><a id="__codelineno-27-9" name="__codelineno-27-9" href="#__codelineno-27-9"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unshackle</span>
+</span><span id="__span-27-10"><a id="__codelineno-27-10" name="__codelineno-27-10" href="#__codelineno-27-10"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hunter2</span>
+</span><span id="__span-27-11"><a id="__codelineno-27-11" name="__codelineno-27-11" href="#__codelineno-27-11"></a><span class="w">    </span><span class="nt">no_push</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Common per-entry options</p>
@@ -4162,11 +4309,11 @@ constructor accepts a <code>timeout</code> parameter (a per-vault <code>timeout<
 <p class="admonition-title">Choosing and ordering metadata providers</p>
 <p>A lookup goes to each provider in turn and stops at the first good match, so the order
 decides which source wins. <code>metadata_providers</code> sets that order:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="nt">metadata_providers</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">tvdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">tmdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">simkl</span><span class="p p-Indicator">]</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="nt">metadata_providers</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">tvdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">tmdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">simkl</span><span class="p p-Indicator">]</span>
 </span></code></pre></div>
 <p>Names not in the list are never used, so this both orders and filters. Unknown names are
 ignored with a warning. Leave it unset for the default order:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="nt">metadata_providers</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">imdbapi</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">omdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">simkl</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">tmdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">tvdb</span><span class="p p-Indicator">]</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="nt">metadata_providers</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">imdbapi</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">omdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">simkl</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">tmdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">tvdb</span><span class="p p-Indicator">]</span>
 </span></code></pre></div>
 <p>A provider is skipped when its API key is missing, whatever the order. Available names are
 <code>imdbapi</code>, <code>omdb</code>, <code>simkl</code>, <code>tmdb</code>, and <code>tvdb</code>. Put <code>tvdb</code> first to make TheTVDB your
@@ -4335,48 +4482,48 @@ setting, and KIDs, key counts, and other metadata are always logged either way.<
 <hr />
 <h2 id="a-complete-annotated-example">A complete annotated example<a class="headerlink" href="#a-complete-annotated-example" title="Permanent link">&para;</a></h2>
 <p>The following config sets a handful of common keys. Every key not shown keeps its default.</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="nt">directories</span><span class="p">:</span>
-</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="w">  </span><span class="nt">downloads</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/Media/unshackle</span>
-</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="w">  </span><span class="nt">temp</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/mnt/scratch/unshackle</span>
-</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>
-</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="nt">network</span><span class="p">:</span>
-</span><span id="__span-27-6"><a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a><span class="w">  </span><span class="nt">browser</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Chrome131</span>
-</span><span id="__span-27-7"><a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a>
-</span><span id="__span-27-8"><a id="__codelineno-27-8" name="__codelineno-27-8" href="#__codelineno-27-8"></a><span class="nt">headers</span><span class="p">:</span>
-</span><span id="__span-27-9"><a id="__codelineno-27-9" name="__codelineno-27-9" href="#__codelineno-27-9"></a><span class="w">  </span><span class="nt">Accept-Language</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en-US,en;q=0.9</span>
-</span><span id="__span-27-10"><a id="__codelineno-27-10" name="__codelineno-27-10" href="#__codelineno-27-10"></a>
-</span><span id="__span-27-11"><a id="__codelineno-27-11" name="__codelineno-27-11" href="#__codelineno-27-11"></a><span class="nt">cdm</span><span class="p">:</span>
-</span><span id="__span-27-12"><a id="__codelineno-27-12" name="__codelineno-27-12" href="#__codelineno-27-12"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
-</span><span id="__span-27-13"><a id="__codelineno-27-13" name="__codelineno-27-13" href="#__codelineno-27-13"></a><span class="w">  </span><span class="nt">EXAMPLE2</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span>
-</span><span id="__span-27-14"><a id="__codelineno-27-14" name="__codelineno-27-14" href="#__codelineno-27-14"></a>
-</span><span id="__span-27-15"><a id="__codelineno-27-15" name="__codelineno-27-15" href="#__codelineno-27-15"></a><span class="nt">decryption</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shaka</span>
-</span><span id="__span-27-16"><a id="__codelineno-27-16" name="__codelineno-27-16" href="#__codelineno-27-16"></a>
-</span><span id="__span-27-17"><a id="__codelineno-27-17" name="__codelineno-27-17" href="#__codelineno-27-17"></a><span class="nt">credentials</span><span class="p">:</span>
-</span><span id="__span-27-18"><a id="__codelineno-27-18" name="__codelineno-27-18" href="#__codelineno-27-18"></a><span class="w">  </span><span class="nt">EXAMPLE2</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">user@example.com:hunter2</span>
-</span><span id="__span-27-19"><a id="__codelineno-27-19" name="__codelineno-27-19" href="#__codelineno-27-19"></a>
-</span><span id="__span-27-20"><a id="__codelineno-27-20" name="__codelineno-27-20" href="#__codelineno-27-20"></a><span class="nt">output_template</span><span class="p">:</span>
-</span><span id="__span-27-21"><a id="__codelineno-27-21" name="__codelineno-27-21" href="#__codelineno-27-21"></a><span class="w">  </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{year}.{quality?}.{source}-{tag}&quot;</span>
-</span><span id="__span-27-22"><a id="__codelineno-27-22" name="__codelineno-27-22" href="#__codelineno-27-22"></a><span class="w">  </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{season_episode}.{quality?}.{source}-{tag}&quot;</span>
-</span><span id="__span-27-23"><a id="__codelineno-27-23" name="__codelineno-27-23" href="#__codelineno-27-23"></a><span class="w">  </span><span class="nt">folder</span><span class="p">:</span>
-</span><span id="__span-27-24"><a id="__codelineno-27-24" name="__codelineno-27-24" href="#__codelineno-27-24"></a><span class="w">    </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}</span><span class="nv"> </span><span class="s">({year})&quot;</span>
-</span><span id="__span-27-25"><a id="__codelineno-27-25" name="__codelineno-27-25" href="#__codelineno-27-25"></a><span class="w">    </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}</span><span class="nv"> </span><span class="s">({year})&quot;</span>
-</span><span id="__span-27-26"><a id="__codelineno-27-26" name="__codelineno-27-26" href="#__codelineno-27-26"></a>
-</span><span id="__span-27-27"><a id="__codelineno-27-27" name="__codelineno-27-27" href="#__codelineno-27-27"></a><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MYGRP</span>
-</span><span id="__span-27-28"><a id="__codelineno-27-28" name="__codelineno-27-28" href="#__codelineno-27-28"></a>
-</span><span id="__span-27-29"><a id="__codelineno-27-29" name="__codelineno-27-29" href="#__codelineno-27-29"></a><span class="nt">key_vaults</span><span class="p">:</span>
-</span><span id="__span-27-30"><a id="__codelineno-27-30" name="__codelineno-27-30" href="#__codelineno-27-30"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SQLite</span>
-</span><span id="__span-27-31"><a id="__codelineno-27-31" name="__codelineno-27-31" href="#__codelineno-27-31"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Local</span>
-</span><span id="__span-27-32"><a id="__codelineno-27-32" name="__codelineno-27-32" href="#__codelineno-27-32"></a><span class="w">    </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/.unshackle/keys.db</span>
-</span><span id="__span-27-33"><a id="__codelineno-27-33" name="__codelineno-27-33" href="#__codelineno-27-33"></a>
-</span><span id="__span-27-34"><a id="__codelineno-27-34" name="__codelineno-27-34" href="#__codelineno-27-34"></a><span class="nt">proxy_providers</span><span class="p">:</span>
-</span><span id="__span-27-35"><a id="__codelineno-27-35" name="__codelineno-27-35" href="#__codelineno-27-35"></a><span class="w">  </span><span class="nt">basic</span><span class="p">:</span>
-</span><span id="__span-27-36"><a id="__codelineno-27-36" name="__codelineno-27-36" href="#__codelineno-27-36"></a><span class="w">    </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://user:pass@1.2.3.4:8080</span>
-</span><span id="__span-27-37"><a id="__codelineno-27-37" name="__codelineno-27-37" href="#__codelineno-27-37"></a>
-</span><span id="__span-27-38"><a id="__codelineno-27-38" name="__codelineno-27-38" href="#__codelineno-27-38"></a><span class="nt">omdb_api_key</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;your-omdb-key&quot;</span>
-</span><span id="__span-27-39"><a id="__codelineno-27-39" name="__codelineno-27-39" href="#__codelineno-27-39"></a><span class="nt">tmdb_api_key</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;your-tmdb-key&quot;</span>
-</span><span id="__span-27-40"><a id="__codelineno-27-40" name="__codelineno-27-40" href="#__codelineno-27-40"></a><span class="nt">tvdb_api_key</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;your-tvdb-key&quot;</span>
-</span><span id="__span-27-41"><a id="__codelineno-27-41" name="__codelineno-27-41" href="#__codelineno-27-41"></a><span class="nt">title_cache_time</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3600</span>
-</span><span id="__span-27-42"><a id="__codelineno-27-42" name="__codelineno-27-42" href="#__codelineno-27-42"></a><span class="nt">redact_paths</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="nt">directories</span><span class="p">:</span>
+</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="w">  </span><span class="nt">downloads</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/Media/unshackle</span>
+</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="w">  </span><span class="nt">temp</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/mnt/scratch/unshackle</span>
+</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a>
+</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="nt">network</span><span class="p">:</span>
+</span><span id="__span-30-6"><a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a><span class="w">  </span><span class="nt">browser</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Chrome131</span>
+</span><span id="__span-30-7"><a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a>
+</span><span id="__span-30-8"><a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a><span class="nt">headers</span><span class="p">:</span>
+</span><span id="__span-30-9"><a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a><span class="w">  </span><span class="nt">Accept-Language</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en-US,en;q=0.9</span>
+</span><span id="__span-30-10"><a id="__codelineno-30-10" name="__codelineno-30-10" href="#__codelineno-30-10"></a>
+</span><span id="__span-30-11"><a id="__codelineno-30-11" name="__codelineno-30-11" href="#__codelineno-30-11"></a><span class="nt">cdm</span><span class="p">:</span>
+</span><span id="__span-30-12"><a id="__codelineno-30-12" name="__codelineno-30-12" href="#__codelineno-30-12"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
+</span><span id="__span-30-13"><a id="__codelineno-30-13" name="__codelineno-30-13" href="#__codelineno-30-13"></a><span class="w">  </span><span class="nt">EXAMPLE2</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span>
+</span><span id="__span-30-14"><a id="__codelineno-30-14" name="__codelineno-30-14" href="#__codelineno-30-14"></a>
+</span><span id="__span-30-15"><a id="__codelineno-30-15" name="__codelineno-30-15" href="#__codelineno-30-15"></a><span class="nt">decryption</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shaka</span>
+</span><span id="__span-30-16"><a id="__codelineno-30-16" name="__codelineno-30-16" href="#__codelineno-30-16"></a>
+</span><span id="__span-30-17"><a id="__codelineno-30-17" name="__codelineno-30-17" href="#__codelineno-30-17"></a><span class="nt">credentials</span><span class="p">:</span>
+</span><span id="__span-30-18"><a id="__codelineno-30-18" name="__codelineno-30-18" href="#__codelineno-30-18"></a><span class="w">  </span><span class="nt">EXAMPLE2</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">user@example.com:hunter2</span>
+</span><span id="__span-30-19"><a id="__codelineno-30-19" name="__codelineno-30-19" href="#__codelineno-30-19"></a>
+</span><span id="__span-30-20"><a id="__codelineno-30-20" name="__codelineno-30-20" href="#__codelineno-30-20"></a><span class="nt">output_template</span><span class="p">:</span>
+</span><span id="__span-30-21"><a id="__codelineno-30-21" name="__codelineno-30-21" href="#__codelineno-30-21"></a><span class="w">  </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{year}.{quality?}.{source}-{tag}&quot;</span>
+</span><span id="__span-30-22"><a id="__codelineno-30-22" name="__codelineno-30-22" href="#__codelineno-30-22"></a><span class="w">  </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{season_episode}.{quality?}.{source}-{tag}&quot;</span>
+</span><span id="__span-30-23"><a id="__codelineno-30-23" name="__codelineno-30-23" href="#__codelineno-30-23"></a><span class="w">  </span><span class="nt">folder</span><span class="p">:</span>
+</span><span id="__span-30-24"><a id="__codelineno-30-24" name="__codelineno-30-24" href="#__codelineno-30-24"></a><span class="w">    </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}</span><span class="nv"> </span><span class="s">({year})&quot;</span>
+</span><span id="__span-30-25"><a id="__codelineno-30-25" name="__codelineno-30-25" href="#__codelineno-30-25"></a><span class="w">    </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}</span><span class="nv"> </span><span class="s">({year})&quot;</span>
+</span><span id="__span-30-26"><a id="__codelineno-30-26" name="__codelineno-30-26" href="#__codelineno-30-26"></a>
+</span><span id="__span-30-27"><a id="__codelineno-30-27" name="__codelineno-30-27" href="#__codelineno-30-27"></a><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MYGRP</span>
+</span><span id="__span-30-28"><a id="__codelineno-30-28" name="__codelineno-30-28" href="#__codelineno-30-28"></a>
+</span><span id="__span-30-29"><a id="__codelineno-30-29" name="__codelineno-30-29" href="#__codelineno-30-29"></a><span class="nt">key_vaults</span><span class="p">:</span>
+</span><span id="__span-30-30"><a id="__codelineno-30-30" name="__codelineno-30-30" href="#__codelineno-30-30"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SQLite</span>
+</span><span id="__span-30-31"><a id="__codelineno-30-31" name="__codelineno-30-31" href="#__codelineno-30-31"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Local</span>
+</span><span id="__span-30-32"><a id="__codelineno-30-32" name="__codelineno-30-32" href="#__codelineno-30-32"></a><span class="w">    </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/.unshackle/keys.db</span>
+</span><span id="__span-30-33"><a id="__codelineno-30-33" name="__codelineno-30-33" href="#__codelineno-30-33"></a>
+</span><span id="__span-30-34"><a id="__codelineno-30-34" name="__codelineno-30-34" href="#__codelineno-30-34"></a><span class="nt">proxy_providers</span><span class="p">:</span>
+</span><span id="__span-30-35"><a id="__codelineno-30-35" name="__codelineno-30-35" href="#__codelineno-30-35"></a><span class="w">  </span><span class="nt">basic</span><span class="p">:</span>
+</span><span id="__span-30-36"><a id="__codelineno-30-36" name="__codelineno-30-36" href="#__codelineno-30-36"></a><span class="w">    </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://user:pass@1.2.3.4:8080</span>
+</span><span id="__span-30-37"><a id="__codelineno-30-37" name="__codelineno-30-37" href="#__codelineno-30-37"></a>
+</span><span id="__span-30-38"><a id="__codelineno-30-38" name="__codelineno-30-38" href="#__codelineno-30-38"></a><span class="nt">omdb_api_key</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;your-omdb-key&quot;</span>
+</span><span id="__span-30-39"><a id="__codelineno-30-39" name="__codelineno-30-39" href="#__codelineno-30-39"></a><span class="nt">tmdb_api_key</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;your-tmdb-key&quot;</span>
+</span><span id="__span-30-40"><a id="__codelineno-30-40" name="__codelineno-30-40" href="#__codelineno-30-40"></a><span class="nt">tvdb_api_key</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;your-tvdb-key&quot;</span>
+</span><span id="__span-30-41"><a id="__codelineno-30-41" name="__codelineno-30-41" href="#__codelineno-30-41"></a><span class="nt">title_cache_time</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3600</span>
+</span><span id="__span-30-42"><a id="__codelineno-30-42" name="__codelineno-30-42" href="#__codelineno-30-42"></a><span class="nt">redact_paths</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 <p>For how these interact at runtime, continue to <a href="../../guide/downloading/">Downloading</a>,
 <a href="../../guide/drm-and-cdm/">DRM &amp; CDM</a>, and <a href="../../guide/output-and-naming/">Output &amp; naming</a>.</p>
