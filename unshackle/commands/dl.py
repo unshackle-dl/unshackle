@@ -574,7 +574,10 @@ class dl:
         help="Proxy URI to use. If a 2-letter country is provided, it will try to get a proxy from the config.",
     )
     @click.option(
-        "--tag", type=str, default=None, help="Set the Group Tag to be used, overriding the one in config if any."
+        "--tag",
+        type=str,
+        default=None,
+        help="Set the Group Tag to be used, overriding the config tag and any tag rules.",
     )
     @click.option("--repack", is_flag=True, default=False, help="Add REPACK tag to the output filename.")
     @click.option(
@@ -1252,6 +1255,7 @@ class dl:
 
         if tag:
             config.tag = tag
+            config.tag_rules = []
 
         # needs to be added this way instead of @cli.result_callback to be
         # able to keep `self` as the first positional

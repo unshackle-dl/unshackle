@@ -130,6 +130,7 @@ class Config:
         self.redact_paths: bool = kwargs.get("redact_paths", True)
 
         self.language_tags: dict = kwargs.get("language_tags") or {}
+        self.tag_rules: list = kwargs.get("tag_rules") or []
         self.dual_multi_mode: str = (kwargs.get("dual_multi_mode") or "strict").lower()
         self.output_template: dict = kwargs.get("output_template") or {}
         folder_cfg = self.output_template.pop("folder", "")
@@ -203,6 +204,7 @@ class Config:
             "edition",
             "repack",
             "lang_tag",
+            "title_type",
         }
 
         unsafe_chars = r'[<>:"/\\|?*]'
