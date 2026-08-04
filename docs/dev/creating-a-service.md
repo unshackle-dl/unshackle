@@ -304,11 +304,14 @@ Common constructor fields:
 
     ```python
     Episode(id_, service, title, season, number, name=None, year=None,
-            language=None, data=None, description=None, air_date=None)
+            language=None, data=None, description=None, air_date=None,
+            part=None)
     ```
 
     Pass `air_date` for daily/sports content to name by date instead of
-    `SxxExx`. Return a `Series([...])` of episodes.
+    `SxxExx`. Return a `Series([...])` of episodes. Pass `part` only when the
+    service splits one episode into several videos, see
+    [Split episodes](#split-episodes).
 
 === "Song"
 
@@ -327,6 +330,52 @@ Common constructor fields:
     You can call `self.get_titles_cached()` instead of `get_titles()` from the
     framework path to reuse cached results and gracefully fall back to stale data
     when the API errors. It also applies the per-service `title_map` config.
+
+#### Split episodes {#split-episodes}
+
+Some services split one logical episode into several separately playable videos, for
+example a variety show that ships episode 1 as *Episode 1 (Part 1)*, *(Part 2)* and
+*(Part 3)*. `Episode.number` stays an `int`. The optional `part` carries the index.
+
+```python
+Episode(..., season=1, number=1, part=1, name="The Reckoning")
+Episode(..., season=1, number=1, part=2, name="The Reckoning")
+```
+
+1. `part` counts from 1, contiguous. `part=0` is rejected, and `-w` can only address
+   parts up to 99.
+2. Every part of one episode shares the same `season` and `number`.
+3. Each part is a separate `Episode` with its own unique `id_`.
+4. Unsplit episode: leave `part` unset. Never pass `part=1` for a whole episode.
+5. Do not put the part in `name` or `number`. Pass a clean `name` (or `None`) and set
+   `part`.
+6. `part` is a split *episode*, not a split *season*. A service listing *Season 1 Part 2*
+   describes a group of episodes. Keep numbering those in sequence, the way the shipped
+   services do.
+
+`part` accepts an `int` or a digit string. A value that is not an integer raises
+`TypeError`. A value of `0` or less raises `ValueError`.
+
+!!! warning "The framework never infers a part from the episode name"
+    Rule 6 is the reason. Shipped services already use the word "Part" to mean a *season*
+    part, so name-sniffing would misread every one of them. The part has to arrive
+    structurally, as the `part` argument.
+
+!!! tip "Clean the part out of the name"
+    `Episode` discards any `name` that starts with `Episode <number>`, so a raw
+    `"Episode 1 (Part 2): The Reckoning"` leaves you with no episode name at all. Strip
+    the prefix before you pass it, or pass `None`.
+
+Once `part` is set, the filename gains a part token (`S01E01.Part.2`, see
+[Output & naming](../guide/output-and-naming.md#split-episodes)), `-w S01E01.2` selects a
+single part while a bare `-w S01E01` selects them all, and the `--list-titles` tree labels
+the episode `01.2`. The REST API reports it as an extra `part` key on the serialized
+title, described in [Endpoints](rest-api/endpoints.md#post-apilist-titles).
+
+!!! note "Opt-in and additive"
+    Leaving `part` unset costs you nothing: filenames, sort order, `-w` matching and the
+    API JSON are identical to a plain episode, so a service that does not split episodes
+    has nothing to adopt.
 
 ### `get_tracks`: required
 

@@ -1645,7 +1645,8 @@ class dl:
 
                 # Apply indentation only for multiple seasons
                 prefix = " " if multiple_seasons else ""
-                option_text = f"{prefix}{t.number}" + (f". {display_name}" if t.name else "")
+                part_label = f".{t.part}" if t.part is not None else ""
+                option_text = f"{prefix}{t.number}{part_label}" + (f". {display_name}" if t.name else "")
 
                 selection_titles.append(option_text)
                 current_ui_idx = len(selection_titles) - 1
@@ -2217,7 +2218,7 @@ class dl:
                 # If --latest-episode is set, only process the latest episode
                 if f"{title.season}x{title.number}" != latest_episode_id:
                     continue
-            elif isinstance(title, Episode) and wanted and f"{title.season}x{title.number}" not in wanted:
+            elif isinstance(title, Episode) and wanted and not title.matches_wanted(wanted):
                 continue
 
             if progress_sink:
@@ -2225,7 +2226,8 @@ class dl:
                     progress_sink(
                         {
                             "title": title.title,
-                            "current_title": f"S{title.season or 0:02}E{title.number or 0:02}",
+                            "current_title": f"S{title.season or 0:02}E{title.number or 0:02}"
+                            + (f".{title.part}" if title.part is not None else ""),
                         }
                     )
                 else:
@@ -3741,7 +3743,9 @@ class dl:
             return titles
         self.tvdb_id = tvdb_id  # keep the mux tag on the series the renumbering used
 
-        keys = [(t.season, t.number) for t in titles]
+        # parts of one episode share a (season, number) slot; without the dedupe the
+        # collision check below reads them as several episodes clashing on one slot
+        keys = list(dict.fromkeys((t.season, t.number) for t in titles))
         source_order = tvdb.detect_order(tvdb_id, keys)  # type: ignore[attr-defined]
         if source_order == self.tvdb_order:
             self.log.info("%s already lists this series in TVDB %s order.", self.service, self.tvdb_order)
@@ -3809,6 +3813,8 @@ class dl:
                 year=title.year,
                 air_date=title.air_date.isoformat() if isinstance(title.air_date, date) else title.air_date,
             )
+            if title.part is not None:
+                meta["part"] = title.part
         elif isinstance(title, Movie):
             meta.update(type="movie", name=title.name, year=title.year)
         else:

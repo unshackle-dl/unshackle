@@ -387,7 +387,8 @@ def _perform_download(
         if isinstance(wanted_raw, str):
             wanted_raw = [wanted_raw]
         # Only convert if not already in internal "SxE" format
-        needs_conversion = any(not re.match(r"^\d+x\d+$", w) for w in wanted_raw)
+        # the !? keeps a pre-parsed part exclusion from being re-fed through parse_tokens
+        needs_conversion = any(not re.match(r"^!?\d+x\d+(\.\d+)?$", w) for w in wanted_raw)
         if needs_conversion:
             season_range = SeasonRange()
             params["wanted"] = season_range.parse_tokens(*wanted_raw)

@@ -368,6 +368,45 @@ with `-` to exclude it.
     unshackle dl -w S01-S05,-S03 EXAMPLE 81234567
     ```
 
+=== "Split episodes"
+
+    ```shell
+    # Part 2 of episode 1 only
+    unshackle dl -w S01E01.2 EXAMPLE 81234567
+
+    # Parts 1 through 3 of episode 1
+    unshackle dl -w S01E01.1-S01E01.3 EXAMPLE 81234567
+
+    # All of season 1 except episode 1 part 2
+    unshackle dl -w S01,-S01E01.2 EXAMPLE 81234567
+    ```
+
+### Split episodes
+
+A few services split one episode into several separately playable videos. Where a service
+reports that, add `.N` after the episode to pick one part.
+
+| Token | Selects |
+| --- | --- |
+| `S01E01` | All parts of episode 1. |
+| `S01E01.2` | Part 2 of episode 1, and nothing else. |
+| `S01E01.1-S01E01.3` | Parts 1 to 3 of episode 1. |
+| `S01,-S01E01.2` | All of season 1 except episode 1 part 2. Parts 1 and 3 are kept. |
+
+A season token such as `S01` covers every episode and every part, so you only need `.N`
+when you want a part on its own.
+
+!!! warning "A part range stays inside one episode"
+    `S01E01.1-S01E01.3` is valid. `S01E01.1-S01E02.3` is rejected, because the parser
+    cannot know how many parts episode 1 has and so cannot work out where the range ends.
+    To span episodes, list the parts you want as separate tokens:
+    `-w S01E01.2,S01E02.1`.
+
+!!! note "A part of an unsplit episode selects nothing"
+    `-w S01E02.2` on an episode that was never split is deliberately empty: it tells you
+    the episode has no parts, rather than quietly handing you the whole episode. Run
+    `--list-titles` to see which episodes carry parts.
+
 ### Other selection flags
 
 | Flag | Behaviour |

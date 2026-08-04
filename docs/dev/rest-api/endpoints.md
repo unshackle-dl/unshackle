@@ -223,6 +223,12 @@ Service-specific CLI options may also be passed as additional keys.
 
 Each serialized title carries `type` (`"episode"`, `"movie"`, or `"other"`), `name`, `id`, `language`, `description`, `date`, and `cover_url`. Episodes and movies add `year`; episodes additionally add `series_title`, `season`, and `number`.
 
+!!! info "`part` on a split episode"
+    A service that splits one episode into several separately playable videos reports each
+    one as its own episode. Those titles share a `season` and `number` and add a `part`
+    integer counting from 1. No other title carries the key, so a client that ignores it
+    is unaffected. See [Split episodes](../creating-a-service.md#split-episodes).
+
 | Status | Error code | Meaning |
 | --- | --- | --- |
 | `200` | - | Titles returned. |
@@ -248,9 +254,10 @@ List the video, audio, and subtitle tracks for a title. For series, you can scop
 | `wanted` | string | no | Episode/season range (e.g. `"S01E01-S01E03"`). |
 | `season` | int/string | no | Season number (combined with `episode`). |
 | `episode` | int/string | no | Episode number (combined with `season`). |
+| `part` | int/string | no | Part index of a split episode (combined with `season` and `episode`). |
 | `profile`, `proxy`, `no_proxy`, `cdm_type` | - | no | As on `list-titles`. |
 
-When both `season` and `episode` are given, they are combined into a `"{season}x{episode}"` selector.
+When both `season` and `episode` are given, they are combined into a `"{season}x{episode}"` selector. Adding `part` narrows that to `"{season}x{episode}.{part}"`, one part of a [split episode](../creating-a-service.md#split-episodes); without it you get every part of the episode. `part` is read only when `season` and `episode` are both given, and `wanted` takes precedence over all three. To scope a part by range, put it in `wanted` instead (`"S01E01.2"`).
 
 === "Single title / movie: Response `200`"
 
@@ -361,7 +368,7 @@ Create a download job. Requires `service` and `title_id`; every other field is a
 | `range` | string[] | `["SDR"]` | Dynamic range(s). |
 | `channels` | number | `null` | Audio channel count. |
 | `no_atmos` | boolean | `false` | Exclude Atmos tracks. |
-| `wanted` | string[] | `[]` | Episode/season selectors. |
+| `wanted` | string[] | `[]` | Episode/season selectors. Accepts the part form, `"S01E01.2"`. |
 | `latest_episode` | boolean | `false` | Only the newest episode. |
 | `lang` / `v_lang` / `a_lang` / `s_lang` | string[] | `["orig"]` / `[]` / `[]` / `["all"]` | Language filters. |
 | `require_subs` | string[] | `[]` | Required subtitle languages. |

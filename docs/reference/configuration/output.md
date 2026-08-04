@@ -34,12 +34,22 @@ values, filesystem-unsafe characters (`< > : " / \ | ? *`), empty templates, and
 folder-kind keys.
 
 ??? example "All valid template variables"
-    `title`, `year`, `season`, `episode`, `season_episode`, `episode_name`, `date`,
-    `quality`, `resolution`, `source`, `tag`, `track_number`, `artist`, `album_artist`,
-    `album`, `disc`, `track_total`, `disc_total`, `release_type`, `genre`, `explicit`,
-    `isrc`, `upc`, `label`, `audio`, `audio_channels`, `audio_full`, `atmos`, `dual`,
-    `multi`, `dubbed`, `video`, `hdr`, `hfr`, `edition`, `repack`, `lang_tag`,
+    `title`, `year`, `season`, `episode`, `season_episode`, `episode_name`, `part`,
+    `date`, `quality`, `resolution`, `source`, `tag`, `track_number`, `artist`,
+    `album_artist`, `album`, `disc`, `track_total`, `disc_total`, `release_type`, `genre`,
+    `explicit`, `isrc`, `upc`, `label`, `audio`, `audio_channels`, `audio_full`, `atmos`,
+    `dual`, `multi`, `dubbed`, `video`, `hdr`, `hfr`, `edition`, `repack`, `lang_tag`,
     `title_type`.
+
+!!! warning "`{part?}` is already inside `{season_episode}`"
+    `part` holds the bare part index of a
+    [split episode](../../guide/output-and-naming.md#split-episodes) (`2`) and is empty on
+    every other title. unshackle folds it into `{episode}` and `{season_episode}`, so the
+    shipped `series` template names split episodes correctly with no edit. Putting
+    `{part?}` next to either of them renders the part twice (`S01E01.Part.2.2`). Use the
+    standalone variable only in a template that names neither `{episode}` nor
+    `{season_episode}`, and note that it is always empty in a folder template, since
+    folders do not carry the part.
 
 ## Tagging & naming keys
 

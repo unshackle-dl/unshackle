@@ -126,10 +126,37 @@ Every variable below is valid in both output and folder templates. Values are de
 | `episode` | Zero-padded episode (`E%02d`) | `E05` |
 | `season_episode` | Combined | `S01E05` |
 | `episode_name` | Episode title | `Pilot` |
+| `part` | Part index of a [split episode](#split-episodes), empty otherwise | `2` |
 | `date` | ISO air date for daily/dated content | `2024-06-01` |
 
 !!! note "Daily & sports content"
     When an episode has an air date, unshackle switches to date-based naming automatically: `season` and `season_episode` become the formatted air date, `episode` and `year` are cleared, and `{date}` holds the ISO date. The date's internal separator (dots or spaces) follows your `series` template style.
+
+### Split episodes {#split-episodes}
+
+A few services split one episode into several separately playable videos. Where a service reports that, the part index is folded into `{episode}` and `{season_episode}`, so the stock `series` template names it with no change to your config.
+
+```text
+Show.Name.S01E01.Part.2.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
+```
+
+The part token sits immediately after the episode token, before the quality tags, and the group tag stays last. Its separator follows your template's own style, the same way dated content does, so a spaced template gives `S01E01 Part 2` instead.
+
+The part is left out of the folder name, so every part of an episode lands in the same season folder:
+
+```text
+The.Show.S01.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG/
+  ├─ The.Show.S01E01.Part.1.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
+  ├─ The.Show.S01E01.Part.2.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
+  └─ The.Show.S01E02.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
+```
+
+The same holds for a folder template of your own: `{season}` never picks up the part, and `{season_episode}` drops it inside a folder template. An episode with no part is named like any other episode.
+
+!!! note "What media servers do with the part token"
+    The form above follows scene practice for genuinely split episodes. Kodi stacks the parts back into one playable episode automatically. Jellyfin lists two versions of S01E01, still correct and playable, because its stacking pattern expects the part marker at the end of the name. Plex's scanner is closed-source, so its handling of text after the part token is unverified.
+
+For custom templates there is also a standalone [`{part}`](../reference/configuration/output.md#output_template) variable. You rarely want it, see the caveat on that page.
 
 ### Audio
 

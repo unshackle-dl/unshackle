@@ -299,6 +299,7 @@ def _build_title(info: Dict[str, Any], service_tag: str, fallback_id: str) -> Un
             year=info.get("year"),
             language=lang,
             air_date=info.get("air_date"),
+            part=info.get("part"),
         )
     return Movie(
         id_=info.get("id", fallback_id),

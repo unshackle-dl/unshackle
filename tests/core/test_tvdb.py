@@ -171,3 +171,62 @@ def test_get_episodes_does_not_cache_an_empty_listing(monkeypatch: pytest.Monkey
     monkeypatch.setattr(p, "_get", lambda _path, params: None)
     assert p.get_episodes(73871, "official") == []
     assert p._episodes == {}
+
+
+# --- apply_tvdb_order over multi-part episodes -------------------------------
+
+
+class _Svc:
+    pass
+
+
+class _FakeProvider:
+    def __init__(self, mapping: dict) -> None:
+        self.mapping = mapping
+
+    def detect_order(self, _id, _keys) -> str:
+        return "official"
+
+    def get_order_map(self, _id, _order, source_order=None) -> dict:
+        return self.mapping
+
+
+def _renumber(monkeypatch: pytest.MonkeyPatch, episodes: list, mapping: dict):
+    from types import SimpleNamespace
+
+    from unshackle.commands.dl import dl
+    from unshackle.core.titles.episode import Series
+
+    monkeypatch.setattr(providers, "get_provider", lambda _name: _FakeProvider(mapping))
+    errors: list = []
+    stub = SimpleNamespace(
+        tvdb_id=73871,
+        tvdb_order="dvd",
+        service="STUB",
+        log=SimpleNamespace(warning=lambda *a, **k: None, info=lambda *a, **k: None, error=lambda *a: errors.append(a)),
+    )
+    return dl.apply_tvdb_order(stub, Series(episodes)), errors
+
+
+def _ep(season: int, number: int, part=None):
+    from unshackle.core.titles.episode import Episode
+
+    return Episode(id_=f"{season}x{number}.{part}", service=_Svc, title="Show", season=season, number=number, part=part)
+
+
+def test_parts_of_one_episode_renumber_together(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Three parts share one (season, number) slot, so they must not read as a collision."""
+    episodes = [_ep(1, 1, 1), _ep(1, 1, 2), _ep(1, 1, 3), _ep(1, 2)]
+    mapping = {(1, 1): (2, 1, "Part-ful"), (1, 2): (2, 2, "Whole")}
+    titles, errors = _renumber(monkeypatch, episodes, mapping)
+    assert errors == []
+    assert [(t.season, t.number, t.part) for t in titles] == [(2, 1, 1), (2, 1, 2), (2, 1, 3), (2, 2, None)]
+
+
+def test_a_real_collision_still_bails(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Dedupe must not disable the guard: two distinct episodes on one slot still refuses."""
+    episodes = [_ep(1, 1), _ep(1, 2)]
+    mapping = {(1, 2): (1, 1, "Clash")}  # (1, 1) is unmapped and keeps the slot (1, 2) moves onto
+    titles, errors = _renumber(monkeypatch, episodes, mapping)
+    assert errors  # refused, with the "two episodes each" error
+    assert [(t.season, t.number) for t in titles] == [(1, 1), (1, 2)]  # numbering untouched
