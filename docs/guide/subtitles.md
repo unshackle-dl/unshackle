@@ -154,8 +154,8 @@ flags drive selection, sort order, output filenames, and the Matroska track flag
     By default this type order is the primary sort, so all forced tracks come first, then
     all normal tracks, then all SDH/CC tracks, each block sorted by language. To keep each
     language next to its own variants instead, set
-    [`subtitle.group_by`](../reference/configuration.md#subtitle) to `language`. Use
-    [`subtitle.type_priority`](../reference/configuration.md#subtitle) to change the
+    [`subtitle.group_by`](../reference/configuration/download.md#subtitle) to `language`. Use
+    [`subtitle.type_priority`](../reference/configuration/download.md#subtitle) to change the
     Forced → Normal → SDH/CC order itself.
 
 A single track cannot be both CC and SDH, and a forced track cannot also be flagged

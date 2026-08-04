@@ -516,5 +516,5 @@ debug_requests: true
 
 - [Downloading](downloading.md): the `dl` command and its DRM-related flags.
 - [Key vaults](vaults.md): caching content keys across downloads.
-- [Configuration](../reference/configuration.md): the full `unshackle.yaml` reference.
+- [Configuration](../reference/configuration/index.md): the full `unshackle.yaml` reference.
 - [Dependencies](../getting-started/installation.md): installing shaka-packager and mp4decrypt.

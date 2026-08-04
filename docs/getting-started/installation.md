@@ -108,7 +108,7 @@ These must be present for core downloading, decryption, and muxing to work:
 !!! warning "shaka-packager is the default decryptor"
     unshackle decrypts with shaka-packager unless you explicitly configure a
     different decryptor. If it is missing, protected downloads will fail at the
-    decryption step. See the [configuration reference](../reference/configuration.md#decryption) for the
+    decryption step. See the [configuration reference](../reference/configuration/drm.md#decryption) for the
     `decryption` key if you want to switch to `mp4decrypt`.
 
 ### Recommended and optional tools

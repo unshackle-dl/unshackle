@@ -272,7 +272,7 @@ alphabetically, after the title's original language. Nothing is removed. Audio w
 same way, but the languages you leave out keep their bitrate and codec order instead of an
 alphabetical one.
 
-See [`subtitle.language_priority`](../reference/configuration.md#subtitle) for the details.
+See [`subtitle.language_priority`](../reference/configuration/download.md#subtitle) for the details.
 
 ### Exact vs fuzzy matching
 

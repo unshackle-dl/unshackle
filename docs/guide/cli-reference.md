@@ -103,7 +103,7 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 !!! tip "These flags select languages, they do not order them"
     Naming languages with `-l` or `-sl` removes the others. To keep every language but put
     your preferred ones first, use `audio.language_priority` and
-    [`subtitle.language_priority`](../reference/configuration.md#subtitle) in your
+    [`subtitle.language_priority`](../reference/configuration/download.md#subtitle) in your
     configuration file.
 
 The special language tokens `orig`, `all`, and `best` are honoured everywhere a language is expected.

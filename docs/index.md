@@ -86,7 +86,7 @@ install to your first file.
 - **[Installation](getting-started/installation.md)**. Install unshackle and the external tools it depends on.
 - **[Quickstart](getting-started/quickstart.md)**. Configure `unshackle.yaml` and run your first download.
 - **[Downloading](guide/downloading.md)**. The full `dl` command guide: quality, codecs, languages, track selection, and output.
-- **[Configuration](getting-started/configuration-file.md)**. Where `unshackle.yaml` lives, the directory layout, and how to edit values. Full key list in the [Configuration Reference](reference/configuration.md).
+- **[Configuration](getting-started/configuration-file.md)**. Where `unshackle.yaml` lives, the directory layout, and how to edit values. Full key list in the [Configuration Reference](reference/configuration/index.md).
 - **[REST API](dev/rest-api/index.md)**. Run the `serve` HTTP server and drive downloads programmatically.
 
 !!! tip "Getting help"

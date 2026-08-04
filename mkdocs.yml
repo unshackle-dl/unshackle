@@ -5,6 +5,9 @@ repo_url: https://github.com/unshackle-dl/unshackle
 repo_name: unshackle-dl/unshackle
 docs_dir: docs
 
+exclude_docs: |
+  reference/configuration.md
+
 theme:
   name: material
   custom_dir: overrides
@@ -117,7 +120,16 @@ nav:
       - Subtitles: guide/subtitles.md
       - Troubleshooting: guide/troubleshooting.md
   - Configuration:
-      - Reference: reference/configuration.md
+      - Overview: reference/configuration/index.md
+      - Directories: reference/configuration/directories.md
+      - Services & Authentication: reference/configuration/services.md
+      - Download & Processing: reference/configuration/download.md
+      - Output & Naming: reference/configuration/output.md
+      - DRM & CDM: reference/configuration/drm.md
+      - Network & Proxy: reference/configuration/network.md
+      - Key Vaults: reference/configuration/vaults.md
+      - Other Settings: reference/configuration/misc.md
+      - Annotated Example: reference/configuration/example.md
   - Developer:
       - Creating a Service: dev/creating-a-service.md
       - Service Architecture: dev/service-architecture.md

@@ -3,7 +3,7 @@
 Almost everything about how unshackle behaves is controlled by a single YAML file named `unshackle.yaml`: where it saves downloads, which CDM it uses, your credentials, proxies, filename templates, and more. This page covers where that file lives, how unshackle finds it, the shape of its contents, the directory layout unshackle builds around it, and how to edit values from the command line.
 
 !!! note "Where the exhaustive key list lives"
-    This page is an overview. For the complete, key-by-key breakdown of every setting, its type, and its default, see the [Configuration Reference](../reference/configuration.md).
+    This page is an overview. For the complete, key-by-key breakdown of every setting, its type, and its default, see the [Configuration Reference](../reference/configuration/index.md).
 
 ## The config filename
 
@@ -89,7 +89,7 @@ The top-level keys group loosely into these areas:
 | Behavior & logging | `update_checks`, `redact_paths`, `debug`, `unicode_filenames` |
 | Paths | `directories`, `filenames` |
 
-For the full list with types and defaults, see the [Configuration Reference](../reference/configuration.md).
+For the full list with types and defaults, see the [Configuration Reference](../reference/configuration/index.md).
 
 !!! warning "Unknown keys are silently ignored"
     unshackle does not validate your config against a schema. If you misspell a key, it is simply skipped and the default is used. You will not get an error. Double-check key names (and their nesting) if a setting does not seem to apply.
@@ -126,7 +126,7 @@ services:
 !!! tip "A few keys are named after the flag's internal name"
     Most keys are obvious, but set these exact ones: `range` (`-r`), `list` (`--list`),
     `tmdb_id` (`--tmdb`), `imdb_id` (`--imdb`), `tvdb_id` (`--tvdb`), `no_atmos` (`--noatmos`), and `output_dir`
-    (`-o`). The [Configuration Reference](../reference/configuration.md#dl) has the full list
+    (`-o`). The [Configuration Reference](../reference/configuration/download.md#dl) has the full list
     and every available key.
 
 ## The directory layout
@@ -177,7 +177,7 @@ unshackle searches entries in the order listed, and **the first source to define
 
 ## The `filenames` key
 
-Alongside `directories`, the `filenames` key lets you override the templates unshackle uses when naming its own working and log files (for example the log filename or the temporary chapters file). Most users never need to touch this. The available names and their default templates are listed in the [Configuration Reference](../reference/configuration.md#filenames).
+Alongside `directories`, the `filenames` key lets you override the templates unshackle uses when naming its own working and log files (for example the log filename or the temporary chapters file). Most users never need to touch this. The available names and their default templates are listed in the [Configuration Reference](../reference/configuration/directories.md#filenames).
 
 ## Editing the config with `unshackle cfg`
 
@@ -223,6 +223,6 @@ When it writes, `unshackle cfg` targets the config file that was loaded. If none
 
 ## Next steps
 
-- Browse the [Configuration Reference](../reference/configuration.md) for every key and default.
+- Browse the [Configuration Reference](../reference/configuration/index.md) for every key and default.
 - Set up your first download in [Downloading](../guide/downloading.md).
 - Learn how services are discovered and updated in [Creating a Service](../dev/creating-a-service.md).

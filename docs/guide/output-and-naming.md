@@ -102,6 +102,7 @@ Every variable below is valid in both output and folder templates. Values are de
 | Variable | Meaning | Example |
 |---|---|---|
 | `title` | Title name (movie/show/song name; `$` is rendered as `S`) | `The Show` |
+| `title_type` | Media kind of the title | `movie`, `series`, `music` |
 | `year` | Release year | `2024` |
 | `source` | Service tag / class name (empty with `--no-source`) | `EXAMPLE` |
 | `quality` | Resolution with scan suffix | `1080p`, `2160p`, `576i` |
@@ -138,7 +139,7 @@ Every variable below is valid in both output and folder templates. Values are de
 | `audio_channels` | Channel layout | `5.1`, `2.0` |
 | `audio_full` | Codec + channels combined | `DDP5.1` |
 | `atmos` | `Atmos` when any track carries JOC | `Atmos` |
-| `dual` | `DUAL` for two audio languages (see [`dual_multi_mode`](../reference/configuration.md#dual_multi_mode)) | `DUAL` |
+| `dual` | `DUAL` for two audio languages (see [`dual_multi_mode`](../reference/configuration/download.md#dual_multi_mode)) | `DUAL` |
 | `multi` | `MULTi` for more than two audio languages | `MULTi` |
 | `dubbed` | `DUBBED` for a single audio language that is not the original (strict mode only) | `DUBBED` |
 
@@ -234,6 +235,10 @@ The `--no-mux` flag skips muxing entirely and writes the individual track files,
 ## Tags & group naming
 
 The release-group tag is the `-TAG` portion at the end of scene-style names, produced by the `{tag}` variable.
+It can be swapped per release with [`tag_rules`](../reference/configuration/output.md#tag_rules): ordered rules that
+match on the release-attribute variables only (`quality`, `resolution`, `hdr`, `source`, `lang_tag`,
+`title_type`, and so on), first match wins. The title's own fields, such as `title` and `season_episode`,
+cannot be matched. See the [reference page](../reference/configuration/output.md#tag_rules) for the exact list.
 
 ```yaml title="unshackle.yaml"
 tag: "MYGROUP"
@@ -405,7 +410,7 @@ how the optional (`?`) variables appear and disappear.
 === "Multi-language"
 
     Place `{dual?}`, `{multi?}` and `{dubbed?}` next to each other. At most one of them is
-    ever set (see [`dual_multi_mode`](../reference/configuration.md#dual_multi_mode)), and the
+    ever set (see [`dual_multi_mode`](../reference/configuration/download.md#dual_multi_mode)), and the
     empty ones collapse:
 
     ```yaml
@@ -439,7 +444,7 @@ how the optional (`?`) variables appear and disappear.
     ```
 
     For finer control (e.g. a `SUBBED` tag driven by subtitle languages), use `{lang_tag?}`
-    with [`language_tags` rules](../reference/configuration.md#language_tags) instead.
+    with [`language_tags` rules](../reference/configuration/download.md#language_tags) instead.
 
 === "Daily shows"
 

@@ -8,7 +8,7 @@ downloading, decryption, muxing, naming) is handled by the unshackle core.
 !!! info "Who this page is for"
     This is a **developer guide**. If you only want to *use* services, see
     [downloading](../guide/downloading.md) and
-    [configuration](../reference/configuration.md). Nothing here is required to run
+    [configuration](../reference/configuration/index.md). Nothing here is required to run
     the CLI. Service code is deliberately kept separate from the core so it can
     live in its own private repository.
 
