@@ -10,7 +10,15 @@ from unshackle.core.vault import Vault
 class API(Vault):
     """Key Vault using a simple RESTful HTTP API call."""
 
-    def __init__(self, name: str, uri: str, token: str, no_push: bool = False, headers: Optional[dict[str, str]] = None, timeout: float = 10.0):
+    def __init__(
+        self,
+        name: str,
+        uri: str,
+        token: str,
+        no_push: bool = False,
+        headers: Optional[dict[str, str]] = None,
+        timeout: float = 10.0,
+    ):
         super().__init__(name, no_push)
         self.uri = uri.rstrip("/")
         self.timeout = timeout
@@ -29,7 +37,7 @@ class API(Vault):
             url=f"{self.uri}/{service.lower()}/{kid}",
             headers={"Accept": "application/json"},
             timeout=self.timeout,
-            allow_redirects=False
+            allow_redirects=False,
         )
         response.raise_for_status()
         data = response.json()
@@ -65,7 +73,7 @@ class API(Vault):
                 params={"page": page, "total": 10},
                 headers={"Accept": "application/json"},
                 timeout=self.timeout,
-                allow_redirects=False
+                allow_redirects=False,
             )
             response.raise_for_status()
             data = response.json()
@@ -106,7 +114,7 @@ class API(Vault):
             json={"content_key": key},
             headers={"Accept": "application/json"},
             timeout=self.timeout,
-            allow_redirects=False
+            allow_redirects=False,
         )
         response.raise_for_status()
         data = response.json()
@@ -155,7 +163,7 @@ class API(Vault):
                     json={"content_keys": batch_keys},
                     headers={"Accept": "application/json"},
                     timeout=self.timeout,
-                    allow_redirects=False
+                    allow_redirects=False,
                 )
 
                 # Check for HTTP errors that suggest batch is too large
@@ -165,7 +173,7 @@ class API(Vault):
                     else:
                         batch_size = 1
                     continue
-                
+
                 response.raise_for_status()
                 data = response.json()
             except Exception:
@@ -204,10 +212,7 @@ class API(Vault):
 
     def get_services(self) -> Iterator[str]:
         response = self.session.post(
-            url=self.uri,
-            headers={"Accept": "application/json"},
-            timeout=self.timeout,
-            allow_redirects=False
+            url=self.uri, headers={"Accept": "application/json"}, timeout=self.timeout, allow_redirects=False
         )
         response.raise_for_status()
         data = response.json()
@@ -250,4 +255,3 @@ class Exceptions:
 
     class ContentKeyInvalid(Exception):
         """The Content Key is invalid."""
-        
