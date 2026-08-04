@@ -2053,13 +2053,24 @@ values, filesystem-unsafe characters (<code>&lt; &gt; : " / \ | ? *</code>), emp
 folder-kind keys.</p>
 <details class="example">
 <summary>All valid template variables</summary>
-<p><code>title</code>, <code>year</code>, <code>season</code>, <code>episode</code>, <code>season_episode</code>, <code>episode_name</code>, <code>date</code>,
-<code>quality</code>, <code>resolution</code>, <code>source</code>, <code>tag</code>, <code>track_number</code>, <code>artist</code>, <code>album_artist</code>,
-<code>album</code>, <code>disc</code>, <code>track_total</code>, <code>disc_total</code>, <code>release_type</code>, <code>genre</code>, <code>explicit</code>,
-<code>isrc</code>, <code>upc</code>, <code>label</code>, <code>audio</code>, <code>audio_channels</code>, <code>audio_full</code>, <code>atmos</code>, <code>dual</code>,
-<code>multi</code>, <code>dubbed</code>, <code>video</code>, <code>hdr</code>, <code>hfr</code>, <code>edition</code>, <code>repack</code>, <code>lang_tag</code>,
+<p><code>title</code>, <code>year</code>, <code>season</code>, <code>episode</code>, <code>season_episode</code>, <code>episode_name</code>, <code>part</code>,
+<code>date</code>, <code>quality</code>, <code>resolution</code>, <code>source</code>, <code>tag</code>, <code>track_number</code>, <code>artist</code>,
+<code>album_artist</code>, <code>album</code>, <code>disc</code>, <code>track_total</code>, <code>disc_total</code>, <code>release_type</code>, <code>genre</code>,
+<code>explicit</code>, <code>isrc</code>, <code>upc</code>, <code>label</code>, <code>audio</code>, <code>audio_channels</code>, <code>audio_full</code>, <code>atmos</code>,
+<code>dual</code>, <code>multi</code>, <code>dubbed</code>, <code>video</code>, <code>hdr</code>, <code>hfr</code>, <code>edition</code>, <code>repack</code>, <code>lang_tag</code>,
 <code>title_type</code>.</p>
 </details>
+<div class="admonition warning">
+<p class="admonition-title"><code>{part?}</code> is already inside <code>{season_episode}</code></p>
+<p><code>part</code> holds the bare part index of a
+<a href="../../../guide/output-and-naming/#split-episodes">split episode</a> (<code>2</code>) and is empty on
+every other title. unshackle folds it into <code>{episode}</code> and <code>{season_episode}</code>, so the
+shipped <code>series</code> template names split episodes correctly with no edit. Putting
+<code>{part?}</code> next to either of them renders the part twice (<code>S01E01.Part.2.2</code>). Use the
+standalone variable only in a template that names neither <code>{episode}</code> nor
+<code>{season_episode}</code>, and note that it is always empty in a folder template, since
+folders do not carry the part.</p>
+</div>
 <h2 id="tagging-naming-keys">Tagging &amp; naming keys<a class="headerlink" href="#tagging-naming-keys" title="Permanent link">&para;</a></h2>
 <table>
 <thead>

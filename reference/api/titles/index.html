@@ -1852,6 +1852,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label=" Episode">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.titles.Episode.matches_wanted" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;matches_wanted
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1999,6 +2016,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label=" Episode">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.titles.Episode.matches_wanted" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;matches_wanted
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2129,7 +2163,8 @@ A service returns one of these collections from its title lookup. See
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">data</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">description</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">air_date</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="p">)</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">part</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -2158,6 +2193,28 @@ A service returns one of these collections from its title lookup. See
 
 
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.titles.Episode.matches_wanted" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">matches_wanted</span>
+
+
+<a href="#unshackle.core.titles.Episode.matches_wanted" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">matches_wanted</span><span class="p">(</span><span class="n">wanted</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Whether a parsed <code>-w</code> key set selects this episode.</p>
+<p>A part-ful episode answers to both its base key and its part key, so <code>-w s1e1</code>
+takes every part. <code>!</code> keys are part-qualified exclusions resolved here.</p>
+
+
+    </div>
+
+</div>
 
 
 

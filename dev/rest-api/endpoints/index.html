@@ -3178,6 +3178,13 @@
 </div>
 </div>
 <p>Each serialized title carries <code>type</code> (<code>"episode"</code>, <code>"movie"</code>, or <code>"other"</code>), <code>name</code>, <code>id</code>, <code>language</code>, <code>description</code>, <code>date</code>, and <code>cover_url</code>. Episodes and movies add <code>year</code>; episodes additionally add <code>series_title</code>, <code>season</code>, and <code>number</code>.</p>
+<div class="admonition info">
+<p class="admonition-title"><code>part</code> on a split episode</p>
+<p>A service that splits one episode into several separately playable videos reports each
+one as its own episode. Those titles share a <code>season</code> and <code>number</code> and add a <code>part</code>
+integer counting from 1. No other title carries the key, so a client that ignores it
+is unaffected. See <a href="../../creating-a-service/#split-episodes">Split episodes</a>.</p>
+</div>
 <table>
 <thead>
 <tr>
@@ -3267,6 +3274,12 @@
 <td>Episode number (combined with <code>season</code>).</td>
 </tr>
 <tr>
+<td><code>part</code></td>
+<td>int/string</td>
+<td>no</td>
+<td>Part index of a split episode (combined with <code>season</code> and <code>episode</code>).</td>
+</tr>
+<tr>
 <td><code>profile</code>, <code>proxy</code>, <code>no_proxy</code>, <code>cdm_type</code></td>
 <td>-</td>
 <td>no</td>
@@ -3274,7 +3287,7 @@
 </tr>
 </tbody>
 </table>
-<p>When both <code>season</code> and <code>episode</code> are given, they are combined into a <code>"{season}x{episode}"</code> selector.</p>
+<p>When both <code>season</code> and <code>episode</code> are given, they are combined into a <code>"{season}x{episode}"</code> selector. Adding <code>part</code> narrows that to <code>"{season}x{episode}.{part}"</code>, one part of a <a href="../../creating-a-service/#split-episodes">split episode</a>; without it you get every part of the episode. <code>part</code> is read only when <code>season</code> and <code>episode</code> are both given, and <code>wanted</code> takes precedence over all three. To scope a part by range, put it in <code>wanted</code> instead (<code>"S01E01.2"</code>).</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="5:2"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">Single title / movie: Response <code>200</code></label><label for="__tabbed_5_2">Multiple episodes: Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -3462,7 +3475,7 @@
 <td><code>wanted</code></td>
 <td>string[]</td>
 <td><code>[]</code></td>
-<td>Episode/season selectors.</td>
+<td>Episode/season selectors. Accepts the part form, <code>"S01E01.2"</code>.</td>
 </tr>
 <tr>
 <td><code>latest_episode</code></td>
