@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://docs.unshackle.dev/reference/api/config/">
+        <link rel="canonical" href="https://docs.unshackle.dev/reference/configuration/network/">
       
       
-        <link rel="prev" href="../service/">
+        <link rel="prev" href="../drm/">
       
       
-        <link rel="next" href="../tracks/">
+        <link rel="next" href="../vaults/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Config - unshackle</title>
+        <title>Network & Proxy - unshackle</title>
       
     
     
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#config-api" class="md-skip">
+        <a href="#network-proxy" class="md-skip">
           Skip to content
         </a>
       
@@ -114,7 +114,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Config
+              Network & Proxy
             
           </span>
         </div>
@@ -303,11 +303,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../configuration/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
           
   
   
@@ -347,13 +349,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../service/" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../api/service/" class="md-tabs__link">
           
   
   
@@ -895,6 +895,8 @@
       
   
   
+    
+  
   
   
     
@@ -926,20 +928,23 @@
     
     
       
+        
+        
+      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../configuration/" class="md-nav__link ">
+            <a href="../" class="md-nav__link ">
               
   
   
@@ -957,13 +962,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -983,7 +988,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/directories/" class="md-nav__link">
+      <a href="../directories/" class="md-nav__link">
         
   
   
@@ -1011,7 +1016,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/services/" class="md-nav__link">
+      <a href="../services/" class="md-nav__link">
         
   
   
@@ -1039,7 +1044,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/download/" class="md-nav__link">
+      <a href="../download/" class="md-nav__link">
         
   
   
@@ -1067,7 +1072,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/output/" class="md-nav__link">
+      <a href="../output/" class="md-nav__link">
         
   
   
@@ -1095,7 +1100,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/drm/" class="md-nav__link">
+      <a href="../drm/" class="md-nav__link">
         
   
   
@@ -1120,10 +1125,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../configuration/network/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network & Proxy
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1139,6 +1171,59 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#network" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        network
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        headers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proxy_providers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        proxy_providers
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1151,7 +1236,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/vaults/" class="md-nav__link">
+      <a href="../vaults/" class="md-nav__link">
         
   
   
@@ -1179,7 +1264,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/misc/" class="md-nav__link">
+      <a href="../misc/" class="md-nav__link">
         
   
   
@@ -1207,7 +1292,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/example/" class="md-nav__link">
+      <a href="../example/" class="md-nav__link">
         
   
   
@@ -1617,10 +1702,8 @@
       
   
   
-    
   
   
-  
     
     
       
@@ -1638,22 +1721,19 @@
     
     
       
-        
-        
-      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
             
   
   
@@ -1671,7 +1751,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1689,7 +1769,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../service/" class="md-nav__link">
+      <a href="../../api/service/" class="md-nav__link">
         
   
   
@@ -1714,37 +1794,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Config
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../api/config/" class="md-nav__link">
         
   
   
@@ -1760,109 +1813,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;config
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Config
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label=" Config">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config.get_folder_template" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_folder_template
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config.get_template_separator" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_template_separator
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.resolve_decryption" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;resolve_decryption
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.resolve_cdm_name" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;resolve_cdm_name
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.get_config_path" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;get_config_path
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1875,7 +1825,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../tracks/" class="md-nav__link">
+      <a href="../../api/tracks/" class="md-nav__link">
         
   
   
@@ -1903,7 +1853,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../titles/" class="md-nav__link">
+      <a href="../../api/titles/" class="md-nav__link">
         
   
   
@@ -1931,7 +1881,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../drm/" class="md-nav__link">
+      <a href="../../api/drm/" class="md-nav__link">
         
   
   
@@ -1986,10 +1936,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#unshackle.core.config" class="md-nav__link">
+  <a href="#network" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;config
+        network
       
     </span>
   </a>
@@ -1997,49 +1947,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config" class="md-nav__link">
+  <a href="#headers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Config
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label=" Config">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config.get_folder_template" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_folder_template
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config.get_template_separator" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_template_separator
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.resolve_decryption" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;resolve_decryption
+        headers
       
     </span>
   </a>
@@ -2047,21 +1958,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#unshackle.core.config.resolve_cdm_name" class="md-nav__link">
+  <a href="#proxy_providers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;resolve_cdm_name
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.get_config_path" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;get_config_path
+        proxy_providers
       
     </span>
   </a>
@@ -2088,226 +1988,174 @@
   
 
 
-<h1 id="config-api">Config API<a class="headerlink" href="#config-api" title="Permanent link">&para;</a></h1>
-<p>Auto-generated reference for the <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-class&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-class-name&quot;&gt;Config&lt;/span&gt;" href="#unshackle.core.config.Config"><code>Config</code></a> object that models the
-<code>unshackle</code> configuration file. For a human-friendly walkthrough of every key, see the
-<a href="../../configuration/">Configuration Reference</a>.</p>
-
-
-<div class="doc doc-object doc-module">
-
-
-
-<a id="unshackle.core.config"></a>
-    <div class="doc doc-contents first">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="unshackle.core.config.Config" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">Config</span>
-
-
-<a href="#unshackle.core.config.Config" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">Config</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+<h1 id="network-proxy">Network &amp; proxy<a class="headerlink" href="#network-proxy" title="Permanent link">&para;</a></h1>
+<h2 id="network"><code>network</code><a class="headerlink" href="#network" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
+</ul>
+<p>TLS-fingerprinting and HTTP client settings for the rnet-based session.</p>
+<table>
+<thead>
+<tr>
+<th>Sub-key</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>browser</code></td>
+<td>str</td>
+<td><code>"Chrome131"</code></td>
+<td>Impersonation preset. Must be an exact preset name (e.g. <code>Chrome131</code>, <code>Firefox135</code>, <code>Edge101</code>, <code>Safari18</code>, <code>OkHttp4_12</code>, <code>OkHttp5</code>, <code>Opera118</code>); unknown names raise an error.</td>
+</tr>
+<tr>
+<td><code>http1_only</code></td>
+<td>bool</td>
+<td><em>(unset)</em></td>
+<td>Force HTTP/1.1.</td>
+</tr>
+<tr>
+<td><code>http2_only</code></td>
+<td>bool</td>
+<td><em>(unset)</em></td>
+<td>Force HTTP/2.</td>
+</tr>
+<tr>
+<td><code>pool_max_idle_per_host</code></td>
+<td>int</td>
+<td><em>(unset)</em></td>
+<td>Connection-pool tuning.</td>
+</tr>
+<tr>
+<td><code>pool_max_size</code></td>
+<td>int</td>
+<td><em>(unset)</em></td>
+<td>Connection-pool tuning.</td>
+</tr>
+<tr>
+<td><code>tcp_nodelay</code></td>
+<td>bool</td>
+<td><em>(unset)</em></td>
+<td>Disable Nagle's algorithm.</td>
+</tr>
+</tbody>
+</table>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">network</span><span class="p">:</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">browser</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Firefox135</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">http2_only</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-
-
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="unshackle.core.config.Config.get_folder_template" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">get_folder_template</span>
-
-
-<a href="#unshackle.core.config.Config.get_folder_template" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_folder_template</span><span class="p">(</span><span class="n">kind</span><span class="p">)</span>
+<div class="admonition note">
+<p class="admonition-title">Measured effect of <code>http1_only</code></p>
+<p>Both <code>http1_only</code> and <code>http2_only</code> are unset by default. In benchmarks, forcing HTTP/1.1
+gained 30 to 50% on hosts that throttle per-connection or stall behind HTTP/2 flow control,
+and <strong>cost up to 27% on fast CDNs</strong>.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Renamed from <code>curl_impersonate</code></p>
+<p>The old <code>curl_impersonate</code> section is a deprecated alias. If you still use it, unshackle
+honours it (only when <code>network</code> is absent) but emits a <code>DeprecationWarning</code>. Rename it to
+<code>network</code>.</p>
+</div>
+<h2 id="headers"><code>headers</code><a class="headerlink" href="#headers" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
+</ul>
+<p>Default HTTP headers merged into every session unshackle creates.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">headers</span><span class="p">:</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">Accept-Language</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en-US,en;q=0.9</span>
 </span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Resolve the folder template for the given title kind.</p>
-<p>kind: one of "movies", "series", "songs", "albums".
-Falls back to the legacy single-string folder template, then "".</p>
-
-
-    </div>
-
+<div class="admonition warning">
+<p class="admonition-title">Don't set <code>Accept-Encoding</code> (and similar) here</p>
+<p>Compatibility headers such as <code>Accept-Encoding</code> are set by the rnet HTTP backend as part of
+its browser-impersonation profile; overriding them breaks the impersonation fingerprint.
+This block is for cross-service defaults only (for example <code>Accept-Language</code>,
+<code>User-Agent</code>); per-service headers belong in that service's own config.</p>
 </div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="unshackle.core.config.Config.get_template_separator" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">get_template_separator</span>
-
-
-<a href="#unshackle.core.config.Config.get_template_separator" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_template_separator</span><span class="p">(</span><span class="n">template_type</span><span class="o">=</span><span class="s1">&#39;movies&#39;</span><span class="p">)</span>
+<h2 id="proxy_providers"><code>proxy_providers</code><a class="headerlink" href="#proxy_providers" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
+</ul>
+<p>Proxy/VPN provider configuration. Each sub-key names a provider, and its block is passed
+straight to that provider's constructor. See <a href="../../../guide/proxies-and-vpn/">Proxies &amp; VPN</a> for
+the full provider guide. Recognised providers and their exit ports:</p>
+<table>
+<thead>
+<tr>
+<th>Provider</th>
+<th>Config key</th>
+<th>Credentials</th>
+<th>Proxy scheme/port</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Basic (static)</td>
+<td><code>basic</code></td>
+<td>country → URI(s)</td>
+<td>as specified</td>
+</tr>
+<tr>
+<td>NordVPN</td>
+<td><code>nordvpn</code></td>
+<td><strong>service</strong> credentials (48 chars combined)</td>
+<td><code>https://...:89</code></td>
+</tr>
+<tr>
+<td>Surfshark</td>
+<td><code>surfsharkvpn</code></td>
+<td><strong>service</strong> credentials (48 chars combined)</td>
+<td><code>https://...:443</code></td>
+</tr>
+<tr>
+<td>Windscribe</td>
+<td><code>windscribevpn</code></td>
+<td>service credentials</td>
+<td><code>https://...:443</code></td>
+</tr>
+<tr>
+<td>ExpressVPN</td>
+<td><code>expressvpn</code></td>
+<td>device login (<code>enable: true</code>) / token cache</td>
+<td><code>https://cat:...@...:443</code></td>
+</tr>
+<tr>
+<td>ProtonVPN</td>
+<td><code>protonvpn</code></td>
+<td>TV login or exported cookies</td>
+<td><code>https://...:4443</code> (or <code>:443</code> Secure Core)</td>
+</tr>
+<tr>
+<td>Gluetun</td>
+<td><code>gluetun</code></td>
+<td>per-VPN keys/creds</td>
+<td><code>http://localhost:{port}</code> (local Docker)</td>
+</tr>
+<tr>
+<td>Hola</td>
+<td><em>(none, auto)</em></td>
+<td>none</td>
+<td><code>http://...:{peer}</code></td>
+</tr>
+</tbody>
+</table>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">basic</span><span class="p">:</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://user:pass@1.2.3.4:8080</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="nt">de</span><span class="p">:</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://a.example:8080</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">socks5://b.example:1080</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">nordvpn</span><span class="p">:</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;service username&gt;</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;service password&gt;</span>
 </span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Get the filename separator for the given template type.</p>
-<p>Analyzes the active template to determine whether it uses dots or spaces
-between variables. Falls back to dot separator (scene-style) by default.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>template_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>One of "movies", "series", or "songs".</p>
-              </div>
-            </td>
-            <td>
-                  <code>&#39;movies&#39;</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
-</div>
-
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="unshackle.core.config.resolve_decryption" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">resolve_decryption</span>
-
-
-<a href="#unshackle.core.config.resolve_decryption" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">resolve_decryption</span><span class="p">(</span><span class="n">decryption_map</span><span class="p">,</span> <span class="n">default</span><span class="p">,</span> <span class="n">service</span><span class="p">)</span>
-</span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Pick the decryption tool for a service (case-insensitive), falling back to default.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="unshackle.core.config.resolve_cdm_name" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">resolve_cdm_name</span>
-
-
-<a href="#unshackle.core.config.resolve_cdm_name" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">resolve_cdm_name</span><span class="p">(</span><span class="n">cdm</span><span class="p">,</span> <span class="n">service</span><span class="p">,</span> <span class="n">override</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
-</span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Resolve a service's top-level CDM entry (case-insensitive), with default fallback.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="unshackle.core.config.get_config_path" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">get_config_path</span>
-
-
-<a href="#unshackle.core.config.get_config_path" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_config_path</span><span class="p">()</span>
-</span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Get Path to Config from any one of the possible locations.</p>
-<p>Returns None if no config file could be found.</p>
-
-
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
+<div class="admonition note">
+<p class="admonition-title">Provider loading differs between CLI and REST server</p>
+<p>The <code>dl</code> CLI loads all providers, including <code>windscribevpn</code> and <code>gluetun</code>. The REST API /
+remote-client path uses a separate resolver that does <strong>not</strong> load <code>windscribevpn</code> or
+<code>gluetun</code>. ExpressVPN and ProtonVPN also auto-load when their cached session exists, and Hola
+auto-loads whenever the <code>hola-proxy</code> binary is present.</p>
 </div>
 
 
@@ -2346,7 +2194,7 @@ between variables. Falls back to dot separator (scene-style) by default.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../service/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Service">
+          <a href="../drm/" class="md-footer__link md-footer__link--prev" aria-label="Previous: DRM &amp; CDM">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -2356,20 +2204,20 @@ between variables. Falls back to dot separator (scene-style) by default.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Service
+                DRM & CDM
               </div>
             </div>
           </a>
         
         
           
-          <a href="../tracks/" class="md-footer__link md-footer__link--next" aria-label="Next: Tracks">
+          <a href="../vaults/" class="md-footer__link md-footer__link--next" aria-label="Next: Key Vaults">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Tracks
+                Key Vaults
               </div>
             </div>
             <div class="md-footer__button md-icon">

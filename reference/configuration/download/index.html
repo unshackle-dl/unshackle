@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://docs.unshackle.dev/reference/api/config/">
+        <link rel="canonical" href="https://docs.unshackle.dev/reference/configuration/download/">
       
       
-        <link rel="prev" href="../service/">
+        <link rel="prev" href="../services/">
       
       
-        <link rel="next" href="../tracks/">
+        <link rel="next" href="../output/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Config - unshackle</title>
+        <title>Download & Processing - unshackle</title>
       
     
     
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#config-api" class="md-skip">
+        <a href="#download-processing" class="md-skip">
           Skip to content
         </a>
       
@@ -114,7 +114,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Config
+              Download & Processing
             
           </span>
         </div>
@@ -303,11 +303,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../configuration/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
           
   
   
@@ -347,13 +349,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../service/" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../api/service/" class="md-tabs__link">
           
   
   
@@ -895,6 +895,8 @@
       
   
   
+    
+  
   
   
     
@@ -926,20 +928,23 @@
     
     
       
+        
+        
+      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../configuration/" class="md-nav__link ">
+            <a href="../" class="md-nav__link ">
               
   
   
@@ -957,13 +962,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -983,7 +988,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/directories/" class="md-nav__link">
+      <a href="../directories/" class="md-nav__link">
         
   
   
@@ -1011,7 +1016,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/services/" class="md-nav__link">
+      <a href="../services/" class="md-nav__link">
         
   
   
@@ -1036,10 +1041,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../configuration/download/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Download & Processing
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1055,6 +1087,92 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#dl" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        dl
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#subtitle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        subtitle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#audio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        audio
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#muxing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        muxing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#language_tags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        language_tags
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dual_multi_mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        dual_multi_mode
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1067,7 +1185,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/output/" class="md-nav__link">
+      <a href="../output/" class="md-nav__link">
         
   
   
@@ -1095,7 +1213,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/drm/" class="md-nav__link">
+      <a href="../drm/" class="md-nav__link">
         
   
   
@@ -1123,7 +1241,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/network/" class="md-nav__link">
+      <a href="../network/" class="md-nav__link">
         
   
   
@@ -1151,7 +1269,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/vaults/" class="md-nav__link">
+      <a href="../vaults/" class="md-nav__link">
         
   
   
@@ -1179,7 +1297,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/misc/" class="md-nav__link">
+      <a href="../misc/" class="md-nav__link">
         
   
   
@@ -1207,7 +1325,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/example/" class="md-nav__link">
+      <a href="../example/" class="md-nav__link">
         
   
   
@@ -1617,10 +1735,8 @@
       
   
   
-    
   
   
-  
     
     
       
@@ -1638,22 +1754,19 @@
     
     
       
-        
-        
-      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
             
   
   
@@ -1671,7 +1784,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1689,7 +1802,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../service/" class="md-nav__link">
+      <a href="../../api/service/" class="md-nav__link">
         
   
   
@@ -1714,37 +1827,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Config
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../api/config/" class="md-nav__link">
         
   
   
@@ -1760,109 +1846,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;config
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Config
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label=" Config">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config.get_folder_template" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_folder_template
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config.get_template_separator" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_template_separator
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.resolve_decryption" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;resolve_decryption
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.resolve_cdm_name" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;resolve_cdm_name
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.get_config_path" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;get_config_path
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1875,7 +1858,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../tracks/" class="md-nav__link">
+      <a href="../../api/tracks/" class="md-nav__link">
         
   
   
@@ -1903,7 +1886,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../titles/" class="md-nav__link">
+      <a href="../../api/titles/" class="md-nav__link">
         
   
   
@@ -1931,7 +1914,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../drm/" class="md-nav__link">
+      <a href="../../api/drm/" class="md-nav__link">
         
   
   
@@ -1986,10 +1969,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#unshackle.core.config" class="md-nav__link">
+  <a href="#dl" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;config
+        dl
       
     </span>
   </a>
@@ -1997,49 +1980,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config" class="md-nav__link">
+  <a href="#subtitle" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Config
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label=" Config">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config.get_folder_template" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_folder_template
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config.get_template_separator" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_template_separator
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.resolve_decryption" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;resolve_decryption
+        subtitle
       
     </span>
   </a>
@@ -2047,10 +1991,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#unshackle.core.config.resolve_cdm_name" class="md-nav__link">
+  <a href="#audio" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;resolve_cdm_name
+        audio
       
     </span>
   </a>
@@ -2058,10 +2002,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#unshackle.core.config.get_config_path" class="md-nav__link">
+  <a href="#muxing" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;get_config_path
+        muxing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#language_tags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        language_tags
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dual_multi_mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        dual_multi_mode
       
     </span>
   </a>
@@ -2088,226 +2054,537 @@
   
 
 
-<h1 id="config-api">Config API<a class="headerlink" href="#config-api" title="Permanent link">&para;</a></h1>
-<p>Auto-generated reference for the <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-class&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-class-name&quot;&gt;Config&lt;/span&gt;" href="#unshackle.core.config.Config"><code>Config</code></a> object that models the
-<code>unshackle</code> configuration file. For a human-friendly walkthrough of every key, see the
-<a href="../../configuration/">Configuration Reference</a>.</p>
-
-
-<div class="doc doc-object doc-module">
-
-
-
-<a id="unshackle.core.config"></a>
-    <div class="doc doc-contents first">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="unshackle.core.config.Config" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">Config</span>
-
-
-<a href="#unshackle.core.config.Config" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">Config</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+<h1 id="download-processing">Download &amp; processing<a class="headerlink" href="#download-processing" title="Permanent link">&para;</a></h1>
+<h2 id="dl"><code>dl</code><a class="headerlink" href="#dl" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
+</ul>
+<p>Persistent defaults for the <code>dl</code> command. The block is used as Click's <code>default_map</code>, so any
+<code>dl</code> flag can be given a default here. See <a href="../../../guide/downloading/">Downloading</a> and the
+<a href="../../../guide/cli-reference/">CLI Reference</a> for what each flag does.</p>
+<p><strong>Key naming.</strong> A key is the flag's long name with dashes replaced by underscores
+(<code>--best-available</code> → <code>best_available</code>, <code>--sub-format</code> → <code>sub_format</code>). A few keys are named
+after the flag's internal destination rather than its visible name; set these exact keys:</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Config key</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-r</code> / <code>--range</code></td>
+<td><code>range</code></td>
+</tr>
+<tr>
+<td><code>--list</code></td>
+<td><code>list</code></td>
+</tr>
+<tr>
+<td><code>--tmdb</code></td>
+<td><code>tmdb_id</code></td>
+</tr>
+<tr>
+<td><code>--imdb</code></td>
+<td><code>imdb_id</code></td>
+</tr>
+<tr>
+<td><code>--animeapi</code></td>
+<td><code>animeapi_id</code></td>
+</tr>
+<tr>
+<td><code>-naa</code> / <code>--noatmos</code></td>
+<td><code>no_atmos</code></td>
+</tr>
+<tr>
+<td><code>-o</code> / <code>--output</code></td>
+<td><code>output_dir</code></td>
+</tr>
+<tr>
+<td><code>--cdm-only</code> / <code>--vaults-only</code></td>
+<td><code>cdm_only</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Precedence</strong> (highest first): an explicit CLI flag → a per-service
+<a href="../services/"><code>services.&lt;TAG&gt;.dl</code></a> override → this global <code>dl:</code> block → the built-in
+default. In other words, config only fills in options you did not set on the command line.</p>
+<p>Common keys (a useful subset; every <code>dl</code> flag works):</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Type</th>
+<th>Default</th>
+<th>Sets</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>lang</code></td>
+<td>list</td>
+<td><code>["orig"]</code></td>
+<td>Video/audio language(s); <code>orig</code> = original language.</td>
+</tr>
+<tr>
+<td><code>a_lang</code> / <code>v_lang</code></td>
+<td>list</td>
+<td><code>[]</code></td>
+<td>Audio- / video-only language override.</td>
+</tr>
+<tr>
+<td><code>s_lang</code></td>
+<td>list</td>
+<td><code>["all"]</code></td>
+<td>Subtitle language(s).</td>
+</tr>
+<tr>
+<td><code>quality</code></td>
+<td>list</td>
+<td><code>[]</code> (best)</td>
+<td>Resolution(s), e.g. <code>[1080]</code>.</td>
+</tr>
+<tr>
+<td><code>vcodec</code></td>
+<td>list</td>
+<td><code>[]</code> (any)</td>
+<td>Video codec(s), e.g. <code>[H265]</code>.</td>
+</tr>
+<tr>
+<td><code>acodec</code></td>
+<td>list</td>
+<td><code>[]</code> (any)</td>
+<td>Audio codec(s), e.g. <code>[EC3]</code>.</td>
+</tr>
+<tr>
+<td><code>range</code></td>
+<td>list</td>
+<td><code>["SDR"]</code></td>
+<td>Colour range(s): <code>SDR</code>, <code>HLG</code>, <code>HDR10</code>, <code>HDR10P</code>, <code>DV</code>, <code>HYBRID</code>.</td>
+</tr>
+<tr>
+<td><code>channels</code></td>
+<td>float</td>
+<td><em>(unset)</em></td>
+<td>Audio channels, e.g. <code>6</code> for 5.1.</td>
+</tr>
+<tr>
+<td><code>sub_format</code></td>
+<td>str</td>
+<td><em>(unset)</em></td>
+<td>Convert subtitles to this format (<code>srt</code>, <code>vtt</code>, <code>original</code>, ...).</td>
+</tr>
+<tr>
+<td><code>forced_subs</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Include forced subtitle tracks.</td>
+</tr>
+<tr>
+<td><code>forced_s_lang</code></td>
+<td>list</td>
+<td><code>[]</code></td>
+<td>Forced subtitle language(s); implies <code>forced_subs</code>.</td>
+</tr>
+<tr>
+<td><code>no_subs</code> / <code>no_audio</code> / <code>no_chapters</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Skip that track type.</td>
+</tr>
+<tr>
+<td><code>downloads</code></td>
+<td>int</td>
+<td><code>1</code></td>
+<td>Tracks downloaded concurrently.</td>
+</tr>
+<tr>
+<td><code>workers</code></td>
+<td>int</td>
+<td><em>(downloader default)</em></td>
+<td>Threads per track.</td>
+</tr>
+<tr>
+<td><code>speed_limit</code></td>
+<td>str</td>
+<td><em>(unlimited)</em></td>
+<td>Total download speed cap across all downloads combined, e.g. <code>500k</code>, <code>5M</code>, <code>1.5G</code> or plain bytes/sec. Values are bytes, not bits (<code>5M</code> = 5.0 MB/s).</td>
+</tr>
+<tr>
+<td><code>slow</code></td>
+<td>str</td>
+<td><em>(unset)</em></td>
+<td>Inter-title delay, e.g. <code>"20-40"</code>.</td>
+</tr>
+<tr>
+<td><code>best_available</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Fall back to best quality if the request is unavailable.</td>
+</tr>
+<tr>
+<td><code>proxy</code></td>
+<td>str</td>
+<td><em>(unset)</em></td>
+<td>Default proxy URI or 2-letter country.</td>
+</tr>
+<tr>
+<td><code>no_folder</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Do not create a per-title folder.</td>
+</tr>
+</tbody>
+</table>
+<div class="language-yaml highlight"><span class="filename">Global download defaults</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">dl</span><span class="p">:</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">lang</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">]</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">quality</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">1080</span><span class="p p-Indicator">]</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">range</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">HDR10</span><span class="p p-Indicator">]</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">vcodec</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">H265</span><span class="p p-Indicator">]</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="nt">sub_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">srt</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">downloads</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
 </span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-
-
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="unshackle.core.config.Config.get_folder_template" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">get_folder_template</span>
-
-
-<a href="#unshackle.core.config.Config.get_folder_template" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_folder_template</span><span class="p">(</span><span class="n">kind</span><span class="p">)</span>
+<div class="admonition note">
+<p class="admonition-title">Per-service overrides</p>
+<p>A <code>dl</code> block nested under a service in <a href="../services/"><code>services</code></a> takes the same keys and
+applies to that service only.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">dl</span><span class="p">:</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">lang</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">]</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nt">services</span><span class="p">:</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">EXAMPLE1</span><span class="p">:</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="nt">dl</span><span class="p">:</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">      </span><span class="nt">lang</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">ja</span><span class="p p-Indicator">]</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">      </span><span class="nt">range</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">DV</span><span class="p p-Indicator">]</span>
 </span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Resolve the folder template for the given title kind.</p>
-<p>kind: one of "movies", "series", "songs", "albums".
-Falls back to the legacy single-string folder template, then "".</p>
-
-
-    </div>
-
 </div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="unshackle.core.config.Config.get_template_separator" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">get_template_separator</span>
-
-
-<a href="#unshackle.core.config.Config.get_template_separator" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_template_separator</span><span class="p">(</span><span class="n">template_type</span><span class="o">=</span><span class="s1">&#39;movies&#39;</span><span class="p">)</span>
+<div class="admonition note">
+<p class="admonition-title"><code>serve</code> uses these same keys</p>
+<p>The <a href="../services/#serve"><code>serve</code></a> block accepts most of the same <code>dl</code> option keys at its top level
+to set server-wide download defaults for every request it handles. Keys the API does not know
+are ignored there (<code>speed_limit</code>, for example; <code>serve</code> has its own <code>global_speed_limit</code>).</p>
+</div>
+<h2 id="subtitle"><code>subtitle</code><a class="headerlink" href="#subtitle" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
+</ul>
+<p>Subtitle handling: SDH stripping, format conversion, and whether subtitles are muxed in or
+written as sidecar files. See <a href="../../../guide/subtitles/">Subtitles</a> for the full guide.</p>
+<table>
+<thead>
+<tr>
+<th>Sub-key</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>strip_sdh</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Strip SDH/CC cues (hearing-impaired annotations) into a clean track.</td>
+</tr>
+<tr>
+<td><code>sdh_method</code></td>
+<td>str</td>
+<td><code>"auto"</code></td>
+<td>SDH-stripping backend to use.</td>
+</tr>
+<tr>
+<td><code>preserve_formatting</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Keep styling/positioning when converting or stripping.</td>
+</tr>
+<tr>
+<td><code>convert_before_strip</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Convert to the working format before stripping SDH.</td>
+</tr>
+<tr>
+<td><code>conversion_method</code></td>
+<td>str</td>
+<td><code>"auto"</code></td>
+<td>Subtitle conversion backend.</td>
+</tr>
+<tr>
+<td><code>output_mode</code></td>
+<td>str</td>
+<td><code>"mux"</code></td>
+<td><code>mux</code> embeds subtitles in the MKV; <code>sidecar</code> writes separate files; <code>both</code> writes sidecars and still muxes.</td>
+</tr>
+<tr>
+<td><code>sidecar_format</code></td>
+<td>str</td>
+<td><code>"srt"</code></td>
+<td>Format for sidecar files when <code>output_mode</code> is <code>sidecar</code> or <code>both</code>.</td>
+</tr>
+<tr>
+<td><code>type_priority</code></td>
+<td>list</td>
+<td><em>(unset)</em></td>
+<td>Ordered ranking of subtitle types (<code>forced</code>, <code>normal</code>, <code>sdh</code>; CC counts as SDH). Types you leave out fall to the end.</td>
+</tr>
+<tr>
+<td><code>group_by</code></td>
+<td>str</td>
+<td><code>"type"</code></td>
+<td>Which key groups the subtitle tracks. <code>type</code> puts all forced tracks together, then all normal, then all SDH. <code>language</code> keeps each language next to its own variants.</td>
+</tr>
+<tr>
+<td><code>language_priority</code></td>
+<td>list</td>
+<td><em>(unset)</em></td>
+<td>Languages to sort to the top, in the order you give. The rest keep the default order: original language first, then alphabetical. Nothing is removed.</td>
+</tr>
+</tbody>
+</table>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">subtitle</span><span class="p">:</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">strip_sdh</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">output_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sidecar</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">sidecar_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">srt</span>
 </span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Get the filename separator for the given template type.</p>
-<p>Analyzes the active template to determine whether it uses dots or spaces
-between variables. Falls back to dot separator (scene-style) by default.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>template_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>One of "movies", "series", or "songs".</p>
-              </div>
-            </td>
-            <td>
-                  <code>&#39;movies&#39;</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    </div>
-
+<div class="admonition note">
+<p class="admonition-title"><code>group_by</code> track order</p>
+<table>
+<thead>
+<tr>
+<th><code>group_by</code></th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>type</code></td>
+<td>Danish, Finnish, French, … Danish SDH, Finnish SDH, French SDH</td>
+</tr>
+<tr>
+<td><code>language</code></td>
+<td>Danish, Danish SDH, Finnish, Finnish SDH, French, French SDH</td>
+</tr>
+</tbody>
+</table>
+<p><code>type_priority</code> still sets the order of the variants, so with <code>group_by: language</code> it
+controls the order inside each language.</p>
 </div>
-
-
-
-  </div>
-
-    </div>
-
-</div>
-
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="unshackle.core.config.resolve_decryption" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">resolve_decryption</span>
-
-
-<a href="#unshackle.core.config.resolve_decryption" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">resolve_decryption</span><span class="p">(</span><span class="n">decryption_map</span><span class="p">,</span> <span class="n">default</span><span class="p">,</span> <span class="n">service</span><span class="p">)</span>
+<div class="admonition note">
+<p class="admonition-title"><code>language_priority</code> sorts languages, it does not select them</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">subtitle</span><span class="p">:</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">group_by</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">language</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">language_priority</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">es</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">fr</span><span class="p p-Indicator">]</span>
 </span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Pick the decryption tool for a service (case-insensitive), falling back to default.</p>
-
-
-    </div>
-
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Result for an English title</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Default</td>
+<td>English, Arabic, Bulgarian, Spanish, French, Japanese</td>
+</tr>
+<tr>
+<td>With the list above</td>
+<td>English, Spanish, French, Arabic, Bulgarian, Japanese</td>
+</tr>
+</tbody>
+</table>
+<p>Nothing is removed, unlike <code>-sl</code>, which drops every subtitle language it does not name.</p>
+<p>Use <code>orig</code> in the list for the title's original language. A base tag also covers its
+regional forms, so <code>en</code> sorts <code>en-US</code> and <code>en-GB</code>, but <code>zh</code> does <strong>not</strong> cover
+<code>zh-Hant</code>, which you must name. The sort ignores entries that match no track, and it
+ignores entries that are not valid language tags.</p>
+<p><code>--exact-lang</code> applies here too: with it, <code>en</code> sorts only <code>en</code>, and <code>en-US</code> falls to
+the alphabetical tail with the rest. Name each tag you want when you use that flag.</p>
 </div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="unshackle.core.config.resolve_cdm_name" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">resolve_cdm_name</span>
-
-
-<a href="#unshackle.core.config.resolve_cdm_name" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">resolve_cdm_name</span><span class="p">(</span><span class="n">cdm</span><span class="p">,</span> <span class="n">service</span><span class="p">,</span> <span class="n">override</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="admonition note">
+<p class="admonition-title"><code>type_priority</code> picks the default subtitle only with <code>muxing.default_language</code></p>
+<p>At mux time the <code>default</code> flag goes to every forced subtitle whose language matches the
+first audio track, so a full dialogue track never becomes default on its own.
+<code>type_priority</code> alone does not change that. Name a subtitle language in
+<a href="#muxing"><code>muxing.default_language</code></a> and the first track in that language gets the flag
+instead, which is where <code>type_priority</code> decides which track that is:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">muxing</span><span class="p">:</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">default_language</span><span class="p">:</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nt">subtitle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="nt">subtitle</span><span class="p">:</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span><span class="nt">type_priority</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">normal</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">sdh</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">forced</span><span class="p p-Indicator">]</span>
 </span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Resolve a service's top-level CDM entry (case-insensitive), with default fallback.</p>
-
-
-    </div>
-
 </div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="unshackle.core.config.get_config_path" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">get_config_path</span>
-
-
-<a href="#unshackle.core.config.get_config_path" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_config_path</span><span class="p">()</span>
+<h2 id="audio"><code>audio</code><a class="headerlink" href="#audio" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
+</ul>
+<p>Audio handling options. The most notable sub-key is <strong><code>codec_priority</code></strong>, an ordered list of
+audio codecs used to break ties in track selection. <strong><code>language_priority</code></strong> is an ordered list
+of languages that sort to the top of the audio tracks.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">audio</span><span class="p">:</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">codec_priority</span><span class="p">:</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EAC3</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AC3</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span><span class="nt">language_priority</span><span class="p">:</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">orig</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
 </span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Get Path to Config from any one of the possible locations.</p>
-<p>Returns None if no config file could be found.</p>
-
-
-    </div>
-
+<div class="admonition note">
+<p class="admonition-title"><code>codec_priority</code> is a soft priority: nothing is dropped</p>
+<p><code>codec_priority</code> outranks bitrate: any listed codec sorts above every unlisted one, and among
+listed codecs the list order decides. Bitrate order survives only within a single codec rank.
+Nothing is ever removed. Two higher-level rules still override it: <strong>Atmos
+tracks always take precedence over <code>codec_priority</code></strong>, and <strong>audio-description tracks are
+always forced to the end</strong> regardless of it. When <code>codec_priority</code> is unset, tracks sort by
+bitrate alone, with those same Atmos/descriptive rules still applied.</p>
 </div>
-
-
-
-  </div>
-
-    </div>
-
+<h2 id="muxing"><code>muxing</code><a class="headerlink" href="#muxing" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
+</ul>
+<p>Matroska (MKV) muxing options.</p>
+<table>
+<thead>
+<tr>
+<th>Sub-key</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>set_title</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Write a human-readable title into the MKV container.</td>
+</tr>
+<tr>
+<td><code>default_language</code></td>
+<td>dict</td>
+<td><code>{}</code></td>
+<td>Force which language is flagged <em>default</em> per track type, e.g. <code>{audio: en, subtitle: en}</code>.</td>
+</tr>
+<tr>
+<td><code>merge_audio</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Merge all audio into one file. <code>--split-audio</code> on the CLI flips this off.</td>
+</tr>
+<tr>
+<td><code>merge_video</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Merge video tracks that share height, range, and codec into one file, so only language varies inside a file. <code>--merge-video</code> on the CLI flips this on.</td>
+</tr>
+</tbody>
+</table>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">muxing</span><span class="p">:</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">set_title</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="nt">default_language</span><span class="p">:</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="nt">audio</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="nt">subtitle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
+</span></code></pre></div>
+<h2 id="language_tags"><code>language_tags</code><a class="headerlink" href="#language_tags" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
+</ul>
+<p>Language-tag remapping and the rule engine behind the <code>{lang_tag}</code> filename variable. When a
+<code>rules</code> list is present, each rule is evaluated in order and the first match's <code>tag</code> is used.
+A rule may test:</p>
+<table>
+<thead>
+<tr>
+<th>Condition</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>audio</code></td>
+<td>Matches against the audio track languages.</td>
+</tr>
+<tr>
+<td><code>subs_contain</code></td>
+<td>At least one subtitle language matches.</td>
+</tr>
+<tr>
+<td><code>subs_contain_all</code></td>
+<td>Every listed language must be present (scalar or list).</td>
+</tr>
+</tbody>
+</table>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">language_tags</span><span class="p">:</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">rules</span><span class="p">:</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">audio</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">ja</span><span class="p p-Indicator">]</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">      </span><span class="nt">subs_contain</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">]</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">      </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;SUBBED&quot;</span>
+</span></code></pre></div>
+<h2 id="dual_multi_mode"><code>dual_multi_mode</code><a class="headerlink" href="#dual_multi_mode" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Type:</strong> <code>str</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>strict</code></li>
+</ul>
+<p>Rule set for the <code>{dual}</code>, <code>{multi}</code>, and <code>{dubbed}</code> filename variables.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1"><code>strict</code> (default)</label><label for="__tabbed_1_2"><code>count</code> (legacy)</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Set when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>{dual}</code></td>
+<td>Exactly two audio languages <strong>and one is the title's original language</strong>.</td>
+</tr>
+<tr>
+<td><code>{multi}</code></td>
+<td>Three or more audio languages, even without the original.</td>
+</tr>
+<tr>
+<td><code>{dubbed}</code></td>
+<td>A single audio language that is not the title's original language (requires a known original).</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="tabbed-block">
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Set when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>{dual}</code></td>
+<td>Exactly two audio languages (original language ignored).</td>
+</tr>
+<tr>
+<td><code>{multi}</code></td>
+<td>Three or more audio languages.</td>
+</tr>
+<tr>
+<td><code>{dubbed}</code></td>
+<td>Never set.</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">dual_multi_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">strict</span>
+</span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Dialects count as one language</p>
+<p>Regional variants of the same base language (e.g. <code>en-US</code> and <code>en-GB</code>) collapse to a single
+language in both modes, so they never trigger <code>{dual}</code> on their own.</p>
 </div>
 
 
@@ -2346,7 +2623,7 @@ between variables. Falls back to dot separator (scene-style) by default.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../service/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Service">
+          <a href="../services/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Services &amp; Authentication">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -2356,20 +2633,20 @@ between variables. Falls back to dot separator (scene-style) by default.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Service
+                Services & Authentication
               </div>
             </div>
           </a>
         
         
           
-          <a href="../tracks/" class="md-footer__link md-footer__link--next" aria-label="Next: Tracks">
+          <a href="../output/" class="md-footer__link md-footer__link--next" aria-label="Next: Output &amp; Naming">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Tracks
+                Output & Naming
               </div>
             </div>
             <div class="md-footer__button md-icon">

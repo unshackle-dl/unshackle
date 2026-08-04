@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://docs.unshackle.dev/reference/api/config/">
+        <link rel="canonical" href="https://docs.unshackle.dev/reference/configuration/services/">
       
       
-        <link rel="prev" href="../service/">
+        <link rel="prev" href="../directories/">
       
       
-        <link rel="next" href="../tracks/">
+        <link rel="next" href="../download/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Config - unshackle</title>
+        <title>Services & Authentication - unshackle</title>
       
     
     
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#config-api" class="md-skip">
+        <a href="#services-auth" class="md-skip">
           Skip to content
         </a>
       
@@ -114,7 +114,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Config
+              Services & Authentication
             
           </span>
         </div>
@@ -303,11 +303,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../configuration/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
           
   
   
@@ -347,13 +349,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../service/" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../api/service/" class="md-tabs__link">
           
   
   
@@ -895,6 +895,8 @@
       
   
   
+    
+  
   
   
     
@@ -926,20 +928,23 @@
     
     
       
+        
+        
+      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../configuration/" class="md-nav__link ">
+            <a href="../" class="md-nav__link ">
               
   
   
@@ -957,13 +962,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -983,7 +988,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/directories/" class="md-nav__link">
+      <a href="../directories/" class="md-nav__link">
         
   
   
@@ -1008,10 +1013,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../configuration/services/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Services & Authentication
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1027,6 +1059,81 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#services" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        services
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#credentials" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        credentials
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#firefox_cookies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        firefox_cookies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#remote_services" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        remote_services
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#serve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        serve
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1039,7 +1146,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/download/" class="md-nav__link">
+      <a href="../download/" class="md-nav__link">
         
   
   
@@ -1067,7 +1174,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/output/" class="md-nav__link">
+      <a href="../output/" class="md-nav__link">
         
   
   
@@ -1095,7 +1202,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/drm/" class="md-nav__link">
+      <a href="../drm/" class="md-nav__link">
         
   
   
@@ -1123,7 +1230,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/network/" class="md-nav__link">
+      <a href="../network/" class="md-nav__link">
         
   
   
@@ -1151,7 +1258,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/vaults/" class="md-nav__link">
+      <a href="../vaults/" class="md-nav__link">
         
   
   
@@ -1179,7 +1286,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/misc/" class="md-nav__link">
+      <a href="../misc/" class="md-nav__link">
         
   
   
@@ -1207,7 +1314,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/example/" class="md-nav__link">
+      <a href="../example/" class="md-nav__link">
         
   
   
@@ -1617,10 +1724,8 @@
       
   
   
-    
   
   
-  
     
     
       
@@ -1638,22 +1743,19 @@
     
     
       
-        
-        
-      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
             
   
   
@@ -1671,7 +1773,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1689,7 +1791,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../service/" class="md-nav__link">
+      <a href="../../api/service/" class="md-nav__link">
         
   
   
@@ -1714,37 +1816,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Config
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../api/config/" class="md-nav__link">
         
   
   
@@ -1760,109 +1835,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;config
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Config
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label=" Config">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config.get_folder_template" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_folder_template
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config.get_template_separator" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_template_separator
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.resolve_decryption" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;resolve_decryption
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.resolve_cdm_name" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;resolve_cdm_name
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.get_config_path" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;get_config_path
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1875,7 +1847,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../tracks/" class="md-nav__link">
+      <a href="../../api/tracks/" class="md-nav__link">
         
   
   
@@ -1903,7 +1875,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../titles/" class="md-nav__link">
+      <a href="../../api/titles/" class="md-nav__link">
         
   
   
@@ -1931,7 +1903,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../drm/" class="md-nav__link">
+      <a href="../../api/drm/" class="md-nav__link">
         
   
   
@@ -1986,10 +1958,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#unshackle.core.config" class="md-nav__link">
+  <a href="#services" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;config
+        services
       
     </span>
   </a>
@@ -1997,49 +1969,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config" class="md-nav__link">
+  <a href="#credentials" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Config
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label=" Config">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config.get_folder_template" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_folder_template
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config.get_template_separator" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_template_separator
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.resolve_decryption" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;resolve_decryption
+        credentials
       
     </span>
   </a>
@@ -2047,10 +1980,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#unshackle.core.config.resolve_cdm_name" class="md-nav__link">
+  <a href="#firefox_cookies" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;resolve_cdm_name
+        firefox_cookies
       
     </span>
   </a>
@@ -2058,10 +1991,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#unshackle.core.config.get_config_path" class="md-nav__link">
+  <a href="#remote_services" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;get_config_path
+        remote_services
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#serve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        serve
       
     </span>
   </a>
@@ -2088,226 +2032,207 @@
   
 
 
-<h1 id="config-api">Config API<a class="headerlink" href="#config-api" title="Permanent link">&para;</a></h1>
-<p>Auto-generated reference for the <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-class&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-class-name&quot;&gt;Config&lt;/span&gt;" href="#unshackle.core.config.Config"><code>Config</code></a> object that models the
-<code>unshackle</code> configuration file. For a human-friendly walkthrough of every key, see the
-<a href="../../configuration/">Configuration Reference</a>.</p>
-
-
-<div class="doc doc-object doc-module">
-
-
-
-<a id="unshackle.core.config"></a>
-    <div class="doc doc-contents first">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="unshackle.core.config.Config" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">Config</span>
-
-
-<a href="#unshackle.core.config.Config" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">Config</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+<h1 id="services-auth">Services &amp; authentication<a class="headerlink" href="#services-auth" title="Permanent link">&para;</a></h1>
+<h2 id="services"><code>services</code><a class="headerlink" href="#services" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Type:</strong> <code>dict</code> keyed by service tag &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
+</ul>
+<p>Per-service configuration, keyed by the canonical service tag (for example <code>EXAMPLE1</code>, <code>EXAMPLE2</code>,
+<code>EXAMPLE3</code>). unshackle reads several well-known sub-keys out of each service's block:</p>
+<ul>
+<li><strong><code>proxy_map</code></strong>: remaps the region query you passed to <code>-p/--proxy</code> for this service. A key is
+  that query, or <code>"provider:query"</code> when the flag also named a provider; the value is the query
+  asked of the proxy provider instead. It has no effect when <code>-p</code> was given a full proxy URL.</li>
+<li><strong><code>title_map</code></strong>: an exact-match rename map applied to fetched titles (source name →
+  desired name), so a service that names a title differently from your library still matches.</li>
+<li><strong><code>dl</code></strong>: per-service download defaults, using the same keys as the global
+  <a href="../download/#dl"><code>dl</code></a> block.</li>
+</ul>
+<p>Individual services may read any additional keys they define. The merged result (the service's
+own <code>config.yaml</code> with this block layered on top) is handed to the service as <code>self.config</code>.</p>
+<p>User- or device-specific values (API keys, account IDs, device attributes) belong in this block
+rather than in the service's own <code>config.yaml</code>, which holds shared defaults; see
+<a href="../../../dev/creating-a-service/">creating a service</a>.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">services</span><span class="p">:</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">EXAMPLE1</span><span class="p">:</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">proxy_map</span><span class="p">:</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">      </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">us-nyc</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">      </span><span class="s">&quot;nordvpn:ca&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ca-toronto</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span><span class="nt">title_map</span><span class="p">:</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">      </span><span class="s">&quot;My</span><span class="nv"> </span><span class="s">Show:</span><span class="nv"> </span><span class="s">The</span><span class="nv"> </span><span class="s">Movie&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">&quot;My</span><span class="nv"> </span><span class="s">Show</span><span class="nv"> </span><span class="s">Presents</span><span class="nv"> </span><span class="s">The</span><span class="nv"> </span><span class="s">Movie&quot;</span>
 </span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-
-
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="unshackle.core.config.Config.get_folder_template" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">get_folder_template</span>
-
-
-<a href="#unshackle.core.config.Config.get_folder_template" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_folder_template</span><span class="p">(</span><span class="n">kind</span><span class="p">)</span>
+<h2 id="credentials"><code>credentials</code><a class="headerlink" href="#credentials" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Type:</strong> <code>dict</code> keyed by service tag &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
+</ul>
+<p>Per-service login credentials. Each value is a <code>username:password[:extra]</code> string, the same
+data as a <code>[username, password]</code> (or <code>[username, password, extra]</code>) list, or a dict of profile
+name to either of those. With the dict form, <code>-p/--profile</code> selects the entry, and the
+<code>default</code> key is used when no profile was given or the named profile is missing. These are
+parsed into <code>Credential</code> objects; the credential's SHA-1 is also used as an account hash for
+cache keys.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">credentials</span><span class="p">:</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">EXAMPLE2</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">user@example.com:hunter2</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">EXAMPLE1</span><span class="p">:</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">primary@example.com:pw1</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="nt">second</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">secondary@example.com:pw2</span>
 </span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Resolve the folder template for the given title kind.</p>
-<p>kind: one of "movies", "series", "songs", "albums".
-Falls back to the legacy single-string folder template, then "".</p>
-
-
-    </div>
-
+<div class="admonition tip">
+<p class="admonition-title">Cookies vs credentials</p>
+<p>Cookies are stored as files under <a href="../directories/"><code>directories.cookies</code></a>, not in this key.
+A service's <code>authenticate()</code> accepts cookies, credentials, or both.</p>
 </div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="unshackle.core.config.Config.get_template_separator" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">get_template_separator</span>
-
-
-<a href="#unshackle.core.config.Config.get_template_separator" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_template_separator</span><span class="p">(</span><span class="n">template_type</span><span class="o">=</span><span class="s1">&#39;movies&#39;</span><span class="p">)</span>
+<h2 id="firefox_cookies"><code>firefox_cookies</code><a class="headerlink" href="#firefox_cookies" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Type:</strong> <code>dict</code> keyed by service tag &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
+</ul>
+<p>Settings for extracting cookies directly from a local Firefox profile. A service block is
+expected to provide <code>hosts</code> (a list of cookie hostnames; entries shorter than 3 characters
+are ignored to prevent dumping the whole cookie store) and an optional <code>local_storage</code>
+boolean to also pull matching entries from <code>webappsstore.sqlite</code>, which only services that
+keep auth tokens in localStorage rather than in HTTP cookies need. Extraction is read-only.</p>
+<div class="admonition note">
+<p class="admonition-title">Firefox does not need to be closed</p>
+<p>The extractor copies <strong>both</strong> <code>cookies.sqlite</code> <strong>and</strong> its WAL file into a <code>0700</code> temp
+directory, so writes Firefox has not yet flushed to the main DB are included. Extraction
+fails only if Firefox holds an exclusive write lock at the instant of the copy. The live
+profile is not modified.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Extraction falls back silently to file cookies</p>
+<p>If extraction yields no cookies or fails for <strong>any</strong> reason, unshackle silently falls back
+to the normal file-based cookie path (<code>cookies/&lt;SERVICE&gt;.txt</code> or
+<code>cookies/&lt;SERVICE&gt;/&lt;profile&gt;.txt</code>), with no error reported.</p>
+</div>
+<h2 id="remote_services"><code>remote_services</code><a class="headerlink" href="#remote_services" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
+</ul>
+<p>Definitions of remote unshackle service servers, used by the <code>--remote</code> mode. Each entry is
+named by you (pick it with <code>--server</code>, or omit that flag when only one is configured) and gives
+the server's <code>url</code> (required), an optional <code>api_key</code> sent as <code>X-Secret-Key</code>, an optional
+<code>server_cdm</code> boolean, and an optional <code>services</code> sub-dict of per-service local overrides such
+as <code>title_map</code>. In <code>--remote</code> mode unshackle turns the server's service list into synthetic CLI
+commands that run against it, falling back to the tags in that <code>services</code> sub-dict when the
+list cannot be fetched. See <a href="../../../dev/rest-api/remote-sessions/">remote sessions</a> for the
+full setup.</p>
+<h2 id="serve"><code>serve</code><a class="headerlink" href="#serve" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
+</ul>
+<p>Configuration for the <code>serve</code> command (the built-in REST API server). The full server guide
+is the <a href="../../../dev/rest-api/">REST API</a> section; these are the config keys.</p>
+<table>
+<thead>
+<tr>
+<th>Sub-key</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>api_secret</code></td>
+<td>str</td>
+<td><em>(unset)</em></td>
+<td>Master secret accepted in the <code>X-Secret-Key</code> header. Required unless the server is started with <code>--no-key</code>.</td>
+</tr>
+<tr>
+<td><code>users</code></td>
+<td>dict</td>
+<td><code>{}</code></td>
+<td>Per-user API keys and their allowlists (see below).</td>
+</tr>
+<tr>
+<td><code>services</code></td>
+<td>list</td>
+<td><em>(unset)</em></td>
+<td>Global service allowlist. Omit to allow all.</td>
+</tr>
+<tr>
+<td><code>remote_only</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Expose only the remote service session endpoints (health, services, search, session) and disable the rest of the REST API.</td>
+</tr>
+<tr>
+<td><code>session_ttl</code></td>
+<td>int (s)</td>
+<td><code>300</code></td>
+<td>Lifetime of an interactive auth session.</td>
+</tr>
+<tr>
+<td><code>max_sessions</code></td>
+<td>int</td>
+<td><code>100</code></td>
+<td>Maximum concurrent sessions.</td>
+</tr>
+<tr>
+<td><code>history_limit</code></td>
+<td>int</td>
+<td><code>100</code></td>
+<td>How many finished jobs to retain in history.</td>
+</tr>
+<tr>
+<td><code>compression_level</code></td>
+<td>int</td>
+<td><code>1</code></td>
+<td>gzip level for responses.</td>
+</tr>
+<tr>
+<td><code>global_speed_limit</code></td>
+<td>str</td>
+<td><em>(unlimited)</em></td>
+<td>Server-wide download speed cap, e.g. <code>10M</code>, <code>1.5G</code> or plain bytes/sec (same format as <code>speed_limit</code>). One shared budget across all concurrent jobs; per-job speed limits are ignored while it is set.</td>
+</tr>
+<tr>
+<td><code>cdm_overrides</code></td>
+<td>list or bool</td>
+<td><em>(unset)</em></td>
+<td>Allowed per-request CDM overrides: a list of permitted device names, or <code>true</code> for any. Unset rejects every override.</td>
+</tr>
+<tr>
+<td><code>allow_job_credentials</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Permit clients to supply credentials per job.</td>
+</tr>
+<tr>
+<td><code>devices</code></td>
+<td>list</td>
+<td><em>(auto)</em></td>
+<td>Widevine devices offered; auto-filled from <code>directories.wvds</code>.</td>
+</tr>
+<tr>
+<td><code>playready_devices</code></td>
+<td>list</td>
+<td><em>(auto)</em></td>
+<td>PlayReady devices; auto-filled from <code>directories.prds</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>Each entry under <code>users</code> is keyed by that user's API key and may set its own <code>services</code>,
+<code>devices</code>, and <code>playready_devices</code> allowlists, narrowing the global ones, plus an optional
+<code>username</code> used as the log label for that key (defaults to a truncated form of the key). A
+user with no <code>playready_devices</code> key gets no PlayReady access at all, not the global list.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">serve</span><span class="p">:</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">api_secret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">change-me</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">remote_only</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">services</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">EXAMPLE2</span><span class="p p-Indicator">]</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="c1"># server-wide download defaults (same keys as the `dl:` block)</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="nt">downloads</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">best_available</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="nt">users</span><span class="p">:</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="nt">a1b2c3d4</span><span class="p">:</span><span class="w">                 </span><span class="c1"># this user&#39;s API key</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">      </span><span class="nt">services</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">]</span><span class="w">        </span><span class="c1"># may only use EXAMPLE1</span>
 </span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Get the filename separator for the given template type.</p>
-<p>Analyzes the active template to determine whether it uses dots or spaces
-between variables. Falls back to dot separator (scene-style) by default.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>template_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>One of "movies", "series", or "songs".</p>
-              </div>
-            </td>
-            <td>
-                  <code>&#39;movies&#39;</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
-</div>
-
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="unshackle.core.config.resolve_decryption" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">resolve_decryption</span>
-
-
-<a href="#unshackle.core.config.resolve_decryption" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">resolve_decryption</span><span class="p">(</span><span class="n">decryption_map</span><span class="p">,</span> <span class="n">default</span><span class="p">,</span> <span class="n">service</span><span class="p">)</span>
-</span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Pick the decryption tool for a service (case-insensitive), falling back to default.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="unshackle.core.config.resolve_cdm_name" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">resolve_cdm_name</span>
-
-
-<a href="#unshackle.core.config.resolve_cdm_name" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">resolve_cdm_name</span><span class="p">(</span><span class="n">cdm</span><span class="p">,</span> <span class="n">service</span><span class="p">,</span> <span class="n">override</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
-</span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Resolve a service's top-level CDM entry (case-insensitive), with default fallback.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="unshackle.core.config.get_config_path" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">get_config_path</span>
-
-
-<a href="#unshackle.core.config.get_config_path" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_config_path</span><span class="p">()</span>
-</span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Get Path to Config from any one of the possible locations.</p>
-<p>Returns None if no config file could be found.</p>
-
-
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
+<div class="admonition note">
+<p class="admonition-title"><code>dl</code> keys inside <code>serve</code></p>
+<p>Most <a href="../download/#dl"><code>dl</code></a> flag keys (<code>downloads</code>, <code>workers</code>, <code>best_available</code>, and so on)
+can be set directly inside <code>serve</code>, where they apply to every request the server handles.
+The server recognises a fixed subset of download parameters, so a few CLI-only flags are
+ignored here.</p>
 </div>
 
 
@@ -2346,7 +2271,7 @@ between variables. Falls back to dot separator (scene-style) by default.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../service/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Service">
+          <a href="../directories/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Directories">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -2356,20 +2281,20 @@ between variables. Falls back to dot separator (scene-style) by default.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Service
+                Directories
               </div>
             </div>
           </a>
         
         
           
-          <a href="../tracks/" class="md-footer__link md-footer__link--next" aria-label="Next: Tracks">
+          <a href="../download/" class="md-footer__link md-footer__link--next" aria-label="Next: Download &amp; Processing">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Tracks
+                Download & Processing
               </div>
             </div>
             <div class="md-footer__button md-icon">

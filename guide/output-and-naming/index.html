@@ -1180,6 +1180,26 @@
     
       
         
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
       
     
     
@@ -1197,8 +1217,9 @@
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
-            
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/configuration/" class="md-nav__link ">
+              
   
   
   <span class="md-ellipsis">
@@ -1212,8 +1233,14 @@
   
   
 
-            <span class="md-nav__icon md-icon"></span>
-          </label>
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4">
@@ -1227,20 +1254,246 @@
           <ul class="md-nav__list" data-md-scrollfix>
             
               
+            
+              
                 
   
   
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/" class="md-nav__link">
+      <a href="../../reference/configuration/directories/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Reference
+    Directories
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/services/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Services & Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/download/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Download & Processing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/output/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Output & Naming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/drm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DRM & CDM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/network/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network & Proxy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/vaults/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Key Vaults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/misc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Other Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Annotated Example
   
 
     
@@ -2398,7 +2651,7 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 </tr>
 <tr>
 <td><code>dual</code></td>
-<td><code>DUAL</code> for two audio languages (see <a href="../../reference/configuration/#dual_multi_mode"><code>dual_multi_mode</code></a>)</td>
+<td><code>DUAL</code> for two audio languages (see <a href="../../reference/configuration/download/#dual_multi_mode"><code>dual_multi_mode</code></a>)</td>
 <td><code>DUAL</code></td>
 </tr>
 <tr>
@@ -2561,10 +2814,10 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 <p>The <code>--no-mux</code> flag skips muxing entirely and writes the individual track files, each with a track-type suffix, into the same output/folder structure.</p>
 <h2 id="tags-group-naming">Tags &amp; group naming<a class="headerlink" href="#tags-group-naming" title="Permanent link">&para;</a></h2>
 <p>The release-group tag is the <code>-TAG</code> portion at the end of scene-style names, produced by the <code>{tag}</code> variable.
-It can be swapped per release with <a href="../../reference/configuration/#tag_rules"><code>tag_rules</code></a>: ordered rules that
+It can be swapped per release with <a href="../../reference/configuration/output/#tag_rules"><code>tag_rules</code></a>: ordered rules that
 match on the release-attribute variables only (<code>quality</code>, <code>resolution</code>, <code>hdr</code>, <code>source</code>, <code>lang_tag</code>,
 <code>title_type</code>, and so on), first match wins. The title's own fields, such as <code>title</code> and <code>season_episode</code>,
-cannot be matched. See the <a href="../../reference/configuration/#tag_rules">reference page</a> for the exact list.</p>
+cannot be matched. See the <a href="../../reference/configuration/output/#tag_rules">reference page</a> for the exact list.</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;MYGROUP&quot;</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="nt">tag_group_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="nt">tag_imdb_tmdb</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
@@ -2789,7 +3042,7 @@ so <code>Season {season}</code> keeps its space even though it holds only one va
 </div>
 <div class="tabbed-block">
 <p>Place <code>{dual?}</code>, <code>{multi?}</code> and <code>{dubbed?}</code> next to each other. At most one of them is
-ever set (see <a href="../../reference/configuration/#dual_multi_mode"><code>dual_multi_mode</code></a>), and the
+ever set (see <a href="../../reference/configuration/download/#dual_multi_mode"><code>dual_multi_mode</code></a>), and the
 empty ones collapse:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="nt">output_template</span><span class="p">:</span>
 </span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="w">  </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{title}.{year}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{dubbed?}.{audio_full}.{video}-{tag}&quot;</span>
@@ -2808,7 +3061,7 @@ three variables is set:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>The.Movie.2024.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
 </span></code></pre></div>
 <p>For finer control (e.g. a <code>SUBBED</code> tag driven by subtitle languages), use <code>{lang_tag?}</code>
-with <a href="../../reference/configuration/#language_tags"><code>language_tags</code> rules</a> instead.</p>
+with <a href="../../reference/configuration/download/#language_tags"><code>language_tags</code> rules</a> instead.</p>
 </div>
 <div class="tabbed-block">
 <p>Dated content needs no special template. When an episode carries an air date,

@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://docs.unshackle.dev/reference/api/config/">
+        <link rel="canonical" href="https://docs.unshackle.dev/reference/configuration/misc/">
       
       
-        <link rel="prev" href="../service/">
+        <link rel="prev" href="../vaults/">
       
       
-        <link rel="next" href="../tracks/">
+        <link rel="next" href="../example/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Config - unshackle</title>
+        <title>Other Settings - unshackle</title>
       
     
     
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#config-api" class="md-skip">
+        <a href="#other-settings" class="md-skip">
           Skip to content
         </a>
       
@@ -114,7 +114,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Config
+              Other Settings
             
           </span>
         </div>
@@ -303,11 +303,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../configuration/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
           
   
   
@@ -347,13 +349,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../service/" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../api/service/" class="md-tabs__link">
           
   
   
@@ -895,6 +895,8 @@
       
   
   
+    
+  
   
   
     
@@ -926,20 +928,23 @@
     
     
       
+        
+        
+      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../configuration/" class="md-nav__link ">
+            <a href="../" class="md-nav__link ">
               
   
   
@@ -957,13 +962,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -983,7 +988,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/directories/" class="md-nav__link">
+      <a href="../directories/" class="md-nav__link">
         
   
   
@@ -1011,7 +1016,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/services/" class="md-nav__link">
+      <a href="../services/" class="md-nav__link">
         
   
   
@@ -1039,7 +1044,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/download/" class="md-nav__link">
+      <a href="../download/" class="md-nav__link">
         
   
   
@@ -1067,7 +1072,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/output/" class="md-nav__link">
+      <a href="../output/" class="md-nav__link">
         
   
   
@@ -1095,7 +1100,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/drm/" class="md-nav__link">
+      <a href="../drm/" class="md-nav__link">
         
   
   
@@ -1123,7 +1128,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/network/" class="md-nav__link">
+      <a href="../network/" class="md-nav__link">
         
   
   
@@ -1151,7 +1156,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/vaults/" class="md-nav__link">
+      <a href="../vaults/" class="md-nav__link">
         
   
   
@@ -1176,10 +1181,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../configuration/misc/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Other Settings
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1195,6 +1227,98 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#external-api-keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        External API keys
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#caching-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Caching &amp; updates
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Caching &amp; updates">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#title-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Title cache
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#update-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Update checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#logging-privacy-debug" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logging, privacy &amp; debug
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deprecated-removed-keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deprecated &amp; removed keys
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1207,7 +1331,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/example/" class="md-nav__link">
+      <a href="../example/" class="md-nav__link">
         
   
   
@@ -1617,10 +1741,8 @@
       
   
   
-    
   
   
-  
     
     
       
@@ -1638,22 +1760,19 @@
     
     
       
-        
-        
-      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
             
   
   
@@ -1671,7 +1790,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1689,7 +1808,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../service/" class="md-nav__link">
+      <a href="../../api/service/" class="md-nav__link">
         
   
   
@@ -1714,37 +1833,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Config
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../api/config/" class="md-nav__link">
         
   
   
@@ -1760,109 +1852,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;config
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Config
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label=" Config">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config.get_folder_template" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_folder_template
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config.get_template_separator" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_template_separator
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.resolve_decryption" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;resolve_decryption
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.resolve_cdm_name" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;resolve_cdm_name
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.get_config_path" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;get_config_path
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1875,7 +1864,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../tracks/" class="md-nav__link">
+      <a href="../../api/tracks/" class="md-nav__link">
         
   
   
@@ -1903,7 +1892,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../titles/" class="md-nav__link">
+      <a href="../../api/titles/" class="md-nav__link">
         
   
   
@@ -1931,7 +1920,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../drm/" class="md-nav__link">
+      <a href="../../api/drm/" class="md-nav__link">
         
   
   
@@ -1986,10 +1975,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#unshackle.core.config" class="md-nav__link">
+  <a href="#external-api-keys" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;config
+        External API keys
       
     </span>
   </a>
@@ -1997,22 +1986,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config" class="md-nav__link">
+  <a href="#caching-updates" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Config
+        Caching &amp; updates
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label=" Config">
+    <nav class="md-nav" aria-label="Caching &amp; updates">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config.get_folder_template" class="md-nav__link">
+  <a href="#title-cache" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_folder_template
+        Title cache
       
     </span>
   </a>
@@ -2020,10 +2009,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config.get_template_separator" class="md-nav__link">
+  <a href="#update-checks" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_template_separator
+        Update checks
       
     </span>
   </a>
@@ -2036,10 +2025,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#unshackle.core.config.resolve_decryption" class="md-nav__link">
+  <a href="#logging-privacy-debug" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;resolve_decryption
+        Logging, privacy &amp; debug
       
     </span>
   </a>
@@ -2047,21 +2036,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#unshackle.core.config.resolve_cdm_name" class="md-nav__link">
+  <a href="#deprecated-removed-keys" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;resolve_cdm_name
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.get_config_path" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;get_config_path
+        Deprecated &amp; removed keys
       
     </span>
   </a>
@@ -2088,227 +2066,257 @@
   
 
 
-<h1 id="config-api">Config API<a class="headerlink" href="#config-api" title="Permanent link">&para;</a></h1>
-<p>Auto-generated reference for the <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-class&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-class-name&quot;&gt;Config&lt;/span&gt;" href="#unshackle.core.config.Config"><code>Config</code></a> object that models the
-<code>unshackle</code> configuration file. For a human-friendly walkthrough of every key, see the
-<a href="../../configuration/">Configuration Reference</a>.</p>
-
-
-<div class="doc doc-object doc-module">
-
-
-
-<a id="unshackle.core.config"></a>
-    <div class="doc doc-contents first">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="unshackle.core.config.Config" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">Config</span>
-
-
-<a href="#unshackle.core.config.Config" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">Config</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+<h1 id="other-settings">Other Settings<a class="headerlink" href="#other-settings" title="Permanent link">&para;</a></h1>
+<p>Smaller configuration areas: external metadata API keys, caching and update checks, logging and debug flags, and deprecated keys.</p>
+<h2 id="external-api-keys">External API keys<a class="headerlink" href="#external-api-keys" title="Permanent link">&para;</a></h2>
+<p>All are unset by default and enable optional metadata/geolocation features.</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>imdb_api_enabled</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Use the free IMDxAPI (api.tiffara.com) metadata provider, which needs no API key. Off by default since the site has been unreliable.</td>
+</tr>
+<tr>
+<td><code>omdb_api_key</code></td>
+<td>str</td>
+<td><code>""</code></td>
+<td><a href="https://www.omdbapi.com/">OMDb</a> API key for IMDb metadata lookups; a more reliable alternative to IMDxAPI. Free keys are available on the OMDb site.</td>
+</tr>
+<tr>
+<td><code>tmdb_api_key</code></td>
+<td>str</td>
+<td><code>""</code></td>
+<td>TMDB API key for metadata enrichment and external-ID tags.</td>
+</tr>
+<tr>
+<td><code>simkl_client_id</code></td>
+<td>str</td>
+<td><code>""</code></td>
+<td>SIMKL client ID for metadata lookups; an alternative/fallback source to TMDB.</td>
+</tr>
+<tr>
+<td><code>tvdb_api_key</code></td>
+<td>str</td>
+<td><code>""</code></td>
+<td><a href="https://thetvdb.com/api-information">TheTVDB v4</a> API key; a fallback source to TMDB, strongest on TV series. Free keys are available on the TVDB site.</td>
+</tr>
+<tr>
+<td><code>tvdb_pin</code></td>
+<td>str</td>
+<td><code>""</code></td>
+<td>Subscriber PIN, only needed for a user-supported TVDB key. Leave empty for a normal project key.</td>
+</tr>
+<tr>
+<td><code>tvdb_order</code></td>
+<td>str</td>
+<td><code>""</code></td>
+<td>Default for <code>--tvdb-order</code>: renumber episodes to a TVDB season order (<code>official</code>, <code>dvd</code>, <code>absolute</code>, <code>alternate</code>, <code>regional</code>). Empty keeps the numbering the service gives.</td>
+</tr>
+<tr>
+<td><code>metadata_providers</code></td>
+<td>list</td>
+<td><em>(see below)</em></td>
+<td>Metadata providers to use, in the order they are tried.</td>
+</tr>
+<tr>
+<td><code>decrypt_labs_api_key</code></td>
+<td>str</td>
+<td><code>""</code></td>
+<td>Global Decrypt Labs API key (used by remote CDM / vault).</td>
+</tr>
+<tr>
+<td><code>ipinfo_api_key</code></td>
+<td>str</td>
+<td><code>""</code></td>
+<td>ipinfo.io API key for IP/region lookups.</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition note">
+<p class="admonition-title">How <code>metadata_providers</code> is applied</p>
+<p>A lookup goes to each provider in turn and stops at the first good match, so the order
+decides which source wins. <code>metadata_providers</code> sets that order:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">metadata_providers</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">tvdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">tmdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">simkl</span><span class="p p-Indicator">]</span>
 </span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-
-
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="unshackle.core.config.Config.get_folder_template" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">get_folder_template</span>
-
-
-<a href="#unshackle.core.config.Config.get_folder_template" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_folder_template</span><span class="p">(</span><span class="n">kind</span><span class="p">)</span>
+<p>Names not in the list are never used, so this both orders and filters. Unknown names are
+ignored with a warning. Leave it unset for the default order:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">metadata_providers</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">imdbapi</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">omdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">simkl</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">tmdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">tvdb</span><span class="p p-Indicator">]</span>
 </span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Resolve the folder template for the given title kind.</p>
-<p>kind: one of "movies", "series", "songs", "albums".
-Falls back to the legacy single-string folder template, then "".</p>
-
-
-    </div>
-
+<p>Whatever the order, a provider is skipped when its API key is missing (or, for
+<code>imdbapi</code>, when <code>imdb_api_enabled</code> is <code>false</code>). Available names are
+<code>imdbapi</code>, <code>omdb</code>, <code>simkl</code>, <code>tmdb</code>, and <code>tvdb</code>.</p>
 </div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="unshackle.core.config.Config.get_template_separator" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">get_template_separator</span>
-
-
-<a href="#unshackle.core.config.Config.get_template_separator" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_template_separator</span><span class="p">(</span><span class="n">template_type</span><span class="o">=</span><span class="s1">&#39;movies&#39;</span><span class="p">)</span>
-</span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Get the filename separator for the given template type.</p>
-<p>Analyzes the active template to determine whether it uses dots or spaces
-between variables. Falls back to dot separator (scene-style) by default.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>template_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>One of "movies", "series", or "songs".</p>
-              </div>
-            </td>
-            <td>
-                  <code>&#39;movies&#39;</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    </div>
-
+<div class="admonition note">
+<p class="admonition-title"><code>ipinfo_api_key</code> never touches your service sessions</p>
+<p>The token is only ever sent to <code>api.ipinfo.io</code> as a per-request <code>Authorization</code> header; it
+is <strong>never</strong> attached to your service session, so it cannot leak to a streaming provider.
+Lookups degrade gracefully through a fallback chain: the authenticated Lite endpoint (higher
+rate limits, and ASN/continent data, but no city or region) → anonymous ipinfo →
+<code>ip-api.in</code> as a last resort.</p>
 </div>
-
-
-
-  </div>
-
-    </div>
-
+<hr />
+<h2 id="caching-updates">Caching &amp; updates<a class="headerlink" href="#caching-updates" title="Permanent link">&para;</a></h2>
+<h3 id="title-cache">Title cache<a class="headerlink" href="#title-cache" title="Permanent link">&para;</a></h3>
+<p>unshackle caches fetched title metadata (region- and account-aware) to avoid repeat API
+calls.</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>title_cache_enabled</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Master switch for the title cache.</td>
+</tr>
+<tr>
+<td><code>title_cache_time</code></td>
+<td>int (seconds)</td>
+<td><code>1800</code> (30 min)</td>
+<td>Lifetime of fresh cached titles.</td>
+</tr>
+<tr>
+<td><code>title_cache_max_retention</code></td>
+<td>int (seconds)</td>
+<td><code>86400</code> (24 h)</td>
+<td>Total retention window for a cached title, counted from when it was cached. Past <code>title_cache_time</code> the stale copy is only served as a fallback when a live fetch fails.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="update-checks">Update checks<a class="headerlink" href="#update-checks" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>update_checks</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Whether to check for new unshackle releases.</td>
+</tr>
+<tr>
+<td><code>update_check_interval</code></td>
+<td>int (hours)</td>
+<td><code>24</code></td>
+<td>Minimum hours between update checks.</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Update checks query the GitHub releases API with a fixed 5-second timeout and cache the
+result in <code>directories.cache/update_check.json</code>.</p>
 </div>
-
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="unshackle.core.config.resolve_decryption" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">resolve_decryption</span>
-
-
-<a href="#unshackle.core.config.resolve_decryption" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">resolve_decryption</span><span class="p">(</span><span class="n">decryption_map</span><span class="p">,</span> <span class="n">default</span><span class="p">,</span> <span class="n">service</span><span class="p">)</span>
-</span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Pick the decryption tool for a service (case-insensitive), falling back to default.</p>
-
-
-    </div>
-
+<hr />
+<h2 id="logging-privacy-debug">Logging, privacy &amp; debug<a class="headerlink" href="#logging-privacy-debug" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>redact_paths</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Mask install-root / venv / home prefixes in logged paths (<code>&lt;unshackle&gt;</code>, <code>&lt;venv&gt;</code>, <code>~</code>). Set <code>false</code> to show full paths.</td>
+</tr>
+<tr>
+<td><code>debug</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Global debug mode.</td>
+</tr>
+<tr>
+<td><code>debug_keys</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Log decryption keys.</td>
+</tr>
+<tr>
+<td><code>debug_requests</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Log HTTP requests.</td>
+</tr>
+<tr>
+<td><code>set_terminal_bg</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Append the theme's background colour to output styling.</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition note">
+<p class="admonition-title">Effect of <code>set_terminal_bg</code></p>
+<p>When on, the theme's background colour is appended to the foreground styles, which makes
+the full colour palette render correctly on terminals whose <em>default</em> background differs
+from unshackle's theme. When off, such terminals can render the ASCII-art banner and
+coloured output incorrectly.</p>
 </div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="unshackle.core.config.resolve_cdm_name" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">resolve_cdm_name</span>
-
-
-<a href="#unshackle.core.config.resolve_cdm_name" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">resolve_cdm_name</span><span class="p">(</span><span class="n">cdm</span><span class="p">,</span> <span class="n">service</span><span class="p">,</span> <span class="n">override</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
-</span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Resolve a service's top-level CDM entry (case-insensitive), with default fallback.</p>
-
-
-    </div>
-
+<div class="admonition danger">
+<p class="admonition-title">Key exposure</p>
+<p>With <code>debug_keys</code> on, decryption content keys are written to the structured debug log at
+INFO level during the DRM handshake. Treat <code>debug</code>, <code>debug_keys</code>, and the <code>unshackle_debug_*.jsonl</code> files as
+sensitive, and keep <code>redact_paths</code> enabled when sharing logs.</p>
+<p><code>debug_keys</code> affects <strong>only</strong> content-encryption keys (the <code>content_key</code>/<code>key</code> fields).
+Passwords, tokens, cookies, and session tokens are <strong>always</strong> redacted regardless of this
+setting, and KIDs, key counts, and other metadata are always logged either way.</p>
 </div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="unshackle.core.config.get_config_path" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">get_config_path</span>
-
-
-<a href="#unshackle.core.config.get_config_path" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_config_path</span><span class="p">()</span>
-</span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Get Path to Config from any one of the possible locations.</p>
-<p>Returns None if no config file could be found.</p>
-
-
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
-</div>
+<hr />
+<h2 id="deprecated-removed-keys">Deprecated &amp; removed keys<a class="headerlink" href="#deprecated-removed-keys" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Status</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>curl_impersonate</code></td>
+<td><strong>Deprecated</strong> → use <a href="../network/"><code>network</code></a></td>
+<td>Emits a <code>DeprecationWarning</code>; still honoured only if <code>network</code> is absent.</td>
+</tr>
+<tr>
+<td><code>downloader</code></td>
+<td><strong>Deprecated</strong></td>
+<td>Any value other than <code>"requests"</code> emits a <code>DeprecationWarning</code>; the value is otherwise ignored (the unified requests downloader is always used).</td>
+</tr>
+<tr>
+<td><code>scene_naming</code></td>
+<td><strong>Removed</strong></td>
+<td>If set to any non-null value, unshackle exits with an error directing you to configure <a href="../output/"><code>output_template</code></a> instead.</td>
+</tr>
+</tbody>
+</table>
 
 
 
@@ -2346,7 +2354,7 @@ between variables. Falls back to dot separator (scene-style) by default.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../service/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Service">
+          <a href="../vaults/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Key Vaults">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -2356,20 +2364,20 @@ between variables. Falls back to dot separator (scene-style) by default.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Service
+                Key Vaults
               </div>
             </div>
           </a>
         
         
           
-          <a href="../tracks/" class="md-footer__link md-footer__link--next" aria-label="Next: Tracks">
+          <a href="../example/" class="md-footer__link md-footer__link--next" aria-label="Next: Annotated Example">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Tracks
+                Annotated Example
               </div>
             </div>
             <div class="md-footer__button md-icon">

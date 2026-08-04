@@ -85,10 +85,6 @@
          <lastmod>2026-08-04</lastmod>
     </url>
     <url>
-         <loc>https://docs.unshackle.dev/reference/configuration/</loc>
-         <lastmod>2026-08-04</lastmod>
-    </url>
-    <url>
          <loc>https://docs.unshackle.dev/reference/api/config/</loc>
          <lastmod>2026-08-04</lastmod>
     </url>
@@ -106,6 +102,46 @@
     </url>
     <url>
          <loc>https://docs.unshackle.dev/reference/api/tracks/</loc>
+         <lastmod>2026-08-04</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.unshackle.dev/reference/configuration/</loc>
+         <lastmod>2026-08-04</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.unshackle.dev/reference/configuration/directories/</loc>
+         <lastmod>2026-08-04</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.unshackle.dev/reference/configuration/download/</loc>
+         <lastmod>2026-08-04</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.unshackle.dev/reference/configuration/drm/</loc>
+         <lastmod>2026-08-04</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.unshackle.dev/reference/configuration/example/</loc>
+         <lastmod>2026-08-04</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.unshackle.dev/reference/configuration/misc/</loc>
+         <lastmod>2026-08-04</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.unshackle.dev/reference/configuration/network/</loc>
+         <lastmod>2026-08-04</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.unshackle.dev/reference/configuration/output/</loc>
+         <lastmod>2026-08-04</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.unshackle.dev/reference/configuration/services/</loc>
+         <lastmod>2026-08-04</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.unshackle.dev/reference/configuration/vaults/</loc>
          <lastmod>2026-08-04</lastmod>
     </url>
 </urlset>

@@ -1058,6 +1058,26 @@
     
       
         
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
       
     
     
@@ -1075,8 +1095,9 @@
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
-            
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/configuration/" class="md-nav__link ">
+              
   
   
   <span class="md-ellipsis">
@@ -1090,8 +1111,14 @@
   
   
 
-            <span class="md-nav__icon md-icon"></span>
-          </label>
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4">
@@ -1105,20 +1132,246 @@
           <ul class="md-nav__list" data-md-scrollfix>
             
               
+            
+              
                 
   
   
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/" class="md-nav__link">
+      <a href="../../reference/configuration/directories/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Reference
+    Directories
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/services/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Services & Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/download/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Download & Processing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/output/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Output & Naming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/drm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DRM & CDM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/network/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network & Proxy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/vaults/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Key Vaults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/misc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Other Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Annotated Example
   
 
     
@@ -2043,7 +2296,7 @@ always beats the config default. You can also scope defaults to a single service
 <p class="admonition-title">A few keys are named after the flag's internal name</p>
 <p>Most keys are obvious, but set these exact ones: <code>range</code> (<code>-r</code>), <code>list</code> (<code>--list</code>),
 <code>tmdb_id</code> (<code>--tmdb</code>), <code>imdb_id</code> (<code>--imdb</code>), <code>tvdb_id</code> (<code>--tvdb</code>), <code>no_atmos</code> (<code>--noatmos</code>), and <code>output_dir</code>
-(<code>-o</code>). The <a href="../../reference/configuration/#dl">Configuration Reference</a> has the full list
+(<code>-o</code>). The <a href="../../reference/configuration/download/#dl">Configuration Reference</a> has the full list
 and every available key.</p>
 </div>
 <h2 id="the-directory-layout">The directory layout<a class="headerlink" href="#the-directory-layout" title="Permanent link">&para;</a></h2>
@@ -2144,7 +2397,7 @@ and every available key.</p>
 </span></code></pre></div>
 <p>unshackle searches entries in the order listed, and <strong>the first source to define a given service tag wins</strong>, so put local folders last if you want them to act as fallbacks rather than overrides. unshackle clones remote repositories on first use and refreshes them at most once a day. See <a href="../../dev/creating-a-service/">Creating a Service</a> for how service discovery and repositories work.</p>
 <h2 id="the-filenames-key">The <code>filenames</code> key<a class="headerlink" href="#the-filenames-key" title="Permanent link">&para;</a></h2>
-<p>Alongside <code>directories</code>, the <code>filenames</code> key lets you override the templates unshackle uses when naming its own working and log files (for example the log filename or the temporary chapters file). Most users never need to touch this. The available names and their default templates are listed in the <a href="../../reference/configuration/#filenames">Configuration Reference</a>.</p>
+<p>Alongside <code>directories</code>, the <code>filenames</code> key lets you override the templates unshackle uses when naming its own working and log files (for example the log filename or the temporary chapters file). Most users never need to touch this. The available names and their default templates are listed in the <a href="../../reference/configuration/directories/#filenames">Configuration Reference</a>.</p>
 <h2 id="editing-the-config-with-unshackle-cfg">Editing the config with <code>unshackle cfg</code><a class="headerlink" href="#editing-the-config-with-unshackle-cfg" title="Permanent link">&para;</a></h2>
 <p>You do not have to edit <code>unshackle.yaml</code> by hand. The <code>unshackle cfg</code> command reads and writes individual values for you, creating the config file (and its parent directory) if it does not exist yet.</p>
 <p><strong>Read a single value</strong> by passing its key. Nested keys use dot notation:</p>

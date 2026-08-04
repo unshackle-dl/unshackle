@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://docs.unshackle.dev/reference/api/config/">
+        <link rel="canonical" href="https://docs.unshackle.dev/reference/configuration/drm/">
       
       
-        <link rel="prev" href="../service/">
+        <link rel="prev" href="../output/">
       
       
-        <link rel="next" href="../tracks/">
+        <link rel="next" href="../network/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Config - unshackle</title>
+        <title>DRM & CDM - unshackle</title>
       
     
     
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#config-api" class="md-skip">
+        <a href="#drm-cdm" class="md-skip">
           Skip to content
         </a>
       
@@ -114,7 +114,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Config
+              DRM & CDM
             
           </span>
         </div>
@@ -303,11 +303,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../configuration/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
           
   
   
@@ -347,13 +349,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../service/" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../api/service/" class="md-tabs__link">
           
   
   
@@ -895,6 +895,8 @@
       
   
   
+    
+  
   
   
     
@@ -926,20 +928,23 @@
     
     
       
+        
+        
+      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../configuration/" class="md-nav__link ">
+            <a href="../" class="md-nav__link ">
               
   
   
@@ -957,13 +962,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -983,7 +988,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/directories/" class="md-nav__link">
+      <a href="../directories/" class="md-nav__link">
         
   
   
@@ -1011,7 +1016,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/services/" class="md-nav__link">
+      <a href="../services/" class="md-nav__link">
         
   
   
@@ -1039,7 +1044,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/download/" class="md-nav__link">
+      <a href="../download/" class="md-nav__link">
         
   
   
@@ -1067,7 +1072,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/output/" class="md-nav__link">
+      <a href="../output/" class="md-nav__link">
         
   
   
@@ -1092,10 +1097,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../configuration/drm/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DRM & CDM
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1111,6 +1143,87 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#cdm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cdm
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#remote_cdm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        remote_cdm
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="remote_cdm">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#remote-cdm-decrypt-labs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        decrypt_labs fields
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#remote-cdm-custom-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        custom_api fields
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decryption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        decryption
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1123,7 +1236,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/network/" class="md-nav__link">
+      <a href="../network/" class="md-nav__link">
         
   
   
@@ -1151,7 +1264,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/vaults/" class="md-nav__link">
+      <a href="../vaults/" class="md-nav__link">
         
   
   
@@ -1179,7 +1292,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/misc/" class="md-nav__link">
+      <a href="../misc/" class="md-nav__link">
         
   
   
@@ -1207,7 +1320,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/example/" class="md-nav__link">
+      <a href="../example/" class="md-nav__link">
         
   
   
@@ -1617,10 +1730,8 @@
       
   
   
-    
   
   
-  
     
     
       
@@ -1638,22 +1749,19 @@
     
     
       
-        
-        
-      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
             
   
   
@@ -1671,7 +1779,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1689,7 +1797,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../service/" class="md-nav__link">
+      <a href="../../api/service/" class="md-nav__link">
         
   
   
@@ -1714,37 +1822,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Config
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../api/config/" class="md-nav__link">
         
   
   
@@ -1760,109 +1841,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;config
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Config
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label=" Config">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config.get_folder_template" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_folder_template
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config.get_template_separator" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_template_separator
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.resolve_decryption" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;resolve_decryption
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.resolve_cdm_name" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;resolve_cdm_name
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.get_config_path" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;get_config_path
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1875,7 +1853,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../tracks/" class="md-nav__link">
+      <a href="../../api/tracks/" class="md-nav__link">
         
   
   
@@ -1903,7 +1881,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../titles/" class="md-nav__link">
+      <a href="../../api/titles/" class="md-nav__link">
         
   
   
@@ -1931,7 +1909,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../drm/" class="md-nav__link">
+      <a href="../../api/drm/" class="md-nav__link">
         
   
   
@@ -1986,10 +1964,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#unshackle.core.config" class="md-nav__link">
+  <a href="#cdm" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;config
+        cdm
       
     </span>
   </a>
@@ -1997,22 +1975,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config" class="md-nav__link">
+  <a href="#remote_cdm" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Config
+        remote_cdm
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label=" Config">
+    <nav class="md-nav" aria-label="remote_cdm">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config.get_folder_template" class="md-nav__link">
+  <a href="#remote-cdm-decrypt-labs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_folder_template
+        decrypt_labs fields
       
     </span>
   </a>
@@ -2020,10 +1998,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#unshackle.core.config.Config.get_template_separator" class="md-nav__link">
+  <a href="#remote-cdm-custom-api" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_template_separator
+        custom_api fields
       
     </span>
   </a>
@@ -2036,32 +2014,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#unshackle.core.config.resolve_decryption" class="md-nav__link">
+  <a href="#decryption" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;resolve_decryption
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.resolve_cdm_name" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;resolve_cdm_name
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unshackle.core.config.get_config_path" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;get_config_path
+        decryption
       
     </span>
   </a>
@@ -2088,226 +2044,238 @@
   
 
 
-<h1 id="config-api">Config API<a class="headerlink" href="#config-api" title="Permanent link">&para;</a></h1>
-<p>Auto-generated reference for the <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-class&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-class-name&quot;&gt;Config&lt;/span&gt;" href="#unshackle.core.config.Config"><code>Config</code></a> object that models the
-<code>unshackle</code> configuration file. For a human-friendly walkthrough of every key, see the
-<a href="../../configuration/">Configuration Reference</a>.</p>
-
-
-<div class="doc doc-object doc-module">
-
-
-
-<a id="unshackle.core.config"></a>
-    <div class="doc doc-contents first">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="unshackle.core.config.Config" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">Config</span>
-
-
-<a href="#unshackle.core.config.Config" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">Config</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+<h1 id="drm-cdm">DRM &amp; CDM<a class="headerlink" href="#drm-cdm" title="Permanent link">&para;</a></h1>
+<p>These are the config keys. For concepts, device provisioning, and the <code>wvd</code>/<code>prd</code> commands see
+the <a href="../../../guide/drm-and-cdm/">DRM &amp; CDM guide</a>. Device files themselves live in
+<a href="../directories/"><code>directories.wvds</code></a> (<code>.wvd</code>) and <code>directories.prds</code> (<code>.prd</code>).</p>
+<h2 id="cdm"><code>cdm</code><a class="headerlink" href="#cdm" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
+</ul>
+<p>Maps a service tag to the CDM (Widevine/PlayReady device) to use, with a <code>default</code> fallback.
+Resolution is case-insensitive: a per-request API override wins, then the per-service entry,
+then <code>default</code>.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">cdm</span><span class="p">:</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">EXAMPLE2</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span>
 </span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-
-
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="unshackle.core.config.Config.get_folder_template" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">get_folder_template</span>
-
-
-<a href="#unshackle.core.config.Config.get_folder_template" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_folder_template</span><span class="p">(</span><span class="n">kind</span><span class="p">)</span>
+<p>A value may also be a <strong>nested dict</strong> for advanced selection by quality, DRM system, or
+profile:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">cdm</span><span class="p">:</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">EXAMPLE1</span><span class="p">:</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="s">&quot;&gt;=1080&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span><span class="w">        </span><span class="c1"># by track height</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="s">&quot;&lt;1080&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="nt">widevine</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span><span class="w">        </span><span class="c1"># by DRM system</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span><span class="nt">playready</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sl3000</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
 </span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Resolve the folder template for the given title kind.</p>
-<p>kind: one of "movies", "series", "songs", "albums".
-Falls back to the legacy single-string folder template, then "".</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="unshackle.core.config.Config.get_template_separator" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">get_template_separator</span>
-
-
-<a href="#unshackle.core.config.Config.get_template_separator" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_template_separator</span><span class="p">(</span><span class="n">template_type</span><span class="o">=</span><span class="s1">&#39;movies&#39;</span><span class="p">)</span>
+<p>Quality keys support <code>1080</code>, <code>&gt;=1080</code>, <code>&gt;720</code>, <code>&lt;=576</code>, <code>&lt;480</code> style comparisons; DRM keys
+are <code>widevine</code> / <code>playready</code>. Quality keys are matched first, but only when a video height is
+known; if the value is still a dict after that, <code>widevine</code>/<code>playready</code> are used when present,
+otherwise the credential profile name, then <code>default</code>.</p>
+<p>The resolved name is looked up in <a href="#remote_cdm"><code>remote_cdm</code></a> by <code>name</code> first. If no entry
+matches, it is loaded as a local device file, in this order: <code>&lt;name&gt;.prd</code> in
+<code>directories.prds</code>, <code>&lt;name&gt;.prd</code> in <code>directories.wvds</code>, then <code>&lt;name&gt;.wvd</code> in
+<code>directories.wvds</code>.</p>
+<h2 id="remote_cdm"><code>remote_cdm</code><a class="headerlink" href="#remote_cdm" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Type:</strong> <code>list[dict]</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>[]</code></li>
+</ul>
+<p>A list of remote CDM server definitions. Each entry is matched by its <code>name</code> (referenced from
+<a href="#cdm"><code>cdm</code></a>), and its <code>type</code> selects the backend:</p>
+<table>
+<thead>
+<tr>
+<th><code>type</code></th>
+<th>Backend</th>
+<th>Key fields</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>decrypt_labs</code></td>
+<td>Decrypt Labs KeyXtractor</td>
+<td><code>host</code>, <code>device_name</code>, <code>secret</code> (<a href="#remote-cdm-decrypt-labs">fields</a>)</td>
+</tr>
+<tr>
+<td><code>custom_api</code></td>
+<td>Fully YAML-configurable remote API</td>
+<td><code>host</code> (required), <code>device</code>, <code>auth</code>, <code>endpoints</code>, <code>request_mapping</code>, <code>response_mapping</code>, <code>caching</code>, <code>timeout</code> (<a href="#remote-cdm-custom-api">fields</a>)</td>
+</tr>
+<tr>
+<td><em>(none)</em>, <code>Device Type: PLAYREADY</code></td>
+<td>pyplayready <code>RemoteCdm</code></td>
+<td><code>host</code>, <code>secret</code>, <code>device_name</code>, <code>security_level</code> (default 3000)</td>
+</tr>
+<tr>
+<td><em>(none)</em>, otherwise</td>
+<td>pywidevine <code>RemoteCdm</code></td>
+<td><code>host</code>, <code>secret</code>, <code>device_name</code>, <code>device_type</code>, <code>system_id</code>, <code>security_level</code> (default 3000)</td>
+</tr>
+</tbody>
+</table>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">remote_cdm</span><span class="p">:</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keyxtractor</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">decrypt_labs</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="nt">device_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">L1</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_wv_server</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://cdm.example.com</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span><span class="nt">secret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">s3cr3t</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="nt">device_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="nt">device_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ANDROID</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="nt">system_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">26830</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">    </span><span class="nt">security_level</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
 </span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Get the filename separator for the given template type.</p>
-<p>Analyzes the active template to determine whether it uses dots or spaces
-between variables. Falls back to dot separator (scene-style) by default.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>template_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>One of "movies", "series", or "songs".</p>
-              </div>
-            </td>
-            <td>
-                  <code>&#39;movies&#39;</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    </div>
-
+<p>For the two pywidevine/pyplayready backends, field names are read case-insensitively in both
+styles: <code>Device Type</code>/<code>device_type</code>, <code>System ID</code>/<code>system_id</code>, <code>Security Level</code>/<code>security_level</code>,
+<code>Host</code>/<code>host</code>, <code>Secret</code>/<code>secret</code>, <code>Device Name</code>/<code>device_name</code>.</p>
+<div class="admonition warning">
+<p class="admonition-title">PlayReady <code>host</code> needs a <code>/playready</code> suffix</p>
+<p>pyplayready's <code>RemoteCdm</code> treats <code>host</code> as a base URL and appends its own endpoint paths,
+so a PlayReady entry's <code>host</code> must include the trailing <code>/playready</code> segment (for example
+<code>https://cdm.example.com/playready</code>). Without it the server returns <code>404</code> rather than a
+configuration error.</p>
 </div>
-
-
-
-  </div>
-
-    </div>
-
-</div>
-
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="unshackle.core.config.resolve_decryption" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">resolve_decryption</span>
-
-
-<a href="#unshackle.core.config.resolve_decryption" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">resolve_decryption</span><span class="p">(</span><span class="n">decryption_map</span><span class="p">,</span> <span class="n">default</span><span class="p">,</span> <span class="n">service</span><span class="p">)</span>
+<h3 id="remote-cdm-decrypt-labs"><code>decrypt_labs</code> fields<a class="headerlink" href="#remote-cdm-decrypt-labs" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Default</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>host</code></td>
+<td><code>https://keyxtractor.decryptlabs.com</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>device_name</code></td>
+<td><code>ChromeCDM</code></td>
+<td><code>ChromeCDM</code>, <code>L1</code>, <code>L2</code> (Widevine) or <code>SL2</code>, <code>SL3</code> (PlayReady)</td>
+</tr>
+<tr>
+<td><code>secret</code></td>
+<td>from <a href="../misc/#external-api-keys"><code>decrypt_labs_api_key</code></a></td>
+<td>Sent as the <code>decrypt-labs-api-key</code> header. An error is raised if neither is set.</td>
+</tr>
+<tr>
+<td><code>system_id</code></td>
+<td><code>26830</code> (Widevine), <code>0</code> (PlayReady)</td>
+<td></td>
+</tr>
+<tr>
+<td><code>security_level</code></td>
+<td>Widevine <code>3</code>; PlayReady <code>2000</code> for <code>SL2</code>, else <code>3000</code></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>PlayReady mode is used when <code>device_type</code> is <code>PLAYREADY</code> or <code>device_name</code> starts with <code>SL</code>.</p>
+<h3 id="remote-cdm-custom-api"><code>custom_api</code> fields<a class="headerlink" href="#remote-cdm-custom-api" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>host</code></td>
+<td>str</td>
+<td>Required. Base URL of the API.</td>
+</tr>
+<tr>
+<td><code>device</code></td>
+<td>dict</td>
+<td><code>name</code>, <code>type</code> (<code>CHROME</code>, <code>ANDROID</code>, <code>PLAYREADY</code>), <code>system_id</code>, <code>security_level</code></td>
+</tr>
+<tr>
+<td><code>auth</code></td>
+<td>dict</td>
+<td><code>type</code> (default <code>header</code>): <code>header</code> uses <code>header_name</code> (default <code>Authorization</code>) and <code>key</code>; <code>bearer</code> uses <code>bearer_token</code> or <code>key</code>; <code>basic</code> uses <code>username</code> and <code>password</code>. <code>custom_headers</code> is merged in for any type.</td>
+</tr>
+<tr>
+<td><code>endpoints</code></td>
+<td>dict</td>
+<td><code>get_request</code> and <code>decrypt_response</code>, each <code>{path, method, timeout}</code></td>
+</tr>
+<tr>
+<td><code>request_mapping</code></td>
+<td>dict</td>
+<td>Per endpoint: <code>param_names</code>, <code>static_params</code>, <code>conditional_params</code>, <code>transforms</code>, <code>nested_params</code>, <code>exclude_params</code></td>
+</tr>
+<tr>
+<td><code>response_mapping</code></td>
+<td>dict</td>
+<td>Per endpoint: <code>fields</code>, <code>transforms</code>, <code>response_types</code>, <code>success_conditions</code>, <code>error_fields</code>, <code>key_fields</code></td>
+</tr>
+<tr>
+<td><code>caching</code></td>
+<td>dict</td>
+<td><code>enabled</code>, <code>use_vaults</code>, <code>check_cached_first</code></td>
+</tr>
+<tr>
+<td><code>legacy</code></td>
+<td>dict</td>
+<td>Legacy mode options.</td>
+</tr>
+<tr>
+<td><code>timeout</code></td>
+<td>int</td>
+<td>Default <code>30</code>. Request timeout in seconds.</td>
+</tr>
+</tbody>
+</table>
+<p>Transforms cover base64/hex/JSON encoding and <code>kid:key</code> parsing. PlayReady mode is used when
+<code>device.type</code> is <code>PLAYREADY</code> or the device name is <code>SL2</code>/<code>SL3</code>.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">remote_cdm</span><span class="p">:</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_custom</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">custom_api</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://cdm.example.com</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="nt">device</span><span class="p">:</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ChromeCDM</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CHROME</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">      </span><span class="nt">system_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">26830</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">      </span><span class="nt">security_level</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span><span class="nt">auth</span><span class="p">:</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bearer</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">      </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your-token</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">    </span><span class="nt">endpoints</span><span class="p">:</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">      </span><span class="nt">get_request</span><span class="p">:</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">        </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/get-challenge</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">        </span><span class="nt">method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">POST</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">      </span><span class="nt">decrypt_response</span><span class="p">:</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">        </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/get-keys</span>
+</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">        </span><span class="nt">method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">POST</span>
+</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="w">    </span><span class="nt">timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
 </span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Pick the decryption tool for a service (case-insensitive), falling back to default.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="unshackle.core.config.resolve_cdm_name" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">resolve_cdm_name</span>
-
-
-<a href="#unshackle.core.config.resolve_cdm_name" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">resolve_cdm_name</span><span class="p">(</span><span class="n">cdm</span><span class="p">,</span> <span class="n">service</span><span class="p">,</span> <span class="n">override</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<h2 id="decryption"><code>decryption</code><a class="headerlink" href="#decryption" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Type:</strong> <code>str</code> or <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>"shaka"</code></li>
+</ul>
+<p>Selects the tool used to physically decrypt CENC content. The value is compared
+case-insensitively; <code>"mp4decrypt"</code> selects Bento4's mp4decrypt, and <strong>anything else</strong>
+(including <code>"shaka"</code>) selects shaka-packager. When the value is a dict, the service key is
+matched case-insensitively and the <code>default</code> entry is the fallback.</p>
+<p>HLS AES-128 ClearKey is decrypted in-process and ignores this setting.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Global</label><label for="__tabbed_1_2">Per-service</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">decryption</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shaka</span>
 </span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Resolve a service's top-level CDM entry (case-insensitive), with default fallback.</p>
-
-
-    </div>
-
 </div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="unshackle.core.config.get_config_path" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">get_config_path</span>
-
-
-<a href="#unshackle.core.config.get_config_path" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_config_path</span><span class="p">()</span>
+<div class="tabbed-block">
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">decryption</span><span class="p">:</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shaka</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">EXAMPLE1</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mp4decrypt</span>
 </span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Get Path to Config from any one of the possible locations.</p>
-<p>Returns None if no config file could be found.</p>
-
-
-    </div>
-
 </div>
-
-
-
-  </div>
-
-    </div>
-
+</div>
 </div>
 
 
@@ -2346,7 +2314,7 @@ between variables. Falls back to dot separator (scene-style) by default.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../service/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Service">
+          <a href="../output/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Output &amp; Naming">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -2356,20 +2324,20 @@ between variables. Falls back to dot separator (scene-style) by default.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Service
+                Output & Naming
               </div>
             </div>
           </a>
         
         
           
-          <a href="../tracks/" class="md-footer__link md-footer__link--next" aria-label="Next: Tracks">
+          <a href="../network/" class="md-footer__link md-footer__link--next" aria-label="Next: Network &amp; Proxy">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Tracks
+                Network & Proxy
               </div>
             </div>
             <div class="md-footer__button md-icon">
