@@ -10,7 +10,7 @@ from unshackle.core.vault import Vault
 class API(Vault):
     """Key Vault using a simple RESTful HTTP API call."""
 
-    def __init__(self, name: str, uri: str, token: str, no_push: bool = False, timeout: float = 10.0):
+    def __init__(self, name: str, uri: str, token: str, no_push: bool = False, headers: Optional[dict[str, str]] = None, timeout: float = 10.0):
         super().__init__(name, no_push)
         self.uri = uri.rstrip("/")
         self.timeout = timeout
@@ -18,13 +18,21 @@ class API(Vault):
         self.session.headers.update({"User-Agent": f"unshackle v{__version__}"})
         self.session.headers.update({"Authorization": f"Bearer {token}"})
 
+        if headers:
+            self.session.headers.update(headers)
+
     def get_key(self, kid: Union[UUID, str], service: str) -> Optional[str]:
         if isinstance(kid, UUID):
             kid = kid.hex
 
-        data = self.session.get(
-            url=f"{self.uri}/{service.lower()}/{kid}", headers={"Accept": "application/json"}, timeout=self.timeout
-        ).json()
+        response = self.session.get(
+            url=f"{self.uri}/{service.lower()}/{kid}",
+            headers={"Accept": "application/json"},
+            timeout=self.timeout,
+            allow_redirects=False
+        )
+        response.raise_for_status()
+        data = response.json()
 
         code = int(data.get("code", 0))
         message = data.get("message")
@@ -52,12 +60,15 @@ class API(Vault):
         page = 1
 
         while True:
-            data = self.session.get(
+            response = self.session.get(
                 url=f"{self.uri}/{service.lower()}",
                 params={"page": page, "total": 10},
                 headers={"Accept": "application/json"},
                 timeout=self.timeout,
-            ).json()
+                allow_redirects=False
+            )
+            response.raise_for_status()
+            data = response.json()
 
             code = int(data.get("code", 0))
             message = data.get("message")
@@ -90,12 +101,15 @@ class API(Vault):
         if isinstance(kid, UUID):
             kid = kid.hex
 
-        data = self.session.post(
+        response = self.session.post(
             url=f"{self.uri}/{service.lower()}/{kid}",
             json={"content_key": key},
             headers={"Accept": "application/json"},
             timeout=self.timeout,
-        ).json()
+            allow_redirects=False
+        )
+        response.raise_for_status()
+        data = response.json()
 
         code = int(data.get("code", 0))
         message = data.get("message")
@@ -141,6 +155,7 @@ class API(Vault):
                     json={"content_keys": batch_keys},
                     headers={"Accept": "application/json"},
                     timeout=self.timeout,
+                    allow_redirects=False
                 )
 
                 # Check for HTTP errors that suggest batch is too large
@@ -150,7 +165,8 @@ class API(Vault):
                     else:
                         batch_size = 1
                     continue
-
+                
+                response.raise_for_status()
                 data = response.json()
             except Exception:
                 # JSON decode error or connection issue - try smaller batch
@@ -187,7 +203,14 @@ class API(Vault):
         return total_added
 
     def get_services(self) -> Iterator[str]:
-        data = self.session.post(url=self.uri, headers={"Accept": "application/json"}, timeout=self.timeout).json()
+        response = self.session.post(
+            url=self.uri,
+            headers={"Accept": "application/json"},
+            timeout=self.timeout,
+            allow_redirects=False
+        )
+        response.raise_for_status()
+        data = response.json()
 
         code = int(data.get("code", 0))
         message = data.get("message")
@@ -227,3 +250,4 @@ class Exceptions:
 
     class ContentKeyInvalid(Exception):
         """The Content Key is invalid."""
+        
