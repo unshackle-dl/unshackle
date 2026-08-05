@@ -92,6 +92,7 @@ from unshackle.core.utils.bitrate import apply_real_bitrates
 from unshackle.core.utils.click_types import (
     AUDIO_CODEC_LIST,
     LANGUAGE_RANGE,
+    OFFSET,
     QUALITY_LIST,
     SEASON_RANGE,
     SLOW_DELAY_RANGE,
@@ -758,6 +759,93 @@ class dl:
         help="Continue with best available quality if requested resolutions are not available.",
     )
     @click.option(
+        "--cross-video",
+        nargs=2,
+        type=(str, str),
+        default=None,
+        metavar="SERVICE URL",
+        help="Take video tracks from another service instead of this one.",
+    )
+    @click.option(
+        "--cross-audio",
+        nargs=2,
+        type=(str, str),
+        default=None,
+        metavar="SERVICE URL",
+        help="Take audio tracks from another service instead of this one.",
+    )
+    @click.option(
+        "--cross-subtitles",
+        nargs=2,
+        type=(str, str),
+        default=None,
+        metavar="SERVICE URL",
+        help="Take subtitle tracks from another service instead of this one.",
+    )
+    @click.option(
+        "--cross-chapters",
+        nargs=2,
+        type=(str, str),
+        default=None,
+        metavar="SERVICE URL",
+        help="Take chapters from another service instead of this one.",
+    )
+    @click.option(
+        "--cross-audio-offset",
+        type=OFFSET,
+        default=None,
+        help="Shift cross-sourced audio in the mux, e.g. 10s, 500ms or -5.5s.",
+    )
+    @click.option(
+        "--cross-subtitle-offset",
+        type=OFFSET,
+        default=None,
+        help="Shift cross-sourced subtitles in the mux, e.g. 10s, 500ms or -5.5s.",
+    )
+    @click.option(
+        "--cross-profile",
+        type=str,
+        default=None,
+        help="Profile used for cross-service credentials. Defaults to --profile.",
+    )
+    @click.option(
+        "--cross-proxy",
+        type=str,
+        default=None,
+        help="Proxy for every cross-service. Overrides each cross-service's own proxy configuration.",
+    )
+    @click.option(
+        "--cross-video-wanted",
+        type=str,
+        default=None,
+        help="Episode to take video from the cross-service, e.g. S01E02. Overrides --cross-wanted for video.",
+    )
+    @click.option(
+        "--cross-audio-wanted",
+        type=str,
+        default=None,
+        help="Episode to take audio from the cross-service, e.g. S01E02. Overrides --cross-wanted for audio.",
+    )
+    @click.option(
+        "--cross-subtitles-wanted",
+        type=str,
+        default=None,
+        help="Episode to take subtitles from the cross-service, e.g. S01E02. Overrides --cross-wanted for subtitles.",
+    )
+    @click.option(
+        "--cross-chapters-wanted",
+        type=str,
+        default=None,
+        help="Episode to take chapters from the cross-service, e.g. S01E02. Overrides --cross-wanted for chapters.",
+    )
+    @click.option(
+        "--cross-wanted",
+        type=str,
+        default=None,
+        help="Episode to take from the cross-services, e.g. S01E02. Default fallback when no per-type override "
+        "is given; otherwise the matching season and episode.",
+    )
+    @click.option(
         "--remote",
         is_flag=True,
         default=False,
@@ -795,6 +883,19 @@ class dl:
         animeapi_id: Optional[str] = None,
         enrich: bool = False,
         output_dir: Optional[Path] = None,
+        cross_video: Optional[tuple[str, str]] = None,
+        cross_audio: Optional[tuple[str, str]] = None,
+        cross_subtitles: Optional[tuple[str, str]] = None,
+        cross_chapters: Optional[tuple[str, str]] = None,
+        cross_audio_offset: Optional[int] = None,
+        cross_subtitle_offset: Optional[int] = None,
+        cross_profile: Optional[str] = None,
+        cross_proxy: Optional[str] = None,
+        cross_video_wanted: Optional[str] = None,
+        cross_audio_wanted: Optional[str] = None,
+        cross_subtitles_wanted: Optional[str] = None,
+        cross_chapters_wanted: Optional[str] = None,
+        cross_wanted: Optional[str] = None,
         *_: Any,
         **__: Any,
     ):
@@ -847,6 +948,24 @@ class dl:
         self.enrich = enrich
         self.animeapi_title: Optional[str] = None
         self.output_dir = output_dir
+
+        self.cross_video = ctx.params.get("cross_video", cross_video)
+        self.cross_audio = ctx.params.get("cross_audio", cross_audio)
+        self.cross_subtitles = ctx.params.get("cross_subtitles", cross_subtitles)
+        self.cross_chapters = ctx.params.get("cross_chapters", cross_chapters)
+        self.cross_audio_offset = ctx.params.get("cross_audio_offset", cross_audio_offset)
+        self.cross_subtitle_offset = ctx.params.get("cross_subtitle_offset", cross_subtitle_offset)
+        self.cross_profile = ctx.params.get("cross_profile", cross_profile) or profile
+        self.cross_proxy = ctx.params.get("cross_proxy", cross_proxy)
+        self.cross_wanted = ctx.params.get("cross_wanted", cross_wanted)
+        self.cross_wanted_by_type: dict[str, Optional[str]] = {
+            "video": ctx.params.get("cross_video_wanted", cross_video_wanted),
+            "audio": ctx.params.get("cross_audio_wanted", cross_audio_wanted),
+            "subtitles": ctx.params.get("cross_subtitles_wanted", cross_subtitles_wanted),
+            "chapters": ctx.params.get("cross_chapters_wanted", cross_chapters_wanted),
+        }
+        # Held outside track.data because the values are live objects, not exportable metadata.
+        self.cross_track_sources: dict[str, tuple[Service, Title_T, Any, Vaults]] = {}
 
         if animeapi_id:
             from unshackle.core.utils.animeapi import resolve_animeapi
@@ -1250,6 +1369,10 @@ class dl:
             config=self.service_config, cdm=self.cdm, proxy_providers=self.proxy_providers, profile=self.profile
         )
 
+        # A service reads dl-level options off ctx.parent.params, so a cross-service is handed a
+        # copy of ours rather than a hand-written set of defaults that drifts as options are added.
+        self.dl_params: dict[str, Any] = dict(ctx.params)
+
         if repack:
             config.repack = True
 
@@ -1260,6 +1383,195 @@ class dl:
         # needs to be added this way instead of @cli.result_callback to be
         # able to keep `self` as the first positional
         self.cli._result_callback = self.result
+
+    @property
+    def has_cross_mux(self) -> bool:
+        return any((self.cross_video, self.cross_audio, self.cross_subtitles, self.cross_chapters))
+
+    def build_vaults(self, vault_tag: str) -> Vaults:
+        """Build and load a Vaults keyed by a service tag, so its keys cache under that owner."""
+        vaults = Vaults(vault_tag)
+        for vault in config.key_vaults:
+            vault_type = vault["type"]
+            vault_name = vault.get("name", vault_type)
+            vault_copy = vault.copy()
+            del vault_copy["type"]
+
+            if vault_type.lower() == "api" and "decrypt_labs" in vault_name.lower():
+                if not vault_copy.get("token") and config.decrypt_labs_api_key:
+                    vault_copy["token"] = config.decrypt_labs_api_key
+
+            if vault_type.lower() == "sqlite":
+                vaults.load_critical(vault_type, **vault_copy)
+            else:
+                vaults.load(vault_type, **vault_copy)
+        return vaults
+
+    def load_cross_service(self, tag: str, url: str) -> tuple[Service, Any, Vaults]:
+        """Load and authenticate another service plus its own CDM and vaults, for muxing its tracks."""
+        service_cls: Any = Services.load(tag)
+
+        service_config_path = Services.get_path(tag) / config.filenames.config
+        service_config = (
+            yaml.safe_load(service_config_path.read_text(encoding="utf8")) if service_config_path.exists() else {}
+        )
+
+        # Stand in for the dl group Click would have invoked the service under.
+        parent_ctx = click.Context(self.cli, info_name="dl")
+        parent_params = {**self.dl_params, "profile": self.cross_profile}
+        if self.cross_proxy:
+            parent_params["proxy"] = self.cross_proxy
+            parent_params["no_proxy"] = False
+        parent_ctx.params = parent_params
+
+        # Keys licensed for this service cache under its own vault, not the primary's; its CDM binds
+        # to those same vaults so lookups and writes stay with the owning service.
+        cross_vaults = self.build_vaults(Services.get_vault_tag(tag))
+        cross_cdm: Any = self.get_cdm(tag, self.cross_profile, vaults=cross_vaults)
+
+        ctx = click.Context(service_cls.cli, parent=parent_ctx, info_name=tag)
+        ctx.obj = ContextData(
+            config=service_config,
+            cdm=cross_cdm,
+            proxy_providers=self.proxy_providers,
+            profile=self.cross_profile,
+        )
+
+        kwargs = {param.name: param.default for param in service_cls.cli.params if param.name}
+        kwargs["title"] = url
+
+        service: Service = service_cls(ctx, **kwargs)
+        service.authenticate(
+            self.get_cookie_jar(tag, self.cross_profile), self.get_credentials(tag, self.cross_profile)
+        )
+        return service, cross_cdm, cross_vaults
+
+    def match_cross_title(self, title: Title_T, cross_titles: Iterable[Title_T], track_type: str) -> Optional[Title_T]:
+        """Find the counterpart of a title in another service's catalogue for a given track type."""
+        if isinstance(title, Movie):
+            return next((x for x in cross_titles if isinstance(x, Movie)), None)
+
+        if not isinstance(title, Episode):
+            return None
+
+        season, number = title.season, title.number
+        # Per-type override wins; --cross-wanted is the shared fallback; else the matching S/E.
+        wanted = self.cross_wanted_by_type.get(track_type) or self.cross_wanted
+        if wanted:
+            match = re.match(r"S(\d+)E(\d+)$", wanted, re.IGNORECASE)
+            if not match:
+                raise click.UsageError(f"cross-wanted must look like S01E02, not {wanted!r}")
+            season, number = int(match.group(1)), int(match.group(2))
+
+        return next(
+            (x for x in cross_titles if isinstance(x, Episode) and x.season == season and x.number == number), None
+        )
+
+    def fetch_cross_tracks(self, title: Title_T) -> dict[str, tuple[Service, Title_T, Tracks, Any, Vaults]]:
+        """Resolve every --cross-* option to the service, title, tracks, CDM and vaults it names."""
+        specs = (
+            ("video", self.cross_video),
+            ("audio", self.cross_audio),
+            ("subtitles", self.cross_subtitles),
+            ("chapters", self.cross_chapters),
+        )
+
+        # Sources are per-title; a stale id recorded for a previous episode must not shadow one of
+        # this episode's own tracks in drm_source.
+        self.cross_track_sources.clear()
+
+        # One service may supply several track types; load and authenticate it only once, and reuse
+        # a matched title's tracks (a per-type --cross-*-wanted may point types at different titles).
+        loaded: dict[tuple[str, str], tuple[Service, Any, Vaults, list[Title_T]]] = {}
+        track_pools: dict[int, Tracks] = {}
+        sources: dict[str, tuple[Service, Title_T, Tracks, Any, Vaults]] = {}
+
+        for track_type, spec in specs:
+            if not spec:
+                continue
+
+            key = (Services.get_tag(spec[0]), spec[1])
+            if key not in loaded:
+                self.log.info(f"Cross-mux: loading {key[0]}")
+                service, cdm, vaults = self.load_cross_service(*key)
+                loaded[key] = (service, cdm, vaults, list(service.get_titles()))
+            service, cdm, vaults, titles = loaded[key]
+
+            cross_title = self.match_cross_title(title, titles, track_type)
+            if not cross_title:
+                self.log.warning(f"Cross-mux: {key[0]} has no title matching {title}, keeping this service's own.")
+                continue
+
+            if id(cross_title) not in track_pools:
+                self.log.info(f"Cross-mux: getting {track_type} from {key[0]}")
+                tracks = service.get_tracks(cross_title)
+                tracks.chapters = service.get_chapters(cross_title)
+                track_pools[id(cross_title)] = tracks
+
+            sources[track_type] = (service, cross_title, track_pools[id(cross_title)], cdm, vaults)
+
+        return sources
+
+    def apply_cross_tracks(
+        self, title: Title_T, sources: dict[str, tuple[Service, Title_T, Tracks, Any, Vaults]]
+    ) -> None:
+        """Merge cross-sourced audio/subtitles into this title (video/chapters replace) and record sources."""
+
+        def adopt(
+            tracks: Iterable[AnyTrack],
+            service: Service,
+            cross_title: Title_T,
+            cdm: Any,
+            vaults: Vaults,
+            offset: Optional[int],
+        ) -> None:
+            for track in tracks:
+                # Track.download() already prefers track.session over the primary service's.
+                track.session = service.session
+                self.cross_track_sources[track.id] = (service, cross_title, cdm, vaults)
+                track.data["cross_source"] = service.__class__.__name__
+                if offset:
+                    track.data["sync_offset_ms"] = offset
+
+        # Ids must stay unique across every track kept for this title, or a cross track's entry in
+        # cross_track_sources would shadow a primary track's and route its DRM to the wrong service.
+        seen_ids = {t.id for t in (*title.tracks.audio, *title.tracks.subtitles)}
+
+        def namespace(tracks: Iterable[AnyTrack], service: Service) -> None:
+            for track in tracks:
+                if track.id in seen_ids:
+                    track.id = f"{track.id}_{service.__class__.__name__.lower()}"
+                seen_ids.add(track.id)
+
+        # Exactly one video source and chapters are singular, so those replace outright.
+        if "video" in sources:
+            service, cross_title, cross_tracks, cdm, vaults = sources["video"]
+            namespace(cross_tracks.videos, service)
+            title.tracks.videos = cross_tracks.videos
+            adopt(title.tracks.videos, service, cross_title, cdm, vaults, None)
+
+        # Audio and subtitles merge so best-per-language selection runs across the primary's own
+        # tracks and the cross-sourced ones together.
+        seen_ids.update(t.id for t in title.tracks.videos)
+
+        if "audio" in sources:
+            service, cross_title, cross_tracks, cdm, vaults = sources["audio"]
+            namespace(cross_tracks.audio, service)
+            adopt(cross_tracks.audio, service, cross_title, cdm, vaults, self.cross_audio_offset)
+            title.tracks.audio.extend(cross_tracks.audio)
+
+        if "subtitles" in sources:
+            service, cross_title, cross_tracks, cdm, vaults = sources["subtitles"]
+            namespace(cross_tracks.subtitles, service)
+            adopt(cross_tracks.subtitles, service, cross_title, cdm, vaults, self.cross_subtitle_offset)
+            title.tracks.subtitles.extend(cross_tracks.subtitles)
+
+        if "chapters" in sources:
+            title.tracks.chapters = sources["chapters"][2].chapters
+
+    def drm_source(self, track: AnyTrack, service: Service, title: Title_T) -> tuple[Service, Title_T, Any, Vaults]:
+        """The service, title, CDM and vaults that licence a track; the primary's unless cross-sourced."""
+        return self.cross_track_sources.get(track.id, (service, title, self.cdm, self.vaults))
 
     @with_task_temp
     def result(
@@ -2360,6 +2672,22 @@ class dl:
                         level="INFO", operation="get_tracks", service=self.service, context=tracks_info
                     )
 
+            if self.has_cross_mux:
+                with console.status("Getting Cross-Service Tracks...", spinner="dots"):
+                    try:
+                        cross_sources = self.fetch_cross_tracks(title)
+                    except Exception as e:
+                        if self.debug_logger:
+                            self.debug_logger.log_error(
+                                "cross_mux", e, service=self.service, context={"title": str(title)}
+                            )
+                        raise
+
+                    if cross_sources:
+                        self.apply_cross_tracks(title, cross_sources)
+                        applied = ", ".join(f"{k} from {v[0].__class__.__name__}" for k, v in cross_sources.items())
+                        self.log.info(f"Cross-mux: using {applied}")
+
             # strip SDH subs to non-SDH if no equivalent same-lang non-SDH is available
             # uses a loose check, e.g, wont strip en-US SDH sub if a non-SDH en-GB is available
             # Check if automatic SDH stripping is enabled in config
@@ -3040,36 +3368,39 @@ class dl:
                 with SyncLive(Padding(download_table, (1, 5)), console=console, refresh_per_second=20):
 
                     def download_track(track: AnyTrack, i: int) -> None:
+                        drm_service, drm_title, drm_cdm, drm_vaults = self.drm_source(track, service, title)
                         track.download(
                             session=track.session or service.session,
                             no_proxy_download=no_proxy_download,
                             prepare_drm=partial(
                                 partial(self.prepare_drm, table=download_table),
                                 track=track,
-                                title=title,
+                                title=drm_title,
                                 certificate=partial(
-                                    service.get_widevine_service_certificate,
-                                    title=title,
+                                    drm_service.get_widevine_service_certificate,
+                                    title=drm_title,
                                     track=track,
                                 ),
                                 licence=partial(
-                                    service.get_playready_license
-                                    if is_playready_cdm(self.cdm)
-                                    else service.get_widevine_license,
-                                    title=title,
+                                    drm_service.get_playready_license
+                                    if is_playready_cdm(drm_cdm)
+                                    else drm_service.get_widevine_license,
+                                    title=drm_title,
                                     track=track,
                                 ),
                                 clearkey_licence=partial(
-                                    service.get_clearkey_license,
-                                    title=title,
+                                    drm_service.get_clearkey_license,
+                                    title=drm_title,
                                     track=track,
                                 ),
                                 cdm_only=cdm_only,
                                 vaults_only=vaults_only,
                                 export=export_path,
-                                service_session=service.session,
+                                service_session=drm_service.session,
+                                cdm=drm_cdm,
+                                vaults=drm_vaults,
                             ),
-                            cdm=self.cdm,
+                            cdm=drm_cdm,
                             max_workers=workers,
                             progress=tracks_progress_callables[i],
                         )
@@ -3909,6 +4240,8 @@ class dl:
         vaults_only: bool = False,
         export: Optional[Path] = None,
         service_session: Optional[Any] = None,
+        cdm: Optional[object] = None,
+        vaults: Optional[Vaults] = None,
     ) -> None:
         """
         Prepare the DRM by getting decryption data like KIDs, Keys, and such.
@@ -3916,6 +4249,9 @@ class dl:
         """
         if not drm:
             return
+
+        cdm = cdm if cdm is not None else self.cdm
+        vaults = vaults if vaults is not None else self.vaults
 
         server_cdm = getattr(self, "server_cdm", False)
 
@@ -3977,26 +4313,38 @@ class dl:
 
         if not server_cdm:
             if isinstance(drm, Widevine):
-                if not is_widevine_cdm(self.cdm):
-                    widevine_cdm = self.get_cdm(self.service, self.profile, drm="widevine", quality=track_quality)
+                if not is_widevine_cdm(cdm):
+                    widevine_cdm = self.get_cdm(
+                        self.service, self.profile, drm="widevine", quality=track_quality, vaults=vaults
+                    )
                     if widevine_cdm and is_widevine_cdm(widevine_cdm):
                         if track_quality:
                             self.log.info(f"Switching to Widevine CDM for Widevine {track_quality}p content")
                         else:
                             self.log.info("Switching to Widevine CDM for Widevine content")
-                        self.cdm = widevine_cdm
+                        if cdm is self.cdm:
+                            # Persist the switch only for the primary CDM so its later tracks skip the
+                            # re-load; a cross-sourced CDM stays local and must not clobber the primary's.
+                            self.cdm = widevine_cdm
+                        cdm = widevine_cdm
                     else:
                         raise ValueError(f"Title needs a Widevine CDM but {self.service} is configured with PlayReady.")
 
             elif isinstance(drm, PlayReady):
-                if not is_playready_cdm(self.cdm):
-                    playready_cdm = self.get_cdm(self.service, self.profile, drm="playready", quality=track_quality)
+                if not is_playready_cdm(cdm):
+                    playready_cdm = self.get_cdm(
+                        self.service, self.profile, drm="playready", quality=track_quality, vaults=vaults
+                    )
                     if playready_cdm and is_playready_cdm(playready_cdm):
                         if track_quality:
                             self.log.info(f"Switching to PlayReady CDM for PlayReady {track_quality}p content")
                         else:
                             self.log.info("Switching to PlayReady CDM for PlayReady content")
-                        self.cdm = playready_cdm
+                        if cdm is self.cdm:
+                            # Persist the switch only for the primary CDM so its later tracks skip the
+                            # re-load; a cross-sourced CDM stays local and must not clobber the primary's.
+                            self.cdm = playready_cdm
+                        cdm = playready_cdm
                     else:
                         raise ValueError(f"Title needs a PlayReady CDM but {self.service} is configured with Widevine.")
 
@@ -4061,15 +4409,13 @@ class dl:
                         continue
 
                     if not cdm_only:
-                        content_key, vault_used = self.vaults.get_key(kid)
+                        content_key, vault_used = vaults.get_key(kid)
                         if content_key:
                             drm.content_keys[kid] = content_key
                             label = f"[text2]{kid.hex}:{content_key}{is_track_kid} from {vault_used}"
                             if not any(f"{kid.hex}:{content_key}" in x.label for x in cek_tree.children):
                                 cek_tree.add(label)
-                            pending_vault_writes.append(
-                                partial(self.vaults.add_key, kid, content_key, excluding=vault_used)
-                            )
+                            pending_vault_writes.append(partial(vaults.add_key, kid, content_key, excluding=vault_used))
                             self.LICENSE_KEY_CACHE[kid] = content_key
 
                             if self.debug_logger:
@@ -4123,9 +4469,9 @@ class dl:
 
                     try:
                         if self.service == "NF":
-                            drm.get_NF_content_keys(cdm=self.cdm, licence=licence, certificate=certificate)
+                            drm.get_NF_content_keys(cdm=cdm, licence=licence, certificate=certificate)
                         else:
-                            drm.get_content_keys(cdm=self.cdm, licence=licence, certificate=certificate)
+                            drm.get_content_keys(cdm=cdm, licence=licence, certificate=certificate)
                     except Exception as e:
                         if drm.content_keys:
                             self.log.debug(f"License call failed but keys already in content_keys: {e}")
@@ -4262,15 +4608,13 @@ class dl:
                         continue
 
                     if not cdm_only:
-                        content_key, vault_used = self.vaults.get_key(kid)
+                        content_key, vault_used = vaults.get_key(kid)
                         if content_key:
                             drm.content_keys[kid] = content_key
                             label = f"[text2]{kid.hex}:{content_key}{is_track_kid} from {vault_used}"
                             if not any(f"{kid.hex}:{content_key}" in x.label for x in cek_tree.children):
                                 cek_tree.add(label)
-                            pending_vault_writes.append(
-                                partial(self.vaults.add_key, kid, content_key, excluding=vault_used)
-                            )
+                            pending_vault_writes.append(partial(vaults.add_key, kid, content_key, excluding=vault_used))
                             self.LICENSE_KEY_CACHE[kid] = content_key
 
                             if self.debug_logger:
@@ -4313,7 +4657,7 @@ class dl:
                     from_vaults = drm.content_keys.copy()
 
                     try:
-                        drm.get_content_keys(cdm=self.cdm, licence=licence, certificate=certificate)
+                        drm.get_content_keys(cdm=cdm, licence=licence, certificate=certificate)
                     except Exception as e:
                         if drm.content_keys:
                             self.log.debug(f"License call failed but keys already in content_keys: {e}")
@@ -4414,15 +4758,13 @@ class dl:
                         continue
 
                     if not cdm_only:
-                        content_key, vault_used = self.vaults.get_key(kid)
+                        content_key, vault_used = vaults.get_key(kid)
                         if content_key:
                             drm.content_keys[kid] = content_key
                             label = f"[text2]{kid.hex}:{content_key}{is_track_kid} from {vault_used}"
                             if not any(f"{kid.hex}:{content_key}" in x.label for x in cek_tree.children):
                                 cek_tree.add(label)
-                            pending_vault_writes.append(
-                                partial(self.vaults.add_key, kid, content_key, excluding=vault_used)
-                            )
+                            pending_vault_writes.append(partial(vaults.add_key, kid, content_key, excluding=vault_used))
                             self.LICENSE_KEY_CACHE[kid] = content_key
                         elif vaults_only:
                             msg = f"No Vault has a Key for {kid.hex} and --vaults-only was used"
@@ -4612,6 +4954,7 @@ class dl:
         profile: Optional[str] = None,
         drm: Optional[str] = None,
         quality: Optional[int] = None,
+        vaults: Optional[Vaults] = None,
     ) -> Optional[object]:
         """
         Get CDM for a specified service (either Local or Remote CDM).
@@ -4704,4 +5047,4 @@ class dl:
 
         from unshackle.core.cdm import load_cdm
 
-        return load_cdm(cdm_name, service_name=service, vaults=self.vaults)
+        return load_cdm(cdm_name, service_name=service, vaults=vaults if vaults is not None else self.vaults)

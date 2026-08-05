@@ -113,6 +113,7 @@ nav:
   - User Guide:
       - Downloading: guide/downloading.md
       - CLI Reference: guide/cli-reference.md
+      - Cross-service Muxing: guide/cross-service-muxing.md
       - DRM & CDM Setup: guide/drm-and-cdm.md
       - Proxies & VPN: guide/proxies-and-vpn.md
       - Key Vaults: guide/vaults.md

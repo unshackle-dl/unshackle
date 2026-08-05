@@ -146,6 +146,43 @@ Keep only certain track types, or skip certain track types. Attachments are alwa
 | `--tag` | Group tag override. |
 | `--repack` | Add a `REPACK` tag to the filename. |
 
+### Cross-service muxing
+
+Take some track types from a different service and mux them with the rest. Each `--cross-*` flag
+takes a service tag and a URL. Video and chapters replace what the service you download provides;
+audio and subtitles are merged in, so the best-per-language selection runs across both services'
+tracks together. See [Cross-service muxing](cross-service-muxing.md) for the full guide.
+
+| Flag | Description |
+|---|---|
+| `--cross-video` | Take video tracks from `SERVICE URL` (replaces the download service's video). |
+| `--cross-audio` | Merge in audio tracks from `SERVICE URL`. |
+| `--cross-subtitles` | Merge in subtitle tracks from `SERVICE URL`. |
+| `--cross-chapters` | Take chapters from `SERVICE URL` (replaces the download service's chapters). |
+| `--cross-audio-offset` | Shift the cross-sourced audio in the mux, e.g. `10s`, `500ms`, `-5.5s`. A bare number is milliseconds. |
+| `--cross-subtitle-offset` | Shift the cross-sourced subtitles in the mux. Same format as above. |
+| `--cross-profile` | Profile used for the cross-service credentials. Defaults to `--profile`. |
+| `--cross-proxy` | Proxy for every cross-service. Overrides each cross-service's own proxy configuration. |
+| `--cross-wanted` | Episode to take from the cross-services, e.g. `S01E02`. Fallback for the per-type flags below. Defaults to the same season and episode as the title you download. |
+| `--cross-video-wanted` | Episode to take video from, e.g. `S01E02`. Overrides `--cross-wanted` for video. |
+| `--cross-audio-wanted` | Episode to take audio from. Overrides `--cross-wanted` for audio. |
+| `--cross-subtitles-wanted` | Episode to take subtitles from. Overrides `--cross-wanted` for subtitles. |
+| `--cross-chapters-wanted` | Episode to take chapters from. Overrides `--cross-wanted` for chapters. |
+
+```bash
+unshackle dl --cross-audio EXAMPLE2 "https://example2.com/show/1" EXAMPLE "https://example.com/show/1"
+```
+
+Each cross-service authenticates, licenses and decrypts its own tracks with its own CDM, key
+vaults and (unless `--cross-proxy` is set) its own proxy, so you need credentials for it as well.
+Offsets are applied by the muxer, which does not re-time the media itself.
+
+!!! note "Titles must match"
+    For a series, unshackle looks for the same season and episode number on the cross-service.
+    Use `--cross-wanted` (or a per-type flag such as `--cross-audio-wanted`) when the two services
+    number the episodes differently. If no title matches, unshackle logs a warning and keeps the
+    tracks of the service you download.
+
 ### Metadata & tagging
 
 | Flag | Description |

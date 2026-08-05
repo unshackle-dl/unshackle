@@ -425,10 +425,30 @@ class SlowDelayRange(click.ParamType):
         return (low, high)
 
 
+class OffsetType(click.ParamType):
+    """Parses a time offset like '10s', '500ms' or '-5.5s' into milliseconds. A bare number is milliseconds."""
+
+    name = "offset"
+
+    _PATTERN = re.compile(r"^(-?\d+(?:\.\d+)?)\s*(s|ms)?$")
+
+    def convert(self, value: Any, param: Optional[click.Parameter], ctx: Optional[click.Context]) -> int:
+        if isinstance(value, int):
+            return value
+
+        match = self._PATTERN.match(str(value).strip())
+        if not match:
+            self.fail(f"'{value}' is not a valid offset. Use format: 10s, 500ms or -5.5s", param, ctx)
+
+        number = float(match.group(1))
+        return int(number * 1000) if match.group(2) == "s" else int(number)
+
+
 SEASON_RANGE = SeasonRange()
 LANGUAGE_RANGE = LanguageRange()
 QUALITY_LIST = QualityList()
 AUDIO_CODEC_LIST = AudioCodecList(Audio.Codec)
 SLOW_DELAY_RANGE = SlowDelayRange()
+OFFSET = OffsetType()
 
 # VIDEO_CODEC_CHOICE will be created dynamically when imported
