@@ -161,6 +161,18 @@ def _is_rnet_session(session: Any) -> bool:
     return isinstance(session, RnetSession)
 
 
+def _is_content_encoded(value: Optional[str]) -> bool:
+    """
+    Check a Content-Encoding value for any coding other than absent or `identity`.
+
+    Reading .raw skips urllib3's decoding, so an encoded body has to go through
+    iter_content or the compressed bytes land on disk as the payload. Codings
+    urllib3 cannot decode still count: an allowlist fails open on whatever token
+    a server sends next, and the cost of guessing wrong is a corrupt file.
+    """
+    return any(coding.strip() not in ("", "identity") for coding in (value or "").lower().split(","))
+
+
 def _probe_ranged(url: str, session: Any, **kwargs: Any) -> tuple[int, bool]:
     headers = {**(kwargs.get("headers") or {}), "Range": "bytes=0-0"}
     rest = {k: v for k, v in kwargs.items() if k != "headers"}
@@ -175,8 +187,7 @@ def _probe_ranged(url: str, session: Any, **kwargs: Any) -> tuple[int, bool]:
     try:
         if resp.status_code != 206:
             return 0, False
-        ce = (resp.headers.get("Content-Encoding") or resp.headers.get("content-encoding") or "").lower()
-        if ce in ("gzip", "deflate", "br"):
+        if _is_content_encoded(resp.headers.get("Content-Encoding") or resp.headers.get("content-encoding")):
             return 0, False
         content_range = resp.headers.get("Content-Range") or resp.headers.get("content-range") or ""
         total = content_range.rsplit("/", 1)[-1].strip()
@@ -306,7 +317,8 @@ def download(
     Download a file with optimized I/O.
 
     Supports both requests.Session and RnetSession for TLS fingerprinting.
-    Uses raw socket reads for requests.Session and native rnet streaming for RnetSession.
+    RnetSession streams natively; requests.Session reads the raw socket, except
+    on a content-encoded body, which has to go through iter_content to be decoded.
 
     Yields the following download status updates while chunks are downloading:
 
@@ -393,15 +405,26 @@ def download(
                 resume_offset = 0
             if part_mode and stream.status_code != 206:
                 raise IOError(f"expected 206 for ranged part, got {stream.status_code}")
+            content_encoded = False
             if use_rnet:
                 content_length = stream.content_length or 0
             else:
+                content_encoded = _is_content_encoded(stream.headers.get("Content-Encoding"))
                 try:
                     content_length = int(stream.headers.get("Content-Length", "0"))
-                    if stream.headers.get("Content-Encoding", "").lower() in ["gzip", "deflate", "br"]:
+                    if content_encoded:
                         content_length = 0
                 except ValueError:
                     content_length = 0
+
+            if resumed and content_encoded:
+                try:
+                    stream.close()
+                except Exception:
+                    pass
+                tmp_file.unlink(missing_ok=True)
+                resume_offset = 0
+                continue
 
             limiter = _speed_limiter
             chunk_size = _adaptive_chunk_size(content_length)
@@ -434,7 +457,7 @@ def download(
 
                 if use_rnet:
                     chunks = stream.stream()
-                elif use_raw:
+                elif use_raw and not content_encoded:
                     _read1 = getattr(stream.raw, "read1", None) if claimed is not None and RACER_READ1 else None
                     if _read1 is not None:
                         chunks = iter(lambda: _read1(chunk_size), b"")

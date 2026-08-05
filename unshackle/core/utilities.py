@@ -454,9 +454,9 @@ def try_ensure_utf8(data: bytes) -> bytes:
     """
     Try to ensure that the given data is encoded in UTF-8.
 
-    Automatically decompresses gzip/deflate/zlib data before encoding detection.
-    This handles cases where HTTP responses are saved with raw Content-Encoding
-    (e.g., when decode_content=False is used for performance).
+    Gzip or zlib compressed input is decompressed first, detected by magic bytes.
+    Callers hand in bytes read from files and from responses they fetched
+    themselves, so there is no Content-Encoding header left to consult.
 
     Parameters:
         data: Input data that may or may not yet be UTF-8 or another encoding.
@@ -464,13 +464,11 @@ def try_ensure_utf8(data: bytes) -> bytes:
     Returns the input data encoded in UTF-8 if successful. If unable to detect the
     encoding of the input data, then the original data is returned as-received.
     """
-    # Decompress gzip data (magic bytes: 1f 8b)
     if data[:2] == b"\x1f\x8b":
         try:
             data = gzip.decompress(data)
         except Exception:
             pass
-    # Decompress raw deflate/zlib data (common zlib headers: 78 01, 78 5e, 78 9c, 78 da)
     elif data[:1] == b"\x78" and len(data) > 1 and data[1:2] in (b"\x01", b"\x5e", b"\x9c", b"\xda"):
         try:
             data = zlib.decompress(data)
