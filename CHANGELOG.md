@@ -19,6 +19,24 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - *dl*: Animate merge/decrypt/mux stages with gradient pulse bars
 - *tags*: Add imdb_api_enabled toggle, off by default
 - *tags*: Add OMDb metadata provider with omdb_api_key config
+- *cdm*: Stamp remote CDM DRM type at load for reliable detection
+- *ism*: Harden Smooth parsing and derive fps/codec from spec fields
+- Original-language aware DUAL/MULTi tagging and new DUBBED variable
+- *drm*: Add PlayReady HRESULT decoder
+- *drm*: Detect revoked PlayReady devices from license responses
+- *drm*: Auto-repack tracks with a residual encrypted sample entry
+- *dl*: Extend --select-titles to movie listings
+- Show git commit hash alongside the version
+- Identify the running code by source hash
+- *dl*: Add --speed-limit and serve global_speed_limit
+- *providers*: Add TheTVDB v4 as a metadata provider
+- *tracks*: Add subtitle.group_by to keep a language with its variants
+- *temp*: Give each download task its own temp directory
+- *dl*: Add -fsl/--forced-s-lang to filter forced subtitles by language
+- *tracks*: Add language_priority to sort preferred languages first
+- *vaults*: Support custom headers on API vault
+- *dl*: Add tag_rules to conditionally swap the group tag
+- *titles*: Add optional Episode.part, selected with -w s1e1.2
 
 ### Bug Fixes
 
@@ -36,23 +54,52 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - *gitignore*: Add memory directory to .gitignore
 - *dl*: Prevent missing tracks error when excluding track types
 - *subs*: Stop segmented WebVTT merge from stripping formatting
+- *proxies*: Show ExpressVPN country/location counts at startup
+- *tracks*: Keep regional language variants distinct in exact selection
+- *services*: Register modules in sys.modules so repo-cloned services can self-import and remove old benchmark that should have been deleted
+- Skip decrypt on mislabeled-clear segments
+- Harden ClearKey/CENC decryption correctness
+- *import*: Stop losing side-loaded subtitles and blaming the manifest URL
+- *ism*: Emit two stsd entries so sample_description_index 2 resolves
+- *ism*: Repair synthesized init and verify fragments decrypted
+- *core*: Strip trailing spaces and dots in template formatting to prevent WinError 3
+- *templates*: Use one separator style across a whole folder path
+- *lang*: Surface orig in errors and flag the original audio track over the API
+- *tracks*: Ignore leftover PIFF uuid when verifying decryption
+- *tracks*: Size the no-proxy download session's connection pool
+- *import*: Scope the merge-back and detect ISM protection
+- *dl*: Honour --no-proxy-download for attachments
+- *tools*: Pass -nostdin to all ffmpeg calls
+- *subtitles*: Strip X-TIMESTAMP-MAP so WebVTT cues are not offset on conversion
+- *downloader*: Decode content-encoded bodies instead of writing raw
+- *downloader*: Surface failed downloads instead of returning silently
 
 ### Documentation
 
 - Restructure documentation into MkDocs Material site
 - Expand config reference and genericize service names
+- Correct DRM, muxing, and proxy references (+ case-insensitive proxy prefix fix)
+- Cleanup and correct documentation
+- *core*: Drop service tags from framework comments
+- Cover the TVDB provider, episode ordering and provider order
+- Split configuration reference into per-area pages
 
 ### Performance Improvements
 
 - *downloader*: Cut per-segment overhead, bound stalled connections
+- Little improvements here and there
+- *pipeline*: Fix pool starvation, unlock vault writes, prep mux
+- Speed up the code hash with sha1 and a plain file reader
 
 ### Changes
 
 - *core*: [**breaking**] Bundle download_track args into DownloadContext
+- *tracks*: Honour the best token and share one match rule
 
 ### Builds
 
 - *deps*: Cap pycaption below 2.2.27
+- *mypy*: Enable explicit_package_bases
 
 ## [5.3.0] - 2026-07-01
 
