@@ -25,6 +25,7 @@ import pycountry
 from construct import ValidationError
 from fontTools import ttLib
 from langcodes import Language, closest_match
+from langcodes.tag_parser import LanguageTagError
 from pymp4.parser import Box
 from unidecode import unidecode
 
@@ -142,6 +143,7 @@ def sanitize_filename(filename: str, spacer: str = ".") -> str:
     filename = re.sub(r"[:; ]", spacer, filename)  # structural chars to (spacer)
     filename = re.sub(r"[\\*!?¿,'\"" "<>|$#~]", "", filename)  # not filename safe chars
     filename = re.sub(rf"[{spacer}]{{2,}}", spacer, filename)  # remove extra neighbouring (spacer)s
+    filename = filename.strip(" .")  # strip leading and trailing spaces and dots for OS path safety
 
     return filename
 
@@ -162,6 +164,21 @@ def is_exact_match(language: Union[str, Language], languages: Sequence[Union[str
     return closest_match(language, list(map(str, languages)))[1] <= LANGUAGE_EXACT_DISTANCE
 
 
+def keep_forced_subtitle(
+    forced: bool,
+    language: Union[str, Language],
+    forced_s_lang: Sequence[str],
+    exact: bool = False,
+) -> bool:
+    """The -fsl filter: non-forced tracks always pass, forced tracks only if they match forced_s_lang."""
+    if not forced:
+        return True
+    if not forced_s_lang:
+        return False
+    match_func = is_exact_match if exact else is_close_match
+    return match_func(language, forced_s_lang)
+
+
 def find_missing_langs(
     requested: Sequence[str],
     available: Sequence[Union[str, Language, None]],
@@ -172,6 +189,54 @@ def find_missing_langs(
     match_func = is_exact_match if exact else is_close_match
     skip = {"all", "best", "orig"}
     return [tok for tok in requested if tok not in skip and not match_func(tok, available)]
+
+
+def as_requested(tokens: Sequence[str], orig_token: Optional[str]) -> str:
+    """Return language tokens as the user wrote them, so 'orig' reads as 'orig' and not the language it resolved to."""
+    return ", ".join("orig" if tok == orig_token else tok for tok in tokens)
+
+
+def matching_languages(
+    language: Union[str, Language],
+    available: Sequence[Union[str, Language, None]],
+    exact: bool = False,
+) -> set[str]:
+    """
+    The languages out of `available` that `language` asks for, by the rules Tracks.by_language uses.
+
+    In exact mode CLDR tag distance is not sufficient on its own: it rates a base language and
+    its "paradigm" regional variant as the same language (distance 0 for en/en-US, pt/pt-BR), so
+    it cannot separate en-US from en. Follow RFC 4647 Lookup: prefer the string-equal tag, and
+    fall back to the distance match only when no such tag is present (e.g. zh matches cmn).
+    """
+    tags = {str(x) for x in available if x}
+    try:
+        want = Language.get(str(language)).to_tag().casefold()
+    except LanguageTagError:
+        # e.g. a config typo in language_priority; an unparseable tag matches nothing
+        return set()
+    if not exact:
+        return {tag for tag in tags if is_close_match(language, [tag])}
+    string_equal = {tag for tag in tags if Language.get(tag).to_tag().casefold() == want}
+    return string_equal or {tag for tag in tags if is_exact_match(language, [tag])}
+
+
+def resolve_sort_langs(tokens: Sequence[str], original: Optional[Union[str, Language]] = None) -> list[str]:
+    """
+    Prepare language tokens for a Tracks.sort_* by_language argument.
+
+    "orig" becomes the title language, or is dropped when the title has none. "all" and
+    "best" pass through, because the sort methods resolve them against the tracks. The
+    result keeps the first position of each language and drops later repeats.
+    """
+    resolved: list[str] = []
+    for token in tokens:
+        language = str(original) if token == "orig" else str(token)
+        if token == "orig" and not original:
+            continue
+        if language not in resolved:
+            resolved.append(language)
+    return resolved
 
 
 def get_boxes(data: bytes, box_type: bytes, as_bytes: bool = False) -> Box:  # type: ignore
@@ -389,9 +454,9 @@ def try_ensure_utf8(data: bytes) -> bytes:
     """
     Try to ensure that the given data is encoded in UTF-8.
 
-    Automatically decompresses gzip/deflate/zlib data before encoding detection.
-    This handles cases where HTTP responses are saved with raw Content-Encoding
-    (e.g., when decode_content=False is used for performance).
+    Gzip or zlib compressed input is decompressed first, detected by magic bytes.
+    Callers hand in bytes read from files and from responses they fetched
+    themselves, so there is no Content-Encoding header left to consult.
 
     Parameters:
         data: Input data that may or may not yet be UTF-8 or another encoding.
@@ -399,13 +464,11 @@ def try_ensure_utf8(data: bytes) -> bytes:
     Returns the input data encoded in UTF-8 if successful. If unable to detect the
     encoding of the input data, then the original data is returned as-received.
     """
-    # Decompress gzip data (magic bytes: 1f 8b)
     if data[:2] == b"\x1f\x8b":
         try:
             data = gzip.decompress(data)
         except Exception:
             pass
-    # Decompress raw deflate/zlib data (common zlib headers: 78 01, 78 5e, 78 9c, 78 da)
     elif data[:1] == b"\x78" and len(data) > 1 and data[1:2] in (b"\x01", b"\x5e", b"\x9c", b"\xda"):
         try:
             data = zlib.decompress(data)
@@ -781,7 +844,7 @@ class DebugLogger:
         """Log the start of a new session with environment information."""
         import platform
 
-        from unshackle.core import __version__
+        from unshackle.core import __code_hash__, __version__
 
         self.log(
             level="INFO",
@@ -789,6 +852,7 @@ class DebugLogger:
             message="Debug logging session started",
             context={
                 "unshackle_version": __version__,
+                "unshackle_code_hash": __code_hash__ or None,
                 "python_version": sys.version,
                 "platform": platform.platform(),
                 "platform_system": platform.system(),
@@ -818,7 +882,7 @@ class DebugLogger:
             operation: Name of the operation being performed
             message: Human-readable message
             context: Additional context information
-            service: Service name (e.g., DSNP, NF)
+            service: Service tag
             error: Exception object if an error occurred
             request: Request details (URL, method, headers, body)
             response: Response details (status, headers, body)

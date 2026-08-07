@@ -8,7 +8,7 @@ import click
 from aiohttp import web
 from aiohttp_swagger3 import SwaggerDocs, SwaggerInfo, SwaggerUiSettings
 
-from unshackle.core import __version__
+from unshackle.core import __code_hash__, __version__
 from unshackle.core.api.errors import APIError, APIErrorCode, build_error_response, handle_api_exception
 from unshackle.core.api.handlers import (
     cancel_download_job_handler,
@@ -105,6 +105,10 @@ async def health(request: web.Request) -> web.Response:
                 version:
                   type: string
                   example: "2.0.0"
+                code_hash:
+                  type: string
+                  nullable: true
+                  example: "1d22a1e"
                 update_check:
                   type: object
                   properties:
@@ -128,7 +132,9 @@ async def health(request: web.Request) -> web.Response:
         log.warning(f"Failed to check for updates: {e}")
         update_info = {"update_available": None, "current_version": __version__, "latest_version": None}
 
-    return web.json_response({"status": "ok", "version": __version__, "update_check": update_info})
+    return web.json_response(
+        {"status": "ok", "version": __version__, "code_hash": __code_hash__ or None, "update_check": update_info}
+    )
 
 
 @api_handler
@@ -683,6 +689,11 @@ async def download(request: web.Request) -> web.Response:
               forced_subs:
                 type: boolean
                 description: Include forced subtitle tracks (default - false)
+              forced_s_lang:
+                type: array
+                items:
+                  type: string
+                description: Languages wanted for forced subtitles, implies forced_subs (default - [])
               exact_lang:
                 type: boolean
                 description: Use exact language matching (no variants) (default - false)
@@ -741,7 +752,7 @@ async def download(request: web.Request) -> web.Response:
                 description: Force disable all proxy use (default - false)
               no_proxy_download:
                 type: boolean
-                description: Bypass proxy for segment downloads only. Manifest, license, and auth still use proxy (default - false)
+                description: Bypass proxy for all downloads. Manifest, license, and auth still use proxy (default - false)
               tag:
                 type: string
                 description: Set the group tag to be used (default - None)
@@ -781,6 +792,13 @@ async def download(request: web.Request) -> web.Response:
               imdb_id:
                 type: string
                 description: Use this IMDB ID (e.g. tt1375666) for tagging (default - None)
+              tvdb_id:
+                type: integer
+                description: Use this TVDB ID for tagging and episode ordering (default - None)
+              tvdb_order:
+                type: string
+                enum: [official, dvd, absolute, alternate, regional]
+                description: Renumber episodes to a TVDB season order (default - the tvdb_order config option)
               output_dir:
                 type: string
                 description: Override the output directory for this download (default - None)

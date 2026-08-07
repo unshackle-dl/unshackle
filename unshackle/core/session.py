@@ -32,7 +32,8 @@ BACKOFF_FACTOR = 0.2
 MAX_BACKOFF = 60.0  # shared backoff cap (rnet max_backoff == requests Retry backoff_max)
 STATUS_FORCELIST = [429, 500, 502, 503, 504]
 RETRY_METHODS = frozenset({"GET", "POST", "HEAD", "OPTIONS", "PUT", "DELETE", "TRACE"})
-POOL_MAX_SIZE = 16  # rnet pool_max_idle_per_host == requests pool_maxsize/pool_connections
+# pool_block=True means a pool smaller than the in-flight request count stalls threads
+POOL_MAX_SIZE = 64  # rnet pool_max_idle_per_host == requests pool_maxsize/pool_connections
 CONNECT_TIMEOUT = 10
 READ_TIMEOUT = 30
 

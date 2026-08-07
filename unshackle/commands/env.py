@@ -15,6 +15,7 @@ from unshackle.core.config import POSSIBLE_CONFIG_PATHS, config, config_path
 from unshackle.core.console import console
 from unshackle.core.constants import context_settings
 from unshackle.core.services import Services
+from unshackle.core.temp import TASK_PREFIX, is_stale
 
 
 def get_dependencies() -> list[dict]:
@@ -94,18 +95,36 @@ def get_dependencies() -> list[dict]:
 
 
 def clear_directory(path: Path) -> tuple[int, int]:
-    """Delete a directory's contents, returning (files_removed, freed_bytes); recreates the dir."""
+    """Delete a directory's contents, returning (files_removed, freed_bytes); recreates the dir.
+
+    Skips task directories that belong to a running download.
+    """
     files_count = 0
     freed_bytes = 0
     if path.exists():
-        for entry in path.glob("**/*"):
-            if entry.is_file():
+        for entry in path.iterdir():
+            is_real_dir = entry.is_dir() and not entry.is_symlink()
+            if is_real_dir and entry.name.startswith(TASK_PREFIX) and not is_stale(entry):
+                continue
+            if is_real_dir:
+                for child in entry.glob("**/*"):
+                    if child.is_file():
+                        files_count += 1
+                        try:
+                            freed_bytes += child.stat().st_size
+                        except OSError:
+                            pass
+                shutil.rmtree(entry, ignore_errors=True)
+            else:
                 files_count += 1
                 try:
-                    freed_bytes += entry.stat().st_size
+                    freed_bytes += entry.lstat().st_size
                 except OSError:
                     pass
-        shutil.rmtree(path, ignore_errors=True)
+                try:
+                    entry.unlink(missing_ok=True)
+                except OSError:
+                    pass
     path.mkdir(parents=True, exist_ok=True)
     return files_count, freed_bytes
 

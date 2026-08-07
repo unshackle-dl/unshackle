@@ -298,7 +298,7 @@ class Services(click.Group):
     @staticmethod
     def get_tag(value: str) -> str:
         """
-        Get the Service Tag (e.g. DSNP, not DisneyPlus/Disney+, etc.) by an Alias.
+        Get the Service Tag (the name of the service's directory, not one of its aliases) by an Alias.
         Input value can be of any case-sensitivity.
         Original input value is returned if it did not match a service tag.
         """

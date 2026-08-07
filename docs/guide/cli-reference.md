@@ -96,8 +96,15 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 | `-sl`, `--s-lang` | `all` | Subtitle language(s). |
 | `--require-subs` | - | Required subtitle langs; keeps **all** subs only if these exist. **Cannot combine with `--s-lang`.** |
 | `-fs`, `--forced-subs` | off | Include forced subtitle tracks. |
-| `--exact-lang` | off | Exact matching only: `-l es-419` matches `es-419`, not `es-ES`. |
+| `-fsl`, `--forced-s-lang` | none | Language(s) wanted for forced subtitles; implies `-fs`. |
+| `--exact-lang` | off | Exact matching only: `-l es-419` matches `es-419`, not `es-ES`. Applies to selection and to sort order. |
 | `--sub-format` | - | Output subtitle format (`SRT`/`srt`, `VTT`/`webvtt`, `ASS`/`ssa`, `TTML`, `SMI`, ...), or `original` to keep the source format. |
+
+!!! tip "These flags select languages, they do not order them"
+    Naming languages with `-l` or `-sl` removes the others. To keep every language but put
+    your preferred ones first, use `audio.language_priority` and
+    [`subtitle.language_priority`](../reference/configuration/download.md#subtitle) in your
+    configuration file.
 
 The special language tokens `orig`, `all`, and `best` are honoured everywhere a language is expected.
 
@@ -105,8 +112,8 @@ The special language tokens `orig`, `all`, and `best` are honoured everywhere a 
 
 | Flag | Description |
 |---|---|
-| `-w`, `--wanted` | Wanted episodes, e.g. `S01-S05,S07`, `S01E01-S02E03`. Supports exclusions with a leading `-` (e.g. `-S03`). |
-| `--select-titles` | Interactively select titles (series only). **Cannot combine with `-w`.** |
+| `-w`, `--wanted` | Wanted episodes, e.g. `S01-S05,S07`, `S01E01-S02E03`. Supports exclusions with a leading `-` (e.g. `-S03`). For a [split episode](downloading.md#split-episodes), `.N` picks one part (`S01E01.2`), a range must stay inside the episode (`S01E01.1-S01E01.3`), and `S01E01` on its own takes every part. |
+| `--select-titles` | Interactively select what to download: episodes of a series, or films when a title has more than one. **Cannot combine with `-w`.** |
 | `--latest-episode` | Download only the single most recent episode. |
 | `--list-titles` | List titles only; do not download. |
 
@@ -145,8 +152,22 @@ Keep only certain track types, or skip certain track types. Attachments are alwa
 |---|---|
 | `--tmdb` | TMDB ID (integer). |
 | `--imdb` | IMDb ID, e.g. `tt1375666`. |
-| `--animeapi` | AnimeAPI ID, e.g. `mal:12345` or `anilist:98765` (defaults to MAL). Back-fills TMDB/IMDb. |
+| `--tvdb` | TVDB ID (integer). Skips the series lookup that `--tvdb-order` would otherwise do. |
+| `--animeapi` | AnimeAPI ID, e.g. `mal:12345` or `anilist:98765` (defaults to MAL). Back-fills TMDB/IMDb/TVDB. |
 | `--enrich` | Override show title/year from the external source. **Requires** one of `--tmdb`, `--imdb`, or `--animeapi`. |
+| `--tvdb-order` | Renumber episodes to a TVDB season order: `official` (aired), `dvd`, `absolute`, `alternate`, or `regional`. Needs `tvdb_api_key`. |
+
+#### Episode ordering
+
+A service does not always number a series the way TVDB's aired order does. Some services list
+Futurama in TVDB's `alternate` (Streaming) order, for example. `--tvdb-order` works out which
+order the service used, then renumbers the episodes into the order you asked for.
+
+!!! note "Orders that do not cover the whole series"
+    An order can omit episodes the service carries; TVDB's `dvd` order for Futurama leaves out
+    the four movies. Those episodes keep their original numbering. If that would give two
+    episodes the same season/episode slot, and so the same filename, unshackle logs an error
+    and keeps the service's numbering unchanged. Pick an order that covers the whole series.
 
 ### DRM, keys & decryption
 
@@ -162,7 +183,7 @@ Keep only certain track types, or skip certain track types. Attachments are alwa
 |---|---|
 | `--proxy` | Proxy URI, a 2-letter country code resolved from configured providers, or `provider:region` (e.g. `nordvpn:ca`, `gluetun:us`, `protonvpn:de:berlin`). |
 | `--no-proxy` | Force-disable all proxy use. |
-| `--no-proxy-download` | Bypass the proxy for **segment downloads only** (manifest, licence, and auth stay proxied). |
+| `--no-proxy-download` | Bypass the proxy for **all downloads** (manifest, licence, and auth stay proxied). |
 | `--remote` | Use a remote unshackle server. |
 | `--server` | Name a remote server from the `remote_services` config. |
 
@@ -174,6 +195,7 @@ Keep only certain track types, or skip certain track types. Attachments are alwa
 | `--adaptive-workers` | off | Scale per-track segment workers dynamically (up to the `--workers` cap) based on measured CDN throughput and errors. |
 | `--download-processes` | `1` | Split large segment batches (24+) across this many download processes to exceed the single-process throughput cap on multi-gigabit connections. |
 | `--downloads` | `1` | Number of tracks downloaded concurrently. |
+| `--speed-limit` | unlimited | Cap total download speed across all threads and tracks, e.g. `500k`, `5M`, `1.5G` or plain bytes/sec. Values are bytes, not bits (`5M` = 5.0 MB/s). `off` disables a configured limit. |
 | `--no-cache` | off | Bypass the title cache. |
 | `--reset-cache` | off | Clear the title cache. |
 | `--list` | off | List available/would-be-downloaded tracks; do not download. |

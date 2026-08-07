@@ -70,6 +70,7 @@ Subtitle selection happens through `dl` flags. The most important is language se
 | `-sl`, `--s-lang` | Language(s) wanted for subtitles. Defaults to `all`. |
 | `--require-subs` | Require these languages to exist; if present, download **all** subtitles. Cannot be combined with `--s-lang`. |
 | `-fs`, `--forced-subs` | Include forced subtitle tracks (excluded by default). |
+| `-fsl`, `--forced-s-lang` | Language(s) wanted for forced subtitles; implies `-fs`. |
 | `--exact-lang` | Exact language matching, with no regional variants. |
 | `-S`, `--subs-only` | Download only subtitle tracks. |
 | `-ns`, `--no-subs` | Do not download subtitle tracks at all. |
@@ -121,6 +122,18 @@ default**. Add `-fs` / `--forced-subs` to include them:
 unshackle dl --s-lang en --forced-subs EXAMPLE 81234567
 ```
 
+`-fs` keeps forced tracks in every selected language. If you only want forced tracks
+in certain languages, use `-fsl` / `--forced-s-lang` instead. It implies `-fs`, so
+you do not need both:
+
+```shell title="All full subtitles, but only the English forced track"
+unshackle dl --s-lang all --forced-s-lang en EXAMPLE 81234567
+```
+
+If you pass both flags, `-fsl` wins and keeps only forced tracks in its languages.
+It also understands `orig` (the title's original language) and `all` (every forced
+track, same as plain `-fs`).
+
 ## Track types: forced, SDH, and CC
 
 Every subtitle track carries flags describing what kind of captions it holds. These
@@ -134,9 +147,16 @@ flags drive selection, sort order, output filenames, and the Matroska track flag
   often uppercase with `>>>` speaker markers and sound cues.
 
 !!! note "SDH and CC are treated together for sorting and stripping"
-    Within a language, unshackle orders subtitles from fewest to most captions:
-    **Forced → Normal → SDH/CC**. For the purposes of hearing-impaired handling, SDH and
-    CC tracks are grouped as the "most captions" variant.
+    unshackle orders subtitles from fewest to most captions: **Forced → Normal → SDH/CC**.
+    For the purposes of hearing-impaired handling, SDH and CC tracks are grouped as the
+    "most captions" variant.
+
+    By default this type order is the primary sort, so all forced tracks come first, then
+    all normal tracks, then all SDH/CC tracks, each block sorted by language. To keep each
+    language next to its own variants instead, set
+    [`subtitle.group_by`](../reference/configuration/download.md#subtitle) to `language`. Use
+    [`subtitle.type_priority`](../reference/configuration/download.md#subtitle) to change the
+    Forced → Normal → SDH/CC order itself.
 
 A single track cannot be both CC and SDH, and a forced track cannot also be flagged
 CC or SDH. These combinations are rejected as invalid.
@@ -356,6 +376,8 @@ subtitle:
 | `convert_before_strip` | `true` | `true` / `false` | Convert a subtitle to SRT before stripping SDH (for non-SubtitleEdit engines). |
 | `output_mode` | `mux` | `mux`, `sidecar`, `both` | Whether subtitles are embedded, written as sidecars, or both. |
 | `sidecar_format` | `srt` | a format name (e.g. `srt`, `vtt`) or `original` | Format used for sidecar files. |
+| `group_by` | `type` | `type`, `language` | Whether all tracks of one type stay together, or each language stays next to its own variants. |
+| `language_priority` | *(unset)* | a list of languages | Languages to sort to the top. The rest keep the default order. Nothing is removed. |
 
 !!! tip "SubtitleEdit is optional but recommended"
     Several high-fidelity paths (the best-quality conversions and the SubtitleEdit SDH

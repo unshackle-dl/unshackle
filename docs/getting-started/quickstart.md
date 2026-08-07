@@ -1,14 +1,20 @@
 # Quick Start
 
 This page takes you from a fresh install to your first downloaded file. You will
-create the one piece of configuration unshackle insists on, add a streaming
-service and a CDM so it can actually fetch and decrypt media, run a basic
-`unshackle dl` command, and learn where the finished file lands.
+create the one piece of configuration unshackle insists on, supply the service
+module and CDM it needs to fetch and decrypt media, run a basic `unshackle dl`
+command, and learn where the finished file lands.
 
 !!! note "Before you start"
     This guide assumes unshackle is already installed and on your `PATH`. If
     `unshackle --help` does not print a help screen, work through
     [Installation](installation.md) first.
+
+!!! warning "unshackle includes no services"
+    unshackle handles manifests, DRM, downloading, and muxing. It does not include a
+    module for any streaming platform, so you write that part yourself
+    ([step 3](#3-write-a-service)). `EXAMPLE` in this guide stands in for the tag you
+    give yours.
 
 ## 1. Check your environment
 
@@ -58,12 +64,12 @@ Everything else has a sensible default. A minimal, working config looks like thi
 ```yaml title="unshackle.yaml"
 output_template:
   movies: "{title} ({year}) {quality} {source}"
-  series: "{title} S{season}E{episode} {episode_name} {quality} {source}"
+  series: "{title} {season_episode} {episode_name?} {quality} {source}"
 ```
 
 Each `{variable}` is filled in from the title and the tracks you downloaded. The
 full set of valid variables, including `resolution`, `video`, `audio`, `hdr`,
-`edition`, `tag`, and more, is documented in [Configuration](configuration-file.md).
+`edition`, `tag`, and more, is documented in [Output and Naming](../guide/output-and-naming.md).
 
 !!! note "Spaces or dots?"
     unshackle auto-detects your naming style from the template: if the separators
@@ -77,51 +83,15 @@ full set of valid variables, including `resolution`, `video`, `audio`, `hdr`,
     rewrites the file and **removes any comments** it contained. If you keep notes
     in your config, edit the file by hand instead.
 
-## 3. Add a service
+## 3. Write a service
 
-The service tag you pass to `dl` (like `EXAMPLE`) maps to a **service module**, a small
-plugin that knows how to talk to one streaming platform. unshackle ships without
-any bundled services, so you add the one(s) you want.
+The service tag you pass to `dl` (like `EXAMPLE`) maps to a **service module**, the
+plugin that talks to one streaming platform. unshackle includes none, so you write
+the one you need. [Creating a Service](../dev/creating-a-service.md) covers how.
 
-Services live under the `directories.services` path (run `unshackle env info` to
-see where that is). unshackle discovers them by looking for `*/__init__.py`: the
-folder name becomes the **service tag**, and the folder must contain a class with
-that exact same name.
-
-=== "Local folder"
-
-    Drop a service folder into your services directory. A service tagged `EXAMPLE`
-    lives at:
-
-    ```
-    <services>/EXAMPLE/__init__.py     # defines a class named EXAMPLE
-    ```
-
-    Once the folder is in place, the tag `EXAMPLE` is immediately available to `dl`,
-    `search`, and the other service-aware commands.
-
-=== "Git repository"
-
-    `directories.services` may also list git repositories. unshackle clones them
-    on first use and keeps them up to date:
-
-    ```yaml title="unshackle.yaml"
-    directories:
-      services:
-        - owner/unshackle-services      # a GitHub owner/repo shorthand
-        - /path/to/local/services       # local folders still work too
-    ```
-
-    Force a refresh of every configured service repo at any time with:
-
-    ```shell
-    unshackle util refresh-services
-    ```
-
-!!! info "Where to get services"
-    Service modules are kept separate from the core project. Ask in the community
-    [Discord](https://discord.gg/mHYyPaCbFK) for where to find the service you
-    need. The core repository deliberately does not host them.
+Put the finished module in your `directories.services` folder (`unshackle env info`
+shows the path). The tag then works with `dl`, `search`, and the other service
+commands.
 
 ## 4. Add a CDM for DRM
 
@@ -144,7 +114,7 @@ cdm:
 ```
 
 PlayReady works the same way with `.prd` files created and managed by the
-[`prd`](configuration-file.md) command. If a title is DRM-free, no CDM is needed.
+[`prd`](../guide/cli-reference.md#prd) command. If a title is DRM-free, no CDM is needed.
 
 !!! tip
     Run `unshackle wvd parse my_device` to inspect a device's security level and
@@ -199,7 +169,7 @@ unshackle dl  <FLAGS>  <SERVICE-TAG>  <TITLE>
 - **`<SERVICE-TAG>`** picks which service to talk to (e.g. `EXAMPLE`).
 - **`<TITLE>`** is the URL, ID, or slug the service understands.
 
-A good first command asks for 1080p with English audio and subtitles:
+A good first command asks for 1080p with English audio:
 
 ```shell title="Your first download"
 unshackle dl -q 1080 -l en EXAMPLE 81234567
@@ -213,7 +183,7 @@ keys through your CDM (and any key vaults), then decrypt, mux, and tag the resul
 | Flag | Meaning |
 |---|---|
 | `-q`, `--quality` | Target resolution(s), e.g. `-q 1080` or `-q 1080,720`. Defaults to best available. |
-| `-l`, `--lang` | Language(s) for video and audio, e.g. `-l en` or `-l orig,en`. `orig` = the title's original language. |
+| `-l`, `--lang` | Language(s) for video and audio, e.g. `-l en` or `-l orig,en`. `orig` = the title's original language. Defaults to `orig`. |
 | `-sl`, `--s-lang` | Subtitle language(s); defaults to `all`. |
 | `-v`, `--vcodec` | Video codec, e.g. `-v H.265`. Defaults to any. |
 | `-r`, `--range` | Dynamic range, e.g. `-r HDR10` or `-r DV`. Defaults to `SDR`. |
@@ -238,18 +208,18 @@ codec, bitrate, channel-layout, and track-type selection.
 
 ## 8. Where the output lands
 
-By default, finished files are written to the `downloads` directory
+By default, unshackle writes finished files to the `downloads` directory
 (`unshackle env info` shows its exact path; the built-in default is a `downloads`
-folder alongside the project). Override it per run with `-o`:
+folder one level above the installed `unshackle` package). Override it per run with `-o`:
 
 ```shell
 unshackle dl -q 1080 -o /mnt/media/incoming EXAMPLE 81234567
 ```
 
-- **Movies** are written as a single `.mkv` file named from your `movies` template.
+- unshackle writes **movies** as a single `.mkv` file named from your `movies` template.
 - **TV episodes** are grouped into a per-show / per-season folder (from your
   `series` template) unless you pass `--no-folder`.
-- The filename is built from your `output_template`, and IMDb/TMDB IDs are added to
+- unshackle builds the filename from your `output_template` and adds IMDb/TMDB/TVDB IDs to
   the file's metadata tags when available.
 
 To change the default output location permanently, set it in your config:
@@ -270,5 +240,5 @@ directories:
 
 !!! tip "You are never far from help"
     `unshackle --help`, `unshackle dl --help`, and `unshackle <command> --help`
-    list every option with its default. When in doubt, add `--list` to a `dl`
+    list every option. When in doubt, add `--list` to a `dl`
     command to preview what it would do before it downloads anything.

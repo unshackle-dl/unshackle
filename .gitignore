@@ -257,3 +257,6 @@ __marimo__/
 
 # Test fixtures with private/local content (services, IDs, credentials)
 tests/remote/e2e/fixtures/fixtures.yaml
+
+# Maintainer-side scripts, kept local
+tools/

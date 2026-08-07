@@ -71,7 +71,7 @@ The recognized kinds are:
 
 ### Separator style (dots vs. spaces)
 
-unshackle looks at the characters you place *between* variables to decide the filename's separator style. If spaces outnumber dots in your template, it sanitizes with spaces; otherwise it uses dots (the scene-style default). This is also applied to the auto-generated date separators for daily/dated content.
+unshackle looks at the characters you place *between* variables to decide the filename's separator style. If spaces outnumber dots in your template, it sanitizes with spaces; otherwise it uses dots (the scene-style default). This is also applied to the auto-generated date separators for daily/dated content, and to every segment of a nested folder template.
 
 === "Scene style (dots)"
 
@@ -102,12 +102,13 @@ Every variable below is valid in both output and folder templates. Values are de
 | Variable | Meaning | Example |
 |---|---|---|
 | `title` | Title name (movie/show/song name; `$` is rendered as `S`) | `The Show` |
+| `title_type` | Media kind of the title | `movie`, `series`, `music` |
 | `year` | Release year | `2024` |
 | `source` | Service tag / class name (empty with `--no-source`) | `EXAMPLE` |
 | `quality` | Resolution with scan suffix | `1080p`, `2160p`, `576i` |
 | `resolution` | Resolution number only | `1080` |
 | `video` | Video codec | `H.264`, `H.265` |
-| `hdr` | Dynamic-range label | `HDR`, `HDR10P`, `DV`, `DV.HDR10`, `HLG` |
+| `hdr` | Dynamic-range label | `HDR`, `HDR10P`, `DV`, `DV.HDR`, `DV.HDR10P`, `HLG` |
 | `hfr` | High frame rate marker (frame rate > 30) | `HFR` |
 | `edition` | Edition label from the track, if any | `Directors Cut` |
 | `tag` | Release-group tag (from `config.tag` or `--tag`) | `TAG` |
@@ -125,10 +126,37 @@ Every variable below is valid in both output and folder templates. Values are de
 | `episode` | Zero-padded episode (`E%02d`) | `E05` |
 | `season_episode` | Combined | `S01E05` |
 | `episode_name` | Episode title | `Pilot` |
+| `part` | Part index of a [split episode](#split-episodes), empty otherwise | `2` |
 | `date` | ISO air date for daily/dated content | `2024-06-01` |
 
 !!! note "Daily & sports content"
     When an episode has an air date, unshackle switches to date-based naming automatically: `season` and `season_episode` become the formatted air date, `episode` and `year` are cleared, and `{date}` holds the ISO date. The date's internal separator (dots or spaces) follows your `series` template style.
+
+### Split episodes {#split-episodes}
+
+A few services split one episode into several separately playable videos. Where a service reports that, the part index is folded into `{episode}` and `{season_episode}`, so the stock `series` template names it with no change to your config.
+
+```text
+Show.Name.S01E01.Part.2.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
+```
+
+The part token sits immediately after the episode token, before the quality tags, and the group tag stays last. Its separator follows your template's own style, the same way dated content does, so a spaced template gives `S01E01 Part 2` instead.
+
+The part is left out of the folder name, so every part of an episode lands in the same season folder:
+
+```text
+The.Show.S01.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG/
+  ├─ The.Show.S01E01.Part.1.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
+  ├─ The.Show.S01E01.Part.2.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
+  └─ The.Show.S01E02.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
+```
+
+The same holds for a folder template of your own: `{season}` never picks up the part, and `{season_episode}` drops it inside a folder template. An episode with no part is named like any other episode.
+
+!!! note "What media servers do with the part token"
+    The form above follows scene practice for genuinely split episodes. Kodi stacks the parts back into one playable episode automatically. Jellyfin lists two versions of S01E01, still correct and playable, because its stacking pattern expects the part marker at the end of the name. Plex's scanner is closed-source, so its handling of text after the part token is unverified.
+
+For custom templates there is also a standalone [`{part}`](../reference/configuration/output.md#output_template) variable. You rarely want it, see the caveat on that page.
 
 ### Audio
 
@@ -138,8 +166,9 @@ Every variable below is valid in both output and folder templates. Values are de
 | `audio_channels` | Channel layout | `5.1`, `2.0` |
 | `audio_full` | Codec + channels combined | `DDP5.1` |
 | `atmos` | `Atmos` when any track carries JOC | `Atmos` |
-| `dual` | `DUAL` for exactly two distinct audio languages | `DUAL` |
+| `dual` | `DUAL` for two audio languages (see [`dual_multi_mode`](../reference/configuration/download.md#dual_multi_mode)) | `DUAL` |
 | `multi` | `MULTi` for more than two audio languages | `MULTi` |
+| `dubbed` | `DUBBED` for a single audio language that is not the original (strict mode only) | `DUBBED` |
 
 ### Music-specific
 
@@ -183,7 +212,7 @@ Folder templates are nested under a special `folder` key inside `output_template
         albums: "{artist} - {album} ({year})"
     ```
 
-The per-kind folder keys are `movies`, `series`, `songs`, and `albums`. Any other key produces a startup warning. Path separators (`/` or `\`) are allowed in folder templates. Each segment is formatted independently, so you can build nested directory structures like `Show/Season 01`.
+The per-kind folder keys are `movies`, `series`, `songs`, and `albums`. Any other key produces a startup warning. Path separators (`/` or `\`) are allowed in folder templates. Each segment is formatted independently, so you can build nested directory structures like `Show/Season 01`. unshackle reads the separator style from the whole template, so every segment is spaced alike.
 
 **Fallback behavior:**
 
@@ -233,6 +262,10 @@ The `--no-mux` flag skips muxing entirely and writes the individual track files,
 ## Tags & group naming
 
 The release-group tag is the `-TAG` portion at the end of scene-style names, produced by the `{tag}` variable.
+It can be swapped per release with [`tag_rules`](../reference/configuration/output.md#tag_rules): ordered rules that
+match on the release-attribute variables only (`quality`, `resolution`, `hdr`, `source`, `lang_tag`,
+`title_type`, and so on), first match wins. The title's own fields, such as `title` and `season_episode`,
+cannot be matched. See the [reference page](../reference/configuration/output.md#tag_rules) for the exact list.
 
 ```yaml title="unshackle.yaml"
 tag: "MYGROUP"
@@ -244,7 +277,11 @@ tag_imdb_tmdb: true
 |---|---|---|---|
 | `tag` | str | `""` | The release-group tag used for `{tag}`. |
 | `tag_group_name` | bool | `true` | Write the group name (`config.tag`) into the MKV `Group` metadata tag. |
-| `tag_imdb_tmdb` | bool | `true` | Look up and embed IMDb / TMDB / TVDB external-ID tags in the MKV metadata (uses `tmdb_api_key` / `simkl_client_id` when available). |
+| `tag_imdb_tmdb` | bool | `true` | Look up and embed IMDb / TMDB / TVDB external-ID tags in the MKV metadata (uses `tmdb_api_key` / `tvdb_api_key` / `simkl_client_id` when available). |
+
+The IDs are written as the Matroska `IMDB`, `TMDB`, and `TVDB2` tags. `TVDB2` values carry the
+entity prefix the [Matroska tagging spec](https://www.matroska.org/technical/tagging.html)
+requires: `series/73871` for a show, `movies/113` for a film.
 
 You can override the tag per run without editing config:
 
@@ -339,6 +376,9 @@ The fallback supports two placeholders: `{i}` (chapter number, starting at 1) an
 
 ## Worked examples
 
+Each tab shows a template and what it produces for a few different downloads, so you can see
+how the optional (`?`) variables appear and disappear.
+
 === "Movies"
 
     ```yaml
@@ -347,9 +387,27 @@ The fallback supports two placeholders: `{i}` (chapter number, starting at 1) an
       folder:
         movies: "{title} ({year})"
     ```
+
+    A 4K Atmos HDR download fills every placeholder:
+
     ```text
     The Movie (2024)/
-      └─ The.Movie.2024.1080p.EXAMPLE.WEB-DL.DDP5.1.Atmos.H.265.HDR-TAG.mkv
+      └─ The.Movie.2024.2160p.EXAMPLE.WEB-DL.DDP5.1.Atmos.H.265.HDR-TAG.mkv
+    ```
+
+    The same template on a plain 1080p SDR stereo download, where `{edition?}`, `{atmos?}`
+    and `{hdr?}` collapse along with their dots:
+
+    ```text
+    The Movie (2024)/
+      └─ The.Movie.2024.1080p.EXAMPLE.WEB-DL.AAC2.0.H.264-TAG.mkv
+    ```
+
+    A director's cut fills `{edition?}`:
+
+    ```text
+    The Movie (2024)/
+      └─ The.Movie.2024.Directors.Cut.2160p.EXAMPLE.WEB-DL.DDP5.1.Atmos.H.265.DV.HDR-TAG.mkv
     ```
 
 === "TV series"
@@ -365,6 +423,76 @@ The fallback supports two placeholders: `{i}` (chapter number, starting at 1) an
       └─ The.Show.S02E04.The.Reckoning.2160p.EXAMPLE.WEB-DL.DDP5.1.H.265-TAG.mkv
     ```
 
+    unshackle decides the separator style once for the whole folder template, and every
+    segment then follows it. Spaces outnumber dots in `{title} ({year})/Season {season}`,
+    so `Season {season}` keeps its space even though it holds only one variable.
+
+    When an episode has no on-screen name, `{episode_name?}` disappears cleanly:
+
+    ```text
+    The Show (2023)/Season S02/
+      └─ The.Show.S02E05.2160p.EXAMPLE.WEB-DL.DDP5.1.H.265-TAG.mkv
+    ```
+
+=== "Multi-language"
+
+    Place `{dual?}`, `{multi?}` and `{dubbed?}` next to each other. At most one of them is
+    ever set (see [`dual_multi_mode`](../reference/configuration/download.md#dual_multi_mode)), and the
+    empty ones collapse:
+
+    ```yaml
+    output_template:
+      movies: "{title}.{year}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{dubbed?}.{audio_full}.{video}-{tag}"
+    ```
+
+    Original English audio plus a French dub (`-l en,fr`):
+
+    ```text
+    The.Movie.2024.1080p.EXAMPLE.WEB-DL.DUAL.DDP5.1.H.264-TAG.mkv
+    ```
+
+    Original plus several dubs (`-l en,fr,de,es`):
+
+    ```text
+    The.Movie.2024.1080p.EXAMPLE.WEB-DL.MULTi.DDP5.1.H.264-TAG.mkv
+    ```
+
+    Only a dub, original audio left out (`-l de` on an English-original title):
+
+    ```text
+    The.Movie.2024.1080p.EXAMPLE.WEB-DL.DUBBED.DDP5.1.H.264-TAG.mkv
+    ```
+
+    Two dialects of one language (`en-US` + `en-GB`) count as a single language, so none of the
+    three variables is set:
+
+    ```text
+    The.Movie.2024.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
+    ```
+
+    For finer control (e.g. a `SUBBED` tag driven by subtitle languages), use `{lang_tag?}`
+    with [`language_tags` rules](../reference/configuration/download.md#language_tags) instead.
+
+=== "Daily shows"
+
+    Dated content needs no special template. When an episode carries an air date,
+    `{season_episode}` becomes the date automatically and `{episode}` and `{year}` clear:
+
+    ```yaml
+    output_template:
+      series: "{title}.{season_episode}.{episode_name?}.{quality}.{source}.WEB-DL.{audio_full}.{video}-{tag}"
+    ```
+
+    A normal episode and a dated one, same template:
+
+    ```text
+    The.Daily.Show.S28E101.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
+    The.Daily.Show.2024.06.01.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
+    ```
+
+    The date separator follows your template style: dots here, spaces if your `series`
+    template uses spaces.
+
 === "Music"
 
     ```yaml
@@ -375,7 +503,25 @@ The fallback supports two placeholders: `{i}` (chapter number, starting at 1) an
     ```
     ```text
     The Artist - The Album (2024)/
-      └─ 01. Opening Track.mka
+      └─ 01.Opening.Track.mka
+    ```
+
+    In `"{track_number}. {title}"` dots and spaces are tied, and ties go to dot style; add
+    more spaces between variables (as below) if you want space-separated names.
+
+    A multi-disc album with explicit tracks, using more of the music variables. `{disc}` is
+    empty on disc 1, so `{disc?}` and its separator only appear from disc 2 onward:
+
+    ```yaml
+    output_template:
+      songs: "{disc?}-{track_number}. {title} {explicit?}"
+      folder:
+        albums: "{album_artist} - {album} ({year}) [{label?}]"
+    ```
+    ```text
+    The Artist - The Album (2024) [The Label]/
+      ├─ 01. Opening Track.mka
+      └─ 02-03. Closing Track Explicit.mka
     ```
 
 ## See also

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import re
 import shutil
 import subprocess
 import textwrap
@@ -307,6 +308,7 @@ class PlayReady:
             challenge = cdm.get_license_challenge(session_id, self.pssh.wrm_headers[0])
 
             if challenge:
+                license_str = ""
                 try:
                     log_event(
                         "drm_license_request",
@@ -339,7 +341,12 @@ class PlayReady:
                         drm_type="PlayReady",
                         response_size=len(license_str),
                     )
-                except Exception:
+                except PlayReady.Exceptions.DeviceRevoked:
+                    raise
+                except Exception as e:
+                    revoked = self._detect_revocation(license_str) or self._detect_revocation(str(e))
+                    if revoked:
+                        raise PlayReady.Exceptions.DeviceRevoked(revoked) from e
                     raise
 
             keys = self._extract_keys_from_cdm(cdm, session_id)
@@ -359,6 +366,23 @@ class PlayReady:
 
         if not self.content_keys:
             raise PlayReady.Exceptions.EmptyLicense("No Content Keys were within the License")
+
+    @staticmethod
+    def _detect_revocation(text: str) -> Optional[str]:
+        """Return the decoded error string if a revocation HRESULT is present, else None.
+
+        Reads the code from the raw SOAP body (<StatusCode>0x8004C065</StatusCode>)
+        or from an exception message that carries it, so any service is covered.
+        """
+        from unshackle.core.drm.playready_errors import describe, is_revocation
+
+        if not text:
+            return None
+        for token in re.findall(r"0x[0-9A-Fa-f]{8}|-?\d{7,}", text):
+            code = int(token, 16) if token.lower().startswith("0x") else int(token)
+            if is_revocation(code):
+                return describe(code) or f"0x{code & 0xFFFFFFFF:08X}"
+        return None
 
     def decrypt(self, path: Path) -> None:
         """
@@ -546,6 +570,9 @@ class PlayReady:
             pass
 
         class EmptyLicense(Exception):
+            pass
+
+        class DeviceRevoked(Exception):
             pass
 
 

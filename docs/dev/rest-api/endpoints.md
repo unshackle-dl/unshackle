@@ -43,6 +43,7 @@ Health check. **This is the only route exempt from authentication**: you can cal
     {
       "status": "ok",
       "version": "5.3.0",
+      "code_hash": "1d22a1e",
       "update_check": {
         "update_available": false,
         "current_version": "5.3.0",
@@ -50,6 +51,8 @@ Health check. **This is the only route exempt from authentication**: you can cal
       }
     }
     ```
+
+`code_hash` fingerprints the framework source the server is running, so it identifies the code itself rather than the release. It is the same value for a git checkout and for an installed package built from that checkout, and it changes if anything under `unshackle/core`, `unshackle/commands`, `unshackle/utils`, or `unshackle/vaults` is edited. Service modules are not included. The value is `null` only when the source files cannot be read.
 
 If the update check fails (for example, no network), `update_available` and `latest_version` are `null` while `current_version` still reports the installed version.
 
@@ -220,6 +223,12 @@ Service-specific CLI options may also be passed as additional keys.
 
 Each serialized title carries `type` (`"episode"`, `"movie"`, or `"other"`), `name`, `id`, `language`, `description`, `date`, and `cover_url`. Episodes and movies add `year`; episodes additionally add `series_title`, `season`, and `number`.
 
+!!! info "`part` on a split episode"
+    A service that splits one episode into several separately playable videos reports each
+    one as its own episode. Those titles share a `season` and `number` and add a `part`
+    integer counting from 1. No other title carries the key, so a client that ignores it
+    is unaffected. See [Split episodes](../creating-a-service.md#split-episodes).
+
 | Status | Error code | Meaning |
 | --- | --- | --- |
 | `200` | - | Titles returned. |
@@ -233,6 +242,9 @@ Each serialized title carries `type` (`"episode"`, `"movie"`, or `"other"`), `na
 
 List the video, audio, and subtitle tracks for a title. For series, you can scope to specific episodes.
 
+!!! tip "Spotting the original-language audio"
+    Each audio track carries `is_original`, which marks the track the default `lang` of `orig` selects. Unshackle resolves it with the same language matcher the downloader uses, so it stays correct for regional variants a client cannot separate from tag text alone (`pt` marks `pt-BR` rather than `pt-PT`). Services need not report a title's language, so every track can legitimately come back `false`.
+
 **Request body**
 
 | Field | Type | Required | Description |
@@ -242,9 +254,10 @@ List the video, audio, and subtitle tracks for a title. For series, you can scop
 | `wanted` | string | no | Episode/season range (e.g. `"S01E01-S01E03"`). |
 | `season` | int/string | no | Season number (combined with `episode`). |
 | `episode` | int/string | no | Episode number (combined with `season`). |
+| `part` | int/string | no | Part index of a split episode (combined with `season` and `episode`). |
 | `profile`, `proxy`, `no_proxy`, `cdm_type` | - | no | As on `list-titles`. |
 
-When both `season` and `episode` are given, they are combined into a `"{season}x{episode}"` selector.
+When both `season` and `episode` are given, they are combined into a `"{season}x{episode}"` selector. Adding `part` narrows that to `"{season}x{episode}.{part}"`, one part of a [split episode](../creating-a-service.md#split-episodes); without it you get every part of the episode. `part` is read only when `season` and `episode` are both given, and `wanted` takes precedence over all three. To scope a part by range, put it in `wanted` instead (`"S01E01.2"`).
 
 === "Single title / movie: Response `200`"
 
@@ -262,7 +275,7 @@ When both `season` and `episode` are given, they are combined into a `"{season}x
       "audio": [
         {
           "id": "a-1", "codec": "EC3", "codec_display": "DD+",
-          "bitrate": 640, "channels": "5.1", "language": "en",
+          "bitrate": 640, "channels": "5.1", "language": "en", "is_original": true,
           "atmos": false, "descriptive": false, "drm": [], "descriptor": "DASH"
         }
       ],
@@ -355,11 +368,12 @@ Create a download job. Requires `service` and `title_id`; every other field is a
 | `range` | string[] | `["SDR"]` | Dynamic range(s). |
 | `channels` | number | `null` | Audio channel count. |
 | `no_atmos` | boolean | `false` | Exclude Atmos tracks. |
-| `wanted` | string[] | `[]` | Episode/season selectors. |
+| `wanted` | string[] | `[]` | Episode/season selectors. Accepts the part form, `"S01E01.2"`. |
 | `latest_episode` | boolean | `false` | Only the newest episode. |
 | `lang` / `v_lang` / `a_lang` / `s_lang` | string[] | `["orig"]` / `[]` / `[]` / `["all"]` | Language filters. |
 | `require_subs` | string[] | `[]` | Required subtitle languages. |
 | `forced_subs` | boolean | `false` | Include forced subtitles. |
+| `forced_s_lang` | string[] | `[]` | Forced subtitle language(s); implies `forced_subs`. |
 | `exact_lang` | boolean | `false` | Exact language matching. |
 | `sub_format` | string | `null` | Output subtitle format. |
 | `video_only` / `audio_only` / `subs_only` / `chapters_only` | boolean | `false` | Track-type restriction (at most one). |
@@ -378,7 +392,8 @@ Create a download job. Requires `service` and `title_id`; every other field is a
 | `best_available` | boolean | `false` | Fall back to best available. |
 | `repack` | boolean | `false` | Add REPACK tag. |
 | `tag` | string | `null` | Release group tag. |
-| `tmdb_id` / `imdb_id` / `animeapi_id` | - | `null` | External ID overrides for tagging. |
+| `tmdb_id` / `imdb_id` / `tvdb_id` / `animeapi_id` | - | `null` | External ID overrides for tagging. |
+| `tvdb_order` | `official`, `dvd`, `absolute`, `alternate`, `regional` | `null` | Renumber episodes to a TVDB season order. Falls back to the `tvdb_order` config option. |
 | `enrich` | boolean | `false` | Override title/year from external source. |
 | `output_dir` | string | `null` | Override output directory. |
 | `no_cache` / `reset_cache` | boolean | `false` | Title cache controls. |

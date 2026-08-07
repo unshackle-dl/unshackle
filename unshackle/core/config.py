@@ -117,6 +117,10 @@ class Config:
         self.imdb_api_enabled: bool = kwargs.get("imdb_api_enabled", False)
         self.omdb_api_key: str = kwargs.get("omdb_api_key") or ""
         self.tmdb_api_key: str = kwargs.get("tmdb_api_key") or ""
+        self.tvdb_api_key: str = kwargs.get("tvdb_api_key") or ""
+        self.tvdb_pin: str = kwargs.get("tvdb_pin") or ""
+        self.tvdb_order: str = (kwargs.get("tvdb_order") or "").lower()
+        self.metadata_providers: list = kwargs.get("metadata_providers") or []
         self.simkl_client_id: str = kwargs.get("simkl_client_id") or ""
         self.decrypt_labs_api_key: str = kwargs.get("decrypt_labs_api_key") or ""
         self.ipinfo_api_key: str = kwargs.get("ipinfo_api_key") or ""
@@ -126,6 +130,8 @@ class Config:
         self.redact_paths: bool = kwargs.get("redact_paths", True)
 
         self.language_tags: dict = kwargs.get("language_tags") or {}
+        self.tag_rules: list = kwargs.get("tag_rules") or []
+        self.dual_multi_mode: str = (kwargs.get("dual_multi_mode") or "strict").lower()
         self.output_template: dict = kwargs.get("output_template") or {}
         folder_cfg = self.output_template.pop("folder", "")
         self.folder_template: str = ""
@@ -167,6 +173,7 @@ class Config:
             "episode",
             "season_episode",
             "episode_name",
+            "part",
             "date",
             "quality",
             "resolution",
@@ -191,12 +198,14 @@ class Config:
             "atmos",
             "dual",
             "multi",
+            "dubbed",
             "video",
             "hdr",
             "hfr",
             "edition",
             "repack",
             "lang_tag",
+            "title_type",
         }
 
         unsafe_chars = r'[<>:"/\\|?*]'

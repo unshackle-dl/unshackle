@@ -86,6 +86,7 @@ def tag_file(
     title: Title,
     tmdb_id: Optional[int] = None,
     imdb_id: Optional[str] = None,
+    tvdb_id: Optional[int] = None,
 ) -> None:
     log.debug("Tagging file %s with title %r", path, title)
     custom_tags: dict[str, str] = {}
@@ -118,7 +119,7 @@ def tag_file(
     if config.tag_imdb_tmdb:
         try:
             providers = get_available_providers()
-            if not providers:
+            if not providers and tvdb_id is None:
                 log.debug("No metadata providers available; skipping tag lookup")
                 apply_tags(path, custom_tags)
                 return
@@ -130,9 +131,11 @@ def tag_file(
                 imdbapi = get_provider("imdbapi")
                 if imdbapi:
                     result = imdbapi.get_by_id(imdb_id, kind)
-                    if result:
-                        result.external_ids.imdb_id = imdb_id
-                        enrich_ids(result)
+                if not result:
+                    # IMDxAPI is off or had no answer; the ID alone still resolves the others
+                    result = MetadataResult(title=name, year=year, kind=kind)
+                result.external_ids.imdb_id = imdb_id
+                enrich_ids(result)
             elif tmdb_id is not None:
                 tmdb = get_provider("tmdb")
                 if tmdb:
@@ -140,17 +143,28 @@ def tag_file(
                     if result:
                         ext = tmdb.get_external_ids(tmdb_id, kind)
                         result.external_ids = ext
+                        enrich_ids(result)
             else:
                 # Search across providers in priority order
                 result = search_metadata(name, year, kind)
 
-            # If we got a TMDB ID from search but no full external IDs, fetch them
-            if result and result.external_ids.tmdb_id and not result.external_ids.imdb_id:
+            # If we got a TMDB ID from search but not the other IDs, fetch them
+            if (
+                result
+                and result.external_ids.tmdb_id
+                and not (result.external_ids.imdb_id and result.external_ids.tvdb_id)
+            ):
                 ext = fetch_external_ids(result.external_ids.tmdb_id, kind)
-                if ext.imdb_id:
+                if ext.imdb_id and not result.external_ids.imdb_id:
                     result.external_ids.imdb_id = ext.imdb_id
-                if ext.tvdb_id:
+                if ext.tvdb_id and not result.external_ids.tvdb_id:
                     result.external_ids.tvdb_id = ext.tvdb_id
+                enrich_ids(result)
+
+            if tvdb_id is not None:
+                if result is None:
+                    result = MetadataResult(kind=kind)
+                result.external_ids.tvdb_id = tvdb_id
 
             if result and result.external_ids:
                 standard_tags = _build_tags_from_ids(result.external_ids, kind)

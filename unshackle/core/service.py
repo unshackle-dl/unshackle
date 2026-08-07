@@ -25,8 +25,16 @@ from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.drm import DRM_T
 from unshackle.core.search_result import SearchResult
-from unshackle.core.session import (BACKOFF_FACTOR, CONNECT_TIMEOUT, MAX_BACKOFF, MAX_RETRIES, POOL_MAX_SIZE,
-                                    READ_TIMEOUT, RETRY_METHODS, STATUS_FORCELIST)
+from unshackle.core.session import (
+    BACKOFF_FACTOR,
+    CONNECT_TIMEOUT,
+    MAX_BACKOFF,
+    MAX_RETRIES,
+    POOL_MAX_SIZE,
+    READ_TIMEOUT,
+    RETRY_METHODS,
+    STATUS_FORCELIST,
+)
 from unshackle.core.title_cacher import TitleCacher, get_account_hash, get_region_from_proxy
 from unshackle.core.titles import Title_T, Titles_T, remap_titles
 from unshackle.core.tracks import Chapters, Tracks

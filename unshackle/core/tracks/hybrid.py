@@ -387,8 +387,8 @@ class Hybrid:
     ) -> tuple[Optional[int], Optional[int], Optional[int], Optional[int]]:
         """Clamp static L6 values to a valid relationship.
 
-        MaxCLL must not exceed the mastering-display peak (some sources, e.g. ATV
-        HDR10+, ship MaxCLL 10000 on a 1000-nit master), and MaxFALL must not exceed
+        MaxCLL must not exceed the mastering-display peak (some HDR10+ sources ship
+        MaxCLL 10000 on a 1000-nit master), and MaxFALL must not exceed
         MaxCLL. A value of 0 means "unknown" and is preserved as-is.
         """
         if max_mdl and max_cll and max_cll > max_mdl:

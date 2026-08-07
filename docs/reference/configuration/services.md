@@ -1,0 +1,137 @@
+# Services & authentication { #services-auth }
+
+## `services`
+
+- **Type:** `dict` keyed by service tag &nbsp;·&nbsp; **Default:** `{}`
+
+Per-service configuration, keyed by the canonical service tag (for example `EXAMPLE1`, `EXAMPLE2`,
+`EXAMPLE3`). unshackle reads several well-known sub-keys out of each service's block:
+
+- **`proxy_map`**: remaps the region query you passed to `-p/--proxy` for this service. A key is
+  that query, or `"provider:query"` when the flag also named a provider; the value is the query
+  asked of the proxy provider instead. It has no effect when `-p` was given a full proxy URL.
+- **`title_map`**: an exact-match rename map applied to fetched titles (source name →
+  desired name), so a service that names a title differently from your library still matches.
+- **`dl`**: per-service download defaults, using the same keys as the global
+  [`dl`](download.md#dl) block.
+
+Individual services may read any additional keys they define. The merged result (the service's
+own `config.yaml` with this block layered on top) is handed to the service as `self.config`.
+
+User- or device-specific values (API keys, account IDs, device attributes) belong in this block
+rather than in the service's own `config.yaml`, which holds shared defaults; see
+[creating a service](../../dev/creating-a-service.md).
+
+```yaml
+services:
+  EXAMPLE1:
+    proxy_map:
+      us: us-nyc
+      "nordvpn:ca": ca-toronto
+    title_map:
+      "My Show: The Movie": "My Show Presents The Movie"
+```
+
+## `credentials`
+
+- **Type:** `dict` keyed by service tag &nbsp;·&nbsp; **Default:** `{}`
+
+Per-service login credentials. Each value is a `username:password[:extra]` string, the same
+data as a `[username, password]` (or `[username, password, extra]`) list, or a dict of profile
+name to either of those. With the dict form, `-p/--profile` selects the entry, and the
+`default` key is used when no profile was given or the named profile is missing. These are
+parsed into `Credential` objects; the credential's SHA-1 is also used as an account hash for
+cache keys.
+
+```yaml
+credentials:
+  EXAMPLE2: user@example.com:hunter2
+  EXAMPLE1:
+    default: primary@example.com:pw1
+    second: secondary@example.com:pw2
+```
+
+!!! tip "Cookies vs credentials"
+    Cookies are stored as files under [`directories.cookies`](directories.md), not in this key.
+    A service's `authenticate()` accepts cookies, credentials, or both.
+
+## `firefox_cookies`
+
+- **Type:** `dict` keyed by service tag &nbsp;·&nbsp; **Default:** `{}`
+
+Settings for extracting cookies directly from a local Firefox profile. A service block is
+expected to provide `hosts` (a list of cookie hostnames; entries shorter than 3 characters
+are ignored to prevent dumping the whole cookie store) and an optional `local_storage`
+boolean to also pull matching entries from `webappsstore.sqlite`, which only services that
+keep auth tokens in localStorage rather than in HTTP cookies need. Extraction is read-only.
+
+!!! note "Firefox does not need to be closed"
+    The extractor copies **both** `cookies.sqlite` **and** its WAL file into a `0700` temp
+    directory, so writes Firefox has not yet flushed to the main DB are included. Extraction
+    fails only if Firefox holds an exclusive write lock at the instant of the copy. The live
+    profile is not modified.
+
+!!! warning "Extraction falls back silently to file cookies"
+    If extraction yields no cookies or fails for **any** reason, unshackle silently falls back
+    to the normal file-based cookie path (`cookies/<SERVICE>.txt` or
+    `cookies/<SERVICE>/<profile>.txt`), with no error reported.
+
+## `remote_services`
+
+- **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
+
+Definitions of remote unshackle service servers, used by the `--remote` mode. Each entry is
+named by you (pick it with `--server`, or omit that flag when only one is configured) and gives
+the server's `url` (required), an optional `api_key` sent as `X-Secret-Key`, an optional
+`server_cdm` boolean, and an optional `services` sub-dict of per-service local overrides such
+as `title_map`. In `--remote` mode unshackle turns the server's service list into synthetic CLI
+commands that run against it, falling back to the tags in that `services` sub-dict when the
+list cannot be fetched. See [remote sessions](../../dev/rest-api/remote-sessions.md) for the
+full setup.
+
+## `serve`
+
+- **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
+
+Configuration for the `serve` command (the built-in REST API server). The full server guide
+is the [REST API](../../dev/rest-api/index.md) section; these are the config keys.
+
+| Sub-key | Type | Default | Description |
+|---------|------|---------|-------------|
+| `api_secret` | str | *(unset)* | Master secret accepted in the `X-Secret-Key` header. Required unless the server is started with `--no-key`. |
+| `users` | dict | `{}` | Per-user API keys and their allowlists (see below). |
+| `services` | list | *(unset)* | Global service allowlist. Omit to allow all. |
+| `remote_only` | bool | `false` | Expose only the remote service session endpoints (health, services, search, session) and disable the rest of the REST API. |
+| `session_ttl` | int (s) | `300` | Lifetime of an interactive auth session. |
+| `max_sessions` | int | `100` | Maximum concurrent sessions. |
+| `history_limit` | int | `100` | How many finished jobs to retain in history. |
+| `compression_level` | int | `1` | gzip level for responses. |
+| `global_speed_limit` | str | *(unlimited)* | Server-wide download speed cap, e.g. `10M`, `1.5G` or plain bytes/sec (same format as `speed_limit`). One shared budget across all concurrent jobs; per-job speed limits are ignored while it is set. |
+| `cdm_overrides` | list or bool | *(unset)* | Allowed per-request CDM overrides: a list of permitted device names, or `true` for any. Unset rejects every override. |
+| `allow_job_credentials` | bool | `false` | Permit clients to supply credentials per job. |
+| `devices` | list | *(auto)* | Widevine devices offered; auto-filled from `directories.wvds`. |
+| `playready_devices` | list | *(auto)* | PlayReady devices; auto-filled from `directories.prds`. |
+
+Each entry under `users` is keyed by that user's API key and may set its own `services`,
+`devices`, and `playready_devices` allowlists, narrowing the global ones, plus an optional
+`username` used as the log label for that key (defaults to a truncated form of the key). A
+user with no `playready_devices` key gets no PlayReady access at all, not the global list.
+
+```yaml
+serve:
+  api_secret: change-me
+  remote_only: true
+  services: [EXAMPLE1, EXAMPLE2]
+  # server-wide download defaults (same keys as the `dl:` block)
+  downloads: 3
+  best_available: true
+  users:
+    a1b2c3d4:                 # this user's API key
+      services: [EXAMPLE1]        # may only use EXAMPLE1
+```
+
+!!! note "`dl` keys inside `serve`"
+    Most [`dl`](download.md#dl) flag keys (`downloads`, `workers`, `best_available`, and so on)
+    can be set directly inside `serve`, where they apply to every request the server handles.
+    The server recognises a fixed subset of download parameters, so a few CLI-only flags are
+    ignored here.

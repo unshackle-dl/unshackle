@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 import shutil
 from pathlib import Path
 from typing import Optional, Union
@@ -13,6 +14,14 @@ from requests import Session
 
 from unshackle.core.session import RnetSession
 from unshackle.core.utilities import log_event
+
+log = logging.getLogger(__name__)
+
+# MPEG-TS: 188-byte packets, sync byte 0x47 at every packet boundary (shared with sample_aes).
+SYNC_BYTE = 0x47
+TS_PACKET_SIZE = 188
+# Consecutive packet boundaries that must carry the sync byte to call a segment clear MPEG-TS.
+TS_SYNC_CHECKS = 4
 
 
 class ClearKey:
@@ -39,11 +48,37 @@ class ClearKey:
 
         self.key: bytes = key
         self.iv: bytes = iv
+        self._warned_clear: bool = False
+
+    def _warn_clear(self, reason: str) -> None:
+        """Warn once per track that a segment was passed through undecrypted."""
+        if not self._warned_clear:
+            log.warning("ClearKey: manifest signaled AES-128 encryption but %s; passing segment through.", reason)
+            self._warned_clear = True
 
     def decrypt(self, path: Path) -> None:
         """Decrypt a Track with AES Clear Key DRM."""
         if not path or not path.exists():
             raise ValueError("Tried to decrypt a file that does not exist.")
+
+        data = path.read_bytes()
+
+        # Mislabeled-clear guard: plaintext MPEG-TS the manifest wrongly tags AES-128. Require the
+        # 0x47 sync byte at 4 consecutive packet boundaries plus an exact packet-count length, so
+        # real CBC ciphertext matching all of these is negligible (~1/256^4).
+        if (
+            len(data) % TS_PACKET_SIZE == 0
+            and len(data) >= TS_PACKET_SIZE * TS_SYNC_CHECKS
+            and all(data[i * TS_PACKET_SIZE] == SYNC_BYTE for i in range(TS_SYNC_CHECKS))
+        ):
+            self._warn_clear("the segment is clear MPEG-TS")
+            return
+
+        # Valid AES-128-CBC ciphertext is always a 16-byte multiple; anything else is not
+        # ciphertext (truncated/clear/SAMPLE-AES). Decrypting would raise, so pass it through.
+        if len(data) % AES.block_size != 0:
+            self._warn_clear(f"the segment length ({len(data)} bytes) is not a multiple of {AES.block_size}")
+            return
 
         log_event(
             "drm_decrypt",
@@ -53,7 +88,7 @@ class ClearKey:
             file=path.name,
         )
 
-        decrypted = AES.new(self.key, AES.MODE_CBC, self.iv).decrypt(path.read_bytes())
+        decrypted = AES.new(self.key, AES.MODE_CBC, self.iv).decrypt(data)
 
         try:
             decrypted = unpad(decrypted, AES.block_size)
@@ -96,11 +131,17 @@ class ClearKey:
             session.headers["User-Agent"] = "smartexoplayer/1.1.0 (Linux;Android 8.0.0) ExoPlayerLib/2.13.3"
 
         if m3u_key.uri.startswith("data:"):
-            media_types, data = m3u_key.uri[5:].split(",")
+            media_types, payload = m3u_key.uri[5:].split(",", 1)
             media_types = media_types.split(";")
+            # Materialise the key bytes here so the 16-byte check covers both encodings: base64
+            # decodes to bytes, a raw payload is latin-1 bytes. A raw str would otherwise reach
+            # __init__ and be reinterpreted through fromhex.
             if "base64" in media_types:
-                data = base64.b64decode(data)
-            key = data
+                key = base64.b64decode(payload)
+            else:
+                key = payload.encode("latin-1")
+            if len(key) != 16:
+                raise ValueError(f"Unexpected Length of Key ({len(key)} bytes) in M3U data: URI.")
         else:
             url = urljoin(m3u_key.base_uri, m3u_key.uri)
             log_event(

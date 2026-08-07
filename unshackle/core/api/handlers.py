@@ -17,7 +17,7 @@ from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_C
 from unshackle.core.proxies.resolve import initialize_proxy_providers, resolve_proxy
 from unshackle.core.services import Services
 from unshackle.core.titles import Episode, Movie, Title_T
-from unshackle.core.tracks import Audio, Subtitle, Video
+from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE
 
@@ -44,6 +44,7 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "s_lang": ["all"],
     "require_subs": [],
     "forced_subs": False,
+    "forced_s_lang": [],
     "exact_lang": False,
     "sub_format": None,
     "video_only": False,
@@ -74,6 +75,8 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "tag": None,
     "tmdb_id": None,
     "imdb_id": None,
+    "tvdb_id": None,
+    "tvdb_order": None,
     "animeapi_id": None,
     "enrich": False,
     "output_dir": None,
@@ -90,6 +93,7 @@ LIST_HANDLER_TRANSPORT_KEYS = {
     "profile",
     "season",
     "episode",
+    "part",
     "wanted",
     "proxy",
     "no_proxy",
@@ -321,6 +325,11 @@ def require_fields(data: Dict[str, Any], *names: str) -> None:
             )
 
 
+def _part_key_suffix(part: Optional[int]) -> str:
+    """`.2` selection-syntax suffix for a part-ful episode, empty otherwise."""
+    return f".{part}" if part is not None else ""
+
+
 def serialize_title(title: Title_T) -> Dict[str, Any]:
     """Convert a title object to JSON-serializable dict."""
     title_language = str(title.language) if hasattr(title, "language") and title.language else None
@@ -333,7 +342,10 @@ def serialize_title(title: Title_T) -> Dict[str, Any]:
     cover_url = _data.get("cover_url") if isinstance(_data, dict) else None
 
     is_episode = isinstance(title, Episode)
+    episode_part = title.part if isinstance(title, Episode) else None
     if is_episode:
+        # no part suffix here: remote_service._build_title rebuilds the Episode from this dict, so a
+        # suffixed name plus the structural `part` below would render the part twice in the filename
         name = title.name if title.name else f"Episode {title.number:02d}"
     else:
         name = str(title.name) if hasattr(title, "name") else str(title)
@@ -354,6 +366,8 @@ def serialize_title(title: Title_T) -> Dict[str, Any]:
         result["series_title"] = str(title.title)
         result["season"] = title.season
         result["number"] = title.number
+        if episode_part is not None:
+            result["part"] = episode_part  # conditional, so part-less JSON is unchanged
 
     return result
 
@@ -491,8 +505,31 @@ def serialize_video_track(track: Video, include_url: bool = False) -> Dict[str, 
     return result
 
 
-def serialize_audio_track(track: Audio, include_url: bool = False) -> Dict[str, Any]:
-    """Convert audio track to JSON-serializable dict."""
+def original_audio_ids(tracks: List[Audio], title: Title_T) -> set:
+    """Return the ids of the audio tracks 'orig' resolves to, empty when the title has no language.
+
+    This defers to Tracks.by_language so the flag agrees with the downloader. It asks
+    exact mode first because CLDR rates a base tag and its paradigm regional variant as
+    the same language, and only the RFC 4647 preference picks one ('en' over 'en-US'
+    when both exist, 'pt-BR' over 'pt-PT' for a 'pt' title). The fuzzy fallback then
+    catches the non-paradigm regionals exact mode drops, such as an 'es' title that
+    carries only 'es-419'.
+    """
+    language = getattr(title, "language", None)
+    if not language:
+        return set()
+    matches = Tracks.by_language(tracks, [str(language)], exact_match=True) or Tracks.by_language(
+        tracks, [str(language)]
+    )
+    return {t.id for t in matches}
+
+
+def serialize_audio_track(track: Audio, include_url: bool = False, is_original: bool = False) -> Dict[str, Any]:
+    """Convert audio track to JSON-serializable dict.
+
+    Resolve is_original with original_audio_ids so the flag always agrees with the
+    track 'orig' would actually download.
+    """
     codec_name = enum_name(track.codec)
 
     result = {
@@ -502,6 +539,7 @@ def serialize_audio_track(track: Audio, include_url: bool = False) -> Dict[str, 
         "bitrate": int(track.bitrate / 1000) if track.bitrate else None,
         "channels": track.channels if track.channels else None,
         "language": str(track.language) if track.language else None,
+        "is_original": is_original,
         "atmos": track.atmos if hasattr(track, "atmos") else False,
         "descriptive": track.descriptive if hasattr(track, "descriptive") else False,
         "drm": serialize_drm(track.drm) if hasattr(track, "drm") and track.drm else None,
@@ -678,6 +716,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
         wanted_param = data.get("wanted")
         season = data.get("season")
         episode = data.get("episode")
+        part = data.get("part")
 
         if hasattr(titles, "__iter__") and not isinstance(titles, str):
             titles_list = list(titles)
@@ -702,7 +741,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                         details={"wanted": wanted_param, "service": normalized_service},
                     )
             elif season is not None and episode is not None:
-                wanted = [f"{season}x{episode}"]
+                wanted = [f"{season}x{episode}{_part_key_suffix(part)}"]
 
             if wanted:
                 # Filter titles based on wanted episodes, similar to how dl.py does it
@@ -710,8 +749,8 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                 log.debug(f"Filtering {len(titles_list)} titles with {len(wanted)} wanted episodes")
                 for title in titles_list:
                     if isinstance(title, Episode):
-                        episode_key = f"{title.season}x{title.number}"
-                        if episode_key in wanted:
+                        episode_key = f"{title.season}x{title.number}{_part_key_suffix(title.part)}"
+                        if title.matches_wanted(wanted):
                             log.debug(f"Episode {episode_key} matches wanted list")
                             matching_titles.append(title)
                         else:
@@ -728,7 +767,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                         details={
                             "service": normalized_service,
                             "title_id": title_id,
-                            "wanted": wanted_param or f"{season}x{episode}",
+                            "wanted": wanted_param or wanted[0],
                         },
                     )
 
@@ -738,7 +777,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                     failed_episodes = []
 
                     # Sort matching titles by season and episode number for consistent ordering
-                    sorted_titles = sorted(matching_titles, key=lambda t: (t.season, t.number))
+                    sorted_titles = sorted(matching_titles, key=lambda t: (t.season, t.number, t.part or 0))
 
                     for title in sorted_titles:
                         try:
@@ -746,22 +785,25 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                             video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
                             audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
 
+                            original_ids = original_audio_ids(audio_tracks, title)
                             episode_data = {
                                 "title": serialize_title(title),
                                 "video": [serialize_video_track(t) for t in video_tracks],
-                                "audio": [serialize_audio_track(t) for t in audio_tracks],
+                                "audio": [
+                                    serialize_audio_track(t, is_original=t.id in original_ids) for t in audio_tracks
+                                ],
                                 "subtitles": [serialize_subtitle_track(t) for t in tracks.subtitles],
                             }
                             episodes_data.append(episode_data)
                             log.debug(f"Successfully got tracks for {title.season}x{title.number}")
                         except SystemExit:
                             # Service calls sys.exit() for unavailable episodes - catch and skip
-                            failed_episodes.append(f"S{title.season}E{title.number:02d}")
+                            failed_episodes.append(f"S{title.season}E{title.number:02d}{_part_key_suffix(title.part)}")
                             log.debug(f"Episode {title.season}x{title.number} not available, skipping")
                             continue
                         except (Exception, SystemExit) as e:
                             # Handle other errors gracefully
-                            failed_episodes.append(f"S{title.season}E{title.number:02d}")
+                            failed_episodes.append(f"S{title.season}E{title.number:02d}{_part_key_suffix(title.part)}")
                             log.debug(f"Error getting tracks for {title.season}x{title.number}: {e}")
                             continue
 
@@ -793,10 +835,11 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
         video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
         audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
 
+        original_ids = original_audio_ids(audio_tracks, first_title)
         response = {
             "title": serialize_title(first_title),
             "video": [serialize_video_track(t) for t in video_tracks],
-            "audio": [serialize_audio_track(t) for t in audio_tracks],
+            "audio": [serialize_audio_track(t, is_original=t.id in original_ids) for t in audio_tracks],
             "subtitles": [serialize_subtitle_track(t) for t in tracks.subtitles],
         }
 
@@ -983,7 +1026,7 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
         if hasattr(service_module, "cli") and hasattr(service_module.cli, "params"):
             for param in service_module.cli.params:
                 if hasattr(param, "name") and param.default is not None and not isinstance(param.default, enum.Enum):
-                    # Store service-specific defaults (e.g., drm_system, hydrate_track, profile for NF)
+                    # Store service-specific defaults (e.g. drm_system, hydrate_track, profile)
                     service_specific_defaults[param.name] = param.default
 
         # Get download manager and start workers if needed
@@ -1555,6 +1598,7 @@ SESSION_TRANSPORT_KEYS = {
     "title_id",
     "season",
     "episode",
+    "part",
     "wanted",
     "proxy",
     "no_proxy",
@@ -1916,11 +1960,15 @@ async def session_tracks_handler(
         else:
             server_cdm_type = "playready"
 
+        original_ids = original_audio_ids(audio_tracks, title)
+
         return web.json_response(
             {
                 "title": serialize_title(title),
                 "video": [serialize_video_track(t, include_url=True) for t in video_tracks],
-                "audio": [serialize_audio_track(t, include_url=True) for t in audio_tracks],
+                "audio": [
+                    serialize_audio_track(t, include_url=True, is_original=t.id in original_ids) for t in audio_tracks
+                ],
                 "subtitles": [serialize_subtitle_track(t, include_url=True) for t in tracks.subtitles],
                 "chapters": [
                     {"timestamp": ch.timestamp, "name": ch.name}
@@ -2040,7 +2088,7 @@ def _resolve_server_cdm(service: str, profile: Optional[str], cdm_type: Optional
     Checks the server's own CDM config (``config.cdm[service]``) to
     determine the CDM type without loading the full CDM object. This
     ensures that when ``server_cdm: true`` is used, the server's CDM
-    determines device selection (e.g. PlayReady vs Widevine for AMZN).
+    determines device selection (e.g. PlayReady vs Widevine).
 
     Falls back to a lightweight stub from *cdm_type* only if no server
     CDM is configured for the service.

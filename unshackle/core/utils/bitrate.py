@@ -71,7 +71,7 @@ def measure_real_bitrate(
         elif track.descriptor == Track.Descriptor.ISM:
             segments = extract_ism(track, session)
         else:
-            # Descriptor.URL: a single file. Some services (e.g. AMZN) parse a DASH
+            # Descriptor.URL: a single file. Some services parse a DASH
             # manifest then collapse each representation to its single BaseURL and
             # flip the descriptor to URL, leaving the manifest (and its duration) in
             # track.data — recover the duration from there, else probe the file.
@@ -375,7 +375,7 @@ def extract_url(track: "Track", session: Union[Session, RnetSession], *, log: lo
                 duration = duration_ticks / timescale
 
     if not duration or duration <= 0:
-        # Services like AMZN clear the manifest data after collapsing to a single
+        # Some services clear the manifest data after collapsing to a single
         # file; fall back to reading the duration straight from the remote file.
         duration = ffprobe_duration(url, session, log=log)
 

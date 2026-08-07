@@ -409,7 +409,8 @@ def _perform_download(
         if isinstance(wanted_raw, str):
             wanted_raw = [wanted_raw]
         # Only convert if not already in internal "SxE" format
-        needs_conversion = any(not re.match(r"^\d+x\d+$", w) for w in wanted_raw)
+        # the !? keeps a pre-parsed part exclusion from being re-fed through parse_tokens
+        needs_conversion = any(not re.match(r"^!?\d+x\d+(\.\d+)?$", w) for w in wanted_raw)
         if needs_conversion:
             season_range = SeasonRange()
             params["wanted"] = season_range.parse_tokens(*wanted_raw)
@@ -439,6 +440,8 @@ def _perform_download(
         "tag": params.get("tag"),
         "tmdb_id": params.get("tmdb_id"),
         "imdb_id": params.get("imdb_id"),
+        "tvdb_id": params.get("tvdb_id"),
+        "tvdb_order": params.get("tvdb_order"),
         "animeapi_id": params.get("animeapi_id"),
         "enrich": params.get("enrich", False),
         "output_dir": Path(params["output_dir"]) if params.get("output_dir") else None,
@@ -469,6 +472,8 @@ def _perform_download(
         tag=params.get("tag"),
         tmdb_id=params.get("tmdb_id"),
         imdb_id=params.get("imdb_id"),
+        tvdb_id=params.get("tvdb_id"),
+        tvdb_order=params.get("tvdb_order"),
         animeapi_id=params.get("animeapi_id"),
         enrich=params.get("enrich", False),
         output_dir=Path(params["output_dir"]) if params.get("output_dir") else None,
@@ -554,6 +559,7 @@ def _perform_download(
                 s_lang=params.get("s_lang", ["all"]),
                 require_subs=params.get("require_subs", []),
                 forced_subs=params.get("forced_subs", False),
+                forced_s_lang=params.get("forced_s_lang", []),
                 exact_lang=params.get("exact_lang", False),
                 sub_format=params.get("sub_format"),
                 video_only=params.get("video_only", False),

@@ -5,18 +5,20 @@ media from streaming manifests, handles the DRM, and muxes everything into clean
 well-tagged files, all driven from a single command-line tool, or served over a
 REST API for automation.
 
-It is a fork of [Devine](https://github.com/devine-dl/devine) with first-class
-DASH, HLS, and Smooth Streaming (ISM) parsing, both **Widevine** and **PlayReady**
-DRM support, and a built-in HTTP server.
+It is a fork of [Devine](https://github.com/devine-dl/devine) with DASH, HLS, and
+Smooth Streaming (ISM) parsing, both **Widevine** and **PlayReady** DRM support,
+and a built-in HTTP server.
 
 !!! warning "Use responsibly"
-    unshackle is licensed under [GPL-3.0](https://github.com/unshackle-dl/unshackle/blob/master/LICENSE).
+    unshackle is licensed under [GPL-3.0](https://github.com/unshackle-dl/unshackle/blob/main/LICENSE).
     Do not use it for content you do not have the rights to. Keep the core free and
     open, keep service code private, and be kind.
 
 ## What it does
 
-Point unshackle at a title on a streaming service and it will:
+unshackle does everything except talk to the streaming platform. You write that part
+as a service module ([Creating a Service](dev/creating-a-service.md)). Point unshackle
+at a title and it will:
 
 - Fetch the title metadata (movies, full series, seasons, episodes, albums, tracks).
 - Parse the streaming manifest: **DASH**, **HLS**, or **Smooth Streaming (ISM)**.
@@ -40,7 +42,7 @@ Point unshackle at a title on a streaming service and it will:
 | Subtitles | SRT, WebVTT, ASS/SSA, TTML and more, with optional SDH stripping and format conversion |
 | Key vaults | SQLite, MySQL, and HTTP/API vaults to store and share content keys |
 | Proxies | Basic proxies plus NordVPN, ProtonVPN, Surfshark, Windscribe, ExpressVPN, Gluetun, and Hola providers |
-| Services | Pluggable service modules, loadable from local folders or git repositories |
+| Services | A plugin API for the service modules you write. unshackle includes none |
 | Automation | A REST API with a job queue, live progress, history, and remote-download sessions |
 
 ## Installation at a glance
@@ -70,7 +72,7 @@ Point unshackle at a title on a streaming service and it will:
 Every download is three parts: the `dl` command, a **service tag**, and the
 service's title argument (a URL, ID, or slug).
 
-```shell title="Download a 1080p title with English audio and subtitles"
+```shell title="Download a 1080p title with English audio"
 unshackle dl -q 1080 -l en EXAMPLE 81234567
 ```
 
@@ -84,7 +86,7 @@ install to your first file.
 - **[Installation](getting-started/installation.md)**. Install unshackle and the external tools it depends on.
 - **[Quickstart](getting-started/quickstart.md)**. Configure `unshackle.yaml` and run your first download.
 - **[Downloading](guide/downloading.md)**. The full `dl` command guide: quality, codecs, languages, track selection, and output.
-- **[Configuration](getting-started/configuration-file.md)**. Every `unshackle.yaml` key, directories, vaults, proxies, and naming templates.
+- **[Configuration](getting-started/configuration-file.md)**. Where `unshackle.yaml` lives, the directory layout, and how to edit values. Full key list in the [Configuration Reference](reference/configuration/index.md).
 - **[REST API](dev/rest-api/index.md)**. Run the `serve` HTTP server and drive downloads programmatically.
 
 !!! tip "Getting help"
