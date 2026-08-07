@@ -406,6 +406,22 @@ def _has_range_header(item: dict[str, Any]) -> bool:
     return any(k.lower() == "range" for k in (item.get("headers") or {}))
 
 
+def _range_covers_full_body(headers: MutableMapping[str, Any], content_length: int) -> bool:
+    """True when a 200 body is exactly the bytes the item's Range slice asked for.
+
+    A server may ignore Range and answer 200 with the whole resource (RFC 9110
+    permits this). That body is only the right bytes when the slice starts at byte 0
+    and spans exactly the full body; anything else (open-ended, multi-range, nonzero
+    start, span mismatch) stays fail-closed.
+    """
+    value = str(next((v for k, v in headers.items() if k.lower() == "range"), ""))
+    match = re.fullmatch(r"bytes=(\d+)-(\d+)", value.strip())
+    if not match or content_length <= 0:
+        return False
+    start, end = int(match.group(1)), int(match.group(2))
+    return start == 0 and content_length == end + 1
+
+
 def _force_unblock_stream(stream: Any) -> None:
     """Best-effort: shut the stream's socket so a thread parked in a blocking read returns now.
 
@@ -710,10 +726,6 @@ def download(
                 resume_offset = 0
             if part_mode and stream.status_code != 206:
                 raise IOError(f"expected 206 for ranged part, got {stream.status_code}")
-            if item_range and not part_mode and stream.status_code != 206:
-                # server ignored the slice's Range and sent the whole parent; writing that
-                # as the segment would silently corrupt the merge, so fail the attempt
-                raise IOError(f"expected 206 for byte-range segment, got {stream.status_code}")
             if use_rnet:
                 content_encoded = _is_content_encoded(
                     stream.headers.get("Content-Encoding") or stream.headers.get("content-encoding")
@@ -727,6 +739,14 @@ def download(
                         content_length = 0
                 except ValueError:
                     content_length = 0
+
+            if item_range and not part_mode and stream.status_code != 206:
+                # server ignored the slice's Range and sent the whole parent (RFC 9110 allows
+                # a 200 here); writing that as the segment would silently corrupt the merge,
+                # so fail the attempt — unless the slice spans the whole resource, in which
+                # case the 200 body is byte-identical to the 206 and safe to keep
+                if not (stream.status_code == 200 and _range_covers_full_body(req_headers, content_length)):
+                    raise IOError(f"expected 206 for byte-range segment, got {stream.status_code}")
 
             if resumed and content_encoded:
                 try:
