@@ -2,6 +2,7 @@ import importlib
 import inspect
 import threading
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -9,6 +10,15 @@ from unshackle.core.constants import DOWNLOAD_CANCELLED
 from unshackle.core.downloaders.requests import TokenBucket, format_speed, parse_speed_limit, set_speed_limit
 
 requests_downloader = importlib.import_module("unshackle.core.downloaders.requests")
+
+
+@pytest.fixture(autouse=True)
+def _clean_cancel():
+    # a failing batch anywhere sets the process-global cancel, and TokenBucket.consume
+    # waits on it, so a leaked flag voids every timing assertion; keep tests independent
+    DOWNLOAD_CANCELLED.clear()
+    yield
+    DOWNLOAD_CANCELLED.clear()
 
 
 @pytest.mark.parametrize(
@@ -86,11 +96,15 @@ def test_bucket_holds_aggregate_rate_across_threads():
     assert achieved >= rate * 0.5
 
 
-def test_bucket_chunk_larger_than_capacity_does_not_deadlock():
+def test_bucket_chunk_larger_than_capacity_does_not_deadlock(monkeypatch):
+    # capture the debt sleep instead of racing the wall clock: Event.wait may wake
+    # early spuriously, which intermittently tripped a lower bound on real sleeps
+    waits: list[float] = []
+    monkeypatch.setattr(requests_downloader, "DOWNLOAD_CANCELLED", SimpleNamespace(wait=waits.append))
     bucket = TokenBucket(1_000_000)
-    start = time.monotonic()
     bucket.consume(1_100_000)
-    assert 1.0 < time.monotonic() - start < 2.0
+    assert len(waits) == 1
+    assert 1.0 < waits[0] < 2.0
 
 
 def test_locked_limit_ignores_unlocked_calls():
