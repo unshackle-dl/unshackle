@@ -116,9 +116,8 @@ def test_range_item_ignored_by_server_fails_not_corrupts(server, tmp_path, monke
 
 
 def test_range_item_spanning_whole_resource_accepts_200(server, tmp_path):
-    # RFC 9110 lets a server ignore Range and answer 200 with the whole resource; when
-    # the slice spans that whole resource the body is byte-identical to the 206, so it
-    # must be kept instead of burning five attempts and failing the track
+    # RFC 9110 lets a server ignore Range and answer 200 with the whole resource; when the
+    # slice spans that resource the body is byte-identical to the 206 and must be kept
     server.honor_range = False
     urls = [{"url": _url(server), "headers": {"Range": f"bytes=0-{len(PARENT) - 1}"}}]
     files = _run(server, tmp_path, urls, max_workers=1)

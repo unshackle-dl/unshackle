@@ -529,7 +529,7 @@ Two related flags:
 | --- | --- |
 | `--workers N` | Threads used per track for segment downloads. Default depends on the downloader. |
 | `--adaptive-workers` | Opt-in: start with a moderate per-track worker count and ramp it up or back off based on measured CDN throughput and errors, capped at `--workers`. Off by default (fixed worker count). |
-| `--download-processes N` | Opt-in: split a large segment batch across `N` download processes, each with its own worker pool. A single process tops out around 1.3 Gb/s (Python interpreter limit); `2` reaches 2.5GbE line rate on fast CDNs. Only engages for batches of 24+ segments. Ignored while `--speed-limit` (or serve's `global_speed_limit`) is set — the cap is one shared budget, which extra processes cannot share, so the download stays in a single process. Default `1`. |
+| `--download-processes N` | Opt-in: split a large segment batch across `N` download processes, each with its own worker pool. A single process tops out around 1.3 Gb/s (Python interpreter limit); `2` reaches 2.5GbE line rate on fast CDNs. Only engages for batches of 24+ segments. Ignored while `--speed-limit` (or serve's `global_speed_limit`) is set: the cap is one shared budget, which extra processes cannot share, so the download stays in a single process. Default `1`. |
 | `--downloads N` | Number of tracks downloaded concurrently. Default `1`. |
 | `--slow [MIN-MAX]` | Add a delay between titles to look more like a real device. `--slow` alone means 60-120s; `--slow 20-40` sets a custom range. Minimum 20s. |
 | `--no-cache` | Bypass the title cache for this download. |

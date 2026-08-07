@@ -151,6 +151,6 @@ def test_rnet_encoded_body_discards_a_partial_instead_of_range_resuming(tmp_path
     save_path = tmp_path / "sub.vtt"
     save_path.with_name("sub.vtt.!dev").write_bytes(PLAIN[:5000])
     list(download(url="http://127.0.0.1:1/sub.vtt", save_path=save_path, session=session))
-    # the encoded 206 must be dropped (never appended); the restart fetches the whole body
+    # the encoded 206 must be dropped, not appended; the clean restart fetches the whole body
     assert session.range_requests == 1
     assert save_path.read_bytes() == PLAIN

@@ -14,8 +14,8 @@ requests_downloader = importlib.import_module("unshackle.core.downloaders.reques
 
 @pytest.fixture(autouse=True)
 def _clean_cancel():
-    # a failing batch anywhere sets the process-global cancel, and TokenBucket.consume
-    # waits on it, so a leaked flag voids every timing assertion; keep tests independent
+    # a failing batch sets the process-global cancel, which TokenBucket.consume waits on;
+    # keep tests independent
     DOWNLOAD_CANCELLED.clear()
     yield
     DOWNLOAD_CANCELLED.clear()
@@ -97,8 +97,8 @@ def test_bucket_holds_aggregate_rate_across_threads():
 
 
 def test_bucket_chunk_larger_than_capacity_does_not_deadlock(monkeypatch):
-    # capture the debt sleep instead of racing the wall clock: Event.wait may wake
-    # early spuriously, which intermittently tripped a lower bound on real sleeps
+    # capture the debt sleep instead of timing it: Event.wait can wake early spuriously,
+    # so a wall-clock lower bound flakes
     waits: list[float] = []
     monkeypatch.setattr(requests_downloader, "DOWNLOAD_CANCELLED", SimpleNamespace(wait=waits.append))
     bucket = TokenBucket(1_000_000)

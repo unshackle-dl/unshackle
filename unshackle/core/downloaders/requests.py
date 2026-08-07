@@ -742,9 +742,9 @@ def download(
 
             if item_range and not part_mode and stream.status_code != 206:
                 # server ignored the slice's Range and sent the whole parent (RFC 9110 allows
-                # a 200 here); writing that as the segment would silently corrupt the merge,
-                # so fail the attempt — unless the slice spans the whole resource, in which
-                # case the 200 body is byte-identical to the 206 and safe to keep
+                # a 200 here); writing that as the segment would silently corrupt the merge, so
+                # fail the attempt unless the slice spans the whole resource, in which case the
+                # 200 body is byte-identical to the 206 and safe to keep
                 if not (stream.status_code == 200 and _range_covers_full_body(req_headers, content_length)):
                     raise IOError(f"expected 206 for byte-range segment, got {stream.status_code}")
 
