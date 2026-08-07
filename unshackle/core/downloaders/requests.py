@@ -1065,6 +1065,7 @@ def _download_multiprocess(
     total_bytes = 0
     start_time = time.time()
     last_speed_report = start_time
+    speed_window = SpeedWindow(start_time)
     done_count = 0
 
     dead_ticks = 0
@@ -1118,9 +1119,9 @@ def _download_multiprocess(
 
             now = time.time()
             if now - last_speed_report > 0.5 and total_bytes > 0:
-                elapsed = now - start_time
-                if elapsed > 0:
-                    yield dict(downloaded=f"{filesize.decimal(math.ceil(total_bytes / elapsed))}/s")
+                rate = speed_window.rate(now, total_bytes)
+                if rate:
+                    yield dict(downloaded=f"{filesize.decimal(math.ceil(rate))}/s")
                 last_speed_report = now
     except KeyboardInterrupt:
         DOWNLOAD_CANCELLED.set()
