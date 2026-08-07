@@ -173,6 +173,17 @@ def _is_content_encoded(value: Optional[str]) -> bool:
     return any(coding.strip() not in ("", "identity") for coding in (value or "").lower().split(","))
 
 
+def _has_range_header(item: dict[str, Any]) -> bool:
+    """
+    Whether the caller asked for a byte-range slice of a parent resource
+    (DASH SegmentBase, HLS EXT-X-BYTERANGE).
+
+    Resume and ranged-parallel requests must leave such a Range alone. Replacing it
+    fetches the parent's bytes instead of the slice's, which corrupts the merge.
+    """
+    return any(str(k).lower() == "range" for k in (item.get("headers") or {}))
+
+
 def _probe_ranged(url: str, session: Any, **kwargs: Any) -> tuple[int, bool]:
     headers = {**(kwargs.get("headers") or {}), "Range": "bytes=0-0"}
     rest = {k: v for k, v in kwargs.items() if k != "headers"}
@@ -224,6 +235,9 @@ def _dispatch_parts(
         f.truncate(total_size)
 
     events: Queue[dict[str, Any]] = Queue()
+    # scoped to this file's parts only: setting the process-global cancel here would
+    # poison the plain-download fallback and silently stand down sibling tracks
+    abort = threading.Event()
 
     def _worker(start: int, end: int) -> None:
         for ev in download(
@@ -232,6 +246,7 @@ def _dispatch_parts(
             session=session,
             part_offset=start,
             part_end=end,
+            abort=abort,
             **kwargs,
         ):
             events.put(ev)
@@ -275,7 +290,7 @@ def _dispatch_parts(
                 exc = fut.exception()
                 if exc:
                     worker_error = True
-                    DOWNLOAD_CANCELLED.set()
+                    abort.set()
                     raise exc
 
         advance = 0
@@ -311,6 +326,7 @@ def download(
     part_offset: Optional[int] = None,
     part_end: Optional[int] = None,
     claimed: Optional[Callable[[], bool]] = None,
+    abort: Optional[threading.Event] = None,
     **kwargs: Any,
 ) -> Generator[dict[str, Any], None, None]:
     """
@@ -342,6 +358,8 @@ def download(
         part_end: Inclusive end byte of the part. Required when `part_offset` is set.
         claimed: Optional predicate checked before every attempt; when it returns True
             the download stops silently (another worker already delivered this file).
+        abort: Optional event that silently stops this download when set, without
+            touching the process-global cancel.
         kwargs: Any extra keyword arguments to pass to the session.get() call. Use this
             for one-time request changes like a header, cookie, or proxy. For example,
             to request Byte-ranges use e.g., `headers={"Range": "bytes=0-128"}`.
@@ -370,11 +388,14 @@ def download(
 
     _time = time.time
     use_raw = _is_requests_session(session)
+    item_range = _has_range_header(kwargs)
 
     attempts = 1
     written = 0
     while True:
         if claimed is not None and claimed():
+            return
+        if abort is not None and abort.is_set():
             return
         if not part_mode:
             written = 0
@@ -388,23 +409,35 @@ def download(
                 request_kwargs.setdefault("read_timeout", READ_TIMEOUT)
             else:
                 request_kwargs.setdefault("timeout", (CONNECT_TIMEOUT, READ_TIMEOUT))
+            req_headers = dict(request_kwargs.get("headers", {}) or {})
+            if not any(str(k).lower() == "accept-encoding" for k in req_headers):
+                req_headers["Accept-Encoding"] = "identity"
             if part_mode:
-                req_headers = dict(request_kwargs.get("headers", {}) or {})
                 req_headers["Range"] = f"bytes={part_offset + written}-{part_end}"
-                request_kwargs["headers"] = req_headers
-            elif resume_offset > 0:
-                req_headers = dict(request_kwargs.get("headers", {}) or {})
+            elif resume_offset > 0 and not item_range:
                 req_headers["Range"] = f"bytes={resume_offset}-"
-                request_kwargs["headers"] = req_headers
+            request_kwargs["headers"] = req_headers
 
             stream = session.get(url, stream=True, **request_kwargs)
+
+            if (not part_mode) and (not item_range) and resume_offset > 0 and stream.status_code == 416:
+                try:
+                    stream.close()
+                except Exception:
+                    pass
+                tmp_file.unlink(missing_ok=True)
+                resume_offset = 0
+                continue
+
             stream.raise_for_status()
 
-            resumed = (not part_mode) and resume_offset > 0 and stream.status_code == 206
+            resumed = (not part_mode) and (not item_range) and resume_offset > 0 and stream.status_code == 206
             if (not part_mode) and resume_offset > 0 and not resumed:
                 resume_offset = 0
             if part_mode and stream.status_code != 206:
                 raise IOError(f"expected 206 for ranged part, got {stream.status_code}")
+            if item_range and not part_mode and stream.status_code != 206:
+                raise IOError(f"expected 206 for byte-range segment, got {stream.status_code}")
             content_encoded = False
             if use_rnet:
                 content_length = stream.content_length or 0
@@ -449,9 +482,6 @@ def download(
             with open(save_path if part_mode else tmp_file, file_mode, buffering=file_buffering) as f:
                 if part_mode:
                     f.seek(part_offset + written)
-                elif not resumed and content_length > 0:
-                    f.truncate(content_length)
-                    f.seek(0)
 
                 _write = f.write
 
@@ -472,7 +502,7 @@ def download(
                 for chunk in chunks:
                     if DOWNLOAD_CANCELLED.is_set():
                         break
-                    if claimed is not None and claimed():
+                    if (claimed is not None and claimed()) or (abort is not None and abort.is_set()):
                         # close the handle or Windows can't delete the stray .!dev at merge (WinError 32)
                         try:
                             stream.close()
@@ -507,9 +537,6 @@ def download(
                 except Exception:
                     pass
 
-                if not part_mode and not resumed and content_length > 0 and written != content_length:
-                    f.truncate(written)
-
             if DOWNLOAD_CANCELLED.is_set() and (not content_length or written < content_length):
                 # cancelled mid-stream: keep the partial .!dev for resume, never finalize
                 return
@@ -535,11 +562,11 @@ def download(
             if claimed is not None and claimed():
                 # a superseded loser's error must not retry or kill the batch
                 return
-            if DOWNLOAD_CANCELLED.is_set() or attempts == MAX_ATTEMPTS:
-                if part_mode and not DOWNLOAD_CANCELLED.is_set():
-                    raise
+            if DOWNLOAD_CANCELLED.is_set() or (abort is not None and abort.is_set()):
                 return
-            if not part_mode:
+            if attempts == MAX_ATTEMPTS:
+                raise
+            if not part_mode and not item_range:
                 resume_offset = tmp_file.stat().st_size if tmp_file.exists() else 0
             time.sleep(RETRY_WAIT)
             attempts += 1
@@ -674,7 +701,7 @@ def requests(
         url_item = urls[0]
         try:
             ranged_used = False
-            if max_workers > 1 and _speed_limiter is None:
+            if max_workers > 1 and _speed_limiter is None and not _has_range_header(url_item):
                 total_size, supports_ranges = _probe_ranged(url_item["url"], session)
                 if supports_ranges and total_size >= RANGE_PARALLEL_MIN_SIZE:
                     try:
@@ -706,6 +733,20 @@ def requests(
             DOWNLOAD_CANCELLED.set()
             yield dict(downloaded="[yellow]CANCELLED")
             raise
+        except Exception as e:
+            yield dict(downloaded="[red]FAILED")
+            if debug_logger:
+                debug_logger.log(
+                    level="ERROR",
+                    operation="downloader_failed",
+                    message=f"Download failed: {e}",
+                    error=e,
+                    context={
+                        "url_count": len(urls),
+                        "output_dir": str(output_dir),
+                    },
+                )
+            raise
     else:
         # Segmented download with thread pool
         # Speed is tracked here on the main thread, not in workers
@@ -725,43 +766,63 @@ def requests(
         seg_lock = threading.Lock()
         seg_start: dict[int, float] = {}
         seg_done: set[int] = set()
+        seg_active: dict[int, int] = {}
         seg_durations: list[float] = []
         hedged: set[int] = set()
 
         def _download_worker(index: int, url_item: dict[str, Any], hedge: bool = False) -> None:
-            item = dict(url_item)
-            save_path = item.pop("save_path")
-            if save_path.exists():  # finished in a previous run
-                with seg_lock:
-                    if index in seg_done:
-                        return
-                    seg_done.add(index)
-                event_queue.put(dict(file_downloaded=save_path, written=save_path.stat().st_size))
-                event_queue.put(dict(advance=1))
-                return
-            # each racer writes to its own target so a loser never touches the final file;
-            # the .!dev suffix keeps strays visible to the manifest parsers' cleanup
-            target = save_path.with_name(f"{save_path.name}.{'h' if hedge else 'p'}.!dev")
-            if not hedge:
-                seg_start[index] = time.time()
-            for event in download(
-                session=session,
-                segmented=segmented_batch,
-                save_path=target,
-                claimed=lambda: index in seg_done,
-                **item,
-            ):
-                if "file_downloaded" in event:
+            with seg_lock:
+                seg_active[index] = seg_active.get(index, 0) + 1
+            left = False
+            try:
+                item = dict(url_item)
+                save_path = item.pop("save_path")
+                if save_path.exists():  # finished in a previous run
                     with seg_lock:
                         if index in seg_done:
-                            target.unlink(missing_ok=True)
                             return
                         seg_done.add(index)
-                        if not hedge:
-                            seg_durations.append(time.time() - seg_start[index])
-                    os.replace(target, save_path)
-                    event = dict(event, file_downloaded=save_path)
-                event_queue.put(event)
+                    event_queue.put(dict(file_downloaded=save_path, written=save_path.stat().st_size))
+                    event_queue.put(dict(advance=1))
+                    return
+                # each racer writes to its own target so a loser never touches the final file;
+                # the .!dev suffix keeps strays visible to the manifest parsers' cleanup
+                target = save_path.with_name(f"{save_path.name}.{'h' if hedge else 'p'}.!dev")
+                if not hedge:
+                    seg_start[index] = time.time()
+                for event in download(
+                    session=session,
+                    segmented=segmented_batch,
+                    save_path=target,
+                    claimed=lambda: index in seg_done,
+                    **item,
+                ):
+                    if "file_downloaded" in event:
+                        with seg_lock:
+                            if index in seg_done:
+                                target.unlink(missing_ok=True)
+                                return
+                            seg_done.add(index)
+                            if not hedge:
+                                seg_durations.append(time.time() - seg_start[index])
+                        os.replace(target, save_path)
+                        event = dict(event, file_downloaded=save_path)
+                    event_queue.put(event)
+            except Exception:
+                # leaving this racer and reading the survivor count must be one critical
+                # section, or two racers failing together each see the other as the survivor
+                # and the segment goes missing without an exception
+                with seg_lock:
+                    seg_active[index] -= 1
+                    left = True
+                    survivor = seg_active[index] > 0 or index in seg_done
+                if survivor:
+                    return
+                raise
+            finally:
+                if not left:
+                    with seg_lock:
+                        seg_active[index] -= 1
 
         futures = [pool.submit(_download_worker, i, url) for i, url in enumerate(urls)]
         pending = set(futures)
