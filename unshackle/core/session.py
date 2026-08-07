@@ -839,8 +839,9 @@ def session(
     # Connection-pool / timeout defaults applied only when neither config.network nor the caller set them.
     # connect_timeout + read_timeout mirror the requests-path default timeout (CONNECT_TIMEOUT, READ_TIMEOUT)
     # so an unset config still gets a bounded connect and read like requests; pool_idle_timeout stays under
-    # the typical ~60s CDN idle kill; pool_max_idle_per_host matches the downloader worker cap to avoid
-    # HTTP/1.1 connection churn; tcp_keepalive keeps long idle segments warm.
+    # the typical ~60s CDN idle kill; pool_max_idle_per_host follows POOL_MAX_SIZE, sized above the worker
+    # cap because hedge racers and tail-boost parts push in-flight requests past it (see POOL_MAX_SIZE);
+    # tcp_keepalive keeps long idle segments warm.
     session_kwargs.setdefault("connect_timeout", CONNECT_TIMEOUT)
     session_kwargs.setdefault("read_timeout", READ_TIMEOUT)
     session_kwargs.setdefault("pool_idle_timeout", 55)
