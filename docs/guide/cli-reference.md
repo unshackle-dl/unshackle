@@ -193,7 +193,7 @@ order the service used, then renumbers the episodes into the order you asked for
 |---|---|---|
 | `--workers` | downloader default | Per-track download threads. |
 | `--adaptive-workers` | off | Scale per-track segment workers dynamically (up to the `--workers` cap) based on measured CDN throughput and errors. |
-| `--download-processes` | `1` | Split large segment batches (24+) across this many download processes to exceed the single-process throughput cap on multi-gigabit connections. |
+| `--download-processes` | `1` | Split large segment batches (24+) across this many download processes to exceed the single-process throughput cap on multi-gigabit connections. Ignored while a speed limit is set: the cap is one shared budget, which extra processes cannot share, so the download stays in a single process. |
 | `--downloads` | `1` | Number of tracks downloaded concurrently. |
 | `--speed-limit` | unlimited | Cap total download speed across all threads and tracks, e.g. `500k`, `5M`, `1.5G` or plain bytes/sec. Values are bytes, not bits (`5M` = 5.0 MB/s). `off` disables a configured limit. |
 | `--no-cache` | off | Bypass the title cache. |

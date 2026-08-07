@@ -154,3 +154,26 @@ def test_multiprocess_cancel_terminates_children(server, tmp_path):
     while time.time() < deadline and len(multiprocessing.active_children()) > baseline:
         time.sleep(0.05)
     assert len(multiprocessing.active_children()) <= baseline
+
+
+def test_speed_limit_forces_single_process(server, tmp_path, monkeypatch):
+    """A set speed limit must keep the batch in-process: spawned children re-import the
+    module and would run with no TokenBucket, silently ignoring the configured cap."""
+
+    def _no_mp(**kwargs):
+        raise AssertionError("multiprocess fan-out engaged despite a speed limit")
+
+    monkeypatch.setattr(dl, "_download_multiprocess", _no_mp)
+    n = dl.MP_MIN_SEGMENTS
+    urls = [{"url": _url(server, f"/seg/{i}.bin")} for i in range(n)]
+    dl.set_speed_limit(1_000_000_000)  # far above the tiny batch, so the test is not slowed
+    try:
+        for _ in dl.requests(urls, output_dir=tmp_path, filename="seg_{i:04}.bin", max_workers=4, processes=2):
+            pass
+    finally:
+        dl.set_speed_limit(None)
+
+    files = sorted(tmp_path.glob("seg_*.bin"))
+    assert len(files) == n
+    for f in files:
+        assert f.read_bytes() == _seg_body(int(f.stem.split("_")[1]))

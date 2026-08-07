@@ -1176,6 +1176,8 @@ def requests(
             beat the single-interpreter throughput cap (GIL in the ssl read path). Engaged
             only when > 1 and there are at least MP_MIN_SEGMENTS urls; otherwise the behaviour
             is byte-identical to a single process. Each child runs its own worker pool.
+            Ignored while a download speed limit is set: spawned children cannot share the
+            process-global rate budget, so the batch stays in a single process.
         index_offset: Added to each url's enumerate index (after ``index_stride`` scaling)
             when formatting ``filename`` so a child handling part of a larger batch keeps
             its urls' original global indices/names. Internal: set by the multiprocess
@@ -1221,6 +1223,20 @@ def requests(
 
     if not max_workers:
         max_workers = min(16, (os.cpu_count() or 1) + 4)
+
+    # A spawned child re-imports this module and would start with no TokenBucket, so the
+    # configured cap would silently stop applying; the cap wins over the fan-out, matching
+    # the _speed_limiter gates on the ranged-parallel paths.
+    speed_limiter = _speed_limiter
+    if processes > 1 and len(urls) >= MP_MIN_SEGMENTS and speed_limiter is not None:
+        processes = 1
+        if debug_logger:
+            debug_logger.log(
+                level="DEBUG",
+                operation="downloader_mp_fallback",
+                message="Speed limit is set; spawned children cannot share its budget, using a single process",
+                context={"url_count": len(urls), "speed_limit": speed_limiter.rate},
+            )
 
     # Process fan-out: split a large segment batch across spawned children. Single-URL and small
     # batches keep the in-process path (a lone file is already parallelized by ranged parts).
