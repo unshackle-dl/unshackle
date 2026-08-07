@@ -714,12 +714,11 @@ def download(
                 # server ignored the slice's Range and sent the whole parent; writing that
                 # as the segment would silently corrupt the merge, so fail the attempt
                 raise IOError(f"expected 206 for byte-range segment, got {stream.status_code}")
-            content_encoded = False
             if use_rnet:
-                content_length = stream.content_length or 0
-                ce = (stream.headers.get("Content-Encoding") or stream.headers.get("content-encoding") or "").lower()
-                if ce in ("gzip", "deflate", "br"):
-                    content_length = 0
+                content_encoded = _is_content_encoded(
+                    stream.headers.get("Content-Encoding") or stream.headers.get("content-encoding")
+                )
+                content_length = 0 if content_encoded else (stream.content_length or 0)
             else:
                 content_encoded = _is_content_encoded(stream.headers.get("Content-Encoding"))
                 try:
