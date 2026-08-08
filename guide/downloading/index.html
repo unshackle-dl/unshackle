@@ -1166,6 +1166,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#what-each-metadata-provider-supplies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What each metadata provider supplies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#episode-ordering" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2809,6 +2820,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#what-each-metadata-provider-supplies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What each metadata provider supplies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#episode-ordering" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3621,7 +3643,7 @@ tagging and naming:</p>
 <tr>
 <td><code>--enrich</code></td>
 <td>-</td>
-<td>Override the show title and year from an external source. <strong>Requires</strong> one of <code>--tmdb</code>, <code>--imdb</code>, or <code>--animeapi</code>.</td>
+<td>Override the show title and year from an external source, and fill in the original language. <strong>Requires</strong> one of <code>--tmdb</code>, <code>--imdb</code>, or <code>--animeapi</code>.</td>
 </tr>
 <tr>
 <td><code>--tvdb-order</code></td>
@@ -3632,6 +3654,70 @@ tagging and naming:</p>
 </table>
 <div class="language-shell highlight"><span class="filename">Force the right IMDb match and enrich the title</span><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--imdb<span class="w"> </span>tt1375666<span class="w"> </span>--enrich<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
+<h3 id="what-each-metadata-provider-supplies">What each metadata provider supplies<a class="headerlink" href="#what-each-metadata-provider-supplies" title="Permanent link">&para;</a></h3>
+<p>Providers differ in what they answer with, so <code>--enrich</code> reads different fields depending on
+which ID you gave it. A provider only runs when its key is configured:</p>
+<table>
+<thead>
+<tr>
+<th>Provider</th>
+<th>Config key</th>
+<th>Title and year</th>
+<th>Original language</th>
+<th>External IDs it returns</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TMDB</td>
+<td><code>tmdb_api_key</code></td>
+<td>yes</td>
+<td>yes, alpha-2 such as <code>ko</code></td>
+<td>IMDb, TMDB, TVDB</td>
+</tr>
+<tr>
+<td>TVDB</td>
+<td><code>tvdb_api_key</code></td>
+<td>yes</td>
+<td>yes, alpha-3 such as <code>kor</code></td>
+<td>TMDB, TVDB, sometimes IMDb</td>
+</tr>
+<tr>
+<td>OMDb</td>
+<td><code>omdb_api_key</code></td>
+<td>yes</td>
+<td>yes, as an English name such as <code>Korean</code></td>
+<td>IMDb</td>
+</tr>
+<tr>
+<td>IMDxAPI</td>
+<td><code>imdb_api_enabled</code></td>
+<td>yes</td>
+<td>only when looked up by ID</td>
+<td>IMDb</td>
+</tr>
+<tr>
+<td>SIMKL</td>
+<td><code>simkl_client_id</code></td>
+<td>yes</td>
+<td>no, it publishes a country and no language</td>
+<td>IMDb, TMDB, TVDB</td>
+</tr>
+</tbody>
+</table>
+<p>Whatever the tag looks like, unshackle normalises it before use, so <code>ko</code>, <code>kor</code> and <code>Korean</code>
+all end up as the same language.</p>
+<p><code>--enrich</code> consults these in a fixed order:</p>
+<ul>
+<li><code>--tmdb</code> reads TMDB.</li>
+<li><code>--imdb</code> tries IMDxAPI, then falls back to OMDb. Since <code>imdb_api_enabled</code> is <code>false</code> by
+  default, an OMDb key is what makes this path work for most people.</li>
+<li><code>--animeapi</code> supplies a title only, so pair it with <code>--tmdb</code> or <code>--imdb</code> if you also want
+  the year and language.</li>
+</ul>
+<p>Language is the one field <code>--enrich</code> will not overwrite. A service that already reported an
+original language keeps it, because the platform knows its own catalogue better than a
+third-party match does. Everything else follows the usual override behaviour.</p>
 <h3 id="episode-ordering">Episode ordering<a class="headerlink" href="#episode-ordering" title="Permanent link">&para;</a></h3>
 <p>A service does not always number a series the way TVDB's aired order does. Some services list
 Futurama in TVDB's <code>alternate</code> (Streaming) order, for example, while TVDB's <code>official</code> order

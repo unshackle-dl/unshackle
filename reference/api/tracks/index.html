@@ -2144,6 +2144,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Subtitle.strip_webvtt_timestamp_map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;strip_webvtt_timestamp_map
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Subtitle.sanitize_webvtt_timestamps" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3170,6 +3181,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_track_name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Subtitle.strip_webvtt_timestamp_map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;strip_webvtt_timestamp_map
       
     </span>
   </a>
@@ -5143,6 +5165,32 @@ explanation list above.</p>
     <div class="doc doc-contents ">
 
         <p>Return the base Track Name.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Subtitle.strip_webvtt_timestamp_map" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">strip_webvtt_timestamp_map</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-staticmethod"><code>staticmethod</code></small>
+  </span>
+
+<a href="#unshackle.core.tracks.Subtitle.strip_webvtt_timestamp_map" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">strip_webvtt_timestamp_map</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Remove X-TIMESTAMP-MAP header lines (RFC 8216 §3.5, HLS only).</p>
+<p>Cue times are already absolute, but SubtitleEdit reads the header and offsets
+every cue by it during conversion.</p>
 
 
     </div>
