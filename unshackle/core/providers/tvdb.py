@@ -9,6 +9,12 @@ import requests
 from unshackle.core.config import config
 from unshackle.core.providers._base import ExternalIds, MetadataProvider, MetadataResult, _clean, _strip_year
 
+
+def primary_language(data: dict) -> Optional[str]:
+    """Search results spell the key primary_language, the extended record originalLanguage."""
+    return data.get("primary_language") or data.get("originalLanguage") or None
+
+
 KIND_TO_TYPE: dict[str, str] = {"movie": "movie", "tv": "series"}
 KIND_TO_PATH: dict[str, str] = {"movie": "movies", "tv": "series"}
 
@@ -153,6 +159,7 @@ class TVDBProvider(MetadataProvider):
             year=_parse_int(best.get("year")),
             kind=kind,
             external_ids=ext,
+            original_language=primary_language(best),
             source="tvdb",
             raw=best,
         )
@@ -176,6 +183,7 @@ class TVDBProvider(MetadataProvider):
             year=_parse_int(detail.get("year")),
             kind=kind,
             external_ids=ext,
+            original_language=primary_language(detail),
             source="tvdb",
             raw=detail,
         )

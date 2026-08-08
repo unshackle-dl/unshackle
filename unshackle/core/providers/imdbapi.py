@@ -15,6 +15,12 @@ KIND_TO_TYPES: dict[str, list[str]] = {
 }
 
 
+def primary_language(data: dict) -> Optional[str]:
+    """IMDb orders spokenLanguages most prominent first, and only detail responses carry it."""
+    langs = data.get("spokenLanguages") or []
+    return langs[0].get("code") if langs else None
+
+
 class IMDBApiProvider(MetadataProvider):
     """IMDb metadata provider using IMDxAPI (api.tiffara.com, free, no API key)."""
 
@@ -90,6 +96,7 @@ class IMDBApiProvider(MetadataProvider):
             year=result_year,
             kind=kind,
             external_ids=ExternalIds(imdb_id=imdb_id),
+            original_language=primary_language(best_match),
             source="imdbapi",
             raw=best_match,
         )
@@ -115,6 +122,7 @@ class IMDBApiProvider(MetadataProvider):
             year=result_year,
             kind=kind,
             external_ids=ExternalIds(imdb_id=data.get("id")),
+            original_language=primary_language(data),
             source="imdbapi",
             raw=data,
         )

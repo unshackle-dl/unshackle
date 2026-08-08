@@ -583,12 +583,40 @@ tagging and naming:
 | `--imdb` | `--imdb tt1375666` | Use this IMDb ID. |
 | `--tvdb` | `--tvdb 73871` | Use this TVDB ID instead of looking the series up. |
 | `--animeapi` | `--animeapi mal:12345` | Resolve via AnimeAPI (`mal:`/`anilist:` prefix; defaults to MAL). |
-| `--enrich` | - | Override the show title and year from an external source. **Requires** one of `--tmdb`, `--imdb`, or `--animeapi`. |
+| `--enrich` | - | Override the show title and year from an external source, and fill in the original language. **Requires** one of `--tmdb`, `--imdb`, or `--animeapi`. |
 | `--tvdb-order` | `--tvdb-order dvd` | Renumber episodes to a TVDB season order. Needs `tvdb_api_key`. |
 
 ```shell title="Force the right IMDb match and enrich the title"
 unshackle dl --imdb tt1375666 --enrich EXAMPLE 81234567
 ```
+
+### What each metadata provider supplies
+
+Providers differ in what they answer with, so `--enrich` reads different fields depending on
+which ID you gave it. A provider only runs when its key is configured:
+
+| Provider | Config key | Title and year | Original language | External IDs it returns |
+| --- | --- | --- | --- | --- |
+| TMDB | `tmdb_api_key` | yes | yes, alpha-2 such as `ko` | IMDb, TMDB, TVDB |
+| TVDB | `tvdb_api_key` | yes | yes, alpha-3 such as `kor` | TMDB, TVDB, sometimes IMDb |
+| OMDb | `omdb_api_key` | yes | yes, as an English name such as `Korean` | IMDb |
+| IMDxAPI | `imdb_api_enabled` | yes | only when looked up by ID | IMDb |
+| SIMKL | `simkl_client_id` | yes | no, it publishes a country and no language | IMDb, TMDB, TVDB |
+
+Whatever the tag looks like, unshackle normalises it before use, so `ko`, `kor` and `Korean`
+all end up as the same language.
+
+`--enrich` consults these in a fixed order:
+
+- `--tmdb` reads TMDB.
+- `--imdb` tries IMDxAPI, then falls back to OMDb. Since `imdb_api_enabled` is `false` by
+  default, an OMDb key is what makes this path work for most people.
+- `--animeapi` supplies a title only, so pair it with `--tmdb` or `--imdb` if you also want
+  the year and language.
+
+Language is the one field `--enrich` will not overwrite. A service that already reported an
+original language keeps it, because the platform knows its own catalogue better than a
+third-party match does. Everything else follows the usual override behaviour.
 
 ### Episode ordering
 

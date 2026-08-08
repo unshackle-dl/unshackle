@@ -4,7 +4,9 @@ Smaller configuration areas: external metadata API keys, caching and update chec
 
 ## External API keys { #external-api-keys }
 
-All are unset by default and enable optional metadata/geolocation features.
+All are unset by default and enable optional metadata/geolocation features. For which fields
+each metadata provider can actually answer with, see
+[What each metadata provider supplies](../../guide/downloading.md#what-each-metadata-provider-supplies).
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|

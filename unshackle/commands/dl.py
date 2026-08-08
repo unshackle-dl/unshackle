@@ -27,7 +27,7 @@ from uuid import UUID
 import click
 import yaml
 from click.core import ParameterSource
-from langcodes import Language
+from langcodes import Language, tag_is_valid
 from pymediainfo import MediaInfo
 from rich.console import Group
 from rich.padding import Padding
@@ -117,6 +117,14 @@ class SkippedSubtitle(TypedDict):
 
 # Config keys accepted as natural names for params whose Python name dodges a builtin.
 DL_OPTION_ALIASES = {"range": "range_", "list": "list_"}
+
+
+def parse_language(tag: Optional[str]) -> Optional[Language]:
+    """A provider's original-language tag as a Language, or None if it is absent or not a real tag."""
+    tag = (tag or "").strip()
+    if not tag or not tag_is_valid(tag) or tag.startswith("und"):
+        return None
+    return Language.get(tag)
 
 
 def normalize_dl_config(dl_config: dict[str, Any]) -> dict[str, Any]:
@@ -628,7 +636,10 @@ class dl:
         "--enrich",
         is_flag=True,
         default=False,
-        help="Override show title and year from external source. Requires --tmdb, --imdb, or --animeapi.",
+        help=(
+            "Override show title and year from external source, and fill in the original language "
+            "if the service did not provide one. Requires --tmdb, --imdb, or --animeapi."
+        ),
     )
     @click.option(
         "--imdb",
@@ -1513,6 +1524,7 @@ class dl:
 
             enrich_title: Optional[str] = None
             enrich_year: Optional[int] = None
+            enrich_lang: Optional[Language] = None
 
             if self.animeapi_title:
                 enrich_title = self.animeapi_title
@@ -1525,33 +1537,36 @@ class dl:
                 enrich_year = providers.get_year_by_id(
                     self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
                 )
+                enrich_lang = parse_language(
+                    providers.get_language_by_id(
+                        self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
+                    )
+                )
             elif self.imdb_id:
-                imdbapi = providers.get_provider("imdbapi")
-                if imdbapi:
-                    imdb_result = imdbapi.get_by_id(self.imdb_id, kind)
+                for name in ("imdbapi", "omdb"):
+                    provider = providers.get_provider(name)
+                    imdb_result = provider.get_by_id(self.imdb_id, kind) if provider else None
                     if imdb_result:
                         if not enrich_title:
                             enrich_title = imdb_result.title
                         enrich_year = imdb_result.year
+                        enrich_lang = parse_language(imdb_result.original_language)
+                        break
 
-            if enrich_title or enrich_year:
-                if isinstance(titles, (Series, Movies)):
-                    for t in titles:
-                        if enrich_title:
-                            if isinstance(t, Episode):
-                                t.title = enrich_title
-                            else:
-                                t.name = enrich_title
-                        if enrich_year and not t.year:
-                            t.year = enrich_year
-                else:
+            if enrich_lang:
+                self.log.info(f"Original language from metadata: {enrich_lang}")
+
+            if enrich_title or enrich_year or enrich_lang:
+                for t in titles if isinstance(titles, (Series, Movies)) else [titles]:
                     if enrich_title:
-                        if isinstance(titles, Episode):
-                            titles.title = enrich_title
+                        if isinstance(t, Episode):
+                            t.title = enrich_title
                         else:
-                            titles.name = enrich_title
-                    if enrich_year and not titles.year:
-                        titles.year = enrich_year
+                            t.name = enrich_title
+                    if enrich_year and not t.year:
+                        t.year = enrich_year
+                    if enrich_lang and not t.language:
+                        t.language = enrich_lang
 
         if self.tvdb_order and isinstance(titles, Series):
             titles = self.apply_tvdb_order(titles, title_cacher, cache_title_id, cache_region, cache_account_hash)

@@ -154,7 +154,7 @@ Keep only certain track types, or skip certain track types. Attachments are alwa
 | `--imdb` | IMDb ID, e.g. `tt1375666`. |
 | `--tvdb` | TVDB ID (integer). Skips the series lookup that `--tvdb-order` would otherwise do. |
 | `--animeapi` | AnimeAPI ID, e.g. `mal:12345` or `anilist:98765` (defaults to MAL). Back-fills TMDB/IMDb/TVDB. |
-| `--enrich` | Override show title/year from the external source. **Requires** one of `--tmdb`, `--imdb`, or `--animeapi`. |
+| `--enrich` | Override show title/year from the external source, and fill in the original language. **Requires** one of `--tmdb`, `--imdb`, or `--animeapi`. |
 | `--tvdb-order` | Renumber episodes to a TVDB season order: `official` (aired), `dvd`, `absolute`, `alternate`, or `regional`. Needs `tvdb_api_key`. |
 
 #### Episode ordering

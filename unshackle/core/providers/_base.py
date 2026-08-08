@@ -36,6 +36,7 @@ class MetadataResult:
     year: Optional[int] = None
     kind: Optional[str] = None  # "movie" or "tv"
     external_ids: ExternalIds = field(default_factory=ExternalIds)
+    original_language: Optional[str] = None  # alpha-2 or alpha-3, whichever the provider speaks
     source: str = ""  # provider name, e.g. "tmdb", "simkl", "imdbapi"
     raw: Optional[dict] = None  # original API response for caching
 
