@@ -616,7 +616,7 @@ class dl:
         "tvdb_id",
         type=int,
         default=None,
-        help="Use this TVDB ID for --tvdb-order instead of looking the series up automatically.",
+        help="Use this TVDB ID for --tvdb-order and --enrich instead of looking the series up automatically.",
     )
     @click.option(
         "--tvdb-order",
@@ -638,7 +638,7 @@ class dl:
         default=False,
         help=(
             "Override show title and year from external source, and fill in the original language "
-            "if the service did not provide one. Requires --tmdb, --imdb, or --animeapi."
+            "if the service did not provide one. Requires --tmdb, --imdb, --tvdb, or --animeapi."
         ),
     )
     @click.option(
@@ -871,8 +871,10 @@ class dl:
             if not self.tvdb_id and anime_ids.tvdb_id:
                 self.tvdb_id = anime_ids.tvdb_id
 
-        if self.enrich and not (self.tmdb_id or self.imdb_id or self.animeapi_title):
-            raise click.UsageError("--enrich requires --tmdb, --imdb, or --animeapi to provide a metadata source.")
+        if self.enrich and not (self.tmdb_id or self.imdb_id or self.tvdb_id or self.animeapi_title):
+            raise click.UsageError(
+                "--enrich requires --tmdb, --imdb, --tvdb, or --animeapi to provide a metadata source."
+            )
 
         # Initialize debug logger with service name if debug logging is enabled
         if config.debug or logging.root.level == logging.DEBUG:
@@ -1552,9 +1554,19 @@ class dl:
                         enrich_year = imdb_result.year
                         enrich_lang = parse_language(imdb_result.original_language)
                         break
+            elif self.tvdb_id:
+                provider = providers.get_provider("tvdb")
+                tvdb_result = provider.get_by_id(self.tvdb_id, kind) if provider else None
+                if tvdb_result:
+                    if not enrich_title:
+                        enrich_title = tvdb_result.title
+                    enrich_year = tvdb_result.year
+                    enrich_lang = parse_language(tvdb_result.original_language)
 
             if enrich_lang:
                 self.log.info(f"Original language from metadata: {enrich_lang}")
+            elif not (enrich_title or enrich_year):
+                self.log.warning("--enrich found no metadata; is the provider's API key configured?")
 
             if enrich_title or enrich_year or enrich_lang:
                 for t in titles if isinstance(titles, (Series, Movies)) else [titles]:

@@ -394,7 +394,7 @@ Create a download job. Requires `service` and `title_id`; every other field is a
 | `tag` | string | `null` | Release group tag. |
 | `tmdb_id` / `imdb_id` / `tvdb_id` / `animeapi_id` | - | `null` | External ID overrides for tagging. |
 | `tvdb_order` | `official`, `dvd`, `absolute`, `alternate`, `regional` | `null` | Renumber episodes to a TVDB season order. Falls back to the `tvdb_order` config option. |
-| `enrich` | boolean | `false` | Override title/year from external source, and fill in the original language. |
+| `enrich` | boolean | `false` | Override title/year from external source, and fill in the original language. Needs one of `tmdb_id`, `imdb_id`, `tvdb_id` or `animeapi_id`; without one the job fails instead of returning `400`. |
 | `output_dir` | string | `null` | Override output directory. |
 | `no_cache` / `reset_cache` | boolean | `false` | Title cache controls. |
 

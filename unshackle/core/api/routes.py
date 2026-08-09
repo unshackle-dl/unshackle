@@ -764,7 +764,7 @@ async def download(request: web.Request) -> web.Response:
                 description: Anime database ID via AnimeAPI, e.g. mal:12345 (default - None)
               enrich:
                 type: boolean
-                description: Override show title and year from external source (default - false)
+                description: Override show title and year from external source, and fill in the original language. Requires one of tmdb_id, imdb_id, tvdb_id or animeapi_id (default - false)
               no_folder:
                 type: boolean
                 description: Disable folder creation for TV shows (default - false)
@@ -794,7 +794,7 @@ async def download(request: web.Request) -> web.Response:
                 description: Use this IMDB ID (e.g. tt1375666) for tagging (default - None)
               tvdb_id:
                 type: integer
-                description: Use this TVDB ID for tagging and episode ordering (default - None)
+                description: Use this TVDB ID for tagging, episode ordering and enrichment (default - None)
               tvdb_order:
                 type: string
                 enum: [official, dvd, absolute, alternate, regional]

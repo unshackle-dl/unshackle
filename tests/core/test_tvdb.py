@@ -157,6 +157,27 @@ def test_cached_tvdb_result_keeps_enriched_ids() -> None:
     assert result.external_ids.tmdb_id == 615
 
 
+@pytest.mark.parametrize(("kind", "path"), [("tv", "/series/73871/extended"), ("movie", "/movies/73871/extended")])
+def test_get_by_id_supplies_what_enrich_needs(monkeypatch: pytest.MonkeyPatch, kind: str, path: str) -> None:
+    p = TVDBProvider()
+    seen: list[str] = []
+
+    def fake_get(request_path: str, params: dict) -> dict:
+        seen.append(request_path)
+        return {
+            "name": "Cowboy Bebop",
+            "year": "1998",
+            "originalLanguage": "jpn",
+            "remoteIds": [{"sourceName": "IMDB", "id": "tt0213338"}],
+        }
+
+    monkeypatch.setattr(p, "_get", fake_get)
+    result = p.get_by_id(73871, kind)
+    assert seen == [path]
+    assert (result.title, result.year, result.original_language) == ("Cowboy Bebop", 1998, "jpn")
+    assert result.external_ids.imdb_id == "tt0213338"
+
+
 def test_get_episodes_fails_closed_on_a_truncated_listing(monkeypatch: pytest.MonkeyPatch) -> None:
     p = TVDBProvider()
     pages: dict[int, object] = {0: {"episodes": [{"id": n} for n in range(500)]}, 1: None}

@@ -583,7 +583,7 @@ tagging and naming:
 | `--imdb` | `--imdb tt1375666` | Use this IMDb ID. |
 | `--tvdb` | `--tvdb 73871` | Use this TVDB ID instead of looking the series up. |
 | `--animeapi` | `--animeapi mal:12345` | Resolve via AnimeAPI (`mal:`/`anilist:` prefix; defaults to MAL). |
-| `--enrich` | - | Override the show title and year from an external source, and fill in the original language. **Requires** one of `--tmdb`, `--imdb`, or `--animeapi`. |
+| `--enrich` | - | Override the show title and year from an external source, and fill in the original language. **Requires** one of `--tmdb`, `--imdb`, `--tvdb`, or `--animeapi`. |
 | `--tvdb-order` | `--tvdb-order dvd` | Renumber episodes to a TVDB season order. Needs `tvdb_api_key`. |
 
 ```shell title="Force the right IMDb match and enrich the title"
@@ -611,8 +611,10 @@ all end up as the same language.
 - `--tmdb` reads TMDB.
 - `--imdb` tries IMDxAPI, then falls back to OMDb. Since `imdb_api_enabled` is `false` by
   default, an OMDb key is what makes this path work for most people.
-- `--animeapi` supplies a title only, so pair it with `--tmdb` or `--imdb` if you also want
-  the year and language.
+- `--tvdb` reads TVDB. It needs `tvdb_api_key`.
+- `--animeapi` supplies a title, plus whichever IDs AnimeAPI knows for the show. If that
+  includes a TMDB, IMDb or TVDB ID, the year and language come from that provider. If it
+  does not, pair it with `--tmdb`, `--imdb` or `--tvdb`.
 
 Language is the one field `--enrich` will not overwrite. A service that already reported an
 original language keeps it, because the platform knows its own catalogue better than a

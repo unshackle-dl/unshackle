@@ -14,7 +14,7 @@ each metadata provider can actually answer with, see
 | `omdb_api_key` | str | `""` | [OMDb](https://www.omdbapi.com/) API key for IMDb metadata lookups; a more reliable alternative to IMDxAPI. Free keys are available on the OMDb site. |
 | `tmdb_api_key` | str | `""` | TMDB API key for metadata enrichment and external-ID tags. |
 | `simkl_client_id` | str | `""` | SIMKL client ID for metadata lookups; an alternative/fallback source to TMDB. |
-| `tvdb_api_key` | str | `""` | [TheTVDB v4](https://thetvdb.com/api-information) API key; a fallback source to TMDB, strongest on TV series. Free keys are available on the TVDB site. |
+| `tvdb_api_key` | str | `""` | [TheTVDB v4](https://thetvdb.com/api-information) API key; a fallback source to TMDB, strongest on TV series. Also the source `--enrich --tvdb` reads. Free keys are available on the TVDB site. |
 | `tvdb_pin` | str | `""` | Subscriber PIN, only needed for a user-supported TVDB key. Leave empty for a normal project key. |
 | `tvdb_order` | str | `""` | Default for `--tvdb-order`: renumber episodes to a TVDB season order (`official`, `dvd`, `absolute`, `alternate`, `regional`). Empty keeps the numbering the service gives. |
 | `metadata_providers` | list | *(see below)* | Metadata providers to use, in the order they are tried. |
