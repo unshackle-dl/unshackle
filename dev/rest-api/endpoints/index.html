@@ -3631,7 +3631,7 @@ is unaffected. See <a href="../../creating-a-service/#split-episodes">Split epis
 <td><code>enrich</code></td>
 <td>boolean</td>
 <td><code>false</code></td>
-<td>Override title/year from external source, and fill in the original language.</td>
+<td>Override title/year from external source, and fill in the original language. Needs one of <code>tmdb_id</code>, <code>imdb_id</code>, <code>tvdb_id</code> or <code>animeapi_id</code>; without one the job fails instead of returning <code>400</code>.</td>
 </tr>
 <tr>
 <td><code>output_dir</code></td>

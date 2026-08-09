@@ -3643,7 +3643,7 @@ tagging and naming:</p>
 <tr>
 <td><code>--enrich</code></td>
 <td>-</td>
-<td>Override the show title and year from an external source, and fill in the original language. <strong>Requires</strong> one of <code>--tmdb</code>, <code>--imdb</code>, or <code>--animeapi</code>.</td>
+<td>Override the show title and year from an external source, and fill in the original language. <strong>Requires</strong> one of <code>--tmdb</code>, <code>--imdb</code>, <code>--tvdb</code>, or <code>--animeapi</code>.</td>
 </tr>
 <tr>
 <td><code>--tvdb-order</code></td>
@@ -3712,8 +3712,10 @@ all end up as the same language.</p>
 <li><code>--tmdb</code> reads TMDB.</li>
 <li><code>--imdb</code> tries IMDxAPI, then falls back to OMDb. Since <code>imdb_api_enabled</code> is <code>false</code> by
   default, an OMDb key is what makes this path work for most people.</li>
-<li><code>--animeapi</code> supplies a title only, so pair it with <code>--tmdb</code> or <code>--imdb</code> if you also want
-  the year and language.</li>
+<li><code>--tvdb</code> reads TVDB. It needs <code>tvdb_api_key</code>.</li>
+<li><code>--animeapi</code> supplies a title, plus whichever IDs AnimeAPI knows for the show. If that
+  includes a TMDB, IMDb or TVDB ID, the year and language come from that provider. If it
+  does not, pair it with <code>--tmdb</code>, <code>--imdb</code> or <code>--tvdb</code>.</li>
 </ul>
 <p>Language is the one field <code>--enrich</code> will not overwrite. A service that already reported an
 original language keeps it, because the platform knows its own catalogue better than a
