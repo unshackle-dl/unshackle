@@ -2985,22 +2985,22 @@
 <tr>
 <td><code>-l</code>, <code>--lang</code></td>
 <td><code>orig</code></td>
-<td>Language(s) for <strong>both</strong> video and audio. <code>orig</code> = the title's original language; e.g. <code>orig,en</code>.</td>
+<td>Language(s) for <strong>both</strong> video and audio. <code>orig</code> = the title's original language; e.g. <code>orig,en</code>. A <code>-</code> prefix excludes, e.g. <code>all,-es</code>.</td>
 </tr>
 <tr>
 <td><code>-vl</code>, <code>--v-lang</code></td>
 <td>-</td>
-<td>Video-only language (overrides <code>-l</code> for video).</td>
+<td>Video-only language (overrides <code>-l</code> for video). A <code>-</code> prefix excludes.</td>
 </tr>
 <tr>
 <td><code>-al</code>, <code>--a-lang</code></td>
 <td>-</td>
-<td>Audio-only language (overrides <code>-l</code> for audio).</td>
+<td>Audio-only language (overrides <code>-l</code> for audio). A <code>-</code> prefix excludes.</td>
 </tr>
 <tr>
 <td><code>-sl</code>, <code>--s-lang</code></td>
 <td><code>all</code></td>
-<td>Subtitle language(s).</td>
+<td>Subtitle language(s). A <code>-</code> prefix excludes, e.g. <code>all,-es</code>.</td>
 </tr>
 <tr>
 <td><code>--require-subs</code></td>
@@ -3015,7 +3015,7 @@
 <tr>
 <td><code>-fsl</code>, <code>--forced-s-lang</code></td>
 <td>none</td>
-<td>Language(s) wanted for forced subtitles; implies <code>-fs</code>.</td>
+<td>Language(s) wanted for forced subtitles; implies <code>-fs</code>. A <code>-</code> prefix excludes.</td>
 </tr>
 <tr>
 <td><code>--exact-lang</code></td>
