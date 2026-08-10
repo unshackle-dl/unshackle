@@ -164,6 +164,49 @@ def is_exact_match(language: Union[str, Language], languages: Sequence[Union[str
     return closest_match(language, list(map(str, languages)))[1] <= LANGUAGE_EXACT_DISTANCE
 
 
+def partition_exclusions(tokens: Optional[Sequence[str]]) -> tuple[list[str], list[str]]:
+    """
+    Split selection tokens into wanted values and values excluded with a leading '-'.
+
+    Both sides keep the order they were written in and drop later repeats. A bare '-'
+    carries no value and is skipped.
+
+    Example:
+        >>> partition_exclusions(["all", "-es"])
+        (['all'], ['es'])
+    """
+    includes: list[str] = []
+    excludes: list[str] = []
+    for raw in tokens or []:
+        token = str(raw).strip()
+        if not token or token == "-":
+            continue
+        target = includes
+        if token.startswith("-"):
+            token = token[1:].strip()
+            if not token:
+                continue
+            target = excludes
+        if token not in target:
+            target.append(token)
+    return includes, excludes
+
+
+def excluded_language_tags(
+    excludes: Sequence[str],
+    available: Sequence[Union[str, Language, None]],
+    exact: bool = False,
+) -> set[str]:
+    """
+    The language tags out of `available` that the exclusion tokens remove.
+
+    Matches through matching_languages so an exclusion drops exactly the tracks the same
+    token would select, including its exact-mode string preference. Untagged tracks are
+    never excluded.
+    """
+    return {tag for token in excludes for tag in matching_languages(token, available, exact)}
+
+
 def keep_forced_subtitle(
     forced: bool,
     language: Union[str, Language],

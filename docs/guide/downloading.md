@@ -254,6 +254,47 @@ it is used. You can override each stream type independently:
 unshackle dl -al en EXAMPLE 81234567
 ```
 
+### Excluding languages
+
+Put a `-` in front of a language to remove it from the selection. This works on `-l`,
+`-vl`, `-al`, `-sl`, and `-fsl`, in the same way as it works on `-w` / `--wanted`.
+
+```shell title="Every subtitle language except Spanish"
+unshackle dl -sl all,-es EXAMPLE 81234567
+```
+
+The exclusions are subtracted from the languages the flag would otherwise select, and the
+order of the values does not matter. If you give only exclusions, the flag keeps its own
+default: `-sl -es` is the same as `-sl all,-es`, and `-l -es` is the same as `-l orig,-es`.
+
+```shell title="Only exclusions"
+# every subtitle language except Spanish and French
+unshackle dl -sl -es,-fr EXAMPLE 81234567
+
+# the original audio language, unless it is Spanish
+unshackle dl -l -es EXAMPLE 81234567
+```
+
+`-vl` and `-al` have no default of their own: they cascade to `-l`. An override that names
+a language replaces `-l` for that stream type, exclusions included. An override that gives
+only exclusions adds them to the ones from `-l`.
+
+```shell title="Cascade"
+# video keeps the Japanese track; only the audio drops Spanish
+unshackle dl -l en,-es -vl ja EXAMPLE 81234567
+```
+
+!!! note "Rules for exclusion tokens"
+    - `orig` is resolved per title, so `-sl -orig` drops the subtitles in the title's
+      original language.
+    - `--exact-lang` applies to exclusions with the same matching rules as selection:
+      `-es` removes exactly the tracks that `es` would select. Without it, `-es` also
+      removes `es-419` and `es-ES`.
+    - Tracks with no language tag are never excluded.
+    - `-all` is rejected. Name the languages you do not want instead.
+    - The comma form is the documented style. `-sl -es` also works, but a shell can read
+      a lone `-es` as another option.
+
 ### Sort order
 
 `-l` and `-sl` **select** languages: naming some removes the rest. To keep every language
@@ -296,6 +337,10 @@ every available subtitle language is downloaded.
 unshackle dl -sl en,es EXAMPLE 81234567
 ```
 
+To keep the default and drop one language, use the `-` prefix described in
+[Excluding languages](#excluding-languages). `-sl all,-es` keeps every subtitle language
+except Spanish, forced Spanish subtitles included.
+
 ### Requiring subtitles
 
 `--require-subs` takes a list of languages that **must** exist. If they all exist, *all*
@@ -311,7 +356,8 @@ download on the presence of a specific subtitle track.
   Without this flag, forced subs are dropped from selection.
 - `-fsl` / `--forced-s-lang`: keep forced subtitles only in these languages (implies
   `-fs`). Works independently of `--s-lang`, so `-sl all -fsl en` grabs every full
-  subtitle but only the English forced track.
+  subtitle but only the English forced track. It accepts exclusions too: `-fsl all,-es`
+  keeps every forced subtitle except the Spanish one, and `-fsl -es` means the same.
 - `--sub-format`: set the output subtitle format, converting only when necessary.
   Accepts codec names/values and common aliases (`srt`, `vtt`, `ass`, `ssa`, `ttml`,
   etc.), or the literal `original` to keep the source format.
@@ -665,12 +711,12 @@ authoritative list.
 | `--range` | `-r` | Color range(s); default `SDR`. |
 | `--channels` | `-c` | Audio channel layout. |
 | `--noatmos` | `-naa` | Exclude Atmos audio. |
-| `--lang` | `-l` | Video + audio language(s); default `orig`. |
-| `--a-lang` | `-al` | Audio-only language override. |
-| `--v-lang` | `-vl` | Video-only language override. |
-| `--s-lang` | `-sl` | Subtitle language(s); default `all`. |
+| `--lang` | `-l` | Video + audio language(s); default `orig`. `-` excludes, e.g. `all,-es`. |
+| `--a-lang` | `-al` | Audio-only language override. `-` excludes. |
+| `--v-lang` | `-vl` | Video-only language override. `-` excludes. |
+| `--s-lang` | `-sl` | Subtitle language(s); default `all`. `-` excludes, e.g. `all,-es`. |
 | `--forced-subs` | `-fs` | Include forced subtitles. |
-| `--forced-s-lang` | `-fsl` | Forced subtitle language(s); implies `-fs`. |
+| `--forced-s-lang` | `-fsl` | Forced subtitle language(s); implies `-fs`. `-` excludes. |
 | `--sub-format` | | Output subtitle format. |
 | `--wanted` | `-w` | Episode/season range. |
 | `--select-titles` | | Interactively pick episodes or films. |

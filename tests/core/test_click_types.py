@@ -7,7 +7,13 @@ import click
 import pytest
 
 from unshackle.core.tracks.subtitle import Subtitle
-from unshackle.core.utils.click_types import QUALITY_LIST, SLOW_DELAY_RANGE, SeasonRange, SubtitleCodecChoice
+from unshackle.core.utils.click_types import (
+    LANGUAGE_RANGE,
+    QUALITY_LIST,
+    SLOW_DELAY_RANGE,
+    SeasonRange,
+    SubtitleCodecChoice,
+)
 
 choice = SubtitleCodecChoice(Subtitle.Codec)
 
@@ -58,6 +64,23 @@ def test_quality_list_accepts_yaml_native_values(value, expected):
 )
 def test_slow_delay_range_accepts_bool(value, expected):
     assert SLOW_DELAY_RANGE.convert(value, None, None) == expected
+
+
+# --- LanguageRange ----------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("all,-es", ["all", "-es"]),
+        ("-es", ["-es"]),
+        ("all, -es ; -fr", ["all", "-es", "-fr"]),
+        (["all", "-es"], ["all", "-es"]),
+    ],
+)
+def test_language_range_passes_exclusion_tokens_through(value, expected):
+    """The '-' prefix is resolved at filter time, so the type must keep the token intact."""
+    assert LANGUAGE_RANGE.convert(value) == expected
 
 
 # --- SeasonRange ------------------------------------------------------------

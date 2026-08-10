@@ -150,3 +150,24 @@ def test_language_range_yaml_shapes(value, expected):
     ctx = make_ctx()
     apply_service_dl_overrides(ctx, {"v_lang": value}, log)
     assert ctx.params["v_lang"] == expected
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("all,-es", ["all", "-es"]),
+        ("-es", ["-es"]),
+        (["all", "-es"], ["all", "-es"]),
+    ],
+)
+def test_language_exclusion_tokens_survive_the_override_convert(value, expected):
+    """A service dl override is re-converted, so its exclusion tokens must reach the filter stage intact."""
+    ctx = make_ctx()
+    apply_service_dl_overrides(ctx, {"v_lang": value}, log)
+    assert ctx.params["v_lang"] == expected
+
+
+def test_cli_exclusion_beats_service_config():
+    ctx = make_ctx(["-vl", "-es"])
+    apply_service_dl_overrides(ctx, {"v_lang": ["en"]}, log)
+    assert ctx.params["v_lang"] == ["-es"]

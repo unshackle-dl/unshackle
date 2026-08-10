@@ -31,9 +31,9 @@ Common keys (a useful subset; every `dl` flag works):
 
 | Key | Type | Default | Sets |
 |-----|------|---------|------|
-| `lang` | list | `["orig"]` | Video/audio language(s); `orig` = original language. |
-| `a_lang` / `v_lang` | list | `[]` | Audio- / video-only language override. |
-| `s_lang` | list | `["all"]` | Subtitle language(s). |
+| `lang` | list | `["orig"]` | Video/audio language(s); `orig` = original language. A `-` prefix excludes, e.g. `[all, -es]`. |
+| `a_lang` / `v_lang` | list | `[]` | Audio- / video-only language override. A `-` prefix excludes. |
+| `s_lang` | list | `["all"]` | Subtitle language(s). A `-` prefix excludes, e.g. `[all, -es]`. |
 | `quality` | list | `[]` (best) | Resolution(s), e.g. `[1080]`. |
 | `vcodec` | list | `[]` (any) | Video codec(s), e.g. `[H265]`. |
 | `acodec` | list | `[]` (any) | Audio codec(s), e.g. `[EC3]`. |
@@ -41,7 +41,7 @@ Common keys (a useful subset; every `dl` flag works):
 | `channels` | float | *(unset)* | Audio channels, e.g. `6` for 5.1. |
 | `sub_format` | str | *(unset)* | Convert subtitles to this format (`srt`, `vtt`, `original`, ...). |
 | `forced_subs` | bool | `false` | Include forced subtitle tracks. |
-| `forced_s_lang` | list | `[]` | Forced subtitle language(s); implies `forced_subs`. |
+| `forced_s_lang` | list | `[]` | Forced subtitle language(s); implies `forced_subs`. A `-` prefix excludes. |
 | `no_subs` / `no_audio` / `no_chapters` | bool | `false` | Skip that track type. |
 | `downloads` | int | `1` | Tracks downloaded concurrently. |
 | `workers` | int | *(downloader default)* | Threads per track. |
@@ -60,6 +60,18 @@ dl:
   sub_format: srt
   downloads: 2
 ```
+
+!!! note "Language exclusions in YAML"
+    The language keys accept the same `-` exclusion tokens as the command line. Give them
+    as a list or as one comma-separated string.
+
+    ```yaml
+    dl:
+      s_lang: [all, -es]
+      a_lang: "orig,-es"
+    ```
+
+    See [Excluding languages](../../guide/downloading.md#excluding-languages) for the rules.
 
 !!! note "Per-service overrides"
     A `dl` block nested under a service in [`services`](services.md) takes the same keys and

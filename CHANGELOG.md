@@ -10,6 +10,7 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 
 ### Features
 
+- *dl*: Exclude a language with a `-` prefix on -l, -vl, -al, -sl and -fsl
 - *api*: Report per-episode and per-track progress on download jobs
 - *api*: Add job retry/priority/clear, history, config and maintenance endpoints
 - *api*: Expose choice values and multiple flag in service cli_params

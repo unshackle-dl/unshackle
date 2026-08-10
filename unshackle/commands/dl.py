@@ -74,6 +74,7 @@ from unshackle.core.tracks.hybrid import Hybrid
 from unshackle.core.tracks.track import assert_fragments_decrypted, has_encrypted_sample_entry
 from unshackle.core.utilities import (
     as_requested,
+    excluded_language_tags,
     find_font_with_fallbacks,
     find_missing_langs,
     get_debug_logger,
@@ -83,6 +84,7 @@ from unshackle.core.utilities import (
     is_exact_match,
     keep_forced_subtitle,
     log_event,
+    partition_exclusions,
     resolve_sort_langs,
     suggest_font_packages,
     time_elapsed_since,
@@ -532,7 +534,7 @@ class dl:
         "--lang",
         type=LANGUAGE_RANGE,
         default="orig",
-        help="Language(s) wanted for Video and Audio (comma-separated). Use 'orig' to select the original language, e.g. 'orig,en' for both original and English.",
+        help="Language(s) wanted for Video and Audio (comma-separated). Use 'orig' to select the original language, e.g. 'orig,en' for both original and English. Prefix a value with '-' to exclude it, e.g. 'all,-es'.",
     )
     @click.option(
         "--latest-episode",
@@ -545,16 +547,22 @@ class dl:
         "--v-lang",
         type=LANGUAGE_RANGE,
         default=[],
-        help="Language wanted for Video. You would use this if the video language doesn't match the audio.",
+        help="Language wanted for Video. You would use this if the video language doesn't match the audio. Prefix a value with '-' to exclude it, e.g. 'all,-es'.",
     )
     @click.option(
         "-al",
         "--a-lang",
         type=LANGUAGE_RANGE,
         default=[],
-        help="Language wanted for Audio, overrides -l/--lang for audio tracks.",
+        help="Language wanted for Audio, overrides -l/--lang for audio tracks. Prefix a value with '-' to exclude it, e.g. 'all,-es'.",
     )
-    @click.option("-sl", "--s-lang", type=LANGUAGE_RANGE, default=["all"], help="Language wanted for Subtitles.")
+    @click.option(
+        "-sl",
+        "--s-lang",
+        type=LANGUAGE_RANGE,
+        default=["all"],
+        help="Language wanted for Subtitles. Prefix a value with '-' to exclude it, e.g. 'all,-es'.",
+    )
     @click.option(
         "--require-subs",
         type=LANGUAGE_RANGE,
@@ -567,7 +575,7 @@ class dl:
         "--forced-s-lang",
         type=LANGUAGE_RANGE,
         default=[],
-        help="Languages wanted for forced subtitles, implies -fs. Keeps forced subs only in these languages.",
+        help="Languages wanted for forced subtitles, implies -fs. Keeps forced subs only in these languages. Prefix a value with '-' to exclude it, e.g. 'all,-es'.",
     )
     @click.option(
         "--exact-lang",
@@ -1340,14 +1348,51 @@ class dl:
         self._remote_service = service if self.server_cdm else None
         start_time = time.time()
 
-        if forced_s_lang:
+        lang, lang_excl = partition_exclusions(lang)
+        v_lang, v_lang_excl = partition_exclusions(v_lang)
+        a_lang, a_lang_excl = partition_exclusions(a_lang)
+        s_lang, s_lang_excl = partition_exclusions(s_lang)
+        forced_s_lang, fsl_excl = partition_exclusions(forced_s_lang)
+        for flag, excludes in (
+            ("-l/--lang", lang_excl),
+            ("-vl/--v-lang", v_lang_excl),
+            ("-al/--a-lang", a_lang_excl),
+            ("-sl/--s-lang", s_lang_excl),
+            ("-fsl/--forced-s-lang", fsl_excl),
+        ):
+            if any(token.lower() == "all" for token in excludes):
+                self.log.error(f"{flag}: 'all' cannot be excluded. Name the languages to exclude instead.")
+                sys.exit(1)
+        # exclusion-only use falls back to the flag's own default; -vl/-al have none, they cascade to -l
+        if lang_excl and not lang:
+            lang = ["orig"]
+        if s_lang_excl and not s_lang:
+            s_lang = ["all"]
+        # an override that names languages replaces -l entirely, so it must not inherit its exclusions
+        video_excl = list(dict.fromkeys(v_lang_excl + ([] if v_lang else lang_excl)))
+        audio_excl = list(dict.fromkeys(a_lang_excl + ([] if a_lang else lang_excl)))
+
+        ctx = getattr(service, "ctx", None)
+        parent_params = ctx.parent.params if ctx and ctx.parent else None
+        if parent_params is not None:
+            # services read the raw ctx params, they must never see a '-xx' token
+            for name, includes, excludes in (
+                ("lang", lang, lang_excl),
+                ("v_lang", v_lang, v_lang_excl),
+                ("a_lang", a_lang, a_lang_excl),
+                ("s_lang", s_lang, s_lang_excl),
+                ("forced_s_lang", forced_s_lang, fsl_excl),
+            ):
+                if excludes and name in parent_params:
+                    parent_params[name] = includes
+
+        if forced_s_lang or fsl_excl:
             # services read forced_subs from raw ctx params, so the implication must be pushed there too
             forced_subs = True
             if "all" in forced_s_lang:
                 forced_s_lang = []
-            ctx = getattr(service, "ctx", None)
-            if ctx and ctx.parent:
-                ctx.parent.params["forced_subs"] = True
+            if parent_params is not None:
+                parent_params["forced_subs"] = True
 
         if skip_dl:
             DOWNLOAD_LICENCE_ONLY.set()
@@ -1846,6 +1891,18 @@ class dl:
                         if not song.tracks.audio:
                             self.log.error(
                                 f"No Audio Track in {abitrate_min}-{abitrate_max}kbps range for {song.name}..."
+                            )
+                            sys.exit(1)
+
+                    song_excl = [
+                        str(song.language) if t == "orig" else t for t in audio_excl if t != "orig" or song.language
+                    ]
+                    if song_excl:
+                        drop = excluded_language_tags(song_excl, [t.language for t in song.tracks.audio], exact_lang)
+                        song.tracks.select_audio(lambda x: str(x.language) not in drop)
+                        if not song.tracks.audio:
+                            self.log.error(
+                                f"Every Audio Track for {song.name} was excluded by -{', -'.join(song_excl)}..."
                             )
                             sys.exit(1)
 
@@ -2500,6 +2557,23 @@ class dl:
                 title.tracks.chapters = []
 
             with console.status("Selecting tracks...", spinner="dots"):
+
+                def resolve_excludes(excludes: list[str], _title: Title_T = title) -> list[str]:
+                    """Resolve 'orig' against this title. An unresolvable 'orig' excludes nothing."""
+                    resolved: list[str] = []
+                    for token in excludes:
+                        value = str(_title.language) if token == "orig" else token
+                        if token == "orig" and not _title.language:
+                            continue
+                        if value not in resolved:
+                            resolved.append(value)
+                    return resolved
+
+                video_excl_r = resolve_excludes(video_excl)
+                audio_excl_r = resolve_excludes(audio_excl)
+                s_excl_r = resolve_excludes(s_lang_excl)
+                fsl_excl_r = resolve_excludes(fsl_excl)
+
                 if isinstance(title, (Movie, Episode)):
                     # filter video tracks
                     if keep_videos and vcodec:
@@ -2544,6 +2618,15 @@ class dl:
                         )
                         if not title.tracks.videos:
                             self.log.error(f"No Video Track in {vbitrate_min}-{vbitrate_max}kbps range...")
+                            sys.exit(1)
+
+                    if keep_videos and video_excl_r:
+                        drop = excluded_language_tags(
+                            video_excl_r, [t.language for t in title.tracks.videos], exact_lang
+                        )
+                        title.tracks.select_video(lambda x: str(x.language) not in drop)
+                        if not title.tracks.videos:
+                            self.log.error(f"Every Video Track was excluded by -{', -'.join(video_excl_r)}...")
                             sys.exit(1)
 
                     effective_video_lang = v_lang or lang
@@ -2826,6 +2909,12 @@ class dl:
                     fsl = [t for t in forced_s_lang if t != "orig"]
                     if "orig" in forced_s_lang and title.language:
                         fsl.append(str(title.language))
+                    if keep_subtitles and s_excl_r:
+                        # applies to forced subs too: an excluded language is unwanted in any form
+                        drop = excluded_language_tags(
+                            s_excl_r, [t.language for t in title.tracks.subtitles], exact_lang
+                        )
+                        title.tracks.select_subtitles(lambda x: str(x.language) not in drop)
                     if keep_subtitles and require_subs:
                         missing_langs = [
                             lang
@@ -2893,6 +2982,11 @@ class dl:
                                 )
                         elif not forced_subs:
                             title.tracks.select_subtitles(lambda x: not x.forced)
+                        if fsl_excl_r:
+                            drop = excluded_language_tags(
+                                fsl_excl_r, [t.language for t in title.tracks.subtitles if t.forced], exact_lang
+                            )
+                            title.tracks.select_subtitles(lambda x: not (x.forced and str(x.language) in drop))
 
                 # filter audio tracks
                 # might have no audio tracks if part of the video, e.g. transport stream hls
@@ -2928,6 +3022,14 @@ class dl:
                         )
                         if not title.tracks.audio:
                             self.log.error(f"No Audio Track in {abitrate_min}-{abitrate_max}kbps range...")
+                            sys.exit(1)
+                    if audio_excl_r:
+                        drop = excluded_language_tags(
+                            audio_excl_r, [t.language for t in title.tracks.audio], exact_lang
+                        )
+                        title.tracks.select_audio(lambda x: str(x.language) not in drop)
+                        if not title.tracks.audio:
+                            self.log.error(f"Every Audio Track was excluded by -{', -'.join(audio_excl_r)}...")
                             sys.exit(1)
                     audio_languages = a_lang or lang
                     if audio_languages:

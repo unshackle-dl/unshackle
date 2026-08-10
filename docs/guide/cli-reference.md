@@ -90,13 +90,13 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 
 | Flag | Default | Description |
 |---|---|---|
-| `-l`, `--lang` | `orig` | Language(s) for **both** video and audio. `orig` = the title's original language; e.g. `orig,en`. |
-| `-vl`, `--v-lang` | - | Video-only language (overrides `-l` for video). |
-| `-al`, `--a-lang` | - | Audio-only language (overrides `-l` for audio). |
-| `-sl`, `--s-lang` | `all` | Subtitle language(s). |
+| `-l`, `--lang` | `orig` | Language(s) for **both** video and audio. `orig` = the title's original language; e.g. `orig,en`. A `-` prefix excludes, e.g. `all,-es`. |
+| `-vl`, `--v-lang` | - | Video-only language (overrides `-l` for video). A `-` prefix excludes. |
+| `-al`, `--a-lang` | - | Audio-only language (overrides `-l` for audio). A `-` prefix excludes. |
+| `-sl`, `--s-lang` | `all` | Subtitle language(s). A `-` prefix excludes, e.g. `all,-es`. |
 | `--require-subs` | - | Required subtitle langs; keeps **all** subs only if these exist. **Cannot combine with `--s-lang`.** |
 | `-fs`, `--forced-subs` | off | Include forced subtitle tracks. |
-| `-fsl`, `--forced-s-lang` | none | Language(s) wanted for forced subtitles; implies `-fs`. |
+| `-fsl`, `--forced-s-lang` | none | Language(s) wanted for forced subtitles; implies `-fs`. A `-` prefix excludes. |
 | `--exact-lang` | off | Exact matching only: `-l es-419` matches `es-419`, not `es-ES`. Applies to selection and to sort order. |
 | `--sub-format` | - | Output subtitle format (`SRT`/`srt`, `VTT`/`webvtt`, `ASS`/`ssa`, `TTML`, `SMI`, ...), or `original` to keep the source format. |
 
