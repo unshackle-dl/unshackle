@@ -1610,8 +1610,14 @@ class dl:
 
             if enrich_lang:
                 self.log.info(f"Original language from metadata: {enrich_lang}")
-            elif not (enrich_title or enrich_year):
+            if not (enrich_title or enrich_year or enrich_lang):
                 self.log.warning("--enrich found no metadata; is the provider's API key configured?")
+            elif missing := [
+                name
+                for name, value in (("title", enrich_title), ("year", enrich_year), ("language", enrich_lang))
+                if not value
+            ]:
+                self.log.warning(f"--enrich source did not provide {', '.join(missing)}; those fields are unchanged.")
 
             if enrich_title or enrich_year or enrich_lang:
                 for t in titles if isinstance(titles, (Series, Movies)) else [titles]:
