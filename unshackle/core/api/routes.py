@@ -665,22 +665,22 @@ async def download(request: web.Request) -> web.Response:
                 type: array
                 items:
                   type: string
-                description: Language for video and audio (use 'orig' for original) (default - ["orig"])
+                description: Language for video and audio (use 'orig' for original; a '-' prefix excludes, e.g. ["all", "-es"]) (default - ["orig"])
               v_lang:
                 type: array
                 items:
                   type: string
-                description: Language for video tracks only (default - [])
+                description: Language for video tracks only (a '-' prefix excludes) (default - [])
               a_lang:
                 type: array
                 items:
                   type: string
-                description: Language for audio tracks only (default - [])
+                description: Language for audio tracks only (a '-' prefix excludes) (default - [])
               s_lang:
                 type: array
                 items:
                   type: string
-                description: Language for subtitle tracks (default - ["all"])
+                description: Language for subtitle tracks (a '-' prefix excludes, e.g. ["all", "-es"]) (default - ["all"])
               require_subs:
                 type: array
                 items:
@@ -693,7 +693,7 @@ async def download(request: web.Request) -> web.Response:
                 type: array
                 items:
                   type: string
-                description: Languages wanted for forced subtitles, implies forced_subs (default - [])
+                description: Languages wanted for forced subtitles, implies forced_subs (a '-' prefix excludes) (default - [])
               exact_lang:
                 type: boolean
                 description: Use exact language matching (no variants) (default - false)
