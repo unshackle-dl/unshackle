@@ -134,6 +134,43 @@ def normalize_dl_config(dl_config: dict[str, Any]) -> dict[str, Any]:
     return {DL_OPTION_ALIASES.get(key, key): value for key, value in dl_config.items()}
 
 
+ID_PROVIDER_KEYS = {"tmdb": "tmdb_api_key", "tvdb": "tvdb_api_key", "omdb": "omdb_api_key"}
+
+
+def validate_metadata_ids(tmdb_id: Optional[int], imdb_id: Optional[str], tvdb_id: Optional[int]) -> None:
+    """Reject ID flags that conflict, or that no configured provider could ever resolve.
+
+    Only ever called with the IDs the user gave, never with the ones --animeapi back-fills.
+    """
+    supplied = [
+        (flag, value) for flag, value in (("--tmdb", tmdb_id), ("--imdb", imdb_id), ("--tvdb", tvdb_id)) if value
+    ]
+    if len(supplied) > 1:
+        raise click.UsageError(
+            f"{', '.join(flag for flag, _ in supplied)} cannot be used together. "
+            "Give one ID and unshackle resolves the others from it."
+        )
+    if not supplied:
+        return
+
+    flag, _ = supplied[0]
+    id_kind = flag.lstrip("-")
+    ordered = {cls.NAME: cls for kind in ("tv", "movie") for cls in providers.provider_order(kind)}
+    consumers = [cls for cls in ordered.values() if cls.ID_KIND == id_kind]
+    if any(cls().is_available() for cls in consumers):
+        return
+
+    if consumers:
+        keys = sorted({ID_PROVIDER_KEYS[cls.NAME] for cls in consumers if cls.NAME in ID_PROVIDER_KEYS})
+        raise click.UsageError(
+            f"{flag} needs the {consumers[0].NAME} provider. Set {' or '.join(keys)} in your config."
+        )
+    names = sorted({cls.NAME for cls in providers.REGISTRY.values() if cls.ID_KIND == id_kind})
+    raise click.UsageError(
+        f"{flag} needs the {' or '.join(names)} provider, which your metadata_providers config leaves out."
+    )
+
+
 def group_videos_by_variant(videos: list[Video], *, merge: bool) -> list[list[Video]]:
     """Group video tracks for muxing.
 
@@ -617,14 +654,16 @@ class dl:
         "tmdb_id",
         type=int,
         default=None,
-        help="Use this TMDB ID for tagging instead of automatic lookup.",
+        help="Use this TMDB ID for tagging instead of an automatic search. Add --enrich to also take "
+        "its title, year and original language.",
     )
     @click.option(
         "--tvdb",
         "tvdb_id",
         type=int,
         default=None,
-        help="Use this TVDB ID for --tvdb-order and --enrich instead of looking the series up automatically.",
+        help="Use this TVDB ID for --tvdb-order and tagging instead of looking the series up "
+        "automatically. Add --enrich to also take its title, year and original language.",
     )
     @click.option(
         "--tvdb-order",
@@ -638,15 +677,16 @@ class dl:
         "animeapi_id",
         type=str,
         default=None,
-        help="Anime database ID via AnimeAPI (e.g. mal:12345, anilist:98765). Defaults to MAL if no prefix.",
+        help="Anime database ID via AnimeAPI (e.g. mal:12345, anilist:98765). Defaults to MAL if no prefix. "
+        "Back-fills the TMDB, IMDB and TVDB IDs it knows for the show.",
     )
     @click.option(
         "--enrich",
         is_flag=True,
         default=False,
         help=(
-            "Override show title and year from external source, and fill in the original language "
-            "if the service did not provide one. Requires --tmdb, --imdb, --tvdb, or --animeapi."
+            "Overwrite the show title, year and original language with the external source's. "
+            "Requires --tmdb, --imdb, --tvdb, or --animeapi."
         ),
     )
     @click.option(
@@ -654,7 +694,8 @@ class dl:
         "imdb_id",
         type=str,
         default=None,
-        help="Use this IMDB ID (e.g. tt1375666) for tagging instead of automatic lookup.",
+        help="Use this IMDB ID (e.g. tt1375666) for tagging instead of an automatic search. Add --enrich "
+        "to also take its title, year and original language.",
     )
     @click.option(
         "--sub-format",
@@ -857,6 +898,7 @@ class dl:
 
         self.profile = profile
         self.proxy_requested = bool(proxy)
+        validate_metadata_ids(tmdb_id, imdb_id, tvdb_id)
         self.tmdb_id = tmdb_id
         self.imdb_id = imdb_id
         self.tvdb_id = tvdb_id
@@ -1576,48 +1618,32 @@ class dl:
             if self.animeapi_title:
                 enrich_title = self.animeapi_title
 
-            if self.tmdb_id:
+            enrich_result = providers.resolve_by_ids(
+                self.tmdb_id,
+                self.imdb_id,
+                self.tvdb_id,
+                kind=kind,
+                title_cacher=title_cacher,
+                cache_title_id=cache_title_id,
+                cache_region=cache_region,
+                cache_account_hash=cache_account_hash,
+            )
+            if enrich_result:
                 if not enrich_title:
-                    enrich_title = providers.get_title_by_id(
-                        self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
-                    )
-                enrich_year = providers.get_year_by_id(
-                    self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
-                )
-                enrich_lang = parse_language(
-                    providers.get_language_by_id(
-                        self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
-                    )
-                )
-            elif self.imdb_id:
-                for name in ("imdbapi", "omdb"):
-                    provider = providers.get_provider(name)
-                    imdb_result = provider.get_by_id(self.imdb_id, kind) if provider else None
-                    if imdb_result:
-                        if not enrich_title:
-                            enrich_title = imdb_result.title
-                        enrich_year = imdb_result.year
-                        enrich_lang = parse_language(imdb_result.original_language)
-                        break
-            elif self.tvdb_id:
-                provider = providers.get_provider("tvdb")
-                tvdb_result = provider.get_by_id(self.tvdb_id, kind) if provider else None
-                if tvdb_result:
-                    if not enrich_title:
-                        enrich_title = tvdb_result.title
-                    enrich_year = tvdb_result.year
-                    enrich_lang = parse_language(tvdb_result.original_language)
+                    enrich_title = enrich_result.title
+                enrich_year = enrich_result.year
+                enrich_lang = parse_language(enrich_result.original_language)
 
             if enrich_lang:
                 self.log.info(f"Original language from metadata: {enrich_lang}")
             if not (enrich_title or enrich_year or enrich_lang):
-                self.log.warning("--enrich found no metadata; is the provider's API key configured?")
+                self.log.warning("--enrich found no metadata. Is the provider's API key configured?")
             elif missing := [
                 name
                 for name, value in (("title", enrich_title), ("year", enrich_year), ("language", enrich_lang))
                 if not value
             ]:
-                self.log.warning(f"--enrich source did not provide {', '.join(missing)}; those fields are unchanged.")
+                self.log.warning(f"--enrich source gave no {', '.join(missing)}. Those fields are unchanged.")
 
             if enrich_title or enrich_year or enrich_lang:
                 for t in titles if isinstance(titles, (Series, Movies)) else [titles]:
@@ -1626,9 +1652,9 @@ class dl:
                             t.title = enrich_title
                         else:
                             t.name = enrich_title
-                    if enrich_year and not t.year:
+                    if enrich_year:
                         t.year = enrich_year
-                    if enrich_lang and not t.language:
+                    if enrich_lang:
                         t.language = enrich_lang
 
         if self.tvdb_order and isinstance(titles, Series):
@@ -2332,20 +2358,28 @@ class dl:
             if isinstance(title, Episode) and not self.tmdb_searched:
                 kind = "tv"
                 tmdb_title: Optional[str] = None
-                if self.tmdb_id:
-                    tmdb_title = providers.get_title_by_id(
-                        self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
-                    )
-                else:
-                    result = providers.search_metadata(
-                        title.title, title.year, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
-                    )
-                    if result and result.title and providers.fuzzy_match(result.title, title.title):
+                has_ids = bool(self.tmdb_id or self.imdb_id or self.tvdb_id)
+                result = providers.resolve_by_ids(
+                    self.tmdb_id,
+                    self.imdb_id,
+                    self.tvdb_id,
+                    title=title.title,
+                    year=title.year,
+                    kind=kind,
+                    title_cacher=title_cacher,
+                    cache_title_id=cache_title_id,
+                    cache_region=cache_region,
+                    cache_account_hash=cache_account_hash,
+                )
+                if result:
+                    if has_ids:
+                        tmdb_title = result.title
+                        if not self.tmdb_id:
+                            self.tmdb_id = result.external_ids.tmdb_id
+                    elif result.title and providers.fuzzy_match(result.title, title.title):
                         self.tmdb_id = result.external_ids.tmdb_id
                         tmdb_title = result.title
                         self.search_source = result.source
-                    else:
-                        self.tmdb_id = None
                 if list_ or list_titles:
                     if self.tmdb_id:
                         console.print(
@@ -2359,8 +2393,17 @@ class dl:
                 self.tmdb_searched = True
 
             if isinstance(title, Movie) and (list_ or list_titles) and not self.tmdb_id:
-                movie_result = providers.search_metadata(
-                    title.name, title.year, "movie", title_cacher, cache_title_id, cache_region, cache_account_hash
+                movie_result = providers.resolve_by_ids(
+                    None,
+                    self.imdb_id,
+                    self.tvdb_id,
+                    title=title.name,
+                    year=title.year,
+                    kind="movie",
+                    title_cacher=title_cacher,
+                    cache_title_id=cache_title_id,
+                    cache_region=cache_region,
+                    cache_account_hash=cache_account_hash,
                 )
                 if movie_result and movie_result.external_ids.tmdb_id:
                     console.print(
@@ -2373,7 +2416,7 @@ class dl:
                 else:
                     console.print(Padding("Search -> [bright_black]No match found[/]", (0, 5)))
 
-            if self.tmdb_id and getattr(self, "search_source", None) not in ("simkl", "imdbapi"):
+            if self.tmdb_id and getattr(self, "search_source", None) not in ("simkl", "imdb"):
                 kind = "tv" if isinstance(title, Episode) else "movie"
                 providers.fetch_external_ids(
                     self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
@@ -3869,8 +3912,17 @@ class dl:
         tvdb_id = self.tvdb_id
         if not tvdb_id:
             show = titles[0]
-            result = providers.search_metadata(
-                show.title, show.year, "tv", title_cacher, cache_title_id, cache_region, cache_account_hash
+            result = providers.resolve_by_ids(
+                self.tmdb_id,
+                self.imdb_id,
+                None,
+                title=show.title,
+                year=show.year,
+                kind="tv",
+                title_cacher=title_cacher,
+                cache_title_id=cache_title_id,
+                cache_region=cache_region,
+                cache_account_hash=cache_account_hash,
             )
             tvdb_id = result.external_ids.tvdb_id if result else None
         if not tvdb_id:

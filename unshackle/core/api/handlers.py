@@ -926,6 +926,23 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
         if not isinstance(data["downloads"], int) or data["downloads"] <= 0:
             return "downloads must be a positive integer"
 
+    for name in ("tmdb_id", "tvdb_id"):
+        if data.get(name) is not None:
+            value = data[name]
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                return f"{name} must be a positive integer"
+
+    if data.get("imdb_id") is not None:
+        if not isinstance(data["imdb_id"], str) or not re.fullmatch(r"tt\d+", data["imdb_id"]):
+            return "imdb_id must be an IMDB ID like 'tt1375666'"
+
+    supplied_ids = [name for name in ("tmdb_id", "imdb_id", "tvdb_id") if data.get(name)]
+    if len(supplied_ids) > 1:
+        return (
+            f"Cannot use multiple external IDs: {', '.join(supplied_ids)}. "
+            "Give one ID and unshackle resolves the others from it."
+        )
+
     exclusive_flags = []
     if data.get("video_only"):
         exclusive_flags.append("video_only")

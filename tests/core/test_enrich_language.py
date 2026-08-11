@@ -1,11 +1,11 @@
-"""--enrich original-language enrichment."""
+"""Original-language parsing for the metadata a supplied ID resolves."""
 
 from __future__ import annotations
 
 import pytest
 
 from unshackle.commands.dl import parse_language
-from unshackle.core.providers.imdbapi import primary_language as imdb_language
+from unshackle.core.providers.imdb import primary_language as imdb_language
 from unshackle.core.providers.omdb import primary_language as omdb_language
 from unshackle.core.providers.tvdb import primary_language as tvdb_language
 
@@ -28,11 +28,27 @@ def test_parse_language(tag: str | None, expected: str | None) -> None:
 
 
 def test_imdb_language_takes_the_first_spoken_language() -> None:
-    data = {"spokenLanguages": [{"code": "jpn", "name": "Japanese"}, {"code": "eng", "name": "English"}]}
-    assert imdb_language(data) == "jpn"
+    data = {"spokenLanguages": {"spokenLanguages": [{"id": "ja", "text": "Japanese"}, {"id": "en", "text": "English"}]}}
+    assert imdb_language(data) == "ja"
 
 
-@pytest.mark.parametrize("data", [{}, {"spokenLanguages": []}, {"spokenLanguages": None}])
+def test_imdb_language_is_alpha_2() -> None:
+    """IMDb's GraphQL language ids are alpha-2."""
+    data = {"spokenLanguages": {"spokenLanguages": [{"id": "ko", "text": "Korean"}]}}
+    assert parse_language(imdb_language(data)) is not None
+    assert str(parse_language(imdb_language(data))) == "ko"
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {},
+        {"spokenLanguages": None},  # search hits can come back with the whole block null
+        {"spokenLanguages": {}},
+        {"spokenLanguages": {"spokenLanguages": []}},
+        {"spokenLanguages": {"spokenLanguages": None}},
+    ],
+)
 def test_imdb_language_missing(data: dict) -> None:
     assert imdb_language(data) is None
 

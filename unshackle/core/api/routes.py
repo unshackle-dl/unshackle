@@ -758,13 +758,13 @@ async def download(request: web.Request) -> web.Response:
                 description: Set the group tag to be used (default - None)
               tmdb_id:
                 type: integer
-                description: Use this TMDB ID for tagging (default - None)
+                description: Use this TMDB ID for tagging instead of a title search. Set enrich to also take its title, year and original language. Mutually exclusive with imdb_id and tvdb_id. Needs tmdb_api_key (default - None)
               animeapi_id:
                 type: string
                 description: Anime database ID via AnimeAPI, e.g. mal:12345 (default - None)
               enrich:
                 type: boolean
-                description: Override show title and year from external source, and fill in the original language. Requires one of tmdb_id, imdb_id, tvdb_id or animeapi_id (default - false)
+                description: Overwrite show title, year and original language with the external source's. Requires one of tmdb_id, imdb_id, tvdb_id or animeapi_id (default - false)
               no_folder:
                 type: boolean
                 description: Disable folder creation for TV shows (default - false)
@@ -791,10 +791,10 @@ async def download(request: web.Request) -> web.Response:
                 description: Add REPACK tag to the output filename (default - false)
               imdb_id:
                 type: string
-                description: Use this IMDB ID (e.g. tt1375666) for tagging (default - None)
+                description: Use this IMDB ID (e.g. tt1375666) for tagging instead of a title search. Set enrich to also take its title, year and original language. Mutually exclusive with tmdb_id and tvdb_id (default - None)
               tvdb_id:
                 type: integer
-                description: Use this TVDB ID for tagging, episode ordering and enrichment (default - None)
+                description: Use this TVDB ID for tagging and episode ordering instead of a series lookup. Set enrich to also take its title, year and original language. Mutually exclusive with tmdb_id and imdb_id. Needs tvdb_api_key (default - None)
               tvdb_order:
                 type: string
                 enum: [official, dvd, absolute, alternate, regional]

@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import warnings
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import yaml
 from appdirs import AppDirs
@@ -114,13 +114,13 @@ class Config:
         self.tag: str = kwargs.get("tag") or ""
         self.tag_group_name: bool = kwargs.get("tag_group_name", True)
         self.tag_imdb_tmdb: bool = kwargs.get("tag_imdb_tmdb", True)
-        self.imdb_api_enabled: bool = kwargs.get("imdb_api_enabled", False)
         self.omdb_api_key: str = kwargs.get("omdb_api_key") or ""
         self.tmdb_api_key: str = kwargs.get("tmdb_api_key") or ""
         self.tvdb_api_key: str = kwargs.get("tvdb_api_key") or ""
         self.tvdb_pin: str = kwargs.get("tvdb_pin") or ""
         self.tvdb_order: str = (kwargs.get("tvdb_order") or "").lower()
-        self.metadata_providers: list = kwargs.get("metadata_providers") or []
+        self.metadata_providers: Union[list, dict] = kwargs.get("metadata_providers") or []
+        self.disable_metadata: bool = kwargs.get("disable_metadata", False)
         self.simkl_client_id: str = kwargs.get("simkl_client_id") or ""
         self.decrypt_labs_api_key: str = kwargs.get("decrypt_labs_api_key") or ""
         self.ipinfo_api_key: str = kwargs.get("ipinfo_api_key") or ""

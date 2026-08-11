@@ -10,14 +10,14 @@ each metadata provider can actually answer with, see
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `imdb_api_enabled` | bool | `false` | Use the free IMDxAPI (api.tiffara.com) metadata provider, which needs no API key. Off by default since the site has been unreliable. |
-| `omdb_api_key` | str | `""` | [OMDb](https://www.omdbapi.com/) API key for IMDb metadata lookups; a more reliable alternative to IMDxAPI. Free keys are available on the OMDb site. |
+| `omdb_api_key` | str | `""` | [OMDb](https://www.omdbapi.com/) API key for IMDb metadata lookups; a fallback for when the keyless `imdb` provider has no answer. Free keys are available on the OMDb site. |
 | `tmdb_api_key` | str | `""` | TMDB API key for metadata enrichment and external-ID tags. |
 | `simkl_client_id` | str | `""` | SIMKL client ID for metadata lookups; an alternative/fallback source to TMDB. |
 | `tvdb_api_key` | str | `""` | [TheTVDB v4](https://thetvdb.com/api-information) API key; a fallback source to TMDB, strongest on TV series. Also the source `--enrich --tvdb` reads. Free keys are available on the TVDB site. |
 | `tvdb_pin` | str | `""` | Subscriber PIN, only needed for a user-supported TVDB key. Leave empty for a normal project key. |
 | `tvdb_order` | str | `""` | Default for `--tvdb-order`: renumber episodes to a TVDB season order (`official`, `dvd`, `absolute`, `alternate`, `regional`). Empty keeps the numbering the service gives. |
-| `metadata_providers` | list | *(see below)* | Metadata providers to use, in the order they are tried. |
+| `metadata_providers` | list or map | *(see below)* | Metadata providers to use, in the order they are tried. |
+| `disable_metadata` | bool | `false` | Set to `true` to stop all automatic metadata lookups. An ID you give yourself is still looked up. |
 | `decrypt_labs_api_key` | str | `""` | Global Decrypt Labs API key (used by remote CDM / vault). |
 | `ipinfo_api_key` | str | `""` | ipinfo.io API key for IP/region lookups. |
 
@@ -33,12 +33,61 @@ each metadata provider can actually answer with, see
     ignored with a warning. Leave it unset for the default order:
 
     ```yaml
-    metadata_providers: [imdbapi, omdb, simkl, tmdb, tvdb]
+    metadata_providers: [imdb, omdb, simkl, tmdb, tvdb]
     ```
 
-    Whatever the order, a provider is skipped when its API key is missing (or, for
-    `imdbapi`, when `imdb_api_enabled` is `false`). Available names are
-    `imdbapi`, `omdb`, `simkl`, `tmdb`, and `tvdb`.
+    Whatever the order, a provider is skipped when its API key is missing. `imdb` needs no
+    key, so it is always available. Available names are `imdb`, `omdb`, `simkl`, `tmdb`, and
+    `tvdb`. The old name `imdbapi` still works and is read as `imdb`.
+
+    The order applies to a title search and to a direct lookup of an ID you give with
+    `--tmdb`, `--imdb`, or `--tvdb`. A supplied ID always goes to the providers that read
+    that kind of ID, and it never falls back to a title search.
+
+!!! note "What `disable_metadata` turns off"
+    With `disable_metadata: true`, unshackle never contacts a metadata provider on its own.
+    The title search is dead, and that includes the keyless `imdb` provider. Titles, years and
+    languages then come only from the service.
+
+    ```yaml
+    disable_metadata: true
+    ```
+
+    An ID you give with `--tmdb`, `--imdb`, `--tvdb`, or `--animeapi` is your permission to use
+    that ID, so it still works: the ID is looked up directly, the other IDs are cross
+    referenced from it, and `--enrich` still reads that source. Only the lookups you did not
+    ask for are stopped.
+
+!!! note "The `imdb` provider needs no key"
+    It replaces the earlier `imdbapi` provider, which read a third-party mirror
+    (api.tiffara.com) and needed the `imdb_api_enabled` switch. That option is gone: delete it
+    from your config, where it is now ignored.
+
+!!! tip "A different order per title kind"
+    Give a map instead of one list when the best source differs by kind. TVDB is strongest on
+    series, TMDB on films. There are two kinds, `tv` and `movie`, and this example sets both
+    of them and names every provider, so nothing is left to the default:
+
+    ```yaml
+    metadata_providers:
+      tv: [tvdb, tmdb, simkl, imdb, omdb]
+      movie: [tmdb, imdb, omdb, simkl, tvdb]
+    ```
+
+    Each list is independent: it both orders and filters that kind on its own, so a provider
+    you leave out of `tv` is still used for `movie`. Here TVDB is tried first for a series and
+    last for a film.
+
+    You do not need to give both keys, or a full list in each. A kind you leave out uses the
+    default order:
+
+    ```yaml
+    metadata_providers:
+      tv: [tvdb, tmdb]     # movies keep the default order
+    ```
+
+    `tv` covers every episode and `movie` covers every film. unshackle only looks up
+    metadata for those two kinds, so any other key, such as `anime` or `music`, is ignored.
 
 !!! note "`ipinfo_api_key` never touches your service sessions"
     The token is only ever sent to `api.ipinfo.io` as a per-request `Authorization` header; it
@@ -109,3 +158,4 @@ calls.
 | `curl_impersonate` | **Deprecated** → use [`network`](network.md) | Emits a `DeprecationWarning`; still honoured only if `network` is absent. |
 | `downloader` | **Deprecated** | Any value other than `"requests"` emits a `DeprecationWarning`; the value is otherwise ignored (the unified requests downloader is always used). |
 | `scene_naming` | **Removed** | If set to any non-null value, unshackle exits with an error directing you to configure [`output_template`](output.md) instead. |
+| `imdb_api_enabled` | **Removed** | Ignored. It gated the old `imdbapi` provider, which the keyless [`imdb`](#external-api-keys) provider replaces. Safe to delete from your config. |

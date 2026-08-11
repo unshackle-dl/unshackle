@@ -14,6 +14,7 @@ class TMDBProvider(MetadataProvider):
 
     NAME = "tmdb"
     REQUIRES_KEY = True
+    ID_KIND = "tmdb"
     BASE_URL = "https://api.themoviedb.org/3"
 
     def is_available(self) -> bool:

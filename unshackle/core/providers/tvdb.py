@@ -71,6 +71,7 @@ class TVDBProvider(MetadataProvider):
 
     NAME = "tvdb"
     REQUIRES_KEY = True
+    ID_KIND = "tvdb"
     BASE_URL = "https://api4.thetvdb.com/v4"
 
     def __init__(self) -> None:

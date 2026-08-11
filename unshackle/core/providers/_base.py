@@ -37,7 +37,7 @@ class MetadataResult:
     kind: Optional[str] = None  # "movie" or "tv"
     external_ids: ExternalIds = field(default_factory=ExternalIds)
     original_language: Optional[str] = None  # alpha-2 or alpha-3, whichever the provider speaks
-    source: str = ""  # provider name, e.g. "tmdb", "simkl", "imdbapi"
+    source: str = ""  # provider name, e.g. "tmdb", "simkl", "imdb"
     raw: Optional[dict] = None  # original API response for caching
 
 
@@ -46,6 +46,7 @@ class MetadataProvider(metaclass=ABCMeta):
 
     NAME: str = ""
     REQUIRES_KEY: bool = True
+    ID_KIND: Optional[str] = None
 
     def __init__(self) -> None:
         self.log = logging.getLogger(f"METADATA.{self.NAME.upper()}")

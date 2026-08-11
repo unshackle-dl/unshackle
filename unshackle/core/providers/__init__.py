@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Union
 
 import requests
 
 from unshackle.core.providers._base import ExternalIds, MetadataProvider, MetadataResult, fuzzy_match, log
-from unshackle.core.providers.imdbapi import IMDBApiProvider
+from unshackle.core.providers.imdb import IMDBProvider
 from unshackle.core.providers.omdb import OMDBProvider
 from unshackle.core.providers.simkl import SimklProvider
 from unshackle.core.providers.tmdb import TMDBProvider
@@ -15,18 +15,28 @@ if TYPE_CHECKING:
     from unshackle.core.title_cacher import TitleCacher
 
 REGISTRY: dict[str, type[MetadataProvider]] = {
-    cls.NAME: cls for cls in (IMDBApiProvider, OMDBProvider, SimklProvider, TMDBProvider, TVDBProvider)
+    cls.NAME: cls for cls in (IMDBProvider, OMDBProvider, SimklProvider, TMDBProvider, TVDBProvider)
 }
 
+# legacy `metadata_providers` names, still accepted
+ALIASES: dict[str, str] = {"imdbapi": "imdb"}
+
 # used when `metadata_providers` is unset
-DEFAULT_ORDER: tuple[str, ...] = ("imdbapi", "omdb", "simkl", "tmdb", "tvdb")
+DEFAULT_ORDER: tuple[str, ...] = ("imdb", "omdb", "simkl", "tmdb", "tvdb")
 
 
-def provider_order() -> list[type[MetadataProvider]]:
-    """Provider classes in the order configured by `metadata_providers`."""
+def provider_order(kind: Optional[str] = None) -> list[type[MetadataProvider]]:
+    """Provider classes in the order configured by `metadata_providers`.
+
+    `metadata_providers` is either a flat list applying to both kinds, or a mapping of
+    kind ("tv"/"movie") to its own list. A kind the mapping omits uses `DEFAULT_ORDER`.
+    """
     from unshackle.core.config import config
 
-    names = [str(n).lower() for n in (config.metadata_providers or DEFAULT_ORDER)]
+    configured = config.metadata_providers
+    selected = (configured.get(kind) if kind else None) if isinstance(configured, dict) else configured
+
+    names = [ALIASES.get(str(n).lower(), str(n).lower()) for n in (selected or DEFAULT_ORDER)]
     unknown = [n for n in names if n not in REGISTRY]
     if unknown:
         log.warning("Ignoring unknown metadata_providers entries: %s", ", ".join(unknown))
@@ -60,7 +70,15 @@ def search_metadata(
     cache_account_hash: Optional[str] = None,
 ) -> Optional[MetadataResult]:
     """Search all available providers for metadata. Returns best match."""
-    ordered = provider_order()
+    from unshackle.core.config import config
+
+    # the one gate for `disable_metadata`: every automatic lookup reaches a provider through
+    # here, while a user-supplied ID goes straight to `resolve_by_ids` and stays allowed
+    if config.disable_metadata:
+        log.debug("Metadata lookups are disabled by config; not searching for %r", title)
+        return None
+
+    ordered = provider_order(kind)
 
     # Check cache first
     if title_cacher and cache_title_id:
@@ -268,6 +286,78 @@ def fetch_external_ids(
     return ext
 
 
+def resolve_by_ids(
+    tmdb_id: Optional[int] = None,
+    imdb_id: Optional[str] = None,
+    tvdb_id: Optional[int] = None,
+    *,
+    title: Optional[str] = None,
+    year: Optional[int] = None,
+    kind: str = "movie",
+    title_cacher: Optional[TitleCacher] = None,
+    cache_title_id: Optional[str] = None,
+    cache_region: Optional[str] = None,
+    cache_account_hash: Optional[str] = None,
+) -> Optional[MetadataResult]:
+    """Resolve metadata from user-supplied external IDs, falling back to search only without them.
+
+    A supplied ID is authoritative. It is looked up directly through the providers that
+    consume its namespace, in `metadata_providers` order for `kind`, and it always survives
+    into `external_ids` whatever a provider answers. A fuzzy title search only runs when no
+    ID was supplied at all.
+    """
+    supplied: dict[str, Union[int, str]] = {}
+    if tmdb_id is not None:
+        supplied["tmdb"] = tmdb_id
+    if imdb_id:
+        supplied["imdb"] = imdb_id
+    if tvdb_id is not None:
+        supplied["tvdb"] = tvdb_id
+
+    if not supplied:
+        if not title:
+            return None
+        return search_metadata(title, year, kind, title_cacher, cache_title_id, cache_region, cache_account_hash)
+
+    result: Optional[MetadataResult] = None
+    for cls in provider_order(kind):
+        provider_id = supplied.get(cls.ID_KIND or "")
+        if provider_id is None:
+            continue
+        p = get_provider(cls.NAME)
+        if not p:
+            continue
+        try:
+            result = p.get_by_id(provider_id, kind)
+        except Exception as exc:
+            log.debug("%s lookup of %s failed: %s", cls.NAME, provider_id, exc)
+            continue
+        if result:
+            break
+
+    if not result:
+        result = MetadataResult(title=title, year=year, kind=kind)
+
+    ids = result.external_ids
+    if tmdb_id is not None:
+        ids.tmdb_id = tmdb_id
+        ids.tmdb_kind = kind
+    if imdb_id:
+        ids.imdb_id = imdb_id
+    if tvdb_id is not None:
+        ids.tvdb_id = tvdb_id
+
+    if ids.tmdb_id and not (ids.imdb_id and ids.tvdb_id):
+        ext = fetch_external_ids(ids.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash)
+        if ext.imdb_id and not ids.imdb_id:
+            ids.imdb_id = ext.imdb_id
+        if ext.tvdb_id and not ids.tvdb_id:
+            ids.tvdb_id = ext.tvdb_id
+    enrich_ids(result)
+
+    return result
+
+
 # -- Internal helpers --
 
 
@@ -276,9 +366,9 @@ def fetch_external_ids(
 _ENRICHMENT_AUTHORITY: tuple[str, ...] = ("tmdb", "simkl", "tvdb")
 
 
-def _enrichment_providers() -> list[str]:
+def _enrichment_providers(kind: Optional[str] = None) -> list[str]:
     """Names of configured providers that can resolve an IMDB ID, most trusted first."""
-    configured = {cls.NAME for cls in provider_order() if hasattr(cls, "find_by_imdb_id")}
+    configured = {cls.NAME for cls in provider_order(kind) if hasattr(cls, "find_by_imdb_id")}
     return [name for name in _ENRICHMENT_AUTHORITY if name in configured]
 
 
@@ -298,7 +388,7 @@ def enrich_ids(result: MetadataResult) -> None:
     kind = result.kind or "movie"
 
     # Step 1: Collect enrichment results from all available providers
-    authority = {name: i for i, name in enumerate(_enrichment_providers())}
+    authority = {name: i for i, name in enumerate(_enrichment_providers(kind))}
     enrichments: list[tuple[str, ExternalIds]] = []
     for provider_name in authority:
         p = get_provider(provider_name)
@@ -477,9 +567,11 @@ def _cached_to_result(cached: dict, provider_name: str, kind: str) -> Optional[M
             source="tvdb",
             raw=cached,
         )
-    elif provider_name == "imdbapi":
-        title = cached.get("primaryTitle") or cached.get("originalTitle")
-        year = cached.get("startYear")
+    elif provider_name == "imdb":
+        from unshackle.core.providers.imdb import primary_language
+
+        title = (cached.get("titleText") or {}).get("text") or (cached.get("originalTitleText") or {}).get("text")
+        year = (cached.get("releaseYear") or {}).get("year")
         imdb_id = cached.get("id")
         # Restore enriched IDs that were saved alongside the raw data
         enriched = cached.get("_enriched_ids", {})
@@ -493,7 +585,8 @@ def _cached_to_result(cached: dict, provider_name: str, kind: str) -> Optional[M
                 tmdb_kind=enriched.get("tmdb_kind"),
                 tvdb_id=enriched.get("tvdb_id"),
             ),
-            source="imdbapi",
+            original_language=primary_language(cached),
+            source="imdb",
             raw=cached,
         )
     return None
@@ -513,5 +606,6 @@ __all__ = [
     "get_title_by_id",
     "get_year_by_id",
     "provider_order",
+    "resolve_by_ids",
     "search_metadata",
 ]

@@ -39,6 +39,7 @@ class OMDBProvider(MetadataProvider):
 
     NAME = "omdb"
     REQUIRES_KEY = True
+    ID_KIND = "imdb"
     BASE_URL = "https://www.omdbapi.com/"
 
     def is_available(self) -> bool:

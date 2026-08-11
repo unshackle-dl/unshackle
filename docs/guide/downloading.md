@@ -621,50 +621,78 @@ unshackle dl --skip-dl --export EXAMPLE 81234567
 ## Metadata and tagging
 
 unshackle looks up metadata automatically, but you can override the identifiers used for
-tagging and naming:
+tagging and naming. An ID you give is authoritative: unshackle looks it up directly instead of
+searching by title, and the ID stays in the tags. An ID only settles *which* title this is.
+To also take that source's title, year and original language, add `--enrich`. Give at most one
+of `--tmdb`, `--imdb` and `--tvdb`; unshackle works the rest out from it. To stop the automatic
+lookups but keep the IDs you give, set
+[`disable_metadata`](../reference/configuration/misc.md#external-api-keys) in your config.
 
 | Flag | Example | Purpose |
 | --- | --- | --- |
-| `--tmdb` | `--tmdb 27205` | Use this TMDB ID instead of automatic lookup. |
-| `--imdb` | `--imdb tt1375666` | Use this IMDb ID. |
-| `--tvdb` | `--tvdb 73871` | Use this TVDB ID instead of looking the series up. |
+| `--tmdb` | `--tmdb 27205` | Use this TMDB ID instead of an automatic search. Needs `tmdb_api_key`. |
+| `--imdb` | `--imdb tt1375666` | Use this IMDb ID instead of an automatic search. Needs no key. |
+| `--tvdb` | `--tvdb 73871` | Use this TVDB ID instead of looking the series up. Needs `tvdb_api_key`. |
 | `--animeapi` | `--animeapi mal:12345` | Resolve via AnimeAPI (`mal:`/`anilist:` prefix; defaults to MAL). |
-| `--enrich` | - | Override the show title and year from an external source, and fill in the original language. **Requires** one of `--tmdb`, `--imdb`, `--tvdb`, or `--animeapi`. |
+| `--enrich` | - | Overwrite the show title, year and original language with the external source's. **Requires** one of `--tmdb`, `--imdb`, `--tvdb`, or `--animeapi`. |
 | `--tvdb-order` | `--tvdb-order dvd` | Renumber episodes to a TVDB season order. Needs `tvdb_api_key`. |
 
-```shell title="Force the right IMDb match and enrich the title"
+```shell title="Force the right IMDb match, and keep the service's own naming"
+unshackle dl --imdb tt1375666 EXAMPLE 81234567
+```
+
+```shell title="Force the match and take IMDb's title, year and language too"
 unshackle dl --imdb tt1375666 --enrich EXAMPLE 81234567
 ```
 
 ### What each metadata provider supplies
 
-Providers differ in what they answer with, so `--enrich` reads different fields depending on
-which ID you gave it. A provider only runs when its key is configured:
+Providers differ in what they answer with, so the fields `--enrich` can replace depend on
+which ID you gave. Every provider except `imdb` only runs when its key is configured:
 
 | Provider | Config key | Title and year | Original language | External IDs it returns |
 | --- | --- | --- | --- | --- |
 | TMDB | `tmdb_api_key` | yes | yes, alpha-2 such as `ko` | IMDb, TMDB, TVDB |
 | TVDB | `tvdb_api_key` | yes | yes, alpha-3 such as `kor` | TMDB, TVDB, sometimes IMDb |
 | OMDb | `omdb_api_key` | yes | yes, as an English name such as `Korean` | IMDb |
-| IMDxAPI | `imdb_api_enabled` | yes | only when looked up by ID | IMDb |
+| IMDb | *(no key needed)* | yes | yes, alpha-2 such as `ko` | IMDb |
 | SIMKL | `simkl_client_id` | yes | no, it publishes a country and no language | IMDb, TMDB, TVDB |
 
 Whatever the tag looks like, unshackle normalises it before use, so `ko`, `kor` and `Korean`
 all end up as the same language.
 
-`--enrich` consults these in a fixed order:
+Each ID goes to the providers that read that kind of ID, in
+[`metadata_providers`](../reference/configuration/misc.md#external-api-keys) order:
 
 - `--tmdb` reads TMDB.
-- `--imdb` tries IMDxAPI, then falls back to OMDb. Since `imdb_api_enabled` is `false` by
-  default, an OMDb key is what makes this path work for most people.
+- `--imdb` reads IMDb, then falls back to OMDb. IMDb needs no key, so this path works out of
+  the box, and an OMDb key only matters when IMDb has no answer.
 - `--tvdb` reads TVDB. It needs `tvdb_api_key`.
 - `--animeapi` supplies a title, plus whichever IDs AnimeAPI knows for the show. If that
   includes a TMDB, IMDb or TVDB ID, the year and language come from that provider. If it
   does not, pair it with `--tmdb`, `--imdb` or `--tvdb`.
 
-Language is the one field `--enrich` will not overwrite. A service that already reported an
-original language keeps it, because the platform knows its own catalogue better than a
-third-party match does. Everything else follows the usual override behaviour.
+Give **one** of `--tmdb`, `--imdb` and `--tvdb`. They cannot be combined, because one ID does
+the job on its own: unshackle resolves the other two from it and writes all three to the tags.
+Passing two is an error rather than a silent choice between them. `--animeapi` is the exception
+and still pairs with one of the three, which is what to do when AnimeAPI knows no IDs for the
+show.
+
+The ID you give must have a provider that can actually resolve it, so unshackle checks that
+before it downloads anything. `--tmdb` without `tmdb_api_key`, or an ID whose providers your
+`metadata_providers` list leaves out, fails immediately with a message naming what to set.
+`--imdb` needs no key, since the `imdb` provider is keyless and in the default order.
+
+With `--enrich`, the title, year and original language are all replaced with the external
+source's values, whether or not the service already filled them in. A field the source does
+not answer with is left alone, and unshackle logs which fields those were, so a provider with
+a thin record cannot blank out what the service told you.
+
+!!! warning "`--enrich` replaces the original language, which affects more than the filename"
+    Track selection reads the original language, so replacing it changes which audio is
+    treated as the original. That is the point when a service mislabels it, but it means a
+    wrong ID can pick the wrong audio track and not only write a wrong name. Without
+    `--enrich` the service's own value is kept and track selection is untouched.
 
 ### Episode ordering
 
