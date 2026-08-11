@@ -35,7 +35,7 @@ folder-kind keys.
 
 ??? example "All valid template variables"
     `title`, `year`, `season`, `episode`, `season_episode`, `episode_name`, `part`,
-    `date`, `quality`, `resolution`, `source`, `tag`, `track_number`, `artist`,
+    `absolute`, `date`, `quality`, `resolution`, `source`, `tag`, `track_number`, `artist`,
     `album_artist`, `album`, `disc`, `track_total`, `disc_total`, `release_type`, `genre`,
     `explicit`, `isrc`, `upc`, `label`, `audio`, `audio_channels`, `audio_full`, `atmos`,
     `dual`, `multi`, `dubbed`, `video`, `hdr`, `hfr`, `edition`, `repack`, `lang_tag`,
@@ -50,6 +50,14 @@ folder-kind keys.
     standalone variable only in a template that names neither `{episode}` nor
     `{season_episode}`, and note that it is always empty in a folder template, since
     folders do not carry the part.
+
+!!! tip "`{absolute}` counts episodes across seasons"
+    `absolute` holds the absolute episode number, zero-padded to 3 digits (`007`), and is
+    empty on titles that have none. It is added to the name and never replaces `{season}`
+    or `{episode}`. Any series with a TVDB absolute order can use it, anime most often.
+    Services can supply it, and
+    [`--enrich`](../../guide/downloading.md#metadata-and-tagging) fills it in from TVDB.
+    Use `{absolute?}` so the name stays clean when it is unknown.
 
 ## Tagging & naming keys
 

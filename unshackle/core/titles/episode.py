@@ -16,8 +16,10 @@ from unshackle.core.utils.template_formatter import TemplateFormatter, detect_sp
 
 
 class Episode(Title):
-    # class-level default so Episodes restored from an older title cache read as part-less
+    # class-level defaults so Episodes restored from an older title cache read as part-less
+    # and without an absolute number
     part: Optional[int] = None
+    absolute: Optional[int] = None
 
     def __init__(
         self,
@@ -33,6 +35,7 @@ class Episode(Title):
         description: Optional[str] = None,
         air_date: Optional[Union[date, str]] = None,
         part: Optional[Union[int, str]] = None,
+        absolute: Optional[Union[int, str]] = None,
     ) -> None:
         super().__init__(id_, service, language, data)
 
@@ -64,6 +67,15 @@ class Episode(Title):
             # parts are 1-based; a falsy 0 would read as "no part" downstream
             if part <= 0:
                 raise ValueError(f"Episode part cannot be {part}")
+
+        if absolute is not None:
+            if isinstance(absolute, str) and absolute.isdigit():
+                absolute = int(absolute)
+            # bool is an int subclass; True would render as "001" in filenames
+            elif isinstance(absolute, bool) or not isinstance(absolute, int):
+                raise TypeError(f"Expected absolute to be an int, not {absolute!r}")
+            if absolute <= 0:
+                raise ValueError(f"Episode absolute cannot be {absolute}")
 
         if name is not None and not isinstance(name, str):
             raise TypeError(f"Expected name to be a str, not {name!r}")
@@ -104,6 +116,7 @@ class Episode(Title):
         self.description = description
         self.air_date = air_date
         self.part = part
+        self.absolute = absolute
 
     def matches_wanted(self, wanted: Collection[str]) -> bool:
         """Whether a parsed ``-w`` key set selects this episode.
@@ -137,6 +150,7 @@ class Episode(Title):
         context["episode_name"] = self.name or ""
         context["date"] = ""
         context["part"] = self.part if include_part and self.part is not None else ""
+        context["absolute"] = f"{self.absolute:03}" if self.absolute is not None else ""
         if self.air_date:
             # daily/sports: air date replaces SxxExx
             disp = self._air_date_display()

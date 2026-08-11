@@ -698,6 +698,12 @@ source's values, whether or not the service already filled them in. A field the 
 not answer with is left alone, and unshackle logs which fields those were, so a provider with
 a thin record cannot blank out what the service told you.
 
+`--enrich` also fills in the absolute episode number of each episode from TVDB's absolute
+order, for any series that has one and where the service did not supply it. Anime is the
+usual beneficiary, but no part of this is limited to anime. This only adds the
+[`{absolute}`](../reference/configuration/output.md#output_template) naming variable. The
+season and episode numbers are never changed.
+
 !!! warning "`--enrich` replaces the original language, which affects more than the filename"
     Track selection reads the original language, so replacing it changes which audio is
     treated as the original. That is the point when a service mislabels it, but it means a

@@ -288,6 +288,8 @@ class EXAMPLE(Service):
                         data=ep,
                         # daily/sports: name by date instead of SxxExx (date or ISO string)
                         # air_date=ep.get("airDate"),
+                        # feeds the {absolute} naming token, --enrich fills it in from TVDB when unset
+                        absolute=ep.get("absoluteNumber"),
                     )
                 )
                 # Per-title override of the ANIME class attr, for a mixed catalogue. Leave it

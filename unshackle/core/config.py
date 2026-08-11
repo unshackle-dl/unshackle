@@ -175,6 +175,7 @@ class Config:
             "season_episode",
             "episode_name",
             "part",
+            "absolute",
             "date",
             "quality",
             "resolution",

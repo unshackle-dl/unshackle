@@ -1656,6 +1656,11 @@ class dl:
                     if enrich_lang:
                         t.language = enrich_lang
 
+            if isinstance(titles, Series):
+                self.fill_absolute_numbers(
+                    titles, self.tvdb_id or (enrich_result.external_ids.tvdb_id if enrich_result else None)
+                )
+
         if self.tvdb_order and isinstance(titles, Series):
             titles = self.apply_tvdb_order(titles, title_cacher, cache_title_id, cache_region, cache_account_hash)
 
@@ -3910,6 +3915,46 @@ class dl:
         """Whether metadata lookups for this title should prefer AniList."""
         per_title = getattr(title, "anime", None)
         return self.service_anime if per_title is None else bool(per_title)
+
+    def fill_absolute_numbers(self, titles: Series, tvdb_id: Optional[int] = None) -> None:
+        """Fill in missing absolute episode numbers from TVDB's absolute order.
+
+        Additive only: season and number are never written, and an absolute number the
+        service already set is kept.
+        """
+        tvdb = providers.get_provider("tvdb")
+        if not tvdb:
+            self.log.debug("Absolute episode numbers need a tvdb_api_key in your config, skipping.")
+            return
+
+        if not tvdb_id:
+            self.log.debug("Could not resolve a TVDB ID, skipping absolute episode numbers.")
+            return
+
+        keys = list(dict.fromkeys((t.season, t.number) for t in titles))
+        source_order = tvdb.detect_order(tvdb_id, keys)  # type: ignore[attr-defined]
+        if source_order == "absolute":
+            # the service already numbers in absolute order; get_order_map would return the
+            # empty same-order map, but here the episode numbers are their own fill
+            mapping = {key: (*key, None) for key in keys}
+        else:
+            mapping = tvdb.get_order_map(tvdb_id, "absolute", source_order)  # type: ignore[attr-defined]
+        if not mapping:
+            self.log.debug("TVDB has no absolute order for series %s, skipping absolute episode numbers.", tvdb_id)
+            return
+
+        filled = 0
+        for title in titles:
+            if title.absolute is not None:
+                continue
+            entry = mapping.get((title.season, title.number))
+            if not entry:
+                continue
+            title.absolute = entry[1]
+            filled += 1
+
+        if filled:
+            self.log.info("Filled absolute numbers for %d episode(s) from TVDB (ID %s).", filled, tvdb_id)
 
     def apply_tvdb_order(
         self,
