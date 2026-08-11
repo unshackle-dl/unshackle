@@ -94,6 +94,7 @@ class Service(metaclass=ABCMeta):
     ALIASES: tuple[str, ...] = ()  # list of aliases for the service; alternatives to the service tag.
     GEOFENCE: tuple[str, ...] = ()  # list of ip regions required to use the service. empty list == no specific region.
     ANIME: bool = False  # service catalogue is anime; metadata lookups prefer AniList. Title.anime overrides per title.
+    DAILY: bool = False  # catalog is daily/date-based. episodes are named by air date. Title.daily overrides per title.
     # vault namespace override; when set, key vault read/write uses this tag instead of the service's own.
     VAULT_TAG: Optional[str] = None
     # Auth methods the service accepts ("cookies"/"credentials"); when None the REST /services

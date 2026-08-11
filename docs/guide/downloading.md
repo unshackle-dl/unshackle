@@ -427,6 +427,43 @@ with `-` to exclude it.
     unshackle dl -w S01,-S01E01.2 EXAMPLE 81234567
     ```
 
+=== "Air dates"
+
+    ```shell
+    # One day
+    unshackle dl -w 2026-08-11 EXAMPLE 81234567
+
+    # A range of days, colon separated
+    unshackle dl -w 2026-08-01:2026-08-31 EXAMPLE 81234567
+
+    # August, but not the 15th
+    unshackle dl -w 2026-08-01:2026-08-31,-2026-08-15 EXAMPLE 81234567
+    ```
+
+### Daily and date-based content
+
+Talk shows, news and sports have no official episode numbering, so unshackle names them
+by air date. An episode that carries an air date is written as `Show.YYYY.MM.DD` instead of
+`SxxExx`, the `{date}` token holds the ISO date, and the season folder becomes the year.
+
+A service that only carries this kind of content sets `DAILY = True` on its class, and a
+service can set `air_date` on each episode itself. Add `--daily` to mark any other title
+as date-based:
+
+```shell
+unshackle dl --daily --tvdb 73871 --enrich EXAMPLE 81234567
+```
+
+With `--enrich` and a TVDB ID, `--daily` fills in the air date of every episode that has
+none. An air date the service already set is kept. Dates before 1970 and dates in the
+future are skipped, because TVDB carries placeholder schedule dates for episodes that
+have not aired. Without `--enrich` unshackle has no source to fill from, and says so.
+
+A dated episode answers to its air date in `-w`, as well as to its `SxxExx` key. A date
+token is a plain ISO date (`2026-08-11`). A date range uses a colon (`2026-08-01:2026-08-31`),
+because the dashes in a date are part of the date. A range cannot span more than 1000 days.
+Date tokens and `SxxExx` tokens can be mixed in one `-w`.
+
 ### Split episodes
 
 A few services split one episode into several separately playable videos. Where a service
@@ -704,6 +741,9 @@ usual beneficiary, but no part of this is limited to anime. This only adds the
 [`{absolute}`](../reference/configuration/output.md#output_template) naming variable. The
 season and episode numbers are never changed.
 
+With `--daily`, `--enrich` also fills in the air date of each episode from TVDB. See
+[Daily and date-based content](#daily-and-date-based-content).
+
 !!! warning "`--enrich` replaces the original language, which affects more than the filename"
     Track selection reads the original language, so replacing it changes which audio is
     treated as the original. That is the point when a service mislabels it, but it means a
@@ -762,7 +802,8 @@ authoritative list.
 | `--forced-subs` | `-fs` | Include forced subtitles. |
 | `--forced-s-lang` | `-fsl` | Forced subtitle language(s); implies `-fs`. `-` excludes. |
 | `--sub-format` | | Output subtitle format. |
-| `--wanted` | `-w` | Episode/season range. |
+| `--wanted` | `-w` | Episode/season range, or an air date. |
+| `--daily` | | Fill missing air dates from TVDB during `--enrich`. |
 | `--select-titles` | | Interactively pick episodes or films. |
 | `--latest-episode` | | Only the newest episode. |
 | `--video-only` / `--audio-only` / `--subs-only` | `-V` / `-A` / `-S` | Restrict track types. |

@@ -80,6 +80,7 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "tvdb_order": None,
     "anilist_id": None,
     "enrich": False,
+    "daily": False,
     "output_dir": None,
     "no_cache": False,
     "reset_cache": False,

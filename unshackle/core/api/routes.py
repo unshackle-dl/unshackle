@@ -767,6 +767,9 @@ async def download(request: web.Request) -> web.Response:
               enrich:
                 type: boolean
                 description: Overwrite show title, year and original language with the external source's. Requires one of tmdb_id, imdb_id, tvdb_id or anilist_id (default - false)
+              daily:
+                type: boolean
+                description: Treat the title as daily/date-based content and fill missing air dates from TVDB. Needs enrich (default - false)
               no_folder:
                 type: boolean
                 description: Disable folder creation for TV shows (default - false)

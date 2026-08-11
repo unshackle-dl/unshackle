@@ -48,6 +48,7 @@ class Title:
         self.language = language
         self.data = data
         self.anime: Optional[bool] = None
+        self.daily: Optional[bool] = None
 
         self.tracks = Tracks()
 

@@ -107,3 +107,45 @@ def test_dated_folder_groups_by_year(reset_template):
     folder = make_episode(air_date=date(2024, 6, 30)).get_filename(StubMediaInfo(), folder=True)
     assert "2024" in folder
     assert "S2024" not in folder  # season folder is the year, not the faked season
+
+
+# --- selection by date ------------------------------------------------------
+
+
+def test_a_dated_episode_matches_its_iso_date_key():
+    assert make_episode(air_date=date(2024, 6, 30)).matches_wanted({"2024-06-30"})
+
+
+def test_a_dated_episode_still_matches_its_season_episode_key():
+    assert make_episode(air_date=date(2024, 6, 30)).matches_wanted({"2024x181"})
+
+
+def test_a_date_key_does_not_match_another_day():
+    assert not make_episode(air_date=date(2024, 6, 30)).matches_wanted({"2024-07-01"})
+
+
+def test_a_season_episode_exclusion_beats_the_date_key():
+    assert not make_episode(air_date=date(2024, 6, 30)).matches_wanted({"2024-06-30", "!2024x181"})
+
+
+def test_an_undated_episode_is_unaffected_by_date_keys():
+    episode = make_episode()
+    assert not episode.matches_wanted({"2024-06-30"})
+    assert episode.matches_wanted({"2024x181"})
+
+
+# --- the air-date guard -----------------------------------------------------
+
+
+def test_a_pre_1970_air_date_is_rejected():
+    with pytest.raises(ValueError):
+        make_episode(air_date=date(1969, 12, 31))
+
+
+def test_a_future_air_date_is_accepted():
+    future = date.today().replace(year=date.today().year + 1)
+    assert make_episode(air_date=future).air_date == future
+
+
+def test_an_unparseable_air_date_string_is_kept_as_is():
+    assert make_episode(air_date="soon").air_date == "soon"

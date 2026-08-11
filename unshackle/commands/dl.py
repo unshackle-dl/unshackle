@@ -16,6 +16,7 @@ from collections.abc import Iterable
 from concurrent import futures
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
+from datetime import date, timedelta
 from functools import partial
 from http.cookiejar import CookieJar, MozillaCookieJar
 from itertools import product
@@ -60,7 +61,7 @@ from unshackle.core.music import (
     write_music_metadata,
 )
 from unshackle.core.providers.anilist import parse_anilist_ref
-from unshackle.core.providers.tvdb import SEASON_TYPES
+from unshackle.core.providers.tvdb import SEASON_TYPES, _parse_int
 from unshackle.core.proxies import Basic, ExpressVPN, Gluetun, Hola, NordVPN, ProtonVPN, SurfsharkVPN, WindscribeVPN
 from unshackle.core.service import Service
 from unshackle.core.services import Services
@@ -701,6 +702,12 @@ class dl:
         ),
     )
     @click.option(
+        "--daily",
+        is_flag=True,
+        default=False,
+        help="Treat the title as daily/date-based content and fill missing air dates from TVDB during --enrich.",
+    )
+    @click.option(
         "--imdb",
         "imdb_id",
         type=str,
@@ -865,6 +872,7 @@ class dl:
         tvdb_order: Optional[str] = None,
         anilist_id: Optional[Union[int, str]] = None,
         enrich: bool = False,
+        daily: bool = False,
         output_dir: Optional[Path] = None,
         *_: Any,
         **__: Any,
@@ -905,6 +913,7 @@ class dl:
         tvdb_order = ctx.params.get("tvdb_order", tvdb_order)
         anilist_id = ctx.params.get("anilist_id", anilist_id)
         enrich = ctx.params.get("enrich", enrich)
+        daily = ctx.params.get("daily", daily)
         output_dir = ctx.params.get("output_dir", output_dir)
 
         self.profile = profile
@@ -918,13 +927,18 @@ class dl:
         if self.tvdb_order and self.tvdb_order not in SEASON_TYPES:
             raise click.UsageError(f"tvdb_order must be one of {', '.join(SEASON_TYPES)}, not {self.tvdb_order!r}")
         self.enrich = enrich
+        self.daily = daily
         self.output_dir = output_dir
         self.service_anime = False
+        self.service_daily = False
 
         if self.enrich and not (self.tmdb_id or self.imdb_id or self.tvdb_id or self.anilist_id):
             raise click.UsageError(
                 "--enrich requires --tmdb, --imdb, --tvdb, or --anilist to provide a metadata source."
             )
+
+        if self.daily and not self.enrich:
+            self.log.warning("--daily fills air dates from TVDB only with --enrich. A service can set them itself.")
 
         # Initialize debug logger with service name if debug logging is enabled
         if config.debug or logging.root.level == logging.DEBUG:
@@ -1387,6 +1401,7 @@ class dl:
         self.tmdb_searched = False
         self.search_source = None
         self.service_anime = bool(getattr(service, "ANIME", False))
+        self.service_daily = bool(getattr(service, "DAILY", False))
         self.server_cdm = getattr(service, "_server_cdm", False)
         self._remote_service = service if self.server_cdm else None
         start_time = time.time()
@@ -1657,9 +1672,10 @@ class dl:
                         t.language = enrich_lang
 
             if isinstance(titles, Series):
-                self.fill_absolute_numbers(
-                    titles, self.tvdb_id or (enrich_result.external_ids.tvdb_id if enrich_result else None)
-                )
+                enrich_tvdb_id = self.tvdb_id or (enrich_result.external_ids.tvdb_id if enrich_result else None)
+                self.fill_absolute_numbers(titles, enrich_tvdb_id)
+                if any(self.daily_hint(t) for t in titles):
+                    self.fill_air_dates(titles, enrich_tvdb_id)
 
         if self.tvdb_order and isinstance(titles, Series):
             titles = self.apply_tvdb_order(titles, title_cacher, cache_title_id, cache_region, cache_account_hash)
@@ -3915,6 +3931,67 @@ class dl:
         """Whether metadata lookups for this title should prefer AniList."""
         per_title = getattr(title, "anime", None)
         return self.service_anime if per_title is None else bool(per_title)
+
+    def daily_hint(self, title: Optional[Title_T] = None) -> bool:
+        """Whether this title is daily/date-based content named by air date."""
+        per_title = getattr(title, "daily", None)
+        return self.daily or (self.service_daily if per_title is None else bool(per_title))
+
+    def fill_air_dates(self, titles: Series, tvdb_id: Optional[int] = None) -> None:
+        """Fill in missing episode air dates from TVDB.
+
+        Additive only: an air date the service already set is kept.
+        """
+        tvdb = providers.get_provider("tvdb")
+        if not tvdb:
+            self.log.debug("Air dates need a tvdb_api_key in your config, skipping.")
+            return
+
+        if not tvdb_id:
+            self.log.debug("Could not resolve a TVDB ID, skipping air dates.")
+            return
+
+        wanted = [t for t in titles if self.daily_hint(t)]
+        if not wanted:
+            return
+
+        keys = list(dict.fromkeys((t.season, t.number) for t in titles))
+        source_order = tvdb.detect_order(tvdb_id, keys)  # type: ignore[attr-defined]
+        episodes = tvdb.get_episodes(tvdb_id, source_order)  # type: ignore[attr-defined]
+        if not episodes:
+            self.log.debug("TVDB listed no episodes for series %s, skipping air dates.", tvdb_id)
+            return
+
+        aired_by_key: dict[tuple[int, int], str] = {}
+        for episode in episodes:
+            season, number = _parse_int(episode.get("seasonNumber")), _parse_int(episode.get("number"))
+            aired = episode.get("aired")
+            if season is None or number is None or not aired:
+                continue
+            aired_by_key[(season, number)] = str(aired)
+
+        # TVDB carries placeholder schedule dates for unaired episodes. Stamping one would
+        # name the file with a date the episode never aired on.
+        limit = date.today() + timedelta(days=1)
+
+        filled = 0
+        for title in wanted:
+            if title.air_date is not None:
+                continue
+            aired = aired_by_key.get((title.season, title.number))
+            if not aired:
+                continue
+            try:
+                air_date = date.fromisoformat(aired[:10])
+            except ValueError:
+                continue
+            if air_date.year < 1970 or air_date > limit:
+                continue
+            title.air_date = air_date
+            filled += 1
+
+        if filled:
+            self.log.info("Filled air dates for %d episode(s) from TVDB (ID %s).", filled, tvdb_id)
 
     def fill_absolute_numbers(self, titles: Series, tvdb_id: Optional[int] = None) -> None:
         """Fill in missing absolute episode numbers from TVDB's absolute order.

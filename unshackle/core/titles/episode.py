@@ -108,6 +108,9 @@ class Episode(Title):
             except ValueError:
                 pass
 
+        if isinstance(air_date, date) and air_date.year < 1970:
+            raise ValueError(f"Episode air date cannot be {air_date}")
+
         self.title = title
         self.season = season
         self.number = number
@@ -122,10 +125,13 @@ class Episode(Title):
         """Whether a parsed ``-w`` key set selects this episode.
 
         A part-ful episode answers to both its base key and its part key, so ``-w s1e1``
-        takes every part. ``!`` keys are part-qualified exclusions resolved here.
+        takes every part. A dated episode also answers to its ISO air date.
+        ``!`` keys are part-qualified exclusions resolved here.
         """
         base = f"{self.season}x{self.number}"
         keys = (base,) if self.part is None else (base, f"{base}.{self.part}")
+        if isinstance(self.air_date, date):
+            keys = (*keys, self.air_date.isoformat())
         if any(f"!{k}" in wanted for k in keys):
             return False
         return any(k in wanted for k in keys)

@@ -99,6 +99,8 @@ Declared at class level to configure framework behaviour:
 | `VAULT_TAG` | `Optional[str]` | Overrides the key-vault namespace so sibling services can share one vault. Default `None` (use the service's own tag). |
 | `AUTH_METHODS` | `Optional[tuple[str, ...]]` | Auth methods accepted (`"cookies"` / `"credentials"`). When `None`, the REST `/services` endpoint infers them from `authenticate()`. |
 | `NO_SUBTITLES` | `bool` | Set `True` on a service with no subtitle tracks to skip subtitle handling entirely. |
+| `ANIME` | `bool` | Set `True` when the catalog is anime, so metadata lookups prefer AniList. A title's own `anime` flag overrides it. |
+| `DAILY` | `bool` | Set `True` when the catalog is daily/date-based (talk shows, news, sports), so episodes are named by air date. A title's own `daily` flag overrides it. |
 
 !!! note "`NO_SUBTITLES` is a convention, not a base-class attribute"
     `NO_SUBTITLES` is checked by `dl.py` via `hasattr` and is deliberately **not**

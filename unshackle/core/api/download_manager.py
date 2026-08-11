@@ -422,6 +422,7 @@ def _perform_download(
         "tvdb_order": params.get("tvdb_order"),
         "anilist_id": params.get("anilist_id"),
         "enrich": params.get("enrich", False),
+        "daily": params.get("daily", False),
         "output_dir": Path(params["output_dir"]) if params.get("output_dir") else None,
         "no_cache": params.get("no_cache", False),
         "reset_cache": params.get("reset_cache", False),
@@ -454,6 +455,7 @@ def _perform_download(
         tvdb_order=params.get("tvdb_order"),
         anilist_id=params.get("anilist_id"),
         enrich=params.get("enrich", False),
+        daily=params.get("daily", False),
         output_dir=Path(params["output_dir"]) if params.get("output_dir") else None,
     )
     # Per-request CDM override (a device name in the WVDs dir); get_cdm() takes it first.
