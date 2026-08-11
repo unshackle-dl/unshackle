@@ -4138,12 +4138,19 @@ class dl:
                 year=title.year,
                 air_date=title.air_date.isoformat() if isinstance(title.air_date, date) else title.air_date,
             )
+            # conditional, so meta for a title without them is unchanged
             if title.part is not None:
                 meta["part"] = title.part
+            if title.absolute is not None:
+                meta["absolute"] = title.absolute
+            if getattr(title, "daily", None) is not None:
+                meta["daily"] = title.daily
         elif isinstance(title, Movie):
             meta.update(type="movie", name=title.name, year=title.year)
         else:
             meta.update(type="movie", name=str(title))
+        if getattr(title, "anime", None) is not None:
+            meta["anime"] = title.anime
         return meta
 
     def write_export(self, export: Path, title: Title_T, track: AnyTrack, drm: Any = None) -> None:

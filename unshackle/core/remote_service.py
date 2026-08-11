@@ -288,8 +288,9 @@ def _match_track(remote_track: Track, local_tracks: list) -> Optional[Track]:
 def _build_title(info: Dict[str, Any], service_tag: str, fallback_id: str) -> Union[Episode, Movie]:
     svc_class = type(service_tag, (), {})
     lang = Language.get(info["language"]) if info.get("language") else None
+    title: Union[Episode, Movie]
     if info.get("type") == "episode":
-        return Episode(
+        title = Episode(
             id_=info.get("id", fallback_id),
             service=svc_class,
             title=info.get("series_title", "Unknown"),
@@ -300,14 +301,22 @@ def _build_title(info: Dict[str, Any], service_tag: str, fallback_id: str) -> Un
             language=lang,
             air_date=info.get("air_date"),
             part=info.get("part"),
+            absolute=info.get("absolute"),
         )
-    return Movie(
-        id_=info.get("id", fallback_id),
-        service=svc_class,
-        name=info.get("name", "Unknown"),
-        year=info.get("year"),
-        language=lang,
-    )
+        if "daily" in info:
+            title.daily = info["daily"]
+    else:
+        title = Movie(
+            id_=info.get("id", fallback_id),
+            service=svc_class,
+            name=info.get("name", "Unknown"),
+            year=info.get("year"),
+            language=lang,
+        )
+    # the synthetic service class carries no ANIME/DAILY, so the flags only survive per title
+    if "anime" in info:
+        title.anime = info["anime"]
+    return title
 
 
 def resolve_server(server_name: Optional[str]) -> tuple[str, str, dict]:
@@ -388,6 +397,8 @@ class RemoteService:
     ALIASES: tuple[str, ...] = ()
     GEOFENCE: tuple[str, ...] = ()
     NO_SUBTITLES: bool = False
+    ANIME: bool = False
+    DAILY: bool = False
 
     def __init__(
         self,

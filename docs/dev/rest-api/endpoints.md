@@ -223,6 +223,16 @@ Service-specific CLI options may also be passed as additional keys.
 
 Each serialized title carries `type` (`"episode"`, `"movie"`, or `"other"`), `name`, `id`, `language`, `description`, `date`, and `cover_url`. Episodes and movies add `year`; episodes additionally add `series_title`, `season`, and `number`.
 
+These keys are sent only when the title carries them, so a title without them serializes exactly as before:
+
+| Key | Type | On | Meaning |
+| --- | --- | --- | --- |
+| `part` | integer | episode | Part index of a [split episode](../creating-a-service.md#split-episodes), counting from 1. |
+| `air_date` | string | episode | ISO air date of [dated content](../../guide/downloading.md#daily-and-date-based-content). unshackle names the episode by date instead of `SxxExx`. |
+| `absolute` | integer | episode | Absolute episode number across all seasons. |
+| `daily` | boolean | episode | The episode is daily/date-based. Set from the title, or from the service's `DAILY` class attribute. |
+| `anime` | boolean | episode, movie | The title is anime, so metadata lookups prefer AniList. Set from the title, or from the service's `ANIME` class attribute. |
+
 !!! info "`part` on a split episode"
     A service that splits one episode into several separately playable videos reports each
     one as its own episode. Those titles share a `season` and `number` and add a `part`

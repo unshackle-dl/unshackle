@@ -2,6 +2,7 @@ import asyncio
 import enum
 import logging
 import re
+from datetime import date as date_
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
@@ -364,14 +365,39 @@ def serialize_title(title: Title_T) -> Dict[str, Any]:
     # "other" titles carry no year; only Episode/Movie do.
     if isinstance(title, (Episode, Movie)):
         result["year"] = title.year
-    if is_episode:
+    if isinstance(title, Episode):
         result["series_title"] = str(title.title)
         result["season"] = title.season
         result["number"] = title.number
+        # every key below is conditional, so JSON for a title without them is unchanged
         if episode_part is not None:
-            result["part"] = episode_part  # conditional, so part-less JSON is unchanged
+            result["part"] = episode_part
+        if title.air_date is not None:
+            result["air_date"] = (
+                title.air_date.isoformat() if isinstance(title.air_date, date_) else str(title.air_date)
+            )
+        if title.absolute is not None:
+            result["absolute"] = title.absolute
+        if getattr(title, "daily", None) is not None:
+            result["daily"] = title.daily
+    if isinstance(title, (Episode, Movie)) and getattr(title, "anime", None) is not None:
+        result["anime"] = title.anime
 
     return result
+
+
+def _stamp_service_flags(serialized: Dict[str, Any], service_instance: Any) -> Dict[str, Any]:
+    """Fill anime/daily from the service class for titles that set neither.
+
+    The client rebuilds titles from this JSON against a synthetic service class, so a
+    class-level ANIME/DAILY would otherwise be lost on the way across.
+    """
+    for key, attr in (("anime", "ANIME"), ("daily", "DAILY")):
+        if key == "daily" and serialized.get("type") != "episode":
+            continue
+        if serialized.get(key) is None and getattr(type(service_instance), attr, False):
+            serialized[key] = True
+    return serialized
 
 
 def _extract_manifests(tracks) -> List[Dict[str, Any]]:
@@ -678,9 +704,9 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
         titles = service_instance.get_titles()
 
         if hasattr(titles, "__iter__") and not isinstance(titles, str):
-            title_list = [serialize_title(t) for t in titles]
+            title_list = [_stamp_service_flags(serialize_title(t), service_instance) for t in titles]
         else:
-            title_list = [serialize_title(titles)]
+            title_list = [_stamp_service_flags(serialize_title(titles), service_instance)]
 
         return web.json_response({"titles": title_list})
 
@@ -1877,7 +1903,7 @@ async def session_titles_handler(session_id: str, request: Optional[web.Request]
         for t in titles_list:
             tid = str(t.id) if hasattr(t, "id") else str(id(t))
             session.title_map[tid] = t
-            serialized_titles.append(serialize_title(t))
+            serialized_titles.append(_stamp_service_flags(serialize_title(t), service_instance))
 
         return web.json_response(
             {
