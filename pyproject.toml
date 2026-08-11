@@ -64,7 +64,6 @@ dependencies = [
     "pycountry>=24.6.1",
     "language-data>=1.4.0",
     "wasmtime>=41.0.0",
-    "animeapi-py>=0.6.0",
     "rnet>=2.4.2",
     "bandit>=1.9.4",
     "jsonpath-ng>=1.8.0",

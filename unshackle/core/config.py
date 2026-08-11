@@ -120,6 +120,7 @@ class Config:
         self.tvdb_pin: str = kwargs.get("tvdb_pin") or ""
         self.tvdb_order: str = (kwargs.get("tvdb_order") or "").lower()
         self.metadata_providers: Union[list, dict] = kwargs.get("metadata_providers") or []
+        self.anilist_title_language: str = (kwargs.get("anilist_title_language") or "english").lower()
         self.disable_metadata: bool = kwargs.get("disable_metadata", False)
         self.simkl_client_id: str = kwargs.get("simkl_client_id") or ""
         self.decrypt_labs_api_key: str = kwargs.get("decrypt_labs_api_key") or ""

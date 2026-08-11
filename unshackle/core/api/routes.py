@@ -759,12 +759,14 @@ async def download(request: web.Request) -> web.Response:
               tmdb_id:
                 type: integer
                 description: Use this TMDB ID for tagging instead of a title search. Set enrich to also take its title, year and original language. Mutually exclusive with imdb_id and tvdb_id. Needs tmdb_api_key (default - None)
-              animeapi_id:
-                type: string
-                description: Anime database ID via AnimeAPI, e.g. mal:12345 (default - None)
+              anilist_id:
+                oneOf:
+                  - type: integer
+                  - type: string
+                description: AniList ID for tagging instead of a title search, or a MyAnimeList ID as the string mal:21. Combines with one of tmdb_id, imdb_id and tvdb_id, which AniList does not know (default - None)
               enrich:
                 type: boolean
-                description: Overwrite show title, year and original language with the external source's. Requires one of tmdb_id, imdb_id, tvdb_id or animeapi_id (default - false)
+                description: Overwrite show title, year and original language with the external source's. Requires one of tmdb_id, imdb_id, tvdb_id or anilist_id (default - false)
               no_folder:
                 type: boolean
                 description: Disable folder creation for TV shows (default - false)

@@ -72,6 +72,9 @@ class EXAMPLE(Service):
     TITLE_RE = r"^(?:https?://(?:www\.)?domain\.com/details/)?(?P<title_id>[^/?#]+)"
     # NO_SUBTITLES: service-level idiom telling the pipeline subs are handled in-band.
     NO_SUBTITLES = False
+    # ANIME: this catalogue is anime, so metadata lookups ask AniList first. Set it False (the
+    # default) on a mixed catalogue and flag the anime titles individually in get_titles().
+    ANIME = True
     # VAULT_TAG: store/read keys under a different vault namespace than this service's tag.
     # Lets sibling services share one key vault. Omit to use the service's own tag.
     VAULT_TAG = "DIFFERENT_NAME"
@@ -287,6 +290,9 @@ class EXAMPLE(Service):
                         # air_date=ep.get("airDate"),
                     )
                 )
+                # Per-title override of the ANIME class attr, for a mixed catalogue. Leave it
+                # None (the default) and the title inherits the service's ANIME value.
+                episodes[-1].anime = metadata.get("category") == "anime"
         return Series(episodes)
 
     # DEFAULT (shown live): this service needs a SEPARATE manifest per codec/range,

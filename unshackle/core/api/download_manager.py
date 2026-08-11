@@ -420,7 +420,7 @@ def _perform_download(
         "imdb_id": params.get("imdb_id"),
         "tvdb_id": params.get("tvdb_id"),
         "tvdb_order": params.get("tvdb_order"),
-        "animeapi_id": params.get("animeapi_id"),
+        "anilist_id": params.get("anilist_id"),
         "enrich": params.get("enrich", False),
         "output_dir": Path(params["output_dir"]) if params.get("output_dir") else None,
         "no_cache": params.get("no_cache", False),
@@ -452,7 +452,7 @@ def _perform_download(
         imdb_id=params.get("imdb_id"),
         tvdb_id=params.get("tvdb_id"),
         tvdb_order=params.get("tvdb_order"),
-        animeapi_id=params.get("animeapi_id"),
+        anilist_id=params.get("anilist_id"),
         enrich=params.get("enrich", False),
         output_dir=Path(params["output_dir"]) if params.get("output_dir") else None,
     )

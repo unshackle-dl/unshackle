@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Optional, Union
 import requests
 
 from unshackle.core.providers._base import ExternalIds, MetadataProvider, MetadataResult, fuzzy_match, log
+from unshackle.core.providers.anilist import AniListProvider, parse_anilist_ref
 from unshackle.core.providers.imdb import IMDBProvider
 from unshackle.core.providers.omdb import OMDBProvider
 from unshackle.core.providers.simkl import SimklProvider
@@ -15,21 +16,24 @@ if TYPE_CHECKING:
     from unshackle.core.title_cacher import TitleCacher
 
 REGISTRY: dict[str, type[MetadataProvider]] = {
-    cls.NAME: cls for cls in (IMDBProvider, OMDBProvider, SimklProvider, TMDBProvider, TVDBProvider)
+    cls.NAME: cls for cls in (AniListProvider, IMDBProvider, OMDBProvider, SimklProvider, TMDBProvider, TVDBProvider)
 }
 
 # legacy `metadata_providers` names, still accepted
 ALIASES: dict[str, str] = {"imdbapi": "imdb"}
 
-# used when `metadata_providers` is unset
-DEFAULT_ORDER: tuple[str, ...] = ("imdb", "omdb", "simkl", "tmdb", "tvdb")
+# used when `metadata_providers` is unset; anilist answers for anime only, so it costs
+# nothing at the end of the order
+DEFAULT_ORDER: tuple[str, ...] = ("imdb", "omdb", "simkl", "tmdb", "tvdb", "anilist")
 
 
-def provider_order(kind: Optional[str] = None) -> list[type[MetadataProvider]]:
+def provider_order(kind: Optional[str] = None, anime: bool = False) -> list[type[MetadataProvider]]:
     """Provider classes in the order configured by `metadata_providers`.
 
     `metadata_providers` is either a flat list applying to both kinds, or a mapping of
     kind ("tv"/"movie") to its own list. A kind the mapping omits uses `DEFAULT_ORDER`.
+    An `anime` title puts anilist first; the rest of the order stays behind it to
+    fall back on.
     """
     from unshackle.core.config import config
 
@@ -37,6 +41,8 @@ def provider_order(kind: Optional[str] = None) -> list[type[MetadataProvider]]:
     selected = (configured.get(kind) if kind else None) if isinstance(configured, dict) else configured
 
     names = [ALIASES.get(str(n).lower(), str(n).lower()) for n in (selected or DEFAULT_ORDER)]
+    if anime and AniListProvider.NAME in names:
+        names = [AniListProvider.NAME, *names]
     unknown = [n for n in names if n not in REGISTRY]
     if unknown:
         log.warning("Ignoring unknown metadata_providers entries: %s", ", ".join(unknown))
@@ -68,6 +74,7 @@ def search_metadata(
     cache_title_id: Optional[str] = None,
     cache_region: Optional[str] = None,
     cache_account_hash: Optional[str] = None,
+    anime: bool = False,
 ) -> Optional[MetadataResult]:
     """Search all available providers for metadata. Returns best match."""
     from unshackle.core.config import config
@@ -78,7 +85,7 @@ def search_metadata(
         log.debug("Metadata lookups are disabled by config; not searching for %r", title)
         return None
 
-    ordered = provider_order(kind)
+    ordered = provider_order(kind, anime)
 
     # Check cache first
     if title_cacher and cache_title_id:
@@ -290,6 +297,7 @@ def resolve_by_ids(
     tmdb_id: Optional[int] = None,
     imdb_id: Optional[str] = None,
     tvdb_id: Optional[int] = None,
+    anilist_id: Optional[Union[int, str]] = None,
     *,
     title: Optional[str] = None,
     year: Optional[int] = None,
@@ -298,6 +306,7 @@ def resolve_by_ids(
     cache_title_id: Optional[str] = None,
     cache_region: Optional[str] = None,
     cache_account_hash: Optional[str] = None,
+    anime: bool = False,
 ) -> Optional[MetadataResult]:
     """Resolve metadata from user-supplied external IDs, falling back to search only without them.
 
@@ -313,14 +322,16 @@ def resolve_by_ids(
         supplied["imdb"] = imdb_id
     if tvdb_id is not None:
         supplied["tvdb"] = tvdb_id
+    if anilist_id is not None:
+        supplied["anilist"] = anilist_id
 
     if not supplied:
         if not title:
             return None
-        return search_metadata(title, year, kind, title_cacher, cache_title_id, cache_region, cache_account_hash)
+        return search_metadata(title, year, kind, title_cacher, cache_title_id, cache_region, cache_account_hash, anime)
 
     result: Optional[MetadataResult] = None
-    for cls in provider_order(kind):
+    for cls in provider_order(kind, anime):
         provider_id = supplied.get(cls.ID_KIND or "")
         if provider_id is None:
             continue
@@ -346,6 +357,10 @@ def resolve_by_ids(
         ids.imdb_id = imdb_id
     if tvdb_id is not None:
         ids.tvdb_id = tvdb_id
+    if anilist_id is not None and ids.anilist_id is None:
+        ref = parse_anilist_ref(anilist_id)
+        if ref and ref[0] == "id":
+            ids.anilist_id = ref[1]
 
     if ids.tmdb_id and not (ids.imdb_id and ids.tvdb_id):
         ext = fetch_external_ids(ids.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash)
@@ -480,6 +495,8 @@ def _external_ids_to_dict(ext: ExternalIds) -> dict:
         result["tmdb_kind"] = ext.tmdb_kind
     if ext.tvdb_id:
         result["tvdb_id"] = ext.tvdb_id
+    if ext.anilist_id:
+        result["anilist_id"] = ext.anilist_id
     return result
 
 
@@ -567,6 +584,8 @@ def _cached_to_result(cached: dict, provider_name: str, kind: str) -> Optional[M
             source="tvdb",
             raw=cached,
         )
+    elif provider_name == "anilist":
+        return AniListProvider()._to_result(cached)
     elif provider_name == "imdb":
         from unshackle.core.providers.imdb import primary_language
 

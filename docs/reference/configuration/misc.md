@@ -17,6 +17,7 @@ each metadata provider can actually answer with, see
 | `tvdb_pin` | str | `""` | Subscriber PIN, only needed for a user-supported TVDB key. Leave empty for a normal project key. |
 | `tvdb_order` | str | `""` | Default for `--tvdb-order`: renumber episodes to a TVDB season order (`official`, `dvd`, `absolute`, `alternate`, `regional`). Empty keeps the numbering the service gives. |
 | `metadata_providers` | list or map | *(see below)* | Metadata providers to use, in the order they are tried. |
+| `anilist_title_language` | str | `english` | Which AniList title variant to use: `english`, `romaji`, or `native`. |
 | `disable_metadata` | bool | `false` | Set to `true` to stop all automatic metadata lookups. An ID you give yourself is still looked up. |
 | `decrypt_labs_api_key` | str | `""` | Global Decrypt Labs API key (used by remote CDM / vault). |
 | `ipinfo_api_key` | str | `""` | ipinfo.io API key for IP/region lookups. |
@@ -33,16 +34,32 @@ each metadata provider can actually answer with, see
     ignored with a warning. Leave it unset for the default order:
 
     ```yaml
-    metadata_providers: [imdb, omdb, simkl, tmdb, tvdb]
+    metadata_providers: [imdb, omdb, simkl, tmdb, tvdb, anilist]
     ```
 
-    Whatever the order, a provider is skipped when its API key is missing. `imdb` needs no
-    key, so it is always available. Available names are `imdb`, `omdb`, `simkl`, `tmdb`, and
-    `tvdb`. The old name `imdbapi` still works and is read as `imdb`.
+    Whatever the order, unshackle skips a provider that has no API key. `imdb` and
+    `anilist` need no key, so they are always available. Available names are `imdb`, `omdb`,
+    `simkl`, `tmdb`, `tvdb`, and `anilist`. The old name `imdbapi` still works and is read as
+    `imdb`.
+
+    `anilist` is last in the default order. It only answers for anime and returns nothing for
+    anything else, so it is harmless there. Move it earlier if you mostly download anime.
 
     The order applies to a title search and to a direct lookup of an ID you give with
-    `--tmdb`, `--imdb`, or `--tvdb`. A supplied ID always goes to the providers that read
-    that kind of ID, and it never falls back to a title search.
+    `--tmdb`, `--imdb`, `--tvdb`, or `--anilist`. A supplied ID always goes to the providers
+    that read that kind of ID, and it never falls back to a title search.
+
+!!! note "Which AniList title `anilist_title_language` picks"
+    AniList holds up to three titles for a work: the English one, the romaji transliteration,
+    and the native one. This option says which of them unshackle uses:
+
+    ```yaml
+    anilist_title_language: romaji
+    ```
+
+    A work does not always have all three. When the one you asked for is unset on AniList's
+    side, unshackle falls back in the order english → romaji → native. It takes the first one
+    that is set, so you always get a title.
 
 !!! note "What `disable_metadata` turns off"
     With `disable_metadata: true`, unshackle never contacts a metadata provider on its own.
@@ -53,10 +70,10 @@ each metadata provider can actually answer with, see
     disable_metadata: true
     ```
 
-    An ID you give with `--tmdb`, `--imdb`, `--tvdb`, or `--animeapi` is your permission to use
-    that ID, so it still works: the ID is looked up directly, the other IDs are cross
-    referenced from it, and `--enrich` still reads that source. Only the lookups you did not
-    ask for are stopped.
+    An ID you give with `--tmdb`, `--imdb`, `--tvdb`, or `--anilist` is your permission to use
+    that ID. That lookup still works. unshackle looks the ID up directly, cross references the other
+    IDs from it, and `--enrich` still reads that source. Only the lookups you did not ask for
+    are stopped.
 
 !!! note "The `imdb` provider needs no key"
     It replaces the earlier `imdbapi` provider, which read a third-party mirror

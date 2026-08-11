@@ -633,8 +633,8 @@ lookups but keep the IDs you give, set
 | `--tmdb` | `--tmdb 27205` | Use this TMDB ID instead of an automatic search. Needs `tmdb_api_key`. |
 | `--imdb` | `--imdb tt1375666` | Use this IMDb ID instead of an automatic search. Needs no key. |
 | `--tvdb` | `--tvdb 73871` | Use this TVDB ID instead of looking the series up. Needs `tvdb_api_key`. |
-| `--animeapi` | `--animeapi mal:12345` | Resolve via AnimeAPI (`mal:`/`anilist:` prefix; defaults to MAL). |
-| `--enrich` | - | Overwrite the show title, year and original language with the external source's. **Requires** one of `--tmdb`, `--imdb`, `--tvdb`, or `--animeapi`. |
+| `--anilist` | `--anilist 21` | Use this AniList ID instead of an automatic search. `mal:12345` is also accepted. Needs no key. |
+| `--enrich` | - | Overwrite the show title, year and original language with the external source's. **Requires** one of `--tmdb`, `--imdb`, `--tvdb`, or `--anilist`. |
 | `--tvdb-order` | `--tvdb-order dvd` | Renumber episodes to a TVDB season order. Needs `tvdb_api_key`. |
 
 ```shell title="Force the right IMDb match, and keep the service's own naming"
@@ -657,9 +657,20 @@ which ID you gave. Every provider except `imdb` only runs when its key is config
 | OMDb | `omdb_api_key` | yes | yes, as an English name such as `Korean` | IMDb |
 | IMDb | *(no key needed)* | yes | yes, alpha-2 such as `ko` | IMDb |
 | SIMKL | `simkl_client_id` | yes | no, it publishes a country and no language | IMDb, TMDB, TVDB |
+| AniList | *(no key needed)* | yes | yes, worked out from the country of origin, such as `ja` | AniList |
 
 Whatever the tag looks like, unshackle normalises it before use, so `ko`, `kor` and `Korean`
 all end up as the same language.
+
+!!! note "AniList only answers for anime"
+    It is last in the default provider order and returns nothing for a title that is not
+    anime. The only cost is one search that misses. Put `anilist` earlier in
+    [`metadata_providers`](../reference/configuration/misc.md#external-api-keys) if you mostly
+    download anime. Which of the three AniList title variants is used is set by
+    [`anilist_title_language`](../reference/configuration/misc.md#external-api-keys).
+
+    A service can also mark its titles as anime. For those titles unshackle tries AniList
+    first. When AniList has no match, it falls through to the normal order.
 
 Each ID goes to the providers that read that kind of ID, in
 [`metadata_providers`](../reference/configuration/misc.md#external-api-keys) order:
@@ -668,15 +679,14 @@ Each ID goes to the providers that read that kind of ID, in
 - `--imdb` reads IMDb, then falls back to OMDb. IMDb needs no key, so this path works out of
   the box, and an OMDb key only matters when IMDb has no answer.
 - `--tvdb` reads TVDB. It needs `tvdb_api_key`.
-- `--animeapi` supplies a title, plus whichever IDs AnimeAPI knows for the show. If that
-  includes a TMDB, IMDb or TVDB ID, the year and language come from that provider. If it
-  does not, pair it with `--tmdb`, `--imdb` or `--tvdb`.
+- `--anilist` reads AniList, which needs no key. It supplies the title, the year and the
+  original language, and writes an AniList tag. It knows no TMDB, IMDB or TVDB ID, so pair it
+  with `--tmdb`, `--imdb` or `--tvdb` when you want those tags as well.
 
 Give **one** of `--tmdb`, `--imdb` and `--tvdb`. They cannot be combined, because one ID does
 the job on its own: unshackle resolves the other two from it and writes all three to the tags.
-Passing two is an error rather than a silent choice between them. `--animeapi` is the exception
-and still pairs with one of the three, which is what to do when AnimeAPI knows no IDs for the
-show.
+Passing two is an error rather than a silent choice between them. `--anilist` is the exception
+and still pairs with one of the three, which is how you tag an anime title with a western ID.
 
 The ID you give must have a provider that can actually resolve it, so unshackle checks that
 before it downloads anything. `--tmdb` without `tmdb_api_key`, or an ID whose providers your
@@ -760,5 +770,5 @@ authoritative list.
 | `--list` / `--list-titles` / `--skip-dl` | | Dry runs. |
 | `--cdm-only` / `--vaults-only` | | Key source control. |
 | `--export` | | Export track info and keys to JSON. |
-| `--tmdb` / `--imdb` / `--tvdb` / `--animeapi` / `--enrich` | | Metadata overrides. |
+| `--tmdb` / `--imdb` / `--tvdb` / `--anilist` / `--enrich` | | Metadata overrides. |
 | `--tvdb-order` | | Renumber episodes to a TVDB season order. |

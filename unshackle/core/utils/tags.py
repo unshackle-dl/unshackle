@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 from xml.sax.saxutils import escape
 
 from unshackle.core import binaries
@@ -74,6 +74,8 @@ def _build_tags_from_ids(ids: ExternalIds, kind: str) -> dict[str, str]:
     if ids.tvdb_id:
         prefix = "movies" if kind == "movie" else "series"
         tags["TVDB2"] = f"{prefix}/{ids.tvdb_id}"
+    if ids.anilist_id:
+        tags["ANILIST"] = str(ids.anilist_id)
     return tags
 
 
@@ -83,6 +85,8 @@ def tag_file(
     tmdb_id: Optional[int] = None,
     imdb_id: Optional[str] = None,
     tvdb_id: Optional[int] = None,
+    anilist_id: Optional[Union[int, str]] = None,
+    anime: bool = False,
 ) -> None:
     log.debug("Tagging file %s with title %r", path, title)
     custom_tags: dict[str, str] = {}
@@ -114,13 +118,15 @@ def tag_file(
 
     if config.tag_imdb_tmdb:
         try:
-            has_ids = tmdb_id is not None or imdb_id is not None or tvdb_id is not None
+            has_ids = any(value is not None for value in (tmdb_id, imdb_id, tvdb_id, anilist_id))
             if not get_available_providers() and not has_ids:
                 log.debug("No metadata providers available; skipping tag lookup")
                 apply_tags(path, custom_tags)
                 return
 
-            result = resolve_by_ids(tmdb_id, imdb_id, tvdb_id, title=name, year=year, kind=kind)
+            result = resolve_by_ids(
+                tmdb_id, imdb_id, tvdb_id, anilist_id, title=name, year=year, kind=kind, anime=anime
+            )
 
             if result and result.external_ids:
                 standard_tags = _build_tags_from_ids(result.external_ids, kind)

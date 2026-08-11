@@ -18,7 +18,7 @@ after the flag's internal destination rather than its visible name; set these ex
 | `--list` | `list` |
 | `--tmdb` | `tmdb_id` |
 | `--imdb` | `imdb_id` |
-| `--animeapi` | `animeapi_id` |
+| `--anilist` | `anilist_id` |
 | `-naa` / `--noatmos` | `no_atmos` |
 | `-o` / `--output` | `output_dir` |
 | `--cdm-only` / `--vaults-only` | `cdm_only` |

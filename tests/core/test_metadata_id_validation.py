@@ -112,3 +112,72 @@ def test_api_accepts_one_id(payload: dict) -> None:
 def test_api_still_reports_a_malformed_id_first() -> None:
     err = validate_download_parameters({"tmdb_id": "12345", "imdb_id": "tt1"})
     assert err and "positive integer" in err
+
+
+# ---------- --anilist stays outside the mutual exclusion ----------
+
+
+@pytest.mark.parametrize("value", [21, "21", "mal:21"])
+def test_anilist_alone_passes_without_any_key(monkeypatch: pytest.MonkeyPatch, value: object) -> None:
+    _with_keys(monkeypatch)
+    assert validate_metadata_ids(None, None, None, value) is None
+
+
+def test_anilist_pairs_with_one_other_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_keys(monkeypatch)
+    assert validate_metadata_ids(None, "tt1375666", None, 21) is None
+
+
+def test_anilist_does_not_excuse_two_western_ids(monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_keys(monkeypatch)
+    with pytest.raises(click.UsageError) as exc:
+        validate_metadata_ids(27205, "tt1375666", None, 21)
+    assert "cannot be used together" in str(exc.value)
+
+
+@pytest.mark.parametrize("value", ["tt1375666", "anilist:21", "mal:", "abc", "-3"])
+def test_a_malformed_anilist_value_is_refused(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    _with_keys(monkeypatch)
+    with pytest.raises(click.UsageError) as exc:
+        validate_metadata_ids(None, None, None, value)
+    assert "--anilist" in str(exc.value)
+
+
+@pytest.mark.parametrize("payload", [{"anilist_id": 21}, {"anilist_id": "mal:21"}, {"anilist_id": "21"}])
+def test_api_accepts_an_anilist_id(payload: dict) -> None:
+    assert validate_download_parameters(payload) is None
+
+
+def test_api_accepts_anilist_alongside_one_western_id() -> None:
+    assert validate_download_parameters({"imdb_id": "tt1375666", "anilist_id": 21}) is None
+
+
+def test_api_still_refuses_two_western_ids_with_anilist() -> None:
+    err = validate_download_parameters({"tmdb_id": 27205, "imdb_id": "tt1375666", "anilist_id": 21})
+    assert err and "multiple external IDs" in err
+
+
+@pytest.mark.parametrize("value", [0, -3, True, "mal:", "tt1375666", "anilist:21", 1.5])
+def test_api_refuses_a_malformed_anilist_id(value: object) -> None:
+    err = validate_download_parameters({"anilist_id": value})
+    assert err and "anilist_id" in err
+
+
+@pytest.mark.parametrize("value", ["0", "mal:0", "²", "21.5"])
+def test_a_non_positive_or_non_decimal_anilist_value_is_refused(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    _with_keys(monkeypatch)
+    with pytest.raises(click.UsageError) as exc:
+        validate_metadata_ids(None, None, None, value)
+    assert "--anilist" in str(exc.value)
+
+
+@pytest.mark.parametrize("payload", [{"anilist_id": "MAL:21"}, {"anilist_id": "007"}, {"anilist_id": " 21 "}])
+def test_api_accepts_what_the_cli_accepts(payload: dict) -> None:
+    """Both surfaces share parse_anilist_ref, so their accept sets cannot drift."""
+    assert validate_download_parameters(payload) is None
+
+
+@pytest.mark.parametrize("value", ["0", "mal:0", "²"])
+def test_api_refuses_what_the_cli_refuses(value: str) -> None:
+    err = validate_download_parameters({"anilist_id": value})
+    assert err and "anilist_id" in err

@@ -59,6 +59,7 @@ from unshackle.core.music import (
     write_music_manifest,
     write_music_metadata,
 )
+from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.providers.tvdb import SEASON_TYPES
 from unshackle.core.proxies import Basic, ExpressVPN, Gluetun, Hola, NordVPN, ProtonVPN, SurfsharkVPN, WindscribeVPN
 from unshackle.core.service import Service
@@ -137,11 +138,20 @@ def normalize_dl_config(dl_config: dict[str, Any]) -> dict[str, Any]:
 ID_PROVIDER_KEYS = {"tmdb": "tmdb_api_key", "tvdb": "tvdb_api_key", "omdb": "omdb_api_key"}
 
 
-def validate_metadata_ids(tmdb_id: Optional[int], imdb_id: Optional[str], tvdb_id: Optional[int]) -> None:
+def validate_metadata_ids(
+    tmdb_id: Optional[int],
+    imdb_id: Optional[str],
+    tvdb_id: Optional[int],
+    anilist_id: Optional[Union[int, str]] = None,
+) -> None:
     """Reject ID flags that conflict, or that no configured provider could ever resolve.
 
-    Only ever called with the IDs the user gave, never with the ones --animeapi back-fills.
+    --anilist stays outside the mutual exclusion: AniList knows no western IDs, so pairing
+    it with one of the other three is how an anime title gets both.
     """
+    if anilist_id and not parse_anilist_ref(anilist_id):
+        raise click.UsageError("--anilist takes an AniList ID like 21, or a MyAnimeList ID like mal:21.")
+
     supplied = [
         (flag, value) for flag, value in (("--tmdb", tmdb_id), ("--imdb", imdb_id), ("--tvdb", tvdb_id)) if value
     ]
@@ -673,12 +683,13 @@ class dl:
         "a series' Streaming Order is 'alternate'. Defaults to the tvdb_order config option.",
     )
     @click.option(
-        "--animeapi",
-        "animeapi_id",
+        "--anilist",
+        "anilist_id",
         type=str,
         default=None,
-        help="Anime database ID via AnimeAPI (e.g. mal:12345, anilist:98765). Defaults to MAL if no prefix. "
-        "Back-fills the TMDB, IMDB and TVDB IDs it knows for the show.",
+        help="Use this AniList ID for tagging instead of an automatic search, or a MyAnimeList ID as mal:12345. "
+        "Add --enrich to also take its title, year and original language. Combines with one of "
+        "--tmdb, --imdb or --tvdb, which AniList does not know.",
     )
     @click.option(
         "--enrich",
@@ -686,7 +697,7 @@ class dl:
         default=False,
         help=(
             "Overwrite the show title, year and original language with the external source's. "
-            "Requires --tmdb, --imdb, --tvdb, or --animeapi."
+            "Requires --tmdb, --imdb, --tvdb, or --anilist."
         ),
     )
     @click.option(
@@ -852,7 +863,7 @@ class dl:
         imdb_id: Optional[str] = None,
         tvdb_id: Optional[int] = None,
         tvdb_order: Optional[str] = None,
-        animeapi_id: Optional[str] = None,
+        anilist_id: Optional[Union[int, str]] = None,
         enrich: bool = False,
         output_dir: Optional[Path] = None,
         *_: Any,
@@ -892,38 +903,27 @@ class dl:
         imdb_id = ctx.params.get("imdb_id", imdb_id)
         tvdb_id = ctx.params.get("tvdb_id", tvdb_id)
         tvdb_order = ctx.params.get("tvdb_order", tvdb_order)
-        animeapi_id = ctx.params.get("animeapi_id", animeapi_id)
+        anilist_id = ctx.params.get("anilist_id", anilist_id)
         enrich = ctx.params.get("enrich", enrich)
         output_dir = ctx.params.get("output_dir", output_dir)
 
         self.profile = profile
         self.proxy_requested = bool(proxy)
-        validate_metadata_ids(tmdb_id, imdb_id, tvdb_id)
+        validate_metadata_ids(tmdb_id, imdb_id, tvdb_id, anilist_id)
         self.tmdb_id = tmdb_id
         self.imdb_id = imdb_id
         self.tvdb_id = tvdb_id
+        self.anilist_id = anilist_id
         self.tvdb_order = (tvdb_order or config.tvdb_order or "").lower()
         if self.tvdb_order and self.tvdb_order not in SEASON_TYPES:
             raise click.UsageError(f"tvdb_order must be one of {', '.join(SEASON_TYPES)}, not {self.tvdb_order!r}")
         self.enrich = enrich
-        self.animeapi_title: Optional[str] = None
         self.output_dir = output_dir
+        self.service_anime = False
 
-        if animeapi_id:
-            from unshackle.core.utils.animeapi import resolve_animeapi
-
-            anime_title, anime_ids = resolve_animeapi(animeapi_id)
-            self.animeapi_title = anime_title
-            if not self.tmdb_id and anime_ids.tmdb_id:
-                self.tmdb_id = anime_ids.tmdb_id
-            if not self.imdb_id and anime_ids.imdb_id:
-                self.imdb_id = anime_ids.imdb_id
-            if not self.tvdb_id and anime_ids.tvdb_id:
-                self.tvdb_id = anime_ids.tvdb_id
-
-        if self.enrich and not (self.tmdb_id or self.imdb_id or self.tvdb_id or self.animeapi_title):
+        if self.enrich and not (self.tmdb_id or self.imdb_id or self.tvdb_id or self.anilist_id):
             raise click.UsageError(
-                "--enrich requires --tmdb, --imdb, --tvdb, or --animeapi to provide a metadata source."
+                "--enrich requires --tmdb, --imdb, --tvdb, or --anilist to provide a metadata source."
             )
 
         # Initialize debug logger with service name if debug logging is enabled
@@ -949,7 +949,7 @@ class dl:
                         "tag": tag,
                         "tmdb_id": self.tmdb_id,
                         "imdb_id": self.imdb_id,
-                        "animeapi_id": animeapi_id,
+                        "anilist_id": anilist_id,
                         "enrich": enrich,
                         "cli_params": {
                             k: v
@@ -961,7 +961,7 @@ class dl:
                                 "tag",
                                 "tmdb_id",
                                 "imdb_id",
-                                "animeapi_id",
+                                "anilist_id",
                                 "enrich",
                             ]
                         },
@@ -1386,6 +1386,7 @@ class dl:
     ) -> None:
         self.tmdb_searched = False
         self.search_source = None
+        self.service_anime = bool(getattr(service, "ANIME", False))
         self.server_cdm = getattr(service, "_server_cdm", False)
         self._remote_service = service if self.server_cdm else None
         start_time = time.time()
@@ -1615,22 +1616,20 @@ class dl:
             enrich_year: Optional[int] = None
             enrich_lang: Optional[Language] = None
 
-            if self.animeapi_title:
-                enrich_title = self.animeapi_title
-
             enrich_result = providers.resolve_by_ids(
                 self.tmdb_id,
                 self.imdb_id,
                 self.tvdb_id,
+                self.anilist_id,
                 kind=kind,
                 title_cacher=title_cacher,
                 cache_title_id=cache_title_id,
                 cache_region=cache_region,
                 cache_account_hash=cache_account_hash,
+                anime=self.anime_hint(sample_title),
             )
             if enrich_result:
-                if not enrich_title:
-                    enrich_title = enrich_result.title
+                enrich_title = enrich_result.title
                 enrich_year = enrich_result.year
                 enrich_lang = parse_language(enrich_result.original_language)
 
@@ -2358,11 +2357,12 @@ class dl:
             if isinstance(title, Episode) and not self.tmdb_searched:
                 kind = "tv"
                 tmdb_title: Optional[str] = None
-                has_ids = bool(self.tmdb_id or self.imdb_id or self.tvdb_id)
+                has_ids = bool(self.tmdb_id or self.imdb_id or self.tvdb_id or self.anilist_id)
                 result = providers.resolve_by_ids(
                     self.tmdb_id,
                     self.imdb_id,
                     self.tvdb_id,
+                    self.anilist_id,
                     title=title.title,
                     year=title.year,
                     kind=kind,
@@ -2370,6 +2370,7 @@ class dl:
                     cache_title_id=cache_title_id,
                     cache_region=cache_region,
                     cache_account_hash=cache_account_hash,
+                    anime=self.anime_hint(title),
                 )
                 if result:
                     if has_ids:
@@ -2397,6 +2398,7 @@ class dl:
                     None,
                     self.imdb_id,
                     self.tvdb_id,
+                    self.anilist_id,
                     title=title.name,
                     year=title.year,
                     kind="movie",
@@ -2404,6 +2406,7 @@ class dl:
                     cache_title_id=cache_title_id,
                     cache_region=cache_region,
                     cache_account_hash=cache_account_hash,
+                    anime=self.anime_hint(title),
                 )
                 if movie_result and movie_result.external_ids.tmdb_id:
                     console.print(
@@ -3869,7 +3872,15 @@ class dl:
                             shutil.move(muxed_path, final_path)
                         used_final_paths.add(final_path)
                         self.completed_files.append(final_path)
-                        tags.tag_file(final_path, title, self.tmdb_id, self.imdb_id, self.tvdb_id)
+                        tags.tag_file(
+                            final_path,
+                            title,
+                            self.tmdb_id,
+                            self.imdb_id,
+                            self.tvdb_id,
+                            self.anilist_id,
+                            self.anime_hint(title),
+                        )
 
                 title_dl_time = time_elapsed_since(dl_start_time)
                 downloaded_label = "Track" if music_mode and isinstance(title, Song) else "Title"
@@ -3894,6 +3905,11 @@ class dl:
         dl_time = time_elapsed_since(start_time)
 
         console.print(Padding(f"Processed all titles in [progress.elapsed]{dl_time}", (0, 5, 1, 5)))
+
+    def anime_hint(self, title: Optional[Title_T] = None) -> bool:
+        """Whether metadata lookups for this title should prefer AniList."""
+        per_title = getattr(title, "anime", None)
+        return self.service_anime if per_title is None else bool(per_title)
 
     def apply_tvdb_order(
         self,

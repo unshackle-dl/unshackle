@@ -14,6 +14,7 @@ from unshackle.core.api.input_bridge import AuthStatus, InputBridge
 from unshackle.core.api.sanitize import safe_cache_key, sanitize_log
 from unshackle.core.config import config
 from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP
+from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.proxies.resolve import initialize_proxy_providers, resolve_proxy
 from unshackle.core.services import Services
 from unshackle.core.titles import Episode, Movie, Title_T
@@ -77,7 +78,7 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "imdb_id": None,
     "tvdb_id": None,
     "tvdb_order": None,
-    "animeapi_id": None,
+    "anilist_id": None,
     "enrich": False,
     "output_dir": None,
     "no_cache": False,
@@ -935,6 +936,13 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
     if data.get("imdb_id") is not None:
         if not isinstance(data["imdb_id"], str) or not re.fullmatch(r"tt\d+", data["imdb_id"]):
             return "imdb_id must be an IMDB ID like 'tt1375666'"
+
+    if data.get("anilist_id") is not None:
+        value = data["anilist_id"]
+        # same parser as --anilist so both surfaces accept and reject the same inputs
+        valid = not isinstance(value, bool) and isinstance(value, (int, str)) and parse_anilist_ref(value)
+        if not valid:
+            return "anilist_id must be a positive integer, or a MyAnimeList ID like 'mal:21'"
 
     supplied_ids = [name for name in ("tmdb_id", "imdb_id", "tvdb_id") if data.get(name)]
     if len(supplied_ids) > 1:

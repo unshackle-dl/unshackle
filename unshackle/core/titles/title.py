@@ -47,6 +47,7 @@ class Title:
         self.service = service
         self.language = language
         self.data = data
+        self.anime: Optional[bool] = None
 
         self.tracks = Tracks()
 

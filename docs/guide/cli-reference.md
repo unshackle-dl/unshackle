@@ -153,15 +153,16 @@ Keep only certain track types, or skip certain track types. Attachments are alwa
 | `--tmdb` | TMDB ID (integer). Used for the tags. Skips the title search. `--enrich` reads it too. Needs `tmdb_api_key`. |
 | `--imdb` | IMDb ID, e.g. `tt1375666`. Used for the tags. Skips the title search. `--enrich` reads it too. Needs no key. |
 | `--tvdb` | TVDB ID (integer). Used for the tags. Skips the series lookup that `--tvdb-order` would otherwise do. `--enrich` reads it too. Needs `tvdb_api_key`. |
-| `--animeapi` | AnimeAPI ID, e.g. `mal:12345` or `anilist:98765` (defaults to MAL). Back-fills TMDB/IMDb/TVDB. |
-| `--enrich` | Overwrite show title, year and original language with the external source's. **Requires** one of `--tmdb`, `--imdb`, `--tvdb`, or `--animeapi`. |
+| `--anilist` | AniList ID (integer), e.g. `--anilist 21`. A MyAnimeList ID is accepted as `mal:12345` and resolved to the AniList entry. Used for the tags. Skips the title search. `--enrich` reads it too. Needs no key. |
+| `--enrich` | Overwrite show title, year and original language with the external source's. **Requires** one of `--tmdb`, `--imdb`, `--tvdb`, or `--anilist`. |
 | `--tvdb-order` | Renumber episodes to a TVDB season order: `official` (aired), `dvd`, `absolute`, `alternate`, or `regional`. Needs `tvdb_api_key`. |
 
 !!! note "One ID at a time"
     `--tmdb`, `--imdb` and `--tvdb` cannot be combined. Give one and unshackle resolves the
-    others from it, writing all three to the tags. `--animeapi` still pairs with one of them.
+    others from it, writing all three to the tags. `--anilist` is outside that rule and pairs
+    with one of them, which is how you attach a western ID to an anime title.
     An ID with no provider that can resolve it, such as `--tmdb` with no `tmdb_api_key`, fails
-    before the download starts.
+    before the download starts. `--anilist` needs no key, so it never fails this check.
 
 #### Episode ordering
 

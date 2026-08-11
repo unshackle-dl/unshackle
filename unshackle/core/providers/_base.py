@@ -26,6 +26,7 @@ class ExternalIds:
     tmdb_id: Optional[int] = None
     tmdb_kind: Optional[str] = None  # "movie" or "tv"
     tvdb_id: Optional[int] = None
+    anilist_id: Optional[int] = None
 
 
 @dataclass

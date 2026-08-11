@@ -129,3 +129,131 @@ def test_flat_list_config_applies_to_both_kinds(monkeypatch: pytest.MonkeyPatch)
     assert [cls.NAME for cls in providers.provider_order("tv")] == ["tvdb", "tmdb"]
     assert [cls.NAME for cls in providers.provider_order("movie")] == ["tvdb", "tmdb"]
     assert [cls.NAME for cls in providers.provider_order()] == ["tvdb", "tmdb"]
+
+
+# ---------- the anilist namespace ----------
+
+
+def test_an_anilist_id_reaches_the_anilist_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    anilist = FakeProvider(
+        "anilist",
+        MetadataResult(title="One Piece", year=1999, kind="tv", external_ids=ExternalIds(anilist_id=21)),
+    )
+    tmdb = FakeProvider("tmdb", MetadataResult(title="Wrong Show", year=2020, kind="tv"))
+    _patch_providers(monkeypatch, {"anilist": anilist, "tmdb": tmdb})
+
+    result = providers.resolve_by_ids(anilist_id=21, kind="tv")
+
+    assert result is not None
+    assert result.title == "One Piece"
+    assert result.external_ids.anilist_id == 21
+    assert anilist.asked == [21]
+    assert tmdb.asked == []
+
+
+def test_a_supplied_anilist_id_survives_a_provider_miss(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_providers(monkeypatch, {})
+
+    result = providers.resolve_by_ids(anilist_id="21", title="One Piece", kind="tv")
+
+    assert result is not None
+    assert result.external_ids.anilist_id == 21
+
+
+def test_a_mal_reference_carries_only_what_the_lookup_answered(monkeypatch: pytest.MonkeyPatch) -> None:
+    anilist = FakeProvider("anilist", MetadataResult(title="One Piece", external_ids=ExternalIds(anilist_id=21)))
+    _patch_providers(monkeypatch, {"anilist": anilist})
+
+    result = providers.resolve_by_ids(anilist_id="mal:21", kind="tv")
+
+    assert result is not None
+    assert anilist.asked == ["mal:21"]
+    assert result.external_ids.anilist_id == 21
+
+
+def test_a_mal_reference_that_misses_leaves_no_anilist_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_providers(monkeypatch, {})
+
+    result = providers.resolve_by_ids(anilist_id="mal:21", title="One Piece", kind="tv")
+
+    assert result is not None
+    assert result.external_ids.anilist_id is None
+
+
+def test_anilist_combines_with_a_western_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    tmdb = FakeProvider("tmdb", MetadataResult(title="One Piece", year=1999, kind="tv"))
+    anilist = FakeProvider("anilist", MetadataResult(title="One Piece", external_ids=ExternalIds(anilist_id=21)))
+    _patch_providers(monkeypatch, {"tmdb": tmdb, "anilist": anilist})
+
+    result = providers.resolve_by_ids(37854, anilist_id=21, kind="tv")
+
+    assert result is not None
+    assert result.external_ids.tmdb_id == 37854
+    assert result.external_ids.anilist_id == 21
+
+
+# ---------- the anime hint ----------
+
+
+def test_anime_puts_anilist_first_with_the_rest_behind_it() -> None:
+    ordered = [cls.NAME for cls in providers.provider_order("tv", anime=True)]
+    assert ordered[0] == "anilist"
+    assert ordered[1:] == [name for name in providers.DEFAULT_ORDER if name != "anilist"]
+
+
+def test_without_the_hint_anilist_stays_last() -> None:
+    assert [cls.NAME for cls in providers.provider_order("tv")] == list(providers.DEFAULT_ORDER)
+    assert providers.DEFAULT_ORDER[-1] == "anilist"
+
+
+def test_the_hint_cannot_add_a_provider_the_config_left_out(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "metadata_providers", ["tmdb", "tvdb"])
+    assert [cls.NAME for cls in providers.provider_order("tv", anime=True)] == ["tmdb", "tvdb"]
+
+
+def test_an_anime_hint_falls_through_to_the_normal_order_on_a_miss(monkeypatch: pytest.MonkeyPatch) -> None:
+    """anilist is asked first but knows no imdb ids, so imdb still answers."""
+    anilist = FakeProvider("anilist", None)
+    imdb = FakeProvider("imdb", MetadataResult(title="One Piece", year=1999, kind="tv"))
+    _patch_providers(monkeypatch, {"anilist": anilist, "imdb": imdb})
+
+    result = providers.resolve_by_ids(imdb_id="tt0388629", kind="tv", anime=True)
+
+    assert result is not None
+    assert result.title == "One Piece"
+    # the imdb id is in no namespace anilist consumes, so it is never asked
+    assert anilist.asked == []
+    assert imdb.asked == ["tt0388629"]
+
+
+def test_the_anime_hint_reaches_search(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict] = []
+    monkeypatch.setattr(providers, "search_metadata", lambda *a, **kw: calls.append({"args": a}) or None)
+    _patch_providers(monkeypatch, {})
+
+    providers.resolve_by_ids(title="One Piece", year=1999, kind="tv", anime=True)
+
+    assert calls and calls[0]["args"][-1] is True
+
+
+def test_all_supplied_ids_survive_together(monkeypatch: pytest.MonkeyPatch) -> None:
+    """anilist_id combined with a western trio member: every supplied ID reaches external_ids."""
+    tvdb = FakeProvider(
+        "tvdb",
+        MetadataResult(title="One Piece", year=1999, kind="tv", external_ids=ExternalIds(tvdb_id=81797)),
+    )
+    _patch_providers(monkeypatch, {"tvdb": tvdb})
+
+    result = providers.resolve_by_ids(tvdb_id=81797, anilist_id="mal:21", imdb_id="tt0388629", kind="tv")
+
+    assert result is not None
+    assert result.external_ids.tvdb_id == 81797
+    assert result.external_ids.imdb_id == "tt0388629"
+    # a mal: ref the provider never resolved contributes no anilist_id; a bare id
+    # would have been forced back in
+    assert result.external_ids.anilist_id is None
+
+    result = providers.resolve_by_ids(tvdb_id=81797, anilist_id=21, kind="tv")
+    assert result is not None
+    assert result.external_ids.tvdb_id == 81797
+    assert result.external_ids.anilist_id == 21
