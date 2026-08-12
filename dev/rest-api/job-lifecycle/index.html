@@ -2637,6 +2637,12 @@ full detail:</p>
 </span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="k">done</span>
 </span></code></pre></div>
 </div>
+<div class="admonition tip">
+<p class="admonition-title">Or subscribe instead of polling</p>
+<p><code>GET /api/download/jobs/{job_id}/events</code> pushes the same job object as Server-Sent
+Events, and closes the stream when the job ends. See
+<a href="../endpoints/#get-apidownloadjobsjob_idevents">Endpoints</a>.</p>
+</div>
 <div class="admonition note">
 <p class="admonition-title">What the percentage means</p>
 <p><code>progress</code> climbs from <code>0</code> toward <code>90</code> while tracks download, then the final stretch

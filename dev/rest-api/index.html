@@ -2056,8 +2056,9 @@ calls you can script against:</p>
 <ul>
 <li><strong>Discovery</strong>: list the services available on the server, run a service's search,
   and enumerate the titles and tracks behind a title ID.</li>
-<li><strong>Downloading</strong>: submit a download as a background <em>job</em>, then poll its status and
-  live progress, cancel it, retry it, or bump it to the front of the queue.</li>
+<li><strong>Downloading</strong>: submit a download as a background <em>job</em>, then follow its status and
+  live progress (by polling, or by subscribing to its Server-Sent Events stream),
+  cancel it, retry it, or bump it to the front of the queue.</li>
 <li><strong>History and housekeeping</strong>: read the log of finished jobs, inspect the server's
   effective (redacted) configuration, check external tool versions, and clear caches
   or temp files.</li>
@@ -2271,6 +2272,11 @@ request and response in full.</p>
 <td><code>GET</code></td>
 <td><code>/api/download/jobs/{job_id}</code></td>
 <td>Full detail for one job.</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/download/jobs/{job_id}/events</code></td>
+<td>Stream one job's progress as Server-Sent Events.</td>
 </tr>
 <tr>
 <td><code>DELETE</code></td>
