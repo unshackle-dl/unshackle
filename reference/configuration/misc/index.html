@@ -2083,16 +2083,10 @@ each metadata provider can actually answer with, see
 </thead>
 <tbody>
 <tr>
-<td><code>imdb_api_enabled</code></td>
-<td>bool</td>
-<td><code>false</code></td>
-<td>Use the free IMDxAPI (api.tiffara.com) metadata provider, which needs no API key. Off by default since the site has been unreliable.</td>
-</tr>
-<tr>
 <td><code>omdb_api_key</code></td>
 <td>str</td>
 <td><code>""</code></td>
-<td><a href="https://www.omdbapi.com/">OMDb</a> API key for IMDb metadata lookups; a more reliable alternative to IMDxAPI. Free keys are available on the OMDb site.</td>
+<td><a href="https://www.omdbapi.com/">OMDb</a> API key for IMDb metadata lookups; a fallback for when the keyless <code>imdb</code> provider has no answer. Free keys are available on the OMDb site.</td>
 </tr>
 <tr>
 <td><code>tmdb_api_key</code></td>
@@ -2126,9 +2120,21 @@ each metadata provider can actually answer with, see
 </tr>
 <tr>
 <td><code>metadata_providers</code></td>
-<td>list</td>
+<td>list or map</td>
 <td><em>(see below)</em></td>
 <td>Metadata providers to use, in the order they are tried.</td>
+</tr>
+<tr>
+<td><code>anilist_title_language</code></td>
+<td>str</td>
+<td><code>english</code></td>
+<td>Which AniList title variant to use: <code>english</code>, <code>romaji</code>, or <code>native</code>.</td>
+</tr>
+<tr>
+<td><code>disable_metadata</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Set to <code>true</code> to stop all automatic metadata lookups. An ID you give yourself is still looked up.</td>
 </tr>
 <tr>
 <td><code>decrypt_labs_api_key</code></td>
@@ -2152,11 +2158,65 @@ decides which source wins. <code>metadata_providers</code> sets that order:</p>
 </span></code></pre></div>
 <p>Names not in the list are never used, so this both orders and filters. Unknown names are
 ignored with a warning. Leave it unset for the default order:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">metadata_providers</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">imdbapi</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">omdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">simkl</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">tmdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">tvdb</span><span class="p p-Indicator">]</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">metadata_providers</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">imdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">omdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">simkl</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">tmdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">tvdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">anilist</span><span class="p p-Indicator">]</span>
 </span></code></pre></div>
-<p>Whatever the order, a provider is skipped when its API key is missing (or, for
-<code>imdbapi</code>, when <code>imdb_api_enabled</code> is <code>false</code>). Available names are
-<code>imdbapi</code>, <code>omdb</code>, <code>simkl</code>, <code>tmdb</code>, and <code>tvdb</code>.</p>
+<p>Whatever the order, unshackle skips a provider that has no API key. <code>imdb</code> and
+<code>anilist</code> need no key, so they are always available. Available names are <code>imdb</code>, <code>omdb</code>,
+<code>simkl</code>, <code>tmdb</code>, <code>tvdb</code>, and <code>anilist</code>. The old name <code>imdbapi</code> still works and is read as
+<code>imdb</code>.</p>
+<p><code>anilist</code> is last in the default order. It only answers for anime and returns nothing for
+anything else, so it is harmless there. Move it earlier if you mostly download anime.</p>
+<p>The order applies to a title search and to a direct lookup of an ID you give with
+<code>--tmdb</code>, <code>--imdb</code>, <code>--tvdb</code>, or <code>--anilist</code>. A supplied ID always goes to the providers
+that read that kind of ID, and it never falls back to a title search.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Which AniList title <code>anilist_title_language</code> picks</p>
+<p>AniList holds up to three titles for a work: the English one, the romaji transliteration,
+and the native one. This option says which of them unshackle uses:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">anilist_title_language</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">romaji</span>
+</span></code></pre></div>
+<p>A work does not always have all three. When the one you asked for is unset on AniList's
+side, unshackle falls back in the order english → romaji → native. It takes the first one
+that is set, so you always get a title.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">What <code>disable_metadata</code> turns off</p>
+<p>With <code>disable_metadata: true</code>, unshackle never contacts a metadata provider on its own.
+The title search is dead, and that includes the keyless <code>imdb</code> provider. Titles, years and
+languages then come only from the service.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">disable_metadata</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span></code></pre></div>
+<p>An ID you give with <code>--tmdb</code>, <code>--imdb</code>, <code>--tvdb</code>, or <code>--anilist</code> is your permission to use
+that ID. That lookup still works. unshackle looks the ID up directly, cross references the other
+IDs from it, and <code>--enrich</code> still reads that source. Only the lookups you did not ask for
+are stopped.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">The <code>imdb</code> provider needs no key</p>
+<p>It replaces the earlier <code>imdbapi</code> provider, which read a third-party mirror
+(api.tiffara.com) and needed the <code>imdb_api_enabled</code> switch. That option is gone: delete it
+from your config, where it is now ignored.</p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">A different order per title kind</p>
+<p>Give a map instead of one list when the best source differs by kind. TVDB is strongest on
+series, TMDB on films. There are two kinds, <code>tv</code> and <code>movie</code>, and this example sets both
+of them and names every provider, so nothing is left to the default:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">metadata_providers</span><span class="p">:</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">tv</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">tvdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">tmdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">simkl</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">imdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">omdb</span><span class="p p-Indicator">]</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">movie</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">tmdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">imdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">omdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">simkl</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">tvdb</span><span class="p p-Indicator">]</span>
+</span></code></pre></div>
+<p>Each list is independent: it both orders and filters that kind on its own, so a provider
+you leave out of <code>tv</code> is still used for <code>movie</code>. Here TVDB is tried first for a series and
+last for a film.</p>
+<p>You do not need to give both keys, or a full list in each. A kind you leave out uses the
+default order:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">metadata_providers</span><span class="p">:</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">tv</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">tvdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">tmdb</span><span class="p p-Indicator">]</span><span class="w">     </span><span class="c1"># movies keep the default order</span>
+</span></code></pre></div>
+<p><code>tv</code> covers every episode and <code>movie</code> covers every film. unshackle only looks up
+metadata for those two kinds, so any other key, such as <code>anime</code> or <code>music</code>, is ignored.</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title"><code>ipinfo_api_key</code> never touches your service sessions</p>
@@ -2316,6 +2376,11 @@ setting, and KIDs, key counts, and other metadata are always logged either way.<
 <td><code>scene_naming</code></td>
 <td><strong>Removed</strong></td>
 <td>If set to any non-null value, unshackle exits with an error directing you to configure <a href="../output/"><code>output_template</code></a> instead.</td>
+</tr>
+<tr>
+<td><code>imdb_api_enabled</code></td>
+<td><strong>Removed</strong></td>
+<td>Ignored. It gated the old <code>imdbapi</code> provider, which the keyless <a href="#external-api-keys"><code>imdb</code></a> provider replaces. Safe to delete from your config.</td>
 </tr>
 </tbody>
 </table>

@@ -2637,6 +2637,16 @@ Two kinds of members matter: <strong>class variables</strong> that describe the 
 <td><code>Optional[tuple[str, ...]]</code></td>
 <td>Accepted auth methods (<code>"cookies"</code> / <code>"credentials"</code>). When <code>None</code>, the REST <code>/services</code> endpoint infers them from <code>authenticate()</code>.</td>
 </tr>
+<tr>
+<td><code>ANIME</code></td>
+<td><code>bool</code></td>
+<td>The catalog is anime, so metadata lookups prefer AniList. A title's own <code>anime</code> flag overrides it.</td>
+</tr>
+<tr>
+<td><code>DAILY</code></td>
+<td><code>bool</code></td>
+<td>The catalog is daily/date-based, so episodes are named by air date. A title's own <code>daily</code> flag overrides it.</td>
+</tr>
 </tbody>
 </table>
 <h3 id="required-methods">Required methods<a class="headerlink" href="#required-methods" title="Permanent link">&para;</a></h3>

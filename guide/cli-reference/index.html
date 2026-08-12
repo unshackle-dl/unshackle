@@ -3048,7 +3048,7 @@ configuration file.</p>
 <tbody>
 <tr>
 <td><code>-w</code>, <code>--wanted</code></td>
-<td>Wanted episodes, e.g. <code>S01-S05,S07</code>, <code>S01E01-S02E03</code>. Supports exclusions with a leading <code>-</code> (e.g. <code>-S03</code>). For a <a href="../downloading/#split-episodes">split episode</a>, <code>.N</code> picks one part (<code>S01E01.2</code>), a range must stay inside the episode (<code>S01E01.1-S01E01.3</code>), and <code>S01E01</code> on its own takes every part.</td>
+<td>Wanted episodes, e.g. <code>S01-S05,S07</code>, <code>S01E01-S02E03</code>. Supports exclusions with a leading <code>-</code> (e.g. <code>-S03</code>). For a <a href="../downloading/#split-episodes">split episode</a>, <code>.N</code> picks one part (<code>S01E01.2</code>), a range must stay inside the episode (<code>S01E01.1-S01E01.3</code>), and <code>S01E01</code> on its own takes every part. For <a href="../downloading/#daily-and-date-based-content">dated content</a>, a token can also be an ISO air date (<code>2026-08-11</code>) or a date range with a colon (<code>2026-08-01:2026-08-31</code>).</td>
 </tr>
 <tr>
 <td><code>--select-titles</code></td>
@@ -3164,23 +3164,27 @@ configuration file.</p>
 <tbody>
 <tr>
 <td><code>--tmdb</code></td>
-<td>TMDB ID (integer).</td>
+<td>TMDB ID (integer). Used for the tags. Skips the title search. <code>--enrich</code> reads it too. Needs <code>tmdb_api_key</code>.</td>
 </tr>
 <tr>
 <td><code>--imdb</code></td>
-<td>IMDb ID, e.g. <code>tt1375666</code>.</td>
+<td>IMDb ID, e.g. <code>tt1375666</code>. Used for the tags. Skips the title search. <code>--enrich</code> reads it too. Needs no key.</td>
 </tr>
 <tr>
 <td><code>--tvdb</code></td>
-<td>TVDB ID (integer). Skips the series lookup that <code>--tvdb-order</code> would otherwise do. <code>--enrich</code> reads it too.</td>
+<td>TVDB ID (integer). Used for the tags. Skips the series lookup that <code>--tvdb-order</code> would otherwise do. <code>--enrich</code> reads it too. Needs <code>tvdb_api_key</code>.</td>
 </tr>
 <tr>
-<td><code>--animeapi</code></td>
-<td>AnimeAPI ID, e.g. <code>mal:12345</code> or <code>anilist:98765</code> (defaults to MAL). Back-fills TMDB/IMDb/TVDB.</td>
+<td><code>--anilist</code></td>
+<td>AniList ID (integer), e.g. <code>--anilist 21</code>. A MyAnimeList ID is accepted as <code>mal:12345</code> and resolved to the AniList entry. Used for the tags. Skips the title search. <code>--enrich</code> reads it too. Needs no key.</td>
 </tr>
 <tr>
 <td><code>--enrich</code></td>
-<td>Override show title/year from the external source, and fill in the original language. <strong>Requires</strong> one of <code>--tmdb</code>, <code>--imdb</code>, <code>--tvdb</code>, or <code>--animeapi</code>.</td>
+<td>Overwrite show title, year and original language with the external source's. <strong>Requires</strong> one of <code>--tmdb</code>, <code>--imdb</code>, <code>--tvdb</code>, or <code>--anilist</code>.</td>
+</tr>
+<tr>
+<td><code>--daily</code></td>
+<td>Treat the title as daily/date-based content and fill missing episode air dates from TVDB. The fill needs <code>--enrich</code> and a TVDB ID. See <a href="../downloading/#daily-and-date-based-content">Daily and date-based content</a>.</td>
 </tr>
 <tr>
 <td><code>--tvdb-order</code></td>
@@ -3188,6 +3192,14 @@ configuration file.</p>
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">One ID at a time</p>
+<p><code>--tmdb</code>, <code>--imdb</code> and <code>--tvdb</code> cannot be combined. Give one and unshackle resolves the
+others from it, writing all three to the tags. <code>--anilist</code> is outside that rule and pairs
+with one of them, which is how you attach a western ID to an anime title.
+An ID with no provider that can resolve it, such as <code>--tmdb</code> with no <code>tmdb_api_key</code>, fails
+before the download starts. <code>--anilist</code> needs no key, so it never fails this check.</p>
+</div>
 <h4 id="episode-ordering">Episode ordering<a class="headerlink" href="#episode-ordering" title="Permanent link">&para;</a></h4>
 <p>A service does not always number a series the way TVDB's aired order does. Some services list
 Futurama in TVDB's <code>alternate</code> (Streaming) order, for example. <code>--tvdb-order</code> works out which
@@ -3420,7 +3432,7 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 </tr>
 <tr>
 <td>DRM</td>
-<td>shaka-packager*, mp4decrypt, ML-Worker</td>
+<td>shaka-packager*, mp4decrypt</td>
 </tr>
 <tr>
 <td>HDR</td>

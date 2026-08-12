@@ -2054,7 +2054,7 @@ folder-kind keys.</p>
 <details class="example">
 <summary>All valid template variables</summary>
 <p><code>title</code>, <code>year</code>, <code>season</code>, <code>episode</code>, <code>season_episode</code>, <code>episode_name</code>, <code>part</code>,
-<code>date</code>, <code>quality</code>, <code>resolution</code>, <code>source</code>, <code>tag</code>, <code>track_number</code>, <code>artist</code>,
+<code>absolute</code>, <code>date</code>, <code>quality</code>, <code>resolution</code>, <code>source</code>, <code>tag</code>, <code>track_number</code>, <code>artist</code>,
 <code>album_artist</code>, <code>album</code>, <code>disc</code>, <code>track_total</code>, <code>disc_total</code>, <code>release_type</code>, <code>genre</code>,
 <code>explicit</code>, <code>isrc</code>, <code>upc</code>, <code>label</code>, <code>audio</code>, <code>audio_channels</code>, <code>audio_full</code>, <code>atmos</code>,
 <code>dual</code>, <code>multi</code>, <code>dubbed</code>, <code>video</code>, <code>hdr</code>, <code>hfr</code>, <code>edition</code>, <code>repack</code>, <code>lang_tag</code>,
@@ -2070,6 +2070,15 @@ shipped <code>series</code> template names split episodes correctly with no edit
 standalone variable only in a template that names neither <code>{episode}</code> nor
 <code>{season_episode}</code>, and note that it is always empty in a folder template, since
 folders do not carry the part.</p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title"><code>{absolute}</code> counts episodes across seasons</p>
+<p><code>absolute</code> holds the absolute episode number, zero-padded to 3 digits (<code>007</code>), and is
+empty on titles that have none. It is added to the name and never replaces <code>{season}</code>
+or <code>{episode}</code>. Any series with a TVDB absolute order can use it, anime most often.
+Services can supply it, and
+<a href="../../../guide/downloading/#metadata-and-tagging"><code>--enrich</code></a> fills it in from TVDB.
+Use <code>{absolute?}</code> so the name stays clean when it is unknown.</p>
 </div>
 <h2 id="tagging-naming-keys">Tagging &amp; naming keys<a class="headerlink" href="#tagging-naming-keys" title="Permanent link">&para;</a></h2>
 <table>

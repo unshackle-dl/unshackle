@@ -2164,7 +2164,8 @@ A service returns one of these collections from its title lookup. See
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">description</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">air_date</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">part</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="p">)</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">absolute</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -2209,7 +2210,8 @@ A service returns one of these collections from its title lookup. See
 
         <p>Whether a parsed <code>-w</code> key set selects this episode.</p>
 <p>A part-ful episode answers to both its base key and its part key, so <code>-w s1e1</code>
-takes every part. <code>!</code> keys are part-qualified exclusions resolved here.</p>
+takes every part. A dated episode also answers to its ISO air date.
+<code>!</code> keys are part-qualified exclusions resolved here.</p>
 
 
     </div>

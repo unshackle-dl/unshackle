@@ -1033,6 +1033,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#daily-and-date-based-content" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Daily and date-based content
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#split-episodes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2698,6 +2709,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#daily-and-date-based-content" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Daily and date-based content
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#split-episodes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3385,7 +3407,7 @@ episodes are downloaded.</p>
 <h3 id="wanted-ranges">Wanted ranges<a class="headerlink" href="#wanted-ranges" title="Permanent link">&para;</a></h3>
 <p><code>-w</code> / <code>--wanted</code> accepts flexible season/episode ranges, comma-separated. Prefix a token
 with <code>-</code> to exclude it.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Whole seasons</label><label for="__tabbed_1_2">Specific episodes</label><label for="__tabbed_1_3">Exclusions</label><label for="__tabbed_1_4">Split episodes</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:5"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><input id="__tabbed_1_5" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Whole seasons</label><label for="__tabbed_1_2">Specific episodes</label><label for="__tabbed_1_3">Exclusions</label><label for="__tabbed_1_4">Split episodes</label><label for="__tabbed_1_5">Air dates</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
@@ -3415,8 +3437,36 @@ with <code>-</code> to exclude it.</p>
 </span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01,-S01E01.2<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 </div>
+<div class="tabbed-block">
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># One day</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span><span class="m">2026</span>-08-11<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="c1"># A range of days, colon separated</span>
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span><span class="m">2026</span>-08-01:2026-08-31<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>
+</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="c1"># August, but not the 15th</span>
+</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span><span class="m">2026</span>-08-01:2026-08-31,-2026-08-15<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
 </div>
 </div>
+</div>
+<h3 id="daily-and-date-based-content">Daily and date-based content<a class="headerlink" href="#daily-and-date-based-content" title="Permanent link">&para;</a></h3>
+<p>Talk shows, news and sports have no official episode numbering, so unshackle names them
+by air date. An episode that carries an air date is written as <code>Show.YYYY.MM.DD</code> instead of
+<code>SxxExx</code>, the <code>{date}</code> token holds the ISO date, and the season folder becomes the year.</p>
+<p>A service that only carries this kind of content sets <code>DAILY = True</code> on its class, and a
+service can set <code>air_date</code> on each episode itself. Add <code>--daily</code> to mark any other title
+as date-based:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--daily<span class="w"> </span>--tvdb<span class="w"> </span><span class="m">73871</span><span class="w"> </span>--enrich<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<p>With <code>--enrich</code> and a TVDB ID, <code>--daily</code> fills in the air date of every episode that has
+none. An air date the service already set is kept. Dates before 1970 and dates in the
+future are skipped, because TVDB carries placeholder schedule dates for episodes that
+have not aired. Without <code>--enrich</code> unshackle has no source to fill from, and says so.</p>
+<p>A dated episode answers to its air date in <code>-w</code>, as well as to its <code>SxxExx</code> key. A date
+token is a plain ISO date (<code>2026-08-11</code>). A date range uses a colon (<code>2026-08-01:2026-08-31</code>),
+because the dashes in a date are part of the date. A range cannot span more than 1000 days.
+Date tokens and <code>SxxExx</code> tokens can be mixed in one <code>-w</code>.</p>
 <h3 id="split-episodes">Split episodes<a class="headerlink" href="#split-episodes" title="Permanent link">&para;</a></h3>
 <p>A few services split one episode into several separately playable videos. Where a service
 reports that, add <code>.N</code> after the episode to pick one part.</p>
@@ -3484,7 +3534,7 @@ the episode has no parts, rather than quietly handing you the whole episode. Run
 </tr>
 </tbody>
 </table>
-<div class="language-shell highlight"><span class="filename">Grab just the newest episode</span><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--latest-episode<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Grab just the newest episode</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--latest-episode<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <h2 id="including-and-excluding-track-types">Including and excluding track types<a class="headerlink" href="#including-and-excluding-track-types" title="Permanent link">&para;</a></h2>
 <p>You can restrict a download to certain track categories, either positively (only these)
@@ -3510,9 +3560,9 @@ or negatively (everything but these).</p>
 <li><code>--skip-subtitle-errors</code>: if a subtitle fails to download, skip it and continue rather
   than aborting the whole title. Video and audio failures remain fatal.</li>
 </ul>
-<div class="language-shell highlight"><span class="filename">Subtitles only</span><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-S<span class="w"> </span>-sl<span class="w"> </span>en<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Subtitles only</span><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-S<span class="w"> </span>-sl<span class="w"> </span>en<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
-<div class="language-shell highlight"><span class="filename">Everything except chapters</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-nc<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Everything except chapters</span><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-nc<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
@@ -3544,7 +3594,7 @@ are always kept.</p>
 </tr>
 </tbody>
 </table>
-<div class="language-shell highlight"><span class="filename">See the track selection without downloading</span><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">1080</span><span class="w"> </span>-v<span class="w"> </span>H.265<span class="w"> </span>-r<span class="w"> </span>HDR10<span class="w"> </span>--list<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">See the track selection without downloading</span><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">1080</span><span class="w"> </span>-v<span class="w"> </span>H.265<span class="w"> </span>-r<span class="w"> </span>HDR10<span class="w"> </span>--list<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <h2 id="output-and-muxing">Output and muxing<a class="headerlink" href="#output-and-muxing" title="Permanent link">&para;</a></h2>
 <h3 id="output-location-and-folders">Output location and folders<a class="headerlink" href="#output-location-and-folders" title="Permanent link">&para;</a></h3>
@@ -3554,7 +3604,7 @@ are always kept.</p>
 <li><code>--no-folder</code>: do not create a per-show folder for TV downloads.</li>
 <li><code>--no-source</code>: remove the service source tag from the filename and path.</li>
 </ul>
-<div class="language-shell highlight"><span class="filename">Send this download somewhere specific</span><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-o<span class="w"> </span>~/Videos/incoming<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Send this download somewhere specific</span><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-o<span class="w"> </span>~/Videos/incoming<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <h3 id="muxing-behaviour">Muxing behaviour<a class="headerlink" href="#muxing-behaviour" title="Permanent link">&para;</a></h3>
 <p>By default, tracks are muxed into a single Matroska (<code>.mkv</code>) file with <code>mkvmerge</code>. These
@@ -3590,14 +3640,14 @@ flags change how the output is assembled:</p>
 <li><code>--tag</code>: set the release group tag (overrides the configured tag).</li>
 <li><code>--repack</code>: add a <code>REPACK</code> tag to the output filename.</li>
 </ul>
-<div class="language-shell highlight"><span class="filename">Custom group tag and a REPACK label</span><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--tag<span class="w"> </span>MYGRP<span class="w"> </span>--repack<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Custom group tag and a REPACK label</span><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--tag<span class="w"> </span>MYGRP<span class="w"> </span>--repack<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <h2 id="proxies">Proxies<a class="headerlink" href="#proxies" title="Permanent link">&para;</a></h2>
 <p><code>--proxy</code> accepts a full proxy URI, a 2-letter country code (resolved through your
 configured proxy providers), or a <code>provider:region</code> form.</p>
-<div class="language-shell highlight"><span class="filename">Proxy forms</span><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>us<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
-</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>nordvpn:ca<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
-</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span><span class="s1">&#39;http://user:pass@host:8080&#39;</span><span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Proxy forms</span><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>us<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>nordvpn:ca<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span><span class="s1">&#39;http://user:pass@host:8080&#39;</span><span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p>Two related flags:</p>
 <ul>
@@ -3637,9 +3687,9 @@ configured proxy providers), or a <code>provider:region</code> form.</p>
 </tr>
 </tbody>
 </table>
-<div class="language-shell highlight"><span class="filename">Two tracks at a time, eight threads each</span><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--downloads<span class="w"> </span><span class="m">2</span><span class="w"> </span>--workers<span class="w"> </span><span class="m">8</span><span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Two tracks at a time, eight threads each</span><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--downloads<span class="w"> </span><span class="m">2</span><span class="w"> </span>--workers<span class="w"> </span><span class="m">8</span><span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
-<div class="language-shell highlight"><span class="filename">Space out a season download</span><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01<span class="w"> </span>--slow<span class="w"> </span><span class="m">30</span>-60<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Space out a season download</span><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01<span class="w"> </span>--slow<span class="w"> </span><span class="m">30</span>-60<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <h2 id="keys-vaults-and-export">Keys, vaults, and export<a class="headerlink" href="#keys-vaults-and-export" title="Permanent link">&para;</a></h2>
 <p>By default, unshackle checks your <strong>key vaults</strong> first and only asks a <strong>CDM</strong> to license
@@ -3648,12 +3698,12 @@ a key when the vault misses. You can force one side or the other:</p>
 <li><code>--cdm-only</code>: only use the CDM (skip vaults).</li>
 <li><code>--vaults-only</code>: only use key vaults (never license via the CDM); a missing key fails.</li>
 </ul>
-<div class="language-shell highlight"><span class="filename">Fetch keys only, no download</span><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Fetch keys only, no download</span><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p><code>--export</code> writes a JSON file, into the configured exports directory, containing track
 info and the acquired content keys for each title. This is the format consumed by
 <code>unshackle import</code> to reconstruct a download later.</p>
-<div class="language-shell highlight"><span class="filename">Export track info and keys</span><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>--export<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Export track info and keys</span><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>--export<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Region is recorded only with a proxy</p>
@@ -3670,7 +3720,12 @@ the service. Neither end guesses a language for you, so the fix belongs in the s
 </div>
 <h2 id="metadata-and-tagging">Metadata and tagging<a class="headerlink" href="#metadata-and-tagging" title="Permanent link">&para;</a></h2>
 <p>unshackle looks up metadata automatically, but you can override the identifiers used for
-tagging and naming:</p>
+tagging and naming. An ID you give is authoritative: unshackle looks it up directly instead of
+searching by title, and the ID stays in the tags. An ID only settles <em>which</em> title this is.
+To also take that source's title, year and original language, add <code>--enrich</code>. Give at most one
+of <code>--tmdb</code>, <code>--imdb</code> and <code>--tvdb</code>; unshackle works the rest out from it. To stop the automatic
+lookups but keep the IDs you give, set
+<a href="../../reference/configuration/misc/#external-api-keys"><code>disable_metadata</code></a> in your config.</p>
 <table>
 <thead>
 <tr>
@@ -3683,27 +3738,27 @@ tagging and naming:</p>
 <tr>
 <td><code>--tmdb</code></td>
 <td><code>--tmdb 27205</code></td>
-<td>Use this TMDB ID instead of automatic lookup.</td>
+<td>Use this TMDB ID instead of an automatic search. Needs <code>tmdb_api_key</code>.</td>
 </tr>
 <tr>
 <td><code>--imdb</code></td>
 <td><code>--imdb tt1375666</code></td>
-<td>Use this IMDb ID.</td>
+<td>Use this IMDb ID instead of an automatic search. Needs no key.</td>
 </tr>
 <tr>
 <td><code>--tvdb</code></td>
 <td><code>--tvdb 73871</code></td>
-<td>Use this TVDB ID instead of looking the series up.</td>
+<td>Use this TVDB ID instead of looking the series up. Needs <code>tvdb_api_key</code>.</td>
 </tr>
 <tr>
-<td><code>--animeapi</code></td>
-<td><code>--animeapi mal:12345</code></td>
-<td>Resolve via AnimeAPI (<code>mal:</code>/<code>anilist:</code> prefix; defaults to MAL).</td>
+<td><code>--anilist</code></td>
+<td><code>--anilist 21</code></td>
+<td>Use this AniList ID instead of an automatic search. <code>mal:12345</code> is also accepted. Needs no key.</td>
 </tr>
 <tr>
 <td><code>--enrich</code></td>
 <td>-</td>
-<td>Override the show title and year from an external source, and fill in the original language. <strong>Requires</strong> one of <code>--tmdb</code>, <code>--imdb</code>, <code>--tvdb</code>, or <code>--animeapi</code>.</td>
+<td>Overwrite the show title, year and original language with the external source's. <strong>Requires</strong> one of <code>--tmdb</code>, <code>--imdb</code>, <code>--tvdb</code>, or <code>--anilist</code>.</td>
 </tr>
 <tr>
 <td><code>--tvdb-order</code></td>
@@ -3712,11 +3767,13 @@ tagging and naming:</p>
 </tr>
 </tbody>
 </table>
-<div class="language-shell highlight"><span class="filename">Force the right IMDb match and enrich the title</span><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--imdb<span class="w"> </span>tt1375666<span class="w"> </span>--enrich<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Force the right IMDb match, and keep the service&#x27;s own naming</span><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--imdb<span class="w"> </span>tt1375666<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<div class="language-shell highlight"><span class="filename">Force the match and take IMDb&#x27;s title, year and language too</span><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--imdb<span class="w"> </span>tt1375666<span class="w"> </span>--enrich<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <h3 id="what-each-metadata-provider-supplies">What each metadata provider supplies<a class="headerlink" href="#what-each-metadata-provider-supplies" title="Permanent link">&para;</a></h3>
-<p>Providers differ in what they answer with, so <code>--enrich</code> reads different fields depending on
-which ID you gave it. A provider only runs when its key is configured:</p>
+<p>Providers differ in what they answer with, so the fields <code>--enrich</code> can replace depend on
+which ID you gave. Every provider except <code>imdb</code> only runs when its key is configured:</p>
 <table>
 <thead>
 <tr>
@@ -3750,10 +3807,10 @@ which ID you gave it. A provider only runs when its key is configured:</p>
 <td>IMDb</td>
 </tr>
 <tr>
-<td>IMDxAPI</td>
-<td><code>imdb_api_enabled</code></td>
+<td>IMDb</td>
+<td><em>(no key needed)</em></td>
 <td>yes</td>
-<td>only when looked up by ID</td>
+<td>yes, alpha-2 such as <code>ko</code></td>
 <td>IMDb</td>
 </tr>
 <tr>
@@ -3763,29 +3820,70 @@ which ID you gave it. A provider only runs when its key is configured:</p>
 <td>no, it publishes a country and no language</td>
 <td>IMDb, TMDB, TVDB</td>
 </tr>
+<tr>
+<td>AniList</td>
+<td><em>(no key needed)</em></td>
+<td>yes</td>
+<td>yes, worked out from the country of origin, such as <code>ja</code></td>
+<td>AniList</td>
+</tr>
 </tbody>
 </table>
 <p>Whatever the tag looks like, unshackle normalises it before use, so <code>ko</code>, <code>kor</code> and <code>Korean</code>
 all end up as the same language.</p>
-<p><code>--enrich</code> consults these in a fixed order:</p>
+<div class="admonition note">
+<p class="admonition-title">AniList only answers for anime</p>
+<p>It is last in the default provider order and returns nothing for a title that is not
+anime. The only cost is one search that misses. Put <code>anilist</code> earlier in
+<a href="../../reference/configuration/misc/#external-api-keys"><code>metadata_providers</code></a> if you mostly
+download anime. Which of the three AniList title variants is used is set by
+<a href="../../reference/configuration/misc/#external-api-keys"><code>anilist_title_language</code></a>.</p>
+<p>A service can also mark its titles as anime. For those titles unshackle tries AniList
+first. When AniList has no match, it falls through to the normal order.</p>
+</div>
+<p>Each ID goes to the providers that read that kind of ID, in
+<a href="../../reference/configuration/misc/#external-api-keys"><code>metadata_providers</code></a> order:</p>
 <ul>
 <li><code>--tmdb</code> reads TMDB.</li>
-<li><code>--imdb</code> tries IMDxAPI, then falls back to OMDb. Since <code>imdb_api_enabled</code> is <code>false</code> by
-  default, an OMDb key is what makes this path work for most people.</li>
+<li><code>--imdb</code> reads IMDb, then falls back to OMDb. IMDb needs no key, so this path works out of
+  the box, and an OMDb key only matters when IMDb has no answer.</li>
 <li><code>--tvdb</code> reads TVDB. It needs <code>tvdb_api_key</code>.</li>
-<li><code>--animeapi</code> supplies a title, plus whichever IDs AnimeAPI knows for the show. If that
-  includes a TMDB, IMDb or TVDB ID, the year and language come from that provider. If it
-  does not, pair it with <code>--tmdb</code>, <code>--imdb</code> or <code>--tvdb</code>.</li>
+<li><code>--anilist</code> reads AniList, which needs no key. It supplies the title, the year and the
+  original language, and writes an AniList tag. It knows no TMDB, IMDB or TVDB ID, so pair it
+  with <code>--tmdb</code>, <code>--imdb</code> or <code>--tvdb</code> when you want those tags as well.</li>
 </ul>
-<p>Language is the one field <code>--enrich</code> will not overwrite. A service that already reported an
-original language keeps it, because the platform knows its own catalogue better than a
-third-party match does. Everything else follows the usual override behaviour.</p>
+<p>Give <strong>one</strong> of <code>--tmdb</code>, <code>--imdb</code> and <code>--tvdb</code>. They cannot be combined, because one ID does
+the job on its own: unshackle resolves the other two from it and writes all three to the tags.
+Passing two is an error rather than a silent choice between them. <code>--anilist</code> is the exception
+and still pairs with one of the three, which is how you tag an anime title with a western ID.</p>
+<p>The ID you give must have a provider that can actually resolve it, so unshackle checks that
+before it downloads anything. <code>--tmdb</code> without <code>tmdb_api_key</code>, or an ID whose providers your
+<code>metadata_providers</code> list leaves out, fails immediately with a message naming what to set.
+<code>--imdb</code> needs no key, since the <code>imdb</code> provider is keyless and in the default order.</p>
+<p>With <code>--enrich</code>, the title, year and original language are all replaced with the external
+source's values, whether or not the service already filled them in. A field the source does
+not answer with is left alone, and unshackle logs which fields those were, so a provider with
+a thin record cannot blank out what the service told you.</p>
+<p><code>--enrich</code> also fills in the absolute episode number of each episode from TVDB's absolute
+order, for any series that has one and where the service did not supply it. Anime is the
+usual beneficiary, but no part of this is limited to anime. This only adds the
+<a href="../../reference/configuration/output/#output_template"><code>{absolute}</code></a> naming variable. The
+season and episode numbers are never changed.</p>
+<p>With <code>--daily</code>, <code>--enrich</code> also fills in the air date of each episode from TVDB. See
+<a href="#daily-and-date-based-content">Daily and date-based content</a>.</p>
+<div class="admonition warning">
+<p class="admonition-title"><code>--enrich</code> replaces the original language, which affects more than the filename</p>
+<p>Track selection reads the original language, so replacing it changes which audio is
+treated as the original. That is the point when a service mislabels it, but it means a
+wrong ID can pick the wrong audio track and not only write a wrong name. Without
+<code>--enrich</code> the service's own value is kept and track selection is untouched.</p>
+</div>
 <h3 id="episode-ordering">Episode ordering<a class="headerlink" href="#episode-ordering" title="Permanent link">&para;</a></h3>
 <p>A service does not always number a series the way TVDB's aired order does. Some services list
 Futurama in TVDB's <code>alternate</code> (Streaming) order, for example, while TVDB's <code>official</code> order
 holds back four season-one episodes to the start of season two. <code>--tvdb-order</code> works out which
 order the service used, then renumbers the episodes into the order you asked for:</p>
-<div class="language-shell highlight"><span class="filename">Download Futurama in DVD order</span><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--tvdb-order<span class="w"> </span>dvd<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Download Futurama in DVD order</span><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--tvdb-order<span class="w"> </span>dvd<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p>Available orders are <code>official</code> (aired), <code>dvd</code>, <code>absolute</code>, <code>alternate</code>, and <code>regional</code>. Set
 <code>tvdb_order</code> in your config to apply one by default.</p>
@@ -3887,7 +3985,12 @@ authoritative list.</p>
 <tr>
 <td><code>--wanted</code></td>
 <td><code>-w</code></td>
-<td>Episode/season range.</td>
+<td>Episode/season range, or an air date.</td>
+</tr>
+<tr>
+<td><code>--daily</code></td>
+<td></td>
+<td>Fill missing air dates from TVDB during <code>--enrich</code>.</td>
 </tr>
 <tr>
 <td><code>--select-titles</code></td>
@@ -3955,7 +4058,7 @@ authoritative list.</p>
 <td>Export track info and keys to JSON.</td>
 </tr>
 <tr>
-<td><code>--tmdb</code> / <code>--imdb</code> / <code>--tvdb</code> / <code>--animeapi</code> / <code>--enrich</code></td>
+<td><code>--tmdb</code> / <code>--imdb</code> / <code>--tvdb</code> / <code>--anilist</code> / <code>--enrich</code></td>
 <td></td>
 <td>Metadata overrides.</td>
 </tr>

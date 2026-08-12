@@ -3178,6 +3178,49 @@
 </div>
 </div>
 <p>Each serialized title carries <code>type</code> (<code>"episode"</code>, <code>"movie"</code>, or <code>"other"</code>), <code>name</code>, <code>id</code>, <code>language</code>, <code>description</code>, <code>date</code>, and <code>cover_url</code>. Episodes and movies add <code>year</code>; episodes additionally add <code>series_title</code>, <code>season</code>, and <code>number</code>.</p>
+<p>These keys are sent only when the title carries them, so a title without them serializes exactly as before:</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Type</th>
+<th>On</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>part</code></td>
+<td>integer</td>
+<td>episode</td>
+<td>Part index of a <a href="../../creating-a-service/#split-episodes">split episode</a>, counting from 1.</td>
+</tr>
+<tr>
+<td><code>air_date</code></td>
+<td>string</td>
+<td>episode</td>
+<td>ISO air date of <a href="../../../guide/downloading/#daily-and-date-based-content">dated content</a>. unshackle names the episode by date instead of <code>SxxExx</code>.</td>
+</tr>
+<tr>
+<td><code>absolute</code></td>
+<td>integer</td>
+<td>episode</td>
+<td>Absolute episode number across all seasons.</td>
+</tr>
+<tr>
+<td><code>daily</code></td>
+<td>boolean</td>
+<td>episode</td>
+<td>The episode is daily/date-based. Set from the title, or from the service's <code>DAILY</code> class attribute.</td>
+</tr>
+<tr>
+<td><code>anime</code></td>
+<td>boolean</td>
+<td>episode, movie</td>
+<td>The title is anime, so metadata lookups prefer AniList. Set from the title, or from the service's <code>ANIME</code> class attribute.</td>
+</tr>
+</tbody>
+</table>
 <div class="admonition info">
 <p class="admonition-title"><code>part</code> on a split episode</p>
 <p>A service that splits one episode into several separately playable videos reports each
@@ -3475,7 +3518,7 @@ is unaffected. See <a href="../../creating-a-service/#split-episodes">Split epis
 <td><code>wanted</code></td>
 <td>string[]</td>
 <td><code>[]</code></td>
-<td>Episode/season selectors. Accepts the part form, <code>"S01E01.2"</code>.</td>
+<td>Episode/season selectors. Accepts the part form, <code>"S01E01.2"</code>, and the air-date form, <code>"2026-08-11"</code> or <code>"2026-08-01:2026-08-31"</code>.</td>
 </tr>
 <tr>
 <td><code>latest_episode</code></td>
@@ -3616,10 +3659,10 @@ is unaffected. See <a href="../../creating-a-service/#split-episodes">Split epis
 <td>Release group tag.</td>
 </tr>
 <tr>
-<td><code>tmdb_id</code> / <code>imdb_id</code> / <code>tvdb_id</code> / <code>animeapi_id</code></td>
+<td><code>tmdb_id</code> / <code>imdb_id</code> / <code>tvdb_id</code> / <code>anilist_id</code></td>
 <td>-</td>
 <td><code>null</code></td>
-<td>External ID overrides for tagging.</td>
+<td>External ID overrides. Each resolves its metadata directly instead of by a title search, and is used for tagging. Set <code>enrich</code> to also take the title, year and original language. Give at most one of <code>tmdb_id</code>, <code>imdb_id</code> and <code>tvdb_id</code>, since unshackle resolves the others from it. Sending two returns <code>400</code>. <code>anilist_id</code> still combines with one of them. <code>tmdb_id</code> and <code>tvdb_id</code> must be positive integers, <code>imdb_id</code> must look like <code>tt1375666</code>, and <code>anilist_id</code> must be a positive integer or a string like <code>mal:12345</code>, or the request returns <code>400</code>. An ID whose provider is unconfigured, such as <code>tmdb_id</code> with no <code>tmdb_api_key</code>, fails the job rather than returning <code>400</code>. <code>anilist_id</code> needs no key.</td>
 </tr>
 <tr>
 <td><code>tvdb_order</code></td>
@@ -3631,7 +3674,13 @@ is unaffected. See <a href="../../creating-a-service/#split-episodes">Split epis
 <td><code>enrich</code></td>
 <td>boolean</td>
 <td><code>false</code></td>
-<td>Override title/year from external source, and fill in the original language. Needs one of <code>tmdb_id</code>, <code>imdb_id</code>, <code>tvdb_id</code> or <code>animeapi_id</code>; without one the job fails instead of returning <code>400</code>.</td>
+<td>Overwrite title, year and original language with the external source's. Needs one of <code>tmdb_id</code>, <code>imdb_id</code>, <code>tvdb_id</code> or <code>anilist_id</code>. Without one the job fails instead of returning <code>400</code>.</td>
+</tr>
+<tr>
+<td><code>daily</code></td>
+<td>boolean</td>
+<td><code>false</code></td>
+<td>Treat the title as daily/date-based content and fill missing episode air dates from TVDB. The fill needs <code>enrich</code> and a TVDB ID. An air date the service already set is kept.</td>
 </tr>
 <tr>
 <td><code>output_dir</code></td>

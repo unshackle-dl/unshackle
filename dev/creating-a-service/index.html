@@ -2403,6 +2403,16 @@ Click <code>cli</code> entry point plus three abstract methods.</p>
 <td><code>bool</code></td>
 <td>Set <code>True</code> on a service with no subtitle tracks to skip subtitle handling entirely.</td>
 </tr>
+<tr>
+<td><code>ANIME</code></td>
+<td><code>bool</code></td>
+<td>Set <code>True</code> when the catalog is anime, so metadata lookups prefer AniList. A title's own <code>anime</code> flag overrides it.</td>
+</tr>
+<tr>
+<td><code>DAILY</code></td>
+<td><code>bool</code></td>
+<td>Set <code>True</code> when the catalog is daily/date-based (talk shows, news, sports), so episodes are named by air date. A title's own <code>daily</code> flag overrides it.</td>
+</tr>
 </tbody>
 </table>
 <div class="admonition note">
