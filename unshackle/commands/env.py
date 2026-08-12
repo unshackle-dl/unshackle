@@ -46,13 +46,6 @@ def get_dependencies() -> list[dict]:
             "desc": "DRM decryption",
             "cat": "DRM",
         },
-        {
-            "name": "ML-Worker",
-            "binary": binaries.ML_Worker,
-            "required": False,
-            "desc": "DRM licensing",
-            "cat": "DRM",
-        },
         # HDR Processing
         {"name": "dovi_tool", "binary": binaries.DoviTool, "required": False, "desc": "Dolby Vision", "cat": "HDR"},
         {

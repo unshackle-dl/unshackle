@@ -306,7 +306,7 @@ Prints a dependency table (Category / Tool / Status / Required / Purpose) showin
 | Category | Tools |
 |---|---|
 | Core | FFmpeg*, FFprobe*, MKVToolNix*, mkvpropedit* |
-| DRM | shaka-packager*, mp4decrypt, ML-Worker |
+| DRM | shaka-packager*, mp4decrypt |
 | HDR | dovi_tool, HDR10Plus_tool |
 | Subtitle | SubtitleEdit, CCExtractor |
 | Player | FFplay, MPV |
