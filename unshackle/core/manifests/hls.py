@@ -1288,9 +1288,15 @@ class HLS:
         elif key.method == "ISO-23001-7":
             drm = Widevine(pssh=WV_PSSH.new(key_ids=[key.uri.split(",")[-1]], system_id=WV_PSSH.SystemId.Widevine))
         elif key.keyformat and key.keyformat.lower() == WidevineCdm.urn:
+            extra_params = dict(key._extra_params)  # noqa
+            # a v0 PSSH carries no KID, leaving the tag's own KEYID as the only source
+            kid = extra_params.pop("keyid", None) or extra_params.pop("kid", None)
+            if isinstance(kid, str):
+                kid = kid.removeprefix("0x").removeprefix("0X")
             drm = Widevine(
                 pssh=WV_PSSH(key.uri.split(",")[-1]),
-                **key._extra_params,  # noqa
+                kid=kid,
+                **extra_params,
             )
         elif key.keyformat and key.keyformat.lower() in {f"urn:uuid:{PR_PSSH.SYSTEM_ID}", "com.microsoft.playready"}:
             drm = PlayReady(
