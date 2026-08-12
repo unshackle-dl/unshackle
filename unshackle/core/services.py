@@ -204,8 +204,8 @@ class Services(click.Group):
             from unshackle.core.remote_service import RemoteClient, resolve_server
 
             server_name = ctx.params.get("server")
-            server_url, api_key, _ = resolve_server(server_name)
-            client = RemoteClient(server_url, api_key)
+            server_url, api_key, services_config = resolve_server(server_name)
+            client = RemoteClient(server_url, api_key, services_config.get("_auth_headers"))
             result = client.get("/api/services")
             Services._remote_services_cache = result.get("services", [])
             return Services._remote_services_cache

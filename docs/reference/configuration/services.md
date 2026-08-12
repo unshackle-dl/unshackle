@@ -82,9 +82,18 @@ keep auth tokens in localStorage rather than in HTTP cookies need. Extraction is
 
 Definitions of remote unshackle service servers, used by the `--remote` mode. Each entry is
 named by you (pick it with `--server`, or omit that flag when only one is configured) and gives
-the server's `url` (required), an optional `api_key` sent as `X-Secret-Key`, an optional
-`server_cdm` boolean, and an optional `services` sub-dict of per-service local overrides such
-as `title_map`. In `--remote` mode unshackle turns the server's service list into synthetic CLI
+the server's `url` (required), an optional `api_key`, an optional `auth_headers` list, an
+optional `server_cdm` boolean, and an optional `services` sub-dict of per-service local
+overrides such as `title_map`.
+
+`auth_headers` lists extra header names to send the API key in, tried before the defaults
+`X-Secret-Key` and `X-Api-Key`, which are always appended as fallbacks. unshackle sends the
+first name; if the server answers `401`, it retries the same request with the next name, and
+keeps the one that works for the rest of the session. Names you list keep your spelling and are
+not repeated in the fallbacks, so `auth_headers: ["Authorization", "x-secret-key"]` is tried as
+`Authorization`, `x-secret-key`, `X-Api-Key`.
+
+In `--remote` mode unshackle turns the server's service list into synthetic CLI
 commands that run against it, falling back to the tags in that `services` sub-dict when the
 list cannot be fetched. See [remote sessions](../../dev/rest-api/remote-sessions.md) for the
 full setup.

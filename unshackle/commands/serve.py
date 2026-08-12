@@ -160,6 +160,10 @@ def serve(
         if global_services:
             log.info(f"Global service allowlist: {', '.join(global_services)}")
         users = config.serve.get("users", {})
+        if isinstance(users, dict):
+            # yaml keys can parse as int; hmac.compare_digest and allowlist lookups need str
+            users = {str(k): v for k, v in users.items()}
+            config.serve["users"] = users
         for user_key, user_cfg in users.items() if isinstance(users, dict) else []:
             user_services = user_cfg.get("services") if isinstance(user_cfg, dict) else None
             if user_services:
@@ -173,7 +177,10 @@ def serve(
                 app["config"] = {"users": {}}
             else:
                 app = web.Application(middlewares=[cors_middleware, api_key_authentication, compression_middleware])
-                app["config"] = {"users": {api_secret: {"devices": [], "username": "api_user"}}}
+                api_users: dict = {api_secret: {"devices": [], "username": "api_user"}}
+                if isinstance(users, dict):
+                    api_users.update(users)
+                app["config"] = {"users": api_users}
             app["debug_api"] = debug_api
 
             # Start session cleanup loop for remote-dl sessions

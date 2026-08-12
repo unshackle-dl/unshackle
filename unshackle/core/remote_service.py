@@ -37,6 +37,8 @@ log = logging.getLogger("remote_service")
 
 SENSITIVE_DATA_KEYS = ("credential", "credentials", "password", "token", "api_key")
 
+DEFAULT_AUTH_HEADERS = ["X-Secret-Key", "X-Api-Key"]
+
 
 def redact_secrets(text: str, data: Optional[Dict[str, Any]] = None) -> str:
     """Mask URL userinfo and any request-payload secrets before the text is logged."""
@@ -47,9 +49,11 @@ def redact_secrets(text: str, data: Optional[Dict[str, Any]] = None) -> str:
 class RemoteClient:
     """HTTP client for the unshackle serve API."""
 
-    def __init__(self, server_url: str, api_key: str) -> None:
+    def __init__(self, server_url: str, api_key: str, auth_headers: Optional[list[str]] = None) -> None:
         self.server_url = server_url.rstrip("/")
         self.api_key = api_key
+        self.auth_headers = list(auth_headers) if auth_headers else list(DEFAULT_AUTH_HEADERS)
+        self._auth_header_index = 0
         self._session: Optional[requests.Session] = None
 
     @property
@@ -60,20 +64,35 @@ class RemoteClient:
             self._session = requests.Session()
             self._session.headers["User-Agent"] = f"unshackle/{__version__}"
             if self.api_key:
-                self._session.headers["X-Secret-Key"] = self.api_key
+                self._session.headers[self.auth_headers[self._auth_header_index]] = self.api_key
         return self._session
+
+    def _next_auth_header(self) -> bool:
+        """Move the api key onto the next candidate header. False once they are exhausted."""
+        if not self.api_key or self._auth_header_index + 1 >= len(self.auth_headers):
+            return False
+        session = self.session
+        session.headers.pop(self.auth_headers[self._auth_header_index], None)
+        self._auth_header_index += 1
+        session.headers[self.auth_headers[self._auth_header_index]] = self.api_key
+        return True
 
     def _request(self, method: str, endpoint: str, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         url = f"{self.server_url}{endpoint}"
-        try:
-            resp = getattr(self.session, method)(url, json=data, timeout=120 if method == "post" else 30)
-        except requests.ConnectionError:
-            server_url = safe_display_url(self.server_url)
-            log.error(f"Could not connect to remote server at {server_url}. Is it running? (unshackle serve)")
-            raise SystemExit(1)
-        except requests.Timeout:
-            log.error(f"Request to remote server timed out: {endpoint}")
-            raise SystemExit(1)
+        while True:
+            try:
+                resp = getattr(self.session, method)(url, json=data, timeout=120 if method == "post" else 30)
+            except requests.ConnectionError:
+                server_url = safe_display_url(self.server_url)
+                log.error(f"Could not connect to remote server at {server_url}. Is it running? (unshackle serve)")
+                raise SystemExit(1)
+            except requests.Timeout:
+                log.error(f"Request to remote server timed out: {endpoint}")
+                raise SystemExit(1)
+            # servers differ on which header carries the key, so retry the rest before giving up
+            if resp.status_code == 401 and self._next_auth_header():
+                continue
+            break
         result = resp.json()
         if resp.status_code >= 400:
             error_msg = redact_secrets(str(result.get("message", resp.text)), data)
@@ -319,8 +338,31 @@ def _build_title(info: Dict[str, Any], service_tag: str, fallback_id: str) -> Un
     return title
 
 
+def _resolve_auth_headers(svc: dict, server_name: str) -> list[str]:
+    """Configured header names first, then the defaults as fallbacks."""
+    auth_headers = svc.get("auth_headers")
+    if auth_headers is None:
+        return list(DEFAULT_AUTH_HEADERS)
+    if (
+        not isinstance(auth_headers, list)
+        or not auth_headers
+        or not all(isinstance(h, str) and h.strip() for h in auth_headers)
+    ):
+        raise click.ClickException(
+            f"Remote service '{server_name}': 'auth_headers' must be a list of header names, e.g.\n\n"
+            '      auth_headers: ["Authorization"]'
+        )
+    resolved = [h.strip() for h in auth_headers]
+    seen = {h.lower() for h in resolved}
+    resolved.extend(h for h in DEFAULT_AUTH_HEADERS if h.lower() not in seen)
+    return resolved
+
+
 def resolve_server(server_name: Optional[str]) -> tuple[str, str, dict]:
-    """Resolve server URL, API key, and per-service config from remote_services."""
+    """Resolve server URL, API key, and per-service config from remote_services.
+
+    The per-service config carries the ``_auth_headers`` candidate list for RemoteClient.
+    """
     remote_services = config.remote_services
     if not remote_services:
         raise click.ClickException(
@@ -338,6 +380,7 @@ def resolve_server(server_name: Optional[str]) -> tuple[str, str, dict]:
             raise click.ClickException(f"Remote service '{server_name}' not found. Available: {available}")
         services = svc.get("services", {})
         services["_server_cdm"] = svc.get("server_cdm", False)
+        services["_auth_headers"] = _resolve_auth_headers(svc, server_name)
         return svc["url"], svc.get("api_key", ""), services
 
     if len(remote_services) == 1:
@@ -345,6 +388,7 @@ def resolve_server(server_name: Optional[str]) -> tuple[str, str, dict]:
         log.info(f"Using remote service: {name}")
         services = svc.get("services", {})
         services["_server_cdm"] = svc.get("server_cdm", False)
+        services["_auth_headers"] = _resolve_auth_headers(svc, name)
         return svc["url"], svc.get("api_key", ""), services
 
     available = ", ".join(remote_services.keys())
@@ -415,7 +459,7 @@ class RemoteService:
 
         self.service_tag = service_tag
         self.title_id = title_id
-        self.client = RemoteClient(server_url, api_key)
+        self.client = RemoteClient(server_url, api_key, services_config.get("_auth_headers"))
         self.ctx = ctx
         self._service_params = service_params or {}
         self.log = logging.getLogger(service_tag)
