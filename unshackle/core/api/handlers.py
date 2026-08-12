@@ -263,7 +263,7 @@ def get_allowed_services(request: Optional[web.Request] = None) -> Optional[List
 
     key_set: Optional[set[str]] = None
     if request:
-        secret_key = request.headers.get("X-Secret-Key")
+        secret_key = request_secret_key(request)
         if secret_key:
             users = config.serve.get("users", {})
             user_config = users.get(secret_key, {})
@@ -283,9 +283,32 @@ def get_allowed_services(request: Optional[web.Request] = None) -> Optional[List
     return list(result)
 
 
+JOB_EVENTS_ROUTE = "/api/download/jobs/{job_id}/events"
+
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, X-Secret-Key, Authorization",
+    "Access-Control-Max-Age": "3600",
+}
+
+
+def request_secret_key(request: web.Request) -> Optional[str]:
+    """The caller's key: the X-Secret-Key header, or on the events route the secret_key
+    query param (EventSource cannot send headers)."""
+    key = request.headers.get("X-Secret-Key")
+    if not key:
+        resource = request.match_info.route.resource
+        if resource is not None and resource.canonical == JOB_EVENTS_ROUTE:
+            key = request.query.get("secret_key")
+    return key
+
+
 def caller_key(request: Optional[web.Request] = None) -> str:
-    """The authenticating X-Secret-Key for a request, or 'anonymous' when unauthenticated."""
-    return request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
+    """The authenticating key for a request, or 'anonymous' when unauthenticated."""
+    if not request:
+        return "anonymous"
+    return request_secret_key(request) or "anonymous"
 
 
 def owns_job(job: Any, request: Optional[web.Request] = None) -> bool:
@@ -1212,6 +1235,71 @@ async def get_download_job_handler(job_id: str, request: Optional[web.Request] =
             context={"operation": "get_download_job", "job_id": job_id},
             debug_mode=debug_mode,
         )
+
+
+async def download_job_events_handler(job_id: str, request: web.Request) -> web.StreamResponse:
+    """Stream a download job's progress to the caller as Server-Sent Events."""
+    import json
+
+    from unshackle.core.api.download_manager import TERMINAL_STATUSES, get_download_manager
+
+    manager = get_download_manager()
+    job = manager.get_job(job_id)
+
+    if not job or not owns_job(job, request):
+        raise APIError(
+            APIErrorCode.JOB_NOT_FOUND,
+            "Job not found",
+            details={"job_id": job_id},
+        )
+
+    response = web.StreamResponse(
+        headers={
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            # Stops nginx from buffering the stream.
+            "X-Accel-Buffering": "no",
+            **CORS_HEADERS,
+        }
+    )
+    await response.prepare(request)
+
+    async def send(event: str, data: Dict[str, Any]) -> None:
+        payload = json.dumps(data, separators=(",", ":"), default=str)
+        await response.write(f"event: {event}\ndata: {payload}\n\n".encode())
+
+    queue: Optional[asyncio.Queue] = None
+    get_task: Optional[asyncio.Task] = None
+    try:
+        await send("snapshot", job.to_dict(include_full_details=True))
+
+        if job.status not in TERMINAL_STATUSES:
+            queue = manager.subscribe(job_id)
+        if queue is None or job.status in TERMINAL_STATUSES:
+            await send(job.status.value, job.to_dict(include_full_details=True))
+            return response
+
+        while True:
+            if get_task is None:
+                get_task = asyncio.create_task(queue.get())
+            done, _ = await asyncio.wait({get_task}, timeout=15)
+            if not done:
+                await response.write(b": keep-alive\n\n")
+                continue
+            item = get_task.result()
+            get_task = None
+            if item is None:
+                break
+            await send(item["event"], item["data"])
+    except (ConnectionResetError, asyncio.CancelledError):
+        log.debug(f"SSE client disconnected from job {sanitize_log(job_id)}")
+    finally:
+        if get_task is not None:
+            get_task.cancel()
+        if queue is not None:
+            manager.unsubscribe(job_id, queue)
+
+    return response
 
 
 async def cancel_download_job_handler(job_id: str, request: Optional[web.Request] = None) -> web.Response:

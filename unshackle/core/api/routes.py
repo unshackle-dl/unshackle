@@ -11,6 +11,8 @@ from aiohttp_swagger3 import SwaggerDocs, SwaggerInfo, SwaggerUiSettings
 from unshackle.core import __code_hash__, __version__
 from unshackle.core.api.errors import APIError, APIErrorCode, build_error_response, handle_api_exception
 from unshackle.core.api.handlers import (
+    CORS_HEADERS,
+    JOB_EVENTS_ROUTE,
     cancel_download_job_handler,
     clear_cache_handler,
     clear_finished_download_jobs_handler,
@@ -18,6 +20,7 @@ from unshackle.core.api.handlers import (
     delete_history_handler,
     download_handler,
     download_history_handler,
+    download_job_events_handler,
     env_check_handler,
     get_allowed_services,
     get_download_job_handler,
@@ -56,26 +59,22 @@ async def cors_middleware(
     else:
         response = await handler(request)
 
-    # Add CORS headers
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Secret-Key, Authorization"
-    response.headers["Access-Control-Max-Age"] = "3600"
+    response.headers.update(CORS_HEADERS)
 
     return response
 
 
 log = logging.getLogger("api")
 
-# Route handler signature: takes the request, returns a response.
-Handler = Callable[[web.Request], Awaitable[web.Response]]
+# Route handler signature: takes the request, returns a response (streamed or complete).
+Handler = Callable[[web.Request], Awaitable[web.StreamResponse]]
 
 
 def api_handler(handler: Handler) -> Handler:
     """Wrap a route handler so any raised APIError becomes a structured error response."""
 
     @functools.wraps(handler)
-    async def wrapper(request: web.Request) -> web.Response:
+    async def wrapper(request: web.Request) -> web.StreamResponse:
         try:
             return await handler(request)
         except APIError as e:
@@ -957,6 +956,46 @@ async def download_job_detail(request: web.Request) -> web.Response:
 
 
 @api_handler
+async def download_job_events(request: web.Request) -> web.StreamResponse:
+    """
+    Stream download job events.
+    ---
+    summary: Stream download job events
+    description: >
+      Server-Sent Events stream of a job's progress. Emits a `snapshot` event, then
+      `progress` and `status` events, and closes after the terminal `completed`, `failed`
+      or `cancelled` event. Every event carries the same full job object that
+      GET /api/download/jobs/{job_id} returns. A browser EventSource can authenticate with
+      the `secret_key` query parameter instead of the X-Secret-Key header; when both are
+      sent the header is used.
+    parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: secret_key
+        in: query
+        required: false
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Event stream
+        content:
+          text/event-stream:
+            schema:
+              type: string
+      '404':
+        description: Job not found
+      '500':
+        description: Server error
+    """
+    job_id = request.match_info["job_id"]
+    return await download_job_events_handler(job_id, request)
+
+
+@api_handler
 async def cancel_download_job(request: web.Request) -> web.Response:
     """
     Cancel or remove download job.
@@ -1801,6 +1840,7 @@ ROUTES: list[tuple[str, str, Handler, bool]] = [
     ("GET", "/api/download/jobs", download_jobs, False),
     ("POST", "/api/download/jobs/clear-finished", clear_finished_download_jobs, False),
     ("GET", "/api/download/jobs/{job_id}", download_job_detail, False),
+    ("GET", JOB_EVENTS_ROUTE, download_job_events, False),
     ("DELETE", "/api/download/jobs/{job_id}", cancel_download_job, False),
     ("POST", "/api/download/jobs/{job_id}/retry", retry_download_job, False),
     ("POST", "/api/download/jobs/{job_id}/priority", prioritize_download_job, False),

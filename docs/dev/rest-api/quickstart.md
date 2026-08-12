@@ -310,7 +310,15 @@ done
 ```
 
 !!! tip "Polling cadence"
-    A few seconds between polls is plenty. The server writes progress updates roughly twice a second internally, but there is no push/streaming channel; you read the current snapshot each time you ask.
+    A few seconds between polls is plenty. The server updates a job's progress roughly twice a second internally, and each poll reads the current snapshot.
+
+!!! tip "Or let the server push the updates"
+    `GET /api/download/jobs/{job_id}/events` streams the same job record as Server-Sent Events, and closes the stream when the job ends. It removes the polling loop above. See [Endpoints](endpoints.md#get-apidownloadjobsjob_idevents).
+
+    ```bash
+    curl -N "$BASE/api/download/jobs/$JOB/events" \
+      -H "X-Secret-Key: $SECRET"
+    ```
 
 If a job ends in `failed`, the full record includes `error_message`, `error_code`, and (when the server was started with `--debug-api`) `error_traceback` and `worker_stderr` to help you diagnose it. Sensitive values in these fields are scrubbed before they are returned.
 

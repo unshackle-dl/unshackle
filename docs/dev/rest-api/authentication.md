@@ -108,6 +108,17 @@ X-Secret-Key: <your-secret>
 
 The value must exactly match one of the configured keys (`api_secret`, or one of the keys under `users`). There is no login step, no session cookie, and no token exchange for API access. The same static key is sent on each request.
 
+!!! info "One route also accepts the key as a query parameter"
+    The job event stream, `GET /api/download/jobs/{job_id}/events`, also accepts the key in a `secret_key` query parameter. This is for browsers: the `EventSource` API cannot set request headers. The exception applies to that one route only, and it works in both server modes.
+
+    ```javascript
+    new EventSource(`http://127.0.0.1:8786/api/download/jobs/${jobId}/events?secret_key=${key}`);
+    ```
+
+    The header always wins. If the request has an `X-Secret-Key` header, the server checks that header and ignores the query parameter, so a wrong header is rejected even when the query parameter holds a valid key.
+
+    A key in a URL is easier to leak than a key in a header, because proxies and browser history can record it. Use the header wherever your client can set one.
+
 === "curl"
 
     ```bash
@@ -269,6 +280,7 @@ With `--caddy`, unshackle also starts `caddy run` using the `Caddyfile` located 
 | Item | Value |
 |---|---|
 | Auth header | `X-Secret-Key` |
+| Query-parameter alternative | `?secret_key=` on `GET /api/download/jobs/{job_id}/events` only |
 | Default bind address | `127.0.0.1:8786` |
 | Exempt endpoint | `GET /api/health` |
 | Failure status | `401 Unauthorized` |
@@ -292,6 +304,8 @@ The header and config are identical between modes, but the code that enforces th
 - **Integrated server** (default). A `serve_authentication` middleware wraps pywidevine's authentication (and pyplayready's for `/playready*` paths), and the REST routes live in the same application, guarded by the same check. Here the accepted-keys map is your full `serve` config: `api_secret` (auto-added with access to all loaded devices) plus every entry under `users`, each with its declared `devices` / `playready_devices`.
 
 Because the API-only middleware guards *all* non-health paths, the Swagger UI at `/api/docs/` is also behind `X-Secret-Key` there. In `--remote-only` mode the Swagger UI is not mounted at all.
+
+Both middlewares read the caller's key through the shared `request_secret_key()` helper in `unshackle/core/api/handlers.py`, which returns the `X-Secret-Key` header and falls back to the `secret_key` query parameter only when the matched route is the job event stream. The integrated server needs one extra branch for this: pywidevine's `authentication` is header-only, so `serve_authentication` compares the query-parameter key itself when the header is absent, and delegates to pywidevine in every other case. That is why a present-but-wrong header is rejected in both modes.
 
 ### CORS and the `Authorization` header
 

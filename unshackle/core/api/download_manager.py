@@ -623,6 +623,7 @@ class DownloadQueueManager:
         self._job_temp_files: Dict[str, Dict[str, str]] = {}
         self._workers_started = False
         self._shutdown_event = asyncio.Event()
+        self._subscribers: Dict[str, List[asyncio.Queue]] = {}
 
         log.info(
             f"Initialized download queue manager: max_concurrent={max_concurrent_downloads}, retention_hours={job_retention_hours}"
@@ -655,6 +656,48 @@ class DownloadQueueManager:
         """List all jobs."""
         return list(self._jobs.values())
 
+    def subscribe(self, job_id: str) -> asyncio.Queue:
+        """Register a listener for a job's events, returning the queue it receives them on."""
+        queue: asyncio.Queue = asyncio.Queue(maxsize=100)
+        self._subscribers.setdefault(job_id, []).append(queue)
+        return queue
+
+    def unsubscribe(self, job_id: str, queue: asyncio.Queue) -> None:
+        """Drop a listener registered by subscribe()."""
+        queues = self._subscribers.get(job_id)
+        if not queues:
+            return
+        with suppress(ValueError):
+            queues.remove(queue)
+        if not queues:
+            del self._subscribers[job_id]
+
+    def _publish(self, job: DownloadJob, event: str) -> None:
+        """Fan an event carrying the job's full detail dict out to every listener."""
+        queues = self._subscribers.get(job.job_id)
+        if not queues:
+            return
+        payload = {"event": event, "data": job.to_dict(include_full_details=True)}
+        for queue in queues:
+            self._put(queue, payload)
+
+    def _publish_terminal(self, job: DownloadJob) -> None:
+        """Publish a job's final state, then close every listener's stream."""
+        self._publish(job, job.status.value)
+        for queue in self._subscribers.pop(job.job_id, []):
+            self._put(queue, None)
+
+    @staticmethod
+    def _put(queue: asyncio.Queue, item: Optional[Dict[str, Any]]) -> None:
+        """Enqueue an item, discarding the oldest when a slow listener has filled the queue."""
+        try:
+            queue.put_nowait(item)
+        except asyncio.QueueFull:
+            with suppress(asyncio.QueueEmpty):
+                queue.get_nowait()
+            with suppress(asyncio.QueueFull):
+                queue.put_nowait(item)
+
     def cancel_job(self, job_id: str) -> bool:
         """Cancel a job if it's queued or downloading."""
         job = self._jobs.get(job_id)
@@ -666,6 +709,7 @@ class DownloadQueueManager:
             job.cancel_event.set()  # Signal cancellation
             job.completed_time = datetime.now()
             record_job_history(job)  # queued jobs never reach a worker, so persist here
+            self._publish_terminal(job)
             log.info(f"Cancelled queued job {sanitize_log(job_id)}")
             return True
         elif job.status == JobStatus.DOWNLOADING:
@@ -763,6 +807,11 @@ class DownloadQueueManager:
         log.info("Shutting down download queue manager")
         self._shutdown_event.set()
 
+        for queues in list(self._subscribers.values()):
+            for queue in queues:
+                self._put(queue, None)
+        self._subscribers.clear()
+
         # Cancel all active downloads
         for task in self._active_downloads.values():
             task.cancel()
@@ -819,6 +868,7 @@ class DownloadQueueManager:
                 # Start processing the job
                 job.status = JobStatus.DOWNLOADING
                 job.started_time = datetime.now()
+                self._publish(job, "status")
 
                 log.info(f"Worker {worker_name} starting job {job.job_id}")
 
@@ -838,6 +888,7 @@ class DownloadQueueManager:
                 finally:
                     job.completed_time = datetime.now()
                     record_job_history(job)
+                    self._publish_terminal(job)
                     if job.job_id in self._active_downloads:
                         del self._active_downloads[job.job_id]
 
@@ -913,6 +964,7 @@ class DownloadQueueManager:
 
         stdout_bytes = b""
         stderr_bytes = b""
+        last_published: Optional[Dict[str, Any]] = None
 
         try:
             while True:
@@ -957,6 +1009,9 @@ class DownloadQueueManager:
                                 if new_progress != job.progress:
                                     job.progress = new_progress
                                     log.info(f"Job {job.job_id} progress updated: {job.progress}%")
+                            if progress_data != last_published:
+                                last_published = progress_data
+                                self._publish(job, "progress")
                 except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
                     log.debug(f"Could not read progress for job {job.job_id}: {e}")
 

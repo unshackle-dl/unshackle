@@ -8,6 +8,7 @@ from aiohttp import web
 from unshackle.core import binaries
 from unshackle.core.api import cors_middleware, setup_routes, setup_swagger
 from unshackle.core.api.compression import compression_middleware
+from unshackle.core.api.handlers import request_secret_key
 from unshackle.core.config import config
 from unshackle.core.constants import context_settings
 from unshackle.core.downloaders import format_speed, parse_speed_limit, set_speed_limit
@@ -130,11 +131,11 @@ def serve(
         config.serve["playready_devices"].extend(list(config.directories.prds.glob("*.prd")))
 
         @web.middleware
-        async def api_key_authentication(request: web.Request, handler) -> web.Response:
+        async def api_key_authentication(request: web.Request, handler) -> web.StreamResponse:
             """Authenticate API requests using X-Secret-Key header."""
             if request.path == "/api/health":
                 return await handler(request)
-            secret_key = request.headers.get("X-Secret-Key")
+            secret_key = request_secret_key(request)
             if not secret_key:
                 return web.json_response({"status": 401, "message": "Secret Key is Empty."}, status=401)
             # Constant-time compare against every configured key so a valid key can't be
@@ -238,8 +239,13 @@ def serve(
 
             def create_serve_authentication(serve_playready_flag: bool):
                 @web.middleware
-                async def serve_authentication(request: web.Request, handler) -> web.Response:
+                async def serve_authentication(request: web.Request, handler) -> web.StreamResponse:
+                    secret_key = request_secret_key(request)
                     if serve_playready_flag and request.path in ("/playready", "/playready/"):
+                        response = await handler(request)
+                    elif secret_key and not request.headers.get("X-Secret-Key"):
+                        if not any(hmac.compare_digest(secret_key, k) for k in request.app["config"]["users"]):
+                            return web.json_response({"status": 401, "message": "Secret Key is Invalid."}, status=401)
                         response = await handler(request)
                     else:
                         response = await pywidevine_serve.authentication(request, handler)

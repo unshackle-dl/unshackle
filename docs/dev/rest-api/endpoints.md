@@ -492,6 +492,73 @@ Fetch a single job with full details (equivalent to a `full=true` list entry).
 | `200` | - | Job returned. |
 | `404` | `JOB_NOT_FOUND` | No such job. |
 
+### `GET /api/download/jobs/{job_id}/events`
+
+Stream the job's progress as [Server-Sent Events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events). Use this instead of polling `GET /api/download/jobs/{job_id}`.
+
+The response has the content type `text/event-stream`. Each event has this format:
+
+```
+event: <name>
+data: <job JSON>
+
+```
+
+The `data` field of every event is the same job object that `GET /api/download/jobs/{job_id}` returns.
+
+| Event | When it is sent |
+| --- | --- |
+| `snapshot` | Immediately, as the first event. Gives the job's current state. |
+| `status` | The job leaves the queue and starts to download. |
+| `progress` | The worker's progress record changed. The server reads that record every 0.5 seconds, so you get at most two of these events each second, and none while the record stays the same. |
+| `completed` | The job finished. The server then closes the stream. |
+| `failed` | The job failed. The server then closes the stream. |
+| `cancelled` | The job was cancelled. The server then closes the stream. |
+
+The server sends a `: keep-alive` comment each 15 seconds while the job is quiet, to keep proxies from closing an idle connection. Ignore these lines.
+
+If the job is already in a terminal state, the server sends the `snapshot` event, then the terminal event, and closes the stream immediately.
+
+!!! tip "Authentication from a browser"
+    `EventSource` cannot set headers. For this endpoint only, the server also accepts the key in the `secret_key` query parameter. This works in both server modes, the default integrated server and `--api-only`:
+
+    ```javascript
+    const events = new EventSource(
+      `http://127.0.0.1:8786/api/download/jobs/${jobId}/events?secret_key=${key}`
+    );
+    events.addEventListener("progress", (e) => console.log(JSON.parse(e.data).progress));
+    events.addEventListener("completed", () => events.close());
+    ```
+
+    The header always wins. Send the key in the query parameter *or* in the header, not both: if an `X-Secret-Key` header is present, the server checks that header and ignores the query parameter. See [Authentication](authentication.md#how-clients-present-credentials).
+
+=== "Request"
+
+    ```bash
+    curl -N -H "X-Secret-Key: $KEY" \
+      "http://127.0.0.1:8786/api/download/jobs/b0f7c8e2-.../events"
+    ```
+
+=== "Response `200`"
+
+    ```
+    event: snapshot
+    data: {"job_id":"b0f7c8e2-...","status":"downloading","progress":42.5,...}
+
+    event: progress
+    data: {"job_id":"b0f7c8e2-...","status":"downloading","progress":48.0,...}
+
+    : keep-alive
+
+    event: completed
+    data: {"job_id":"b0f7c8e2-...","status":"completed","progress":100.0,...}
+    ```
+
+| Status | Error code | Meaning |
+| --- | --- | --- |
+| `200` | - | Event stream started. |
+| `404` | `JOB_NOT_FOUND` | No such job. |
+
 ### `DELETE /api/download/jobs/{job_id}`
 
 Cancel or remove a job. The behaviour depends on the job's current state:

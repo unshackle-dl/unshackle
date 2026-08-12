@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 import traceback
 from pathlib import Path
@@ -20,9 +21,11 @@ def _read_payload(path: Path) -> Dict[str, Any]:
 
 
 def _write_result(path: Path, payload: Dict[str, Any]) -> None:
+    # Atomic replace: the parent polls this file while it is being rewritten.
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        json.dump(payload, handle)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(payload), encoding="utf-8")
+    os.replace(tmp, path)
 
 
 def main(argv: list[str]) -> int:
