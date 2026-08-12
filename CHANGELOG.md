@@ -10,7 +10,6 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 
 ### Features
 
-- *dl*: Exclude a language with a `-` prefix on -l, -vl, -al, -sl and -fsl
 - *api*: Report per-episode and per-track progress on download jobs
 - *api*: Add job retry/priority/clear, history, config and maintenance endpoints
 - *api*: Expose choice values and multiple flag in service cli_params
@@ -38,6 +37,13 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - *vaults*: Support custom headers on API vault
 - *dl*: Add tag_rules to conditionally swap the group tag
 - *titles*: Add optional Episode.part, selected with -w s1e1.2
+- *enrich*: Fill in the original language from metadata providers
+- *dl*: Allow --tvdb as an --enrich metadata source
+- *dl*: Exclude languages with a - prefix on -l, -vl, -al, -sl and -fsl
+- *metadata*: [**breaking**] Authoritative id resolver and keyless imdb provider
+- *metadata*: [**breaking**] Replace animeapi with a first-class anilist provider
+- *dl*: Add absolute episode numbers filled from tvdb absolute order
+- *dl*: Add daily date-based episodes with tvdb air-date fill
 
 ### Bug Fixes
 
@@ -74,6 +80,10 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - *subtitles*: Strip X-TIMESTAMP-MAP so WebVTT cues are not offset on conversion
 - *downloader*: Decode content-encoded bodies instead of writing raw
 - *downloader*: Surface failed downloads instead of returning silently
+- *dl*: Warn when --enrich source is missing title, year, or language
+- *api*: Carry air_date, absolute, anime and daily across the title wire
+- *dl*: Treat audio muxed into the video as an available language
+- *hls*: Take the key id from EXT-X-KEY when the PSSH carries none
 
 ### Documentation
 
@@ -84,6 +94,7 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - *core*: Drop service tags from framework comments
 - Cover the TVDB provider, episode ordering and provider order
 - Split configuration reference into per-area pages
+- *api*: Note the - language exclusion prefix in the OpenAPI spec
 
 ### Performance Improvements
 
@@ -96,6 +107,11 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 
 - *core*: [**breaking**] Bundle download_track args into DownloadContext
 - *tracks*: Honour the best token and share one match rule
+
+### Maintenance
+
+- *changelog*: Update entries for new features and bug fixes
+- *env*: Drop ML-Worker from the dependency check
 
 ### Builds
 
