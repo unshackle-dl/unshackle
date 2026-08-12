@@ -2350,7 +2350,10 @@ class dl:
         if music_collection_mode:
             raise click.ClickException("Music collections require grouped audio downloads.")
 
+        base_selection = (v_lang, a_lang, s_lang, range_)
+
         for i, title in enumerate(titles):
+            v_lang, a_lang, s_lang, range_ = base_selection
             if isinstance(title, Episode) and latest_episode and latest_episode_id:
                 # If --latest-episode is set, only process the latest episode
                 if f"{title.season}x{title.number}" != latest_episode_id:
@@ -2571,7 +2574,7 @@ class dl:
                     exact_match=exact_lang,
                 )
                 title.tracks.sort_subtitles(
-                    by_language=resolve_sort_langs([*subtitle_priority, *s_lang], title.language),
+                    by_language=resolve_sort_langs([*subtitle_priority, *(s_lang or [])], title.language),
                     type_priority=config.subtitle.get("type_priority"),
                     group_by=config.subtitle.get("group_by"),
                     exact_match=exact_lang,
