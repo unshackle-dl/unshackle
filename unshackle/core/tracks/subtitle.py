@@ -291,6 +291,9 @@ class Subtitle(Track):
                     Subtitle.filter_unwanted_cues(caption_set)
                     subtitle_text = pycaption.WebVTTWriter().write(caption_set)
                     self.path.write_text(subtitle_text, encoding="utf8")
+                except pycaption.exceptions.CaptionReadNoCaptions:
+                    # some renditions carry headers but no cues; write them out rather than fail the download
+                    self.path.write_text(text, encoding="utf8")
                 except pycaption.exceptions.CaptionReadSyntaxError:
                     # If first attempt fails, try more aggressive sanitization
                     text = Subtitle.sanitize_webvtt(text)
