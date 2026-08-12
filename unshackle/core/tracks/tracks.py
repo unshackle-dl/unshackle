@@ -523,6 +523,8 @@ class Tracks:
                 lang_name = video_track.language.display_name()
 
                 for video in self.videos:
+                    if video.data.get("audio_language"):
+                        continue
                     video.needs_repack = True
                     video.data["audio_language"] = lang_code
                     video.data["audio_language_name"] = lang_name

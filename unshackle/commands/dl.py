@@ -76,6 +76,7 @@ from unshackle.core.tracks.hybrid import Hybrid
 from unshackle.core.tracks.track import assert_fragments_decrypted, has_encrypted_sample_entry
 from unshackle.core.utilities import (
     as_requested,
+    embedded_audio_langs,
     excluded_language_tags,
     find_font_with_fallbacks,
     find_missing_langs,
@@ -3125,10 +3126,12 @@ class dl:
                         if a_orig_token in audio_languages:
                             a_orig_token = None
 
+                        embedded_langs = embedded_audio_langs(title.tracks.videos, keep_videos)
+
                         if not any(tok in processed_lang for tok in ("best", "all")):
                             missing_a_langs = find_missing_langs(
                                 processed_lang,
-                                [a.language for a in title.tracks.audio],
+                                [a.language for a in title.tracks.audio] + embedded_langs,
                                 exact=exact_lang,
                             )
                             if missing_a_langs:
@@ -3153,8 +3156,9 @@ class dl:
                         title.tracks.audio = select_best_audio(
                             title.tracks.audio, processed_lang, acodec, audio_description, exact_lang
                         )
-                        if not title.tracks.audio:
-                            # empty only when 'orig' was the sole request and did not resolve
+                        if not title.tracks.audio and not embedded_langs:
+                            # empty when 'orig' was the sole request, did not resolve, and the
+                            # video carries no audio of its own to fall back on
                             self.log.error(
                                 f"There's no {as_requested(processed_lang, a_orig_token) or 'orig'} "
                                 f"Audio Track, cannot continue..."

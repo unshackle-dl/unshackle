@@ -222,6 +222,19 @@ def keep_forced_subtitle(
     return match_func(language, forced_s_lang)
 
 
+def embedded_audio_langs(videos: Sequence[Any], keep_videos: bool) -> list[str]:
+    """
+    Return the audio languages carried inside video tracks rather than beside them.
+
+    A muxed stream keeps its audio in the video track, which a service declares by setting
+    ``data["audio_language"]``. That audio is only available while the video is kept, so
+    dropping the video (``--audio-only``, ``--no-video``) drops the language with it.
+    """
+    if not keep_videos:
+        return []
+    return [video.data["audio_language"] for video in videos if video.data.get("audio_language")]
+
+
 def find_missing_langs(
     requested: Sequence[str],
     available: Sequence[Union[str, Language, None]],
