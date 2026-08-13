@@ -23,12 +23,12 @@ def load_command(path: Path) -> object:
     try:
         module = import_module_by_path(path)
     except Exception as e:
-        raise RuntimeError(f"{path.stem}: failed to import — {type(e).__name__}: {e} ({path})") from e
+        raise RuntimeError(f"{path.stem}: failed to import - {type(e).__name__}: {e} ({path})") from e
     try:
         return getattr(module, path.stem)
     except AttributeError as e:
         raise RuntimeError(
-            f"{path.stem}: no object named '{path.stem}' found in {path} — it must match the filename"
+            f"{path.stem}: no object named '{path.stem}' found in {path} - it must match the filename"
         ) from e
 
 
@@ -74,10 +74,9 @@ class Commands(click.Group):
         if not module:
             raise click.ClickException(f"Unable to find command by the name '{name}'")
 
-        if hasattr(module, "cli"):
-            return module.cli
-
-        return module
+        cmd = module.cli if hasattr(module, "cli") else module
+        cmd.name = name
+        return cmd
 
 
 # Hide direct access to commands from quick import form, they shouldn't be accessed directly

@@ -95,7 +95,9 @@ not repeated in the fallbacks, so `auth_headers: ["Authorization", "x-secret-key
 
 In `--remote` mode unshackle turns the server's service list into synthetic CLI
 commands that run against it, falling back to the tags in that `services` sub-dict when the
-list cannot be fetched. See [remote sessions](../../dev/rest-api/remote-sessions.md) for the
+list cannot be fetched. Each synthetic command carries the server-side service's options and
+documentation, so `unshackle dl --remote <TAG> -h` shows the same help text as it does on the
+server. See [remote sessions](../../dev/rest-api/remote-sessions.md) for the
 full setup.
 
 ## `serve`

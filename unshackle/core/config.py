@@ -110,6 +110,7 @@ class Config:
             self.decryption_map = {}
             self.decryption = decryption_cfg or "shaka"
 
+        self.theme: str = kwargs.get("theme") or "default"
         self.set_terminal_bg: bool = kwargs.get("set_terminal_bg", False)
         self.tag: str = kwargs.get("tag") or ""
         self.tag_group_name: bool = kwargs.get("tag_group_name", True)

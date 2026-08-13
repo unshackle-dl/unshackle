@@ -141,6 +141,14 @@ calls.
 
 ---
 
+## Appearance { #appearance }
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `theme` | str | `catppuccin-mocha` | Named colour theme for all CLI output: banner, logs, progress bars, and help screens. One of `catppuccin-mocha` (aliases `default`, `catppuccin`, `mocha`), `dracula`, `nord`, `gruvbox`, `one-dark` (alias `onedark`), `tokyo-night` (alias `tokyonight`), `monokai`, `flexoki`, `solarized-dark` (alias `solarized`). Case-insensitive; underscores work in place of hyphens. Unknown names fall back to the default with a warning. Preview them all with `unshackle env theme`. |
+
+---
+
 ## Logging, privacy & debug { #logging-privacy-debug }
 
 | Key | Type | Default | Description |

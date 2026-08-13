@@ -21,6 +21,7 @@ from rich.text import Text, TextType
 from rich.theme import Theme
 
 from unshackle.core.config import config
+from unshackle.core.themes import DEFAULT_THEME, PALETTES, apply_help_theme, resolve_palette
 
 
 class ComfyLogRenderer(LogRender):
@@ -317,25 +318,16 @@ class ComfyConsole(Console):
                 live.start()
 
 
-catppuccin_mocha = {
-    # Colors based on "CatppuccinMocha" from Gogh themes
-    "bg": "rgb(30,30,46)",
-    "text": "rgb(205,214,244)",
-    "text2": "rgb(162,169,193)",  # slightly darker
-    "black": "rgb(69,71,90)",
-    "bright_black": "rgb(88,91,112)",
-    "red": "rgb(243,139,168)",
-    "green": "rgb(166,227,161)",
-    "yellow": "rgb(249,226,175)",
-    "blue": "rgb(137,180,250)",
-    "pink": "rgb(245,194,231)",
-    "cyan": "rgb(148,226,213)",
-    "gray": "rgb(166,173,200)",
-    "bright_gray": "rgb(186,194,222)",
-    "dark_gray": "rgb(54,54,84)",
-}
-
-primary_scheme = catppuccin_mocha
+primary_scheme = resolve_palette(config.theme)
+if primary_scheme is None:
+    logging.getLogger("console").warning(
+        "Unknown theme %r, falling back to %s (available: %s)",
+        config.theme,
+        DEFAULT_THEME,
+        ", ".join(PALETTES),
+    )
+    primary_scheme = dict(PALETTES[DEFAULT_THEME])
+apply_help_theme(primary_scheme)
 primary_scheme["none"] = primary_scheme["text"]
 primary_scheme["grey23"] = primary_scheme["black"]
 primary_scheme["magenta"] = primary_scheme["pink"]

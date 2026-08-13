@@ -14,6 +14,7 @@ from io import BytesIO
 from typing import Any, Optional
 
 # RenderableType is rich's union of "things that can be printed to a console".
+from rich import box
 from rich.console import Group, RenderableType
 from rich.padding import Padding
 from rich.panel import Panel
@@ -145,7 +146,7 @@ def render_track_panel(rows: list[TrackRow], total: int) -> Panel:
                 detail.append(" | ")
                 detail.append("Hi-Res", style="gold1")
         node.add(detail, guide_style="bright_black")
-    return Panel(tree, title="Available Tracks")
+    return Panel(tree, title="Available Tracks", box=box.SQUARE, border_style="bright_black")
 
 
 def render_album_header(

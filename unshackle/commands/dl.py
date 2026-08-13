@@ -30,6 +30,7 @@ import yaml
 from click.core import ParameterSource
 from langcodes import Language, tag_is_valid
 from pymediainfo import MediaInfo
+from rich import box
 from rich.console import Group
 from rich.padding import Padding
 from rich.panel import Panel
@@ -1766,7 +1767,7 @@ class dl:
                     # Note: Headers are not mapped to actual title indices
 
                 # Format display name
-                display_name = ((t.name[:30].rstrip() + "…") if len(t.name) > 30 else t.name) if t.name else None
+                display_name = ((t.name[:30].rstrip() + "...") if len(t.name) > 30 else t.name) if t.name else None
 
                 # Apply indentation only for multiple seasons
                 prefix = " " if multiple_seasons else ""
@@ -2582,7 +2583,12 @@ class dl:
 
             if list_:
                 available_tracks, _ = title.tracks.tree()
-                console.print(Padding(Panel(available_tracks, title="Available Tracks"), (0, 5)))
+                console.print(
+                    Padding(
+                        Panel(available_tracks, title="Available Tracks", box=box.SQUARE, border_style="bright_black"),
+                        (0, 5),
+                    )
+                )
                 continue
 
             # Determine which tracks to keep
@@ -4166,7 +4172,7 @@ class dl:
         Carries no session/cookies/dl-flags. Region (country code) is stored only when the
         export used ``--proxy``, as an import geofence. Each track records only the licensed
         DRM system; content keys live once under the track's ``keys``. ``drm`` may be None
-        (DRM-free track) or a DRM system without ``to_dict``/``content_keys`` (e.g. ClearKey) —
+        (DRM-free track) or a DRM system without ``to_dict``/``content_keys`` (e.g. ClearKey) -
         the track, manifest, chapter and attachment info is still exported.
         """
         with self.EXPORT_LOCK:

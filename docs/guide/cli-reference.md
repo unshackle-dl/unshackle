@@ -322,6 +322,14 @@ unshackle env info
 
 Shows where the config was loaded from (or lists the candidate config locations if none was found) and prints a table of every configured directory (downloads, temp, cache, cookies, logs, exports, WVDs, PRDs, services, and more).
 
+### `env theme`
+
+```
+unshackle env theme
+```
+
+Prints a sample of every available CLI theme: colour swatches, help text with option rows, a track listing with video/audio/subtitle entries, log lines, a progress bar, and the gradient pulse bar. The active theme is marked and each theme's aliases are listed. Set your choice with the [`theme`](../reference/configuration/misc.md#appearance) config key.
+
 ### `env clear`
 
 Clear an environment directory. The directory is emptied and recreated, and the number of files and bytes freed is reported.
@@ -335,6 +343,7 @@ Clear an environment directory. The directory is emptied and recreated, and the 
     ```shell
     unshackle env check
     unshackle env info
+    unshackle env theme
     unshackle env clear cache
     unshackle env clear cache EXAMPLE   # one service only
     unshackle env clear temp

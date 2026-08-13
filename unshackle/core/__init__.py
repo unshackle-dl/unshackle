@@ -3,6 +3,10 @@ import os
 from pathlib import Path
 from typing import Callable, Optional
 
+from rich_click.patch import patch as _patch_click_help
+
+_patch_click_help()
+
 __version__ = "5.3.0"
 
 _PKG = Path(__file__).parent.parent

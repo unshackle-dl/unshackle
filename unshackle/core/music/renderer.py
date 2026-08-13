@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any, Optional
 
+from rich import box
 from rich.console import Group, RenderableType
 from rich.markup import escape
 from rich.panel import Panel
@@ -112,7 +113,7 @@ class MusicRenderer:
             suffix = "s" if hidden != 1 else ""
             tree.add(f"[bright_black]... {hidden} more track{suffix}[/]", guide_style="bright_black")
 
-        return Panel(tree, title="Available Tracks")
+        return Panel(tree, title="Available Tracks", box=box.SQUARE, border_style="bright_black")
 
     def render_plan_header(self, plan: MusicDownloadPlan) -> Optional[Table]:
         title = plan.title
@@ -174,7 +175,7 @@ class MusicRenderer:
             suffix = "s" if hidden != 1 else ""
             tree.add(f"[bright_black]... {hidden} more track{suffix}[/]", guide_style="bright_black")
 
-        return Panel(tree, title="Available Tracks")
+        return Panel(tree, title="Available Tracks", box=box.SQUARE, border_style="bright_black")
 
     @staticmethod
     def _metadata_grid() -> Table:
