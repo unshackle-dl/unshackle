@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from click.testing import CliRunner
 
@@ -50,7 +52,9 @@ def test_serve_api_only_with_no_widevine_rejected(runner: CliRunner, monkeypatch
 
     result = runner.invoke(serve, ["--api-only", "--no-widevine", "--no-key"])
     assert result.exit_code != 0
-    assert "Cannot use --api-only" in (result.output or str(result.exception))
+    # strip ANSI: rich-click forces color under GITHUB_ACTIONS and styles --flags mid-sentence
+    output = re.sub(r"\x1b\[[0-9;]*m", "", result.output or str(result.exception))
+    assert "Cannot use --api-only" in output
 
 
 def test_serve_no_key_without_api_secret_does_not_require_secret(
