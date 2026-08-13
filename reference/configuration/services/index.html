@@ -2110,9 +2110,16 @@ to the normal file-based cookie path (<code>cookies/&lt;SERVICE&gt;.txt</code> o
 </ul>
 <p>Definitions of remote unshackle service servers, used by the <code>--remote</code> mode. Each entry is
 named by you (pick it with <code>--server</code>, or omit that flag when only one is configured) and gives
-the server's <code>url</code> (required), an optional <code>api_key</code> sent as <code>X-Secret-Key</code>, an optional
-<code>server_cdm</code> boolean, and an optional <code>services</code> sub-dict of per-service local overrides such
-as <code>title_map</code>. In <code>--remote</code> mode unshackle turns the server's service list into synthetic CLI
+the server's <code>url</code> (required), an optional <code>api_key</code>, an optional <code>auth_headers</code> list, an
+optional <code>server_cdm</code> boolean, and an optional <code>services</code> sub-dict of per-service local
+overrides such as <code>title_map</code>.</p>
+<p><code>auth_headers</code> lists extra header names to send the API key in, tried before the defaults
+<code>X-Secret-Key</code> and <code>X-Api-Key</code>, which are always appended as fallbacks. unshackle sends the
+first name; if the server answers <code>401</code>, it retries the same request with the next name, and
+keeps the one that works for the rest of the session. Names you list keep your spelling and are
+not repeated in the fallbacks, so <code>auth_headers: ["Authorization", "x-secret-key"]</code> is tried as
+<code>Authorization</code>, <code>x-secret-key</code>, <code>X-Api-Key</code>.</p>
+<p>In <code>--remote</code> mode unshackle turns the server's service list into synthetic CLI
 commands that run against it, falling back to the tags in that <code>services</code> sub-dict when the
 list cannot be fetched. See <a href="../../../dev/rest-api/remote-sessions/">remote sessions</a> for the
 full setup.</p>
