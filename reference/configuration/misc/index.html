@@ -1294,6 +1294,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#appearance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Appearance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#logging-privacy-debug" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2025,6 +2036,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#appearance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Appearance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#logging-privacy-debug" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2291,6 +2313,26 @@ calls.</p>
 <p>Update checks query the GitHub releases API with a fixed 5-second timeout and cache the
 result in <code>directories.cache/update_check.json</code>.</p>
 </div>
+<hr />
+<h2 id="appearance">Appearance<a class="headerlink" href="#appearance" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>theme</code></td>
+<td>str</td>
+<td><code>catppuccin-mocha</code></td>
+<td>Named colour theme for all CLI output: banner, logs, progress bars, and help screens. One of <code>catppuccin-mocha</code> (aliases <code>default</code>, <code>catppuccin</code>, <code>mocha</code>), <code>dracula</code>, <code>nord</code>, <code>gruvbox</code>, <code>one-dark</code> (alias <code>onedark</code>), <code>tokyo-night</code> (alias <code>tokyonight</code>), <code>monokai</code>, <code>flexoki</code>, <code>solarized-dark</code> (alias <code>solarized</code>). Case-insensitive; underscores work in place of hyphens. Unknown names fall back to the default with a warning. Preview them all with <code>unshackle env theme</code>.</td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="logging-privacy-debug">Logging, privacy &amp; debug<a class="headerlink" href="#logging-privacy-debug" title="Permanent link">&para;</a></h2>
 <table>

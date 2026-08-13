@@ -2121,7 +2121,9 @@ not repeated in the fallbacks, so <code>auth_headers: ["Authorization", "x-secre
 <code>Authorization</code>, <code>x-secret-key</code>, <code>X-Api-Key</code>.</p>
 <p>In <code>--remote</code> mode unshackle turns the server's service list into synthetic CLI
 commands that run against it, falling back to the tags in that <code>services</code> sub-dict when the
-list cannot be fetched. See <a href="../../../dev/rest-api/remote-sessions/">remote sessions</a> for the
+list cannot be fetched. Each synthetic command carries the server-side service's options and
+documentation, so <code>unshackle dl --remote &lt;TAG&gt; -h</code> shows the same help text as it does on the
+server. See <a href="../../../dev/rest-api/remote-sessions/">remote sessions</a> for the
 full setup.</p>
 <h2 id="serve"><code>serve</code><a class="headerlink" href="#serve" title="Permanent link">&para;</a></h2>
 <ul>

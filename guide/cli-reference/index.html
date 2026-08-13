@@ -971,6 +971,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#env-theme" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        env theme
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#env-clear" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2557,6 +2568,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#env-theme" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        env theme
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#env-clear" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3457,6 +3479,10 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 <div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>unshackle env info
 </span></code></pre></div>
 <p>Shows where the config was loaded from (or lists the candidate config locations if none was found) and prints a table of every configured directory (downloads, temp, cache, cookies, logs, exports, WVDs, PRDs, services, and more).</p>
+<h3 id="env-theme"><code>env theme</code><a class="headerlink" href="#env-theme" title="Permanent link">&para;</a></h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>unshackle env theme
+</span></code></pre></div>
+<p>Prints a sample of every available CLI theme: colour swatches, help text with option rows, a track listing with video/audio/subtitle entries, log lines, a progress bar, and the gradient pulse bar. The active theme is marked and each theme's aliases are listed. Set your choice with the <a href="../../reference/configuration/misc/#appearance"><code>theme</code></a> config key.</p>
 <h3 id="env-clear"><code>env clear</code><a class="headerlink" href="#env-clear" title="Permanent link">&para;</a></h3>
 <p>Clear an environment directory. The directory is emptied and recreated, and the number of files and bytes freed is reported.</p>
 <table>
@@ -3479,17 +3505,18 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 </table>
 <div class="admonition example">
 <p class="admonition-title">Example</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>unshackle<span class="w"> </span>env<span class="w"> </span>check
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>unshackle<span class="w"> </span>env<span class="w"> </span>info
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>unshackle<span class="w"> </span>env<span class="w"> </span>clear<span class="w"> </span>cache
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>unshackle<span class="w"> </span>env<span class="w"> </span>clear<span class="w"> </span>cache<span class="w"> </span>EXAMPLE<span class="w">   </span><span class="c1"># one service only</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>unshackle<span class="w"> </span>env<span class="w"> </span>clear<span class="w"> </span>temp
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>unshackle<span class="w"> </span>env<span class="w"> </span>check
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>unshackle<span class="w"> </span>env<span class="w"> </span>info
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>unshackle<span class="w"> </span>env<span class="w"> </span>theme
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>unshackle<span class="w"> </span>env<span class="w"> </span>clear<span class="w"> </span>cache
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>unshackle<span class="w"> </span>env<span class="w"> </span>clear<span class="w"> </span>cache<span class="w"> </span>EXAMPLE<span class="w">   </span><span class="c1"># one service only</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>unshackle<span class="w"> </span>env<span class="w"> </span>clear<span class="w"> </span>temp
 </span></code></pre></div>
 </div>
 <hr />
 <h2 id="kv"><code>kv</code><a class="headerlink" href="#kv" title="Permanent link">&para;</a></h2>
 <p>Manage Key Vaults. Vaults are configured under <code>key_vaults</code> in <code>unshackle.yaml</code>, each with a <code>name</code>, a <code>type</code> (<code>sqlite</code>, <code>mysql</code>, <code>http</code>, <code>api</code>), and type-specific options. Service tags are normalised automatically.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>unshackle kv COMMAND [ARGS]...
+<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>unshackle kv COMMAND [ARGS]...
 </span></code></pre></div>
 <h3 id="kv-copy-to_vault-from_vault"><code>kv copy TO_VAULT FROM_VAULT...</code><a class="headerlink" href="#kv-copy-to_vault-from_vault" title="Permanent link">&para;</a></h3>
 <p>Copy keys from one or more source vaults into a destination vault. Rows with matching KIDs are skipped unless the existing row has no key; existing data is never altered or deleted.</p>
@@ -3543,18 +3570,18 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 <p>Create service tables on vaults that use tables, for every installed service, where they don't already exist.</p>
 <div class="admonition example">
 <p class="admonition-title">Example</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>unshackle<span class="w"> </span>kv<span class="w"> </span>copy<span class="w"> </span>main<span class="w"> </span>backup1<span class="w"> </span>backup2
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>unshackle<span class="w"> </span>kv<span class="w"> </span>copy<span class="w"> </span>main<span class="w"> </span>backup<span class="w"> </span>-s<span class="w"> </span>EXAMPLE
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>unshackle<span class="w"> </span>kv<span class="w"> </span>sync<span class="w"> </span>main<span class="w"> </span>mysql_vault
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>unshackle<span class="w"> </span>kv<span class="w"> </span>add<span class="w"> </span>keys.txt<span class="w"> </span>EXAMPLE<span class="w"> </span>main<span class="w"> </span>backup
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>unshackle<span class="w"> </span>kv<span class="w"> </span>search<span class="w"> </span>0123456789abcdef0123456789abcdef<span class="w"> </span>-s<span class="w"> </span>EXAMPLE<span class="w"> </span>-v<span class="w"> </span>main
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>unshackle<span class="w"> </span>kv<span class="w"> </span>prepare<span class="w"> </span>main<span class="w"> </span>mysql_vault
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>unshackle<span class="w"> </span>kv<span class="w"> </span>copy<span class="w"> </span>main<span class="w"> </span>backup1<span class="w"> </span>backup2
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>unshackle<span class="w"> </span>kv<span class="w"> </span>copy<span class="w"> </span>main<span class="w"> </span>backup<span class="w"> </span>-s<span class="w"> </span>EXAMPLE
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>unshackle<span class="w"> </span>kv<span class="w"> </span>sync<span class="w"> </span>main<span class="w"> </span>mysql_vault
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>unshackle<span class="w"> </span>kv<span class="w"> </span>add<span class="w"> </span>keys.txt<span class="w"> </span>EXAMPLE<span class="w"> </span>main<span class="w"> </span>backup
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>unshackle<span class="w"> </span>kv<span class="w"> </span>search<span class="w"> </span>0123456789abcdef0123456789abcdef<span class="w"> </span>-s<span class="w"> </span>EXAMPLE<span class="w"> </span>-v<span class="w"> </span>main
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>unshackle<span class="w"> </span>kv<span class="w"> </span>prepare<span class="w"> </span>main<span class="w"> </span>mysql_vault
 </span></code></pre></div>
 </div>
 <hr />
 <h2 id="wvd"><code>wvd</code><a class="headerlink" href="#wvd" title="Permanent link">&para;</a></h2>
 <p>Manage Widevine Device (<code>.wvd</code>) files. Devices live in the configured WVDs directory.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>unshackle wvd COMMAND [ARGS]...
+<div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>unshackle wvd COMMAND [ARGS]...
 </span></code></pre></div>
 <table>
 <thead>
@@ -3615,16 +3642,16 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 </table>
 <div class="admonition example">
 <p class="admonition-title">Example</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>unshackle<span class="w"> </span>wvd<span class="w"> </span>add<span class="w"> </span>device.wvd
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>unshackle<span class="w"> </span>wvd<span class="w"> </span>parse<span class="w"> </span>nexus_6p_1234_l1
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>unshackle<span class="w"> </span>wvd<span class="w"> </span>dump<span class="w"> </span>device.wvd<span class="w"> </span>./out_dir
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>unshackle<span class="w"> </span>wvd<span class="w"> </span>new<span class="w"> </span><span class="s2">&quot;Nexus 6P&quot;</span><span class="w"> </span>private_key.pem<span class="w"> </span>client_id.bin<span class="w"> </span>vmp.bin<span class="w"> </span>-t<span class="w"> </span>ANDROID<span class="w"> </span>-l<span class="w"> </span><span class="m">3</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>unshackle<span class="w"> </span>wvd<span class="w"> </span>add<span class="w"> </span>device.wvd
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>unshackle<span class="w"> </span>wvd<span class="w"> </span>parse<span class="w"> </span>nexus_6p_1234_l1
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>unshackle<span class="w"> </span>wvd<span class="w"> </span>dump<span class="w"> </span>device.wvd<span class="w"> </span>./out_dir
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>unshackle<span class="w"> </span>wvd<span class="w"> </span>new<span class="w"> </span><span class="s2">&quot;Nexus 6P&quot;</span><span class="w"> </span>private_key.pem<span class="w"> </span>client_id.bin<span class="w"> </span>vmp.bin<span class="w"> </span>-t<span class="w"> </span>ANDROID<span class="w"> </span>-l<span class="w"> </span><span class="m">3</span>
 </span></code></pre></div>
 </div>
 <hr />
 <h2 id="prd"><code>prd</code><a class="headerlink" href="#prd" title="Permanent link">&para;</a></h2>
 <p>Manage PlayReady Device (<code>.prd</code>) files. Devices live in the configured PRDs directory. Built on <code>pyplayready</code>.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>unshackle prd COMMAND [ARGS]...
+<div class="language-text highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>unshackle prd COMMAND [ARGS]...
 </span></code></pre></div>
 <h3 id="prd-new-paths"><code>prd new PATHS...</code><a class="headerlink" href="#prd-new-paths" title="Permanent link">&para;</a></h3>
 <p>Create a new <code>.prd</code>. Provide either a single folder containing <code>zgpriv.dat</code> (group key) and <code>bgroupcert.dat</code> (group certificate), or two file paths (group key, then group certificate).</p>
@@ -3678,16 +3705,16 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 </table>
 <div class="admonition example">
 <p class="admonition-title">Example</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>unshackle<span class="w"> </span>prd<span class="w"> </span>new<span class="w"> </span>./device_folder/
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>unshackle<span class="w"> </span>prd<span class="w"> </span>new<span class="w"> </span>zgpriv.dat<span class="w"> </span>bgroupcert.dat<span class="w"> </span>-o<span class="w"> </span>/out/dir
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>unshackle<span class="w"> </span>prd<span class="w"> </span>reprovision<span class="w"> </span>mydevice.prd
-</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>unshackle<span class="w"> </span>prd<span class="w"> </span><span class="nb">test</span><span class="w"> </span>mydevice.prd<span class="w"> </span>-sl<span class="w"> </span><span class="m">3000</span><span class="w"> </span>-c<span class="w"> </span>aescbc
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>unshackle<span class="w"> </span>prd<span class="w"> </span>new<span class="w"> </span>./device_folder/
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>unshackle<span class="w"> </span>prd<span class="w"> </span>new<span class="w"> </span>zgpriv.dat<span class="w"> </span>bgroupcert.dat<span class="w"> </span>-o<span class="w"> </span>/out/dir
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>unshackle<span class="w"> </span>prd<span class="w"> </span>reprovision<span class="w"> </span>mydevice.prd
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>unshackle<span class="w"> </span>prd<span class="w"> </span><span class="nb">test</span><span class="w"> </span>mydevice.prd<span class="w"> </span>-sl<span class="w"> </span><span class="m">3000</span><span class="w"> </span>-c<span class="w"> </span>aescbc
 </span></code></pre></div>
 </div>
 <hr />
 <h2 id="serve"><code>serve</code><a class="headerlink" href="#serve" title="Permanent link">&para;</a></h2>
 <p>Serve your local Widevine/PlayReady devices and the REST API for remote access. Built on <code>aiohttp</code>.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>unshackle serve [OPTIONS]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>unshackle serve [OPTIONS]
 </span></code></pre></div>
 <table>
 <thead>
@@ -3754,31 +3781,31 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 <div class="admonition warning">
 <p class="admonition-title">Configure <code>api_secret</code> first</p>
 <p>Unless you pass <code>--no-key</code>, <code>serve.api_secret</code> must be set in your config. Requests authenticate with the <code>X-Secret-Key</code> header. Running with <code>--no-key</code> disables authentication entirely and should only be used on a trusted, private network.</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="nt">serve</span><span class="p">:</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">  </span><span class="nt">api_secret</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;your-api-secret&quot;</span>
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">  </span><span class="nt">users</span><span class="p">:</span>
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">    </span><span class="nt">your-secret-key</span><span class="p">:</span>
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="w">      </span><span class="nt">devices</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;device_name&quot;</span><span class="p p-Indicator">]</span><span class="w">           </span><span class="c1"># Widevine devices</span>
-</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="w">      </span><span class="nt">playready_devices</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;device_name&quot;</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="c1"># PlayReady devices</span>
-</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="w">      </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">user</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nt">serve</span><span class="p">:</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="w">  </span><span class="nt">api_secret</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;your-api-secret&quot;</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="w">  </span><span class="nt">users</span><span class="p">:</span>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="w">    </span><span class="nt">your-secret-key</span><span class="p">:</span>
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="w">      </span><span class="nt">devices</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;device_name&quot;</span><span class="p p-Indicator">]</span><span class="w">           </span><span class="c1"># Widevine devices</span>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="w">      </span><span class="nt">playready_devices</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;device_name&quot;</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="c1"># PlayReady devices</span>
+</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="w">      </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">user</span>
 </span></code></pre></div>
 </div>
 <div class="admonition example">
 <p class="admonition-title">Example</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>unshackle<span class="w"> </span>serve
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>unshackle<span class="w"> </span>serve<span class="w"> </span>-h<span class="w"> </span><span class="m">0</span>.0.0.0<span class="w"> </span>-p<span class="w"> </span><span class="m">8080</span>
-</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>unshackle<span class="w"> </span>serve<span class="w"> </span>--api-only
-</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>unshackle<span class="w"> </span>serve<span class="w"> </span>--remote-only
-</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>unshackle<span class="w"> </span>serve<span class="w"> </span>--caddy
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>unshackle<span class="w"> </span>serve
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>unshackle<span class="w"> </span>serve<span class="w"> </span>-h<span class="w"> </span><span class="m">0</span>.0.0.0<span class="w"> </span>-p<span class="w"> </span><span class="m">8080</span>
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>unshackle<span class="w"> </span>serve<span class="w"> </span>--api-only
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>unshackle<span class="w"> </span>serve<span class="w"> </span>--remote-only
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>unshackle<span class="w"> </span>serve<span class="w"> </span>--caddy
 </span></code></pre></div>
 </div>
 <hr />
 <h2 id="util"><code>util</code><a class="headerlink" href="#util" title="Permanent link">&para;</a></h2>
 <p>Various helper media utilities. When a command is given a directory, it processes every <code>.mkv</code>/<code>.mp4</code> inside it in natural (S01E01 before S01E10) order.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>unshackle util COMMAND [ARGS]...
+<div class="language-text highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>unshackle util COMMAND [ARGS]...
 </span></code></pre></div>
 <h3 id="util-refresh-services"><code>util refresh-services</code><a class="headerlink" href="#util-refresh-services" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>unshackle util refresh-services
+<div class="language-text highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>unshackle util refresh-services
 </span></code></pre></div>
 <p>Force a refresh (git pull / hard reset) of all service repos configured under <code>directories.services</code>.</p>
 <h3 id="util-crop-path-aspect"><code>util crop PATH ASPECT</code><a class="headerlink" href="#util-crop-path-aspect" title="Permanent link">&para;</a></h3>
@@ -3852,11 +3879,11 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 </table>
 <div class="admonition example">
 <p class="admonition-title">Example</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>unshackle<span class="w"> </span>util<span class="w"> </span>refresh-services
-</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>unshackle<span class="w"> </span>util<span class="w"> </span>crop<span class="w"> </span>video.mkv<span class="w"> </span><span class="m">2</span>.39:1
-</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>unshackle<span class="w"> </span>util<span class="w"> </span>crop<span class="w"> </span>./season/<span class="w"> </span><span class="m">16</span>:9<span class="w"> </span>--pillar<span class="w"> </span>-o<span class="w"> </span><span class="m">10</span>
-</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>unshackle<span class="w"> </span>util<span class="w"> </span>range<span class="w"> </span>video.mkv<span class="w"> </span>--full
-</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>unshackle<span class="w"> </span>util<span class="w"> </span><span class="nb">test</span><span class="w"> </span>video.mkv<span class="w"> </span>-m<span class="w"> </span><span class="m">0</span>:v:0
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>unshackle<span class="w"> </span>util<span class="w"> </span>refresh-services
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>unshackle<span class="w"> </span>util<span class="w"> </span>crop<span class="w"> </span>video.mkv<span class="w"> </span><span class="m">2</span>.39:1
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>unshackle<span class="w"> </span>util<span class="w"> </span>crop<span class="w"> </span>./season/<span class="w"> </span><span class="m">16</span>:9<span class="w"> </span>--pillar<span class="w"> </span>-o<span class="w"> </span><span class="m">10</span>
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>unshackle<span class="w"> </span>util<span class="w"> </span>range<span class="w"> </span>video.mkv<span class="w"> </span>--full
+</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a>unshackle<span class="w"> </span>util<span class="w"> </span><span class="nb">test</span><span class="w"> </span>video.mkv<span class="w"> </span>-m<span class="w"> </span><span class="m">0</span>:v:0
 </span></code></pre></div>
 </div>
 <hr />
