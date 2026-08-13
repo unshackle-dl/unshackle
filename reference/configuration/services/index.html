@@ -2223,6 +2223,12 @@ is the <a href="../../../dev/rest-api/">REST API</a> section; these are the conf
 <code>devices</code>, and <code>playready_devices</code> allowlists, narrowing the global ones, plus an optional
 <code>username</code> used as the log label for that key (defaults to a truncated form of the key). A
 user with no <code>playready_devices</code> key gets no PlayReady access at all, not the global list.</p>
+<p><code>server_cdm</code> decides whether the server runs the CDM licensing for that key. It is <code>false</code>
+unless the entry sets it, so a remote client configured with <code>server_cdm: true</code> is told to
+license with its own local CDM instead, and a client that asks anyway gets a <code>FORBIDDEN</code>
+error. Because a download job always licenses with the server's CDM, a key without
+<code>server_cdm</code> also cannot submit or retry <code>/api/download</code> jobs. Keys that have no <code>users</code>
+entry, such as <code>api_secret</code>, keep server CDM access.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">serve</span><span class="p">:</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">api_secret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">change-me</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">remote_only</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
@@ -2233,6 +2239,8 @@ user with no <code>playready_devices</code> key gets no PlayReady access at all,
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="nt">users</span><span class="p">:</span>
 </span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="nt">a1b2c3d4</span><span class="p">:</span><span class="w">                 </span><span class="c1"># this user&#39;s API key</span>
 </span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">      </span><span class="nt">services</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">]</span><span class="w">        </span><span class="c1"># may only use EXAMPLE1</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">    </span><span class="nt">e5f6a7b8</span><span class="p">:</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">      </span><span class="nt">server_cdm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">            </span><span class="c1"># this key may have the server do the licensing</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title"><code>dl</code> keys inside <code>serve</code></p>
