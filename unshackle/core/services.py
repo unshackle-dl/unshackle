@@ -209,6 +209,8 @@ class Services(click.Group):
             result = client.get("/api/services")
             Services._remote_services_cache = result.get("services", [])
             return Services._remote_services_cache
+        except click.ClickException:
+            raise
         except Exception:
             return None
 
