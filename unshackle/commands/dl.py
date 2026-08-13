@@ -1404,7 +1404,7 @@ class dl:
         self.service_anime = bool(getattr(service, "ANIME", False))
         self.service_daily = bool(getattr(service, "DAILY", False))
         self.server_cdm = getattr(service, "_server_cdm", False)
-        self._remote_service = service if self.server_cdm else None
+        self._remote_service = service if hasattr(service, "_server_cdm") else None
         start_time = time.time()
 
         lang, lang_excl = partition_exclusions(lang)
@@ -4256,7 +4256,8 @@ class dl:
         if not drm:
             return
 
-        server_cdm = getattr(self, "server_cdm", False)
+        svc_for_cdm = getattr(self, "_remote_service", None)
+        server_cdm = getattr(svc_for_cdm, "_server_cdm", getattr(self, "server_cdm", False))
 
         if server_cdm:
             if not drm.content_keys:

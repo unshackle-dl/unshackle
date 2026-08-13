@@ -283,6 +283,21 @@ def get_allowed_services(request: Optional[web.Request] = None) -> Optional[List
     return list(result)
 
 
+def server_cdm_allowed(request: Optional[web.Request] = None) -> bool:
+    """Whether the calling key may have the server run the CDM licensing.
+
+    Configured keys opt in with ``server_cdm: true``; keys absent from
+    ``serve.users`` (the admin secret) keep full access.
+    """
+    if not request:
+        return True
+    secret_key = request_secret_key(request)
+    user_config = config.serve.get("users", {}).get(secret_key)
+    if user_config is None:
+        return True
+    return bool(user_config.get("server_cdm", False))
+
+
 JOB_EVENTS_ROUTE = "/api/download/jobs/{job_id}/events"
 
 CORS_HEADERS = {
@@ -1034,7 +1049,7 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def enforce_download_gates(params: Dict[str, Any]) -> None:
+def enforce_download_gates(params: Dict[str, Any], request: Optional[web.Request] = None) -> None:
     """Enforce serve-config gates on per-job cdm overrides and client-supplied credentials.
 
     A per-request `cdm` selects a server-side device, so it is gated here rather than honoured
@@ -1043,7 +1058,15 @@ def enforce_download_gates(params: Dict[str, Any]) -> None:
     A per-request `credential` (or `credentials` map) authenticates the job with client-supplied
     secrets instead of the server-side credentials. Gate it behind `serve.allow_job_credentials`
     (default off) so a default deployment stays locked to its own credentials; mirrors the CDM gate.
+    A download job licenses DRM in-process with the server's own CDM, so a key without
+    ``server_cdm`` cannot submit or retry jobs.
     """
+    if not server_cdm_allowed(request):
+        raise APIError(
+            APIErrorCode.FORBIDDEN,
+            "Download jobs license with the server CDM, which is not enabled for this key.",
+        )
+
     requested_cdm = params.get("cdm")
     if requested_cdm:
         allowed = (config.serve or {}).get("cdm_overrides")
@@ -1087,7 +1110,7 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
             details={"service": normalized_service, "title_id": title_id},
         )
 
-    enforce_download_gates(data)
+    enforce_download_gates(data, request)
 
     try:
         # Load service module to extract service-specific parameter defaults
@@ -1396,7 +1419,7 @@ async def retry_download_job_handler(job_id: str, request: Optional[web.Request]
                 f"Invalid or unavailable service: {job.service}",
                 details={"service": job.service},
             )
-        enforce_download_gates(job.parameters)
+        enforce_download_gates(job.parameters, request)
 
         await manager.start_workers()
 
@@ -2122,6 +2145,7 @@ async def session_tracks_handler(
                 "manifests": manifests,
                 "session_headers": session_headers,
                 "session_cookies": session_cookies,
+                "server_cdm": server_cdm_allowed(request),
                 "server_cdm_type": server_cdm_type,
             }
         )
@@ -2741,6 +2765,12 @@ async def session_license_handler(
     challenge_b64 = data.get("challenge")
     drm_type = data.get("drm_type", "widevine")
     mode = data.get("mode", "proxy")
+
+    if mode == "server_cdm" and not server_cdm_allowed(request):
+        raise APIError(
+            APIErrorCode.FORBIDDEN,
+            "Server CDM licensing is not enabled for this key. Use a local CDM (proxy mode).",
+        )
 
     if mode == "server_cdm" and track_ids:
         from unshackle.core.config import config as app_config

@@ -662,6 +662,9 @@ class RemoteService:
 
         _resolve_manifest_data(tracks, result.get("manifests", []))
 
+        if self._server_cdm and not result.get("server_cdm", True):
+            self._server_cdm = False
+            self.log.warning("Server CDM licensing is not enabled for this key, using the local CDM")
         self._server_cdm_type = result.get("server_cdm_type", "widevine")
 
         self._tracks_by_title[title_id] = tracks

@@ -126,6 +126,13 @@ Each entry under `users` is keyed by that user's API key and may set its own `se
 `username` used as the log label for that key (defaults to a truncated form of the key). A
 user with no `playready_devices` key gets no PlayReady access at all, not the global list.
 
+`server_cdm` decides whether the server runs the CDM licensing for that key. It is `false`
+unless the entry sets it, so a remote client configured with `server_cdm: true` is told to
+license with its own local CDM instead, and a client that asks anyway gets a `FORBIDDEN`
+error. Because a download job always licenses with the server's CDM, a key without
+`server_cdm` also cannot submit or retry `/api/download` jobs. Keys that have no `users`
+entry, such as `api_secret`, keep server CDM access.
+
 ```yaml
 serve:
   api_secret: change-me
@@ -137,6 +144,8 @@ serve:
   users:
     a1b2c3d4:                 # this user's API key
       services: [EXAMPLE1]        # may only use EXAMPLE1
+    e5f6a7b8:
+      server_cdm: true            # this key may have the server do the licensing
 ```
 
 !!! note "`dl` keys inside `serve`"
