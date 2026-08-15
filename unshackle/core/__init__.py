@@ -7,7 +7,7 @@ from rich_click.patch import patch as _patch_click_help
 
 _patch_click_help()
 
-__version__ = "5.4.0"
+__version__ = "5.5.0"
 
 _PKG = Path(__file__).parent.parent
 # Framework code only. Services are user-swappable, so they are not part of the identity.
