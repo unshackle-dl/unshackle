@@ -1,0 +1,81 @@
+name: ci
+
+on:
+  push:
+    branches: [dev, main]
+    paths-ignore:
+      - "docs/**"
+      - "overrides/**"
+      - "mkdocs.yml"
+      - "**.md"
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "overrides/**"
+      - "mkdocs.yml"
+      - "**.md"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v8.3.2
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Ruff lint
+        run: uv run ruff check .
+      - name: Ruff format
+        run: uv run ruff format --check .
+      - name: Import order
+        run: uv run isort --check-only unshackle tests --skip-glob "*/services/*"
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.11", "3.14"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v8.3.2
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+      - name: Install
+        run: uv sync --locked --group test
+      - name: Import check
+        run: uv run python -c "import unshackle; print(unshackle.__name__, 'imports OK')"
+      - name: CLI loads
+        run: uv run unshackle --help
+      - name: Tests
+        run: uv run pytest -m "not live and not slow"
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v8.3.2
+        with:
+          enable-cache: true
+          cache-suffix: build
+      - name: Build sdist and wheel
+        run: uv build
+      - name: Smoke-test wheel
+        run: uv run --isolated --no-project --with dist/*.whl unshackle --help
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/dependency-review-action@v5.0.0

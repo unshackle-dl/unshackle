@@ -14,7 +14,7 @@ from rich.rule import Rule
 from unshackle.core.binaries import FFMPEG, FFProbe, HDR10PlusTool
 from unshackle.core.config import config
 from unshackle.core.console import console
-from unshackle.core.utilities import get_debug_logger
+from unshackle.core.utilities import log_event
 from unshackle.core.utils import dovi
 from unshackle.core.utils.subprocess import run_step
 
@@ -22,7 +22,6 @@ from unshackle.core.utils.subprocess import run_step
 class Hybrid:
     def __init__(self, videos, source) -> None:
         self.log = logging.getLogger("hybrid")
-        self.debug_logger = get_debug_logger()
 
         """
             Takes the Dolby Vision and HDR10(+) streams out of the VideoTracks.
@@ -48,18 +47,17 @@ class Hybrid:
 
         console.print(Padding(Rule(f"[rule.text]HDR10+DV Hybrid ({self.resolution})"), (1, 2)))
 
-        if self.debug_logger:
-            self.debug_logger.log(
-                level="DEBUG",
-                operation="hybrid_init",
-                message="Starting HDR10+DV hybrid processing",
-                context={
-                    "source": source,
-                    "resolution": self.resolution,
-                    "video_count": len(videos),
-                    "video_ranges": [str(v.range) for v in videos],
-                },
-            )
+        log_event(
+            "hybrid_init",
+            level="DEBUG",
+            message="Starting HDR10+DV hybrid processing",
+            context={
+                "source": source,
+                "resolution": self.resolution,
+                "video_count": len(videos),
+                "video_ranges": [str(v.range) for v in videos],
+            },
+        )
 
         for video in self.videos:
             if not video.path or not os.path.exists(video.path):
@@ -122,19 +120,18 @@ class Hybrid:
 
         self.injecting()
 
-        if self.debug_logger:
-            self.debug_logger.log(
-                level="INFO",
-                operation="hybrid_complete",
-                message="Injection Completed",
-                context={
-                    "hdr_type": self.hdr_type,
-                    "resolution": self.resolution,
-                    "hdr10plus_to_dv": self.hdr10plus_to_dv,
-                    "rpu_file": self.rpu_file,
-                    "output_file": self.hevc_file,
-                },
-            )
+        log_event(
+            "hybrid_complete",
+            level="INFO",
+            message="Injection Completed",
+            context={
+                "hdr_type": self.hdr_type,
+                "resolution": self.resolution,
+                "hdr10plus_to_dv": self.hdr10plus_to_dv,
+                "rpu_file": self.rpu_file,
+                "output_file": self.hevc_file,
+            },
+        )
         self.log.info("✓ Injection Completed")
         if self.source == ("itunes" or "appletvplus"):
             Path.unlink(config.directories.temp / "hdr10.mkv")
@@ -156,24 +153,22 @@ class Hybrid:
                 label=f"ffmpeg extract {type_}",
             )
         except RuntimeError as e:
-            if self.debug_logger:
-                self.debug_logger.log(
-                    level="ERROR",
-                    operation="hybrid_extract_stream",
-                    message=f"Failed extracting {type_} stream",
-                    context={"type": type_, "input": str(save_path), "output": str(output), "error": str(e)},
-                )
+            log_event(
+                "hybrid_extract_stream",
+                level="ERROR",
+                message=f"Failed extracting {type_} stream",
+                context={"type": type_, "input": str(save_path), "output": str(output), "error": str(e)},
+            )
             self.log.error(f"x Failed extracting {type_} stream")
             sys.exit(1)
 
-        if self.debug_logger:
-            self.debug_logger.log(
-                level="DEBUG",
-                operation="hybrid_extract_stream",
-                message=f"Extracted {type_} stream",
-                context={"type": type_, "input": str(save_path), "output": str(output)},
-                success=True,
-            )
+        log_event(
+            "hybrid_extract_stream",
+            level="DEBUG",
+            message=f"Extracted {type_} stream",
+            context={"type": type_, "input": str(save_path), "output": str(output)},
+            success=True,
+        )
 
     def extract_rpu(self, video, untouched=False):
         if os.path.isfile(config.directories.temp / "RPU.bin") or os.path.isfile(
@@ -190,13 +185,12 @@ class Hybrid:
             dovi.extract_rpu(dv_stream, rpu_path, mode=None if untouched else 3, status=spinner)
         except RuntimeError as e:
             stderr_text = str(e)
-            if self.debug_logger:
-                self.debug_logger.log(
-                    level="ERROR",
-                    operation="hybrid_extract_rpu",
-                    message=f"Failed extracting{' untouched ' if untouched else ' '}RPU",
-                    context={"untouched": untouched, "error": stderr_text},
-                )
+            log_event(
+                "hybrid_extract_rpu",
+                level="ERROR",
+                message=f"Failed extracting{' untouched ' if untouched else ' '}RPU",
+                context={"untouched": untouched, "error": stderr_text},
+            )
             if "MAX_PQ_LUMINANCE" in stderr_text:
                 self.extract_rpu(video, untouched=True)
                 return
@@ -204,14 +198,13 @@ class Hybrid:
                 raise ValueError("Dolby Vision VideoTrack seems to be corrupt")
             raise ValueError(f"Failed extracting{' untouched ' if untouched else ' '}RPU from Dolby Vision stream")
 
-        if self.debug_logger:
-            self.debug_logger.log(
-                level="DEBUG",
-                operation="hybrid_extract_rpu",
-                message=f"Extracted{' untouched ' if untouched else ' '}RPU from Dolby Vision stream",
-                context={"untouched": untouched, "output": f"{rpu_name}.bin"},
-                success=True,
-            )
+        log_event(
+            "hybrid_extract_rpu",
+            level="DEBUG",
+            message=f"Extracted{' untouched ' if untouched else ' '}RPU from Dolby Vision stream",
+            context={"untouched": untouched, "output": f"{rpu_name}.bin"},
+            success=True,
+        )
 
     def level_5(self, input_video):
         """Generate Level 5 active area metadata via crop detection on the HDR10 stream.
@@ -232,16 +225,17 @@ class Hybrid:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
 
             if result_duration.returncode != 0:
-                if self.debug_logger:
-                    self.debug_logger.log(
-                        level="WARNING",
-                        operation="hybrid_level5",
-                        message="Could not probe video duration",
-                        context={"returncode": result_duration.returncode, "stderr": (result_duration.stderr or "")},
-                    )
+                log_event(
+                    "hybrid_level5",
+                    level="WARNING",
+                    message="Could not probe video duration",
+                    context={"returncode": result_duration.returncode, "stderr": (result_duration.stderr or "")},
+                )
                 self.log.warning("Could not probe video duration, skipping L5 crop detection")
                 return
 
@@ -265,16 +259,17 @@ class Hybrid:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
 
             if result_streams.returncode != 0:
-                if self.debug_logger:
-                    self.debug_logger.log(
-                        level="WARNING",
-                        operation="hybrid_level5",
-                        message="Could not probe video resolution",
-                        context={"returncode": result_streams.returncode, "stderr": (result_streams.stderr or "")},
-                    )
+                log_event(
+                    "hybrid_level5",
+                    level="WARNING",
+                    message="Could not probe video resolution",
+                    context={"returncode": result_streams.returncode, "stderr": (result_streams.stderr or "")},
+                )
                 self.log.warning("Could not probe video resolution, skipping L5 crop detection")
                 return
 
@@ -309,6 +304,8 @@ class Hybrid:
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                 )
 
                 # cropdetect outputs crop=w:h:x:y
@@ -327,13 +324,12 @@ class Hybrid:
                     crop_results.append((left, top, right, bottom))
 
         if not crop_results:
-            if self.debug_logger:
-                self.debug_logger.log(
-                    level="WARNING",
-                    operation="hybrid_level5",
-                    message="No crop data detected, skipping L5",
-                    context={"samples": len(random_times)},
-                )
+            log_event(
+                "hybrid_level5",
+                level="WARNING",
+                message="No crop data detected, skipping L5",
+                context={"samples": len(random_times)},
+            )
             self.log.warning("No crop data detected, skipping L5")
             return
 
@@ -342,7 +338,7 @@ class Hybrid:
         for crop in crop_results:
             crop_counts[crop] = crop_counts.get(crop, 0) + 1
         most_common = max(crop_counts, key=crop_counts.get)
-        left, top, right, bottom = most_common      # frame instead of leaving phantom bars from the source.
+        left, top, right, bottom = most_common  # frame instead of leaving phantom bars from the source.
 
         l5_json = {
             "active_area": {
@@ -365,26 +361,24 @@ class Hybrid:
                 label="dovi_tool editor (L5)",
             )
         except RuntimeError as e:
-            if self.debug_logger:
-                self.debug_logger.log(
-                    level="ERROR",
-                    operation="hybrid_level5",
-                    message="Failed editing RPU Level 5 values",
-                    context={"error": str(e)},
-                )
+            log_event(
+                "hybrid_level5",
+                level="ERROR",
+                message="Failed editing RPU Level 5 values",
+                context={"error": str(e)},
+            )
             raise ValueError("Failed editing RPU Level 5 values")
 
-        if self.debug_logger:
-            self.debug_logger.log(
-                level="DEBUG",
-                operation="hybrid_level5",
-                message="Edited RPU Level 5 active area",
-                context={
-                    "crop": {"left": left, "right": right, "top": top, "bottom": bottom},
-                    "samples": len(crop_results),
-                },
-                success=True,
-            )
+        log_event(
+            "hybrid_level5",
+            level="DEBUG",
+            message="Edited RPU Level 5 active area",
+            context={
+                "crop": {"left": left, "right": right, "top": top, "bottom": bottom},
+                "samples": len(crop_results),
+            },
+            success=True,
+        )
         self.rpu_file = "RPU_L5.bin"
 
     @staticmethod
@@ -393,8 +387,8 @@ class Hybrid:
     ) -> tuple[Optional[int], Optional[int], Optional[int], Optional[int]]:
         """Clamp static L6 values to a valid relationship.
 
-        MaxCLL must not exceed the mastering-display peak (some sources, e.g. ATV
-        HDR10+, ship MaxCLL 10000 on a 1000-nit master), and MaxFALL must not exceed
+        MaxCLL must not exceed the mastering-display peak (some HDR10+ sources ship
+        MaxCLL 10000 on a 1000-nit master), and MaxFALL must not exceed
         MaxCLL. A value of 0 means "unknown" and is preserved as-is.
         """
         if max_mdl and max_cll and max_cll > max_mdl:
@@ -412,13 +406,12 @@ class Hybrid:
             with console.status("Reading RPU luminance metadata...", spinner="dots"):
                 info_text = dovi.info_summary(config.directories.temp / self.rpu_file)
         except RuntimeError as e:
-            if self.debug_logger:
-                self.debug_logger.log(
-                    level="ERROR",
-                    operation="hybrid_level6",
-                    message="Failed reading RPU metadata for Level 6 values",
-                    context={"error": str(e)},
-                )
+            log_event(
+                "hybrid_level6",
+                level="ERROR",
+                message="Failed reading RPU metadata for Level 6 values",
+                context={"error": str(e)},
+            )
             raise ValueError("Failed reading RPU metadata for Level 6 values")
 
         max_cll = None
@@ -455,13 +448,12 @@ class Hybrid:
         max_mdl, min_mdl, max_cll, max_fall = self.sanitize_l6(max_mdl, min_mdl, max_cll, max_fall)
 
         if any(v is None for v in (max_cll, max_fall, max_mdl, min_mdl)):
-            if self.debug_logger:
-                self.debug_logger.log(
-                    level="ERROR",
-                    operation="hybrid_level6",
-                    message="Could not extract Level 6 luminance data from RPU",
-                    context={"max_cll": max_cll, "max_fall": max_fall, "max_mdl": max_mdl, "min_mdl": min_mdl},
-                )
+            log_event(
+                "hybrid_level6",
+                level="ERROR",
+                message="Could not extract Level 6 luminance data from RPU",
+                context={"max_cll": max_cll, "max_fall": max_fall, "max_mdl": max_mdl, "min_mdl": min_mdl},
+            )
             raise ValueError("Could not extract Level 6 luminance data from RPU")
 
         level6_data = {
@@ -488,28 +480,26 @@ class Hybrid:
                 label="dovi_tool editor (L6)",
             )
         except RuntimeError as e:
-            if self.debug_logger:
-                self.debug_logger.log(
-                    level="ERROR",
-                    operation="hybrid_level6",
-                    message="Failed editing RPU Level 6 values",
-                    context={"error": str(e)},
-                )
+            log_event(
+                "hybrid_level6",
+                level="ERROR",
+                message="Failed editing RPU Level 6 values",
+                context={"error": str(e)},
+            )
             raise ValueError("Failed editing RPU Level 6 values")
 
-        if self.debug_logger:
-            self.debug_logger.log(
-                level="DEBUG",
-                operation="hybrid_level6",
-                message="Edited RPU Level 6 luminance values",
-                context={
-                    "max_cll": max_cll,
-                    "max_fall": max_fall,
-                    "max_mdl": max_mdl,
-                    "min_mdl": min_mdl,
-                },
-                success=True,
-            )
+        log_event(
+            "hybrid_level6",
+            level="DEBUG",
+            message="Edited RPU Level 6 luminance values",
+            context={
+                "max_cll": max_cll,
+                "max_fall": max_fall,
+                "max_mdl": max_mdl,
+                "min_mdl": min_mdl,
+            },
+            success=True,
+        )
         self.rpu_file = "RPU_L6.bin"
 
     def injecting(self):
@@ -525,28 +515,26 @@ class Hybrid:
                 label="dovi_tool inject-rpu",
             )
         except RuntimeError as e:
-            if self.debug_logger:
-                self.debug_logger.log(
-                    level="ERROR",
-                    operation="hybrid_inject_rpu",
-                    message="Failed injecting Dolby Vision metadata into HDR10 stream",
-                    context={"error": str(e)},
-                )
+            log_event(
+                "hybrid_inject_rpu",
+                level="ERROR",
+                message="Failed injecting Dolby Vision metadata into HDR10 stream",
+                context={"error": str(e)},
+            )
             raise ValueError("Failed injecting Dolby Vision metadata into HDR10 stream")
 
-        if self.debug_logger:
-            self.debug_logger.log(
-                level="DEBUG",
-                operation="hybrid_inject_rpu",
-                message=f"Injected Dolby Vision metadata into {self.hdr_type} stream",
-                context={
-                    "hdr_type": self.hdr_type,
-                    "rpu_file": self.rpu_file,
-                    "output": self.hevc_file,
-                    "drop_hdr10plus": self.hdr10plus_to_dv,
-                },
-                success=True,
-            )
+        log_event(
+            "hybrid_inject_rpu",
+            level="DEBUG",
+            message=f"Injected Dolby Vision metadata into {self.hdr_type} stream",
+            context={
+                "hdr_type": self.hdr_type,
+                "rpu_file": self.rpu_file,
+                "output": self.hevc_file,
+                "drop_hdr10plus": self.hdr10plus_to_dv,
+            },
+            success=True,
+        )
 
     def extract_hdr10plus(self, _video):
         """Extract HDR10+ metadata from the video stream"""
@@ -570,34 +558,31 @@ class Hybrid:
                 label="hdr10plus_tool extract",
             )
         except RuntimeError as e:
-            if self.debug_logger:
-                self.debug_logger.log(
-                    level="ERROR",
-                    operation="hybrid_extract_hdr10plus",
-                    message="Failed extracting HDR10+ metadata",
-                    context={"error": str(e)},
-                )
+            log_event(
+                "hybrid_extract_hdr10plus",
+                level="ERROR",
+                message="Failed extracting HDR10+ metadata",
+                context={"error": str(e)},
+            )
             raise ValueError("Failed extracting HDR10+ metadata")
 
         file_size = os.path.getsize(config.directories.temp / self.hdr10plus_file)
         if file_size == 0:
-            if self.debug_logger:
-                self.debug_logger.log(
-                    level="ERROR",
-                    operation="hybrid_extract_hdr10plus",
-                    message="No HDR10+ metadata found in the stream",
-                    context={"file_size": 0},
-                )
+            log_event(
+                "hybrid_extract_hdr10plus",
+                level="ERROR",
+                message="No HDR10+ metadata found in the stream",
+                context={"file_size": 0},
+            )
             raise ValueError("No HDR10+ metadata found in the stream")
 
-        if self.debug_logger:
-            self.debug_logger.log(
-                level="DEBUG",
-                operation="hybrid_extract_hdr10plus",
-                message="Extracted HDR10+ metadata",
-                context={"output": self.hdr10plus_file, "file_size": file_size},
-                success=True,
-            )
+        log_event(
+            "hybrid_extract_hdr10plus",
+            level="DEBUG",
+            message="Extracted HDR10+ metadata",
+            context={"output": self.hdr10plus_file, "file_size": file_size},
+            success=True,
+        )
 
     def _probe_hdr_metadata(self):
         """Extract mastering display and content light level metadata from the HDR10 stream via ffprobe.
@@ -624,6 +609,8 @@ class Hybrid:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
 
         max_mdl = 1000
@@ -649,13 +636,12 @@ class Hybrid:
             except (json.JSONDecodeError, KeyError, ValueError, ZeroDivisionError):
                 pass
 
-        if self.debug_logger:
-            self.debug_logger.log(
-                level="DEBUG",
-                operation="hybrid_probe_hdr_metadata",
-                message="Probed HDR metadata from source stream",
-                context={"max_mdl": max_mdl, "min_mdl": min_mdl, "max_cll": max_cll, "max_fall": max_fall},
-            )
+        log_event(
+            "hybrid_probe_hdr_metadata",
+            level="DEBUG",
+            message="Probed HDR metadata from source stream",
+            context={"max_mdl": max_mdl, "min_mdl": min_mdl, "max_cll": max_cll, "max_fall": max_fall},
+        )
 
         return max_mdl, min_mdl, max_cll, max_fall
 
@@ -692,22 +678,20 @@ class Hybrid:
                 label="dovi_tool generate",
             )
         except RuntimeError as e:
-            if self.debug_logger:
-                self.debug_logger.log(
-                    level="ERROR",
-                    operation="hybrid_convert_hdr10plus",
-                    message="Failed converting HDR10+ to Dolby Vision",
-                    context={"error": str(e)},
-                )
+            log_event(
+                "hybrid_convert_hdr10plus",
+                level="ERROR",
+                message="Failed converting HDR10+ to Dolby Vision",
+                context={"error": str(e)},
+            )
             raise ValueError("Failed converting HDR10+ to Dolby Vision")
 
-        if self.debug_logger:
-            self.debug_logger.log(
-                level="DEBUG",
-                operation="hybrid_convert_hdr10plus",
-                message="Converted HDR10+ metadata to Dolby Vision Profile 8",
-                success=True,
-            )
+        log_event(
+            "hybrid_convert_hdr10plus",
+            level="DEBUG",
+            message="Converted HDR10+ metadata to Dolby Vision Profile 8",
+            success=True,
+        )
 
         # Clean up temporary files
         Path.unlink(config.directories.temp / "extra.json")

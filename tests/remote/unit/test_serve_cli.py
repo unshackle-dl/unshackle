@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from click.testing import CliRunner
 
@@ -50,7 +52,9 @@ def test_serve_api_only_with_no_widevine_rejected(runner: CliRunner, monkeypatch
 
     result = runner.invoke(serve, ["--api-only", "--no-widevine", "--no-key"])
     assert result.exit_code != 0
-    assert "Cannot use --api-only" in (result.output or str(result.exception))
+    # strip ANSI: rich-click forces color under GITHUB_ACTIONS and styles --flags mid-sentence
+    output = re.sub(r"\x1b\[[0-9;]*m", "", result.output or str(result.exception))
+    assert "Cannot use --api-only" in output
 
 
 def test_serve_no_key_without_api_secret_does_not_require_secret(
@@ -67,6 +71,61 @@ def test_serve_no_key_without_api_secret_does_not_require_secret(
     result = runner.invoke(serve, ["--api-only", "--no-key", "--remote-only"])
     # No exception should escape, exit code 0 means startup proceeded then run_app stub returned.
     assert result.exit_code == 0, result.output
+
+
+async def test_api_only_accepts_serve_users_keys(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch, aiohttp_client
+) -> None:
+    """In api-only keyed mode the accepted keys are api_secret plus every `serve.users` key."""
+    from aiohttp import web
+
+    captured: dict = {}
+
+    def capture_app(app, **kwargs):
+        captured["app"] = app
+
+    monkeypatch.setattr(web, "run_app", capture_app)
+    from unshackle.core.config import config as cfg
+
+    monkeypatch.setattr(
+        cfg,
+        "serve",
+        {"api_secret": "master-key", "users": {"user-key": {"username": "alice", "services": ["EXAMPLE"]}}},
+    )
+
+    result = runner.invoke(serve, ["--api-only", "--remote-only"])
+    assert result.exit_code == 0, result.output
+
+    app = captured["app"]
+    assert set(app["config"]["users"]) == {"master-key", "user-key"}
+    assert app["config"]["users"]["user-key"]["username"] == "alice"
+
+    client = await aiohttp_client(app)
+    # an unrouted path still passes through the auth middleware first
+    assert (await client.get("/api/unknown", headers={"X-Secret-Key": "user-key"})).status == 404
+    assert (await client.get("/api/unknown", headers={"X-Secret-Key": "master-key"})).status == 404
+    assert (await client.get("/api/unknown", headers={"X-Secret-Key": "nope"})).status == 401
+
+
+async def test_api_only_coerces_non_str_user_keys(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch, aiohttp_client
+) -> None:
+    """A yaml users key that parses as int must still authenticate (compare_digest needs str)."""
+    from aiohttp import web
+
+    captured: dict = {}
+    monkeypatch.setattr(web, "run_app", lambda app, **kwargs: captured.update(app=app))
+    from unshackle.core.config import config as cfg
+
+    monkeypatch.setattr(cfg, "serve", {"api_secret": "master-key", "users": {123456: {"username": "bob"}}})
+
+    result = runner.invoke(serve, ["--api-only", "--remote-only"])
+    assert result.exit_code == 0, result.output
+    assert "123456" in captured["app"]["config"]["users"]
+
+    client = await aiohttp_client(captured["app"])
+    assert (await client.get("/api/unknown", headers={"X-Secret-Key": "123456"})).status == 404
+    assert (await client.get("/api/unknown", headers={"X-Secret-Key": "master-key"})).status == 404
 
 
 def test_serve_without_no_key_requires_api_secret(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:

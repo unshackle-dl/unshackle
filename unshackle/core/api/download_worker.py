@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 import traceback
 from pathlib import Path
@@ -20,9 +21,11 @@ def _read_payload(path: Path) -> Dict[str, Any]:
 
 
 def _write_result(path: Path, payload: Dict[str, Any]) -> None:
+    # Atomic replace: the parent polls this file while it is being rewritten.
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        json.dump(payload, handle)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(payload), encoding="utf-8")
+    os.replace(tmp, path)
 
 
 def main(argv: list[str]) -> int:
@@ -49,19 +52,21 @@ def main(argv: list[str]) -> int:
 
         log.info(f"Worker starting job {job_id} ({service}:{title_id})")
 
+        # Merged so sparse keys (current_title, output_files) survive later writes.
+        progress_state: Dict[str, Any] = {}
+
         def progress_callback(progress_data: Dict[str, Any]) -> None:
             """Write progress updates to file for main process to read."""
             if progress_path:
                 try:
+                    progress_state.update(progress_data)
                     log.info(f"Writing progress update: {progress_data}")
-                    _write_result(progress_path, progress_data)
+                    _write_result(progress_path, progress_state)
                     log.info(f"Progress update written to {progress_path}")
                 except Exception as e:
                     log.error(f"Failed to write progress update: {e}")
 
-        output_files = _perform_download(
-            job_id, service, title_id, params, cancel_event=None, progress_callback=progress_callback
-        )
+        output_files = _perform_download(job_id, service, title_id, params, progress_callback=progress_callback)
 
         result = {"status": "success", "output_files": output_files}
 

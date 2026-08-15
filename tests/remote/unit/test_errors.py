@@ -6,8 +6,13 @@ import json
 
 import pytest
 
-from unshackle.core.api.errors import (APIError, APIErrorCode, build_error_response, categorize_exception,
-                                       handle_api_exception)
+from unshackle.core.api.errors import (
+    APIError,
+    APIErrorCode,
+    build_error_response,
+    categorize_exception,
+    handle_api_exception,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -17,23 +22,33 @@ def _body(resp) -> dict:
 
 
 def test_api_error_default_http_status_per_code() -> None:
+    # Every live APIErrorCode and the status a client observes for it. This is the
+    # status half of the error contract PRD 05 must preserve through the collapse.
     cases = {
         APIErrorCode.INVALID_INPUT: 400,
         APIErrorCode.INVALID_SERVICE: 400,
-        APIErrorCode.AUTH_REQUIRED: 401,
+        APIErrorCode.INVALID_PROXY: 400,
+        APIErrorCode.INVALID_PARAMETERS: 400,
         APIErrorCode.AUTH_FAILED: 401,
         APIErrorCode.FORBIDDEN: 403,
         APIErrorCode.GEOFENCE: 403,
         APIErrorCode.NOT_FOUND: 404,
+        APIErrorCode.NO_CONTENT: 404,
+        APIErrorCode.JOB_NOT_FOUND: 404,
         APIErrorCode.SESSION_NOT_FOUND: 404,
         APIErrorCode.TRACK_NOT_FOUND: 404,
+        APIErrorCode.CONFLICT: 409,
         APIErrorCode.RATE_LIMITED: 429,
         APIErrorCode.INTERNAL_ERROR: 500,
+        APIErrorCode.DOWNLOAD_ERROR: 500,
+        APIErrorCode.WORKER_ERROR: 500,
         APIErrorCode.SERVICE_ERROR: 502,
         APIErrorCode.DRM_ERROR: 502,
         APIErrorCode.NETWORK_ERROR: 503,
         APIErrorCode.SERVICE_UNAVAILABLE: 503,
     }
+    # Lock that the cases above are the *complete* live set — a new/removed code trips this.
+    assert {c.name for c in cases} == {c.name for c in APIErrorCode}
     for code, expected in cases.items():
         assert APIError(code, "x").http_status == expected, code
 
@@ -125,3 +140,45 @@ def test_handle_api_exception_categorizes_generic() -> None:
     resp = handle_api_exception(ConnectionError("oops"))
     body = _body(resp)
     assert body["error_code"] == "NETWORK_ERROR"
+
+
+# --- Error contract harness (PRD 05 gate) ---------------------------------
+# Locks the FULL observable response — (http status, error_code, retryable) — that
+# a client sees for a generic (non-APIError) exception flowing through the
+# handle_api_exception funnel that every route's `except Exception` path calls.
+# This is the equivalence reference: after the categorize_exception collapse,
+# any tuple that changes here is a client-visible behaviour change, not a refactor.
+@pytest.mark.parametrize(
+    "exc, status, code, retryable",
+    [
+        (Exception("Invalid credentials provided"), 401, "AUTH_FAILED", False),
+        (Exception("Connection refused"), 503, "NETWORK_ERROR", True),
+        (TimeoutError("read timeout"), 503, "NETWORK_ERROR", True),
+        (Exception("Not available in your region"), 403, "GEOFENCE", False),
+        (Exception("Title not found"), 404, "NOT_FOUND", False),
+        (Exception("HTTP 429 too many requests"), 429, "RATE_LIMITED", True),
+        (Exception("DRM license fetch failed"), 502, "DRM_ERROR", False),
+        (Exception("503 service unavailable"), 503, "SERVICE_UNAVAILABLE", True),
+        (ValueError("malformed body"), 400, "INVALID_INPUT", False),
+        (RuntimeError("totally novel failure xyz"), 500, "INTERNAL_ERROR", False),
+    ],
+)
+def test_error_contract_generic_exception(exc: Exception, status: int, code: str, retryable: bool) -> None:
+    resp = handle_api_exception(exc)
+    assert resp.status == status
+    body = _body(resp)
+    assert body["error_code"] == code
+    # retryable is only serialized when True (build_error_response omits it otherwise).
+    assert body.get("retryable", False) is retryable
+
+
+def test_error_contract_apierror_passthrough_full_shape() -> None:
+    # APIError carriers keep status + code + message + details + retryable verbatim.
+    err = APIError(APIErrorCode.RATE_LIMITED, "slow down", details={"retry_after": 5}, retryable=True)
+    resp = handle_api_exception(err)
+    assert resp.status == 429
+    body = _body(resp)
+    assert body["error_code"] == "RATE_LIMITED"
+    assert body["message"] == "slow down"
+    assert body["details"] == {"retry_after": 5}
+    assert body["retryable"] is True

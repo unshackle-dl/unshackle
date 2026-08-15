@@ -9,9 +9,9 @@ import re
 import shutil
 import subprocess
 import sys
-from functools import partial
+import time
 from pathlib import Path
-from typing import Any, Callable, Optional, Union
+from typing import Any, Optional, Union
 from urllib.parse import urljoin
 from uuid import UUID
 from zlib import crc32
@@ -32,8 +32,11 @@ from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, 
 from unshackle.core.drm import DRM_T, ClearKey, MonaLisa, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.session import RnetResponse, RnetSession
-from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
-from unshackle.core.utilities import get_debug_logger, get_extension, is_close_match, try_ensure_utf8
+from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video
+from unshackle.core.tracks.track import assert_fragments_decrypted
+from unshackle.core.utilities import get_extension, is_close_match, log_event, try_ensure_utf8
+from unshackle.core.utils.redact import safe_display_url
+from unshackle.core.utils.subprocess import log_tool_run
 
 
 class HLS:
@@ -85,6 +88,13 @@ class HLS:
             raise TypeError(f"Expected response to be a requests.Response or rnet.Response, not {type(res)}")
 
         master = m3u8.loads(content, uri=url)
+
+        log_event(
+            "manifest_hls_fetch",
+            level="DEBUG",
+            message=f"Fetched HLS manifest ({len(content)} bytes)",
+            context={"url": safe_display_url(url), "size": len(content)},
+        )
 
         return cls(master, session, url=url, raw_text=content)
 
@@ -198,7 +208,7 @@ class HLS:
             # DV-composite track: primary codec is plain HEVC but SUPPLEMENTAL-CODECS advertises
             # a DV codec. Range stays whatever VIDEO-RANGE signaled (HDR10/HLG/SDR); DVFixup will
             # restore DV signaling post-download. Services that know their encoder embeds HDR10+
-            # SEI must override `range` themselves (see services/ATV).
+            # SEI must override `range` themselves.
             dv_compatible_bitstream = primary_track_type is Video and not primary_has_dv and supp_dv_codec is not None
 
             tracks.add(
@@ -313,6 +323,22 @@ class HLS:
 
         if self.url:
             tracks.manifest_url = self.url
+
+        log_event(
+            "manifest_hls_parse",
+            level="INFO",
+            message=(
+                f"Parsed HLS manifest: {len(tracks.videos)} video, "
+                f"{len(tracks.audio)} audio, {len(tracks.subtitles)} subtitle track(s)"
+            ),
+            context={
+                "videos": len(tracks.videos),
+                "audio": len(tracks.audio),
+                "subtitles": len(tracks.subtitles),
+                "ranges": sorted({str(v.range) for v in tracks.videos}),
+                "vcodecs": sorted({str(v.codec) for v in tracks.videos}),
+            },
+        )
         return tracks
 
     @staticmethod
@@ -491,22 +517,15 @@ class HLS:
         return None
 
     @staticmethod
-    def download_track(
-        track: AnyTrack,
-        save_path: Path,
-        save_dir: Path,
-        progress: partial,
-        session: Optional[Union[Session, RnetSession]] = None,
-        proxy: Optional[str] = None,
-        max_workers: Optional[int] = None,
-        license_widevine: Optional[Callable] = None,
-        *,
-        cdm: Optional[object] = None,
-    ) -> None:
-        if not session:
-            session = Session()
-        elif not isinstance(session, (Session, RnetSession)):
-            raise TypeError(f"Expected session to be a {Session} or {RnetSession}, not {session!r}")
+    def download_track(track: AnyTrack, ctx: DownloadContext) -> None:
+        session = ctx.ensure_session()
+        save_path = ctx.save_path
+        save_dir = ctx.save_dir
+        progress = ctx.progress
+        proxy = ctx.proxy
+        max_workers = ctx.max_workers
+        license_widevine = ctx.license_widevine
+        cdm = ctx.cdm
 
         if proxy:
             # Handle proxies differently based on session type
@@ -570,6 +589,14 @@ class HLS:
                         DOWNLOAD_CANCELLED.set()  # skip pending track downloads
                         progress(downloaded="[red]FAILED")
                         raise
+                elif isinstance(media_drm, ClearKey):
+                    # AES-128 (ClearKey) needs no license server - the key is already fetched.
+                    # Without this branch session_drm stayed None and segments were never
+                    # decrypted (they were merged still-encrypted, producing a broken file).
+                    track.drm = [media_drm]
+                    session_drm = media_drm
+                    initial_drm_key = media_playlist_key
+                    initial_drm_licensed = True
 
         # Fall back to session DRM if media playlist has no matching keys
         if not initial_drm_licensed and session_drm and isinstance(session_drm, (Widevine, PlayReady)):
@@ -648,21 +675,19 @@ class HLS:
             session=session,
         )
 
-        debug_logger = get_debug_logger()
-        if debug_logger:
-            debug_logger.log(
-                level="DEBUG",
-                operation="manifest_hls_download_start",
-                message="Starting HLS manifest download",
-                context={
-                    "track_id": getattr(track, "id", None),
-                    "track_type": track.__class__.__name__,
-                    "total_segments": total_segments,
-                    "has_drm": bool(session_drm),
-                    "drm_type": session_drm.__class__.__name__ if session_drm else None,
-                    "save_path": str(save_path),
-                },
-            )
+        log_event(
+            "manifest_hls_download_start",
+            level="DEBUG",
+            message="Starting HLS manifest download",
+            context={
+                "track_id": getattr(track, "id", None),
+                "track_type": track.__class__.__name__,
+                "total_segments": total_segments,
+                "has_drm": bool(session_drm),
+                "drm_type": session_drm.__class__.__name__ if session_drm else None,
+                "save_path": str(save_path),
+            },
+        )
 
         for status_update in downloader(**downloader_args):
             file_downloaded = status_update.get("file_downloaded")
@@ -682,6 +707,12 @@ class HLS:
         name_len = len(str(total_segments))
         discon_i = 0
         range_offset = 0
+        # First segment's Media Sequence Number - used as the AES-128 IV when EXT-X-KEY has
+        # no explicit IV (RFC 8216 §5.2), where each segment's IV is its sequence number.
+        media_sequence_start = getattr(master, "media_sequence", None) or 0
+        # Downloaded segment files are named by post-filter index; map that back to the wanted
+        # segment so the IV uses the absolute media sequence number, not the download index.
+        wanted_segments = [seg for seg in master.segments if seg not in unwanted_segments]
         map_data: Optional[tuple[m3u8.model.InitializationSection, bytes]] = None
         if session_drm:
             encryption_data: Optional[tuple[Optional[m3u8.Key], DRM_T]] = (initial_drm_key, session_drm)
@@ -705,11 +736,19 @@ class HLS:
                     delete: Delete the file once it's been merged.
                     include_map_data: Whether to include the init map data.
                 """
+                prepend = include_map_data and map_data and map_data[1]
+                if len(via) == 1 and not prepend and delete:
+                    try:
+                        os.replace(via[0], to)
+                        return
+                    except OSError:
+                        pass
                 with open(to, "wb") as x:
-                    if include_map_data and map_data and map_data[1]:
+                    if prepend:
                         x.write(map_data[1])
                     for file in via:
-                        x.write(file.read_bytes())
+                        with open(file, "rb") as segment:
+                            shutil.copyfileobj(segment, x, 1024 * 1024)
                         x.flush()
                         if delete:
                             file.unlink()
@@ -756,11 +795,23 @@ class HLS:
                     # with widevine we can merge all segments and decrypt once
                     merge(to=merged_path, via=files, delete=True, include_map_data=True)
                     drm.decrypt(merged_path)
+                    assert_fragments_decrypted(merged_path)
                     merged_path.rename(decrypted_path)
                 else:
                     # with other drm we must decrypt separately and then merge them
                     # for aes this is because each segment likely has 16-byte padding
+                    key_obj = encryption_data[0]
+                    # AES-128 with no explicit IV: each segment's IV is its media sequence
+                    # number (RFC 8216 §5.2). Without this the engine used a zero IV and the
+                    # output decrypted to garbage.
+                    seq_iv = isinstance(drm, ClearKey) and not (key_obj and key_obj.iv)
                     for file in files:
+                        if seq_iv and file.stem.isdigit():
+                            download_i = int(file.stem)
+                            seq = getattr(wanted_segments[download_i], "media_sequence", None)
+                            if seq is None:
+                                seq = media_sequence_start + download_i
+                            drm.iv = int(seq).to_bytes(16, "big")
                         drm.decrypt(file)
                     merge(to=merged_path, via=files, delete=True, include_map_data=True)
 
@@ -921,52 +972,50 @@ class HLS:
         # finally merge all the discontinuity save files together to the final path
         segments_to_merge = find_segments_recursively(save_dir)
 
-        if debug_logger:
-            debug_logger.log(
-                level="DEBUG",
-                operation="manifest_hls_download_complete",
-                message="HLS download complete, preparing to merge",
+        log_event(
+            "manifest_hls_download_complete",
+            level="DEBUG",
+            message="HLS download complete, preparing to merge",
+            context={
+                "track_id": getattr(track, "id", None),
+                "track_type": track.__class__.__name__,
+                "save_dir": str(save_dir),
+                "save_dir_exists": save_dir.exists(),
+                "segments_found": len(segments_to_merge),
+                "segment_files": [f.name for f in segments_to_merge[:10]],  # Limit to first 10
+                "downloader": "requests",
+            },
+        )
+
+        if not segments_to_merge:
+            error_msg = f"No segment files found in output directory: {save_dir}"
+            all_contents = list(save_dir.iterdir()) if save_dir.exists() else []
+            log_event(
+                "manifest_hls_download_no_segments",
+                level="ERROR",
+                message=error_msg,
                 context={
                     "track_id": getattr(track, "id", None),
                     "track_type": track.__class__.__name__,
                     "save_dir": str(save_dir),
                     "save_dir_exists": save_dir.exists(),
-                    "segments_found": len(segments_to_merge),
-                    "segment_files": [f.name for f in segments_to_merge[:10]],  # Limit to first 10
+                    "directory_contents": [str(p) for p in all_contents],
                     "downloader": "requests",
                 },
             )
-
-        if not segments_to_merge:
-            error_msg = f"No segment files found in output directory: {save_dir}"
-            if debug_logger:
-                all_contents = list(save_dir.iterdir()) if save_dir.exists() else []
-                debug_logger.log(
-                    level="ERROR",
-                    operation="manifest_hls_download_no_segments",
-                    message=error_msg,
-                    context={
-                        "track_id": getattr(track, "id", None),
-                        "track_type": track.__class__.__name__,
-                        "save_dir": str(save_dir),
-                        "save_dir_exists": save_dir.exists(),
-                        "directory_contents": [str(p) for p in all_contents],
-                        "downloader": "requests",
-                    },
-                )
             raise FileNotFoundError(error_msg)
 
         if len(segments_to_merge) == 1:
             shutil.move(segments_to_merge[0], save_path)
         else:
-            progress(downloaded="Merging")
+            progress(downloaded="Merging", completed=0, total=None)
             if isinstance(track, (Video, Audio)):
                 HLS.merge_segments(segments=segments_to_merge, save_path=save_path)
             else:
                 with open(save_path, "wb") as f:
                     for discontinuity_file in segments_to_merge:
-                        discontinuity_data = discontinuity_file.read_bytes()
-                        f.write(discontinuity_data)
+                        with open(discontinuity_file, "rb") as src:
+                            shutil.copyfileobj(src, f, 1024 * 1024)
                         f.flush()
                         os.fsync(f.fileno())
                         discontinuity_file.unlink()
@@ -979,7 +1028,7 @@ class HLS:
                 # Directory might not be empty, try removing recursively
                 shutil.rmtree(save_dir, ignore_errors=True)
 
-        progress(downloaded="Downloaded")
+        progress(downloaded="Downloaded", completed=100, total=100)
 
         track.path = save_path
 
@@ -1021,9 +1070,11 @@ class HLS:
                 demuxer_file = save_path.parent / f"ffmpeg_concat_demuxer_{save_path.stem}.txt"
                 demuxer_file.write_text("\n".join([f"file '{segment.absolute()}'" for segment in segments]))
 
+                concat_start = time.monotonic()
                 subprocess.check_call(
                     [
                         binaries.FFMPEG,
+                        "-nostdin",
                         "-hide_banner",
                         "-loglevel",
                         "error",
@@ -1043,6 +1094,14 @@ class HLS:
                 )
                 demuxer_file.unlink(missing_ok=True)
                 cleanup_segments_and_dirs()
+                log_tool_run(
+                    "ffmpeg concat segments",
+                    "ffmpeg",
+                    0,
+                    duration_ms=round((time.monotonic() - concat_start) * 1000, 1),
+                    segments=len(segments),
+                    output_size=save_path.stat().st_size if save_path.exists() else 0,
+                )
                 return save_path.stat().st_size
 
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
@@ -1057,7 +1116,7 @@ class HLS:
         with open(save_path, "wb") as output_file:
             for segment in segments:
                 with open(segment, "rb") as segment_file:
-                    output_file.write(segment_file.read())
+                    shutil.copyfileobj(segment_file, output_file, 1024 * 1024)
 
         cleanup_segments_and_dirs()
         return save_path.stat().st_size
@@ -1229,9 +1288,15 @@ class HLS:
         elif key.method == "ISO-23001-7":
             drm = Widevine(pssh=WV_PSSH.new(key_ids=[key.uri.split(",")[-1]], system_id=WV_PSSH.SystemId.Widevine))
         elif key.keyformat and key.keyformat.lower() == WidevineCdm.urn:
+            extra_params = dict(key._extra_params)  # noqa
+            # a v0 PSSH carries no KID, leaving the tag's own KEYID as the only source
+            kid = extra_params.pop("keyid", None) or extra_params.pop("kid", None)
+            if isinstance(kid, str):
+                kid = kid.removeprefix("0x").removeprefix("0X")
             drm = Widevine(
                 pssh=WV_PSSH(key.uri.split(",")[-1]),
-                **key._extra_params,  # noqa
+                kid=kid,
+                **extra_params,
             )
         elif key.keyformat and key.keyformat.lower() in {f"urn:uuid:{PR_PSSH.SYSTEM_ID}", "com.microsoft.playready"}:
             drm = PlayReady(

@@ -93,6 +93,13 @@ class Service(metaclass=ABCMeta):
     # Abstract class variables
     ALIASES: tuple[str, ...] = ()  # list of aliases for the service; alternatives to the service tag.
     GEOFENCE: tuple[str, ...] = ()  # list of ip regions required to use the service. empty list == no specific region.
+    ANIME: bool = False  # service catalogue is anime; metadata lookups prefer AniList. Title.anime overrides per title.
+    DAILY: bool = False  # catalog is daily/date-based. episodes are named by air date. Title.daily overrides per title.
+    # vault namespace override; when set, key vault read/write uses this tag instead of the service's own.
+    VAULT_TAG: Optional[str] = None
+    # Auth methods the service accepts ("cookies"/"credentials"); when None the REST /services
+    # endpoint infers them from authenticate().
+    AUTH_METHODS: Optional[tuple[str, ...]] = None
 
     def __init__(self, ctx: click.Context):
         console.print(Padding(Rule(f"[rule.text]Service: {self.__class__.__name__}"), (1, 2)))
@@ -323,6 +330,7 @@ class Service(metaclass=ABCMeta):
             "https://",
             HTTPAdapter(
                 max_retries=Retry(total=5, backoff_factor=0.2, status_forcelist=[429, 500, 502, 503, 504]),
+                pool_maxsize=64,
                 pool_block=True,
             ),
         )
@@ -432,6 +440,27 @@ class Service(metaclass=ABCMeta):
         """
         # Delegates license handling to the Widevine license method by default if a service-specific PlayReady implementation is not provided.
         return self.get_widevine_license(challenge=challenge, title=title, track=track)
+
+    def get_clearkey_license(
+        self, *, challenge: bytes, title: Title_T, track: AnyTrack
+    ) -> Optional[Union[bytes, str, dict]]:
+        """
+        Get a W3C ClearKey License (JWK Set) by sending a License Request (challenge).
+
+        Used for DASH `org.w3.clearkey` content. No CDM is involved: the challenge is
+        the W3C EME JSON license request, e.g. ``{"kids": ["<base64url>"], "type": "temporary"}``,
+        and the license is a JWK Set, e.g. ``{"keys": [{"kty": "oct", "k": "...", "kid": "..."}]}``.
+
+        :param challenge: The JSON license request bytes to POST to the license server.
+        :param title: The current `Title` from get_titles that is being executed. This is provided in
+            case it has data needed to be used, e.g. for a HTTP request.
+        :param track: The current `Track` needing decryption. Provided for same reason as `title`.
+        :return: The JWK Set license as a dict, JSON str, or raw bytes. Return None (the default)
+            to let the framework POST the challenge to the manifest-provided Laurl, if any.
+            Services with no license server can instead pre-populate the DRM object's
+            `content_keys` in get_tracks.
+        """
+        return None
 
     # Required Abstract functions
     # The following functions *must* be implemented by the Service.

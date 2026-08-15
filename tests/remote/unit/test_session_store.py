@@ -85,6 +85,21 @@ async def test_cleanup_expired_keeps_pending_input_under_grace(store: SessionSto
     assert store.session_count == 1
 
 
+async def test_cleanup_expired_drops_pending_input_past_grace(store: SessionStore) -> None:
+    """The auth-state grace is the single AUTH_INPUT_TIMEOUT rule, not a separate magic number."""
+    from datetime import datetime, timedelta, timezone
+
+    from unshackle.core.api.input_bridge import AUTH_INPUT_TIMEOUT
+
+    entry = await store.create("ATV", _FakeService())
+    entry.input_bridge = InputBridge()
+    entry.auth_status = AuthStatus.PENDING_INPUT
+    entry.last_accessed = datetime.now(timezone.utc) - timedelta(seconds=AUTH_INPUT_TIMEOUT + 1)
+    removed = await store.cleanup_expired()
+    assert removed == 1
+    assert store.session_count == 0
+
+
 async def test_cancel_all_bridges(store: SessionStore) -> None:
     a = await store.create("ATV", _FakeService())
     b = await store.create("NF", _FakeService())

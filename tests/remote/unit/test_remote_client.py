@@ -86,6 +86,65 @@ def test_4xx_raises_systemexit_with_logged_error(client: RemoteClient, caplog: p
 
 
 @responses.activate
+def test_401_falls_back_to_next_auth_header(client: RemoteClient) -> None:
+    seen: list[tuple[str | None, str | None]] = []
+
+    def cb(request):
+        seen.append((request.headers.get("X-Secret-Key"), request.headers.get("X-Api-Key")))
+        if request.headers.get("X-Api-Key") == "secret-xyz":
+            return (200, {}, json.dumps({"status": "ok"}))
+        return (401, {}, json.dumps({"message": "Secret Key is Invalid."}))
+
+    responses.add_callback(responses.GET, "http://srv:8786/api/services", callback=cb)
+
+    assert client.get("/api/services") == {"status": "ok"}
+    assert seen == [("secret-xyz", None), (None, "secret-xyz")]
+
+    # the winning header is sticky: no second attempt on the next request
+    seen.clear()
+    assert client.get("/api/services") == {"status": "ok"}
+    assert seen == [(None, "secret-xyz")]
+
+
+@responses.activate
+def test_non_401_error_does_not_fall_back(client: RemoteClient, caplog: pytest.LogCaptureFixture) -> None:
+    responses.add(
+        responses.GET,
+        "http://srv:8786/api/services",
+        json={"error_code": "FORBIDDEN", "message": "nope"},
+        status=403,
+    )
+    with caplog.at_level("ERROR"), pytest.raises(SystemExit):
+        client.get("/api/services")
+    assert len(responses.calls) == 1
+    assert client.session.headers.get("X-Secret-Key") == "secret-xyz"
+
+
+@responses.activate
+def test_401_on_every_header_exits(client: RemoteClient, caplog: pytest.LogCaptureFixture) -> None:
+    responses.add(
+        responses.GET,
+        "http://srv:8786/api/services",
+        json={"error_code": "UNAUTHORIZED", "message": "Secret Key is Invalid."},
+        status=401,
+    )
+    with caplog.at_level("ERROR"), pytest.raises(SystemExit):
+        client.get("/api/services")
+    assert len(responses.calls) == 2
+    assert "Secret Key is Invalid." in caplog.text
+
+
+@responses.activate
+def test_single_configured_auth_header_does_not_retry() -> None:
+    c = RemoteClient(server_url="http://srv:8786", api_key="k", auth_headers=["X-Api-Key"])
+    responses.add(responses.GET, "http://srv:8786/api/services", json={"message": "nope"}, status=401)
+    with pytest.raises(SystemExit):
+        c.get("/api/services")
+    assert len(responses.calls) == 1
+    assert c.session.headers.get("X-Api-Key") == "k"
+
+
+@responses.activate
 def test_connection_error_raises_systemexit(client: RemoteClient) -> None:
     import requests
 

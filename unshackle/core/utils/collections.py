@@ -38,6 +38,19 @@ def flatten(items: Any, ignore_types: Union[Type, Tuple[Type, ...]] = str) -> It
         yield items
 
 
+def ci_get(mapping: dict, key: str, default: Any = None) -> Any:
+    """Case-insensitive top-level lookup, for per-service config maps."""
+    if not mapping:
+        return default
+    if key in mapping:
+        return mapping[key]
+    kl = key.lower()
+    for k, v in mapping.items():
+        if isinstance(k, str) and k.lower() == kl:
+            return v
+    return default
+
+
 def merge_dict(source: dict, destination: dict) -> None:
     """Recursively merge Source into Destination in-place."""
     if not source:

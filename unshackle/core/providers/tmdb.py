@@ -14,6 +14,7 @@ class TMDBProvider(MetadataProvider):
 
     NAME = "tmdb"
     REQUIRES_KEY = True
+    ID_KIND = "tmdb"
     BASE_URL = "https://api.themoviedb.org/3"
 
     def is_available(self) -> bool:
@@ -90,6 +91,7 @@ class TMDBProvider(MetadataProvider):
             year=result_year,
             kind=kind,
             external_ids=ext,
+            original_language=(detail or {}).get("original_language"),
             source="tmdb",
             raw={"detail": detail or {}, "external_ids": ext_raw or {}},
         )
@@ -108,6 +110,7 @@ class TMDBProvider(MetadataProvider):
             year=year,
             kind=kind,
             external_ids=ExternalIds(tmdb_id=int(provider_id), tmdb_kind=kind),
+            original_language=detail.get("original_language"),
             source="tmdb",
             raw=detail,
         )

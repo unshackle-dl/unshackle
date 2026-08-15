@@ -1,0 +1,149 @@
+site_name: unshackle
+site_description: Movie, TV, and Music archival software — user guide and REST API reference
+site_url: https://docs.unshackle.dev/
+repo_url: https://github.com/unshackle-dl/unshackle
+repo_name: unshackle-dl/unshackle
+docs_dir: docs
+
+exclude_docs: |
+  reference/configuration.md
+
+theme:
+  name: material
+  custom_dir: overrides
+  favicon: assets/favicon.svg
+  icon:
+    logo: custom/no_encryption
+  palette:
+    - media: "(prefers-color-scheme)"
+      primary: black
+      toggle:
+        icon: material/link
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      accent: indigo
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: indigo
+      toggle:
+        icon: material/toggle-switch-off
+        name: Switch to system preference
+  font:
+    text: Roboto
+    code: Roboto Mono
+  features:
+    - content.code.annotate
+    - content.code.copy
+    - content.tabs.link
+    - content.tooltips
+    - navigation.footer
+    - navigation.indexes
+    - navigation.sections
+    - navigation.tabs
+    - navigation.top
+    - navigation.tracking
+    - search.highlight
+    - search.share
+    - search.suggest
+    - toc.follow
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]
+          options:
+            docstring_style: google
+            show_root_heading: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            separate_signature: true
+            signature_crossrefs: true
+            merge_init_into_class: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quickstart.md
+      - The Configuration File: getting-started/configuration-file.md
+  - User Guide:
+      - Downloading: guide/downloading.md
+      - CLI Reference: guide/cli-reference.md
+      - DRM & CDM Setup: guide/drm-and-cdm.md
+      - Proxies & VPN: guide/proxies-and-vpn.md
+      - Key Vaults: guide/vaults.md
+      - Output & Naming: guide/output-and-naming.md
+      - Subtitles: guide/subtitles.md
+      - Troubleshooting: guide/troubleshooting.md
+  - Configuration:
+      - Overview: reference/configuration/index.md
+      - Directories: reference/configuration/directories.md
+      - Services & Authentication: reference/configuration/services.md
+      - Download & Processing: reference/configuration/download.md
+      - Output & Naming: reference/configuration/output.md
+      - DRM & CDM: reference/configuration/drm.md
+      - Network & Proxy: reference/configuration/network.md
+      - Key Vaults: reference/configuration/vaults.md
+      - Other Settings: reference/configuration/misc.md
+      - Annotated Example: reference/configuration/example.md
+  - Developer:
+      - Creating a Service: dev/creating-a-service.md
+      - Service Architecture: dev/service-architecture.md
+      - REST API:
+          - Overview: dev/rest-api/index.md
+          - Quick Start: dev/rest-api/quickstart.md
+          - Authentication: dev/rest-api/authentication.md
+          - Endpoints: dev/rest-api/endpoints.md
+          - Job Lifecycle: dev/rest-api/job-lifecycle.md
+          - Remote Sessions: dev/rest-api/remote-sessions.md
+          - Error Responses: dev/rest-api/errors.md
+  - API Reference:
+      - Service: reference/api/service.md
+      - Config: reference/api/config.md
+      - Tracks: reference/api/tracks.md
+      - Titles: reference/api/titles.md
+      - DRM: reference/api/drm.md

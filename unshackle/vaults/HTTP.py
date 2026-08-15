@@ -34,6 +34,7 @@ class HTTP(Vault):
         username: Optional[str] = None,
         api_mode: str = "query",
         no_push: bool = False,
+        timeout: float = 10.0,
     ):
         """
         Initialize HTTP Vault.
@@ -49,6 +50,7 @@ class HTTP(Vault):
         """
         super().__init__(name, no_push)
         self.url = host
+        self.timeout = timeout
         self.password = api_key or password
         if not self.password:
             raise ValueError("Either password or api_key is required")
@@ -84,7 +86,7 @@ class HTTP(Vault):
             "token": self.password,
         }
 
-        r = self.session.post(self.url, json=request_payload)
+        r = self.session.post(self.url, json=request_payload, timeout=self.timeout)
 
         if r.status_code == 404:
             return {"status": "not_found"}
@@ -115,7 +117,7 @@ class HTTP(Vault):
             try:
                 request_payload = {"service": service.lower(), "kid": kid}
 
-                response = self.session.post(self.url, json=request_payload)
+                response = self.session.post(self.url, json=request_payload, timeout=self.timeout)
 
                 if not response.ok:
                     return None
@@ -182,6 +184,7 @@ class HTTP(Vault):
             response = self.session.get(
                 self.url,
                 params={"service": service.lower(), "username": self.username, "password": self.password, "kid": kid},
+                timeout=self.timeout,
             )
 
             data = response.json()
@@ -200,7 +203,9 @@ class HTTP(Vault):
             return iter([])
         else:  # query mode
             response = self.session.get(
-                self.url, params={"service": service.lower(), "username": self.username, "password": self.password}
+                self.url,
+                params={"service": service.lower(), "username": self.username, "password": self.password},
+                timeout=self.timeout,
             )
 
             data = response.json()
@@ -250,6 +255,7 @@ class HTTP(Vault):
                     "key": key,
                     "title": title,
                 },
+                timeout=self.timeout,
             )
 
             data = response.json()
@@ -301,6 +307,7 @@ class HTTP(Vault):
                         "key": key,
                         "title": title,
                     },
+                    timeout=self.timeout,
                 )
 
                 data = response.json()
@@ -323,7 +330,9 @@ class HTTP(Vault):
                 return iter([])
         else:  # query mode
             response = self.session.get(
-                self.url, params={"username": self.username, "password": self.password, "list_services": True}
+                self.url,
+                params={"username": self.username, "password": self.password, "list_services": True},
+                timeout=self.timeout,
             )
 
             data = response.json()
@@ -395,6 +404,7 @@ class HTTP(Vault):
                     "key": key,
                     "title": title,
                 },
+                timeout=self.timeout,
             )
 
             try:

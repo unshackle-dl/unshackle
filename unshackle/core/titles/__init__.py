@@ -2,10 +2,10 @@ from typing import Union
 
 from .episode import Episode, Series
 from .movie import Movie, Movies
-from .song import Album, Song
+from .music import Album, Music, Song
 
 Title_T = Union[Movie, Episode, Song]
-Titles_T = Union[Movies, Series, Album]
+Titles_T = Union[Movies, Series, Music, Album]
 
 
 def remap_titles(titles: Titles_T, title_map: dict) -> Titles_T:
@@ -39,6 +39,7 @@ __all__ = (
     "Series",
     "Movie",
     "Movies",
+    "Music",
     "Album",
     "Song",
     "Title_T",

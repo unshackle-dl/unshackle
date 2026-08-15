@@ -20,7 +20,7 @@ class _FakeReq:
 
 
 def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro) if False else asyncio.run(coro)
+    return asyncio.run(coro)
 
 
 def test_skips_when_client_does_not_accept_gzip() -> None:

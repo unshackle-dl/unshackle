@@ -10,7 +10,7 @@ from rich.padding import Padding
 from rich.text import Text
 from urllib3.exceptions import InsecureRequestWarning
 
-from unshackle.core import __version__
+from unshackle.core import __code_hash__, __version__
 from unshackle.core.commands import Commands
 from unshackle.core.config import config
 from unshackle.core.console import ComfyRichHandler, console
@@ -44,6 +44,10 @@ def main(version: bool, debug: bool) -> None:
     if debug_logging_enabled:
         init_debug_logger(enabled=True)
 
+    if debug and not config.debug_requests:
+        for noisy in ("urllib3", "urllib3.connectionpool", "requests", "rnet", "httpx", "httpcore", "hpack", "h2"):
+            logging.getLogger(noisy).setLevel(logging.WARNING)
+
     urllib3.disable_warnings(InsecureRequestWarning)
 
     traceback.install(console=console, width=80, suppress=[click])
@@ -59,7 +63,8 @@ def main(version: bool, debug: bool) -> None:
                     r" ▀▀▀ ▀▀ █▪ ▀▀▀▀ ▀▀▀ · ▀  ▀ ·▀▀▀ ·▀  ▀.▀▀▀  ▀▀▀ ",
                     style="ascii.art",
                 ),
-                f"v [repr.number]{__version__}[/] - © 2025-{datetime.now().year} - github.com/unshackle-dl/unshackle",
+                f"v [repr.number]{__version__}[/]{f' ({__code_hash__})' if __code_hash__ else ''}"
+                f" - © 2025-{datetime.now().year} - github.com/unshackle-dl/unshackle",
             ),
             (1, 11, 1, 10),
             expand=True,

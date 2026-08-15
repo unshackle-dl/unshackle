@@ -10,6 +10,7 @@ endpoints:
   playback: https://api.domain.com/v1/playback/{title_id}   # HLS alternate
   widevine_license: https://api.domain.com/v1/license/widevine
   playready_license: https://api.domain.com/v1/license/playready
+  clearkey_license: https://api.domain.com/v1/license/clearkey   # DASH org.w3.clearkey (omit to use manifest Laurl)
 
 # Base64 Widevine service certificate (enables privacy-mode license requests).
 certificate: null

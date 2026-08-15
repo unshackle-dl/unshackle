@@ -9,6 +9,16 @@ from unshackle.core.utilities import sanitize_filename
 log = logging.getLogger(__name__)
 
 
+def detect_spacer(template: str) -> str:
+    """Dot or space, whichever the template uses between its variables.
+
+    Falls back to a dot (scene style) when the template has nothing between two
+    variables, such as a folder path segment with only one variable.
+    """
+    separator_text = "".join(re.findall(r"\}([^{]*)\{", template))
+    return " " if separator_text.count(" ") > separator_text.count(".") else "."
+
+
 class TemplateFormatter:
     """
     Template formatter for custom filename patterns.
@@ -17,13 +27,17 @@ class TemplateFormatter:
     Example: '{title}.{year}.{quality?}.{source}-{tag}'
     """
 
-    def __init__(self, template: str):
+    def __init__(self, template: str, spacer: str | None = None):
         """Initialize the template formatter.
 
         Args:
             template: Template string with variables in {variable} format
+            spacer: Force a separator style instead of detecting it from `template`.
+                Folder paths pass the style of the whole path, so every segment is
+                spaced alike even when it holds a single variable.
         """
         self.template = template
+        self.spacer = spacer or detect_spacer(template)
         self.variables = self._extract_variables()
 
     def _extract_variables(self) -> list[str]:
@@ -95,24 +109,15 @@ class TemplateFormatter:
 
             # Clean up multiple consecutive dots/separators and other artifacts
             result = re.sub(r"\.{2,}", ".", result)  # Multiple dots -> single dot
-            result = re.sub(r"\s{2,}", " ", result)  # Multiple spaces -> single space
-            result = re.sub(r"-{2,}", "-", result)  # Multiple dashes -> single dash
-            result = re.sub(r"^[\.\s\-]+|[\.\s\-]+$", "", result)  # Remove leading/trailing dots, spaces, dashes
             result = re.sub(r"\.-", "-", result)  # Remove dots before dashes (for dot-based templates)
-            result = re.sub(r"[\.\s]+\)", ")", result)  # Remove dots/spaces before closing parentheses
-            result = re.sub(r"\(\s*\)", "", result)  # Remove empty parentheses (empty conditional)
+            result = re.sub(r"[\.\s]+([)\]])", r"\1", result)  # Remove dots/spaces before closing bracket
+            result = re.sub(r"\(\s*\)|\[\s*\]", "", result)  # Remove empty brackets (empty conditional)
+            # bracket removal is what creates neighbouring separators, so collapse after it
+            result = re.sub(r"\s{2,}", " ", result)  # Multiple spaces -> single space
+            result = re.sub(r"(?:-\s*)+-", "-", result)  # Multiple dashes (with optional spaces) -> single dash
+            result = re.sub(r"^[\.\s\-]+|[\.\s\-]+$", "", result)  # Remove leading/trailing dots, spaces, dashes
 
-            # Determine the appropriate separator based on template style
-            # Count separator characters between variables (between } and {)
-            between_vars = re.findall(r"\}([^{]*)\{", self.template)
-            separator_text = "".join(between_vars)
-            dot_count = separator_text.count(".")
-            space_count = separator_text.count(" ")
-
-            if space_count > dot_count:
-                result = sanitize_filename(result, spacer=" ")
-            else:
-                result = sanitize_filename(result, spacer=".")
+            result = sanitize_filename(result, spacer=self.spacer)
 
             if not result or result.isspace():
                 log.warning("Template formatting resulted in empty filename, using fallback")

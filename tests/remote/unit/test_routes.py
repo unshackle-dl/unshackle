@@ -11,7 +11,8 @@ import pytest
 from aiohttp import web
 
 from unshackle.core.api.compression import compression_middleware
-from unshackle.core.api.routes import cors_middleware, setup_routes
+from unshackle.core.api.errors import APIError, APIErrorCode
+from unshackle.core.api.routes import api_handler, cors_middleware, setup_routes
 
 pytestmark = pytest.mark.unit
 
@@ -88,10 +89,44 @@ def test_setup_routes_remote_only_excludes_list_and_download(make_app) -> None:
     assert ("POST", "/api/list-tracks") not in paths
     assert ("POST", "/api/download") not in paths
     assert ("GET", "/api/download/jobs") not in paths
-    # session endpoints still present
-    assert ("POST", "/api/session/create") in paths
-    assert ("GET", "/api/session/{session_id}/titles") in paths
-    assert ("POST", "/api/session/{session_id}/license") in paths
+    # The full remote subset is still registered after the single-table collapse.
+    remote_subset = {
+        ("GET", "/api/health"),
+        ("GET", "/api/services"),
+        ("POST", "/api/search"),
+        ("POST", "/api/session/create"),
+        ("GET", "/api/session/{session_id}/titles"),
+        ("POST", "/api/session/{session_id}/tracks"),
+        ("POST", "/api/session/{session_id}/segments"),
+        ("POST", "/api/session/{session_id}/license"),
+        ("GET", "/api/session/{session_id}/prompt"),
+        ("POST", "/api/session/{session_id}/prompt"),
+        ("GET", "/api/session/{session_id}"),
+        ("DELETE", "/api/session/{session_id}"),
+    }
+    assert remote_subset.issubset(paths)
+
+
+async def test_api_handler_maps_apierror(aiohttp_client) -> None:
+    """The error wrapper turns a raised APIError into the same structured response
+    the per-handler except blocks produced (status + code from APIError)."""
+
+    @api_handler
+    async def boom(request: web.Request) -> web.Response:
+        raise APIError(APIErrorCode.NOT_FOUND, "nope", details={"x": 1})
+
+    app = web.Application()
+    app["debug_api"] = False
+    app.router.add_get("/boom", boom)
+    client = await aiohttp_client(app)
+
+    resp = await client.get("/boom")
+    assert resp.status == 404  # NOT_FOUND -> 404 per errors.APIError._default_http_status
+    body = await resp.json()
+    assert body["status"] == "error"
+    assert body["error_code"] == "NOT_FOUND"
+    assert body["message"] == "nope"
+    assert body["details"] == {"x": 1}
 
 
 async def test_cors_preflight_returns_headers(make_app, aiohttp_client) -> None:

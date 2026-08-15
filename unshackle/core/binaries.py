@@ -34,28 +34,44 @@ def find(*names: str) -> Optional[Path]:
     return None
 
 
-FFMPEG = find("ffmpeg")
-FFProbe = find("ffprobe")
-FFPlay = find("ffplay")
-SubtitleEdit = find("SubtitleEdit")
-ShakaPackager = find(
-    "shaka-packager",
-    "packager",
-    f"packager-{__shaka_platform}",
-    f"packager-{__shaka_platform}-arm64",
-    f"packager-{__shaka_platform}-x64",
-)
-CCExtractor = find("ccextractor", "ccextractorwin", "ccextractorwinfull")
-HolaProxy = find("hola-proxy")
-MPV = find("mpv")
-Caddy = find("caddy")
-MKVToolNix = find("mkvmerge")
-Mkvpropedit = find("mkvpropedit")
-DoviTool = find("dovi_tool")
-HDR10PlusTool = find("hdr10plus_tool", "HDR10Plus_tool")
-Mp4decrypt = find("mp4decrypt")
-Docker = find("docker")
-ML_Worker = find("ML-Worker")
+# Binary attribute -> candidate names passed to find(). Resolved lazily on first
+# attribute access (see __getattr__) to avoid ~500ms of shutil.which PATH scans at import.
+__binaries = {
+    "FFMPEG": ("ffmpeg",),
+    "FFProbe": ("ffprobe",),
+    "FFPlay": ("ffplay",),
+    # seconv = SubtitleEdit 5+ CLI (the 5.0 GUI has no batch mode); SubtitleEdit = 4.x
+    "SubtitleEdit": ("seconv", "SubtitleEdit"),
+    "ShakaPackager": (
+        "shaka-packager",
+        "packager",
+        f"packager-{__shaka_platform}",
+        f"packager-{__shaka_platform}-arm64",
+        f"packager-{__shaka_platform}-x64",
+    ),
+    "CCExtractor": ("ccextractor", "ccextractorwin", "ccextractorwinfull"),
+    "HolaProxy": ("hola-proxy",),
+    "MPV": ("mpv",),
+    "Caddy": ("caddy",),
+    "MKVToolNix": ("mkvmerge",),
+    "Mkvpropedit": ("mkvpropedit",),
+    "DoviTool": ("dovi_tool",),
+    "HDR10PlusTool": ("hdr10plus_tool", "HDR10Plus_tool"),
+    "Mp4decrypt": ("mp4decrypt",),
+    "Docker": ("docker",),
+    "ML_Worker": ("ML-Worker",),
+    "Git": ("git",),
+}
+
+
+def __getattr__(name: str) -> Optional[Path]:
+    candidates = __binaries.get(name)
+    if candidates is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    # Cache the result (including None for an absent binary) so later access is a plain attr hit.
+    resolved = find(*candidates)
+    globals()[name] = resolved
+    return resolved
 
 
 __all__ = (
@@ -75,5 +91,6 @@ __all__ = (
     "Mp4decrypt",
     "Docker",
     "ML_Worker",
+    "Git",
     "find",
 )

@@ -154,7 +154,11 @@ class Audio(Track):
     @property
     def atmos(self) -> bool:
         """Return True if the audio track contains Dolby Atmos."""
-        return bool(self.joc)
+        if self.joc:
+            return True
+        if isinstance(self.extra, dict):
+            return bool(self.extra.get("atmos") or self.extra.get("joc"))
+        return False
 
     def __str__(self) -> str:
         return " | ".join(

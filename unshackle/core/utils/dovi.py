@@ -13,11 +13,12 @@ re-implement subprocess plumbing per call site. Each wrapper:
 from __future__ import annotations
 
 import subprocess
+import time
 from pathlib import Path
 from typing import Optional
 
 from unshackle.core import binaries
-from unshackle.core.utils.subprocess import run_step
+from unshackle.core.utils.subprocess import log_tool_run, run_step
 
 
 def _require_dovi_tool() -> str:
@@ -82,7 +83,16 @@ def editor(
 def info_summary(rpu: Path) -> str:
     """Return the textual summary (`dovi_tool info -i ... -s`) for an RPU file."""
     tool = _require_dovi_tool()
-    p = subprocess.run([tool, "info", "-i", str(rpu), "-s"], capture_output=True, text=True)
+    info_start = time.monotonic()
+    p = subprocess.run(
+        [tool, "info", "-i", str(rpu), "-s"], capture_output=True, text=True, encoding="utf-8", errors="replace"
+    )
+    log_tool_run(
+        "dovi_tool info",
+        "dovi_tool",
+        p.returncode,
+        duration_ms=round((time.monotonic() - info_start) * 1000, 1),
+    )
     if p.returncode != 0:
         raise RuntimeError(f"dovi_tool info failed: {(p.stderr or '')[-400:]}")
     return p.stdout

@@ -152,7 +152,9 @@ class CustomRemoteCDM:
         self.security_level = device.get("security_level", 3)
 
         # Determine if this is a PlayReady CDM
-        self._is_playready = self.device_type_str.upper() == "PLAYREADY" or self.device_name in ["SL2", "SL3"]
+        self._is_playready = self.device_type_str.upper() == "PLAYREADY" or (
+            bool(self.device_name) and self.device_name.upper().startswith("SL")
+        )
 
         # Get device type enum for compatibility
         if self.device_type_str:

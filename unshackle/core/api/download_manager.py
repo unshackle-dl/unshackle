@@ -7,6 +7,7 @@ import sys
 import tempfile
 import threading
 import uuid
+from collections import deque
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -14,12 +15,57 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from unshackle.core.api.sanitize import sanitize_log
+from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_text
+
 log = logging.getLogger("download_manager")
 
 
-def _sanitize_log(value: object) -> str:
-    """Sanitize a value for safe logging by removing newlines and control characters."""
-    return str(value).replace("\n", "").replace("\r", "").replace("\x00", "")
+# Job parameters may carry secrets (a raw "user:pass" credential, a proxy URL with embedded
+# userinfo). These must never leave the process via the API or logs, so they are masked
+# wherever parameters are serialized for a response.
+_SENSITIVE_PARAM_KEYS = ("credential", "credentials", "password", "token", "api_key")
+
+
+def _redact_parameters(parameters: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a copy of job parameters with secrets masked, safe to serialize."""
+    if not isinstance(parameters, dict):
+        return parameters
+    redacted = dict(parameters)
+    for key in _SENSITIVE_PARAM_KEYS:
+        if redacted.get(key):
+            redacted[key] = REDACTED
+    proxy = redacted.get("proxy")
+    if isinstance(proxy, str) and "@" in proxy:
+        redacted["proxy"] = URL_USERINFO_RE.sub(f"{REDACTED}@", proxy)
+    return redacted
+
+
+def _secret_values(parameters: Dict[str, Any]) -> List[str]:
+    """Raw secret strings carried in job parameters, longest first, for scrubbing free text."""
+    if not isinstance(parameters, dict):
+        return []
+    secrets: List[str] = []
+    for key in ("credential", "password", "token", "api_key"):
+        value = parameters.get(key)
+        if isinstance(value, str) and value:
+            secrets.append(value)
+            if key == "credential" and ":" in value:
+                password = value.split(":", 1)[1]
+                if len(password) >= 4:  # short passwords would blanket-replace and garble the text
+                    secrets.append(password)
+    creds = parameters.get("credentials")
+    if isinstance(creds, dict):
+        secrets.extend(v for v in creds.values() if isinstance(v, str) and v)
+    elif isinstance(creds, str) and creds:
+        secrets.append(creds)
+    return sorted(set(secrets), key=len, reverse=True)  # longest first so substrings don't survive
+
+
+def _redact_text(text: Optional[str], parameters: Dict[str, Any]) -> Optional[str]:
+    """Mask proxy userinfo and any known parameter secrets that leaked into a free-text field
+    (error message / details / traceback / worker stderr) before it is returned via the API."""
+    return redact_text(text, _secret_values(parameters))
 
 
 class JobStatus(Enum):
@@ -28,6 +74,10 @@ class JobStatus(Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+
+
+# Statuses a job can never leave; such jobs are safe to remove or retry.
+TERMINAL_STATUSES = (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED)
 
 
 @dataclass
@@ -54,8 +104,31 @@ class DownloadJob:
     error_traceback: Optional[str] = None
     worker_stderr: Optional[str] = None
 
+    # Current phase, track counts, and labels of the tracks downloading now.
+    phase: Optional[str] = None
+    title: Optional[str] = None
+    current_title: Optional[str] = None
+    completed_tracks: int = 0
+    total_tracks: int = 0
+    active_tracks: List[str] = field(default_factory=list)
+    track_progress: List[Dict[str, Any]] = field(default_factory=list)
+    # Segment counts and transfer speed of the track downloading now (granular display)
+    segments_done: float = 0.0
+    segments_total: float = 0.0
+    speed: Optional[str] = None
+
+    # Subtitles skipped under skip_subtitle_errors (non-fatal). Each entry is a dl.SkippedSubtitle
+    # dict (id / language / title) so a client can report which weren't available.
+    skipped_subtitles: List[Dict[str, Any]] = field(default_factory=list)
+
     # Cancellation support
     cancel_event: threading.Event = field(default_factory=threading.Event)
+
+    # Guards against writing the same job to the persistent history file twice.
+    history_recorded: bool = False
+
+    # X-Secret-Key that created the job; scopes per-caller access, never serialized into to_dict().
+    owner_key: Optional[str] = None
 
     def to_dict(self, include_full_details: bool = False) -> Dict[str, Any]:
         """Convert job to dictionary for JSON response."""
@@ -65,25 +138,164 @@ class DownloadJob:
             "created_time": self.created_time.isoformat(),
             "service": self.service,
             "title_id": self.title_id,
+            "title": self.title,
             "progress": self.progress,
+            "phase": self.phase,
+            "current_title": self.current_title,
+            "completed_tracks": self.completed_tracks,
+            "total_tracks": self.total_tracks,
+            "active_tracks": self.active_tracks,
+            "track_progress": self.track_progress,
+            "segments_done": self.segments_done,
+            "segments_total": self.segments_total,
+            "speed": self.speed,
+            "skipped_subtitles": self.skipped_subtitles,
         }
 
         if include_full_details:
+            # Error/stderr/traceback are free text a service may have echoed a credential or proxy
+            # URL into, so scrub them with the same secrets that _redact_parameters masks.
             result.update(
                 {
-                    "parameters": self.parameters,
+                    "parameters": _redact_parameters(self.parameters),
                     "started_time": self.started_time.isoformat() if self.started_time else None,
                     "completed_time": self.completed_time.isoformat() if self.completed_time else None,
                     "output_files": self.output_files,
-                    "error_message": self.error_message,
-                    "error_details": self.error_details,
+                    "error_message": _redact_text(self.error_message, self.parameters),
+                    "error_details": _redact_text(self.error_details, self.parameters),
                     "error_code": self.error_code,
-                    "error_traceback": self.error_traceback,
-                    "worker_stderr": self.worker_stderr,
+                    "error_traceback": _redact_text(self.error_traceback, self.parameters),
+                    "worker_stderr": _redact_text(self.worker_stderr, self.parameters),
                 }
             )
 
         return result
+
+
+def _history_path() -> Path:
+    """Path of the persistent job history file (under the cache dir, kept out of the config/data tree)."""
+    from unshackle.core.config import config
+
+    return config.directories.cache / "api_history.jsonl"
+
+
+def _history_limit() -> int:
+    """Max history entries to retain (serve.history_limit, default 100; <= 0 means unlimited)."""
+    from unshackle.core.config import config
+
+    try:
+        return int((config.serve or {}).get("history_limit", 100))
+    except (TypeError, ValueError):
+        return 100
+
+
+def record_job_history(job: DownloadJob) -> None:
+    """Append a terminal job's summary as one JSON line to the history file (best effort)."""
+    if job.history_recorded or job.status not in TERMINAL_STATUSES:
+        return
+    job.history_recorded = True
+    entry = {
+        "job_id": job.job_id,
+        "service": job.service,
+        "title_id": job.title_id,
+        "title": job.title,
+        "status": job.status.value,
+        "created_time": job.created_time.isoformat(),
+        "completed_time": job.completed_time.isoformat() if job.completed_time else None,
+        "output_files": job.output_files,
+        "parameters": _redact_parameters(job.parameters),
+        "error_message": _redact_text(job.error_message, job.parameters),
+    }
+    try:
+        path = _history_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        line = json.dumps(entry)
+        limit = _history_limit()
+        # Serialized on the manager's event loop, so read-append-trim doesn't race.
+        if limit > 0 and path.exists():
+            existing = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+            existing.append(line)
+            path.write_text("\n".join(existing[-limit:]) + "\n", encoding="utf-8")  # keep newest N
+        else:
+            with open(path, "a", encoding="utf-8") as handle:
+                handle.write(line + "\n")
+    except OSError as e:
+        log.warning(f"Could not write job history: {e}")
+
+
+def read_job_history(limit: int = 100, service: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Read persisted job history, newest first; corrupt lines are skipped, missing file = empty."""
+    path = _history_path()
+    if not path.exists():
+        return []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as e:
+        log.warning(f"Could not read job history: {e}")
+        return []
+    entries: List[Dict[str, Any]] = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(entry, dict):
+            continue
+        if service and str(entry.get("service") or "").upper() != service.upper():
+            continue
+        entries.append(entry)
+    entries.reverse()  # newest first
+    return entries[:limit] if limit and limit > 0 else entries
+
+
+def delete_job_history(job_id: str, allowed: Optional[set] = None) -> bool:
+    """Remove a history entry by job_id (rewriting the file). Returns True if one was deleted.
+
+    When `allowed` is given, an entry outside the caller's service allowlist is treated as
+    absent (returns False) so it can't be deleted by a restricted key.
+    """
+    path = _history_path()
+    if not path.exists():
+        return False
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as e:
+        log.warning(f"Could not read job history: {e}")
+        return False
+    kept: List[str] = []
+    deleted = False
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            entry = json.loads(stripped)
+        except json.JSONDecodeError:
+            kept.append(stripped)  # preserve corrupt lines untouched
+            continue
+        match = isinstance(entry, dict) and entry.get("job_id") == job_id
+        if match and (allowed is None or str(entry.get("service") or "").upper() in allowed):
+            deleted = True
+            continue
+        kept.append(stripped)
+    if not deleted:
+        return False
+    try:
+        path.write_text("\n".join(kept) + ("\n" if kept else ""), encoding="utf-8")
+    except OSError as e:
+        log.warning(f"Could not write job history: {e}")
+        return False
+    return True
+
+
+def to_enum(values: List[str], enum_cls: type[Enum]) -> List[Enum]:
+    """Map case-insensitive strings (by member name or value) to enum members, dropping unknowns."""
+    lookup = {m.name.upper(): m for m in enum_cls}
+    lookup.update({str(m.value).upper(): m for m in enum_cls})
+    return [lookup[v.upper()] for v in values if v.upper() in lookup]
 
 
 def _perform_download(
@@ -91,25 +303,19 @@ def _perform_download(
     service: str,
     title_id: str,
     params: Dict[str, Any],
-    cancel_event: Optional[threading.Event] = None,
     progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
 ) -> List[str]:
     """Execute the synchronous download logic for a job."""
 
-    def _check_cancel(stage: str):
-        if cancel_event and cancel_event.is_set():
-            raise Exception(f"Job was cancelled {stage}")
-
     from contextlib import redirect_stderr, redirect_stdout
     from io import StringIO
-
-    _check_cancel("before execution started")
 
     # Import dl.py components lazily to avoid circular deps during module import
     import click
     import yaml
 
     from unshackle.commands.dl import dl
+    from unshackle.core.api.errors import APIError, APIErrorCode
     from unshackle.core.config import config
     from unshackle.core.services import Services
     from unshackle.core.tracks import Subtitle, Video
@@ -118,15 +324,25 @@ def _perform_download(
 
     log.info(f"Starting sync download for job {job_id}")
 
+    # A service caches tokens under cache/<Service>/, keyed by service name only, so two jobs on
+    # one service with different credentials would share a cache. When a per-job credential is set,
+    # namespace the cache dir by a hash of it so the sessions can't cross.
+    job_credential = params.get("credential")
+    if job_credential:
+        import hashlib
+
+        cred_hash = hashlib.pbkdf2_hmac("sha256", job_credential.encode("utf-8"), b"unshackle-job-ns", 100_000).hex()[
+            :12
+        ]
+        config.directories.cache = config.directories.cache / "_jobs" / cred_hash
+
     # Convert string parameters to enums (API receives strings, dl.result() expects enums)
     vcodec_raw = params.get("vcodec")
     if vcodec_raw:
         if isinstance(vcodec_raw, str):
             vcodec_raw = [vcodec_raw]
         if isinstance(vcodec_raw, list) and vcodec_raw and not isinstance(vcodec_raw[0], Video.Codec):
-            codec_map = {c.name.upper(): c for c in Video.Codec}
-            codec_map.update({c.value.upper(): c for c in Video.Codec})
-            params["vcodec"] = [codec_map[v.upper()] for v in vcodec_raw if v.upper() in codec_map]
+            params["vcodec"] = to_enum(vcodec_raw, Video.Codec)
     else:
         params["vcodec"] = []
 
@@ -135,17 +351,14 @@ def _perform_download(
         if isinstance(range_raw, str):
             range_raw = [range_raw]
         if isinstance(range_raw, list) and range_raw and not isinstance(range_raw[0], Video.Range):
-            range_map = {r.name.upper(): r for r in Video.Range}
-            range_map.update({r.value.upper(): r for r in Video.Range})
-            params["range"] = [range_map[r.upper()] for r in range_raw if r.upper() in range_map]
+            params["range"] = to_enum(range_raw, Video.Range)
     else:
         params["range"] = [Video.Range.SDR]
 
     sub_format_raw = params.get("sub_format")
     if sub_format_raw and isinstance(sub_format_raw, str):
-        sub_map = {c.name.upper(): c for c in Subtitle.Codec}
-        sub_map.update({c.value.upper(): c for c in Subtitle.Codec})
-        params["sub_format"] = sub_map.get(sub_format_raw.upper())
+        mapped = to_enum([sub_format_raw], Subtitle.Codec)
+        params["sub_format"] = mapped[0] if mapped else None
 
     if params.get("export"):
         params["export"] = bool(params["export"])
@@ -174,7 +387,8 @@ def _perform_download(
         if isinstance(wanted_raw, str):
             wanted_raw = [wanted_raw]
         # Only convert if not already in internal "SxE" format
-        needs_conversion = any(not re.match(r"^\d+x\d+$", w) for w in wanted_raw)
+        # the !? keeps a pre-parsed part exclusion from being re-fed through parse_tokens
+        needs_conversion = any(not re.match(r"^!?\d+x\d+(\.\d+)?$", w) for w in wanted_raw)
         if needs_conversion:
             season_range = SeasonRange()
             params["wanted"] = season_range.parse_tokens(*wanted_raw)
@@ -204,12 +418,29 @@ def _perform_download(
         "tag": params.get("tag"),
         "tmdb_id": params.get("tmdb_id"),
         "imdb_id": params.get("imdb_id"),
-        "animeapi_id": params.get("animeapi_id"),
+        "tvdb_id": params.get("tvdb_id"),
+        "tvdb_order": params.get("tvdb_order"),
+        "anilist_id": params.get("anilist_id"),
         "enrich": params.get("enrich", False),
+        "daily": params.get("daily", False),
         "output_dir": Path(params["output_dir"]) if params.get("output_dir") else None,
         "no_cache": params.get("no_cache", False),
         "reset_cache": params.get("reset_cache", False),
+        # Track-selection params read by Service.__init__ via ctx.parent.params
+        "quality": params.get("quality", []),
+        "vcodec": params.get("vcodec", []),
+        "range_": params.get("range", [Video.Range.SDR]),
+        "best_available": params.get("best_available", False),
     }
+    # Hand-built context: record parameter sources so service dl overrides
+    # apply to defaults but never clobber client-sent values.
+    from click.core import ParameterSource
+
+    for param_name in ctx.params:
+        source_key = "range" if param_name == "range_" else param_name
+        ctx.set_parameter_source(
+            param_name, ParameterSource.COMMANDLINE if source_key in params else ParameterSource.DEFAULT
+        )
 
     dl_instance = dl(
         ctx=ctx,
@@ -220,14 +451,28 @@ def _perform_download(
         tag=params.get("tag"),
         tmdb_id=params.get("tmdb_id"),
         imdb_id=params.get("imdb_id"),
-        animeapi_id=params.get("animeapi_id"),
+        tvdb_id=params.get("tvdb_id"),
+        tvdb_order=params.get("tvdb_order"),
+        anilist_id=params.get("anilist_id"),
         enrich=params.get("enrich", False),
+        daily=params.get("daily", False),
         output_dir=Path(params["output_dir"]) if params.get("output_dir") else None,
     )
+    # Per-request CDM override (a device name in the WVDs dir); get_cdm() takes it first.
+    if params.get("cdm"):
+        dl_instance.cdm_override = params["cdm"]
+
+    # Per-request credential ("user:pass"); feed it into the map get_credentials() reads so a
+    # client can authenticate without anything being persisted to disk. Without a profile,
+    # get_credentials() falls back to "default", so store it there too rather than dropping it
+    # (which would silently authenticate as the server's own default account).
+    if params.get("credential"):
+        svc_creds = config.credentials.get(service)
+        if not isinstance(svc_creds, dict):
+            config.credentials[service] = svc_creds = {}
+        svc_creds[params.get("profile") or "default"] = params["credential"]
 
     service_module = Services.load(service)
-
-    _check_cancel("before service instantiation")
 
     try:
         import inspect
@@ -266,36 +511,11 @@ def _perform_download(
 
     original_download_dir = config.directories.downloads
 
-    _check_cancel("before download execution")
-
     stdout_capture = StringIO()
     stderr_capture = StringIO()
 
-    # Simple progress tracking if callback provided
-    if progress_callback:
-        # Report initial progress
-        progress_callback({"progress": 0.0, "status": "starting"})
-
-        # Simple approach: report progress at key points
-        original_result = dl_instance.result
-
-        def result_with_progress(*args, **kwargs):
-            try:
-                # Report that download started
-                progress_callback({"progress": 5.0, "status": "downloading"})
-
-                # Call original method
-                result = original_result(*args, **kwargs)
-
-                # Report completion
-                progress_callback({"progress": 100.0, "status": "completed"})
-                return result
-            except Exception as e:
-                progress_callback({"progress": 0.0, "status": "failed", "error": str(e)})
-                raise
-
-        dl_instance.result = result_with_progress
-
+    # progress_sink (dl.build_job_progress_callables) owns percentage; terminal status
+    # (success/failure) is reported by the worker's result file.
     try:
         with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
             dl_instance.result(
@@ -319,6 +539,7 @@ def _perform_download(
                 s_lang=params.get("s_lang", ["all"]),
                 require_subs=params.get("require_subs", []),
                 forced_subs=params.get("forced_subs", False),
+                forced_s_lang=params.get("forced_s_lang", []),
                 exact_lang=params.get("exact_lang", False),
                 sub_format=params.get("sub_format"),
                 video_only=params.get("video_only", False),
@@ -326,6 +547,7 @@ def _perform_download(
                 subs_only=params.get("subs_only", False),
                 chapters_only=params.get("chapters_only", False),
                 no_subs=params.get("no_subs", False),
+                skip_subtitle_errors=params.get("skip_subtitle_errors", False),
                 no_audio=params.get("no_audio", False),
                 no_chapters=params.get("no_chapters", False),
                 no_video=params.get("no_video", False),
@@ -346,6 +568,7 @@ def _perform_download(
                 worst=params.get("worst", False),
                 best_available=params.get("best_available", False),
                 split_audio=params.get("split_audio"),
+                progress_sink=progress_callback,
             )
 
     except SystemExit as exc:
@@ -355,7 +578,7 @@ def _perform_download(
             log.error(f"Download exited with code {exc.code}")
             log.error(f"Stdout: {stdout_str}")
             log.error(f"Stderr: {stderr_str}")
-            raise Exception(f"Download failed with exit code {exc.code}")
+            raise APIError(APIErrorCode.DOWNLOAD_ERROR, f"Download failed with exit code {exc.code}")
 
     except Exception as exc:  # noqa: BLE001 - propagate to caller
         stdout_str = stdout_capture.getvalue()
@@ -364,6 +587,18 @@ def _perform_download(
         log.error(f"Stdout: {stdout_str}")
         log.error(f"Stderr: {stderr_str}")
         raise
+
+    # dl.result() catches a download-worker exception, reports it, but returns normally (exit 0).
+    # It sets download_failed in that case, so the job isn't reported as completed with no output.
+    if getattr(dl_instance, "download_failed", False):
+        detail = (stdout_capture.getvalue() + stderr_capture.getvalue())[-200:].strip()
+        raise APIError(APIErrorCode.WORKER_ERROR, "download worker failed: " + (detail or "see logs"))
+
+    # Surface any subtitles that were skipped (non-fatal failures) so the client can report them.
+    if progress_callback:
+        skipped_subs = getattr(dl_instance, "skipped_subtitles", None)
+        if skipped_subs:
+            progress_callback({"skipped_subtitles": list(skipped_subs)})
 
     output_files = [str(p) for p in dl_instance.completed_files]
     log.info(f"Download completed for job {job_id}, {len(output_files)} file(s) in {original_download_dir}")
@@ -380,17 +615,21 @@ class DownloadQueueManager:
 
         self._jobs: Dict[str, DownloadJob] = {}
         self._job_queue: asyncio.Queue = asyncio.Queue()
+        # asyncio.Queue has no reorder, so prioritized jobs go in a deque workers drain first.
+        self._priority_jobs: deque = deque()
+        self._promoted_ids: set = set()  # their stale FIFO-queue copies get skipped via this set
         self._active_downloads: Dict[str, asyncio.Task] = {}
         self._download_processes: Dict[str, asyncio.subprocess.Process] = {}
         self._job_temp_files: Dict[str, Dict[str, str]] = {}
         self._workers_started = False
         self._shutdown_event = asyncio.Event()
+        self._subscribers: Dict[str, List[asyncio.Queue]] = {}
 
         log.info(
             f"Initialized download queue manager: max_concurrent={max_concurrent_downloads}, retention_hours={job_retention_hours}"
         )
 
-    def create_job(self, service: str, title_id: str, **parameters) -> DownloadJob:
+    def create_job(self, service: str, title_id: str, owner_key: Optional[str] = None, **parameters) -> DownloadJob:
         """Create a new download job and add it to the queue."""
         job_id = str(uuid.uuid4())
         job = DownloadJob(
@@ -400,12 +639,13 @@ class DownloadQueueManager:
             service=service,
             title_id=title_id,
             parameters=parameters,
+            owner_key=owner_key,
         )
 
         self._jobs[job_id] = job
         self._job_queue.put_nowait(job)
 
-        log.info(f"Created download job {job_id} for {_sanitize_log(service)}:{_sanitize_log(title_id)}")
+        log.info(f"Created download job {job_id} for {sanitize_log(service)}:{sanitize_log(title_id)}")
         return job
 
     def get_job(self, job_id: str) -> Optional[DownloadJob]:
@@ -416,6 +656,48 @@ class DownloadQueueManager:
         """List all jobs."""
         return list(self._jobs.values())
 
+    def subscribe(self, job_id: str) -> asyncio.Queue:
+        """Register a listener for a job's events, returning the queue it receives them on."""
+        queue: asyncio.Queue = asyncio.Queue(maxsize=100)
+        self._subscribers.setdefault(job_id, []).append(queue)
+        return queue
+
+    def unsubscribe(self, job_id: str, queue: asyncio.Queue) -> None:
+        """Drop a listener registered by subscribe()."""
+        queues = self._subscribers.get(job_id)
+        if not queues:
+            return
+        with suppress(ValueError):
+            queues.remove(queue)
+        if not queues:
+            del self._subscribers[job_id]
+
+    def _publish(self, job: DownloadJob, event: str) -> None:
+        """Fan an event carrying the job's full detail dict out to every listener."""
+        queues = self._subscribers.get(job.job_id)
+        if not queues:
+            return
+        payload = {"event": event, "data": job.to_dict(include_full_details=True)}
+        for queue in queues:
+            self._put(queue, payload)
+
+    def _publish_terminal(self, job: DownloadJob) -> None:
+        """Publish a job's final state, then close every listener's stream."""
+        self._publish(job, job.status.value)
+        for queue in self._subscribers.pop(job.job_id, []):
+            self._put(queue, None)
+
+    @staticmethod
+    def _put(queue: asyncio.Queue, item: Optional[Dict[str, Any]]) -> None:
+        """Enqueue an item, discarding the oldest when a slow listener has filled the queue."""
+        try:
+            queue.put_nowait(item)
+        except asyncio.QueueFull:
+            with suppress(asyncio.QueueEmpty):
+                queue.get_nowait()
+            with suppress(asyncio.QueueFull):
+                queue.put_nowait(item)
+
     def cancel_job(self, job_id: str) -> bool:
         """Cancel a job if it's queued or downloading."""
         job = self._jobs.get(job_id)
@@ -425,31 +707,64 @@ class DownloadQueueManager:
         if job.status == JobStatus.QUEUED:
             job.status = JobStatus.CANCELLED
             job.cancel_event.set()  # Signal cancellation
-            log.info(f"Cancelled queued job {_sanitize_log(job_id)}")
+            job.completed_time = datetime.now()
+            record_job_history(job)  # queued jobs never reach a worker, so persist here
+            self._publish_terminal(job)
+            log.info(f"Cancelled queued job {sanitize_log(job_id)}")
             return True
         elif job.status == JobStatus.DOWNLOADING:
             # Set the cancellation event first - this will be checked by the download thread
             job.cancel_event.set()
             job.status = JobStatus.CANCELLED
-            log.info(f"Signaled cancellation for downloading job {_sanitize_log(job_id)}")
+            log.info(f"Signaled cancellation for downloading job {sanitize_log(job_id)}")
 
             # Cancel the active download task
             task = self._active_downloads.get(job_id)
             if task:
                 task.cancel()
-                log.info(f"Cancelled download task for job {_sanitize_log(job_id)}")
+                log.info(f"Cancelled download task for job {sanitize_log(job_id)}")
 
             process = self._download_processes.get(job_id)
             if process:
                 try:
                     process.terminate()
-                    log.info(f"Terminated worker process for job {_sanitize_log(job_id)}")
+                    log.info(f"Terminated worker process for job {sanitize_log(job_id)}")
                 except ProcessLookupError:
-                    log.debug(f"Worker process for job {_sanitize_log(job_id)} already exited")
+                    log.debug(f"Worker process for job {sanitize_log(job_id)} already exited")
 
             return True
 
         return False
+
+    def remove_job(self, job_id: str) -> bool:
+        """Remove a terminal (completed/failed/cancelled) job entirely."""
+        job = self._jobs.get(job_id)
+        if not job or job.status not in TERMINAL_STATUSES:
+            return False
+        del self._jobs[job_id]
+        log.info(f"Removed job {sanitize_log(job_id)}")
+        return True
+
+    def clear_finished_jobs(self) -> int:
+        """Remove all terminal (completed/failed/cancelled) jobs, returning the count removed."""
+        finished = [job_id for job_id, job in self._jobs.items() if job.status in TERMINAL_STATUSES]
+        for job_id in finished:
+            del self._jobs[job_id]
+        if finished:
+            log.info(f"Cleared {len(finished)} finished jobs")
+        return len(finished)
+
+    def prioritize_job(self, job_id: str) -> bool:
+        """Move a queued job to the front of the line."""
+        job = self._jobs.get(job_id)
+        if not job or job.status != JobStatus.QUEUED:
+            return False
+        if job in self._priority_jobs:
+            return True
+        self._priority_jobs.append(job)
+        self._promoted_ids.add(job_id)
+        log.info(f"Moved job {sanitize_log(job_id)} to front of queue")
+        return True
 
     def cleanup_old_jobs(self) -> int:
         """Remove jobs older than retention period."""
@@ -492,6 +807,11 @@ class DownloadQueueManager:
         log.info("Shutting down download queue manager")
         self._shutdown_event.set()
 
+        for queues in list(self._subscribers.values()):
+            for queue in queues:
+                self._put(queue, None)
+        self._subscribers.clear()
+
         # Cancel all active downloads
         for task in self._active_downloads.values():
             task.cancel()
@@ -532,8 +852,15 @@ class DownloadQueueManager:
 
         while not self._shutdown_event.is_set():
             try:
-                # Wait for a job or shutdown signal
-                job = await asyncio.wait_for(self._job_queue.get(), timeout=1.0)
+                # Prioritized jobs run first; their stale copies still in the FIFO queue are skipped.
+                if self._priority_jobs:
+                    job = self._priority_jobs.popleft()
+                else:
+                    # Wait for a job or shutdown signal
+                    job = await asyncio.wait_for(self._job_queue.get(), timeout=1.0)
+                    if job.job_id in self._promoted_ids:
+                        self._promoted_ids.discard(job.job_id)
+                        continue
 
                 if job.status == JobStatus.CANCELLED:
                     continue
@@ -541,6 +868,7 @@ class DownloadQueueManager:
                 # Start processing the job
                 job.status = JobStatus.DOWNLOADING
                 job.started_time = datetime.now()
+                self._publish(job, "status")
 
                 log.info(f"Worker {worker_name} starting job {job.job_id}")
 
@@ -559,6 +887,8 @@ class DownloadQueueManager:
                     log.error(f"Job {job.job_id} failed: {e}")
                 finally:
                     job.completed_time = datetime.now()
+                    record_job_history(job)
+                    self._publish_terminal(job)
                     if job.job_id in self._active_downloads:
                         del self._active_downloads[job.job_id]
 
@@ -634,6 +964,7 @@ class DownloadQueueManager:
 
         stdout_bytes = b""
         stderr_bytes = b""
+        last_published: Optional[Dict[str, Any]] = None
 
         try:
             while True:
@@ -647,11 +978,40 @@ class DownloadQueueManager:
                     if os.path.exists(progress_path):
                         with open(progress_path, "r", encoding="utf-8") as handle:
                             progress_data = json.load(handle)
+                            if progress_data.get("phase") and progress_data["phase"] != job.phase:
+                                job.phase = progress_data["phase"]
+                            if progress_data.get("current_title"):
+                                job.current_title = str(progress_data["current_title"])
+                            if progress_data.get("title"):
+                                job.title = str(progress_data["title"])
+                            if progress_data.get("output_files"):
+                                job.output_files = [str(f) for f in progress_data["output_files"]]
+                            if progress_data.get("total_tracks"):
+                                job.total_tracks = int(progress_data["total_tracks"])
+                            if progress_data.get("completed_tracks") is not None:
+                                job.completed_tracks = int(progress_data["completed_tracks"])
+                            if "active_tracks" in progress_data:
+                                job.active_tracks = list(progress_data["active_tracks"])
+                            if "track_progress" in progress_data:
+                                job.track_progress = list(progress_data["track_progress"])
+                            for _sk in ("segments_done", "segments_total"):
+                                if _sk in progress_data:
+                                    try:
+                                        setattr(job, _sk, float(progress_data[_sk]))
+                                    except (TypeError, ValueError):
+                                        pass
+                            if progress_data.get("speed"):
+                                job.speed = str(progress_data["speed"])
+                            if progress_data.get("skipped_subtitles"):
+                                job.skipped_subtitles = progress_data["skipped_subtitles"]
                             if "progress" in progress_data:
                                 new_progress = float(progress_data["progress"])
                                 if new_progress != job.progress:
                                     job.progress = new_progress
                                     log.info(f"Job {job.job_id} progress updated: {job.progress}%")
+                            if progress_data != last_published:
+                                last_published = progress_data
+                                self._publish(job, "progress")
                 except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
                     log.debug(f"Could not read progress for job {job.job_id}: {e}")
 
@@ -670,14 +1030,18 @@ class DownloadQueueManager:
             stdout = stdout_bytes.decode("utf-8", errors="ignore")
             stderr = stderr_bytes.decode("utf-8", errors="ignore")
 
+            # A service can echo a credential or a proxy URL into its output, so scrub it before
+            # it reaches the log as well, not only the API response.
+            safe_stdout = _redact_text(stdout.strip(), job.parameters)
+            safe_stderr = _redact_text(stderr.strip(), job.parameters)
             if stdout.strip():
-                log.debug(f"Worker stdout for job {job.job_id}: {stdout.strip()}")
+                log.debug(f"Worker stdout for job {job.job_id}: {safe_stdout}")
             if stderr.strip():
                 job.worker_stderr = stderr.strip()
                 if returncode != 0:
-                    log.warning(f"Worker stderr for job {job.job_id}: {stderr.strip()}")
+                    log.warning(f"Worker stderr for job {job.job_id}: {safe_stderr}")
                 else:
-                    log.debug(f"Worker stderr for job {job.job_id}: {stderr.strip()}")
+                    log.debug(f"Worker stderr for job {job.job_id}: {safe_stderr}")
 
             result_data: Optional[Dict[str, Any]] = None
             try:
@@ -718,10 +1082,6 @@ class DownloadQueueManager:
                     os.remove(path)
                 except OSError:
                     pass
-
-    def _execute_download_sync(self, job: DownloadJob) -> List[str]:
-        """Execute download synchronously using existing dl.py logic."""
-        return _perform_download(job.job_id, job.service, job.title_id, job.parameters.copy(), job.cancel_event)
 
     async def _cleanup_worker(self):
         """Worker that periodically cleans up old jobs."""

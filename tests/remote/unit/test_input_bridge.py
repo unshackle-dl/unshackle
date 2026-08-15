@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from unshackle.core.api.input_bridge import AuthStatus, BridgeCancelledError, InputBridge
+from unshackle.core.api.input_bridge import AuthStatus, InputBridge
 
 pytestmark = pytest.mark.unit
 
@@ -16,7 +16,6 @@ def test_initial_status_is_authenticating() -> None:
     bridge = InputBridge()
     assert bridge.status is AuthStatus.AUTHENTICATING
     assert bridge.get_pending_prompt() is None
-    assert bridge.error is None
 
 
 def test_submit_response_returns_false_when_no_prompt_pending() -> None:
@@ -49,16 +48,15 @@ def test_request_input_blocks_until_submit() -> None:
 
 def test_request_input_times_out() -> None:
     bridge = InputBridge()
-    with pytest.raises(TimeoutError):
+    with pytest.raises(TimeoutError, match="No client response"):
         bridge.request_input("hello", timeout=0.6)
     assert bridge.status is AuthStatus.FAILED
-    assert "timed out" in (bridge.error or "")
 
 
 def test_cancel_before_request_raises_immediately() -> None:
     bridge = InputBridge()
     bridge.cancel()
-    with pytest.raises(BridgeCancelledError):
+    with pytest.raises(RuntimeError, match="cancelled"):
         bridge.request_input("hello", timeout=5)
     assert bridge.status is AuthStatus.FAILED
 
@@ -70,7 +68,7 @@ def test_cancel_unblocks_pending_request() -> None:
     def worker() -> None:
         try:
             bridge.request_input("OTP?", timeout=5)
-        except BridgeCancelledError as e:
+        except RuntimeError as e:
             exc.append(e)
 
     t = threading.Thread(target=worker)
@@ -82,7 +80,7 @@ def test_cancel_unblocks_pending_request() -> None:
 
     bridge.cancel()
     t.join(timeout=2)
-    assert exc and isinstance(exc[0], BridgeCancelledError)
+    assert exc and isinstance(exc[0], RuntimeError)
     assert bridge.status is AuthStatus.FAILED
 
 
@@ -92,9 +90,7 @@ def test_get_pending_prompt_returns_none_outside_pending_state() -> None:
     assert bridge.get_pending_prompt() is None
 
 
-def test_status_and_error_setters() -> None:
+def test_status_setter() -> None:
     bridge = InputBridge()
     bridge.status = AuthStatus.AUTHENTICATED
-    bridge.error = "boom"
     assert bridge.status is AuthStatus.AUTHENTICATED
-    assert bridge.error == "boom"

@@ -49,6 +49,43 @@ def multi_remote_services(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
+def test_resolve_server_default_auth_headers(single_remote_service) -> None:
+    _, _, services = resolve_server("primary")
+    assert services["_auth_headers"] == ["X-Secret-Key", "X-Api-Key"]
+
+
+def test_resolve_server_custom_auth_headers_extend_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    from unshackle.core import remote_service as rs
+
+    monkeypatch.setattr(
+        rs.config, "remote_services", {"p": {"url": "https://p:8080", "auth_headers": ["Authorization"]}}
+    )
+    _, _, services = resolve_server("p")
+    assert services["_auth_headers"] == ["Authorization", "X-Secret-Key", "X-Api-Key"]
+
+
+def test_resolve_server_auth_headers_dedup_is_case_insensitive(monkeypatch: pytest.MonkeyPatch) -> None:
+    from unshackle.core import remote_service as rs
+
+    monkeypatch.setattr(
+        rs.config,
+        "remote_services",
+        {"p": {"url": "https://p:8080", "auth_headers": ["Authorization", "x-secret-key"]}},
+    )
+    _, _, services = resolve_server("p")
+    assert services["_auth_headers"] == ["Authorization", "x-secret-key", "X-Api-Key"]
+
+
+@pytest.mark.parametrize("bad", ["X-Api-Key", [], [""], ["X-Api-Key", 3]])
+def test_resolve_server_bad_auth_headers_raises(monkeypatch: pytest.MonkeyPatch, bad: object) -> None:
+    from unshackle.core import remote_service as rs
+
+    monkeypatch.setattr(rs.config, "remote_services", {"p": {"url": "https://p:8080", "auth_headers": bad}})
+    with pytest.raises(click.ClickException) as exc:
+        resolve_server("p")
+    assert "auth_headers" in str(exc.value.message)
+
+
 def test_resolve_server_no_config_raises_click(empty_remote_services) -> None:
     with pytest.raises(click.ClickException) as exc:
         resolve_server(None)

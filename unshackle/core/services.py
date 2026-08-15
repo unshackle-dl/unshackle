@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import logging
 import re
 from pathlib import Path
@@ -8,18 +9,45 @@ import click
 
 from unshackle.core.config import config
 from unshackle.core.service import Service
+from unshackle.core.service_repo import DirtyServiceRepo, is_repo_spec, resolve_service_repo
 from unshackle.core.utilities import import_module_by_path
+from unshackle.core.utils.redact import redact_path
 
 log = logging.getLogger("services")
 
-_service_dirs = config.directories.services
-if not isinstance(_service_dirs, list):
-    _service_dirs = [_service_dirs]
+_raw = config.directories.services
+if not isinstance(_raw, list):
+    _raw = [_raw]
+# resolve in config order - priority IS list order: the first source to define a tag is the source,
+# later sources (local or repo) with the same tag are shadowed. List local last to make it a fallback.
+_service_dirs: list[Path] = []
+DIRTY_REPOS: list[str] = []
+for _entry in _raw:
+    if isinstance(_entry, str) and is_repo_spec(_entry):
+        try:
+            _resolved = resolve_service_repo(_entry)
+        except DirtyServiceRepo as e:
+            # local edits in the clone - record it and let check_load_errors() exit cleanly
+            DIRTY_REPOS.append(redact_path(str(e.path)))
+            _resolved = None
+        if _resolved:
+            _service_dirs.append(_resolved)
+    else:
+        _service_dirs.append(Path(_entry))
 
-_SERVICES = sorted(
-    (path for service_dir in _service_dirs for path in service_dir.glob("*/__init__.py")),
-    key=lambda x: x.parent.stem,
-)
+# dedupe by tag honoring list order (first wins); track shadows for the load summary
+_seen: dict[str, Path] = {}
+SHADOWED: list[str] = []
+for _dir in _service_dirs:
+    for _path in _dir.glob("*/__init__.py"):
+        tag = _path.parent.stem
+        if tag in _seen:
+            SHADOWED.append(
+                f"{tag}: using {redact_path(str(_seen[tag]))}, ignoring duplicate {redact_path(str(_path))}"
+            )
+        else:
+            _seen[tag] = _path
+_SERVICES = sorted(_seen.values(), key=lambda x: x.parent.stem)
 
 
 def load_service(path: Path) -> object:
@@ -32,12 +60,12 @@ def load_service(path: Path) -> object:
     try:
         module = import_module_by_path(path)
     except Exception as e:
-        raise RuntimeError(f"{tag}: failed to import — {type(e).__name__}: {e} ({path})") from e
+        raise RuntimeError(f"{tag}: failed to import - {type(e).__name__}: {e} ({path})") from e
     try:
         return getattr(module, tag)
     except AttributeError as e:
         raise RuntimeError(
-            f"{tag}: no class named '{tag}' found in {path} — the class name must match the directory name"
+            f"{tag}: no class named '{tag}' found in {path} - the class name must match the directory name"
         ) from e
 
 
@@ -64,19 +92,39 @@ _MODULES, LOAD_ERRORS = load_services(_SERVICES)
 _ALIASES = {tag: getattr(module, "ALIASES", ()) for tag, module in _MODULES.items()}
 
 
+_SUMMARY_LOGGED = False
+
+
 def check_load_errors() -> None:
-    """Raise a single clean error if any Service failed to load.
+    """Log a one-line load summary (once) and raise a single clean error on failures.
 
     Called when services are actually needed (listing/resolving) so the message
     is rendered once by Click, without a traceback and without cascading through
-    every command that imports this module.
+    every command that imports this module. Duplicate services (a tag also served by an
+    earlier, higher-priority source, which is ignored) are summarised here; the full
+    list - naming the path used and the duplicate ignored - is debug-only.
     """
+    if DIRTY_REPOS:
+        joined = "\n".join(f"  - {p}" for p in DIRTY_REPOS)
+        raise click.ClickException(
+            "Service repo has local changes - refusing to refresh so your edits are not lost.\n"
+            "Commit and push them to the upstream repo (or revert them), then retry:\n" + joined
+        )
+    global _SUMMARY_LOGGED
+    if not _SUMMARY_LOGGED:
+        _SUMMARY_LOGGED = True
+        summary = f"Loaded {len(_MODULES)} services"
+        if SHADOWED:
+            summary += f" ({len(SHADOWED)} duplicate(s) ignored)"
+        log.info(summary)
+        for shadow in SHADOWED:
+            log.debug("%s", shadow)
     if LOAD_ERRORS:
         joined = "\n".join(f"  - {err}" for err in LOAD_ERRORS)
         raise click.ClickException(f"Failed to load {len(LOAD_ERRORS)} service(s):\n{joined}")
 
 
-class Services(click.MultiCommand):
+class Services(click.Group):
     """Lazy-loaded command group of project services."""
 
     _remote_services_cache: list[dict] | None = None
@@ -144,9 +192,27 @@ class Services(click.MultiCommand):
             raise click.ClickException(f"{e}. Available Services: {', '.join(available_services)}")
 
         if hasattr(service, "cli"):
-            return service.cli
+            cli = service.cli
+            cli.name = tag
+            doc = service.__doc__
+            if doc and doc.strip() and cli.help in (None, "", doc):
+                cli.help = Services._docstring_help(doc)
+            return cli
 
         raise click.ClickException(f"Service '{tag}' has no 'cli' method configured.")
+
+    @staticmethod
+    def _docstring_help(doc: str) -> str:
+        """Format a service docstring for Click help, one \\b per paragraph so Click keeps the layout.
+
+        The first paragraph stays unprefixed: it is the summary line, and a \\b there
+        renders as a stray blank line and empties click's derived short help.
+        """
+        doc = inspect.cleandoc(doc)
+        if "\b" in doc:
+            return doc
+        first, *rest = doc.split("\n\n")
+        return "\n\n".join([first] + [f"\b\n{p}" for p in rest])
 
     @staticmethod
     def _fetch_remote_services(ctx: click.Context) -> list[dict] | None:
@@ -157,11 +223,13 @@ class Services(click.MultiCommand):
             from unshackle.core.remote_service import RemoteClient, resolve_server
 
             server_name = ctx.params.get("server")
-            server_url, api_key, _ = resolve_server(server_name)
-            client = RemoteClient(server_url, api_key)
+            server_url, api_key, services_config = resolve_server(server_name)
+            client = RemoteClient(server_url, api_key, services_config.get("_auth_headers"))
             result = client.get("/api/services")
             Services._remote_services_cache = result.get("services", [])
             return Services._remote_services_cache
+        except click.ClickException:
+            raise
         except Exception:
             return None
 
@@ -170,9 +238,12 @@ class Services(click.MultiCommand):
         """Create a Click command for a remote service with server-provided options."""
         svc_info = Services._fetch_remote_service_info(tag, ctx)
         short_help = svc_info.get("url") if svc_info else None
+        help_text = svc_info.get("help") if svc_info else None
+        if help_text:
+            help_text = Services._docstring_help(help_text)
         cli_params = svc_info.get("cli_params") if svc_info else None
 
-        @click.command(name=tag, short_help=short_help)
+        @click.command(name=tag, short_help=short_help, help=help_text)
         @click.argument("title", type=str)
         @click.pass_context
         def remote_cli(ctx: click.Context, title: str, **kwargs: object) -> object:
@@ -251,7 +322,7 @@ class Services(click.MultiCommand):
     @staticmethod
     def get_tag(value: str) -> str:
         """
-        Get the Service Tag (e.g. DSNP, not DisneyPlus/Disney+, etc.) by an Alias.
+        Get the Service Tag (the name of the service's directory, not one of its aliases) by an Alias.
         Input value can be of any case-sensitivity.
         Original input value is returned if it did not match a service tag.
         """
@@ -273,6 +344,20 @@ class Services(click.MultiCommand):
             return module
 
         raise KeyError(f"There is no Service added by the Tag '{tag}'")
+
+    @staticmethod
+    def get_vault_tag(name: str) -> str:
+        """Resolve the key-vault namespace tag for a service.
+
+        Returns the service's VAULT_TAG override when set, otherwise its own tag.
+        Falls back to the resolved tag for non-local services (remote/import).
+        """
+        tag = Services.get_tag(name)
+        try:
+            service = Services.load(tag)
+        except KeyError:
+            return tag
+        return getattr(service, "VAULT_TAG", None) or tag
 
 
 __all__ = ("Services",)

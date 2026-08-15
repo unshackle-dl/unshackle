@@ -1,13 +1,14 @@
 """
-DV fixup for HLS composite HEVC streams.
+DV exposure for HLS composite HEVC streams.
 
 Some services deliver DV Profile 8.1 in a stream whose primary CODECS is plain
-hvc1, with DV advertised only via SUPPLEMENTAL-CODECS. The fMP4 carries DV RPU NALs but
-the container does not signal DV, so muxing produces an MKV that mediainfo and DV-capable
-TVs see as plain HDR10/HDR10+.
+hvc1, with DV advertised only via SUPPLEMENTAL-CODECS. The fMP4 carries valid DV RPU NALs
+but the container does not signal DV, so muxing the MP4 directly produces an MKV that
+mediainfo and DV-capable TVs see as plain HDR10/HDR10+.
 
-A dovi_tool extract-rpu / inject-rpu round-trip rewrites the bitstream so it is recognised
-as DV after muxing. HDR10+ SEI NALs and HDR10 base layer signaling survive untouched.
+The RPU is already valid — only the container's DV signaling is lost. Demuxing the
+elementary HEVC stream (ffmpeg -c:v copy) exposes the in-stream RPU to mkvmerge, which then
+signals DV in the muxed MKV. No dovi_tool extract/inject round-trip is needed.
 """
 
 from __future__ import annotations
@@ -19,11 +20,9 @@ from typing import TYPE_CHECKING
 from rich.padding import Padding
 from rich.rule import Rule
 
-from unshackle.core.binaries import FFMPEG, DoviTool
-from unshackle.core.config import config
+from unshackle.core.binaries import FFMPEG
 from unshackle.core.console import console
-from unshackle.core.utilities import get_debug_logger
-from unshackle.core.utils import dovi
+from unshackle.core.utilities import log_event
 from unshackle.core.utils.subprocess import run_step
 
 if TYPE_CHECKING:
@@ -31,72 +30,56 @@ if TYPE_CHECKING:
 
 
 class DVFixup:
-    """Round-trip a DV-composite HEVC track through dovi_tool to restore DV signaling."""
+    """Demux a DV-composite HEVC track to its elementary stream so mkvmerge exposes DV."""
 
     def __init__(self, video: "Video") -> None:
         self.log = logging.getLogger("dv-fixup")
-        self.debug_logger = get_debug_logger()
         self.video = video
 
-        if not DoviTool:
-            raise EnvironmentError("dovi_tool is required for DV-composite fixup but was not found.")
         if not FFMPEG:
             raise EnvironmentError("ffmpeg is required for DV-composite fixup but was not found.")
         if not video.path or not Path(video.path).exists():
             raise ValueError(f"Video track {video.id} was not downloaded before DV fixup.")
 
     def run(self) -> Path:
-        """Execute the fixup. Returns the DV-signaled HEVC path, or the original
-        source path on any failure so muxing can proceed with the as-downloaded file."""
+        """Demux the elementary HEVC so mkvmerge exposes its DV RPU. Returns the
+        elementary-stream path, or the original source on any failure so muxing can
+        proceed with the as-downloaded file."""
         source = Path(self.video.path)
         height = self.video.height or 0
         console.print(Padding(Rule(f"[rule.text]DV Composite Fixup ({height}p)"), (1, 2)))
 
         fixed_hevc = source.with_name(f"{self.video.id}.dv.hevc")
         if fixed_hevc.exists() and fixed_hevc.stat().st_size > 0:
-            self.log.info("✓ DV signaling already restored (reusing existing fixup)")
+            self.log.info("✓ DV signaling already exposed (reusing existing demux)")
             return fixed_hevc
-
-        tmp = config.directories.temp
-        tmp.mkdir(parents=True, exist_ok=True)
-        suffix = f"{self.video.id}_{height or 'na'}"
-        raw_hevc = tmp / f"dvfix_{suffix}.hevc"
-        rpu = tmp / f"dvfix_{suffix}_rpu.bin"
 
         try:
             run_step(
-                [FFMPEG, "-nostdin", "-y", "-i", source, "-c:v", "copy", "-f", "hevc", raw_hevc],
-                status="Demuxing HEVC bitstream...",
-                output=raw_hevc,
+                [FFMPEG, "-nostdin", "-y", "-i", source, "-c:v", "copy", "-f", "hevc", fixed_hevc],
+                status="Demuxing HEVC bitstream to expose DV...",
+                output=fixed_hevc,
                 label="ffmpeg demux",
             )
-            dovi.extract_rpu_with_fallback(raw_hevc, rpu)
-            dovi.inject_rpu(raw_hevc, rpu, fixed_hevc, status="Re-injecting DV RPU with proper signaling...")
         except Exception as e:
             self.log.warning(f"DV fixup failed ({e}); muxing source as-is.")
-            if self.debug_logger:
-                self.debug_logger.log(
-                    level="WARNING",
-                    operation="dv_fixup",
-                    message="DV fixup failed; falling back to source",
-                    context={"error": str(e), "source": str(source)},
-                )
-            for leftover in (raw_hevc, rpu, fixed_hevc):
-                leftover.unlink(missing_ok=True)
+            log_event(
+                "dv_fixup",
+                level="WARNING",
+                message="DV fixup failed; falling back to source",
+                context={"error": str(e), "source": str(source)},
+            )
+            fixed_hevc.unlink(missing_ok=True)
             return source
 
-        for leftover in (raw_hevc, rpu):
-            leftover.unlink(missing_ok=True)
-
-        self.log.info("✓ DV signaling restored")
-        if self.debug_logger:
-            self.debug_logger.log(
-                level="INFO",
-                operation="dv_fixup",
-                message="DV fixup complete",
-                context={"source": str(source), "output": str(fixed_hevc)},
-                success=True,
-            )
+        self.log.info("✓ DV signaling exposed")
+        log_event(
+            "dv_fixup",
+            level="INFO",
+            message="DV fixup complete",
+            context={"source": str(source), "output": str(fixed_hevc)},
+            success=True,
+        )
         return fixed_hevc
 
 

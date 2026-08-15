@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import base64
+import re
 import shutil
 import subprocess
 import textwrap
+import time
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
 from uuid import UUID
@@ -20,7 +22,7 @@ from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import AnyTrack
-from unshackle.core.utilities import get_boxes
+from unshackle.core.utilities import get_boxes, log_event
 from unshackle.core.utils.subprocess import ffprobe
 
 
@@ -80,7 +82,8 @@ class PlayReady:
     def _extract_kids_from_pssh_b64(self, pssh_b64: str) -> list[UUID]:
         """Extract all KIDs from base64-encoded PSSH data."""
         try:
-            import xml.etree.ElementTree as ET
+            # PSSH XML comes from third-party manifests; defusedxml guards against entity expansion
+            import defusedxml.ElementTree as ET
 
             # Decode the PSSH
             pssh_bytes = base64.b64decode(pssh_b64)
@@ -305,7 +308,16 @@ class PlayReady:
             challenge = cdm.get_license_challenge(session_id, self.pssh.wrm_headers[0])
 
             if challenge:
+                license_str = ""
                 try:
+                    log_event(
+                        "drm_license_request",
+                        level="DEBUG",
+                        message="Requesting PlayReady license",
+                        drm_type="PlayReady",
+                        challenge_size=len(challenge),
+                        kid_count=len(self.kids),
+                    )
                     try:
                         license_res = licence(challenge=challenge, pssh_b64=self.pssh_b64)
                     except TypeError:
@@ -322,16 +334,55 @@ class PlayReady:
                             pass
 
                     cdm.parse_license(session_id, license_str)
-                except Exception:
+                    log_event(
+                        "drm_license_response",
+                        level="DEBUG",
+                        message="Parsed PlayReady license",
+                        drm_type="PlayReady",
+                        response_size=len(license_str),
+                    )
+                except PlayReady.Exceptions.DeviceRevoked:
+                    raise
+                except Exception as e:
+                    revoked = self._detect_revocation(license_str) or self._detect_revocation(str(e))
+                    if revoked:
+                        raise PlayReady.Exceptions.DeviceRevoked(revoked) from e
                     raise
 
             keys = self._extract_keys_from_cdm(cdm, session_id)
             self.content_keys.update(keys)
+
+            if keys:
+                log_event(
+                    "drm_content_keys",
+                    level="INFO",
+                    message=f"Recovered {len(keys)} PlayReady content key(s) from CDM",
+                    drm_type="PlayReady",
+                    key_count=len(keys),
+                    keys=[{"kid": k.hex if hasattr(k, "hex") else str(k), "key": v} for k, v in keys.items()],
+                )
         finally:
             cdm.close(session_id)
 
         if not self.content_keys:
             raise PlayReady.Exceptions.EmptyLicense("No Content Keys were within the License")
+
+    @staticmethod
+    def _detect_revocation(text: str) -> Optional[str]:
+        """Return the decoded error string if a revocation HRESULT is present, else None.
+
+        Reads the code from the raw SOAP body (<StatusCode>0x8004C065</StatusCode>)
+        or from an exception message that carries it, so any service is covered.
+        """
+        from unshackle.core.drm.playready_errors import describe, is_revocation
+
+        if not text:
+            return None
+        for token in re.findall(r"0x[0-9A-Fa-f]{8}|-?\d{7,}", text):
+            code = int(token, 16) if token.lower().startswith("0x") else int(token)
+            if is_revocation(code):
+                return describe(code) or f"0x{code & 0xFFFFFFFF:08X}"
+        return None
 
     def decrypt(self, path: Path) -> None:
         """
@@ -350,11 +401,34 @@ class PlayReady:
             raise ValueError("Tried to decrypt a file that does not exist.")
 
         decrypter = str(getattr(config, "decryption", "")).lower()
+        tool = "mp4decrypt" if decrypter == "mp4decrypt" else "shaka-packager"
 
+        log_event(
+            "drm_decrypt",
+            level="DEBUG",
+            message=f"Decrypting {path.name} with {tool}",
+            drm_type="PlayReady",
+            tool=tool,
+            file=path.name,
+            key_count=len(self.content_keys),
+        )
+
+        decrypt_start = time.monotonic()
         if decrypter == "mp4decrypt":
-            return self._decrypt_with_mp4decrypt(path)
+            self._decrypt_with_mp4decrypt(path)
         else:
-            return self._decrypt_with_shaka_packager(path)
+            self._decrypt_with_shaka_packager(path)
+
+        log_event(
+            "drm_decrypt_complete",
+            level="DEBUG",
+            message=f"Decrypted {path.name} with {tool}",
+            drm_type="PlayReady",
+            tool=tool,
+            file=path.name,
+            duration_ms=round((time.monotonic() - decrypt_start) * 1000, 1),
+            output_size=path.stat().st_size if path.exists() else 0,
+        )
 
     def _decrypt_with_mp4decrypt(self, path: Path) -> None:
         """Decrypt using mp4decrypt"""
@@ -388,7 +462,15 @@ class PlayReady:
         ]
 
         try:
-            subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
+            subprocess.run(
+                cmd,
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
         except subprocess.CalledProcessError as e:
             error_msg = e.stderr if e.stderr else f"mp4decrypt failed with exit code {e.returncode}"
             raise subprocess.CalledProcessError(e.returncode, cmd, output=e.stdout, stderr=error_msg)
@@ -488,6 +570,9 @@ class PlayReady:
             pass
 
         class EmptyLicense(Exception):
+            pass
+
+        class DeviceRevoked(Exception):
             pass
 
 

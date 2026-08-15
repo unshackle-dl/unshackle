@@ -112,6 +112,10 @@ def is_playready_cdm(cdm: Any) -> bool:
     if cdm is None:
         return False
 
+    drm = getattr(cdm, "drm", None)
+    if drm:
+        return str(drm).lower() == "playready"
+
     if hasattr(cdm, "is_playready"):
         try:
             return bool(getattr(cdm, "is_playready"))
@@ -144,6 +148,18 @@ def is_playready_cdm(cdm: Any) -> bool:
     return "pyplayready" in mod
 
 
+def is_remote_playready_cdm(cdm: Any) -> bool:
+    """Return True if the CDM is a remote PlayReady CDM (as opposed to a local .prd)."""
+
+    return is_playready_cdm(cdm) and is_remote_cdm(cdm)
+
+
+def is_remote_widevine_cdm(cdm: Any) -> bool:
+    """Return True if the CDM is a remote Widevine CDM (as opposed to a local .wvd)."""
+
+    return is_widevine_cdm(cdm) and is_remote_cdm(cdm)
+
+
 def is_widevine_cdm(cdm: Any) -> bool:
     """
     Return True if the given CDM should be treated as Widevine.
@@ -154,6 +170,10 @@ def is_widevine_cdm(cdm: Any) -> bool:
 
     if cdm is None:
         return False
+
+    drm = getattr(cdm, "drm", None)
+    if drm:
+        return str(drm).lower() == "widevine"
 
     if hasattr(cdm, "is_playready"):
         try:

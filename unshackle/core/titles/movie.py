@@ -10,7 +10,7 @@ from sortedcontainers import SortedKeyList
 from unshackle.core.config import config
 from unshackle.core.titles.title import Title
 from unshackle.core.utilities import sanitize_filename
-from unshackle.core.utils.template_formatter import TemplateFormatter
+from unshackle.core.utils.template_formatter import TemplateFormatter, detect_spacer
 
 
 class Movie(Title):
@@ -62,13 +62,14 @@ class Movie(Title):
         if folder:
             template = config.get_folder_template("movies")
             if template:
-                formatter = TemplateFormatter(template)
                 context = self._build_template_context(media_info, show_service)
-                folder_name = formatter.format(context)
-
-                separators = re.sub(r"\{[^}]*\}", "", template)
-                spacer = "." if "." in separators and " " not in separators else " "
-                return sanitize_filename(folder_name, spacer)
+                spacer = detect_spacer(template)  # one style for the whole path
+                segments = [
+                    TemplateFormatter(seg, spacer).format(context)
+                    for seg in re.split(r"[\\/]", template)
+                    if seg.strip()
+                ]
+                return "/".join(s for s in segments if s)
             name = f"{self.name}"
             if self.year:
                 name += f" ({self.year})"

@@ -25,15 +25,14 @@ from unshackle.core.utilities import is_close_match
 
 class EXAMPLE(Service):
     """
-    \b
     Reference service for domain.com - a deliberately exhaustive showcase of
     EVERYTHING an unshackle service can touch. It is NOT meant to run against a
     real API; it exists so a new service author can see one canonical example of
     every framework feature in one place.
 
-    \b
     Version: 2.0.0
     Author: sp4rk.y
+    Date: 2026-06-28
     Authorization: Cookies + Credentials
     Geofence: US, UK
     Robustness:
@@ -44,14 +43,12 @@ class EXAMPLE(Service):
             SL3000: 2160p
         ClearKey: 1080p (DRM-free fallback)
 
-    \b
     Tips:
         - Input may be a full URL or a bare ID/slug:
             https://domain.com/details/20914   ->   20914
         - -m / --movie forces movie parsing when the API type is ambiguous.
         - -d / --device selects a client profile block from config.yaml.
 
-    \b
     Feature map (where to look):
         __init__              TrackRequest read/override, CDM-aware codec gating
         authenticate          cookies AND credentials, JWT decode, token cache+refresh
@@ -64,7 +61,7 @@ class EXAMPLE(Service):
         get_chapters          Chapters() with named + unnamed markers
         get_widevine_*        service cert + license (per-segment PSSH via `track`)
         get_playready_license PlayReady challenge POST
-        get_clearkey          DRM-free / ClearKey fallback (commented alternate)
+        get_clearkey_license  DASH org.w3.clearkey JWK Set POST (Laurl fallback)
     """
 
     # ALIASES: extra CLI tags that resolve to this service (e.g. `dl EX ...`).
@@ -75,6 +72,12 @@ class EXAMPLE(Service):
     TITLE_RE = r"^(?:https?://(?:www\.)?domain\.com/details/)?(?P<title_id>[^/?#]+)"
     # NO_SUBTITLES: service-level idiom telling the pipeline subs are handled in-band.
     NO_SUBTITLES = False
+    # ANIME: this catalogue is anime, so metadata lookups ask AniList first. Set it False (the
+    # default) on a mixed catalogue and flag the anime titles individually in get_titles().
+    ANIME = True
+    # VAULT_TAG: store/read keys under a different vault namespace than this service's tag.
+    # Lets sibling services share one key vault. Omit to use the service's own tag.
+    VAULT_TAG = "DIFFERENT_NAME"
 
     # Map our API's range strings <-> unshackle's Video.Range enum.
     VIDEO_RANGE_MAP = {
@@ -283,8 +286,15 @@ class EXAMPLE(Service):
                         year=metadata["releaseYear"] if metadata.get("releaseYear", 0) > 0 else None,
                         language=original_lang,
                         data=ep,
+                        # daily/sports: name by date instead of SxxExx (date or ISO string)
+                        # air_date=ep.get("airDate"),
+                        # feeds the {absolute} naming token, --enrich fills it in from TVDB when unset
+                        absolute=ep.get("absoluteNumber"),
                     )
                 )
+                # Per-title override of the ANIME class attr, for a mixed catalogue. Leave it
+                # None (the default) and the title inherits the service's ANIME value.
+                episodes[-1].anime = metadata.get("category") == "anime"
         return Series(episodes)
 
     # DEFAULT (shown live): this service needs a SEPARATE manifest per codec/range,
@@ -483,7 +493,20 @@ class EXAMPLE(Service):
         response.raise_for_status()
         return response.content
 
-    # For ClearKey or unencrypted content there is no license callback; instead the
-    # KID:KEY pair comes from the manifest or a side endpoint and is attached to the
+    def get_clearkey_license(
+        self, *, challenge: bytes, title: Title_T, track: AnyTrack
+    ) -> Optional[Union[bytes, str, dict]]:
+        # DASH org.w3.clearkey: `challenge` is the W3C JSON license request; return the
+        # JWK Set response. Omit this method entirely when the manifest carries a Laurl —
+        # the framework then POSTs the challenge there with no service code at all.
+        license_url = self.config["endpoints"].get("clearkey_license")
+        if not license_url:
+            return None  # fall back to the manifest-provided Laurl, if any
+        response = self.session.post(url=license_url, data=challenge)
+        response.raise_for_status()
+        return response.json()
+
+    # For HLS AES-128 ClearKey or unencrypted content there is no license callback;
+    # the key comes from the manifest or a side endpoint and is attached to the
     # track's DRM directly. Vaults (`self.cache` is separate) cache KID:KEY so repeat
     # downloads skip the license round-trip entirely.

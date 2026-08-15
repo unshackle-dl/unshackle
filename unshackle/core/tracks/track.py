@@ -6,6 +6,7 @@ import shutil
 import subprocess
 from collections import defaultdict
 from copy import copy
+from dataclasses import dataclass
 from enum import Enum
 from functools import partial
 from pathlib import Path
@@ -15,21 +16,22 @@ from zlib import crc32
 
 from langcodes import Language
 from requests import Session
+from requests.adapters import HTTPAdapter, Retry
 
 from unshackle.core import binaries
 from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY
 from unshackle.core.downloaders import requests
-from unshackle.core.drm import DRM_T, PlayReady, Widevine
+from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.session import RnetSession
-from unshackle.core.utilities import get_boxes, try_ensure_utf8
+from unshackle.core.utilities import get_boxes, log_event, try_ensure_utf8
 from unshackle.core.utils.subprocess import ffprobe
 
 
 def direct_session(session: Union[Session, "RnetSession"]) -> Session:
-    """Vanilla requests.Session with copied headers/cookies, no proxy."""
+    """requests.Session with copied headers/cookies and no proxy."""
     new = Session()
     headers = getattr(session, "headers", None)
     if headers is not None:
@@ -44,7 +46,200 @@ def direct_session(session: Union[Session, "RnetSession"]) -> Session:
             new.cookies.update(jar if jar is not None else cookies)
         except Exception:
             pass
+    new.mount(
+        "https://",
+        HTTPAdapter(
+            max_retries=Retry(total=5, backoff_factor=0.2, status_forcelist=[429, 500, 502, 503, 504]),
+            pool_maxsize=64,
+            pool_block=True,
+        ),
+    )
+    new.mount("http://", new.adapters["https://"])
     return new
+
+
+def _read_top_level_box(path: Path, box_type: bytes) -> Optional[bytes]:
+    # seek through top-level box headers; only the wanted box's bytes are read into RAM
+    file_size = path.stat().st_size
+    with path.open("rb") as f:
+        start = 0
+        while start + 8 <= file_size:
+            header = f.read(8)
+            if len(header) < 8:
+                return None
+            size = int.from_bytes(header[:4], "big")
+            if size == 1:  # 64-bit largesize
+                large = f.read(8)
+                if len(large) < 8:
+                    return None
+                size = int.from_bytes(large, "big")
+            elif size == 0:  # box runs to EOF
+                size = file_size - start
+            if size < 8:
+                return None
+            if header[4:8] == box_type:
+                f.seek(start)
+                return f.read(size)
+            start += size
+            f.seek(start)
+    return None
+
+
+def has_encrypted_sample_entry(path: Path) -> bool:
+    """True if the MP4's moov still carries an encrypted sample entry (encv/enca).
+
+    A faithful decrypt rewrites encv/enca back to the real codec 4CC via frma, so a
+    survivor means the decrypt tool skipped/failed the track. This is a 4CC scan
+    scoped to the moov box (where sample entries live), not a structural parse;
+    scoping avoids chance byte collisions in mdat. Any read error -> False.
+    """
+    try:
+        moov = _read_top_level_box(path, b"moov")
+    except Exception:
+        return False
+    if not moov:
+        return False
+    for tok in (b"encv", b"enca"):
+        i = moov.find(tok, 4)
+        while i != -1:
+            # require a plausible sample-entry box size right before the 4CC
+            size = int.from_bytes(moov[i - 4 : i], "big")
+            if 16 <= size <= len(moov) - (i - 4):
+                return True
+            i = moov.find(tok, i + 1)
+    return False
+
+
+def _senc_protects_samples(buf: bytes, body: int, end: int) -> bool:
+    """True if a senc/PIFF-uuid box describes protected samples.
+
+    An empty senc (sample_count 0) sits on a genuinely clear fragment, so treating it as
+    a skipped one would raise on a healthy file. Field order follows
+    read_per_sample_iv_size.
+    """
+    flags = int.from_bytes(buf[body + 1 : body + 4], "big")
+    pos = body + 4 + (20 if flags & 0x1 else 0)  # PIFF override: AlgorithmID(3)+IV_size(1)+KID(16)
+    if pos + 4 > end:
+        return False
+    return int.from_bytes(buf[pos : pos + 4], "big") > 0
+
+
+def _moof_still_encrypted(moof: bytes) -> bool:
+    # senc only: a decrypter detaches just the atom it consumed, so a PIFF uuid can
+    # outlive a good decrypt. ISM arrives as senc via piff_senc_to_cenc.
+    # structural walk: a 4CC byte scan collides with trun payload
+    from unshackle.core.manifests.ism_init import iter_boxes
+
+    body = 16 if int.from_bytes(moof[:4], "big") == 1 else 8
+    for box_type, _, traf_body, traf_end in iter_boxes(moof, body, len(moof)):
+        if box_type != b"traf":
+            continue
+        for child, _usertype, child_body, child_end in iter_boxes(moof, traf_body, traf_end):
+            if child == b"senc" and _senc_protects_samples(moof, child_body, child_end):
+                return True
+    return False
+
+
+def assert_fragments_decrypted(path: Path) -> None:
+    """Raise if any fragment survived decryption still carrying a sample-encryption box.
+
+    mp4decrypt strips senc from every fragment it processes and leaves it on the ones it
+    skips, so a survivor marks a silent skip. One cause is a tfhd.sample_description_index
+    dangling past the stsd entry count, which mp4decrypt reports as success (exit 0, no
+    stderr) while leaving the payload as ciphertext. Unlike has_encrypted_sample_entry
+    (moov-scoped) this is fragment-scoped; the moov comes out clean in that failure.
+
+    Only a standard senc counts as evidence. Some DASH content ships a PIFF uuid beside it,
+    and a decrypter detaches just the atom it consumed, so that uuid outlives a good
+    decrypt; counting it would condemn a healthy file.
+
+    The guarantee runs in one direction: a survivor proves a skip, while a clean pass is
+    only as good as the decrypter's own behaviour. shaka-packager (the default
+    `decryption` backend) remuxes into a single fragment and drops senc whether or not it
+    decrypted, so this cannot fire on shaka output. The walk is unbuffered and reads only
+    box headers; it seeks over mdat and never reads it. A malformed box size aborts the
+    walk with a warning and returns normally, so a file this function cannot parse is
+    never escalated into a raise. The logged warning is the only signal of that; a caller
+    sees the same silent return it gets from a verified clean file.
+    """
+    surviving = 0
+    total = 0
+    first_offset = None
+    try:
+        file_size = path.stat().st_size
+        with path.open("rb", buffering=0) as f:
+            start = 0
+            while start + 8 <= file_size:
+                f.seek(start)
+                header = f.read(8)
+                if len(header) < 8:
+                    break
+                size = int.from_bytes(header[:4], "big")
+                box_header = 8
+                if size == 1:  # 64-bit largesize
+                    large = f.read(8)
+                    if len(large) < 8:
+                        break
+                    size = int.from_bytes(large, "big")
+                    box_header = 16
+                elif size == 0:  # box runs to EOF
+                    size = file_size - start
+                # below the consumed header the cursor stalls and desyncs onto payload
+                if size < box_header or start + size > file_size:
+                    logging.getLogger("track").warning(
+                        f"{path.name}: malformed box size at offset {start}; cannot verify the "
+                        "remaining fragments were decrypted."
+                    )
+                    break
+                if header[4:8] == b"moof":
+                    total += 1
+                    f.seek(start)
+                    if _moof_still_encrypted(f.read(size)):
+                        surviving += 1
+                        if first_offset is None:
+                            first_offset = start
+                start += size
+    except Exception as e:
+        logging.getLogger("track").warning(f"{path.name}: fragment decryption check did not complete ({e}).")
+        return
+    if surviving:
+        log_event(
+            "decrypt_fragments_still_encrypted",
+            level="ERROR",
+            message=f"{surviving}/{total} fragments still encrypted after decryption",
+            file=path.name,
+            surviving=surviving,
+            total=total,
+            first_offset=first_offset,
+        )
+        raise ValueError(
+            f"{path.name}: {surviving}/{total} fragment(s) still encrypted after decryption (first at "
+            f"byte {first_offset}). The decrypt tool skipped them silently, so check "
+            f"tfhd.sample_description_index against the stsd entry count in the init segment."
+        )
+
+
+@dataclass
+class DownloadContext:
+    """Shared arguments passed to each manifest's ``download_track``."""
+
+    save_path: Path
+    save_dir: Path
+    progress: partial
+    session: Optional[Union[Session, "RnetSession"]] = None
+    proxy: Optional[str] = None
+    max_workers: Optional[int] = None
+    license_widevine: Optional[Callable] = None
+    cdm: Optional[object] = None
+
+    def ensure_session(self) -> Union[Session, "RnetSession"]:
+        """Return the session, or a new ``Session`` if none was set."""
+        session = self.session
+        if not session:
+            session = Session()
+        elif not isinstance(session, (Session, RnetSession)):
+            raise TypeError(f"Expected session to be a {Session} or {RnetSession}, not {session!r}")
+        return session
 
 
 class Track:
@@ -256,9 +451,13 @@ class Track:
             cleanup()
 
         try:
-            if self.descriptor == self.Descriptor.HLS:
-                HLS.download_track(
-                    track=self,
+            manifest_parsers = {
+                self.Descriptor.HLS: HLS,
+                self.Descriptor.DASH: DASH,
+                self.Descriptor.ISM: ISM,
+            }
+            if self.descriptor in manifest_parsers:
+                ctx = DownloadContext(
                     save_path=save_path,
                     save_dir=save_dir,
                     progress=progress,
@@ -268,30 +467,7 @@ class Track:
                     license_widevine=prepare_drm,
                     cdm=cdm,
                 )
-            elif self.descriptor == self.Descriptor.DASH:
-                DASH.download_track(
-                    track=self,
-                    save_path=save_path,
-                    save_dir=save_dir,
-                    progress=progress,
-                    session=dl_session,
-                    proxy=proxy,
-                    max_workers=max_workers,
-                    license_widevine=prepare_drm,
-                    cdm=cdm,
-                )
-            elif self.descriptor == self.Descriptor.ISM:
-                ISM.download_track(
-                    track=self,
-                    save_path=save_path,
-                    save_dir=save_dir,
-                    progress=progress,
-                    session=dl_session,
-                    proxy=proxy,
-                    max_workers=max_workers,
-                    license_widevine=prepare_drm,
-                    cdm=cdm,
-                )
+                manifest_parsers[self.descriptor].download_track(track=self, ctx=ctx)
             elif self.descriptor == self.Descriptor.URL:
                 try:
                     if not self.drm and track_type in ("Video", "Audio"):
@@ -335,6 +511,13 @@ class Track:
                             progress(downloaded="LICENSING")
                             prepare_drm(drm, track_kid=track_kid)
                             progress(downloaded="[yellow]LICENSED")
+                        elif isinstance(drm, ClearKeyCENC):
+                            # license and grab content keys (no CDM involved)
+                            if not prepare_drm:
+                                raise ValueError("prepare_drm func must be supplied to use ClearKey DRM")
+                            progress(downloaded="LICENSING")
+                            prepare_drm(drm, track_kid=track_kid)
+                            progress(downloaded="[yellow]LICENSED")
                     else:
                         drm = None
 
@@ -362,11 +545,16 @@ class Track:
                         events.emit(events.Types.TRACK_DOWNLOADED, track=self)
 
                         if drm:
-                            progress(downloaded="Decrypting", completed=0, total=100)
+                            progress(downloaded="Decrypting", completed=0, total=None)
                             drm.decrypt(save_path)
+                            assert_fragments_decrypted(save_path)
                             self.drm = None
                             events.emit(events.Types.TRACK_DECRYPTED, track=self, drm=drm, segment=None)
-                            progress(downloaded="Decrypted", completed=100)
+                            progress(downloaded="Decrypted", completed=100, total=100)
+                            # residual encv/enca => decrypt tool skipped/failed; force a repack so the
+                            # muxer isn't first-FourCC-locked to a generic (encrypted) codec. OR-in only.
+                            if has_encrypted_sample_entry(save_path):
+                                self.needs_repack = True
 
                         if track_type == "Subtitle" and self.codec.name not in ("fVTT", "fTTML"):
                             track_data = self.path.read_bytes()
@@ -556,7 +744,7 @@ class Track:
         Load DRM information for this track if it was deferred during parsing.
 
         Args:
-            service: Service instance that can fetch track-specific DRM info
+            service (Service | None): Service instance that can fetch track-specific DRM info
 
         Returns:
             True if DRM was loaded or already present, False if failed
@@ -711,7 +899,16 @@ class Track:
 
         return init_data
 
-    def repackage(self) -> None:
+    def repackage(self, bsf_v: Optional[str] = None) -> bool:
+        """Remux the track with ffmpeg ``-c copy``.
+
+        When ``bsf_v`` is given it is folded into the same pass as ``-bsf:v`` (used to
+        normalize video VUI colour metadata without a second full-file remux). Repackaging
+        is mandatory; the bitstream filter is best-effort. If the combined run fails (and it
+        isn't the AAC-retry case) it is retried once without ``bsf_v`` so the remux still
+        succeeds. Returns True if the requested ``bsf_v`` was applied (always False when
+        ``bsf_v`` is None, since nothing was requested).
+        """
         if not self.path or not self.path.exists():
             raise ValueError("Cannot repackage a Track that has not been downloaded.")
 
@@ -721,9 +918,10 @@ class Track:
         original_path = self.path
         output_path = original_path.with_stem(f"{original_path.stem}_repack")
 
-        def _ffmpeg(extra_args: list[str] = None):
+        def _ffmpeg(extra_args: list[str] = None, bsf: Optional[str] = None):
             args = [
                 binaries.FFMPEG,
+                "-nostdin",
                 "-hide_banner",
                 "-loglevel",
                 "error",
@@ -755,9 +953,11 @@ class Track:
                     "bitexact",  # only have minimal tag data, reproducible mux
                     "-codec",
                     "copy",
-                    str(output_path),
                 ]
             )
+            if bsf:
+                args.extend(["-bsf:v", bsf])
+            args.append(str(output_path))
 
             subprocess.run(
                 args,
@@ -766,17 +966,45 @@ class Track:
                 stderr=subprocess.PIPE,
             )
 
+        log_event(
+            "repackage",
+            level="DEBUG",
+            message=f"Repackaging {self.__class__.__name__} {original_path.name} with ffmpeg",
+            context={"track_type": self.__class__.__name__, "id": self.id, "file": original_path.name},
+        )
+
+        bsf_applied = False
         try:
-            _ffmpeg()
+            _ffmpeg(bsf=bsf_v)
+            bsf_applied = bsf_v is not None
         except subprocess.CalledProcessError as e:
             if b"Malformed AAC bitstream detected" in e.stderr:
                 # e.g., TruTV's dodgy encodes
-                _ffmpeg(["-y", "-bsf:a", "aac_adtstoasc"])
+                _ffmpeg(["-y", "-bsf:a", "aac_adtstoasc"], bsf=bsf_v)
+                bsf_applied = bsf_v is not None
+            elif bsf_v is not None:
+                # Repack is mandatory, the VUI bitstream filter is best-effort: retry
+                # without it so the remux still succeeds; caller falls back to normalize_vui.
+                output_path.unlink(missing_ok=True)
+                _ffmpeg()
             else:
                 raise
 
         original_path.unlink()
         self.path = output_path
 
+        log_event(
+            "repackage_complete",
+            level="DEBUG",
+            message=f"Repackaged {self.__class__.__name__} -> {output_path.name}",
+            context={
+                "track_type": self.__class__.__name__,
+                "id": self.id,
+                "output": output_path.name,
+                "output_size": output_path.stat().st_size if output_path.exists() else 0,
+            },
+        )
+        return bsf_applied
 
-__all__ = ("Track",)
+
+__all__ = ("Track", "DownloadContext")

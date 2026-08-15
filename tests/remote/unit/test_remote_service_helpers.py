@@ -6,8 +6,16 @@ from enum import Enum
 
 import pytest
 
-from unshackle.core.remote_service import (_build_title, _build_tracks, _deserialize_audio, _deserialize_subtitle,
-                                           _deserialize_video, _enum_get, _match_track, _reconstruct_drm)
+from unshackle.core.remote_service import (
+    _build_title,
+    _build_tracks,
+    _deserialize_audio,
+    _deserialize_subtitle,
+    _deserialize_video,
+    _enum_get,
+    _match_track,
+    _reconstruct_drm,
+)
 from unshackle.core.titles.episode import Episode
 from unshackle.core.titles.movie import Movie
 from unshackle.core.tracks import Audio, Subtitle, Video

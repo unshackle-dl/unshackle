@@ -1,4 +1,5 @@
 import re
+from datetime import date, timedelta
 from typing import Any, Optional, Union
 
 import click
@@ -131,12 +132,17 @@ class SubtitleCodecChoice(click.Choice):
                 if value_lower not in choices:
                     choices.append(value_lower)
 
+        choices.append("original")
+
         self.aliases = aliases
         super().__init__(choices, case_sensitive=False)
 
     def convert(self, value: Any, param: Optional[click.Parameter] = None, ctx: Optional[click.Context] = None):
         if not value:
             return None
+
+        if str(value).lower() == "original":
+            return "original"
 
         # First try to convert using the parent class
         converted_value = super().convert(value, param, ctx)
@@ -169,10 +175,37 @@ class SeasonRange(click.ParamType):
 
     MIN_EPISODE = 0
     MAX_EPISODE = 999
+    MIN_PART = 1
+    MAX_PART = 99
+    MAX_DATE_SPAN = 1000
+
+    DATE_TOKEN = re.compile(r"^(?P<left>\d{4}-\d{2}-\d{2})(:(?P<right>\d{4}-\d{2}-\d{2}))?$")
+
+    def _parse_date_token(self, token: str, match: re.Match) -> list[str]:
+        """Expand an ISO date token or ':'-separated date range into ISO day keys."""
+        try:
+            left = date.fromisoformat(match.group("left"))
+            right = date.fromisoformat(match.group("right")) if match.group("right") else left
+        except ValueError:
+            self.fail(f"Invalid date, must be a real YYYY-MM-DD date: {token}")
+        if left > right:
+            self.fail(f"Invalid range, left side date cannot be later than right side date: {token}")
+        span = (right - left).days + 1
+        if span > self.MAX_DATE_SPAN:
+            self.fail(f"Invalid range, a date range cannot span more than {self.MAX_DATE_SPAN} days: {token}")
+        return [(left + timedelta(days=i)).isoformat() for i in range(span)]
 
     def parse_tokens(self, *tokens: str) -> list[str]:
         """
         Parse multiple tokens or ranged tokens as '{s}x{e}' strings.
+
+        An episode split into separately playable parts is addressed as '{s}x{e}.{p}'.
+        A part range must stay inside one episode, since how many parts an episode has
+        is not knowable here. A part-qualified exclusion cannot be removed from the
+        computed keys (they are base keys), so it becomes a '!' key resolved at match time.
+
+        Dated content is addressed by ISO air date. A date range uses ':' only, because
+        a date's own '-' separators are not a range separator.
 
         Supports exclusioning by putting a `-` before the token.
 
@@ -184,6 +217,14 @@ class SeasonRange(click.ParamType):
             ["2x1", "2x3", "2x4", "2x5"]
             >>> sr.parse_tokens("S01-S05", "-S03", "-S02E01")
             ["1x0", "1x1", ..., "2x0", (...), "2x2", (...), "4x0", ..., "5x0", ...]
+            >>> sr.parse_tokens("S01E01.1-S01E01.3")
+            ["1x1.1", "1x1.2", "1x1.3"]
+            >>> sr.parse_tokens("S01E01", "-S01E01.2")
+            ["1x1", "!1x1.2"]
+            >>> sr.parse_tokens("2026-08-11")
+            ["2026-08-11"]
+            >>> sr.parse_tokens("2026-08-01:2026-08-03", "-2026-08-02")
+            ["2026-08-01", "2026-08-03"]
         """
         if len(tokens) == 0:
             return []
@@ -193,37 +234,62 @@ class SeasonRange(click.ParamType):
             exclude = token.startswith("-")
             if exclude:
                 token = token[1:]
+            # dates carry their own '-' separators, so they must be read before the range split
+            date_match = self.DATE_TOKEN.match(token)
+            if date_match:
+                (computed if not exclude else exclusions).extend(self._parse_date_token(token, date_match))
+                continue
             parsed = [
-                re.match(r"^S(?P<season>\d+)(E(?P<episode>\d+))?$", x, re.IGNORECASE) for x in re.split(r"[:-]", token)
+                re.match(r"^S(?P<season>\d+)(E(?P<episode>\d+)(\.(?P<part>\d+))?)?$", x, re.IGNORECASE)
+                for x in re.split(r"[:-]", token)
             ]
             if len(parsed) > 2:
                 self.fail(f"Invalid token, only a left and right range is acceptable: {token}")
             if len(parsed) == 1:
+                # the same match object is read with different per-side defaults, so a bare
+                # S01 spans from MIN_EPISODE to MAX_EPISODE
                 parsed.append(parsed[0])
             if any(x is None for x in parsed):
                 self.fail(f"Invalid token, syntax error occurred: {token}")
-            from_season, from_episode = [
-                int(v) if v is not None else self.MIN_EPISODE
-                for k, v in parsed[0].groupdict().items()
-                if parsed[0]  # type: ignore[union-attr]
-            ]
-            to_season, to_episode = [
-                int(v) if v is not None else self.MAX_EPISODE
-                for k, v in parsed[1].groupdict().items()
-                if parsed[1]  # type: ignore[union-attr]
-            ]
+            left, right = parsed[0], parsed[1]
+            from_season = int(left.group("season"))  # type: ignore[union-attr]
+            from_episode_raw = left.group("episode")  # type: ignore[union-attr]
+            from_episode = int(from_episode_raw) if from_episode_raw is not None else self.MIN_EPISODE
+            from_part_raw = left.group("part")  # type: ignore[union-attr]
+            from_part = int(from_part_raw) if from_part_raw is not None else None
+            to_season = int(right.group("season"))  # type: ignore[union-attr]
+            to_episode_raw = right.group("episode")  # type: ignore[union-attr]
+            to_episode = int(to_episode_raw) if to_episode_raw is not None else self.MAX_EPISODE
+            to_part_raw = right.group("part")  # type: ignore[union-attr]
+            to_part = int(to_part_raw) if to_part_raw is not None else None
             if from_season > to_season:
                 self.fail(f"Invalid range, left side season cannot be bigger than right side season: {token}")
             if from_season == to_season and from_episode > to_episode:
                 self.fail(f"Invalid range, left side episode cannot be bigger than right side episode: {token}")
+            if (from_part is None) != (to_part is None):
+                self.fail(f"Invalid range, a part must be given on both sides or on neither: {token}")
+            if from_part is not None and to_part is not None:
+                if (from_season, from_episode) != (to_season, to_episode):
+                    self.fail(f"Invalid range, a part range must stay within one episode: {token}")
+                if not all(self.MIN_PART <= p <= self.MAX_PART for p in (from_part, to_part)):
+                    self.fail(f"Invalid part, must be between {self.MIN_PART} and {self.MAX_PART}: {token}")
+                if from_part > to_part:
+                    self.fail(f"Invalid range, left side part cannot be bigger than right side part: {token}")
+                for p in range(from_part, to_part + 1):
+                    (computed if not exclude else exclusions).append(f"{from_season}x{from_episode}.{p}")
+                continue
             for s in range(from_season, to_season + 1):
                 for e in range(
                     from_episode if s == from_season else 0, (self.MAX_EPISODE if s < to_season else to_episode) + 1
                 ):
                     (computed if not exclude else exclusions).append(f"{s}x{e}")
         for exclusion in exclusions:
-            if exclusion in computed:
-                computed.remove(exclusion)
+            if "." in exclusion:
+                computed.append(f"!{exclusion}")  # base key stays; resolved at match time
+            else:
+                # a base exclusion must drop that episode's part keys too, or they still match
+                prefix = f"{exclusion}."
+                computed = [k for k in computed if k != exclusion and not k.startswith(prefix)]
         return list(set(computed))
 
     def convert(
@@ -249,16 +315,19 @@ class QualityList(click.ParamType):
     name = "quality_list"
 
     def convert(
-        self, value: Union[str, list[str]], param: Optional[click.Parameter] = None, ctx: Optional[click.Context] = None
+        self,
+        value: Union[str, int, list[Union[str, int]]],
+        param: Optional[click.Parameter] = None,
+        ctx: Optional[click.Context] = None,
     ) -> list[int]:
         if not value:
             return []
         if not isinstance(value, list):
-            value = value.split(",")
+            value = str(value).split(",")
         resolutions = []
         for resolution in value:
             try:
-                resolutions.append(int(resolution.lower().rstrip("p")))
+                resolutions.append(int(str(resolution).lower().rstrip("p")))
             except TypeError:
                 self.fail(
                     f"Expected string for int() conversion, got {resolution!r} of type {type(resolution).__name__}",
@@ -365,9 +434,13 @@ class SlowDelayRange(click.ParamType):
 
     name = "delay_range"
 
-    def convert(self, value: Any, param: Optional[click.Parameter], ctx: Optional[click.Context]) -> tuple[int, int]:
+    def convert(
+        self, value: Any, param: Optional[click.Parameter], ctx: Optional[click.Context]
+    ) -> Optional[tuple[int, int]]:
         if isinstance(value, tuple):
             return value
+        if isinstance(value, bool):
+            return (60, 120) if value else None
 
         match = re.match(r"^(\d+)-(\d+)$", str(value))
         if not match:

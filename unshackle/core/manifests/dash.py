@@ -8,8 +8,7 @@ import re
 import shutil
 import sys
 from copy import deepcopy
-from functools import partial
-from pathlib import Path
+from functools import lru_cache, partial
 from typing import Any, Callable, Optional, Union
 from urllib.parse import urljoin, urlparse
 from uuid import UUID
@@ -25,11 +24,13 @@ from requests import Session
 
 from unshackle.core.cdm.detect import is_playready_cdm
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
-from unshackle.core.drm import DRM_T, PlayReady, Widevine
+from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.session import RnetSession
-from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
-from unshackle.core.utilities import get_debug_logger, is_close_match, try_ensure_utf8
+from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video
+from unshackle.core.tracks.track import assert_fragments_decrypted
+from unshackle.core.utilities import is_close_match, log_event, try_ensure_utf8
+from unshackle.core.utils.redact import safe_display_url
 from unshackle.core.utils.xml import load_xml
 
 
@@ -66,6 +67,13 @@ class DASH:
 
         if not res.ok:
             raise requests.ConnectionError("Failed to request the MPD document.", response=res)
+
+        log_event(
+            "manifest_dash_fetch",
+            level="DEBUG",
+            message=f"Fetched DASH manifest ({len(res.text)} bytes)",
+            context={"url": safe_display_url(url), "size": len(res.text)},
+        )
 
         return DASH.from_text(res.text, url)
 
@@ -248,25 +256,34 @@ class DASH:
             break
 
         tracks.manifest_url = self.url
+
+        log_event(
+            "manifest_dash_parse",
+            level="INFO",
+            message=(
+                f"Parsed DASH manifest: {len(tracks.videos)} video, "
+                f"{len(tracks.audio)} audio, {len(tracks.subtitles)} subtitle track(s)"
+            ),
+            context={
+                "videos": len(tracks.videos),
+                "audio": len(tracks.audio),
+                "subtitles": len(tracks.subtitles),
+                "ranges": sorted({str(v.range) for v in tracks.videos}),
+                "vcodecs": sorted({str(v.codec) for v in tracks.videos}),
+            },
+        )
         return tracks
 
     @staticmethod
-    def download_track(
-        track: AnyTrack,
-        save_path: Path,
-        save_dir: Path,
-        progress: partial,
-        session: Optional[Session] = None,
-        proxy: Optional[str] = None,
-        max_workers: Optional[int] = None,
-        license_widevine: Optional[Callable] = None,
-        *,
-        cdm: Optional[object] = None,
-    ):
-        if not session:
-            session = Session()
-        elif not isinstance(session, (Session, RnetSession)):
-            raise TypeError(f"Expected session to be a {Session} or {RnetSession}, not {session!r}")
+    def download_track(track: AnyTrack, ctx: DownloadContext) -> None:
+        session = ctx.ensure_session()
+        save_path = ctx.save_path
+        save_dir = ctx.save_dir
+        progress = ctx.progress
+        proxy = ctx.proxy
+        max_workers = ctx.max_workers
+        license_widevine = ctx.license_widevine
+        cdm = ctx.cdm
 
         if proxy:
             session.proxies.update({"all": proxy})
@@ -332,20 +349,16 @@ class DASH:
         if period_count > 1:
             log.debug(f"Multi-period manifest detected with {period_count} content periods")
 
+        stored_period: Optional[Element] = track.data["dash"].get("period")
+
         for period_idx, content_period in enumerate(content_periods):
-            # Find the matching representation in this period
-            matched_rep = None
-            matched_as = None
-            for as_ in content_period.findall("AdaptationSet"):
-                if DASH.is_trick_mode(as_):
-                    continue
-                for rep in as_.findall("Representation"):
-                    if rep.get("id") == rep_id:
-                        matched_rep = rep
-                        matched_as = as_
-                        break
-                if matched_rep is not None:
-                    break
+            if content_period is stored_period:
+                matched_as, matched_rep = adaptation_set, representation
+            else:
+                matched_as, matched_rep = DASH.resolve_representation(content_period, rep_id, adaptation_set) or (
+                    None,
+                    None,
+                )
 
             if matched_rep is None or matched_as is None:
                 period_id = content_period.get("id", period_idx)
@@ -444,22 +457,20 @@ class DASH:
             session=session,
         )
 
-        debug_logger = get_debug_logger()
-        if debug_logger:
-            debug_logger.log(
-                level="DEBUG",
-                operation="manifest_dash_download_start",
-                message="Starting DASH manifest download",
-                context={
-                    "track_id": getattr(track, "id", None),
-                    "track_type": track.__class__.__name__,
-                    "total_segments": len(segments),
-                    "has_drm": bool(track.drm),
-                    "drm_types": [drm.__class__.__name__ for drm in (track.drm or [])],
-                    "save_path": str(save_path),
-                    "has_init_data": bool(init_data),
-                },
-            )
+        log_event(
+            "manifest_dash_download_start",
+            level="DEBUG",
+            message="Starting DASH manifest download",
+            context={
+                "track_id": getattr(track, "id", None),
+                "track_type": track.__class__.__name__,
+                "total_segments": len(segments),
+                "has_drm": bool(track.drm),
+                "drm_types": [drm.__class__.__name__ for drm in (track.drm or [])],
+                "save_path": str(save_path),
+                "has_init_data": bool(init_data),
+            },
+        )
 
         for status_update in downloader(**downloader_args):
             file_downloaded = status_update.get("file_downloaded")
@@ -474,19 +485,18 @@ class DASH:
         # Verify output directory exists and contains files
         if not save_dir.exists():
             error_msg = f"Output directory does not exist: {save_dir}"
-            if debug_logger:
-                debug_logger.log(
-                    level="ERROR",
-                    operation="manifest_dash_download_output_missing",
-                    message=error_msg,
-                    context={
-                        "track_id": getattr(track, "id", None),
-                        "track_type": track.__class__.__name__,
-                        "save_dir": str(save_dir),
-                        "save_path": str(save_path),
-                        "downloader": "requests",
-                    },
-                )
+            log_event(
+                "manifest_dash_download_output_missing",
+                level="ERROR",
+                message=error_msg,
+                context={
+                    "track_id": getattr(track, "id", None),
+                    "track_type": track.__class__.__name__,
+                    "save_dir": str(save_dir),
+                    "save_path": str(save_path),
+                    "downloader": "requests",
+                },
+            )
             raise FileNotFoundError(error_msg)
 
         for control_file in save_dir.glob("*.!dev"):
@@ -494,62 +504,60 @@ class DASH:
 
         segments_to_merge = [x for x in sorted(save_dir.iterdir()) if x.is_file()]
 
-        if debug_logger:
-            debug_logger.log(
-                level="DEBUG",
-                operation="manifest_dash_download_complete",
-                message="DASH download complete, preparing to merge",
+        log_event(
+            "manifest_dash_download_complete",
+            level="DEBUG",
+            message="DASH download complete, preparing to merge",
+            context={
+                "track_id": getattr(track, "id", None),
+                "track_type": track.__class__.__name__,
+                "save_dir": str(save_dir),
+                "save_dir_exists": save_dir.exists(),
+                "segments_found": len(segments_to_merge),
+                "segment_files": [f.name for f in segments_to_merge[:10]],  # Limit to first 10
+                "downloader": "requests",
+            },
+        )
+
+        if not segments_to_merge:
+            error_msg = f"No segment files found in output directory: {save_dir}"
+            # List all contents of the directory for debugging
+            all_contents = list(save_dir.iterdir()) if save_dir.exists() else []
+            log_event(
+                "manifest_dash_download_no_segments",
+                level="ERROR",
+                message=error_msg,
                 context={
                     "track_id": getattr(track, "id", None),
                     "track_type": track.__class__.__name__,
                     "save_dir": str(save_dir),
-                    "save_dir_exists": save_dir.exists(),
-                    "segments_found": len(segments_to_merge),
-                    "segment_files": [f.name for f in segments_to_merge[:10]],  # Limit to first 10
+                    "directory_contents": [str(p) for p in all_contents],
                     "downloader": "requests",
                 },
             )
-
-        if not segments_to_merge:
-            error_msg = f"No segment files found in output directory: {save_dir}"
-            if debug_logger:
-                # List all contents of the directory for debugging
-                all_contents = list(save_dir.iterdir()) if save_dir.exists() else []
-                debug_logger.log(
-                    level="ERROR",
-                    operation="manifest_dash_download_no_segments",
-                    message=error_msg,
-                    context={
-                        "track_id": getattr(track, "id", None),
-                        "track_type": track.__class__.__name__,
-                        "save_dir": str(save_dir),
-                        "directory_contents": [str(p) for p in all_contents],
-                        "downloader": "requests",
-                    },
-                )
             raise FileNotFoundError(error_msg)
 
+        is_text_subtitle = (
+            not drm and isinstance(track, Subtitle) and track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML)
+        )
         with open(save_path, "wb") as f:
             if init_data:
                 f.write(init_data)
             if len(segments_to_merge) > 1:
                 progress(downloaded="Merging", completed=0, total=len(segments_to_merge))
             for segment_file in segments_to_merge:
-                segment_data = segment_file.read_bytes()
-                if (
-                    not drm
-                    and isinstance(track, Subtitle)
-                    and track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML)
-                ):
-                    segment_data = try_ensure_utf8(segment_data)
+                if is_text_subtitle:
+                    segment_data = try_ensure_utf8(segment_file.read_bytes())
                     segment_data = (
                         segment_data.decode("utf8")
                         .replace("&lrm;", html.unescape("&lrm;"))
                         .replace("&rlm;", html.unescape("&rlm;"))
                         .encode("utf8")
                     )
-                f.write(segment_data)
-                f.flush()
+                    f.write(segment_data)
+                else:
+                    with open(segment_file, "rb") as src:
+                        shutil.copyfileobj(src, f, 1024 * 1024)
                 segment_file.unlink()
                 progress(advance=1)
 
@@ -557,11 +565,12 @@ class DASH:
         events.emit(events.Types.TRACK_DOWNLOADED, track=track)
 
         if drm:
-            progress(downloaded="Decrypting", completed=0, total=100)
+            progress(downloaded="Decrypting", completed=0, total=None)
             drm.decrypt(save_path)
+            assert_fragments_decrypted(save_path)
             track.drm = None
             events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=drm, segment=None)
-            progress(downloaded="Decrypting", advance=100)
+            progress(downloaded="Decrypted", completed=100, total=100)
 
         # Clean up empty segment directory
         if save_dir.exists() and save_dir.name.endswith("_segments"):
@@ -922,6 +931,54 @@ class DASH:
         )
 
     @staticmethod
+    def adaptation_set_key(adaptation_set: Element) -> tuple[Optional[str], ...]:
+        """Identity of an AdaptationSet, used to re-find its counterpart in another Period."""
+        return tuple(
+            adaptation_set.get(attr)
+            for attr in ("contentType", "mimeType", "lang", "audioTrackId", "audioTrackSubtype", "id")
+        )
+
+    @staticmethod
+    def resolve_representation(
+        period: Element, rep_id: Optional[str], adaptation_set: Element
+    ) -> Optional[tuple[Element, Element]]:
+        """
+        Find the (AdaptationSet, Representation) in another Period matching rep_id.
+
+        Representation ids are only unique within an AdaptationSet, so the set matching
+        `adaptation_set`'s identity wins over an earlier sibling that reuses the same id
+        for different content (e.g. audio description vs dialog).
+        """
+        as_key = DASH.adaptation_set_key(adaptation_set)
+
+        def candidates(within: Element) -> list[tuple[Element, Element]]:
+            found = []
+            for as_ in within.findall("AdaptationSet"):
+                if DASH.is_trick_mode(as_) or DASH.adaptation_set_key(as_) != as_key:
+                    continue
+                for rep in as_.findall("Representation"):
+                    if rep.get("id") == rep_id:
+                        found.append((as_, rep))
+                        break
+            return found
+
+        matches = candidates(period)
+        if matches:
+            parent = adaptation_set.getparent()
+            siblings = [as_ for as_, _ in candidates(parent)] if parent is not None else []
+            ordinal = siblings.index(adaptation_set) if adaptation_set in siblings else 0
+            return matches[min(ordinal, len(matches) - 1)]
+
+        for as_ in period.findall("AdaptationSet"):
+            if DASH.is_trick_mode(as_):
+                continue
+            for rep in as_.findall("Representation"):
+                if rep.get("id") == rep_id:
+                    return as_, rep
+
+        return None
+
+    @staticmethod
     def is_descriptive(adaptation_set: Element) -> bool:
         """Check if contents of Adaptation Set is Descriptive."""
         return any(
@@ -1028,6 +1085,54 @@ class DASH:
 
                 drm.append(PlayReady(pssh=pr_pssh, kid=kid, pssh_b64=pr_pssh_b64))
 
+            elif urn == ClearKeyCENC.urn:
+                # W3C EME ClearKey (org.w3.clearkey) — match the scheme UUID alone,
+                # value="ClearKey1.0" is spec'd (DASH-IF CCP) but not required in the wild
+                kid_attr = protection.get("default_KID") or protection.get("{urn:mpeg:cenc:2013}default_KID")
+                kid = None
+                if kid_attr:
+                    try:
+                        kid = UUID(kid_attr)
+                    except ValueError:
+                        try:
+                            kid = UUID(bytes=base64.b64decode(kid_attr))
+                        except Exception:
+                            kid = None
+
+                if not kid:
+                    # DASH-IF puts default_KID on the sibling mp4protection element
+                    kid = next(
+                        (
+                            UUID(p.get("default_KID") or p.get("{urn:mpeg:cenc:2013}default_KID"))
+                            for p in protections
+                            if p.get("default_KID") or p.get("{urn:mpeg:cenc:2013}default_KID")
+                        ),
+                        None,
+                    )
+
+                if not kid or kid in PLACEHOLDER_KIDS:
+                    continue
+
+                # license URL appears under several namespaces/casings in the wild
+                laurl = next(
+                    (
+                        text.strip()
+                        for name in (
+                            "{https://dashif.org/CPS}Laurl",
+                            "{https://dashif.org/CPS}laurl",
+                            "{http://dashif.org/guidelines/clearKey}Laurl",
+                            "{http://dashif.org/guidelines/clearKey}laurl",
+                            "Laurl",
+                            "laurl",
+                        )
+                        for text in [protection.findtext(name)]
+                        if text and text.strip()
+                    ),
+                    None,
+                )
+
+                drm.append(ClearKeyCENC(kids=[kid], laurl=laurl))
+
         return drm
 
     @staticmethod
@@ -1045,10 +1150,18 @@ class DASH:
         return sum(float(x[0:-1]) * {"H": 60 * 60, "M": 60, "S": 1}[x[-1].upper()] for x in m)
 
     @staticmethod
+    @lru_cache(maxsize=None)
+    def _field_format_pattern(field: str) -> re.Pattern:
+        # printf-style `$Field%fmt$` matcher, compiled once per field name
+        return re.compile(rf"\${re.escape(field)}%([a-z0-9]+)\$", flags=re.I)
+
+    @staticmethod
     def replace_fields(url: str, **kwargs: Any) -> str:
+        if "$" not in url:
+            return url
         for field, value in kwargs.items():
             url = url.replace(f"${field}$", str(value))
-            m = re.search(rf"\${re.escape(field)}%([a-z0-9]+)\$", url, flags=re.I)
+            m = DASH._field_format_pattern(field).search(url)
             if m:
                 url = url.replace(m.group(), f"{value:{m.group(1)}}")
         return url

@@ -4,6 +4,7 @@ import base64
 import shutil
 import subprocess
 import textwrap
+import time
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
 from uuid import UUID
@@ -20,7 +21,7 @@ from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import AnyTrack
-from unshackle.core.utilities import get_boxes
+from unshackle.core.utilities import get_boxes, log_event
 from unshackle.core.utils.subprocess import ffprobe
 
 
@@ -79,8 +80,8 @@ class Widevine:
         headers and more.
 
         Raises:
-            PSSHNotFound - If the PSSH was not found within the data.
-            KIDNotFound - If the KID was not found within the data or PSSH.
+            PSSHNotFound: If the PSSH was not found within the data.
+            KIDNotFound: If the KID was not found within the data or PSSH.
         """
         if not session:
             session = Session()
@@ -130,8 +131,8 @@ class Widevine:
         It is *rare* to need to use this.
 
         Raises:
-            PSSHNotFound - If the PSSH was not found within the data.
-            KIDNotFound - If the KID was not found within the data or PSSH.
+            PSSHNotFound: If the PSSH was not found within the data.
+            KIDNotFound: If the KID was not found within the data or PSSH.
         """
         if not init_data:
             raise ValueError("Init data should be provided.")
@@ -216,13 +217,42 @@ class Widevine:
                 if hasattr(cdm, "has_cached_keys") and cdm.has_cached_keys(session_id):
                     pass
                 else:
+                    log_event(
+                        "drm_license_request",
+                        level="DEBUG",
+                        message=f"Requesting Widevine license for KID {kid.hex}",
+                        drm_type="Widevine",
+                        kid=kid.hex,
+                        challenge_size=len(challenge),
+                        kid_count=len(self.kids),
+                    )
                     try:
                         license_res = licence(challenge=challenge, pssh=self.pssh)
                     except TypeError:
                         license_res = licence(challenge=challenge)
                     cdm.parse_license(session_id, license_res)
+                    log_event(
+                        "drm_license_response",
+                        level="DEBUG",
+                        message=f"Parsed Widevine license for KID {kid.hex}",
+                        drm_type="Widevine",
+                        kid=kid.hex,
+                        response_size=len(license_res) if license_res else 0,
+                    )
 
                 self.content_keys = {key.kid: key.key.hex() for key in cdm.get_keys(session_id, "CONTENT")}
+
+                if self.content_keys:
+                    log_event(
+                        "drm_content_keys",
+                        level="INFO",
+                        message=f"Recovered {len(self.content_keys)} Widevine content key(s)",
+                        drm_type="Widevine",
+                        kid=kid.hex,
+                        key_count=len(self.content_keys),
+                        keys=[{"kid": k.hex, "key": v} for k, v in self.content_keys.items()],
+                    )
+
                 if not self.content_keys:
                     raise Widevine.Exceptions.EmptyLicense("No Content Keys were within the License")
 
@@ -287,11 +317,34 @@ class Widevine:
             raise ValueError("Tried to decrypt a file that does not exist.")
 
         decrypter = str(getattr(config, "decryption", "")).lower()
+        tool = "mp4decrypt" if decrypter == "mp4decrypt" else "shaka-packager"
 
+        log_event(
+            "drm_decrypt",
+            level="DEBUG",
+            message=f"Decrypting {path.name} with {tool}",
+            drm_type="Widevine",
+            tool=tool,
+            file=path.name,
+            key_count=len(self.content_keys),
+        )
+
+        decrypt_start = time.monotonic()
         if decrypter == "mp4decrypt":
-            return self._decrypt_with_mp4decrypt(path)
+            self._decrypt_with_mp4decrypt(path)
         else:
-            return self._decrypt_with_shaka_packager(path)
+            self._decrypt_with_shaka_packager(path)
+
+        log_event(
+            "drm_decrypt_complete",
+            level="DEBUG",
+            message=f"Decrypted {path.name} with {tool}",
+            drm_type="Widevine",
+            tool=tool,
+            file=path.name,
+            duration_ms=round((time.monotonic() - decrypt_start) * 1000, 1),
+            output_size=path.stat().st_size if path.exists() else 0,
+        )
 
     def _decrypt_with_mp4decrypt(self, path: Path) -> None:
         """Decrypt using mp4decrypt"""
@@ -325,7 +378,15 @@ class Widevine:
         ]
 
         try:
-            subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
+            subprocess.run(
+                cmd,
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
         except subprocess.CalledProcessError as e:
             error_msg = e.stderr if e.stderr else f"mp4decrypt failed with exit code {e.returncode}"
             raise subprocess.CalledProcessError(e.returncode, cmd, output=e.stdout, stderr=error_msg)
@@ -373,6 +434,8 @@ class Widevine:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
                 universal_newlines=True,
+                encoding="utf-8",
+                errors="replace",
             )
 
             stream_skipped = False

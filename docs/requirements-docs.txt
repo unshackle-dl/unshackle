@@ -1,0 +1,4 @@
+mkdocs-material>=9.5
+mkdocstrings[python]>=0.26
+# ruff (or black) lets mkdocstrings format rendered signatures
+ruff>=0.3

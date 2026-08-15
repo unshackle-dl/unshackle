@@ -5,9 +5,16 @@ from __future__ import annotations
 import pytest
 from langcodes import Language
 
-from unshackle.core.api.handlers import (sanitize_log, serialize_audio_track, serialize_drm, serialize_subtitle_track,
-                                         serialize_title, serialize_video_track, validate_download_parameters,
-                                         validate_service)
+from unshackle.core.api.handlers import (
+    sanitize_log,
+    serialize_audio_track,
+    serialize_drm,
+    serialize_subtitle_track,
+    serialize_title,
+    serialize_video_track,
+    validate_download_parameters,
+    validate_service,
+)
 from unshackle.core.titles.episode import Episode
 from unshackle.core.titles.movie import Movie
 from unshackle.core.tracks import Audio, Subtitle, Video
@@ -197,6 +204,22 @@ def test_serialize_drm_widevine_minimal() -> None:
     assert info["pssh"] == "BASE64PSSH=="
     assert info["kids"] == ["00112233445566778899aabbccddeeff"]
     assert info["license_url"] == "https://lic.example.com/wv"
+
+
+def test_serialize_drm_playready_pssh_without_dumps_is_omitted() -> None:
+    # pyplayready's PSSH exposes no dumps()/to_base64()/__bytes__; serialization
+    # must omit the pssh field rather than emit an object repr.
+    class _PSSH:
+        pass
+
+    class _PlayReady:
+        def __init__(self) -> None:
+            self._pssh = _PSSH()
+            self.kids = ["00112233445566778899aabbccddeeff"]
+
+    info = serialize_drm(_PlayReady())[0]
+    assert "pssh" not in info
+    assert info["kids"] == ["00112233445566778899aabbccddeeff"]
 
 
 # ---------- validate_service ----------
