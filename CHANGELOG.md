@@ -6,7 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 This changelog is automatically generated using [git-cliff](https://git-cliff.org).
 
-## [Unreleased]
+## [5.4.0] - 2026-08-15
 
 ### Features
 
@@ -44,6 +44,10 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - *metadata*: [**breaking**] Replace animeapi with a first-class anilist provider
 - *dl*: Add absolute episode numbers filled from tvdb absolute order
 - *dl*: Add daily date-based episodes with tvdb air-date fill
+- *api*: Stream download job progress over server-sent events
+- *remote*: Accept serve.users keys in api-only mode and add client auth-header fallback
+- *serve*: Gate server CDM licensing behind a per-key server_cdm opt-in
+- *cli*: Add named color themes and rich-formatted help
 
 ### Bug Fixes
 
@@ -84,11 +88,17 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - *api*: Carry air_date, absolute, anime and daily across the title wire
 - *dl*: Treat audio muxed into the video as an available language
 - *hls*: Take the key id from EXT-X-KEY when the PSSH carries none
+- *dl*: Reset per-title language and range selection each iteration
+- *subtitle*: Keep cue-less webvtt instead of failing the download
+- *services*: Re-raise ClickException for better error handling in remote services cache
+- *dash*: Resolve representations by adaptation set, not id alone
+- *kv*: Search remote vaults that cannot list their tables
 
 ### Documentation
 
 - Restructure documentation into MkDocs Material site
 - Expand config reference and genericize service names
+- *changelog*: Regenerate with git-cliff
 - Correct DRM, muxing, and proxy references (+ case-insensitive proxy prefix fix)
 - Cleanup and correct documentation
 - *core*: Drop service tags from framework comments
@@ -112,6 +122,7 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 
 - *changelog*: Update entries for new features and bug fixes
 - *env*: Drop ML-Worker from the dependency check
+- *changelog*: Update changelog
 
 ### Builds
 
@@ -882,7 +893,7 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - Reorganize Planned Features section in README for clarity
 - Improve track selection logic in dl.py
 
-[unreleased]: https://github.com/unshackle-dl/unshackle/compare/5.3.0..HEAD
+[5.4.0]: https://github.com/unshackle-dl/unshackle/compare/5.3.0..5.4.0
 [5.3.0]: https://github.com/unshackle-dl/unshackle/compare/5.2.0..5.3.0
 [5.2.0]: https://github.com/unshackle-dl/unshackle/compare/5.1.0..5.2.0
 [5.1.0]: https://github.com/unshackle-dl/unshackle/compare/5.0.0..5.1.0
