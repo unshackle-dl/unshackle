@@ -349,20 +349,16 @@ class DASH:
         if period_count > 1:
             log.debug(f"Multi-period manifest detected with {period_count} content periods")
 
+        stored_period: Optional[Element] = track.data["dash"].get("period")
+
         for period_idx, content_period in enumerate(content_periods):
-            # Find the matching representation in this period
-            matched_rep = None
-            matched_as = None
-            for as_ in content_period.findall("AdaptationSet"):
-                if DASH.is_trick_mode(as_):
-                    continue
-                for rep in as_.findall("Representation"):
-                    if rep.get("id") == rep_id:
-                        matched_rep = rep
-                        matched_as = as_
-                        break
-                if matched_rep is not None:
-                    break
+            if content_period is stored_period:
+                matched_as, matched_rep = adaptation_set, representation
+            else:
+                matched_as, matched_rep = DASH.resolve_representation(content_period, rep_id, adaptation_set) or (
+                    None,
+                    None,
+                )
 
             if matched_rep is None or matched_as is None:
                 period_id = content_period.get("id", period_idx)
@@ -933,6 +929,54 @@ class DASH:
             prop.get("schemeIdUri") == "http://dashif.org/guidelines/trickmode"
             for prop in essential_props + supplemental_props
         )
+
+    @staticmethod
+    def adaptation_set_key(adaptation_set: Element) -> tuple[Optional[str], ...]:
+        """Identity of an AdaptationSet, used to re-find its counterpart in another Period."""
+        return tuple(
+            adaptation_set.get(attr)
+            for attr in ("contentType", "mimeType", "lang", "audioTrackId", "audioTrackSubtype", "id")
+        )
+
+    @staticmethod
+    def resolve_representation(
+        period: Element, rep_id: Optional[str], adaptation_set: Element
+    ) -> Optional[tuple[Element, Element]]:
+        """
+        Find the (AdaptationSet, Representation) in another Period matching rep_id.
+
+        Representation ids are only unique within an AdaptationSet, so the set matching
+        `adaptation_set`'s identity wins over an earlier sibling that reuses the same id
+        for different content (e.g. audio description vs dialog).
+        """
+        as_key = DASH.adaptation_set_key(adaptation_set)
+
+        def candidates(within: Element) -> list[tuple[Element, Element]]:
+            found = []
+            for as_ in within.findall("AdaptationSet"):
+                if DASH.is_trick_mode(as_) or DASH.adaptation_set_key(as_) != as_key:
+                    continue
+                for rep in as_.findall("Representation"):
+                    if rep.get("id") == rep_id:
+                        found.append((as_, rep))
+                        break
+            return found
+
+        matches = candidates(period)
+        if matches:
+            parent = adaptation_set.getparent()
+            siblings = [as_ for as_, _ in candidates(parent)] if parent is not None else []
+            ordinal = siblings.index(adaptation_set) if adaptation_set in siblings else 0
+            return matches[min(ordinal, len(matches) - 1)]
+
+        for as_ in period.findall("AdaptationSet"):
+            if DASH.is_trick_mode(as_):
+                continue
+            for rep in as_.findall("Representation"):
+                if rep.get("id") == rep_id:
+                    return as_, rep
+
+        return None
 
     @staticmethod
     def is_descriptive(adaptation_set: Element) -> bool:
