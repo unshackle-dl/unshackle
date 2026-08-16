@@ -586,6 +586,8 @@ def perform_download(
                 no_source=params.get("no_source", False),
                 no_mux=params.get("no_mux", False),
                 workers=params.get("workers"),
+                adaptive_workers=params.get("adaptive_workers", False),
+                download_processes=params.get("download_processes", 1),
                 downloads=params.get("downloads", 1),
                 worst=params.get("worst", False),
                 best_available=params.get("best_available", False),

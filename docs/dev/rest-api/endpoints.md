@@ -397,6 +397,8 @@ Create a download job. Requires `service` and `title_id`; every other field is a
 | `proxy` / `no_proxy` / `no_proxy_download` | string / bool / bool | `null` / `false` / `false` | Proxy controls. |
 | `no_folder` / `no_source` / `no_mux` | boolean | `false` | Output/mux controls. |
 | `workers` | int | `null` | Threads per track. |
+| `adaptive_workers` | boolean | `false` | Scale segment workers to measured CDN throughput, up to the `workers` cap. |
+| `download_processes` | int | `1` | Split a track's segments across this many processes. Only engages for large batches. |
 | `downloads` | int | `1` | Concurrent tracks. |
 | `worst` | boolean | `false` | Lowest bitrate within quality. |
 | `best_available` | boolean | `false` | Fall back to best available. |

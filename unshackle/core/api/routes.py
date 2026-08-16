@@ -781,6 +781,12 @@ async def download(request: web.Request) -> web.Response:
               workers:
                 type: integer
                 description: Max workers/threads per track download (default - None)
+              adaptive_workers:
+                type: boolean
+                description: Scale per-track segment workers to measured CDN throughput, up to the workers cap (default - false)
+              download_processes:
+                type: integer
+                description: Split a track's segments across this many processes; only engages for large batches (default - 1)
               downloads:
                 type: integer
                 description: Amount of tracks to download concurrently (default - 1)
