@@ -87,16 +87,16 @@ def fast_timeouts() -> Iterator[None]:
     DOWNLOAD_CANCELLED.clear()
 
 
-def _pool_threads() -> int:
+def pool_threads() -> int:
     return sum(1 for t in threading.enumerate() if t.name.startswith("ThreadPoolExecutor"))
 
 
-def _assert_drained_and_unlocked(out_dir: Path, baseline: int) -> None:
+def assert_drained_and_unlocked(out_dir: Path, baseline: int) -> None:
     """Workers must exit within one read timeout; then every stray must be deletable."""
     deadline = time.monotonic() + FAST["READ_TIMEOUT"] + FAST["RETRY_WAIT"] + 3
-    while time.monotonic() < deadline and _pool_threads() > baseline:
+    while time.monotonic() < deadline and pool_threads() > baseline:
         time.sleep(0.05)
-    assert _pool_threads() <= baseline, "worker threads leaked past the drain deadline"
+    assert pool_threads() <= baseline, "worker threads leaked past the drain deadline"
     for stray in out_dir.glob("*.!dev"):
         stray.unlink()  # PermissionError here on Windows = a handle is still held
     # a resurrected worker would reopen/recreate its .!dev within one retry cycle
@@ -107,7 +107,7 @@ def _assert_drained_and_unlocked(out_dir: Path, baseline: int) -> None:
 def test_failed_batch_frees_handles_even_after_flag_clear(server: _Server, tmp_path: Path) -> None:
     """Stall fault fails the batch; clearing DOWNLOAD_CANCELLED (as dl.py does for the
     next track) must not resurrect the leaked racer's retry loop."""
-    baseline = _pool_threads()
+    baseline = pool_threads()
     host, port = str(server.server_address[0]), int(server.server_address[1])
     urls = [f"http://{host}:{port}/stall/0"] + [f"http://{host}:{port}/ok/{i}" for i in range(1, 4)]
 
@@ -117,13 +117,13 @@ def test_failed_batch_frees_handles_even_after_flag_clear(server: _Server, tmp_p
 
     assert DOWNLOAD_CANCELLED.is_set()
     DOWNLOAD_CANCELLED.clear()  # what dl.py does after a failed track
-    _assert_drained_and_unlocked(tmp_path, baseline)
+    assert_drained_and_unlocked(tmp_path, baseline)
 
 
 def test_external_cancel_frees_handles(server: _Server, tmp_path: Path) -> None:
     """DOWNLOAD_CANCELLED set mid-stream (sibling-track failure / SIGINT path): the batch
     must wind down without leaving locked handles or live workers."""
-    baseline = _pool_threads()
+    baseline = pool_threads()
     host, port = str(server.server_address[0]), int(server.server_address[1])
     urls = [f"http://{host}:{port}/slow/{i}" for i in range(4)]
 
@@ -132,4 +132,4 @@ def test_external_cancel_frees_handles(server: _Server, tmp_path: Path) -> None:
             DOWNLOAD_CANCELLED.set()
 
     DOWNLOAD_CANCELLED.clear()
-    _assert_drained_and_unlocked(tmp_path, baseline)
+    assert_drained_and_unlocked(tmp_path, baseline)

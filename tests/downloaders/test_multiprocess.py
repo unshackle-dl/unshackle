@@ -31,7 +31,7 @@ dl = importlib.import_module("unshackle.core.downloaders.requests")
 SEG_REPEAT = 32  # 8-digit index * 32 = 256-byte body, distinct per index
 
 
-def _seg_body(index: int) -> bytes:
+def seg_body(index: int) -> bytes:
     """Segment body that encodes its own index, so misfiled striding is detectable."""
     return (f"{index:08d}" * SEG_REPEAT).encode()
 
@@ -49,7 +49,7 @@ class _Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
-        body = _seg_body(index)
+        body = seg_body(index)
         self.send_response(200)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -78,7 +78,7 @@ def server():
 
 
 @pytest.fixture(autouse=True)
-def _clear_cancel():
+def clear_cancel():
     # spawned children carry their own flag, but the parent loop reads this process's flag;
     # keep it clean so cancel state never leaks between tests
     dl.DOWNLOAD_CANCELLED.clear()
@@ -86,14 +86,14 @@ def _clear_cancel():
     dl.DOWNLOAD_CANCELLED.clear()
 
 
-def _url(srv, path):
+def url(srv, path):
     return f"http://127.0.0.1:{srv.server_address[1]}{path}"
 
 
 def test_multiprocess_stride_downloads_all_segments_correctly(server, tmp_path):
     # >= MP_MIN_SEGMENTS with processes=2 engages the fan-out via the public entry point
     n = dl.MP_MIN_SEGMENTS
-    urls = [{"url": _url(server, f"/seg/{i}.bin")} for i in range(n)]
+    urls = [{"url": url(server, f"/seg/{i}.bin")} for i in range(n)]
 
     total_advance = 0
     for event in dl.requests(urls, output_dir=tmp_path, filename="seg_{i:04}.bin", max_workers=4, processes=2):
@@ -103,7 +103,7 @@ def test_multiprocess_stride_downloads_all_segments_correctly(server, tmp_path):
     assert len(files) == n
     for f in files:
         index = int(f.stem.split("_")[1])
-        assert f.read_bytes() == _seg_body(index), f"segment {index} holds another index's bytes (stride mapping bug)"
+        assert f.read_bytes() == seg_body(index), f"segment {index} holds another index's bytes (stride mapping bug)"
     # parent drops child advances and emits one advance=1 per file_downloaded
     assert total_advance == n
 
@@ -112,7 +112,7 @@ def test_multiprocess_child_crash_raises(server, tmp_path):
     # download_multiprocess has no MP_MIN_SEGMENTS gate, so drive it directly with 2 urls.
     # a dict url without "url" raises KeyError while requests() builds the save path (before
     # any retry loop), so the child sends __mp_error__ fast; the sibling downloads normally.
-    good = {"url": _url(server, "/seg/0.bin")}
+    good = {"url": url(server, "/seg/0.bin")}
     bad = {"nourl": True}
     with pytest.raises(RuntimeError):
         for _ in dl.download_multiprocess(
@@ -134,7 +134,7 @@ def test_multiprocess_child_crash_raises(server, tmp_path):
 def test_multiprocess_cancel_terminates_children(server, tmp_path):
     server.delay = 0.5  # slow segments so cancel lands well before the batch could finish
     n = dl.MP_MIN_SEGMENTS
-    urls = [{"url": _url(server, f"/seg/{i}.bin")} for i in range(n)]
+    urls = [{"url": url(server, f"/seg/{i}.bin")} for i in range(n)]
 
     baseline = len(multiprocessing.active_children())
     start = time.time()
@@ -160,12 +160,12 @@ def test_speed_limit_forces_single_process(server, tmp_path, monkeypatch):
     """A set speed limit must keep the batch in-process: spawned children re-import the
     module and would run with no TokenBucket, silently ignoring the configured cap."""
 
-    def _no_mp(**kwargs):
+    def no_mp(**kwargs):
         raise AssertionError("multiprocess fan-out engaged despite a speed limit")
 
-    monkeypatch.setattr(dl, "download_multiprocess", _no_mp)
+    monkeypatch.setattr(dl, "download_multiprocess", no_mp)
     n = dl.MP_MIN_SEGMENTS
-    urls = [{"url": _url(server, f"/seg/{i}.bin")} for i in range(n)]
+    urls = [{"url": url(server, f"/seg/{i}.bin")} for i in range(n)]
     dl.set_speed_limit(1_000_000_000)  # far above the tiny batch, so the test is not slowed
     try:
         for _ in dl.requests(urls, output_dir=tmp_path, filename="seg_{i:04}.bin", max_workers=4, processes=2):
@@ -176,4 +176,4 @@ def test_speed_limit_forces_single_process(server, tmp_path, monkeypatch):
     files = sorted(tmp_path.glob("seg_*.bin"))
     assert len(files) == n
     for f in files:
-        assert f.read_bytes() == _seg_body(int(f.stem.split("_")[1]))
+        assert f.read_bytes() == seg_body(int(f.stem.split("_")[1]))

@@ -30,7 +30,7 @@ WINDOW = 10.0
 DT = 0.5
 
 
-def _fill_window(c: AdaptiveWorkerController, rate: float, now: float) -> float:
+def fill_window(c: AdaptiveWorkerController, rate: float, now: float) -> float:
     """Record ``WINDOW`` seconds of samples at ``rate`` bytes/sec ending on the 0.5s grid.
 
     Records a sample at ``now`` and every 0.5s up to ``now + WINDOW`` so the oldest kept
@@ -44,7 +44,7 @@ def _fill_window(c: AdaptiveWorkerController, rate: float, now: float) -> float:
     return now
 
 
-def _run_tick(c: AdaptiveWorkerController, rate: float, now: float, errors: int = 0) -> tuple[int, float]:
+def run_tick(c: AdaptiveWorkerController, rate: float, now: float, errors: int = 0) -> tuple[int, float]:
     """Advance one tick recording samples at ``rate``, optionally inject ``errors``, then update."""
     end = now + TICK
     while now < end - 1e-9:
@@ -78,11 +78,11 @@ def test_ramps_up_while_speed_improves() -> None:
     now = 0.0
     c.update(now)  # arm
     rate = 1_000_000.0
-    now = _fill_window(c, rate, now)
+    now = fill_window(c, rate, now)
     targets = [c.update(now)]  # first evaluation: slow-start doubles 6 -> 12
     for _ in range(6):
         rate *= 2  # sustained >10% windowed gain each tick
-        target, now = _run_tick(c, rate, now)
+        target, now = run_tick(c, rate, now)
         targets.append(target)
     assert targets == sorted(targets)  # monotonic non-decreasing
     assert targets[-1] == 16  # climbed to the cap
@@ -94,13 +94,13 @@ def test_reverts_on_plateau_and_ends_slow_start() -> None:
     now = 0.0
     c.update(now)
     rate = 1_000_000.0
-    now = _fill_window(c, rate, now)
+    now = fill_window(c, rate, now)
     assert c.update(now) == 12  # first increase slow-starts 6 -> 12
     # hold the rate flat: <10% gain -> the tick reverts the increase to its restore point
-    target, now = _run_tick(c, rate, now)
+    target, now = run_tick(c, rate, now)
     assert target == 6
     # slow-start is over: the next successful probe is additive (+2), not a double
-    target, now = _run_tick(c, rate * 4, now)
+    target, now = run_tick(c, rate * 4, now)
     assert target == 8
 
 
@@ -108,17 +108,17 @@ def test_halves_and_cooldown_on_error_burst() -> None:
     c = AdaptiveWorkerController(cap=16, tick=TICK, window=WINDOW)
     now = 0.0
     c.update(now)
-    now = _fill_window(c, 1_000_000.0, now)
+    now = fill_window(c, 1_000_000.0, now)
     for _ in range(3):
         c.record_error(now)
     assert c.update(now) == 3  # 3 errors -> multiplicative decrease 6 // 2
 
     # cooldown tick holds even with improving throughput
-    target, now = _run_tick(c, 2_000_000.0, now)
+    target, now = run_tick(c, 2_000_000.0, now)
     assert target == 3
 
     # cooldown consumed -> climbing resumes
-    target, now = _run_tick(c, 4_000_000.0, now)
+    target, now = run_tick(c, 4_000_000.0, now)
     assert target == 5
 
 
@@ -128,11 +128,11 @@ def test_clamps_to_bounds_and_never_exceeds_cap() -> None:
     now = 0.0
     c.update(now)
     rate = 1_000_000.0
-    now = _fill_window(c, rate, now)
+    now = fill_window(c, rate, now)
     seen = [c.update(now)]
     for _ in range(10):
         rate *= 2
-        target, now = _run_tick(c, rate, now)
+        target, now = run_tick(c, rate, now)
         seen.append(target)
     assert all(2 <= s <= 4 for s in seen)
     assert max(seen) == 4  # never exceeds the cap
@@ -142,7 +142,7 @@ def test_error_burst_floors_at_min() -> None:
     c = AdaptiveWorkerController(cap=16, start=2, tick=TICK, window=WINDOW)
     now = 0.0
     c.update(now)
-    now = _fill_window(c, 1_000_000.0, now)
+    now = fill_window(c, 1_000_000.0, now)
     for _ in range(5):
         c.record_error(now)
     assert c.update(now) == 2  # max(ADAPTIVE_MIN, 2 // 2)
@@ -153,7 +153,7 @@ def test_tail_guard_suppresses_increase() -> None:
     c = AdaptiveWorkerController(cap=16, tick=TICK, window=WINDOW)
     now = 0.0
     c.update(now)  # arm at target 6
-    now = _fill_window(c, 1_000_000.0, now)
+    now = fill_window(c, 1_000_000.0, now)
     assert c.update(now, 3) == 6  # 3 < target 6 -> holds at 6 rather than climbing to 8
 
 
@@ -162,7 +162,7 @@ def test_tail_guard_none_path_unchanged() -> None:
     c = AdaptiveWorkerController(cap=16, tick=TICK, window=WINDOW)
     now = 0.0
     c.update(now)
-    now = _fill_window(c, 1_000_000.0, now)
+    now = fill_window(c, 1_000_000.0, now)
     assert c.update(now) == 12  # first evaluation slow-starts 6 -> 12
 
 
@@ -171,7 +171,7 @@ def test_tail_guard_still_halves_on_error_burst() -> None:
     c = AdaptiveWorkerController(cap=16, tick=TICK, window=WINDOW)
     now = 0.0
     c.update(now)
-    now = _fill_window(c, 1_000_000.0, now)
+    now = fill_window(c, 1_000_000.0, now)
     for _ in range(3):
         c.record_error(now)
     assert c.update(now, 2) == 3  # guard active (2 < 6) but 3 errors -> 6 // 2

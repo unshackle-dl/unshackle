@@ -88,7 +88,7 @@ def server():
 
 
 @pytest.fixture(autouse=True)
-def _clean_cancel():
+def clean_cancel():
     # a failing batch sets the process-global cancel; keep tests independent
     dl.DOWNLOAD_CANCELLED.clear()
     yield
@@ -96,20 +96,20 @@ def _clean_cancel():
 
 
 @pytest.fixture(autouse=True)
-def _boost_constants(monkeypatch):
+def boost_constants(monkeypatch):
     monkeypatch.setattr(dl, "TAIL_BOOST_MIN_SEGMENT_SIZE", BOOST_MIN)
     monkeypatch.setattr(dl, "TAIL_BOOST_PART_SIZE", BOOST_PART)
 
 
-def _url(srv, path):
+def url(srv, path):
     return f"http://127.0.0.1:{srv.server_address[1]}{path}"
 
 
-def _urls(srv):
-    return [{"url": _url(srv, f"/seg{i}.bin")} for i in range(SEG_COUNT)]
+def seg_urls(srv):
+    return [{"url": url(srv, f"/seg{i}.bin")} for i in range(SEG_COUNT)]
 
 
-def _run(srv, tmp_path, urls):
+def run(srv, tmp_path, urls):
     advances = 0
     for ev in dl.requests(urls, output_dir=tmp_path, filename="seg_{i:04}.bin", max_workers=MAX_WORKERS, adaptive=True):
         a = ev.get("advance")
@@ -118,7 +118,7 @@ def _run(srv, tmp_path, urls):
     return sorted(tmp_path.glob("seg_*.bin")), advances
 
 
-def _ranged_counts(srv):
+def ranged_counts(srv):
     with srv.lock:
         reqs = list(srv.requests)
     counts: dict[str, int] = {}
@@ -128,15 +128,15 @@ def _ranged_counts(srv):
     return counts
 
 
-def _boost_engaged(srv):
+def boost_engaged(srv):
     # a boosted path sees a 0-0 probe plus >=2 part windows; a normal segment sees no Range
-    return any(n > 1 for n in _ranged_counts(srv).values())
+    return any(n > 1 for n in ranged_counts(srv).values())
 
 
 def test_tail_boost_split_produces_byte_identical_segment(server, tmp_path):
-    files, advances = _run(server, tmp_path, _urls(server))
+    files, advances = run(server, tmp_path, seg_urls(server))
 
-    assert _boost_engaged(server), "tail boost never engaged; test would silently cover the normal path"
+    assert boost_engaged(server), "tail boost never engaged; test would silently cover the normal path"
     assert len(files) == SEG_COUNT
     assert all(f.read_bytes() == BODY for f in files)
     # part-mode byte advances are swallowed; each segment reports exactly one advance=1
@@ -147,13 +147,13 @@ def test_tail_boost_split_produces_byte_identical_segment(server, tmp_path):
 
 
 def test_tail_boost_finalize_last_part_wins(server, tmp_path):
-    files, _ = _run(server, tmp_path, _urls(server))
+    files, _ = run(server, tmp_path, seg_urls(server))
 
-    assert _boost_engaged(server), "tail boost never engaged; finalize path untested"
+    assert boost_engaged(server), "tail boost never engaged; finalize path untested"
     assert len(files) == SEG_COUNT
     # last part wins: the pre-truncated .tp.!dev is os.replace'd into save_path, leaving no target
     assert not list(tmp_path.glob("*.tp.!dev"))
-    for path in _ranged_counts(server):
+    for path in ranged_counts(server):
         i = int(path.removeprefix("/seg").removesuffix(".bin"))
         save_path = tmp_path / f"seg_{i:04}.bin"
         assert save_path.exists()
@@ -165,7 +165,7 @@ def test_tail_boost_part_failure_fails_batch_but_keeps_siblings_files_clean(serv
     monkeypatch.setattr(dl, "RETRY_WAIT", 0.01)
 
     with pytest.raises(Exception):
-        _run(server, tmp_path, _urls(server))
+        run(server, tmp_path, seg_urls(server))
 
     # the boosted tail segments (6, 7) hit the failing windows: no part run reaches parts_left==0
     # cleanly, so neither is finalized. sibling leaders that did finalize must be uncorrupted.

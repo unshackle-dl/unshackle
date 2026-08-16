@@ -70,11 +70,11 @@ def server():
     thread.join(timeout=5)
 
 
-def _url(srv, path="/parent.bin"):
+def url(srv, path="/parent.bin"):
     return f"http://127.0.0.1:{srv.server_address[1]}{path}"
 
 
-def _run(srv, tmp_path, urls, **kwargs):
+def run(srv, tmp_path, urls, **kwargs):
     for _ in dl.requests(urls, output_dir=tmp_path, filename="seg_{i:04}.bin", **kwargs):
         pass
     return sorted(tmp_path.glob("seg_*.bin"))
@@ -90,7 +90,7 @@ def test_adaptive_controller_starts_at_cap(server, tmp_path, monkeypatch):
         return ctl
 
     monkeypatch.setattr(dl, "AdaptiveWorkerController", recorder)
-    files = _run(server, tmp_path, [{"url": _url(server)} for _ in range(8)], max_workers=4, adaptive=True)
+    files = run(server, tmp_path, [{"url": url(server)} for _ in range(8)], max_workers=4, adaptive=True)
     assert len(files) == 8
     assert seen == {"cap": 4, "start": 4}
 
@@ -100,7 +100,7 @@ def test_small_segments_never_probed(server, tmp_path, monkeypatch):
         raise AssertionError("tail boost probed a small-segment batch")
 
     monkeypatch.setattr(dl, "probe_ranged", no_probe)
-    files = _run(server, tmp_path, [{"url": _url(server)} for _ in range(30)], max_workers=4, adaptive=True)
+    files = run(server, tmp_path, [{"url": url(server)} for _ in range(30)], max_workers=4, adaptive=True)
     assert len(files) == 30
     assert all(f.read_bytes() == PARENT for f in files)
 
@@ -108,9 +108,9 @@ def test_small_segments_never_probed(server, tmp_path, monkeypatch):
 def test_range_item_ignored_by_server_fails_not_corrupts(server, tmp_path, monkeypatch):
     server.honor_range = False
     monkeypatch.setattr(dl, "RETRY_WAIT", 0.01)
-    urls = [{"url": _url(server), "headers": {"Range": f"bytes={SLICE_START}-{SLICE_END}"}}]
+    urls = [{"url": url(server), "headers": {"Range": f"bytes={SLICE_START}-{SLICE_END}"}}]
     with pytest.raises(Exception):
-        _run(server, tmp_path, urls, max_workers=1)
+        run(server, tmp_path, urls, max_workers=1)
     # nothing finalized: a 200 full-parent body must never become the segment
     assert not list(tmp_path.glob("seg_*.bin"))
 
@@ -119,8 +119,8 @@ def test_range_item_spanning_whole_resource_accepts_200(server, tmp_path):
     # RFC 9110 lets a server ignore Range and answer 200 with the whole resource; when the
     # slice spans that resource the body is byte-identical to the 206 and must be kept
     server.honor_range = False
-    urls = [{"url": _url(server), "headers": {"Range": f"bytes=0-{len(PARENT) - 1}"}}]
-    files = _run(server, tmp_path, urls, max_workers=1)
+    urls = [{"url": url(server), "headers": {"Range": f"bytes=0-{len(PARENT) - 1}"}}]
+    files = run(server, tmp_path, urls, max_workers=1)
     assert files[0].read_bytes() == PARENT
     assert len(server.requests) == 1
 
@@ -128,8 +128,8 @@ def test_range_item_spanning_whole_resource_accepts_200(server, tmp_path):
 def test_range_item_retry_rewrites_slice(server, tmp_path, monkeypatch):
     server.truncate_first = True
     monkeypatch.setattr(dl, "RETRY_WAIT", 0.01)
-    urls = [{"url": _url(server), "headers": {"Range": f"bytes={SLICE_START}-{SLICE_END}"}}]
-    files = _run(server, tmp_path, urls, max_workers=1)
+    urls = [{"url": url(server), "headers": {"Range": f"bytes={SLICE_START}-{SLICE_END}"}}]
+    files = run(server, tmp_path, urls, max_workers=1)
     assert files[0].read_bytes() == PARENT[SLICE_START : SLICE_END + 1]
     # the retry must re-send the item's own Range, never a resume Range from the partial
     ranges = [r.get("Range") for r in server.requests]
@@ -138,24 +138,24 @@ def test_range_item_retry_rewrites_slice(server, tmp_path, monkeypatch):
 
 
 def test_segment_requests_ask_identity_encoding(server, tmp_path):
-    _run(server, tmp_path, [{"url": _url(server)}], max_workers=1)
+    run(server, tmp_path, [{"url": url(server)}], max_workers=1)
     assert all(r.get("Accept-Encoding") == "identity" for r in server.requests)
 
 
-def _exc_with_headers(headers):
+def exc_with_headers(headers):
     exc = Exception("boom")
     exc.response = SimpleNamespace(headers=headers)
     return exc
 
 
 def test_retry_sleep_honors_numeric_retry_after():
-    assert dl.retry_sleep(_exc_with_headers({"Retry-After": "3"}), 1) == 3.0
-    assert dl.retry_sleep(_exc_with_headers({"Retry-After": "9999"}), 1) == 60.0  # session.MAX_BACKOFF cap
+    assert dl.retry_sleep(exc_with_headers({"Retry-After": "3"}), 1) == 3.0
+    assert dl.retry_sleep(exc_with_headers({"Retry-After": "9999"}), 1) == 60.0  # session.MAX_BACKOFF cap
 
 
 def test_retry_sleep_honors_http_date_retry_after():
     when = format_datetime(datetime.now(timezone.utc) + timedelta(seconds=10), usegmt=True)
-    assert 5 <= dl.retry_sleep(_exc_with_headers({"Retry-After": when}), 1) <= 10
+    assert 5 <= dl.retry_sleep(exc_with_headers({"Retry-After": when}), 1) <= 10
 
 
 def test_retry_sleep_exponential_backoff_with_jitter():
@@ -166,7 +166,7 @@ def test_retry_sleep_exponential_backoff_with_jitter():
 
 
 def test_retry_sleep_invalid_retry_after_falls_back():
-    v = dl.retry_sleep(_exc_with_headers({"Retry-After": "soon"}), 1)
+    v = dl.retry_sleep(exc_with_headers({"Retry-After": "soon"}), 1)
     assert dl.RETRY_WAIT <= v <= dl.RETRY_WAIT * 1.1
 
 
@@ -174,20 +174,20 @@ def test_retry_sleep_naive_http_date_treated_as_utc():
     # "-0000" makes parsedate_to_datetime return a naive datetime; must clamp, not raise
     when = format_datetime(datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=10))
     assert when.endswith("-0000")
-    v = dl.retry_sleep(_exc_with_headers({"Retry-After": when}), 1)
+    v = dl.retry_sleep(exc_with_headers({"Retry-After": when}), 1)
     assert 5 <= v <= 10
 
 
 def test_retry_sleep_nan_retry_after_falls_back():
     # float("nan") parses; a non-finite wait must fall back to the exponential path
-    v = dl.retry_sleep(_exc_with_headers({"Retry-After": "nan"}), 1)
+    v = dl.retry_sleep(exc_with_headers({"Retry-After": "nan"}), 1)
     assert dl.RETRY_WAIT <= v <= dl.RETRY_WAIT * 1.1
 
 
 def test_retry_sleep_honors_retry_after_on_wrapped_cause():
     # RnetSession raises MaxRetriesError whose __cause__ HTTPError carries the response
     exc = Exception("max retries exceeded")
-    exc.__cause__ = _exc_with_headers({"Retry-After": "3"})
+    exc.__cause__ = exc_with_headers({"Retry-After": "3"})
     assert dl.retry_sleep(exc, 1) == 3.0
 
 
@@ -196,7 +196,7 @@ def test_transient_429_with_retry_after_does_not_abort_track(server, tmp_path, m
     dl.DOWNLOAD_CANCELLED.clear()
     monkeypatch.setattr(dl, "RETRY_WAIT", 0.01)
     server.fail_429_first = 2
-    files = _run(server, tmp_path, [{"url": _url(server, f"/seg{i}.bin")} for i in range(3)], max_workers=1)
+    files = run(server, tmp_path, [{"url": url(server, f"/seg{i}.bin")} for i in range(3)], max_workers=1)
     assert len(files) == 3
     assert all(f.read_bytes() == PARENT for f in files)
     assert not dl.DOWNLOAD_CANCELLED.is_set()

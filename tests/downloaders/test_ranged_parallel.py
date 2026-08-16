@@ -71,7 +71,7 @@ class _RangeHandler(BaseHTTPRequestHandler):
 
 
 @pytest.fixture(autouse=True)
-def _clear_cancelled():
+def clear_cancelled():
     # ranged failures must never touch the process-global flag; isolate every test from it
     dl.DOWNLOAD_CANCELLED.clear()
     yield
@@ -91,11 +91,11 @@ def server():
     thread.join(timeout=5)
 
 
-def _url(srv, path="/payload.bin"):
+def url(srv, path="/payload.bin"):
     return f"http://127.0.0.1:{srv.server_address[1]}{path}"
 
 
-def _run(srv, tmp_path, urls, **kwargs):
+def run(srv, tmp_path, urls, **kwargs):
     for _ in dl.requests(urls, output_dir=tmp_path, filename="seg_{i:04}.bin", **kwargs):
         pass
     return sorted(tmp_path.glob("seg_*.bin"))
@@ -105,7 +105,7 @@ def test_ranged_parallel_merges_byte_identical(server, tmp_path, monkeypatch):
     # shrink the thresholds so a 32 KiB payload splits into several parts
     monkeypatch.setattr(dl, "RANGE_PARALLEL_MIN_SIZE", 8 * 1024)
     monkeypatch.setattr(dl, "RANGE_PARALLEL_PART_SIZE", 2 * 1024)
-    files = _run(server, tmp_path, [{"url": _url(server)}], max_workers=4)
+    files = run(server, tmp_path, [{"url": url(server)}], max_workers=4)
     assert len(files) == 1
     assert files[0].read_bytes() == PAYLOAD
     # the split must actually have happened: >1 distinct window beyond the 0-0 probe
@@ -120,7 +120,7 @@ def test_ranged_part_requires_206(server, tmp_path, monkeypatch):
     monkeypatch.setattr(dl, "RETRY_WAIT", 0.01)
     save_path = tmp_path / "seg_0000.bin"
     gen = dl.dispatch_parts(
-        url=_url(server),
+        url=url(server),
         save_path=save_path,
         session=Session(),
         total_size=len(PAYLOAD),
@@ -141,7 +141,7 @@ def test_ranged_part_failure_stays_local(server, tmp_path, monkeypatch):
     dl.DOWNLOAD_CANCELLED.clear()
     save_path = tmp_path / "seg_0000.bin"
     gen = dl.dispatch_parts(
-        url=_url(server),
+        url=url(server),
         save_path=save_path,
         session=Session(),
         total_size=len(PAYLOAD),
@@ -157,8 +157,8 @@ def test_ranged_part_failure_stays_local(server, tmp_path, monkeypatch):
 def test_probe_ranged_parses_content_range(server):
     session = Session()
     server.mode = "range"
-    assert dl.probe_ranged(_url(server), session) == (len(PAYLOAD), True)
+    assert dl.probe_ranged(url(server), session) == (len(PAYLOAD), True)
     server.mode = "always_200"
-    assert dl.probe_ranged(_url(server), session) == (0, False)
+    assert dl.probe_ranged(url(server), session) == (0, False)
     server.mode = "gzip_probe"
-    assert dl.probe_ranged(_url(server), session) == (0, False)
+    assert dl.probe_ranged(url(server), session) == (0, False)

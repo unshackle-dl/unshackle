@@ -81,13 +81,13 @@ def server():
 
 
 @pytest.fixture(autouse=True)
-def _clear_cancel():
+def clear_cancel():
     dl.DOWNLOAD_CANCELLED.clear()
     yield
     dl.DOWNLOAD_CANCELLED.clear()
 
 
-def _url(server: _Server) -> str:
+def url(server: _Server) -> str:
     host, port = server.server_address
     return f"http://{host}:{port}/seg.bin"
 
@@ -96,16 +96,16 @@ def test_dispatch_parts_does_not_finalize_on_global_cancel(server, tmp_path):
     server.gate = threading.Event()
     save_path = tmp_path / "big.bin"
 
-    def _cancel_when_started() -> None:
+    def cancel_when_started() -> None:
         assert server.started.wait(timeout=10)
         dl.DOWNLOAD_CANCELLED.set()
         server.gate.set()
 
-    canceller = threading.Thread(target=_cancel_when_started)
+    canceller = threading.Thread(target=cancel_when_started)
     canceller.start()
     events = list(
         dl.dispatch_parts(
-            url=_url(server),
+            url=url(server),
             save_path=save_path,
             session=Session(),
             total_size=len(BODY),
@@ -124,9 +124,9 @@ def test_backoff_wait_exits_promptly_on_batch_abort(server, tmp_path, monkeypatc
     monkeypatch.setattr(dl, "retry_sleep", lambda exc, attempts: 30.0)
     abort = threading.Event()
 
-    def _consume() -> None:
+    def consume() -> None:
         for _ in dl.download(
-            url=_url(server),
+            url=url(server),
             save_path=tmp_path / "seg.bin",
             session=Session(),
             segmented=True,
@@ -134,7 +134,7 @@ def test_backoff_wait_exits_promptly_on_batch_abort(server, tmp_path, monkeypatc
         ):
             pass
 
-    worker = threading.Thread(target=_consume)
+    worker = threading.Thread(target=consume)
     start = time.monotonic()
     worker.start()
     time.sleep(0.5)  # let the first attempt fail and enter the backoff wait

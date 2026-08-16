@@ -30,7 +30,7 @@ from requests import Session
 dl = importlib.import_module("unshackle.core.downloaders.requests")
 
 
-def _consume(gen) -> list:
+def consume(gen) -> list:
     return list(gen)
 
 
@@ -100,7 +100,7 @@ class _FaultServer:
 
 
 @pytest.fixture(autouse=True)
-def _fast_retries(monkeypatch: pytest.MonkeyPatch) -> None:
+def fast_retries(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(dl, "RETRY_WAIT", 0)
 
 
@@ -112,7 +112,7 @@ def test_truncated_segment_is_not_finalized(tmp_path: Path, monkeypatch: pytest.
     with _FaultServer(body) as srv:
         srv.truncate_first = 99  # every attempt under-delivers
         with pytest.raises(Exception):
-            _consume(dl.download(url=srv.url, save_path=save, session=Session(), segmented=True))
+            consume(dl.download(url=srv.url, save_path=save, session=Session(), segmented=True))
     assert not save.exists(), "truncated segment must not be finalized as complete"
 
 
@@ -123,7 +123,7 @@ def test_interrupted_download_resumes_from_bytes_written(tmp_path: Path) -> None
     save = tmp_path / "file.bin"
     with _FaultServer(body) as srv:
         srv.truncate_first = 1  # first attempt delivers half then closes; retry completes
-        _consume(dl.download(url=srv.url, save_path=save, session=Session()))
+        consume(dl.download(url=srv.url, save_path=save, session=Session()))
     assert save.read_bytes() == body
     # attempt 1 had no Range; attempt 2 must resume partway in, not from 0 or past the end
     assert srv.ranges[0] is None
@@ -139,7 +139,7 @@ def test_resumes_from_preexisting_dev_partial(tmp_path: Path) -> None:
     tmp = save.with_name("file.bin.!dev")
     tmp.write_bytes(body[:1500])  # correct prefix the interrupted run flushed to disk
     with _FaultServer(body) as srv:
-        _consume(dl.download(url=srv.url, save_path=save, session=Session()))
+        consume(dl.download(url=srv.url, save_path=save, session=Session()))
     assert save.read_bytes() == body
     assert not tmp.exists()
     assert srv.ranges[0] == "bytes=1500-", f"expected resume from 1500, got {srv.ranges[0]}"
@@ -198,7 +198,7 @@ def test_byte_range_slice_segments_never_probed_or_boosted(tmp_path: Path, monke
     url = f"http://{host}:{port}/media.mp4"
     urls = [{"url": url, "headers": {"Range": f"bytes={i * seg}-{(i + 1) * seg - 1}"}} for i in range(nseg)]
     try:
-        _consume(
+        consume(
             dl.requests(
                 urls=urls,
                 output_dir=tmp_path,
@@ -226,6 +226,6 @@ def test_oversized_resume_416_restarts_clean(tmp_path: Path) -> None:
     tmp = save.with_name(f"{save.name}.!dev")
     tmp.write_bytes(b"X" * 4096)  # poisoned partial, bigger than the server's body
     with _FaultServer(body) as srv:
-        _consume(dl.download(url=srv.url, save_path=save, session=Session()))
+        consume(dl.download(url=srv.url, save_path=save, session=Session()))
     assert save.read_bytes() == body
     assert srv.ranges[0] is not None and "4096" in srv.ranges[0]  # first request over-ranged → 416

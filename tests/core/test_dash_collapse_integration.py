@@ -76,7 +76,7 @@ def server():
 
 
 @pytest.fixture(autouse=True)
-def _clear_cancel():
+def clear_cancel():
     was_set = DOWNLOAD_CANCELLED.is_set()
     DOWNLOAD_CANCELLED.clear()
     yield
@@ -86,16 +86,16 @@ def _clear_cancel():
         DOWNLOAD_CANCELLED.clear()
 
 
-def _base(srv) -> str:
+def base(srv) -> str:
     return f"http://127.0.0.1:{srv.server_address[1]}/"
 
 
-def _collapse_mpd(srv) -> str:
+def collapse_mpd(srv) -> str:
     # SegmentList on one media.mp4: init is bytes [0, INIT_LEN), media ranges cover the rest
     # contiguously -> collapsible_single_url returns the URL and download_track collapses.
     return f"""<?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011">
-  <BaseURL>{_base(srv)}</BaseURL>
+  <BaseURL>{base(srv)}</BaseURL>
   <Period id="0">
     <AdaptationSet contentType="video" mimeType="video/mp4" lang="en">
       <Representation id="v0" codecs="avc1.640028" bandwidth="1000000" width="1920" height="1080">
@@ -111,11 +111,11 @@ def _collapse_mpd(srv) -> str:
 </MPD>"""
 
 
-def _mixed_mpd(srv) -> str:
+def mixed_mpd(srv) -> str:
     # Two SegmentURLs on distinct paths -> mixed URLs -> predicate False -> segmented path.
     return f"""<?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011">
-  <BaseURL>{_base(srv)}</BaseURL>
+  <BaseURL>{base(srv)}</BaseURL>
   <Period id="0">
     <AdaptationSet contentType="video" mimeType="video/mp4" lang="en">
       <Representation id="v0" codecs="avc1.640028" bandwidth="1000000" width="1920" height="1080">
@@ -130,11 +130,11 @@ def _mixed_mpd(srv) -> str:
 </MPD>"""
 
 
-def _track(mpd: str, srv):
-    return DASH.from_text(mpd, url=f"{_base(srv)}manifest.mpd").to_tracks(language="en").videos[0]
+def make_track(mpd: str, srv):
+    return DASH.from_text(mpd, url=f"{base(srv)}manifest.mpd").to_tracks(language="en").videos[0]
 
 
-def _ctx(tmp_path, name="out.mp4"):
+def make_ctx(tmp_path, name="out.mp4"):
     return DownloadContext(
         save_path=tmp_path / name,
         save_dir=tmp_path / "v0_segments",
@@ -144,8 +144,8 @@ def _ctx(tmp_path, name="out.mp4"):
 
 def test_collapse_downloads_parent_whole_in_one_direct_request(server, tmp_path):
     server.routes["/media.mp4"] = PARENT
-    track = _track(_collapse_mpd(server), server)
-    ctx = _ctx(tmp_path, "collapsed.mp4")
+    track = make_track(collapse_mpd(server), server)
+    ctx = make_ctx(tmp_path, "collapsed.mp4")
 
     DASH.download_track(track, ctx)
 
@@ -166,8 +166,8 @@ def test_non_collapse_takes_segmented_merge_path(server, tmp_path):
     server.routes["/init.bin"] = INIT2
     server.routes["/part0.bin"] = PART0
     server.routes["/part1.bin"] = PART1
-    track = _track(_mixed_mpd(server), server)
-    ctx = _ctx(tmp_path, "merged.mp4")
+    track = make_track(mixed_mpd(server), server)
+    ctx = make_ctx(tmp_path, "merged.mp4")
 
     DASH.download_track(track, ctx)
 

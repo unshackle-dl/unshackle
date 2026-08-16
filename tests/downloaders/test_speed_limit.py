@@ -13,7 +13,7 @@ requests_downloader = importlib.import_module("unshackle.core.downloaders.reques
 
 
 @pytest.fixture(autouse=True)
-def _clean_cancel():
+def clean_cancel():
     # a failing batch sets the process-global cancel, which TokenBucket.consume waits on;
     # keep tests independent
     DOWNLOAD_CANCELLED.clear()
