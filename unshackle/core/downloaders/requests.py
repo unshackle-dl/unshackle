@@ -5,7 +5,7 @@ import statistics
 import threading
 import time
 from collections import deque
-from concurrent.futures import FIRST_COMPLETED, wait
+from concurrent.futures import FIRST_COMPLETED, Future, wait
 from concurrent.futures.thread import ThreadPoolExecutor
 from http.cookiejar import CookieJar
 from pathlib import Path
@@ -824,19 +824,48 @@ def requests(
                     with seg_lock:
                         seg_active[index] -= 1
 
-        futures = [pool.submit(download_worker, i, url) for i, url in enumerate(urls)]
-        pending = set(futures)
+        outstanding = 0
+        failures: list[BaseException] = []
+
+        def track_future(future: Future) -> None:
+            if not future.cancelled():
+                exc = future.exception()
+                if exc is not None:
+                    failures.append(exc)
+            event_queue.put(dict(worker_done=True))
+
+        def spawn(index: int, url_item: dict[str, Any], hedge: bool = False) -> None:
+            nonlocal outstanding
+            outstanding += 1
+            pool.submit(download_worker, index, url_item, hedge).add_done_callback(track_future)
+
+        queue_depth = max_workers * 2
+        next_index = 0
+
+        def fill_queue() -> None:
+            nonlocal next_index
+            while next_index < len(urls) and outstanding < queue_depth:
+                spawn(next_index, urls[next_index])
+                next_index += 1
+
+        fill_queue()
 
         pending_advance = 0
 
         try:
-            while pending:
-                # Drain queued events — batch advances, track bytes for speed
+            while outstanding or next_index < len(urls):
+                # Drain queued events - batch advances, track bytes for speed. The first get
+                # blocks so the loop idles between events instead of spinning.
+                blocking = True
                 while True:
                     try:
-                        event = event_queue.get_nowait()
+                        event = event_queue.get(timeout=0.1) if blocking else event_queue.get_nowait()
                     except Empty:
                         break
+                    blocking = False
+                    if event.get("worker_done"):
+                        outstanding -= 1
+                        continue
                     # Accumulate advance events for batched yield
                     advance = event.get("advance")
                     if advance:
@@ -848,6 +877,8 @@ def requests(
                         total_bytes += written
                     # Pass through other events (file_downloaded, total, etc.)
                     yield event
+
+                fill_queue()
 
                 # Yield batched advances every drain cycle for responsive progress bar
                 if pending_advance > 0:
@@ -862,10 +893,10 @@ def requests(
                         yield dict(downloaded=f"{filesize.decimal(math.ceil(rate))}/s")
                     last_speed_report = now
 
-                # hedge stuck segments once spare workers exist (pending < max_workers);
-                # throttled to ~0.5s and median recomputed only when seg_durations grows
+                # hedge stuck segments once spare workers exist; throttled to ~0.5s and
+                # median recomputed only when seg_durations grows
                 if (
-                    len(pending) < max_workers
+                    outstanding < max_workers
                     and seg_durations
                     and speed_limiter is None
                     and now - last_hedge_check > 0.5
@@ -883,37 +914,37 @@ def requests(
                             for i, started in seg_start.items()
                             if i not in seg_done and i not in hedged and now - started > threshold
                         ]
-                    for i in stuck[: max_workers - len(pending)]:
+                    for i in stuck[: max_workers - outstanding]:
                         hedged.add(i)
-                        pending.add(pool.submit(download_worker, i, urls[i], True))
+                        spawn(i, urls[i], True)
 
                 # all segments claimed; superseded losers exit via their claimed() check
                 if len(seg_done) == len(urls):
                     break
 
-                # Wait efficiently for next future completion (OS condition variable)
-                completed, pending = wait(pending, timeout=0.1, return_when=FIRST_COMPLETED)
-                for future in completed:
-                    exc = future.exception()
-                    if isinstance(exc, KeyboardInterrupt):
-                        raise KeyboardInterrupt()
-                    elif exc:
-                        DOWNLOAD_CANCELLED.set()
-                        yield dict(downloaded="[red]FAILING")
-                        pool.shutdown(wait=False, cancel_futures=True)
-                        yield dict(downloaded="[red]FAILED")
-                        if debug_logger:
-                            debug_logger.log(
-                                level="ERROR",
-                                operation="downloader_failed",
-                                message=f"Download failed: {exc}",
-                                error=exc,
-                                context={
-                                    "url_count": len(urls),
-                                    "output_dir": str(output_dir),
-                                },
-                            )
-                        raise exc
+                if failures:
+                    break
+
+            if any(isinstance(exc, KeyboardInterrupt) for exc in failures):
+                raise KeyboardInterrupt()
+            if failures and len(seg_done) != len(urls):
+                exc = failures[0]
+                DOWNLOAD_CANCELLED.set()
+                yield dict(downloaded="[red]FAILING")
+                pool.shutdown(wait=False, cancel_futures=True)
+                yield dict(downloaded="[red]FAILED")
+                if debug_logger:
+                    debug_logger.log(
+                        level="ERROR",
+                        operation="downloader_failed",
+                        message=f"Download failed: {exc}",
+                        error=exc,
+                        context={
+                            "url_count": len(urls),
+                            "output_dir": str(output_dir),
+                        },
+                    )
+                raise exc
         except KeyboardInterrupt:
             DOWNLOAD_CANCELLED.set()
             yield dict(downloaded="[yellow]CANCELLING")
@@ -931,6 +962,8 @@ def requests(
                 event = event_queue.get_nowait()
             except Empty:
                 break
+            if event.get("worker_done"):
+                continue
             advance = event.get("advance")
             if advance:
                 pending_advance += advance

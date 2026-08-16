@@ -149,6 +149,29 @@ def test_failed_segment_fails_the_batch(tmp_path, server):
     assert sorted(p.name for p in tmp_path.iterdir() if p.suffix == ".mp4") == []
 
 
+@pytest.mark.parametrize("server", ["ok"], indirect=True)
+def test_batch_larger_than_the_queue_window_downloads_every_segment(tmp_path, server):
+    # a broken top-up livelocks the drain loop instead of erroring, so consume on a thread and
+    # let the timeout fail the test
+    urls = [server.url] * 6
+    advanced = 0
+
+    def consume():
+        nonlocal advanced
+        advanced = sum(
+            event["advance"]
+            for event in requests_downloader(urls=urls, output_dir=tmp_path, filename="{i:02}.mp4", max_workers=1)
+            if "advance" in event
+        )
+
+    consumer = threading.Thread(target=consume, daemon=True)
+    consumer.start()
+    consumer.join(timeout=30)
+    assert not consumer.is_alive(), "downloader never finished the batch"
+    assert advanced == len(urls)
+    assert sorted(p.name for p in tmp_path.iterdir() if p.suffix == ".mp4") == [f"{i:02}.mp4" for i in range(6)]
+
+
 @pytest.mark.parametrize(
     ("item", "expected"),
     [
