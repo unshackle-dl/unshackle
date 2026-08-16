@@ -242,7 +242,7 @@ use `self.request_input(prompt)`, never a bare `input()`. Under `serve` mode
 there is no local terminal, so a bare `input()` would hang the server waiting on
 stdin that never arrives; `request_input` instead relays the prompt to the
 remote client through the attached `InputBridge`. Locally it routes through the
-shared Rich console (`console.input`) so the prompt renders correctly alongside
+shared Rich console (`prompt_user`) so the prompt renders correctly alongside
 progress and log output.
 
 !!! warning "Key token caches by whatever varies per session"

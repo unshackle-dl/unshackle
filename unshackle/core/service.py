@@ -16,11 +16,10 @@ import requests
 from requests.adapters import HTTPAdapter, Retry
 from rich.padding import Padding
 from rich.rule import Rule
-from rich.text import Text
 
 from unshackle.core.cacher import Cacher
 from unshackle.core.config import config
-from unshackle.core.console import console
+from unshackle.core.console import console, prompt_user
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.drm import DRM_T
@@ -369,9 +368,7 @@ class Service(metaclass=ABCMeta):
         """
         if self._input_bridge is not None:
             return self._input_bridge.request_input(prompt)
-        indent = " " * 5
-        padded = indent + prompt.replace("\n", "\n" + indent)
-        return console.input(Text(padded, style="text"))
+        return prompt_user(prompt)
 
     def search(self) -> Generator[SearchResult, None, None]:
         """

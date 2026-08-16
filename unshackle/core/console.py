@@ -427,4 +427,20 @@ console = ComfyConsole(
 )
 
 
-__all__ = ("ComfyLogRenderer", "ComfyRichHandler", "ComfyConsole", "GradientPulseBarColumn", "SyncLive", "console")
+def prompt_user(prompt: str) -> str:
+    """Ask the user for input on the shared console, themed and indented like the rest of the output."""
+    indent = " " * 5
+    body = Text(indent + prompt.rstrip("\n ").replace("\n", "\n" + indent), style="text")
+    body.append("\n" + indent + "> ", style="rule.text")
+    return console.input(body)
+
+
+__all__ = (
+    "ComfyLogRenderer",
+    "ComfyRichHandler",
+    "ComfyConsole",
+    "GradientPulseBarColumn",
+    "SyncLive",
+    "console",
+    "prompt_user",
+)

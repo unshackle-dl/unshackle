@@ -22,7 +22,7 @@ from rich.padding import Padding
 from rich.rule import Rule
 
 from unshackle.core.config import config
-from unshackle.core.console import console
+from unshackle.core.console import console, prompt_user
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.titles import Title_T, Titles_T, remap_titles
@@ -616,7 +616,11 @@ class RemoteService:
 
             if status == "pending_input":
                 prompt = resp.get("prompt", "Enter input: ")
-                user_response = click.prompt(prompt.rstrip("\n "), default="", show_default=False)
+                try:
+                    user_response = prompt_user(prompt)
+                except EOFError:
+                    log.error("Remote auth needs interactive input but stdin is closed")
+                    raise SystemExit(1) from None
                 self.client.post(
                     f"/api/session/{self._session_id}/prompt",
                     {"response": user_response},

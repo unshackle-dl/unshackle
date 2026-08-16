@@ -11,10 +11,9 @@ from pathlib import Path
 from typing import Optional
 
 import requests
-from rich.text import Text
 
 from unshackle.core.config import config
-from unshackle.core.console import console
+from unshackle.core.console import prompt_user
 from unshackle.core.proxies.proxy import Proxy
 
 log = logging.getLogger("proxies.proton")
@@ -326,13 +325,12 @@ class ProtonVPN(Proxy):
             log.error("Proton: unexpected TV login response")
             return False
 
-        indent = " " * 5
         prompt = (
             "Proton: open https://account.proton.me/vpn/tv/code\n"
             f"Enter code {user_code}, then press Enter to continue..."
         )
         try:
-            console.input(Text(indent + prompt.replace("\n", "\n" + indent), style="text"))
+            prompt_user(prompt)
         except EOFError:
             return False
 
