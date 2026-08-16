@@ -2771,7 +2771,7 @@ seconds left before this specific session expires.</p>
 <p>Source: <code>unshackle/core/remote_service.py</code>. This is the canonical consumer of the
 session API and a good template for any client.</p>
 <ul>
-<li><strong><code>RemoteClient._request</code></strong> sets <code>X-Secret-Key</code> and <code>User-Agent: unshackle/&lt;version&gt;</code>,
+<li><strong><code>RemoteClient.request</code></strong> sets <code>X-Secret-Key</code> and <code>User-Agent: unshackle/&lt;version&gt;</code>,
   uses a 120s timeout for <code>POST</code> and 30s for <code>GET</code>/<code>DELETE</code>, and treats any
   <code>status_code &gt;= 400</code> as fatal: it logs <code>Server error [&lt;error_code&gt;]: &lt;message&gt;</code>
   and raises <code>SystemExit(1)</code>.</li>

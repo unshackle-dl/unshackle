@@ -2105,6 +2105,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Hybrid.probe_hdr_metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;probe_hdr_metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Hybrid.convert_hdr10plus_to_dv" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2181,6 +2192,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;sanitize_webvtt_cue_identifiers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Subtitle.parse_vtt_time" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;parse_vtt_time
       
     </span>
   </a>
@@ -3149,6 +3171,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Hybrid.probe_hdr_metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;probe_hdr_metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Hybrid.convert_hdr10plus_to_dv" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3225,6 +3258,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;sanitize_webvtt_cue_identifiers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Subtitle.parse_vtt_time" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;parse_vtt_time
       
     </span>
   </a>
@@ -4936,12 +4980,36 @@ MaxCLL. A value of 0 means "unknown" and is preserved as-is.</p>
 
 
 <a href="#unshackle.core.tracks.Hybrid.extract_hdr10plus" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">extract_hdr10plus</span><span class="p">(</span><span class="n">_video</span><span class="p">)</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">extract_hdr10plus</span><span class="p">(</span><span class="n">video</span><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
 
         <p>Extract HDR10+ metadata from the video stream</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Hybrid.probe_hdr_metadata" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">probe_hdr_metadata</span>
+
+
+<a href="#unshackle.core.tracks.Hybrid.probe_hdr_metadata" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">probe_hdr_metadata</span><span class="p">()</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Extract mastering display and content light level metadata from the HDR10 stream via ffprobe.</p>
+<p>Returns (max_mdl, min_mdl, max_cll, max_fall) in dovi_tool level6 units:
+- max_mdl: nits (integer)
+- min_mdl: 0.0001 nit units (integer)
+- max_cll / max_fall: nits (integer)</p>
 
 
     </div>
@@ -5429,6 +5497,30 @@ some parsers (like pysubs2).</p>
           </tr>
       </tbody>
     </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Subtitle.parse_vtt_time" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">parse_vtt_time</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-staticmethod"><code>staticmethod</code></small>
+  </span>
+
+<a href="#unshackle.core.tracks.Subtitle.parse_vtt_time" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">parse_vtt_time</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Parse WebVTT timestamp to milliseconds. Returns 0 for malformed input.</p>
 
 
     </div>
