@@ -2778,7 +2778,8 @@ session API and a good template for any client.</p>
 <li><strong>Retries.</strong> The download-side HTTP session mounts an adapter with
   <code>Retry(total=5, backoff_factor=0.2, status_forcelist=[429, 500, 502, 503, 504])</code>.</li>
 <li><strong>Flow.</strong> <code>authenticate()</code> → <code>create</code> (+ poll <code>prompt</code> every 2s up to a 600s
-  deadline, answering <code>pending_input</code> prompts) → <code>get_titles()</code> → <code>get_tracks()</code>
+  deadline, answering <code>pending_input</code> prompts; with stdin closed the client logs an
+  error and raises <code>SystemExit(1)</code> instead of posting an empty answer) → <code>get_titles()</code> → <code>get_tracks()</code>
   (merging returned <code>session_headers</code>/<code>session_cookies</code>, re-parsing <code>manifests</code>) →
   license via proxy or <code>server_cdm</code> → <code>close()</code> (<code>DELETE</code>, saving any returned
   <code>cache</code>).</li>
