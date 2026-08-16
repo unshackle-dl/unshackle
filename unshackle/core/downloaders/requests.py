@@ -422,6 +422,27 @@ def range_covers_full_body(headers: MutableMapping[str, Any], content_length: in
     return start == 0 and content_length == end + 1
 
 
+def parse_content_range(value: Any) -> Optional[tuple[int, int, Optional[int]]]:
+    """Parse a 206's ``Content-Range`` into ``(start, end, total)``; None when absent or unparseable.
+
+    ``total`` is None for an unknown complete length (``*``). None fails closed: a caller
+    must not place bytes at an offset it cannot prove the server agreed to.
+    """
+    if isinstance(value, bytes):
+        value = value.decode("latin1", "replace")
+    match = re.fullmatch(r"bytes\s+(\d+)-(\d+)/(\d+|\*)", str(value or "").strip(), re.IGNORECASE)
+    if not match:
+        return None
+    return int(match.group(1)), int(match.group(2)), None if match.group(3) == "*" else int(match.group(3))
+
+
+def request_range_start(headers: MutableMapping[str, Any]) -> Optional[int]:
+    """Start byte of the request's ``Range`` header; None when absent or not ``bytes=start-...``."""
+    value = str(next((v for k, v in headers.items() if str(k).lower() == "range"), ""))
+    match = re.match(r"bytes=(\d+)-", value.strip())
+    return int(match.group(1)) if match else None
+
+
 def force_unblock_stream(stream: Any) -> None:
     """Best-effort: shut the stream's socket so a thread parked in a blocking read returns now.
 
@@ -723,10 +744,42 @@ def download(
 
             # item_range 206s reflect the slice's own Range, not a resume; those retries rewrite in "wb"
             resumed = (not part_mode) and (not item_range) and resume_offset > 0 and stream.status_code == 206
+            if resumed:
+                content_range = parse_content_range(
+                    stream.headers.get("Content-Range") or stream.headers.get("content-range")
+                )
+                if content_range is None or content_range[0] != resume_offset:
+                    # some servers answer `bytes=X-` with a 206 for the whole resource;
+                    # appending that body would misplace every byte after the partial. A
+                    # proven full-resource-from-zero body is byte-identical to a 200, so
+                    # keep the response and rewrite from scratch; anything else (alien
+                    # start, prefix slice, no provable placement) restarts clean like a 416
+                    start, end, total = content_range or (None, None, None)
+                    if start == 0 and total is not None and end == total - 1:
+                        resumed = False
+                        resume_offset = 0
+                    else:
+                        try:
+                            stream.close()
+                        except Exception:
+                            pass
+                        tmp_file.unlink(missing_ok=True)
+                        resume_offset = 0
+                        written = 0
+                        continue
             if (not part_mode) and resume_offset > 0 and not resumed:
                 resume_offset = 0
-            if part_mode and stream.status_code != 206:
-                raise IOError(f"expected 206 for ranged part, got {stream.status_code}")
+            if part_mode and part_offset is not None and part_end is not None:  # spelled so mypy narrows
+                if stream.status_code != 206:
+                    raise IOError(f"expected 206 for ranged part, got {stream.status_code}")
+                content_range = parse_content_range(
+                    stream.headers.get("Content-Range") or stream.headers.get("content-range")
+                )
+                if content_range is None or content_range[0] != part_offset + written or content_range[1] > part_end:
+                    # a wrong start would land bytes at the wrong offset in the shared file,
+                    # and an end past part_end would spill into a sibling part's region; fail
+                    # the attempt before any byte is written
+                    raise IOError(f"part {part_offset}-{part_end} got Content-Range {content_range!r}")
             if use_rnet:
                 content_encoded = is_content_encoded(
                     stream.headers.get("Content-Encoding") or stream.headers.get("content-encoding")
@@ -748,6 +801,19 @@ def download(
                 # 200 body is byte-identical to the 206 and safe to keep
                 if not (stream.status_code == 200 and range_covers_full_body(req_headers, content_length)):
                     raise IOError(f"expected 206 for byte-range segment, got {stream.status_code}")
+
+            if item_range and not part_mode and stream.status_code == 206:
+                # a 206 for a different range than the slice asked for (e.g. the whole
+                # parent) would be written as the segment and silently corrupt the merge
+                slice_start = request_range_start(req_headers)
+                if slice_start is not None:
+                    content_range = parse_content_range(
+                        stream.headers.get("Content-Range") or stream.headers.get("content-range")
+                    )
+                    if content_range is None or content_range[0] != slice_start:
+                        raise IOError(
+                            f"byte-range segment got Content-Range {content_range!r}, expected start {slice_start}"
+                        )
 
             if resumed and content_encoded:
                 try:
