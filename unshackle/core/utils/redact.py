@@ -41,7 +41,7 @@ def safe_display_url(url: str) -> str:
     return urlunsplit((parts.scheme, netloc, parts.path, "", ""))
 
 
-def _path_bases() -> list[tuple[str, str]]:
+def path_bases() -> list[tuple[str, str]]:
     """Local base directories to strip from logged paths, longest-first.
 
     Anchors everything left of the unshackle install/root (and the venv / home dir) so an
@@ -52,14 +52,14 @@ def _path_bases() -> list[tuple[str, str]]:
     try:
         # redact.py lives at <root>/unshackle/core/utils/redact.py -> parents[3] == project/install root
         candidates.append((str(Path(__file__).resolve().parents[3]), "<unshackle>"))
-    except Exception:
+    except (OSError, IndexError):
         pass
     for raw in (getattr(sys, "prefix", ""), getattr(sys, "base_prefix", "")):
         if raw:
             candidates.append((str(Path(raw)), "<venv>"))
     try:
         candidates.append((str(Path.home()), "~"))
-    except Exception:
+    except (OSError, RuntimeError):
         pass
 
     bases: list[tuple[str, str]] = []
@@ -74,10 +74,10 @@ def _path_bases() -> list[tuple[str, str]]:
     return bases
 
 
-_PATH_BASES = _path_bases()
+PATH_BASES = path_bases()
 
 
-def _path_redaction_enabled() -> bool:
+def path_redaction_enabled() -> bool:
     """Path-prefix redaction is on unless ``config.redact_paths`` is explicitly False."""
     try:
         from unshackle.core.config import config  # lazy: config doesn't import redact, so no cycle
@@ -93,9 +93,9 @@ def redact_path(text: Optional[str]) -> Optional[str]:
     Idempotent and cheap; only touches strings that actually contain a known base dir, so URLs
     and relative paths pass through unchanged. Disabled by ``config.redact_paths: false``.
     """
-    if not isinstance(text, str) or not text or not _path_redaction_enabled():
+    if not isinstance(text, str) or not text or not path_redaction_enabled():
         return text
-    for base, token in _PATH_BASES:
+    for base, token in PATH_BASES:
         if base in text:
             text = text.replace(base, token)
     return text
@@ -104,16 +104,16 @@ def redact_path(text: Optional[str]) -> Optional[str]:
 # any http(s) URL embedded in free text (content/manifest/segment/api locations)
 URL_RE = re.compile(r"https?://[^\s\"'<>\\]+", re.IGNORECASE)
 # a plausible file extension to preserve (e.g. .mpd, .m3u8, .mp4, .m4s, .vtt)
-_EXT_RE = re.compile(r"^\.[A-Za-z0-9]{1,5}$")
+EXT_RE = re.compile(r"^\.[A-Za-z0-9]{1,5}$")
 
 
-def _collapse_url(match: "re.Match[str]") -> str:
+def collapse_url(match: "re.Match[str]") -> str:
     url = match.group(0)
     try:
         suffix = Path(urlsplit(url).path).suffix
     except Exception:
         suffix = ""
-    if not _EXT_RE.match(suffix):
+    if not EXT_RE.match(suffix):
         suffix = ""
     return f"redacted{suffix}"
 
@@ -127,7 +127,7 @@ def redact_url(text: Optional[str]) -> Optional[str]:
     """
     if not isinstance(text, str) or not text:
         return text
-    return URL_RE.sub(_collapse_url, text)
+    return URL_RE.sub(collapse_url, text)
 
 
 def redact_all(text: Optional[str]) -> Optional[str]:

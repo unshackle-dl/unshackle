@@ -25,9 +25,12 @@ def safe_inflate(data: bytes, max_size: int = MAX_INFLATE_BYTES) -> bytes:
 
 
 @web.middleware
-async def compression_middleware(request: web.Request, handler) -> web.Response:
+async def compression_middleware(request: web.Request, handler) -> web.StreamResponse:
     """Compress JSON responses with gzip when the client supports it."""
     response = await handler(request)
+
+    if not isinstance(response, web.Response):
+        return response
 
     accept_encoding = request.headers.get("Accept-Encoding", "")
     if "gzip" not in accept_encoding:
@@ -37,7 +40,7 @@ async def compression_middleware(request: web.Request, handler) -> web.Response:
         return response
 
     body = response.body
-    if body is None or len(body) < 256:
+    if not isinstance(body, (bytes, bytearray)) or len(body) < 256:
         return response
 
     from unshackle.core.config import config

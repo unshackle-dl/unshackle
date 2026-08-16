@@ -254,6 +254,47 @@ it is used. You can override each stream type independently:
 unshackle dl -al en EXAMPLE 81234567
 ```
 
+### Excluding languages
+
+Put a `-` in front of a language to remove it from the selection. This works on `-l`,
+`-vl`, `-al`, `-sl`, and `-fsl`, in the same way as it works on `-w` / `--wanted`.
+
+```shell title="Every subtitle language except Spanish"
+unshackle dl -sl all,-es EXAMPLE 81234567
+```
+
+The exclusions are subtracted from the languages the flag would otherwise select, and the
+order of the values does not matter. If you give only exclusions, the flag keeps its own
+default: `-sl -es` is the same as `-sl all,-es`, and `-l -es` is the same as `-l orig,-es`.
+
+```shell title="Only exclusions"
+# every subtitle language except Spanish and French
+unshackle dl -sl -es,-fr EXAMPLE 81234567
+
+# the original audio language, unless it is Spanish
+unshackle dl -l -es EXAMPLE 81234567
+```
+
+`-vl` and `-al` have no default of their own: they cascade to `-l`. An override that names
+a language replaces `-l` for that stream type, exclusions included. An override that gives
+only exclusions adds them to the ones from `-l`.
+
+```shell title="Cascade"
+# video keeps the Japanese track; only the audio drops Spanish
+unshackle dl -l en,-es -vl ja EXAMPLE 81234567
+```
+
+!!! note "Rules for exclusion tokens"
+    - `orig` is resolved per title, so `-sl -orig` drops the subtitles in the title's
+      original language.
+    - `--exact-lang` applies to exclusions with the same matching rules as selection:
+      `-es` removes exactly the tracks that `es` would select. Without it, `-es` also
+      removes `es-419` and `es-ES`.
+    - Tracks with no language tag are never excluded.
+    - `-all` is rejected. Name the languages you do not want instead.
+    - The comma form is the documented style. `-sl -es` also works, but a shell can read
+      a lone `-es` as another option.
+
 ### Sort order
 
 `-l` and `-sl` **select** languages: naming some removes the rest. To keep every language
@@ -296,6 +337,10 @@ every available subtitle language is downloaded.
 unshackle dl -sl en,es EXAMPLE 81234567
 ```
 
+To keep the default and drop one language, use the `-` prefix described in
+[Excluding languages](#excluding-languages). `-sl all,-es` keeps every subtitle language
+except Spanish, forced Spanish subtitles included.
+
 ### Requiring subtitles
 
 `--require-subs` takes a list of languages that **must** exist. If they all exist, *all*
@@ -311,7 +356,8 @@ download on the presence of a specific subtitle track.
   Without this flag, forced subs are dropped from selection.
 - `-fsl` / `--forced-s-lang`: keep forced subtitles only in these languages (implies
   `-fs`). Works independently of `--s-lang`, so `-sl all -fsl en` grabs every full
-  subtitle but only the English forced track.
+  subtitle but only the English forced track. It accepts exclusions too: `-fsl all,-es`
+  keeps every forced subtitle except the Spanish one, and `-fsl -es` means the same.
 - `--sub-format`: set the output subtitle format, converting only when necessary.
   Accepts codec names/values and common aliases (`srt`, `vtt`, `ass`, `ssa`, `ttml`,
   etc.), or the literal `original` to keep the source format.
@@ -380,6 +426,43 @@ with `-` to exclude it.
     # All of season 1 except episode 1 part 2
     unshackle dl -w S01,-S01E01.2 EXAMPLE 81234567
     ```
+
+=== "Air dates"
+
+    ```shell
+    # One day
+    unshackle dl -w 2026-08-11 EXAMPLE 81234567
+
+    # A range of days, colon separated
+    unshackle dl -w 2026-08-01:2026-08-31 EXAMPLE 81234567
+
+    # August, but not the 15th
+    unshackle dl -w 2026-08-01:2026-08-31,-2026-08-15 EXAMPLE 81234567
+    ```
+
+### Daily and date-based content
+
+Talk shows, news and sports have no official episode numbering, so unshackle names them
+by air date. An episode that carries an air date is written as `Show.YYYY.MM.DD` instead of
+`SxxExx`, the `{date}` token holds the ISO date, and the season folder becomes the year.
+
+A service that only carries this kind of content sets `DAILY = True` on its class, and a
+service can set `air_date` on each episode itself. Add `--daily` to mark any other title
+as date-based:
+
+```shell
+unshackle dl --daily --tvdb 73871 --enrich EXAMPLE 81234567
+```
+
+With `--enrich` and a TVDB ID, `--daily` fills in the air date of every episode that has
+none. An air date the service already set is kept. Dates before 1970 and dates in the
+future are skipped, because TVDB carries placeholder schedule dates for episodes that
+have not aired. Without `--enrich` unshackle has no source to fill from, and says so.
+
+A dated episode answers to its air date in `-w`, as well as to its `SxxExx` key. A date
+token is a plain ISO date (`2026-08-11`). A date range uses a colon (`2026-08-01:2026-08-31`),
+because the dashes in a date are part of the date. A range cannot span more than 1000 days.
+Date tokens and `SxxExx` tokens can be mixed in one `-w`.
 
 ### Split episodes
 
@@ -577,20 +660,97 @@ unshackle dl --skip-dl --export EXAMPLE 81234567
 ## Metadata and tagging
 
 unshackle looks up metadata automatically, but you can override the identifiers used for
-tagging and naming:
+tagging and naming. An ID you give is authoritative: unshackle looks it up directly instead of
+searching by title, and the ID stays in the tags. An ID only settles *which* title this is.
+To also take that source's title, year and original language, add `--enrich`. Give at most one
+of `--tmdb`, `--imdb` and `--tvdb`; unshackle works the rest out from it. To stop the automatic
+lookups but keep the IDs you give, set
+[`disable_metadata`](../reference/configuration/misc.md#external-api-keys) in your config.
 
 | Flag | Example | Purpose |
 | --- | --- | --- |
-| `--tmdb` | `--tmdb 27205` | Use this TMDB ID instead of automatic lookup. |
-| `--imdb` | `--imdb tt1375666` | Use this IMDb ID. |
-| `--tvdb` | `--tvdb 73871` | Use this TVDB ID instead of looking the series up. |
-| `--animeapi` | `--animeapi mal:12345` | Resolve via AnimeAPI (`mal:`/`anilist:` prefix; defaults to MAL). |
-| `--enrich` | - | Override the show title and year from an external source. **Requires** one of `--tmdb`, `--imdb`, or `--animeapi`. |
+| `--tmdb` | `--tmdb 27205` | Use this TMDB ID instead of an automatic search. Needs `tmdb_api_key`. |
+| `--imdb` | `--imdb tt1375666` | Use this IMDb ID instead of an automatic search. Needs no key. |
+| `--tvdb` | `--tvdb 73871` | Use this TVDB ID instead of looking the series up. Needs `tvdb_api_key`. |
+| `--anilist` | `--anilist 21` | Use this AniList ID instead of an automatic search. `mal:12345` is also accepted. Needs no key. |
+| `--enrich` | - | Overwrite the show title, year and original language with the external source's. **Requires** one of `--tmdb`, `--imdb`, `--tvdb`, or `--anilist`. |
 | `--tvdb-order` | `--tvdb-order dvd` | Renumber episodes to a TVDB season order. Needs `tvdb_api_key`. |
 
-```shell title="Force the right IMDb match and enrich the title"
+```shell title="Force the right IMDb match, and keep the service's own naming"
+unshackle dl --imdb tt1375666 EXAMPLE 81234567
+```
+
+```shell title="Force the match and take IMDb's title, year and language too"
 unshackle dl --imdb tt1375666 --enrich EXAMPLE 81234567
 ```
+
+### What each metadata provider supplies
+
+Providers differ in what they answer with, so the fields `--enrich` can replace depend on
+which ID you gave. Every provider except `imdb` only runs when its key is configured:
+
+| Provider | Config key | Title and year | Original language | External IDs it returns |
+| --- | --- | --- | --- | --- |
+| TMDB | `tmdb_api_key` | yes | yes, alpha-2 such as `ko` | IMDb, TMDB, TVDB |
+| TVDB | `tvdb_api_key` | yes | yes, alpha-3 such as `kor` | TMDB, TVDB, sometimes IMDb |
+| OMDb | `omdb_api_key` | yes | yes, as an English name such as `Korean` | IMDb |
+| IMDb | *(no key needed)* | yes | yes, alpha-2 such as `ko` | IMDb |
+| SIMKL | `simkl_client_id` | yes | no, it publishes a country and no language | IMDb, TMDB, TVDB |
+| AniList | *(no key needed)* | yes | yes, worked out from the country of origin, such as `ja` | AniList |
+
+Whatever the tag looks like, unshackle normalises it before use, so `ko`, `kor` and `Korean`
+all end up as the same language.
+
+!!! note "AniList only answers for anime"
+    It is last in the default provider order and returns nothing for a title that is not
+    anime. The only cost is one search that misses. Put `anilist` earlier in
+    [`metadata_providers`](../reference/configuration/misc.md#external-api-keys) if you mostly
+    download anime. Which of the three AniList title variants is used is set by
+    [`anilist_title_language`](../reference/configuration/misc.md#external-api-keys).
+
+    A service can also mark its titles as anime. For those titles unshackle tries AniList
+    first. When AniList has no match, it falls through to the normal order.
+
+Each ID goes to the providers that read that kind of ID, in
+[`metadata_providers`](../reference/configuration/misc.md#external-api-keys) order:
+
+- `--tmdb` reads TMDB.
+- `--imdb` reads IMDb, then falls back to OMDb. IMDb needs no key, so this path works out of
+  the box, and an OMDb key only matters when IMDb has no answer.
+- `--tvdb` reads TVDB. It needs `tvdb_api_key`.
+- `--anilist` reads AniList, which needs no key. It supplies the title, the year and the
+  original language, and writes an AniList tag. It knows no TMDB, IMDB or TVDB ID, so pair it
+  with `--tmdb`, `--imdb` or `--tvdb` when you want those tags as well.
+
+Give **one** of `--tmdb`, `--imdb` and `--tvdb`. They cannot be combined, because one ID does
+the job on its own: unshackle resolves the other two from it and writes all three to the tags.
+Passing two is an error rather than a silent choice between them. `--anilist` is the exception
+and still pairs with one of the three, which is how you tag an anime title with a western ID.
+
+The ID you give must have a provider that can actually resolve it, so unshackle checks that
+before it downloads anything. `--tmdb` without `tmdb_api_key`, or an ID whose providers your
+`metadata_providers` list leaves out, fails immediately with a message naming what to set.
+`--imdb` needs no key, since the `imdb` provider is keyless and in the default order.
+
+With `--enrich`, the title, year and original language are all replaced with the external
+source's values, whether or not the service already filled them in. A field the source does
+not answer with is left alone, and unshackle logs which fields those were, so a provider with
+a thin record cannot blank out what the service told you.
+
+`--enrich` also fills in the absolute episode number of each episode from TVDB's absolute
+order, for any series that has one and where the service did not supply it. Anime is the
+usual beneficiary, but no part of this is limited to anime. This only adds the
+[`{absolute}`](../reference/configuration/output.md#output_template) naming variable. The
+season and episode numbers are never changed.
+
+With `--daily`, `--enrich` also fills in the air date of each episode from TVDB. See
+[Daily and date-based content](#daily-and-date-based-content).
+
+!!! warning "`--enrich` replaces the original language, which affects more than the filename"
+    Track selection reads the original language, so replacing it changes which audio is
+    treated as the original. That is the point when a service mislabels it, but it means a
+    wrong ID can pick the wrong audio track and not only write a wrong name. Without
+    `--enrich` the service's own value is kept and track selection is untouched.
 
 ### Episode ordering
 
@@ -637,14 +797,15 @@ authoritative list.
 | `--range` | `-r` | Color range(s); default `SDR`. |
 | `--channels` | `-c` | Audio channel layout. |
 | `--noatmos` | `-naa` | Exclude Atmos audio. |
-| `--lang` | `-l` | Video + audio language(s); default `orig`. |
-| `--a-lang` | `-al` | Audio-only language override. |
-| `--v-lang` | `-vl` | Video-only language override. |
-| `--s-lang` | `-sl` | Subtitle language(s); default `all`. |
+| `--lang` | `-l` | Video + audio language(s); default `orig`. `-` excludes, e.g. `all,-es`. |
+| `--a-lang` | `-al` | Audio-only language override. `-` excludes. |
+| `--v-lang` | `-vl` | Video-only language override. `-` excludes. |
+| `--s-lang` | `-sl` | Subtitle language(s); default `all`. `-` excludes, e.g. `all,-es`. |
 | `--forced-subs` | `-fs` | Include forced subtitles. |
-| `--forced-s-lang` | `-fsl` | Forced subtitle language(s); implies `-fs`. |
+| `--forced-s-lang` | `-fsl` | Forced subtitle language(s); implies `-fs`. `-` excludes. |
 | `--sub-format` | | Output subtitle format. |
-| `--wanted` | `-w` | Episode/season range. |
+| `--wanted` | `-w` | Episode/season range, or an air date. |
+| `--daily` | | Fill missing air dates from TVDB during `--enrich`. |
 | `--select-titles` | | Interactively pick episodes or films. |
 | `--latest-episode` | | Only the newest episode. |
 | `--video-only` / `--audio-only` / `--subs-only` | `-V` / `-A` / `-S` | Restrict track types. |
@@ -658,5 +819,5 @@ authoritative list.
 | `--list` / `--list-titles` / `--skip-dl` | | Dry runs. |
 | `--cdm-only` / `--vaults-only` | | Key source control. |
 | `--export` | | Export track info and keys to JSON. |
-| `--tmdb` / `--imdb` / `--tvdb` / `--animeapi` / `--enrich` | | Metadata overrides. |
+| `--tmdb` / `--imdb` / `--tvdb` / `--anilist` / `--enrich` | | Metadata overrides. |
 | `--tvdb-order` | | Renumber episodes to a TVDB season order. |

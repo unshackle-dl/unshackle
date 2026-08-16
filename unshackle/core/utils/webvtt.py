@@ -2,10 +2,10 @@ import re
 from typing import Optional
 
 # Timing line: optional hours, verbatim settings tail.
-_TIMING = re.compile(r"^((?:\d+:)?\d{2}:\d{2}\.\d{3})[ \t]+-->[ \t]+((?:\d+:)?\d{2}:\d{2}\.\d{3})(.*)$")
+TIMING = re.compile(r"^((?:\d+:)?\d{2}:\d{2}\.\d{3})[ \t]+-->[ \t]+((?:\d+:)?\d{2}:\d{2}\.\d{3})(.*)$")
 
 
-def _timestamp_ms(ts: str) -> int:
+def timestamp_ms(ts: str) -> int:
     hms, ms = ts.rsplit(".", 1)
     parts = [int(p) for p in hms.split(":")]
     while len(parts) < 3:
@@ -52,7 +52,7 @@ def merge_segmented_webvtt(vtt_raw: str, segment_durations: Optional[list[int]] 
                 if header not in headers:  # segments repeat the same block
                     headers.append(header)
             continue
-        timing = _TIMING.match(lines[timing_i].strip())
+        timing = TIMING.match(lines[timing_i].strip())
         if not timing:
             continue
         start, end, settings = timing.groups()
@@ -61,15 +61,15 @@ def merge_segmented_webvtt(vtt_raw: str, segment_durations: Optional[list[int]] 
             continue
 
         normalized = "\n".join(line.strip() for line in payload)
-        if prev is not None and _timestamp_ms(start) - prev_end_ms <= 1 and normalized == prev[4]:
-            end_ms = _timestamp_ms(end)
+        if prev is not None and timestamp_ms(start) - prev_end_ms <= 1 and normalized == prev[4]:
+            end_ms = timestamp_ms(end)
             if end_ms > prev_end_ms:  # splice: extend only, never shorten the kept cue
                 prev[1] = end
                 prev_end_ms = end_ms
             continue
 
         prev = [start, end, settings, "\n".join(payload), normalized]
-        prev_end_ms = _timestamp_ms(end)
+        prev_end_ms = timestamp_ms(end)
         cues.append(prev)
 
     blocks = headers + [f"{c[0]} --> {c[1]}{c[2]}\n{c[3]}" for c in cues]

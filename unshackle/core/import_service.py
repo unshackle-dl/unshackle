@@ -16,7 +16,7 @@ from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.drm import drm_from_dict
 from unshackle.core.manifests import DASH, HLS, ISM
-from unshackle.core.remote_service import RemoteService, _build_title, _match_track, _resolve_proxy
+from unshackle.core.remote_service import RemoteService, build_title, match_track, resolve_proxy_arg
 from unshackle.core.titles import Episode, Movies, Series, Title_T, Titles_T, remap_titles
 from unshackle.core.tracks import Audio, Chapter, Chapters, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
@@ -28,7 +28,7 @@ PARSERS = {"DASH": DASH, "HLS": HLS, "ISM": ISM}
 MANIFEST_DATA_KEYS = {"DASH": "dash", "ISM": "ism"}
 
 
-def _fallback_language(language: Any) -> Optional[Any]:
+def fallback_language(language: Any) -> Optional[Any]:
     """The title language if the parsers would accept it, else None so they raise.
 
     DASH drops an und/invalid fallback but ISM does not, and a truthy 'und' there silently
@@ -40,7 +40,7 @@ def _fallback_language(language: Any) -> Optional[Any]:
     return language
 
 
-def _resolve_import_manifest_data(
+def resolve_import_manifest_data(
     tracks: Tracks,
     manifest_type: Optional[str],
     *,
@@ -68,7 +68,7 @@ def _resolve_import_manifest_data(
     if not pending:
         return
 
-    fallback_lang = _fallback_language(language)
+    fallback_lang = fallback_language(language)
     for url in {str(track.url) for track in pending if track.url}:
         try:
             manifest = parser.from_url(url=url, session=session)
@@ -90,7 +90,7 @@ def _resolve_import_manifest_data(
         for track in pending:
             if track.data.get(data_key) or str(track.url) != url:
                 continue
-            matched = _match_track(track, local_tracks)
+            matched = match_track(track, local_tracks)
             if matched and matched.data.get(data_key):
                 track.data.update(matched.data)
 
@@ -160,7 +160,7 @@ class ImportService:
             return session
 
         try:
-            proxy = _resolve_proxy(proxy_query)
+            proxy = resolve_proxy_arg(proxy_query)
         except Exception as e:
             if explicit:
                 raise click.ClickException(f"Failed to resolve proxy '{proxy_query}': {e}")
@@ -184,7 +184,7 @@ class ImportService:
         if self.titles is not None:
             return self.titles
         titles_list = [
-            _build_title(entry.get("meta", {}), self.service_tag, fallback_id=title_id)
+            build_title(entry.get("meta", {}), self.service_tag, fallback_id=title_id)
             for title_id, entry in self.titles_data.items()
         ]
         self.titles = (
@@ -231,7 +231,7 @@ class ImportService:
                     f"The manifest URL may have expired since export. ({e})"
                 )
             try:
-                parsed = manifest.to_tracks(language=_fallback_language(title.language))
+                parsed = manifest.to_tracks(language=fallback_language(title.language))
             except ValueError as e:
                 if "Language information could not be derived" in str(e):
                     raise click.ClickException(
@@ -275,7 +275,7 @@ class ImportService:
                 track.drm = drm
             tracks.add(track, warn_only=True)
 
-        _resolve_import_manifest_data(
+        resolve_import_manifest_data(
             tracks,
             manifest_type,
             session=self.session,
@@ -328,7 +328,7 @@ class ImportService:
 
         if drm_obj is None and keys:
             drm_type = (drm_dicts[0].get("system", "Widevine").lower()) if drm_dicts else "widevine"
-            drm_obj = RemoteService._create_drm_stub(drm_type, list(keys.keys()))
+            drm_obj = RemoteService.create_drm_stub(drm_type, list(keys.keys()))
 
         if drm_obj is None:
             return None
@@ -354,7 +354,7 @@ class ImportService:
         for track in title.tracks:
             if not isinstance(track, (Video, Audio)) or not self.track_is_encrypted(track):
                 continue
-            drm_obj = track.drm[0] if track.drm else RemoteService._create_drm_stub(system, kid_hexes)
+            drm_obj = track.drm[0] if track.drm else RemoteService.create_drm_stub(system, kid_hexes)
             for kid, key in pool.items():
                 drm_obj.content_keys[kid] = key
             track.drm = [drm_obj]

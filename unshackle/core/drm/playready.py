@@ -42,7 +42,7 @@ class PlayReady:
             raise TypeError(f"Expected pssh to be a {PSSH}, not {pssh!r}")
 
         if pssh_b64:
-            kids = self._extract_kids_from_pssh_b64(pssh_b64)
+            kids = self.extract_kids_from_pssh_b64(pssh_b64)
         else:
             kids = []
 
@@ -55,7 +55,7 @@ class PlayReady:
                             kids.append(signed_key_id.value)
                         else:
                             kids.append(UUID(bytes_le=base64.b64decode(signed_key_id.value)))
-                    except Exception:
+                    except (ValueError, TypeError):
                         continue
 
         if kid:
@@ -79,7 +79,7 @@ class PlayReady:
         if pssh_b64:
             self.data.setdefault("pssh_b64", pssh_b64)
 
-    def _extract_kids_from_pssh_b64(self, pssh_b64: str) -> list[UUID]:
+    def extract_kids_from_pssh_b64(self, pssh_b64: str) -> list[UUID]:
         """Extract all KIDs from base64-encoded PSSH data."""
         try:
             # PSSH XML comes from third-party manifests; defusedxml guards against entity expansion
@@ -118,7 +118,7 @@ class PlayReady:
                             kid_bytes = base64.b64decode(value + "==")
                             kid_uuid = UUID(bytes_le=kid_bytes)
                             kids.append(kid_uuid)
-                        except Exception:
+                        except ValueError:
                             pass
 
                 # v4.2/v4.3: DATA/PROTECTINFO/KIDS/KID
@@ -131,7 +131,7 @@ class PlayReady:
                             kid_uuid = UUID(bytes_le=kid_bytes)
                             if kid_uuid not in kids:
                                 kids.append(kid_uuid)
-                        except Exception:
+                        except ValueError:
                             pass
 
                 # v4.1: DATA/PROTECTINFO/KID
@@ -144,7 +144,7 @@ class PlayReady:
                             kid_uuid = UUID(bytes_le=kid_bytes)
                             if kid_uuid not in kids:
                                 kids.append(kid_uuid)
-                        except Exception:
+                        except ValueError:
                             pass
 
                 # v4.0: DATA/KID
@@ -156,12 +156,14 @@ class PlayReady:
                             kid_uuid = UUID(bytes_le=kid_bytes)
                             if kid_uuid not in kids:
                                 kids.append(kid_uuid)
-                        except Exception:
+                        except ValueError:
                             pass
 
                 return kids
 
-        except Exception:
+        # covers bad base64 (binascii.Error), defusedxml rejections (both ValueError) and XML
+        # ParseError (SyntaxError) from arbitrary third-party PSSH data
+        except (ValueError, SyntaxError):
             pass
 
         return []
@@ -265,7 +267,7 @@ class PlayReady:
     def kids(self) -> list[UUID]:
         return self._kids
 
-    def _extract_keys_from_cdm(self, cdm: PlayReadyCdm, session_id: bytes) -> dict:
+    def extract_keys_from_cdm(self, cdm: PlayReadyCdm, session_id: bytes) -> dict:
         """Extract keys from CDM session with cross-library compatibility.
 
         Args:
@@ -330,7 +332,7 @@ class PlayReady:
                     if "<License>" not in license_str:
                         try:
                             license_str = base64.b64decode(license_str + "===").decode()
-                        except Exception:
+                        except ValueError:
                             pass
 
                     cdm.parse_license(session_id, license_str)
@@ -344,12 +346,12 @@ class PlayReady:
                 except PlayReady.Exceptions.DeviceRevoked:
                     raise
                 except Exception as e:
-                    revoked = self._detect_revocation(license_str) or self._detect_revocation(str(e))
+                    revoked = self.detect_revocation(license_str) or self.detect_revocation(str(e))
                     if revoked:
                         raise PlayReady.Exceptions.DeviceRevoked(revoked) from e
                     raise
 
-            keys = self._extract_keys_from_cdm(cdm, session_id)
+            keys = self.extract_keys_from_cdm(cdm, session_id)
             self.content_keys.update(keys)
 
             if keys:
@@ -368,7 +370,7 @@ class PlayReady:
             raise PlayReady.Exceptions.EmptyLicense("No Content Keys were within the License")
 
     @staticmethod
-    def _detect_revocation(text: str) -> Optional[str]:
+    def detect_revocation(text: str) -> Optional[str]:
         """Return the decoded error string if a revocation HRESULT is present, else None.
 
         Reads the code from the raw SOAP body (<StatusCode>0x8004C065</StatusCode>)
@@ -415,9 +417,9 @@ class PlayReady:
 
         decrypt_start = time.monotonic()
         if decrypter == "mp4decrypt":
-            self._decrypt_with_mp4decrypt(path)
+            self.decrypt_with_mp4decrypt(path)
         else:
-            self._decrypt_with_shaka_packager(path)
+            self.decrypt_with_shaka_packager(path)
 
         log_event(
             "drm_decrypt_complete",
@@ -430,7 +432,7 @@ class PlayReady:
             output_size=path.stat().st_size if path.exists() else 0,
         )
 
-    def _decrypt_with_mp4decrypt(self, path: Path) -> None:
+    def decrypt_with_mp4decrypt(self, path: Path) -> None:
         """Decrypt using mp4decrypt"""
         if not binaries.Mp4decrypt:
             raise EnvironmentError("mp4decrypt executable not found but is required.")
@@ -483,7 +485,7 @@ class PlayReady:
         path.unlink()
         shutil.move(output_path, path)
 
-    def _decrypt_with_shaka_packager(self, path: Path) -> None:
+    def decrypt_with_shaka_packager(self, path: Path) -> None:
         """Decrypt using Shaka Packager (original method)"""
         if not binaries.ShakaPackager:
             raise EnvironmentError("Shaka Packager executable not found but is required.")

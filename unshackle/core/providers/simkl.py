@@ -47,7 +47,7 @@ class SimklProvider(MetadataProvider):
             self.log.debug("Simkl returned list (no matches) for %r", filename)
             return None
 
-        return self._parse_response(data, title, year, kind)
+        return self.parse_response(data, title, year, kind)
 
     def get_by_id(self, provider_id: Union[int, str], kind: str) -> Optional[MetadataResult]:
         return None  # SIMKL has no direct ID lookup used here
@@ -115,7 +115,7 @@ class SimklProvider(MetadataProvider):
             tvdb_id=tvdb_id,
         )
 
-    def _parse_response(
+    def parse_response(
         self, data: dict, search_title: str, search_year: Optional[int], kind: str
     ) -> Optional[MetadataResult]:
         """Parse a SIMKL response into a MetadataResult."""

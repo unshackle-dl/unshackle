@@ -391,14 +391,15 @@ and base64-encoding, **excluding** `titles_*` files) and returns them under a
 Source: `unshackle/core/remote_service.py`. This is the canonical consumer of the
 session API and a good template for any client.
 
-- **`RemoteClient._request`** sets `X-Secret-Key` and `User-Agent: unshackle/<version>`,
+- **`RemoteClient.request`** sets `X-Secret-Key` and `User-Agent: unshackle/<version>`,
   uses a 120s timeout for `POST` and 30s for `GET`/`DELETE`, and treats any
   `status_code >= 400` as fatal: it logs `Server error [<error_code>]: <message>`
   and raises `SystemExit(1)`.
 - **Retries.** The download-side HTTP session mounts an adapter with
   `Retry(total=5, backoff_factor=0.2, status_forcelist=[429, 500, 502, 503, 504])`.
 - **Flow.** `authenticate()` → `create` (+ poll `prompt` every 2s up to a 600s
-  deadline, answering `pending_input` prompts) → `get_titles()` → `get_tracks()`
+  deadline, answering `pending_input` prompts; with stdin closed the client logs an
+  error and raises `SystemExit(1)` instead of posting an empty answer) → `get_titles()` → `get_tracks()`
   (merging returned `session_headers`/`session_cookies`, re-parsing `manifests`) →
   license via proxy or `server_cdm` → `close()` (`DELETE`, saving any returned
   `cache`).

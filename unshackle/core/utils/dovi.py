@@ -21,7 +21,7 @@ from unshackle.core import binaries
 from unshackle.core.utils.subprocess import log_tool_run, run_step
 
 
-def _require_dovi_tool() -> str:
+def require_dovi_tool() -> str:
     if not binaries.DoviTool:
         raise EnvironmentError("dovi_tool executable was not found but is required.")
     return str(binaries.DoviTool)
@@ -36,7 +36,7 @@ def extract_rpu(
     label: str = "dovi_tool extract-rpu",
 ) -> bytes:
     """Extract DV RPU NALs from a raw HEVC stream. `mode=None` skips the -m flag (untouched)."""
-    tool = _require_dovi_tool()
+    tool = require_dovi_tool()
     args: list = [tool]
     if mode is not None:
         args += ["-m", str(mode)]
@@ -53,7 +53,7 @@ def inject_rpu(
     label: str = "dovi_tool inject-rpu",
 ) -> bytes:
     """Inject a DV RPU back into a raw HEVC stream, producing DV-signaled output."""
-    tool = _require_dovi_tool()
+    tool = require_dovi_tool()
     return run_step(
         [tool, "inject-rpu", "-i", source, "--rpu-in", rpu, "-o", output],
         status=status,
@@ -71,7 +71,7 @@ def editor(
     label: str = "dovi_tool editor",
 ) -> bytes:
     """Apply a JSON edit spec to an RPU file."""
-    tool = _require_dovi_tool()
+    tool = require_dovi_tool()
     return run_step(
         [tool, "editor", "-i", source, "-j", json_spec, "-o", output],
         status=status,
@@ -82,7 +82,7 @@ def editor(
 
 def info_summary(rpu: Path) -> str:
     """Return the textual summary (`dovi_tool info -i ... -s`) for an RPU file."""
-    tool = _require_dovi_tool()
+    tool = require_dovi_tool()
     info_start = time.monotonic()
     p = subprocess.run(
         [tool, "info", "-i", str(rpu), "-s"], capture_output=True, text=True, encoding="utf-8", errors="replace"
@@ -107,7 +107,7 @@ def generate_from_hdr10plus(
     label: str = "dovi_tool generate",
 ) -> bytes:
     """Build a DV RPU from extracted HDR10+ metadata + an extra JSON descriptor."""
-    tool = _require_dovi_tool()
+    tool = require_dovi_tool()
     return run_step(
         [tool, "generate", "-j", extra_json, "--hdr10plus-json", hdr10plus_json, "-o", output],
         status=status,

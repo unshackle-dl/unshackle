@@ -5,20 +5,16 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 from xml.sax.saxutils import escape
 
 from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.providers import (
     ExternalIds,
-    MetadataResult,
-    enrich_ids,
-    fetch_external_ids,
     fuzzy_match,
     get_available_providers,
-    get_provider,
-    search_metadata,
+    resolve_by_ids,
 )
 from unshackle.core.titles.episode import Episode
 from unshackle.core.titles.movie import Movie
@@ -68,7 +64,7 @@ def apply_tags(path: Path, tags: dict[str, str]) -> None:
         tmp_path.unlink(missing_ok=True)
 
 
-def _build_tags_from_ids(ids: ExternalIds, kind: str) -> dict[str, str]:
+def build_tags_from_ids(ids: ExternalIds, kind: str) -> dict[str, str]:
     """Build standard MKV tags from external IDs."""
     tags: dict[str, str] = {}
     if ids.imdb_id:
@@ -78,6 +74,8 @@ def _build_tags_from_ids(ids: ExternalIds, kind: str) -> dict[str, str]:
     if ids.tvdb_id:
         prefix = "movies" if kind == "movie" else "series"
         tags["TVDB2"] = f"{prefix}/{ids.tvdb_id}"
+    if ids.anilist_id:
+        tags["ANILIST"] = str(ids.anilist_id)
     return tags
 
 
@@ -87,6 +85,8 @@ def tag_file(
     tmdb_id: Optional[int] = None,
     imdb_id: Optional[str] = None,
     tvdb_id: Optional[int] = None,
+    anilist_id: Optional[Union[int, str]] = None,
+    anime: bool = False,
 ) -> None:
     log.debug("Tagging file %s with title %r", path, title)
     custom_tags: dict[str, str] = {}
@@ -118,56 +118,18 @@ def tag_file(
 
     if config.tag_imdb_tmdb:
         try:
-            providers = get_available_providers()
-            if not providers and tvdb_id is None:
+            has_ids = any(value is not None for value in (tmdb_id, imdb_id, tvdb_id, anilist_id))
+            if not get_available_providers() and not has_ids:
                 log.debug("No metadata providers available; skipping tag lookup")
                 apply_tags(path, custom_tags)
                 return
 
-            result: Optional[MetadataResult] = None
-
-            # Direct ID lookup path
-            if imdb_id:
-                imdbapi = get_provider("imdbapi")
-                if imdbapi:
-                    result = imdbapi.get_by_id(imdb_id, kind)
-                if not result:
-                    # IMDxAPI is off or had no answer; the ID alone still resolves the others
-                    result = MetadataResult(title=name, year=year, kind=kind)
-                result.external_ids.imdb_id = imdb_id
-                enrich_ids(result)
-            elif tmdb_id is not None:
-                tmdb = get_provider("tmdb")
-                if tmdb:
-                    result = tmdb.get_by_id(tmdb_id, kind)
-                    if result:
-                        ext = tmdb.get_external_ids(tmdb_id, kind)
-                        result.external_ids = ext
-                        enrich_ids(result)
-            else:
-                # Search across providers in priority order
-                result = search_metadata(name, year, kind)
-
-            # If we got a TMDB ID from search but not the other IDs, fetch them
-            if (
-                result
-                and result.external_ids.tmdb_id
-                and not (result.external_ids.imdb_id and result.external_ids.tvdb_id)
-            ):
-                ext = fetch_external_ids(result.external_ids.tmdb_id, kind)
-                if ext.imdb_id and not result.external_ids.imdb_id:
-                    result.external_ids.imdb_id = ext.imdb_id
-                if ext.tvdb_id and not result.external_ids.tvdb_id:
-                    result.external_ids.tvdb_id = ext.tvdb_id
-                enrich_ids(result)
-
-            if tvdb_id is not None:
-                if result is None:
-                    result = MetadataResult(kind=kind)
-                result.external_ids.tvdb_id = tvdb_id
+            result = resolve_by_ids(
+                tmdb_id, imdb_id, tvdb_id, anilist_id, title=name, year=year, kind=kind, anime=anime
+            )
 
             if result and result.external_ids:
-                standard_tags = _build_tags_from_ids(result.external_ids, kind)
+                standard_tags = build_tags_from_ids(result.external_ids, kind)
         except Exception as e:
             log.warning("Metadata lookup failed, applying custom tags only: %s", e)
 

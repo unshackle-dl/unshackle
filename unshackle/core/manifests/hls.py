@@ -311,15 +311,16 @@ class HLS:
             if has_resolution and has_codec:
                 continue
             try:
-                probe = HLS._probe_ts_info(video.url, self.session)
+                probe = HLS.probe_ts_info(video.url, self.session)
                 if probe:
                     width, height, codec = probe
                     if not has_resolution:
                         video.width, video.height = width, height
                     if not has_codec:
                         video.codec = codec
-            except Exception:
-                pass
+            # best-effort probe over network + ffprobe; the track stays usable without it
+            except Exception as e:
+                logging.getLogger("HLS").debug(f"TS probe failed for {video.url}: {e!r}")
 
         if self.url:
             tracks.manifest_url = self.url
@@ -342,7 +343,7 @@ class HLS:
         return tracks
 
     @staticmethod
-    def _probe_ts_info(
+    def probe_ts_info(
         variant_url: str, session: Optional[Union[Session, RnetSession]] = None
     ) -> Optional[tuple[int, int, Video.Codec]]:
         """Probe the first TS segment of a variant playlist to extract resolution and codec."""
@@ -360,10 +361,10 @@ class HLS:
         res = session.get(seg_uri, headers={"Range": "bytes=0-8191"})
         data = res.content
 
-        return HLS._parse_ts_video_info(data)
+        return HLS.parse_ts_video_info(data)
 
     @staticmethod
-    def _parse_ts_video_info(data: bytes) -> Optional[tuple[int, int, Video.Codec]]:
+    def parse_ts_video_info(data: bytes) -> Optional[tuple[int, int, Video.Codec]]:
         """Parse H.264/H.265 NAL units from TS segment data to extract resolution and codec."""
 
         class _BitReader:
@@ -1148,12 +1149,12 @@ class HLS:
 
             try:
                 decoded = base64.b64decode(value).decode()
-            except Exception:
+            except ValueError:
                 decoded = value
 
             try:
                 items = json.loads(decoded)
-            except Exception:
+            except ValueError:
                 continue
 
             for item in items if isinstance(items, list) else []:
@@ -1224,8 +1225,9 @@ class HLS:
             map_res = session.get(url=map_uri, headers=headers)
             if map_res.ok:
                 return track.get_key_id(map_res.content)
-        except Exception:
-            pass
+        # best-effort key-id probe over network + init parse; caller falls back without it
+        except Exception as e:
+            logging.getLogger("HLS").debug(f"Init map key-id probe failed for {map_uri}: {e!r}")
         return None
 
     @staticmethod
@@ -1292,9 +1294,15 @@ class HLS:
         elif key.method == "ISO-23001-7":
             drm = Widevine(pssh=WV_PSSH.new(key_ids=[key.uri.split(",")[-1]], system_id=WV_PSSH.SystemId.Widevine))
         elif key.keyformat and key.keyformat.lower() == WidevineCdm.urn:
+            extra_params = dict(key._extra_params)  # noqa
+            # a v0 PSSH carries no KID, leaving the tag's own KEYID as the only source
+            kid = extra_params.pop("keyid", None) or extra_params.pop("kid", None)
+            if isinstance(kid, str):
+                kid = kid.removeprefix("0x").removeprefix("0X")
             drm = Widevine(
                 pssh=WV_PSSH(key.uri.split(",")[-1]),
-                **key._extra_params,  # noqa
+                kid=kid,
+                **extra_params,
             )
         elif key.keyformat and key.keyformat.lower() in {f"urn:uuid:{PR_PSSH.SYSTEM_ID}", "com.microsoft.playready"}:
             drm = PlayReady(

@@ -261,7 +261,7 @@ def uniform_segments(
     """
     Build Segments giving each an equal share of the total duration.
 
-    Used for DASH: ``DASH._get_period_segments`` returns timeline *start times*
+    Used for DASH: ``DASH.get_period_segments`` returns timeline *start times*
     rather than per-segment durations, so they cannot be trusted. Segment lengths
     are near-uniform in practice, so the track duration (from
     ``mediaPresentationDuration``) split evenly is both correct and timeline-safe.
@@ -278,28 +278,26 @@ def extract_dash(track: "Track", session: Union[Session, RnetSession]) -> list[S
 
     data = track.data["dash"]
     manifest = data["manifest"]
-    rep_id = data.get("representation_id") or data["representation"].get("id")
+    adaptation_set = data["adaptation_set"]
+    representation = data["representation"]
+    rep_id = data.get("representation_id") or representation.get("id")
     filtered_period_ids = data.get("filtered_period_ids", [])
+    stored_period = data.get("period")
     track_url = track.url if isinstance(track.url, str) else track.url[0]
 
-    content_periods = [p for p in manifest.findall("Period") if DASH._is_content_period(p, filtered_period_ids)]
+    content_periods = [p for p in manifest.findall("Period") if DASH.is_content_period(p, filtered_period_ids)]
 
     raw_segments: list[tuple[str, Optional[str]]] = []
     for period in content_periods:
-        matched_rep = matched_as = None
-        for as_ in period.findall("AdaptationSet"):
-            if DASH.is_trick_mode(as_):
-                continue
-            for rep in as_.findall("Representation"):
-                if rep.get("id") == rep_id:
-                    matched_rep, matched_as = rep, as_
-                    break
-            if matched_rep is not None:
-                break
+        # rep ids are only unique within an AdaptationSet, so resolve like DASH.download_track
+        if period is stored_period:
+            matched_as, matched_rep = adaptation_set, representation
+        else:
+            matched_as, matched_rep = DASH.resolve_representation(period, rep_id, adaptation_set) or (None, None)
         if matched_rep is None or matched_as is None:
             continue
 
-        _, period_segments, _, _, _ = DASH._get_period_segments(
+        _, period_segments, _, _, _ = DASH.get_period_segments(
             period=period,
             adaptation_set=matched_as,
             representation=matched_rep,

@@ -28,6 +28,17 @@ def test_placeholder_spellings_repeat_and_audiotag_fallback() -> None:
     assert audio.codec == Audio.Codec.AAC  # AudioTag 255 means AACL
 
 
+def test_duration_fallback_when_next_fragment_omits_time() -> None:
+    # A d-less <c> whose successor also omits t must fall back to the manifest
+    # duration (int(None) used to raise TypeError past the except clause).
+    sparse = MANIFEST.replace('<c t="0" d="20000000" r="2"/>', '<c t="0"/>')
+    tracks = ISM.from_text(sparse, "https://cdn.example/x.ism/manifest").to_tracks()
+    assert tracks.audio[0].data["ism"]["segments"] == [
+        "https://cdn.example/x.ism/QualityLevels(128000)/Fragments(audio=0)",
+        "https://cdn.example/x.ism/QualityLevels(128000)/Fragments(audio=60000000)",
+    ]
+
+
 def test_missing_language_without_fallback_raises() -> None:
     # MS-SSTR Language is optional; video StreamIndexes commonly omit it.
     no_lang = MANIFEST.replace(' Language="en"', "")

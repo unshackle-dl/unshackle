@@ -164,6 +164,49 @@ def is_exact_match(language: Union[str, Language], languages: Sequence[Union[str
     return closest_match(language, list(map(str, languages)))[1] <= LANGUAGE_EXACT_DISTANCE
 
 
+def partition_exclusions(tokens: Optional[Sequence[str]]) -> tuple[list[str], list[str]]:
+    """
+    Split selection tokens into wanted values and values excluded with a leading '-'.
+
+    Both sides keep the order they were written in and drop later repeats. A bare '-'
+    carries no value and is skipped.
+
+    Example:
+        >>> partition_exclusions(["all", "-es"])
+        (['all'], ['es'])
+    """
+    includes: list[str] = []
+    excludes: list[str] = []
+    for raw in tokens or []:
+        token = str(raw).strip()
+        if not token or token == "-":
+            continue
+        target = includes
+        if token.startswith("-"):
+            token = token[1:].strip()
+            if not token:
+                continue
+            target = excludes
+        if token not in target:
+            target.append(token)
+    return includes, excludes
+
+
+def excluded_language_tags(
+    excludes: Sequence[str],
+    available: Sequence[Union[str, Language, None]],
+    exact: bool = False,
+) -> set[str]:
+    """
+    The language tags out of `available` that the exclusion tokens remove.
+
+    Matches through matching_languages so an exclusion drops exactly the tracks the same
+    token would select, including its exact-mode string preference. Untagged tracks are
+    never excluded.
+    """
+    return {tag for token in excludes for tag in matching_languages(token, available, exact)}
+
+
 def keep_forced_subtitle(
     forced: bool,
     language: Union[str, Language],
@@ -177,6 +220,19 @@ def keep_forced_subtitle(
         return False
     match_func = is_exact_match if exact else is_close_match
     return match_func(language, forced_s_lang)
+
+
+def embedded_audio_langs(videos: Sequence[Any], keep_videos: bool) -> list[str]:
+    """
+    Return the audio languages carried inside video tracks rather than beside them.
+
+    A muxed stream keeps its audio in the video track, which a service declares by setting
+    ``data["audio_language"]``. That audio is only available while the video is kept, so
+    dropping the video (``--audio-only``, ``--no-video``) drops the language with it.
+    """
+    if not keep_videos:
+        return []
+    return [video.data["audio_language"] for video in videos if video.data.get("audio_language")]
 
 
 def find_missing_langs(
@@ -467,12 +523,12 @@ def try_ensure_utf8(data: bytes) -> bytes:
     if data[:2] == b"\x1f\x8b":
         try:
             data = gzip.decompress(data)
-        except Exception:
+        except (OSError, EOFError, zlib.error):
             pass
     elif data[:1] == b"\x78" and len(data) > 1 and data[1:2] in (b"\x01", b"\x5e", b"\x9c", b"\xda"):
         try:
             data = zlib.decompress(data)
-        except Exception:
+        except zlib.error:
             pass
 
     try:
@@ -1109,12 +1165,12 @@ class DebugLogger:
 
 
 # Global debug logger instance
-_debug_logger: Optional[DebugLogger] = None
+debug_logger: Optional[DebugLogger] = None
 
 
 def get_debug_logger() -> Optional[DebugLogger]:
     """Get the global debug logger instance."""
-    return _debug_logger
+    return debug_logger
 
 
 def log_event(operation: str, *, level: str = "DEBUG", message: str = "", **kwargs: Any) -> None:
@@ -1124,7 +1180,7 @@ def log_event(operation: str, *, level: str = "DEBUG", message: str = "", **kwar
     ``if dl := get_debug_logger(): dl.log(...)`` guard boilerplate. To add logging to a new
     feature, call ``log_event("my_feature_event", message="...", context={...})``.
     """
-    dl = _debug_logger
+    dl = debug_logger
     if dl:
         dl.log(level=level, operation=operation, message=message, **kwargs)
 
@@ -1142,7 +1198,7 @@ def timed_operation(operation: str, *, level: str = "DEBUG", message: str = "", 
         with timed_operation("mux", context={"output": str(path)}):
             run_mkvmerge(...)
     """
-    dl = _debug_logger
+    dl = debug_logger
     if not dl:
         yield
         return
@@ -1179,18 +1235,18 @@ def init_debug_logger(log_path: Optional[Path] = None, enabled: bool = False, lo
         enabled: Whether debug logging is enabled
         log_keys: Whether to log decryption keys (for debugging key issues)
     """
-    global _debug_logger
-    if _debug_logger:
-        _debug_logger.close()
-    _debug_logger = DebugLogger(log_path=log_path, enabled=enabled, log_keys=log_keys)
+    global debug_logger
+    if debug_logger:
+        debug_logger.close()
+    debug_logger = DebugLogger(log_path=log_path, enabled=enabled, log_keys=log_keys)
 
 
 def close_debug_logger():
     """Close the global debug logger."""
-    global _debug_logger
-    if _debug_logger:
-        _debug_logger.close()
-        _debug_logger = None
+    global debug_logger
+    if debug_logger:
+        debug_logger.close()
+        debug_logger = None
 
 
 __all__ = (

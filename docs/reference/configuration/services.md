@@ -82,11 +82,22 @@ keep auth tokens in localStorage rather than in HTTP cookies need. Extraction is
 
 Definitions of remote unshackle service servers, used by the `--remote` mode. Each entry is
 named by you (pick it with `--server`, or omit that flag when only one is configured) and gives
-the server's `url` (required), an optional `api_key` sent as `X-Secret-Key`, an optional
-`server_cdm` boolean, and an optional `services` sub-dict of per-service local overrides such
-as `title_map`. In `--remote` mode unshackle turns the server's service list into synthetic CLI
+the server's `url` (required), an optional `api_key`, an optional `auth_headers` list, an
+optional `server_cdm` boolean, and an optional `services` sub-dict of per-service local
+overrides such as `title_map`.
+
+`auth_headers` lists extra header names to send the API key in, tried before the defaults
+`X-Secret-Key` and `X-Api-Key`, which are always appended as fallbacks. unshackle sends the
+first name; if the server answers `401`, it retries the same request with the next name, and
+keeps the one that works for the rest of the session. Names you list keep your spelling and are
+not repeated in the fallbacks, so `auth_headers: ["Authorization", "x-secret-key"]` is tried as
+`Authorization`, `x-secret-key`, `X-Api-Key`.
+
+In `--remote` mode unshackle turns the server's service list into synthetic CLI
 commands that run against it, falling back to the tags in that `services` sub-dict when the
-list cannot be fetched. See [remote sessions](../../dev/rest-api/remote-sessions.md) for the
+list cannot be fetched. Each synthetic command carries the server-side service's options and
+documentation, so `unshackle dl --remote <TAG> -h` shows the same help text as it does on the
+server. See [remote sessions](../../dev/rest-api/remote-sessions.md) for the
 full setup.
 
 ## `serve`
@@ -117,6 +128,13 @@ Each entry under `users` is keyed by that user's API key and may set its own `se
 `username` used as the log label for that key (defaults to a truncated form of the key). A
 user with no `playready_devices` key gets no PlayReady access at all, not the global list.
 
+`server_cdm` decides whether the server runs the CDM licensing for that key. It is `false`
+unless the entry sets it, so a remote client configured with `server_cdm: true` is told to
+license with its own local CDM instead, and a client that asks anyway gets a `FORBIDDEN`
+error. Because a download job always licenses with the server's CDM, a key without
+`server_cdm` also cannot submit or retry `/api/download` jobs. Keys that have no `users`
+entry, such as `api_secret`, keep server CDM access.
+
 ```yaml
 serve:
   api_secret: change-me
@@ -128,6 +146,8 @@ serve:
   users:
     a1b2c3d4:                 # this user's API key
       services: [EXAMPLE1]        # may only use EXAMPLE1
+    e5f6a7b8:
+      server_cdm: true            # this key may have the server do the licensing
 ```
 
 !!! note "`dl` keys inside `serve`"

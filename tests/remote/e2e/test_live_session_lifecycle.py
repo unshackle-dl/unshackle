@@ -9,7 +9,7 @@ import pytest
 pytestmark = [pytest.mark.live, pytest.mark.slow]
 
 
-def _create_session(http_session, server_url: str, service: str, conf: dict) -> str:
+def create_session(http_session, server_url: str, service: str, conf: dict) -> str:
     payload = {"service": service, "title_id": conf["title_url"]}
     r = http_session.post(f"{server_url}/api/session/create", json=payload, timeout=120)
     if r.status_code >= 400:
@@ -20,7 +20,7 @@ def _create_session(http_session, server_url: str, service: str, conf: dict) -> 
     return sid
 
 
-def _wait_for_titles(http_session, server_url: str, sid: str, timeout: float = 120.0):
+def wait_for_titles(http_session, server_url: str, sid: str, timeout: float = 120.0):
     """Poll /titles until auth completes. Returns (status_code, response_json).
 
     Server returns 400 + auth_status=authenticating while auth is in-flight,
@@ -44,20 +44,20 @@ def _wait_for_titles(http_session, server_url: str, sid: str, timeout: float = 1
     return 408, {"message": "timeout waiting for auth"}
 
 
-def _delete_session(http_session, server_url: str, sid: str) -> None:
+def delete_session(http_session, server_url: str, sid: str) -> None:
     http_session.delete(f"{server_url}/api/session/{sid}", timeout=30)
 
 
 def test_session_create_then_delete(http_session, server_url: str, service_case) -> None:
     service, conf = service_case
-    sid = _create_session(http_session, server_url, service, conf)
+    sid = create_session(http_session, server_url, service, conf)
     try:
         r = http_session.get(f"{server_url}/api/session/{sid}", timeout=30)
         assert r.status_code == 200
         info = r.json()
         assert info.get("session", {}).get("service_tag", service) == service or service in str(info)
     finally:
-        _delete_session(http_session, server_url, sid)
+        delete_session(http_session, server_url, sid)
 
     # After delete, info should 404
     r2 = http_session.get(f"{server_url}/api/session/{sid}", timeout=30)
@@ -66,9 +66,9 @@ def test_session_create_then_delete(http_session, server_url: str, service_case)
 
 def test_session_titles_returns_list(http_session, server_url: str, service_case) -> None:
     service, conf = service_case
-    sid = _create_session(http_session, server_url, service, conf)
+    sid = create_session(http_session, server_url, service, conf)
     try:
-        code, body = _wait_for_titles(http_session, server_url, sid)
+        code, body = wait_for_titles(http_session, server_url, sid)
         if code != 200:
             pytest.skip(f"{service}: titles fetch failed {code}: {str(body)[:200]}")
         assert "titles" in body
@@ -78,14 +78,14 @@ def test_session_titles_returns_list(http_session, server_url: str, service_case
         assert "id" in first
         assert "type" in first
     finally:
-        _delete_session(http_session, server_url, sid)
+        delete_session(http_session, server_url, sid)
 
 
 def test_session_tracks_for_first_title(http_session, server_url: str, service_case) -> None:
     service, conf = service_case
-    sid = _create_session(http_session, server_url, service, conf)
+    sid = create_session(http_session, server_url, service, conf)
     try:
-        code, body = _wait_for_titles(http_session, server_url, sid)
+        code, body = wait_for_titles(http_session, server_url, sid)
         if code != 200:
             pytest.skip(f"{service}: titles fetch failed {code}: {str(body)[:200]}")
         titles = body.get("titles") or []
@@ -104,13 +104,13 @@ def test_session_tracks_for_first_title(http_session, server_url: str, service_c
         assert "video" in body or "audio" in body, body
         assert body.get("video") or body.get("audio"), body
     finally:
-        _delete_session(http_session, server_url, sid)
+        delete_session(http_session, server_url, sid)
 
 
 def test_session_delete_idempotent_returns_404_after(http_session, server_url: str, service_case) -> None:
     service, conf = service_case
-    sid = _create_session(http_session, server_url, service, conf)
-    _delete_session(http_session, server_url, sid)
+    sid = create_session(http_session, server_url, service, conf)
+    delete_session(http_session, server_url, sid)
 
     r = http_session.delete(f"{server_url}/api/session/{sid}", timeout=30)
     assert r.status_code in (404, 200)  # tolerate both depending on server semantics

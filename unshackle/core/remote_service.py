@@ -22,7 +22,7 @@ from rich.padding import Padding
 from rich.rule import Rule
 
 from unshackle.core.config import config
-from unshackle.core.console import console
+from unshackle.core.console import console, prompt_user
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.titles import Title_T, Titles_T, remap_titles
@@ -37,6 +37,8 @@ log = logging.getLogger("remote_service")
 
 SENSITIVE_DATA_KEYS = ("credential", "credentials", "password", "token", "api_key")
 
+DEFAULT_AUTH_HEADERS = ["X-Secret-Key", "X-Api-Key"]
+
 
 def redact_secrets(text: str, data: Optional[Dict[str, Any]] = None) -> str:
     """Mask URL userinfo and any request-payload secrets before the text is logged."""
@@ -47,9 +49,11 @@ def redact_secrets(text: str, data: Optional[Dict[str, Any]] = None) -> str:
 class RemoteClient:
     """HTTP client for the unshackle serve API."""
 
-    def __init__(self, server_url: str, api_key: str) -> None:
+    def __init__(self, server_url: str, api_key: str, auth_headers: Optional[list[str]] = None) -> None:
         self.server_url = server_url.rstrip("/")
         self.api_key = api_key
+        self.auth_headers = list(auth_headers) if auth_headers else list(DEFAULT_AUTH_HEADERS)
+        self._auth_header_index = 0
         self._session: Optional[requests.Session] = None
 
     @property
@@ -60,20 +64,35 @@ class RemoteClient:
             self._session = requests.Session()
             self._session.headers["User-Agent"] = f"unshackle/{__version__}"
             if self.api_key:
-                self._session.headers["X-Secret-Key"] = self.api_key
+                self._session.headers[self.auth_headers[self._auth_header_index]] = self.api_key
         return self._session
 
-    def _request(self, method: str, endpoint: str, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def next_auth_header(self) -> bool:
+        """Move the api key onto the next candidate header. False once they are exhausted."""
+        if not self.api_key or self._auth_header_index + 1 >= len(self.auth_headers):
+            return False
+        session = self.session
+        session.headers.pop(self.auth_headers[self._auth_header_index], None)
+        self._auth_header_index += 1
+        session.headers[self.auth_headers[self._auth_header_index]] = self.api_key
+        return True
+
+    def request(self, method: str, endpoint: str, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         url = f"{self.server_url}{endpoint}"
-        try:
-            resp = getattr(self.session, method)(url, json=data, timeout=120 if method == "post" else 30)
-        except requests.ConnectionError:
-            server_url = safe_display_url(self.server_url)
-            log.error(f"Could not connect to remote server at {server_url}. Is it running? (unshackle serve)")
-            raise SystemExit(1)
-        except requests.Timeout:
-            log.error(f"Request to remote server timed out: {endpoint}")
-            raise SystemExit(1)
+        while True:
+            try:
+                resp = getattr(self.session, method)(url, json=data, timeout=120 if method == "post" else 30)
+            except requests.ConnectionError:
+                server_url = safe_display_url(self.server_url)
+                log.error(f"Could not connect to remote server at {server_url}. Is it running? (unshackle serve)")
+                raise SystemExit(1)
+            except requests.Timeout:
+                log.error(f"Request to remote server timed out: {endpoint}")
+                raise SystemExit(1)
+            # servers differ on which header carries the key, so retry the rest before giving up
+            if resp.status_code == 401 and self.next_auth_header():
+                continue
+            break
         result = resp.json()
         if resp.status_code >= 400:
             error_msg = redact_secrets(str(result.get("message", resp.text)), data)
@@ -83,16 +102,16 @@ class RemoteClient:
         return result
 
     def post(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        return self._request("post", endpoint, data)
+        return self.request("post", endpoint, data)
 
     def get(self, endpoint: str) -> Dict[str, Any]:
-        return self._request("get", endpoint)
+        return self.request("get", endpoint)
 
     def delete(self, endpoint: str) -> Dict[str, Any]:
-        return self._request("delete", endpoint)
+        return self.request("delete", endpoint)
 
 
-def _enum_get(enum_cls: type[Enum], name: Optional[str], default: Any = None) -> Any:
+def enum_get(enum_cls: type[Enum], name: Optional[str], default: Any = None) -> Any:
     """Safely get an enum value by name."""
     if not name:
         return default
@@ -102,13 +121,13 @@ def _enum_get(enum_cls: type[Enum], name: Optional[str], default: Any = None) ->
         return default
 
 
-def _deserialize_video(data: Dict[str, Any]) -> Video:
+def deserialize_video(data: Dict[str, Any]) -> Video:
     v = Video(
         url=data.get("url") or "https://placeholder",
         language=Language.get(data.get("language") or "und"),
-        descriptor=_enum_get(Track.Descriptor, data.get("descriptor"), Track.Descriptor.URL),
-        codec=_enum_get(Video.Codec, data.get("codec")),
-        range_=_enum_get(Video.Range, data.get("range"), Video.Range.SDR),
+        descriptor=enum_get(Track.Descriptor, data.get("descriptor"), Track.Descriptor.URL),
+        codec=enum_get(Video.Codec, data.get("codec")),
+        range_=enum_get(Video.Range, data.get("range"), Video.Range.SDR),
         bitrate=data["bitrate"] * 1000 if data.get("bitrate") else 0,
         width=data.get("width") or 0,
         height=data.get("height") or 0,
@@ -118,12 +137,12 @@ def _deserialize_video(data: Dict[str, Any]) -> Video:
     return v
 
 
-def _deserialize_audio(data: Dict[str, Any]) -> Audio:
+def deserialize_audio(data: Dict[str, Any]) -> Audio:
     a = Audio(
         url=data.get("url") or "https://placeholder",
         language=Language.get(data.get("language") or "und"),
-        descriptor=_enum_get(Track.Descriptor, data.get("descriptor"), Track.Descriptor.URL),
-        codec=_enum_get(Audio.Codec, data.get("codec")),
+        descriptor=enum_get(Track.Descriptor, data.get("descriptor"), Track.Descriptor.URL),
+        codec=enum_get(Audio.Codec, data.get("codec")),
         bitrate=data["bitrate"] * 1000 if data.get("bitrate") else 0,
         channels=data.get("channels"),
         joc=1 if data.get("atmos") else 0,
@@ -133,12 +152,12 @@ def _deserialize_audio(data: Dict[str, Any]) -> Audio:
     return a
 
 
-def _deserialize_subtitle(data: Dict[str, Any]) -> Subtitle:
+def deserialize_subtitle(data: Dict[str, Any]) -> Subtitle:
     return Subtitle(
         url=data.get("url") or "https://placeholder",
         language=Language.get(data.get("language") or "und"),
-        descriptor=_enum_get(Track.Descriptor, data.get("descriptor"), Track.Descriptor.URL),
-        codec=_enum_get(Subtitle.Codec, data.get("codec")),
+        descriptor=enum_get(Track.Descriptor, data.get("descriptor"), Track.Descriptor.URL),
+        codec=enum_get(Subtitle.Codec, data.get("codec")),
         cc=data.get("cc", False),
         sdh=data.get("sdh", False),
         forced=data.get("forced", False),
@@ -146,7 +165,7 @@ def _deserialize_subtitle(data: Dict[str, Any]) -> Subtitle:
     )
 
 
-def _reconstruct_drm(drm_list: Optional[list]) -> list:
+def reconstruct_drm(drm_list: Optional[list]) -> list:
     """Reconstruct DRM objects from serialized API data."""
     if not drm_list:
         return []
@@ -173,22 +192,24 @@ def _reconstruct_drm(drm_list: Optional[list]) -> list:
 
                 pr_pssh = PlayReadyPSSH(b64.b64decode(pssh_str))
                 result.append(PlayReady(pssh=pr_pssh, pssh_b64=pssh_str))
-        except Exception:
+        # a dropped entry can leave the track with no DRM, so never skip silently
+        except Exception as e:
+            log.warning(f"Skipping unparseable {drm_type} DRM entry from server: {e!r}")
             continue
     return result
 
 
-def _build_tracks(data: Dict[str, Any]) -> Tracks:
+def build_tracks(data: Dict[str, Any]) -> Tracks:
     tracks = Tracks()
-    tracks.videos = [_deserialize_video(v) for v in data.get("video", [])]
-    tracks.audio = [_deserialize_audio(a) for a in data.get("audio", [])]
-    tracks.subtitles = [_deserialize_subtitle(s) for s in data.get("subtitles", [])]
+    tracks.videos = [deserialize_video(v) for v in data.get("video", [])]
+    tracks.audio = [deserialize_audio(a) for a in data.get("audio", [])]
+    tracks.subtitles = [deserialize_subtitle(s) for s in data.get("subtitles", [])]
 
     for track_data, track_obj in [
         *zip(data.get("video", []), tracks.videos),
         *zip(data.get("audio", []), tracks.audio),
     ]:
-        drm_objs = _reconstruct_drm(track_data.get("drm"))
+        drm_objs = reconstruct_drm(track_data.get("drm"))
         if drm_objs:
             track_obj.drm = drm_objs
     tracks.attachments = [
@@ -198,7 +219,7 @@ def _build_tracks(data: Dict[str, Any]) -> Tracks:
     return tracks
 
 
-def _resolve_manifest_data(tracks: Tracks, manifests: list) -> None:
+def resolve_manifest_data(tracks: Tracks, manifests: list) -> None:
     """Re-parse serialized manifests and populate track.data for downloading.
 
     The server serializes DASH and ISM manifest XML as zlib-compressed base64.
@@ -250,7 +271,7 @@ def _resolve_manifest_data(tracks: Tracks, manifests: list) -> None:
             for remote_track in all_tracks:
                 if remote_track.data.get(m_type):
                     continue
-                matched = _match_track(remote_track, local_all)
+                matched = match_track(remote_track, local_all)
                 if matched and matched.data.get(m_type):
                     remote_track.data.update(matched.data)
                     remote_track.descriptor = matched.descriptor
@@ -261,7 +282,7 @@ def _resolve_manifest_data(tracks: Tracks, manifests: list) -> None:
             log_m.warning("Failed to re-parse %s manifest from %s: %s", m_type, m_url, e)
 
 
-def _match_track(remote_track: Track, local_tracks: list) -> Optional[Track]:
+def match_track(remote_track: Track, local_tracks: list) -> Optional[Track]:
     """Match a remote track to a locally-parsed track by ID or attributes."""
     remote_id = str(remote_track.id)
     for lt in local_tracks:
@@ -285,11 +306,12 @@ def _match_track(remote_track: Track, local_tracks: list) -> Optional[Track]:
     return None
 
 
-def _build_title(info: Dict[str, Any], service_tag: str, fallback_id: str) -> Union[Episode, Movie]:
+def build_title(info: Dict[str, Any], service_tag: str, fallback_id: str) -> Union[Episode, Movie]:
     svc_class = type(service_tag, (), {})
     lang = Language.get(info["language"]) if info.get("language") else None
+    title: Union[Episode, Movie]
     if info.get("type") == "episode":
-        return Episode(
+        title = Episode(
             id_=info.get("id", fallback_id),
             service=svc_class,
             title=info.get("series_title", "Unknown"),
@@ -300,18 +322,49 @@ def _build_title(info: Dict[str, Any], service_tag: str, fallback_id: str) -> Un
             language=lang,
             air_date=info.get("air_date"),
             part=info.get("part"),
+            absolute=info.get("absolute"),
         )
-    return Movie(
-        id_=info.get("id", fallback_id),
-        service=svc_class,
-        name=info.get("name", "Unknown"),
-        year=info.get("year"),
-        language=lang,
-    )
+        if "daily" in info:
+            title.daily = info["daily"]
+    else:
+        title = Movie(
+            id_=info.get("id", fallback_id),
+            service=svc_class,
+            name=info.get("name", "Unknown"),
+            year=info.get("year"),
+            language=lang,
+        )
+    # the synthetic service class carries no ANIME/DAILY, so the flags only survive per title
+    if "anime" in info:
+        title.anime = info["anime"]
+    return title
+
+
+def resolve_auth_headers(svc: dict, server_name: str) -> list[str]:
+    """Configured header names first, then the defaults as fallbacks."""
+    auth_headers = svc.get("auth_headers")
+    if auth_headers is None:
+        return list(DEFAULT_AUTH_HEADERS)
+    if (
+        not isinstance(auth_headers, list)
+        or not auth_headers
+        or not all(isinstance(h, str) and h.strip() for h in auth_headers)
+    ):
+        raise click.ClickException(
+            f"Remote service '{server_name}': 'auth_headers' must be a list of header names, e.g.\n\n"
+            '      auth_headers: ["Authorization"]'
+        )
+    resolved = [h.strip() for h in auth_headers]
+    seen = {h.lower() for h in resolved}
+    resolved.extend(h for h in DEFAULT_AUTH_HEADERS if h.lower() not in seen)
+    return resolved
 
 
 def resolve_server(server_name: Optional[str]) -> tuple[str, str, dict]:
-    """Resolve server URL, API key, and per-service config from remote_services."""
+    """Resolve server URL, API key, and per-service config from remote_services.
+
+    The per-service config carries the ``_auth_headers`` candidate list for RemoteClient.
+    """
     remote_services = config.remote_services
     if not remote_services:
         raise click.ClickException(
@@ -329,6 +382,7 @@ def resolve_server(server_name: Optional[str]) -> tuple[str, str, dict]:
             raise click.ClickException(f"Remote service '{server_name}' not found. Available: {available}")
         services = svc.get("services", {})
         services["_server_cdm"] = svc.get("server_cdm", False)
+        services["_auth_headers"] = resolve_auth_headers(svc, server_name)
         return svc["url"], svc.get("api_key", ""), services
 
     if len(remote_services) == 1:
@@ -336,13 +390,14 @@ def resolve_server(server_name: Optional[str]) -> tuple[str, str, dict]:
         log.info(f"Using remote service: {name}")
         services = svc.get("services", {})
         services["_server_cdm"] = svc.get("server_cdm", False)
+        services["_auth_headers"] = resolve_auth_headers(svc, name)
         return svc["url"], svc.get("api_key", ""), services
 
     available = ", ".join(remote_services.keys())
     raise click.ClickException(f"Multiple remote services configured. Use --server to select one: {available}")
 
 
-def _load_credentials_for_transport(service_tag: str, profile: Optional[str]) -> Optional[Dict[str, str]]:
+def load_credentials_for_transport(service_tag: str, profile: Optional[str]) -> Optional[Dict[str, str]]:
     from unshackle.commands.dl import dl
 
     credential = dl.get_credentials(service_tag, profile)
@@ -354,7 +409,7 @@ def _load_credentials_for_transport(service_tag: str, profile: Optional[str]) ->
     return None
 
 
-def _load_cookies_for_transport(service_tag: str, profile: Optional[str]) -> Optional[str]:
+def load_cookies_for_transport(service_tag: str, profile: Optional[str]) -> Optional[str]:
     import zlib
 
     from unshackle.commands.dl import dl
@@ -365,7 +420,7 @@ def _load_cookies_for_transport(service_tag: str, profile: Optional[str]) -> Opt
     return None
 
 
-def _resolve_proxy(proxy_arg: Optional[str]) -> Optional[str]:
+def resolve_proxy_arg(proxy_arg: Optional[str]) -> Optional[str]:
     if not proxy_arg:
         return None
 
@@ -388,6 +443,8 @@ class RemoteService:
     ALIASES: tuple[str, ...] = ()
     GEOFENCE: tuple[str, ...] = ()
     NO_SUBTITLES: bool = False
+    ANIME: bool = False
+    DAILY: bool = False
 
     def __init__(
         self,
@@ -404,7 +461,7 @@ class RemoteService:
 
         self.service_tag = service_tag
         self.title_id = title_id
-        self.client = RemoteClient(server_url, api_key)
+        self.client = RemoteClient(server_url, api_key, services_config.get("_auth_headers"))
         self.ctx = ctx
         self._service_params = service_params or {}
         self.log = logging.getLogger(service_tag)
@@ -431,9 +488,9 @@ class RemoteService:
 
         svc_config = services_config.get(service_tag, {})
         self._server_cdm = services_config.get("_server_cdm", False)
-        self._apply_service_config(svc_config)
+        self.apply_service_config(svc_config)
 
-    def _apply_service_config(self, svc_config: dict) -> None:
+    def apply_service_config(self, svc_config: dict) -> None:
         if not svc_config:
             return
         config_maps = {
@@ -477,16 +534,16 @@ class RemoteService:
 
         create_data: Dict[str, Any] = {"service": self.service_tag, "title_id": self.title_id}
 
-        credentials = _load_credentials_for_transport(self.service_tag, profile)
+        credentials = load_credentials_for_transport(self.service_tag, profile)
         if credentials:
             create_data["credentials"] = credentials
 
-        cookies_text = _load_cookies_for_transport(self.service_tag, profile)
+        cookies_text = load_cookies_for_transport(self.service_tag, profile)
         if cookies_text:
             create_data["cookies"] = cookies_text
 
         if not no_proxy and proxy:
-            resolved_proxy = _resolve_proxy(proxy)
+            resolved_proxy = resolve_proxy_arg(proxy)
             if resolved_proxy:
                 create_data["proxy"] = resolved_proxy
 
@@ -527,7 +584,7 @@ class RemoteService:
 
             create_data["cdm_type"] = "playready" if is_playready_cdm(cdm) else "widevine"
 
-        cache_data = self._load_cache_files()
+        cache_data = self.load_cache_files()
         if cache_data:
             create_data["cache"] = cache_data
 
@@ -536,9 +593,9 @@ class RemoteService:
 
         status = result.get("status", "authenticated")
         if status == "authenticating":
-            self._poll_auth_completion()
+            self.poll_auth_completion()
 
-    def _poll_auth_completion(self, poll_interval: float = 2.0, timeout: float = 600.0) -> None:
+    def poll_auth_completion(self, poll_interval: float = 2.0, timeout: float = 600.0) -> None:
         """Poll the server until authentication completes, handling interactive prompts.
 
         When the server needs user input (OTP, device code, PIN), it returns
@@ -561,7 +618,11 @@ class RemoteService:
 
             if status == "pending_input":
                 prompt = resp.get("prompt", "Enter input: ")
-                user_response = click.prompt(prompt.rstrip("\n "), default="", show_default=False)
+                try:
+                    user_response = prompt_user(prompt)
+                except EOFError:
+                    log.error("Remote auth needs interactive input but stdin is closed")
+                    raise SystemExit(1) from None
                 self.client.post(
                     f"/api/session/{self._session_id}/prompt",
                     {"response": user_response},
@@ -577,7 +638,7 @@ class RemoteService:
         if self._titles is not None:
             return self._titles
         result = self.client.get(f"/api/session/{self._session_id}/titles")
-        titles_list = [_build_title(t, self.service_tag, self.title_id) for t in result.get("titles", [])]
+        titles_list = [build_title(t, self.service_tag, self.title_id) for t in result.get("titles", [])]
         self._titles = (
             Series(titles_list) if titles_list and isinstance(titles_list[0], Episode) else Movies(titles_list)
         )
@@ -597,7 +658,7 @@ class RemoteService:
         if title_id in self._tracks_by_title:
             return self._tracks_by_title[title_id]
         result = self.client.post(f"/api/session/{self._session_id}/tracks", {"title_id": title_id})
-        tracks = _build_tracks(result)
+        tracks = build_tracks(result)
 
         for k, v in result.get("session_headers", {}).items():
             if k.lower() not in ("host", "content-length", "content-type"):
@@ -605,8 +666,11 @@ class RemoteService:
         for k, v in result.get("session_cookies", {}).items():
             self._session.cookies.set(k, v)
 
-        _resolve_manifest_data(tracks, result.get("manifests", []))
+        resolve_manifest_data(tracks, result.get("manifests", []))
 
+        if self._server_cdm and not result.get("server_cdm", True):
+            self._server_cdm = False
+            self.log.warning("Server CDM licensing is not enabled for this key, using the local CDM")
         self._server_cdm_type = result.get("server_cdm_type", "widevine")
 
         self._tracks_by_title[title_id] = tracks
@@ -655,7 +719,7 @@ class RemoteService:
                     continue
 
                 kid_list = list(track_keys.keys())
-                drm_obj = self._create_drm_stub(server_drm_type, kid_list)
+                drm_obj = self.create_drm_stub(server_drm_type, kid_list)
                 for kid_hex, key_hex in track_keys.items():
                     drm_obj.content_keys[UUID(hex=kid_hex)] = key_hex
                 track.drm = [drm_obj]
@@ -669,7 +733,7 @@ class RemoteService:
             self.log.warning("Failed to resolve server CDM keys: %s", e)
 
     @staticmethod
-    def _create_drm_stub(drm_type: str, kid_hexes: list[str]) -> Any:
+    def create_drm_stub(drm_type: str, kid_hexes: list[str]) -> Any:
         """Create a DRM object stub matching the type the server actually used.
 
         For server_cdm mode, this is only used for display — keys are already
@@ -721,12 +785,12 @@ class RemoteService:
         return Chapters([Chapter(ch["timestamp"], ch.get("name")) for ch in raw])
 
     def get_widevine_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> Optional[Union[bytes, str]]:
-        return self._proxy_license(challenge, track, "widevine")
+        return self.proxy_license(challenge, track, "widevine")
 
     def get_playready_license(
         self, *, challenge: bytes, title: Title_T, track: AnyTrack
     ) -> Optional[Union[bytes, str]]:
-        return self._proxy_license(challenge, track, "playready")
+        return self.proxy_license(challenge, track, "playready")
 
     def get_clearkey_license(
         self, *, challenge: bytes, title: Title_T, track: AnyTrack
@@ -751,10 +815,12 @@ class RemoteService:
                 },
             )
             return base64.b64decode(resp["license"])
-        except Exception:
+        # a missing certificate is legal (services may not use one); log and continue without
+        except Exception as e:
+            self.log.debug(f"Service certificate fetch failed: {e!r}")
             return None
 
-    def _proxy_license(self, challenge: Union[bytes, str], track: AnyTrack, drm_type: str) -> bytes:
+    def proxy_license(self, challenge: Union[bytes, str], track: AnyTrack, drm_type: str) -> bytes:
         if isinstance(challenge, str):
             challenge = challenge.encode("utf-8")
 
@@ -824,12 +890,12 @@ class RemoteService:
         if self._session_id:
             try:
                 result = self.client.delete(f"/api/session/{self._session_id}")
-                self._save_returned_cache(result.get("cache", {}))
+                self.save_returned_cache(result.get("cache", {}))
             except Exception as e:
                 self.log.warning(f"Failed to clean up remote session: {e}")
             self._session_id = None
 
-    def _save_returned_cache(self, cache_data: Dict[str, str]) -> None:
+    def save_returned_cache(self, cache_data: Dict[str, str]) -> None:
         """Save cache files returned by the server to the local cache directory.
 
         The server returns updated cache files (e.g. refreshed tokens) on
@@ -858,7 +924,7 @@ class RemoteService:
 
         self.log.info(f"Saved {len(cache_data)} cache file(s) from server")
 
-    def _load_cache_files(self) -> Dict[str, str]:
+    def load_cache_files(self) -> Dict[str, str]:
         import zlib
 
         cache_dir = config.directories.cache / self.service_tag

@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import html
+import logging
 import re
 import shutil
 import struct
@@ -78,24 +79,28 @@ class ISM:
         return cls(load_xml(text), url)
 
     @staticmethod
-    def _get_drm(headers: list[Element]) -> list[DRM_T]:
+    def get_drm(headers: list[Element]) -> list[DRM_T]:
         drm: list[DRM_T] = []
         for header in headers:
-            system_id = (header.get("SystemID") or header.get("SystemId") or "").lower()
+            # MS-SSTR manifests often write the GUID in registry format ({...}).
+            system_id = (header.get("SystemID") or header.get("SystemId") or "").strip().strip("{}").lower()
             data = "".join(header.itertext()).strip()
             if not data:
                 continue
             if system_id == "edef8ba9-79d6-4ace-a3c8-27dcd51d21ed":
                 try:
                     pssh = PSSH(base64.b64decode(data))
-                except Exception:
+                # a dropped header can leave the track with no DRM, so never skip silently
+                except Exception as e:
+                    logging.getLogger("ISM").warning(f"Skipping unparseable Widevine ProtectionHeader: {e!r}")
                     continue
                 kid = next(iter(pssh.key_ids), None)
                 drm.append(Widevine(pssh=pssh, kid=kid))
             elif system_id == "9a04f079-9840-4286-ab92-e65be0885f95":
                 try:
                     pr_pssh = PR_PSSH(data)
-                except Exception:
+                except Exception as e:
+                    logging.getLogger("ISM").warning(f"Skipping unparseable PlayReady ProtectionHeader: {e!r}")
                     continue
                 drm.append(PlayReady(pssh=pr_pssh, pssh_b64=data))
         return drm
@@ -122,7 +127,7 @@ class ISM:
         return ISM.get_video_range_and_fps(fourcc, codec_private_data)[0]
 
     @staticmethod
-    def _init_segment(
+    def init_segment(
         track: AnyTrack, session_drm: Optional[DRM_T], first_segment: Optional[bytes] = None
     ) -> Optional[bytes]:
         # Smooth fragments are moof+mdat only; rebuild the ftyp+moov init box from
@@ -225,7 +230,7 @@ class ISM:
         tracks = Tracks()
         base_url = self.url
         duration = int(self.manifest.get("Duration") or 0)
-        drm = self._get_drm(self.manifest.xpath(".//ProtectionHeader"))
+        drm = self.get_drm(self.manifest.xpath(".//ProtectionHeader"))
 
         for stream_index in self.manifest.findall("StreamIndex"):
             content_type = stream_index.get("Type")
@@ -272,7 +277,8 @@ class ISM:
                     if not duration_frag:
                         try:
                             next_time = int(fragments[idx + 1].get("t"))
-                        except (IndexError, AttributeError):
+                        except (IndexError, TypeError):
+                            # no next fragment, or the next <c> omits t (get returns None)
                             next_time = duration
                         # floor division: float times would corrupt segment URLs;
                         # any drift is reset by the next fragment's explicit t.
@@ -524,7 +530,7 @@ class ISM:
         progress(downloaded="Merging", completed=0, total=len(segments_to_merge))
         with open(save_path, "wb") as f:
             first_segment = segments_to_merge[0].read_bytes() if segments_to_merge else None
-            init_segment = ISM._init_segment(track, session_drm, first_segment)
+            init_segment = ISM.init_segment(track, session_drm, first_segment)
             if init_segment:
                 f.write(init_segment)
             iv_size = (read_per_sample_iv_size(first_segment) if session_drm and first_segment else None) or 8

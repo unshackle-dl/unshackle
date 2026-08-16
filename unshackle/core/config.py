@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import warnings
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import yaml
 from appdirs import AppDirs
@@ -110,17 +110,19 @@ class Config:
             self.decryption_map = {}
             self.decryption = decryption_cfg or "shaka"
 
+        self.theme: str = kwargs.get("theme") or "default"
         self.set_terminal_bg: bool = kwargs.get("set_terminal_bg", False)
         self.tag: str = kwargs.get("tag") or ""
         self.tag_group_name: bool = kwargs.get("tag_group_name", True)
         self.tag_imdb_tmdb: bool = kwargs.get("tag_imdb_tmdb", True)
-        self.imdb_api_enabled: bool = kwargs.get("imdb_api_enabled", False)
         self.omdb_api_key: str = kwargs.get("omdb_api_key") or ""
         self.tmdb_api_key: str = kwargs.get("tmdb_api_key") or ""
         self.tvdb_api_key: str = kwargs.get("tvdb_api_key") or ""
         self.tvdb_pin: str = kwargs.get("tvdb_pin") or ""
         self.tvdb_order: str = (kwargs.get("tvdb_order") or "").lower()
-        self.metadata_providers: list = kwargs.get("metadata_providers") or []
+        self.metadata_providers: Union[list, dict] = kwargs.get("metadata_providers") or []
+        self.anilist_title_language: str = (kwargs.get("anilist_title_language") or "english").lower()
+        self.disable_metadata: bool = kwargs.get("disable_metadata", False)
         self.simkl_client_id: str = kwargs.get("simkl_client_id") or ""
         self.decrypt_labs_api_key: str = kwargs.get("decrypt_labs_api_key") or ""
         self.ipinfo_api_key: str = kwargs.get("ipinfo_api_key") or ""
@@ -149,7 +151,7 @@ class Config:
             )
 
         if self.output_template:
-            self._validate_output_templates()
+            self.validate_output_templates()
 
         self.unicode_filenames: bool = kwargs.get("unicode_filenames", False)
 
@@ -161,7 +163,7 @@ class Config:
         self.debug_keys: bool = kwargs.get("debug_keys", False)
         self.debug_requests: bool = kwargs.get("debug_requests", False)
 
-    def _validate_output_templates(self) -> None:
+    def validate_output_templates(self) -> None:
         """Validate output template configurations and warn about potential issues."""
         if not self.output_template:
             return
@@ -174,6 +176,7 @@ class Config:
             "season_episode",
             "episode_name",
             "part",
+            "absolute",
             "date",
             "quality",
             "resolution",

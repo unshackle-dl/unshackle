@@ -177,6 +177,11 @@ The full detail adds `started_time`, `completed_time`, `output_files`, the redac
     done
     ```
 
+!!! tip "Or subscribe instead of polling"
+    `GET /api/download/jobs/{job_id}/events` pushes the same job object as Server-Sent
+    Events, and closes the stream when the job ends. See
+    [Endpoints](endpoints.md#get-apidownloadjobsjob_idevents).
+
 !!! note "What the percentage means"
     `progress` climbs from `0` toward `90` while tracks download, then the final stretch
     to `100` covers post-download work such as decryption cleanup, repackaging, and

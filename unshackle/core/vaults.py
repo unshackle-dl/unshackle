@@ -10,11 +10,11 @@ from unshackle.core.vault import Vault
 
 log = logging.getLogger(__name__)
 
-_VAULTS = sorted(
+VAULTS = sorted(
     (path for path in config.directories.vaults.glob("*.py") if path.stem.lower() != "__init__"), key=lambda x: x.stem
 )
 
-_MODULES = {path.stem: getattr(import_module_by_path(path), path.stem) for path in _VAULTS}
+MODULES = {path.stem: getattr(import_module_by_path(path), path.stem) for path in VAULTS}
 
 
 class Vaults:
@@ -32,7 +32,7 @@ class Vaults:
 
     def load(self, type_: str, **kwargs: Any) -> bool:
         """Load a Vault into the vaults list. Returns True if successful, False otherwise."""
-        module = _MODULES.get(type_)
+        module = MODULES.get(type_)
         if not module:
             raise ValueError(f"Unable to find vault command by the name '{type_}'.")
         # only pass the global default to vaults that declare a timeout param (per-vault config still wins)
@@ -42,12 +42,14 @@ class Vaults:
             vault = module(**kwargs)
             self.vaults.append(vault)
             return True
-        except Exception:
+        # one bad vault config must not stop the others from loading
+        except Exception as e:
+            log.debug(f"Vault '{type_}' failed to load: {e!r}")
             return False
 
     def load_critical(self, type_: str, **kwargs: Any) -> None:
         """Load a critical Vault that must succeed or raise an exception."""
-        module = _MODULES.get(type_)
+        module = MODULES.get(type_)
         if not module:
             raise ValueError(f"Unable to find vault command by the name '{type_}'.")
         vault = module(**kwargs)

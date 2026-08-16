@@ -190,9 +190,9 @@ def test_byte_range_slice_segments_never_probed_or_boosted(tmp_path: Path, monke
     host, port = httpd.server_address
 
     probed: list[str] = []
-    real_probe = dl._probe_ranged
+    real_probe = dl.probe_ranged
     monkeypatch.setattr(
-        dl, "_probe_ranged", lambda url, session, **kw: probed.append(url) or real_probe(url, session, **kw)
+        dl, "probe_ranged", lambda url, session, **kw: probed.append(url) or real_probe(url, session, **kw)
     )
 
     url = f"http://{host}:{port}/media.mp4"

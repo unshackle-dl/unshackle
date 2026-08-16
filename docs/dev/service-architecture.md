@@ -64,6 +64,8 @@ Declared at the top of your service class, these are static descriptors:
 | `GEOFENCE` | `tuple[str, ...]` | ISO region codes the service requires; empty means no geofence. The first entry is treated as the "main region" for automatic proxy selection. |
 | `VAULT_TAG` | `Optional[str]` | Overrides the key-vault namespace; defaults to the service's own tag. |
 | `AUTH_METHODS` | `Optional[tuple[str, ...]]` | Accepted auth methods (`"cookies"` / `"credentials"`). When `None`, the REST `/services` endpoint infers them from `authenticate()`. |
+| `ANIME` | `bool` | The catalog is anime, so metadata lookups prefer AniList. A title's own `anime` flag overrides it. |
+| `DAILY` | `bool` | The catalog is daily/date-based, so episodes are named by air date. A title's own `daily` flag overrides it. |
 
 ### Required methods
 

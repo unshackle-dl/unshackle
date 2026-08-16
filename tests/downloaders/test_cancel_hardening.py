@@ -2,7 +2,7 @@
 
 Pins two teardown-safety invariants:
 
-- ``_dispatch_parts`` must NOT finalize when the process-global ``DOWNLOAD_CANCELLED``
+- ``dispatch_parts`` must NOT finalize when the process-global ``DOWNLOAD_CANCELLED``
   fires mid-download: part workers return silently keeping partials, so every future
   completes without error, and finalizing would strip the ``.!dev`` control file and
   pass off a hole-filled pre-truncated file as complete on the next run.
@@ -104,7 +104,7 @@ def test_dispatch_parts_does_not_finalize_on_global_cancel(server, tmp_path):
     canceller = threading.Thread(target=_cancel_when_started)
     canceller.start()
     events = list(
-        dl._dispatch_parts(
+        dl.dispatch_parts(
             url=_url(server),
             save_path=save_path,
             session=Session(),
@@ -121,7 +121,7 @@ def test_dispatch_parts_does_not_finalize_on_global_cancel(server, tmp_path):
 
 def test_backoff_wait_exits_promptly_on_batch_abort(server, tmp_path, monkeypatch):
     server.always_status = 503
-    monkeypatch.setattr(dl, "_retry_sleep", lambda exc, attempts: 30.0)
+    monkeypatch.setattr(dl, "retry_sleep", lambda exc, attempts: 30.0)
     abort = threading.Event()
 
     def _consume() -> None:

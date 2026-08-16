@@ -65,13 +65,13 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             item.add_marker(skip_live)
 
 
-def _free_port() -> int:
+def free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
 
 
-def _wait_for_health(url: str, timeout: float = 60.0) -> bool:
+def wait_for_health(url: str, timeout: float = 60.0) -> bool:
     import requests
 
     deadline = time.monotonic() + timeout
@@ -87,11 +87,11 @@ def _wait_for_health(url: str, timeout: float = 60.0) -> bool:
 
 
 @pytest.fixture(autouse=True)
-def _isolated_job_history(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def isolated_job_history(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Redirect job history writes to tmp_path so tests don't append to the server's api_history.jsonl."""
     from unshackle.core.api import download_manager
 
-    monkeypatch.setattr(download_manager, "_history_path", lambda: tmp_path / "api_history.jsonl")
+    monkeypatch.setattr(download_manager, "history_path", lambda: tmp_path / "api_history.jsonl")
 
 
 @pytest.fixture(scope="session")
@@ -120,19 +120,19 @@ def server_url(request: pytest.FixtureRequest):
     if mode == "never":
         if not explicit:
             pytest.fail("--spawn-serve=never requires --server-url")
-        if not _wait_for_health(explicit, timeout=10):
+        if not wait_for_health(explicit, timeout=10):
             pytest.fail(f"External serve not reachable at {explicit}")
         yield explicit
         return
 
     if mode == "auto" and explicit:
-        if not _wait_for_health(explicit, timeout=10):
+        if not wait_for_health(explicit, timeout=10):
             pytest.fail(f"External serve not reachable at {explicit}")
         yield explicit
         return
 
     # Spawn our own serve.
-    port = _free_port()
+    port = free_port()
     cmd = [
         "uv",
         "run",
@@ -153,7 +153,7 @@ def server_url(request: pytest.FixtureRequest):
     )
     url = f"http://127.0.0.1:{port}"
     try:
-        if not _wait_for_health(url, timeout=60):
+        if not wait_for_health(url, timeout=60):
             proc.terminate()
             pytest.fail(f"Spawned serve at {url} did not become healthy within 60s")
         yield url

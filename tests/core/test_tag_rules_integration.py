@@ -61,7 +61,7 @@ def clean_config(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def context_for(rules: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch) -> dict:
     monkeypatch.setattr(config, "tag_rules", rules)
-    return make_movie()._build_base_template_context(make_media_info(["en"]))
+    return make_movie().build_base_template_context(make_media_info(["en"]))
 
 
 def test_matching_rule_replaces_the_tag(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -90,7 +90,7 @@ def test_rules_run_after_lang_tag(monkeypatch: pytest.MonkeyPatch) -> None:
 
     movie = make_movie()
     movie.tracks = TrackStub(audio=[types.SimpleNamespace(language=Language.get("ja"))], subtitles=[])  # type: ignore[assignment]
-    context = movie._build_base_template_context(make_media_info(["ja"]))
+    context = movie.build_base_template_context(make_media_info(["ja"]))
 
     assert context["lang_tag"] == "SUBBED"
     assert context["tag"] == "SUBGRP"
@@ -113,7 +113,7 @@ def test_a_quality_rule_matches_the_built_context(monkeypatch: pytest.MonkeyPatc
     )
     media_info = types.SimpleNamespace(video_tracks=[video], audio_tracks=[make_audio("en")])
 
-    context = make_movie()._build_base_template_context(media_info)
+    context = make_movie().build_base_template_context(media_info)
 
     assert context["quality"] == "2160p"
     assert context["video"] == "H.265"

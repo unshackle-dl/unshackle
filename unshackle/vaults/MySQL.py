@@ -253,10 +253,10 @@ class ConnectionFactory:
         self._con = con
         self._store = threading.local()
 
-    def _create_connection(self) -> pymysql.Connection:
+    def create_connection(self) -> pymysql.Connection:
         return pymysql.connect(**self._con)
 
     def get(self) -> pymysql.Connection:
         if not hasattr(self._store, "conn"):
-            self._store.conn = self._create_connection()
+            self._store.conn = self.create_connection()
         return self._store.conn

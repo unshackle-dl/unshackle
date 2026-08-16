@@ -2,7 +2,7 @@
 
 Drives the real DASH pipeline against public SegmentBase test manifests and reports
 wall time, size, throughput and output validity (ffprobe). On branches that have the
-single-URL collapse (DASH._collapsible_single_url) it also reports whether the
+single-URL collapse (DASH.collapsible_single_url) it also reports whether the
 collapse fired; on checkouts without it (e.g. dev) the same script runs the classic
 per-segment + merge path, so running it from both checkouts gives an A/B comparison:
 
@@ -39,7 +39,7 @@ guard_results: list[bool] = []
 
 def install_guard_spy() -> bool:
     """Record collapse decisions when this checkout has the guard; no-op otherwise."""
-    orig = getattr(DASH, "_collapsible_single_url", None)
+    orig = getattr(DASH, "collapsible_single_url", None)
     if orig is None:
         return False
 
@@ -48,7 +48,7 @@ def install_guard_spy() -> bool:
         guard_results.append(result)
         return result
 
-    DASH._collapsible_single_url = staticmethod(spy)  # type: ignore[method-assign]
+    DASH.collapsible_single_url = staticmethod(spy)  # type: ignore[method-assign]
     return True
 
 

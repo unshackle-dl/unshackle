@@ -38,9 +38,9 @@ class TemplateFormatter:
         """
         self.template = template
         self.spacer = spacer or detect_spacer(template)
-        self.variables = self._extract_variables()
+        self.variables = self.extract_variables()
 
-    def _extract_variables(self) -> list[str]:
+    def extract_variables(self) -> list[str]:
         """Extract all variables from the template."""
         pattern = r"\{([^}]+)\}"
         matches = re.findall(pattern, self.template)
@@ -82,7 +82,7 @@ class TemplateFormatter:
                         # Remove the placeholder and consume the adjacent separator on one side
                         # e.g. "{disc?}-{track}" → "{track}" when disc is empty
                         # e.g. "{title}.{edition?}.{quality}" → "{title}.{quality}" when edition is empty
-                        def _remove_conditional(m: re.Match) -> str:
+                        def remove_conditional(m: re.Match) -> str:
                             s = m.group(0)
                             has_left = s[0] in ".- "
                             has_right = s[-1] in ".- "
@@ -94,7 +94,7 @@ class TemplateFormatter:
 
                         result = re.sub(
                             rf"[\.\s\-]?{re.escape(placeholder)}[\.\s\-]?",
-                            _remove_conditional,
+                            remove_conditional,
                             result,
                             count=1,
                         )

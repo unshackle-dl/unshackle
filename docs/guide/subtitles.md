@@ -67,10 +67,10 @@ Subtitle selection happens through `dl` flags. The most important is language se
 
 | Flag | Purpose |
 | --- | --- |
-| `-sl`, `--s-lang` | Language(s) wanted for subtitles. Defaults to `all`. |
+| `-sl`, `--s-lang` | Language(s) wanted for subtitles. Defaults to `all`. A `-` prefix excludes, e.g. `all,-es`. |
 | `--require-subs` | Require these languages to exist; if present, download **all** subtitles. Cannot be combined with `--s-lang`. |
 | `-fs`, `--forced-subs` | Include forced subtitle tracks (excluded by default). |
-| `-fsl`, `--forced-s-lang` | Language(s) wanted for forced subtitles; implies `-fs`. |
+| `-fsl`, `--forced-s-lang` | Language(s) wanted for forced subtitles; implies `-fs`. A `-` prefix excludes. |
 | `--exact-lang` | Exact language matching, with no regional variants. |
 | `-S`, `--subs-only` | Download only subtitle tracks. |
 | `-ns`, `--no-subs` | Do not download subtitle tracks at all. |

@@ -90,13 +90,13 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 
 | Flag | Default | Description |
 |---|---|---|
-| `-l`, `--lang` | `orig` | Language(s) for **both** video and audio. `orig` = the title's original language; e.g. `orig,en`. |
-| `-vl`, `--v-lang` | - | Video-only language (overrides `-l` for video). |
-| `-al`, `--a-lang` | - | Audio-only language (overrides `-l` for audio). |
-| `-sl`, `--s-lang` | `all` | Subtitle language(s). |
+| `-l`, `--lang` | `orig` | Language(s) for **both** video and audio. `orig` = the title's original language; e.g. `orig,en`. A `-` prefix excludes, e.g. `all,-es`. |
+| `-vl`, `--v-lang` | - | Video-only language (overrides `-l` for video). A `-` prefix excludes. |
+| `-al`, `--a-lang` | - | Audio-only language (overrides `-l` for audio). A `-` prefix excludes. |
+| `-sl`, `--s-lang` | `all` | Subtitle language(s). A `-` prefix excludes, e.g. `all,-es`. |
 | `--require-subs` | - | Required subtitle langs; keeps **all** subs only if these exist. **Cannot combine with `--s-lang`.** |
 | `-fs`, `--forced-subs` | off | Include forced subtitle tracks. |
-| `-fsl`, `--forced-s-lang` | none | Language(s) wanted for forced subtitles; implies `-fs`. |
+| `-fsl`, `--forced-s-lang` | none | Language(s) wanted for forced subtitles; implies `-fs`. A `-` prefix excludes. |
 | `--exact-lang` | off | Exact matching only: `-l es-419` matches `es-419`, not `es-ES`. Applies to selection and to sort order. |
 | `--sub-format` | - | Output subtitle format (`SRT`/`srt`, `VTT`/`webvtt`, `ASS`/`ssa`, `TTML`, `SMI`, ...), or `original` to keep the source format. |
 
@@ -112,7 +112,7 @@ The special language tokens `orig`, `all`, and `best` are honoured everywhere a 
 
 | Flag | Description |
 |---|---|
-| `-w`, `--wanted` | Wanted episodes, e.g. `S01-S05,S07`, `S01E01-S02E03`. Supports exclusions with a leading `-` (e.g. `-S03`). For a [split episode](downloading.md#split-episodes), `.N` picks one part (`S01E01.2`), a range must stay inside the episode (`S01E01.1-S01E01.3`), and `S01E01` on its own takes every part. |
+| `-w`, `--wanted` | Wanted episodes, e.g. `S01-S05,S07`, `S01E01-S02E03`. Supports exclusions with a leading `-` (e.g. `-S03`). For a [split episode](downloading.md#split-episodes), `.N` picks one part (`S01E01.2`), a range must stay inside the episode (`S01E01.1-S01E01.3`), and `S01E01` on its own takes every part. For [dated content](downloading.md#daily-and-date-based-content), a token can also be an ISO air date (`2026-08-11`) or a date range with a colon (`2026-08-01:2026-08-31`). |
 | `--select-titles` | Interactively select what to download: episodes of a series, or films when a title has more than one. **Cannot combine with `-w`.** |
 | `--latest-episode` | Download only the single most recent episode. |
 | `--list-titles` | List titles only; do not download. |
@@ -150,12 +150,20 @@ Keep only certain track types, or skip certain track types. Attachments are alwa
 
 | Flag | Description |
 |---|---|
-| `--tmdb` | TMDB ID (integer). |
-| `--imdb` | IMDb ID, e.g. `tt1375666`. |
-| `--tvdb` | TVDB ID (integer). Skips the series lookup that `--tvdb-order` would otherwise do. |
-| `--animeapi` | AnimeAPI ID, e.g. `mal:12345` or `anilist:98765` (defaults to MAL). Back-fills TMDB/IMDb/TVDB. |
-| `--enrich` | Override show title/year from the external source. **Requires** one of `--tmdb`, `--imdb`, or `--animeapi`. |
+| `--tmdb` | TMDB ID (integer). Used for the tags. Skips the title search. `--enrich` reads it too. Needs `tmdb_api_key`. |
+| `--imdb` | IMDb ID, e.g. `tt1375666`. Used for the tags. Skips the title search. `--enrich` reads it too. Needs no key. |
+| `--tvdb` | TVDB ID (integer). Used for the tags. Skips the series lookup that `--tvdb-order` would otherwise do. `--enrich` reads it too. Needs `tvdb_api_key`. |
+| `--anilist` | AniList ID (integer), e.g. `--anilist 21`. A MyAnimeList ID is accepted as `mal:12345` and resolved to the AniList entry. Used for the tags. Skips the title search. `--enrich` reads it too. Needs no key. |
+| `--enrich` | Overwrite show title, year and original language with the external source's. **Requires** one of `--tmdb`, `--imdb`, `--tvdb`, or `--anilist`. |
+| `--daily` | Treat the title as daily/date-based content and fill missing episode air dates from TVDB. The fill needs `--enrich` and a TVDB ID. See [Daily and date-based content](downloading.md#daily-and-date-based-content). |
 | `--tvdb-order` | Renumber episodes to a TVDB season order: `official` (aired), `dvd`, `absolute`, `alternate`, or `regional`. Needs `tvdb_api_key`. |
+
+!!! note "One ID at a time"
+    `--tmdb`, `--imdb` and `--tvdb` cannot be combined. Give one and unshackle resolves the
+    others from it, writing all three to the tags. `--anilist` is outside that rule and pairs
+    with one of them, which is how you attach a western ID to an anime title.
+    An ID with no provider that can resolve it, such as `--tmdb` with no `tmdb_api_key`, fails
+    before the download starts. `--anilist` needs no key, so it never fails this check.
 
 #### Episode ordering
 
@@ -300,7 +308,7 @@ Prints a dependency table (Category / Tool / Status / Required / Purpose) showin
 | Category | Tools |
 |---|---|
 | Core | FFmpeg*, FFprobe*, MKVToolNix*, mkvpropedit* |
-| DRM | shaka-packager*, mp4decrypt, ML-Worker |
+| DRM | shaka-packager*, mp4decrypt |
 | HDR | dovi_tool, HDR10Plus_tool |
 | Subtitle | SubtitleEdit, CCExtractor |
 | Player | FFplay, MPV |
@@ -316,6 +324,14 @@ unshackle env info
 
 Shows where the config was loaded from (or lists the candidate config locations if none was found) and prints a table of every configured directory (downloads, temp, cache, cookies, logs, exports, WVDs, PRDs, services, and more).
 
+### `env theme`
+
+```
+unshackle env theme
+```
+
+Prints a sample of every available CLI theme: colour swatches, help text with option rows, a track listing with video/audio/subtitle entries, log lines, a progress bar, and the gradient pulse bar. The active theme is marked and each theme's aliases are listed. Set your choice with the [`theme`](../reference/configuration/misc.md#appearance) config key.
+
 ### `env clear`
 
 Clear an environment directory. The directory is emptied and recreated, and the number of files and bytes freed is reported.
@@ -329,6 +345,7 @@ Clear an environment directory. The directory is emptied and recreated, and the 
     ```shell
     unshackle env check
     unshackle env info
+    unshackle env theme
     unshackle env clear cache
     unshackle env clear cache EXAMPLE   # one service only
     unshackle env clear temp

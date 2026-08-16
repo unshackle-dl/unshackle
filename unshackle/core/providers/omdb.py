@@ -4,9 +4,10 @@ from difflib import SequenceMatcher
 from typing import Optional, Union
 
 import requests
+from langcodes import Language
 
 from unshackle.core.config import config
-from unshackle.core.providers._base import ExternalIds, MetadataProvider, MetadataResult, _clean, fuzzy_match
+from unshackle.core.providers._base import ExternalIds, MetadataProvider, MetadataResult, clean, fuzzy_match
 
 # Mapping from our kind ("movie"/"tv") to OMDb title types
 KIND_TO_TYPE: dict[str, str] = {
@@ -15,7 +16,18 @@ KIND_TO_TYPE: dict[str, str] = {
 }
 
 
-def _parse_year(value: Optional[str]) -> Optional[int]:
+def primary_language(data: dict) -> Optional[str]:
+    """OMDb gives English language names, most prominent first, e.g. 'Korean, English'."""
+    name = (data.get("Language") or "").split(",")[0].strip()
+    if not name:
+        return None
+    try:
+        return str(Language.find(name))
+    except LookupError:
+        return None
+
+
+def parse_year(value: Optional[str]) -> Optional[int]:
     # OMDb years look like "2017", "2008–2013" or "2023–"
     if value and len(value) >= 4 and value[:4].isdigit():
         return int(value[:4])
@@ -27,18 +39,19 @@ class OMDBProvider(MetadataProvider):
 
     NAME = "omdb"
     REQUIRES_KEY = True
+    ID_KIND = "imdb"
     BASE_URL = "https://www.omdbapi.com/"
 
     def is_available(self) -> bool:
         return bool(config.omdb_api_key)
 
     @property
-    def _api_key(self) -> str:
+    def api_key(self) -> str:
         return config.omdb_api_key
 
-    def _get(self, params: dict[str, str]) -> Optional[dict]:
+    def api_get(self, params: dict[str, str]) -> Optional[dict]:
         try:
-            r = self.session.get(self.BASE_URL, params={"apikey": self._api_key, **params}, timeout=30)
+            r = self.session.get(self.BASE_URL, params={"apikey": self.api_key, **params}, timeout=30)
             r.raise_for_status()
             data = r.json()
         except (requests.RequestException, ValueError) as exc:
@@ -59,11 +72,11 @@ class OMDBProvider(MetadataProvider):
         if year is not None:
             params["y"] = str(year)
 
-        data = self._get(params)
+        data = self.api_get(params)
         if not data and year is not None:
             # OMDb's year filter is exact; retry without it for off-by-one metadata
             del params["y"]
-            data = self._get(params)
+            data = self.api_get(params)
         if not data:
             return None
 
@@ -75,9 +88,9 @@ class OMDBProvider(MetadataProvider):
             name = candidate.get("Title") or ""
             if not name:
                 continue
-            ratio = SequenceMatcher(None, _clean(title), _clean(name)).ratio()
+            ratio = SequenceMatcher(None, clean(title), clean(name)).ratio()
             if ratio > best_ratio:
-                candidate_year = _parse_year(candidate.get("Year"))
+                candidate_year = parse_year(candidate.get("Year"))
                 if year and candidate_year and abs(year - candidate_year) > 1:
                     continue
                 best_ratio = ratio
@@ -96,13 +109,14 @@ class OMDBProvider(MetadataProvider):
         self.log.debug("OMDb -> %s (ID %s)", result_title, imdb_id)
 
         # Fetch full detail so raw carries ratings, genre, rating cert, etc.
-        detail = self._get({"i": imdb_id}) if imdb_id else None
+        detail = self.api_get({"i": imdb_id}) if imdb_id else None
 
         return MetadataResult(
             title=result_title,
-            year=_parse_year(best_match.get("Year")),
+            year=parse_year(best_match.get("Year")),
             kind=kind,
             external_ids=ExternalIds(imdb_id=imdb_id),
+            original_language=primary_language(detail or best_match),
             source="omdb",
             raw=detail or best_match,
         )
@@ -112,15 +126,16 @@ class OMDBProvider(MetadataProvider):
         imdb_id = str(provider_id)
         self.log.debug("Fetching OMDb title %s", imdb_id)
 
-        data = self._get({"i": imdb_id})
+        data = self.api_get({"i": imdb_id})
         if not data:
             return None
 
         return MetadataResult(
             title=data.get("Title"),
-            year=_parse_year(data.get("Year")),
+            year=parse_year(data.get("Year")),
             kind=kind,
             external_ids=ExternalIds(imdb_id=data.get("imdbID")),
+            original_language=primary_language(data),
             source="omdb",
             raw=data,
         )

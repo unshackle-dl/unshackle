@@ -18,7 +18,7 @@ import pytest
 pytestmark = [pytest.mark.live, pytest.mark.slow]
 
 
-def _create_session(http_session, server_url: str, service: str, title_id: str) -> str:
+def create_session(http_session, server_url: str, service: str, title_id: str) -> str:
     payload = {
         "service": service,
         "title_id": title_id,
@@ -33,7 +33,7 @@ def _create_session(http_session, server_url: str, service: str, title_id: str) 
     return r.json()["session_id"]
 
 
-def _wait_for_titles(http_session, server_url: str, sid: str, timeout: float = 120.0):
+def wait_for_titles(http_session, server_url: str, sid: str, timeout: float = 120.0):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         r = http_session.get(f"{server_url}/api/session/{sid}/titles", timeout=30)
@@ -51,7 +51,7 @@ def _wait_for_titles(http_session, server_url: str, sid: str, timeout: float = 1
     return 408, {"message": "auth timeout"}
 
 
-def _pick_target_title(titles: list[dict[str, Any]], season: int = 1, episode: int = 1) -> Optional[dict[str, Any]]:
+def pick_target_title(titles: list[dict[str, Any]], season: int = 1, episode: int = 1) -> Optional[dict[str, Any]]:
     """Pick the configured target episode; fall back to the first title."""
     for t in titles:
         if t.get("type") == "episode" and t.get("season") == season and t.get("number") == episode:
@@ -59,7 +59,7 @@ def _pick_target_title(titles: list[dict[str, Any]], season: int = 1, episode: i
     return titles[0] if titles else None
 
 
-def _summarize(video_tracks: list[dict[str, Any]]) -> dict[str, Any]:
+def summarize(video_tracks: list[dict[str, Any]]) -> dict[str, Any]:
     max_height = max((v.get("height") or 0 for v in video_tracks), default=0)
     max_width = max((v.get("width") or 0 for v in video_tracks), default=0)
     codecs = sorted({v.get("codec") for v in video_tracks if v.get("codec")})
@@ -76,25 +76,25 @@ def _summarize(video_tracks: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _resolve_title_id(conf: dict) -> Optional[str]:
+def resolve_title_id(conf: dict) -> Optional[str]:
     """Prefer series_url so S01E01 logic kicks in; fall back to movie title_url."""
     return conf.get("series_url") or conf.get("title_url")
 
 
 def test_track_quality_meets_expected(http_session, server_url: str, service_case, capsys) -> None:
     service, conf = service_case
-    title_input = _resolve_title_id(conf)
+    title_input = resolve_title_id(conf)
     if not title_input:
         pytest.skip(f"{service}: no title_url/series_url in fixture")
 
-    sid = _create_session(http_session, server_url, service, title_input)
+    sid = create_session(http_session, server_url, service, title_input)
     try:
-        code, body = _wait_for_titles(http_session, server_url, sid)
+        code, body = wait_for_titles(http_session, server_url, sid)
         if code != 200:
             pytest.skip(f"{service}: titles fetch failed {code}: {str(body)[:200]}")
 
         titles = body.get("titles") or []
-        target = _pick_target_title(titles, season=conf.get("target_season", 1), episode=conf.get("target_episode", 1))
+        target = pick_target_title(titles, season=conf.get("target_season", 1), episode=conf.get("target_episode", 1))
         if not target:
             pytest.skip(f"{service}: no titles returned")
 
@@ -114,7 +114,7 @@ def test_track_quality_meets_expected(http_session, server_url: str, service_cas
 
         tracks = r.json()
         video = tracks.get("video") or []
-        summary = _summarize(video)
+        summary = summarize(video)
         # Print summary even when test passes — discovery aid.
         with capsys.disabled():
             print(f"\n[{service}] target={kind} '{target.get('name')}' -> {summary}")

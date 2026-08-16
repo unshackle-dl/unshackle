@@ -1,5 +1,6 @@
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
 
@@ -243,6 +244,36 @@ def add(file: Path, service: str, vaults: list[str]) -> None:
     log.info("Done!")
 
 
+def search_vault(vault: Vault, kid: str, services: list[str], log: logging.Logger) -> Optional[tuple[str, str]]:
+    """Return the (service, key) of the first service table in a vault holding the KID."""
+
+    def probe(svc: str) -> Optional[tuple[str, str]]:
+        try:
+            key = vault.get_key(kid, svc)
+        except Exception as e:
+            log.debug(f"{vault} [{svc}]: lookup error ({e})")
+            return None
+        if key and key.count("0") != len(key):
+            return svc, key
+        return None
+
+    if len(services) == 1:
+        return probe(services[0])
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = [pool.submit(probe, svc) for svc in services]
+        try:
+            for future in as_completed(futures):
+                found = future.result()
+                if found:
+                    return found
+        finally:
+            for future in futures:
+                future.cancel()
+
+    return None
+
+
 @kv.command()
 @click.argument("kid", type=str)
 @click.option("-s", "--service", type=str, default=None, help="Limit search to a specific service tag.")
@@ -254,8 +285,10 @@ def search(kid: str, service: Optional[str], vault_name: Optional[str]) -> None:
     Search configured Key Vault(s) for a KID and report any matching KEY.
 
     KID must be 32 hex characters (no dashes). If --service is omitted, every
-    service table in each vault is scanned. If --vault is omitted, every
-    vault in the config is searched.
+    service table in each vault is scanned; vaults that cannot list their
+    tables are probed with every locally installed service tag instead, so
+    passing --service is much faster. If --vault is omitted, every vault in
+    the config is searched.
     """
     log = logging.getLogger("kv")
 
@@ -274,8 +307,9 @@ def search(kid: str, service: Optional[str], vault_name: Optional[str]) -> None:
 
     service_tag = Services.get_tag(service) if service else None
 
-    hit: Optional[tuple[str, str, str]] = None
+    hits: list[tuple[str, str, str]] = []
     for vault in vaults_:
+        probed = False
         if service_tag:
             services_to_check: list[str] = [service_tag]
         else:
@@ -285,28 +319,25 @@ def search(kid: str, service: Optional[str], vault_name: Optional[str]) -> None:
                 log.debug(f"{vault}: get_services() failed ({e})")
                 services_to_check = []
             if not services_to_check:
-                log.warning(f"{vault}: cannot search without a service (remote vault requires --service). Skipping.")
-                continue
+                services_to_check = list(Services.get_tags())
+                probed = True
+                log.debug(f"{vault}: cannot list tables, probing {len(services_to_check)} local service tag(s)")
 
-        for svc in services_to_check:
-            try:
-                key = vault.get_key(kid_norm, svc)
-            except Exception as e:
-                log.debug(f"{vault} [{svc}]: lookup error ({e})")
-                continue
-            if key and key.count("0") != len(key):
-                hit = (vault.name, svc, key)
-                break
-        if hit:
-            break
+        found = search_vault(vault, kid_norm, services_to_check, log)
+        if found:
+            svc_hit, key_hit = found
+            hits.append((vault.name, f"{svc_hit}?" if probed else svc_hit, key_hit))
 
-    if hit:
-        vname, svc, key = hit
-        tree = Tree(Text.assemble((svc, "cyan"), (f"({vname})", "text"), overflow="fold"))
-        tree.add(f"[text2]{kid_norm}:{key}")
-        console.print(Padding(tree, (1, 5)))
-    else:
+    if not hits:
         log.info(f"KID {kid_norm} not found in {len(vaults_)} vault(s).")
+        return
+
+    for svc in dict.fromkeys(svc for _, svc, _ in hits):
+        tree = Tree(Text.assemble((svc, "cyan"), overflow="fold"))
+        for vname, hit_svc, key in hits:
+            if hit_svc == svc:
+                tree.add(f"[text2]{kid_norm}:{key} from {vname}")
+        console.print(Padding(tree, (1, 5)))
 
 
 @kv.command()

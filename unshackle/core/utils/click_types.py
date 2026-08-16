@@ -1,4 +1,5 @@
 import re
+from datetime import date, timedelta
 from typing import Any, Optional, Union
 
 import click
@@ -176,6 +177,23 @@ class SeasonRange(click.ParamType):
     MAX_EPISODE = 999
     MIN_PART = 1
     MAX_PART = 99
+    MAX_DATE_SPAN = 1000
+
+    DATE_TOKEN = re.compile(r"^(?P<left>\d{4}-\d{2}-\d{2})(:(?P<right>\d{4}-\d{2}-\d{2}))?$")
+
+    def parse_date_token(self, token: str, match: re.Match) -> list[str]:
+        """Expand an ISO date token or ':'-separated date range into ISO day keys."""
+        try:
+            left = date.fromisoformat(match.group("left"))
+            right = date.fromisoformat(match.group("right")) if match.group("right") else left
+        except ValueError:
+            self.fail(f"Invalid date, must be a real YYYY-MM-DD date: {token}")
+        if left > right:
+            self.fail(f"Invalid range, left side date cannot be later than right side date: {token}")
+        span = (right - left).days + 1
+        if span > self.MAX_DATE_SPAN:
+            self.fail(f"Invalid range, a date range cannot span more than {self.MAX_DATE_SPAN} days: {token}")
+        return [(left + timedelta(days=i)).isoformat() for i in range(span)]
 
     def parse_tokens(self, *tokens: str) -> list[str]:
         """
@@ -185,6 +203,9 @@ class SeasonRange(click.ParamType):
         A part range must stay inside one episode, since how many parts an episode has
         is not knowable here. A part-qualified exclusion cannot be removed from the
         computed keys (they are base keys), so it becomes a '!' key resolved at match time.
+
+        Dated content is addressed by ISO air date. A date range uses ':' only, because
+        a date's own '-' separators are not a range separator.
 
         Supports exclusioning by putting a `-` before the token.
 
@@ -200,6 +221,10 @@ class SeasonRange(click.ParamType):
             ["1x1.1", "1x1.2", "1x1.3"]
             >>> sr.parse_tokens("S01E01", "-S01E01.2")
             ["1x1", "!1x1.2"]
+            >>> sr.parse_tokens("2026-08-11")
+            ["2026-08-11"]
+            >>> sr.parse_tokens("2026-08-01:2026-08-03", "-2026-08-02")
+            ["2026-08-01", "2026-08-03"]
         """
         if len(tokens) == 0:
             return []
@@ -209,6 +234,11 @@ class SeasonRange(click.ParamType):
             exclude = token.startswith("-")
             if exclude:
                 token = token[1:]
+            # dates carry their own '-' separators, so they must be read before the range split
+            date_match = self.DATE_TOKEN.match(token)
+            if date_match:
+                (computed if not exclude else exclusions).extend(self.parse_date_token(token, date_match))
+                continue
             parsed = [
                 re.match(r"^S(?P<season>\d+)(E(?P<episode>\d+)(\.(?P<part>\d+))?)?$", x, re.IGNORECASE)
                 for x in re.split(r"[:-]", token)

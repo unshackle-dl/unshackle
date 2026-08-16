@@ -581,7 +581,7 @@ def test_hvcc_profile_tier_level_is_nonzero():
     assert level_idc != 0
 
 
-def _piff_fragment(flags: int = 0x0, override: bool = False) -> bytes:
+def piff_fragment(flags: int = 0x0, override: bool = False) -> bytes:
     """Minimal moof+mdat fragment carrying sample encryption in the PIFF uuid box."""
     ivs = b"".join(bytes([i]) * 8 for i in range(1, 3))
     senc_payload = struct.pack(">I", 2) + ivs
@@ -599,7 +599,7 @@ def _piff_fragment(flags: int = 0x0, override: bool = False) -> bytes:
 
 
 def test_piff_senc_rewritten_to_cenc_senc():
-    frag = _piff_fragment()
+    frag = piff_fragment()
     out = piff_senc_to_cenc(frag)
     # trun's data_offset is moof-relative; shrinking the box misaims decryption
     assert len(out) == len(frag)
@@ -612,7 +612,7 @@ def test_piff_senc_rewritten_to_cenc_senc():
 
 
 def test_piff_senc_override_header_stripped():
-    frag = _piff_fragment(override=True)
+    frag = piff_fragment(override=True)
     out = piff_senc_to_cenc(frag)
     assert len(out) == len(frag)
     assert PIFF_SENC_UUID not in out
@@ -624,7 +624,7 @@ def test_piff_senc_override_header_stripped():
 
 def test_piff_subsample_flag_survives_override_strip():
     # losing 0x2 is silent: no subsample map, so clear NAL headers get encrypted too
-    frag = _piff_fragment(flags=0x2, override=True)
+    frag = piff_fragment(flags=0x2, override=True)
     out = piff_senc_to_cenc(frag)
     senc = out.index(b"senc")
     flags = int.from_bytes(out[senc + 5 : senc + 8], "big")
@@ -648,7 +648,7 @@ def test_piff_rewrite_skips_traf_that_already_has_senc():
 
 
 def test_piff_rewrite_covers_every_moof_and_traf():
-    frag = _piff_fragment() + _piff_fragment()
+    frag = piff_fragment() + piff_fragment()
     out = piff_senc_to_cenc(frag)
     assert len(out) == len(frag)
     assert PIFF_SENC_UUID not in out
@@ -683,8 +683,8 @@ def traf_children_tile_exactly(frag: bytes) -> bool:
 
 def test_piff_rewrite_keeps_traf_children_tiling_exactly():
     # a mis-sized senc still "decrypts", just off the wrong bytes, so assert the sizes too
-    assert traf_children_tile_exactly(_piff_fragment())
-    for frag in (_piff_fragment(), _piff_fragment(flags=0x2), _piff_fragment(flags=0x2, override=True)):
+    assert traf_children_tile_exactly(piff_fragment())
+    for frag in (piff_fragment(), piff_fragment(flags=0x2), piff_fragment(flags=0x2, override=True)):
         assert traf_children_tile_exactly(piff_senc_to_cenc(frag)), "rewritten traf no longer tiles"
 
 
@@ -700,7 +700,7 @@ def test_piff_rewrite_refuses_override_iv_size_mismatch():
 
 def test_piff_rewrite_never_grows_output_on_malformed_boxes():
     # A declared size running past the buffer would extend the output over the mdat.
-    good = _piff_fragment()
+    good = piff_fragment()
     truncations = [good[:n] for n in range(8, len(good), 7)]
     oversized = bytearray(good)
     struct.pack_into(">I", oversized, 0, len(good) + 4096)  # moof claims more than exists
@@ -709,7 +709,7 @@ def test_piff_rewrite_never_grows_output_on_malformed_boxes():
         assert len(out) == len(frag), f"output grew: {len(frag)} -> {len(out)}"
 
 
-def _text_fragment(seq: int, begin: str, end: str, text: str, sdi: int) -> bytes:
+def text_fragment(seq: int, begin: str, end: str, text: str, sdi: int) -> bytes:
     """A single-sample fTTML moof+mdat, mirroring what a Smooth text stream serves."""
     payload = (
         "<?xml version='1.0' encoding='utf-8'?>"
@@ -771,7 +771,7 @@ def test_pymp4_consumes_whole_init_and_reaches_fragments():
     init = build_init_segment(
         stream_type="text", fourcc="TTML", codec_private_data="", duration=6_000_000_000, language="eng"
     )
-    data = init + _text_fragment(1, "00:00:01.000", "00:00:02.000", "first", sdi=1)
+    data = init + text_fragment(1, "00:00:01.000", "00:00:02.000", "first", sdi=1)
     types = [b.type for b in MP4.parse_stream(BytesIO(data))]
     assert types == [b"ftyp", b"moov", b"moof", b"mdat"]
 
@@ -784,8 +784,8 @@ def test_fttml_subtitle_parse_yields_cues():
     )
     data = (
         init
-        + _text_fragment(1, "00:00:01.000", "00:00:02.000", "first", sdi=1)
-        + _text_fragment(2, "00:00:03.000", "00:00:04.000", "second", sdi=2)
+        + text_fragment(1, "00:00:01.000", "00:00:02.000", "first", sdi=1)
+        + text_fragment(2, "00:00:03.000", "00:00:04.000", "second", sdi=2)
     )
     caption_set = Subtitle.parse(data, Subtitle.Codec.fTTML)
     cues = [c for lang in caption_set.get_languages() for c in caption_set.get_captions(lang)]

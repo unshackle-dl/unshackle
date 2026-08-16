@@ -6,7 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 This changelog is automatically generated using [git-cliff](https://git-cliff.org).
 
-## [Unreleased]
+## [5.4.0] - 2026-08-15
 
 ### Features
 
@@ -19,6 +19,35 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - *dl*: Animate merge/decrypt/mux stages with gradient pulse bars
 - *tags*: Add imdb_api_enabled toggle, off by default
 - *tags*: Add OMDb metadata provider with omdb_api_key config
+- *cdm*: Stamp remote CDM DRM type at load for reliable detection
+- *ism*: Harden Smooth parsing and derive fps/codec from spec fields
+- Original-language aware DUAL/MULTi tagging and new DUBBED variable
+- *drm*: Add PlayReady HRESULT decoder
+- *drm*: Detect revoked PlayReady devices from license responses
+- *drm*: Auto-repack tracks with a residual encrypted sample entry
+- *dl*: Extend --select-titles to movie listings
+- Show git commit hash alongside the version
+- Identify the running code by source hash
+- *dl*: Add --speed-limit and serve global_speed_limit
+- *providers*: Add TheTVDB v4 as a metadata provider
+- *tracks*: Add subtitle.group_by to keep a language with its variants
+- *temp*: Give each download task its own temp directory
+- *dl*: Add -fsl/--forced-s-lang to filter forced subtitles by language
+- *tracks*: Add language_priority to sort preferred languages first
+- *vaults*: Support custom headers on API vault
+- *dl*: Add tag_rules to conditionally swap the group tag
+- *titles*: Add optional Episode.part, selected with -w s1e1.2
+- *enrich*: Fill in the original language from metadata providers
+- *dl*: Allow --tvdb as an --enrich metadata source
+- *dl*: Exclude languages with a - prefix on -l, -vl, -al, -sl and -fsl
+- *metadata*: [**breaking**] Authoritative id resolver and keyless imdb provider
+- *metadata*: [**breaking**] Replace animeapi with a first-class anilist provider
+- *dl*: Add absolute episode numbers filled from tvdb absolute order
+- *dl*: Add daily date-based episodes with tvdb air-date fill
+- *api*: Stream download job progress over server-sent events
+- *remote*: Accept serve.users keys in api-only mode and add client auth-header fallback
+- *serve*: Gate server CDM licensing behind a per-key server_cdm opt-in
+- *cli*: Add named color themes and rich-formatted help
 
 ### Bug Fixes
 
@@ -36,23 +65,69 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - *gitignore*: Add memory directory to .gitignore
 - *dl*: Prevent missing tracks error when excluding track types
 - *subs*: Stop segmented WebVTT merge from stripping formatting
+- *proxies*: Show ExpressVPN country/location counts at startup
+- *tracks*: Keep regional language variants distinct in exact selection
+- *services*: Register modules in sys.modules so repo-cloned services can self-import and remove old benchmark that should have been deleted
+- Skip decrypt on mislabeled-clear segments
+- Harden ClearKey/CENC decryption correctness
+- *import*: Stop losing side-loaded subtitles and blaming the manifest URL
+- *ism*: Emit two stsd entries so sample_description_index 2 resolves
+- *ism*: Repair synthesized init and verify fragments decrypted
+- *core*: Strip trailing spaces and dots in template formatting to prevent WinError 3
+- *templates*: Use one separator style across a whole folder path
+- *lang*: Surface orig in errors and flag the original audio track over the API
+- *tracks*: Ignore leftover PIFF uuid when verifying decryption
+- *tracks*: Size the no-proxy download session's connection pool
+- *import*: Scope the merge-back and detect ISM protection
+- *dl*: Honour --no-proxy-download for attachments
+- *tools*: Pass -nostdin to all ffmpeg calls
+- *subtitles*: Strip X-TIMESTAMP-MAP so WebVTT cues are not offset on conversion
+- *downloader*: Decode content-encoded bodies instead of writing raw
+- *downloader*: Surface failed downloads instead of returning silently
+- *dl*: Warn when --enrich source is missing title, year, or language
+- *api*: Carry air_date, absolute, anime and daily across the title wire
+- *dl*: Treat audio muxed into the video as an available language
+- *hls*: Take the key id from EXT-X-KEY when the PSSH carries none
+- *dl*: Reset per-title language and range selection each iteration
+- *subtitle*: Keep cue-less webvtt instead of failing the download
+- *services*: Re-raise ClickException for better error handling in remote services cache
+- *dash*: Resolve representations by adaptation set, not id alone
+- *kv*: Search remote vaults that cannot list their tables
 
 ### Documentation
 
 - Restructure documentation into MkDocs Material site
 - Expand config reference and genericize service names
+- *changelog*: Regenerate with git-cliff
+- Correct DRM, muxing, and proxy references (+ case-insensitive proxy prefix fix)
+- Cleanup and correct documentation
+- *core*: Drop service tags from framework comments
+- Cover the TVDB provider, episode ordering and provider order
+- Split configuration reference into per-area pages
+- *api*: Note the - language exclusion prefix in the OpenAPI spec
 
 ### Performance Improvements
 
 - *downloader*: Cut per-segment overhead, bound stalled connections
+- Little improvements here and there
+- *pipeline*: Fix pool starvation, unlock vault writes, prep mux
+- Speed up the code hash with sha1 and a plain file reader
 
 ### Changes
 
 - *core*: [**breaking**] Bundle download_track args into DownloadContext
+- *tracks*: Honour the best token and share one match rule
+
+### Maintenance
+
+- *changelog*: Update entries for new features and bug fixes
+- *env*: Drop ML-Worker from the dependency check
+- *changelog*: Update changelog
 
 ### Builds
 
 - *deps*: Cap pycaption below 2.2.27
+- *mypy*: Enable explicit_package_bases
 
 ## [5.3.0] - 2026-07-01
 
@@ -818,7 +893,7 @@ This changelog is automatically generated using [git-cliff](https://git-cliff.or
 - Reorganize Planned Features section in README for clarity
 - Improve track selection logic in dl.py
 
-[unreleased]: https://github.com/unshackle-dl/unshackle/compare/5.3.0..HEAD
+[5.4.0]: https://github.com/unshackle-dl/unshackle/compare/5.3.0..5.4.0
 [5.3.0]: https://github.com/unshackle-dl/unshackle/compare/5.2.0..5.3.0
 [5.2.0]: https://github.com/unshackle-dl/unshackle/compare/5.1.0..5.2.0
 [5.1.0]: https://github.com/unshackle-dl/unshackle/compare/5.0.0..5.1.0

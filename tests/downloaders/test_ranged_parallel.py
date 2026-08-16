@@ -9,10 +9,10 @@ Pins the byte-range fan-out that splits one large file across parts:
   retries rather than writing a wrong-length body into the pre-truncated file;
 - that failure sets only the ranged download's LOCAL abort event, never the
   process-global DOWNLOAD_CANCELLED (which would poison sibling tracks);
-- ``_probe_ranged`` parses the Content-Range total on a 206 and declines a 200
+- ``probe_ranged`` parses the Content-Range total on a 206 and declines a 200
   or a content-encoded 206.
 
-Tests 2/3 exercise ``_dispatch_parts`` directly: the public single-URL path in
+Tests 2/3 exercise ``dispatch_parts`` directly: the public single-URL path in
 ``requests()`` deliberately swallows a ranged failure and falls back to a plain
 sequential download, so the raise the invariant guarantees is only observable at
 the dispatch layer.
@@ -119,7 +119,7 @@ def test_ranged_part_requires_206(server, tmp_path, monkeypatch):
     server.mode = "probe_only_206"
     monkeypatch.setattr(dl, "RETRY_WAIT", 0.01)
     save_path = tmp_path / "seg_0000.bin"
-    gen = dl._dispatch_parts(
+    gen = dl.dispatch_parts(
         url=_url(server),
         save_path=save_path,
         session=Session(),
@@ -140,7 +140,7 @@ def test_ranged_part_failure_stays_local(server, tmp_path, monkeypatch):
     monkeypatch.setattr(dl, "RETRY_WAIT", 0.01)
     dl.DOWNLOAD_CANCELLED.clear()
     save_path = tmp_path / "seg_0000.bin"
-    gen = dl._dispatch_parts(
+    gen = dl.dispatch_parts(
         url=_url(server),
         save_path=save_path,
         session=Session(),
@@ -157,8 +157,8 @@ def test_ranged_part_failure_stays_local(server, tmp_path, monkeypatch):
 def test_probe_ranged_parses_content_range(server):
     session = Session()
     server.mode = "range"
-    assert dl._probe_ranged(_url(server), session) == (len(PAYLOAD), True)
+    assert dl.probe_ranged(_url(server), session) == (len(PAYLOAD), True)
     server.mode = "always_200"
-    assert dl._probe_ranged(_url(server), session) == (0, False)
+    assert dl.probe_ranged(_url(server), session) == (0, False)
     server.mode = "gzip_probe"
-    assert dl._probe_ranged(_url(server), session) == (0, False)
+    assert dl.probe_ranged(_url(server), session) == (0, False)

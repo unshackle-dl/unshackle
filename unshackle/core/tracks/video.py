@@ -178,15 +178,15 @@ class Video(Track):
                 # The codebase is currently agnostic to either, so a manual conversion to 6 is done.
                 transfer = 6
 
-            def _safe(enum_cls, value):
+            def safe(enum_cls, value):
                 try:
                     return enum_cls(value)
                 except ValueError:
                     return enum_cls(2)  # Unspecified for unknown/private-use codes
 
-            primaries = _safe(Primaries, primaries)
-            transfer = _safe(Transfer, transfer)
-            matrix = _safe(Matrix, matrix)
+            primaries = safe(Primaries, primaries)
+            transfer = safe(Transfer, transfer)
+            matrix = safe(Matrix, matrix)
 
             # primaries and matrix does not strictly correlate to a range
 
@@ -540,7 +540,7 @@ class Video(Track):
 
         out_path = Path(out_path)
 
-        def _run_ccextractor() -> bool:
+        def run_ccextractor() -> bool:
             cc_start = time.monotonic()
             try:
                 subprocess.run(
@@ -575,9 +575,9 @@ class Video(Track):
 
         # Try on the original file first (preserves container-level CC data like c608 boxes),
         # then fall back to repacked file (ccextractor can fail on some container formats).
-        if not _run_ccextractor():
+        if not run_ccextractor():
             self.repackage()
-            _run_ccextractor()
+            run_ccextractor()
 
         if out_path.exists():
             cc_track = Subtitle(

@@ -69,7 +69,7 @@ async def test_cleanup_expired_drops_old_authenticated(store: SessionStore, monk
     from datetime import datetime, timedelta, timezone
 
     entry = await store.create("ATV", _FakeService())
-    entry.last_accessed = datetime.now(timezone.utc) - timedelta(seconds=store._ttl + 100)
+    entry.last_accessed = datetime.now(timezone.utc) - timedelta(seconds=store.ttl + 100)
     removed = await store.cleanup_expired()
     assert removed == 1
     assert store.session_count == 0
@@ -118,7 +118,7 @@ async def test_get_session_store_returns_singleton() -> None:
 
 
 async def test_max_sessions_evicts_oldest(store: SessionStore, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(type(store), "_max_sessions", property(lambda _: 2))
+    monkeypatch.setattr(type(store), "max_sessions", property(lambda _: 2))
 
     await store.create("A", _FakeService(), session_id="a")
     await asyncio.sleep(0.01)

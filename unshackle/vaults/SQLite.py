@@ -207,7 +207,7 @@ class ConnectionFactory:
         self._path = path
         self._store = threading.local()
 
-    def _create_connection(self) -> Connection:
+    def create_connection(self) -> Connection:
         conn = sqlite3.connect(self._path, timeout=30.0)
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
@@ -216,5 +216,5 @@ class ConnectionFactory:
 
     def get(self) -> Connection:
         if not hasattr(self._store, "conn"):
-            self._store.conn = self._create_connection()
+            self._store.conn = self.create_connection()
         return self._store.conn

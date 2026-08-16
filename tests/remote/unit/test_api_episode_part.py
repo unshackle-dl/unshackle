@@ -26,7 +26,7 @@ class _FakeSvc:
     pass
 
 
-def _ep(season: int = 1, number: int = 1, part: Optional[int] = None, **overrides: Any) -> Episode:
+def ep(season: int = 1, number: int = 1, part: Optional[int] = None, **overrides: Any) -> Episode:
     base: Dict[str, Any] = dict(
         id_=f"ep-{season}-{number}-{part or 0}",
         service=_FakeSvc,
@@ -58,7 +58,7 @@ class _FakeService:
         return _FakeTracks()
 
 
-def _run_list_tracks(monkeypatch: pytest.MonkeyPatch, titles: List[Episode], **data: Any) -> Dict[str, Any]:
+def run_list_tracks(monkeypatch: pytest.MonkeyPatch, titles: List[Episode], **data: Any) -> Dict[str, Any]:
     """Drive list_tracks_handler end to end with the service layer stubbed out."""
     monkeypatch.setattr(handlers, "validate_service", lambda tag, request=None: "FAKE")
     monkeypatch.setattr(handlers, "setup_list_service", lambda *a, **kw: _FakeService(titles))
@@ -71,7 +71,7 @@ def _run_list_tracks(monkeypatch: pytest.MonkeyPatch, titles: List[Episode], **d
     return json.loads(response.body)
 
 
-def _selected(result: Dict[str, Any]) -> List[str]:
+def selected(result: Dict[str, Any]) -> List[str]:
     """Selection-syntax keys of whatever the handler returned, single or multi."""
     entries = result["episodes"] if "episodes" in result else [{"title": result["title"]}]
     keys = []
@@ -86,7 +86,7 @@ def _selected(result: Dict[str, Any]) -> List[str]:
 
 
 def test_partless_episode_json_has_no_part_key() -> None:
-    d = serialize_title(_ep(part=None))
+    d = serialize_title(ep(part=None))
     assert "part" not in d
     assert list(d.keys()) == [
         "type",
@@ -105,26 +105,26 @@ def test_partless_episode_json_has_no_part_key() -> None:
 
 
 def test_partful_episode_json_carries_part_last() -> None:
-    d = serialize_title(_ep(part=2))
+    d = serialize_title(ep(part=2))
     assert d["part"] == 2
     # additive: `part` is appended, every pre-existing key keeps its position
-    assert list(d.keys())[:11] == list(serialize_title(_ep(part=None)).keys())
+    assert list(d.keys())[:11] == list(serialize_title(ep(part=None)).keys())
     assert list(d.keys())[11] == "part"
 
 
 def test_part_stays_out_of_the_name_field() -> None:
-    """`name` is a reconstruction input for _build_title, not a display string."""
-    assert serialize_title(_ep(part=2))["name"] == "Pilot"
-    assert serialize_title(_ep(part=3, name=None))["name"] == "Episode 01"
+    """`name` is a reconstruction input for build_title, not a display string."""
+    assert serialize_title(ep(part=2))["name"] == "Pilot"
+    assert serialize_title(ep(part=3, name=None))["name"] == "Episode 01"
 
 
 def test_remote_build_title_round_trip() -> None:
-    from unshackle.core.remote_service import _build_title
+    from unshackle.core.remote_service import build_title
 
-    rebuilt = _build_title(serialize_title(_ep(1, 4, 2)), "FAKE", "fallback-id")
+    rebuilt = build_title(serialize_title(ep(1, 4, 2)), "FAKE", "fallback-id")
     assert (rebuilt.season, rebuilt.number, rebuilt.part, rebuilt.name) == (1, 4, 2, "Pilot")
 
-    partless = _build_title(serialize_title(_ep(1, 4, None)), "FAKE", "fallback-id")
+    partless = build_title(serialize_title(ep(1, 4, None)), "FAKE", "fallback-id")
     assert partless.part is None
 
 
@@ -143,32 +143,32 @@ def test_movie_json_unaffected() -> None:
 @pytest.fixture
 def split_titles() -> List[Episode]:
     """E1 split into three parts, E2 unsplit."""
-    return [_ep(1, 1, 1), _ep(1, 1, 2), _ep(1, 1, 3), _ep(1, 2, None)]
+    return [ep(1, 1, 1), ep(1, 1, 2), ep(1, 1, 3), ep(1, 2, None)]
 
 
 def test_rest_bare_episode_key_selects_every_part(monkeypatch, split_titles) -> None:
-    result = _run_list_tracks(monkeypatch, split_titles, wanted="S01E01")
-    assert _selected(result) == ["1x1.1", "1x1.2", "1x1.3"]
+    result = run_list_tracks(monkeypatch, split_titles, wanted="S01E01")
+    assert selected(result) == ["1x1.1", "1x1.2", "1x1.3"]
 
 
 def test_rest_part_key_selects_exactly_one(monkeypatch, split_titles) -> None:
-    result = _run_list_tracks(monkeypatch, split_titles, wanted="S01E01.2")
-    assert _selected(result) == ["1x1.2"]
+    result = run_list_tracks(monkeypatch, split_titles, wanted="S01E01.2")
+    assert selected(result) == ["1x1.2"]
 
 
 def test_rest_negative_part_key_excludes_only_that_part(monkeypatch, split_titles) -> None:
-    result = _run_list_tracks(monkeypatch, split_titles, wanted=["S01", "-S01E01.2"])
-    assert _selected(result) == ["1x1.1", "1x1.3", "1x2"]
+    result = run_list_tracks(monkeypatch, split_titles, wanted=["S01", "-S01E01.2"])
+    assert selected(result) == ["1x1.1", "1x1.3", "1x2"]
 
 
 def test_rest_partless_episode_unchanged(monkeypatch, split_titles) -> None:
-    result = _run_list_tracks(monkeypatch, split_titles, wanted="S01E02")
-    assert _selected(result) == ["1x2"]
+    result = run_list_tracks(monkeypatch, split_titles, wanted="S01E02")
+    assert selected(result) == ["1x2"]
     assert "part" not in result["title"]
 
 
 def test_rest_part_of_unsplit_episode_selects_nothing(monkeypatch, split_titles) -> None:
-    result = _run_list_tracks(monkeypatch, split_titles, wanted="S01E02.1")
+    result = run_list_tracks(monkeypatch, split_titles, wanted="S01E02.1")
     assert result["status"] == 404
 
 
@@ -176,28 +176,28 @@ def test_rest_part_of_unsplit_episode_selects_nothing(monkeypatch, split_titles)
 
 
 def test_discrete_fields_without_part_select_every_part(monkeypatch, split_titles) -> None:
-    result = _run_list_tracks(monkeypatch, split_titles, season=1, episode=1)
-    assert _selected(result) == ["1x1.1", "1x1.2", "1x1.3"]
+    result = run_list_tracks(monkeypatch, split_titles, season=1, episode=1)
+    assert selected(result) == ["1x1.1", "1x1.2", "1x1.3"]
 
 
 def test_discrete_fields_with_part_select_one(monkeypatch, split_titles) -> None:
-    result = _run_list_tracks(monkeypatch, split_titles, season=1, episode=1, part=3)
-    assert _selected(result) == ["1x1.3"]
+    result = run_list_tracks(monkeypatch, split_titles, season=1, episode=1, part=3)
+    assert selected(result) == ["1x1.3"]
 
 
 def test_discrete_part_accepts_string(monkeypatch, split_titles) -> None:
-    result = _run_list_tracks(monkeypatch, split_titles, season=1, episode=1, part="3")
-    assert _selected(result) == ["1x1.3"]
+    result = run_list_tracks(monkeypatch, split_titles, season=1, episode=1, part="3")
+    assert selected(result) == ["1x1.3"]
 
 
 def test_discrete_no_match_error_reports_the_part_qualified_key(monkeypatch, split_titles) -> None:
-    result = _run_list_tracks(monkeypatch, split_titles, season=1, episode=1, part=9)
+    result = run_list_tracks(monkeypatch, split_titles, season=1, episode=1, part=9)
     assert result["status"] == 404
     assert result["details"]["wanted"] == "1x1.9"
 
 
 def test_discrete_partless_error_key_unchanged(monkeypatch, split_titles) -> None:
-    result = _run_list_tracks(monkeypatch, split_titles, season=9, episode=9)
+    result = run_list_tracks(monkeypatch, split_titles, season=9, episode=9)
     assert result["details"]["wanted"] == "9x9"
 
 
@@ -211,15 +211,15 @@ def test_part_is_a_transport_key_not_a_service_option() -> None:
 
 
 def test_rest_multi_episode_order_is_stable_across_parts(monkeypatch) -> None:
-    titles = [_ep(1, 2, None), _ep(1, 1, 3), _ep(1, 1, 1), _ep(1, 1, 2)]
-    result = _run_list_tracks(monkeypatch, titles, wanted="S01")
-    assert _selected(result) == ["1x1.1", "1x1.2", "1x1.3", "1x2"]
+    titles = [ep(1, 2, None), ep(1, 1, 3), ep(1, 1, 1), ep(1, 1, 2)]
+    result = run_list_tracks(monkeypatch, titles, wanted="S01")
+    assert selected(result) == ["1x1.1", "1x1.2", "1x1.3", "1x2"]
 
 
 # ---------- download_manager: already-internal wanted sniff ----------
 
 
-_SNIFF = r"^!?\d+x\d+(\.\d+)?$"
+SNIFF = r"^!?\d+x\d+(\.\d+)?$"
 
 
 @pytest.mark.parametrize(
@@ -237,7 +237,7 @@ _SNIFF = r"^!?\d+x\d+(\.\d+)?$"
     ],
 )
 def test_download_manager_sniff_regex(wanted: List[str], internal: bool) -> None:
-    needs_conversion = any(not re.match(_SNIFF, w) for w in wanted)
+    needs_conversion = any(not re.match(SNIFF, w) for w in wanted)
     assert needs_conversion is (not internal)
 
 
@@ -248,12 +248,12 @@ def test_sniff_regex_matches_the_one_in_download_manager() -> None:
     import unshackle.core.api.download_manager as dm
 
     source = Path(dm.__file__).read_text(encoding="utf8")
-    assert f'needs_conversion = any(not re.match(r"{_SNIFF}", w) for w in wanted_raw)' in source
+    assert f'needs_conversion = any(not re.match(r"{SNIFF}", w) for w in wanted_raw)' in source
 
 
 def test_perform_download_skips_reconversion_for_preparsed_part_keys(monkeypatch) -> None:
     """A pre-parsed list with part and negative keys must not reach parse_tokens."""
-    from unshackle.core.api.download_manager import _perform_download
+    from unshackle.core.api.download_manager import perform_download
     from unshackle.core.utils.click_types import SeasonRange
 
     calls = []
@@ -262,14 +262,14 @@ def test_perform_download_skips_reconversion_for_preparsed_part_keys(monkeypatch
     params: Dict[str, Any] = {"wanted": ["1x1", "1x1.2", "!1x1.3"]}
     with pytest.raises(BaseException):
         # blows up later on the unknown service; the wanted block runs first
-        _perform_download("job-1", "NoSuchServiceXYZ", "t1", params)
+        perform_download("job-1", "NoSuchServiceXYZ", "t1", params)
 
     assert calls == []
     assert params["wanted"] == ["1x1", "1x1.2", "!1x1.3"]
 
 
 def test_perform_download_still_converts_cli_style_tokens(monkeypatch) -> None:
-    from unshackle.core.api.download_manager import _perform_download
+    from unshackle.core.api.download_manager import perform_download
     from unshackle.core.utils.click_types import SeasonRange
 
     calls = []
@@ -277,7 +277,7 @@ def test_perform_download_still_converts_cli_style_tokens(monkeypatch) -> None:
 
     params: Dict[str, Any] = {"wanted": "S01E01"}
     with pytest.raises(BaseException):
-        _perform_download("job-2", "NoSuchServiceXYZ", "t1", params)
+        perform_download("job-2", "NoSuchServiceXYZ", "t1", params)
 
     assert calls == [("S01E01",)]
     assert params["wanted"] == ["1x1"]
@@ -325,7 +325,7 @@ def test_rest_filter_agrees_with_cli_filter(monkeypatch, split_titles, wanted_to
         if t.matches_wanted(wanted)
     ]
 
-    result = _run_list_tracks(monkeypatch, split_titles, wanted=list(wanted_tokens))
-    rest_selected = [] if result.get("status") == 404 else _selected(result)
+    result = run_list_tracks(monkeypatch, split_titles, wanted=list(wanted_tokens))
+    rest_selected = [] if result.get("status") == 404 else selected(result)
 
     assert sorted(rest_selected) == sorted(cli_selected)

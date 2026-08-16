@@ -36,14 +36,14 @@ def evaluate_language_tag(
             log.warning("Language tag rule missing 'tag' field, skipping: %s", rule)
             continue
 
-        if _rule_matches(rule, audio_languages, subtitle_languages):
+        if rule_matches(rule, audio_languages, subtitle_languages):
             log.debug("Language tag rule matched: %s -> %s", rule, tag)
             return str(tag)
 
     return ""
 
 
-def _rule_matches(
+def rule_matches(
     rule: dict[str, Any],
     audio_languages: Sequence[Language],
     subtitle_languages: Sequence[Language],

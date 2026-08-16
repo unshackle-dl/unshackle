@@ -1,4 +1,4 @@
-"""Offline unit tests for DASH._collapsible_single_url, the guard that decides when a
+"""Offline unit tests for DASH.collapsible_single_url, the guard that decides when a
 byte-range track (SegmentBase / ranged SegmentList) can be downloaded as one whole
 resource instead of per-segment files + merge."""
 
@@ -12,7 +12,7 @@ URL = "https://cdn/media.mp4"
 
 
 def collapsible(segments, init_len: Optional[int], is_subtitle: bool = False) -> bool:
-    return DASH._collapsible_single_url(is_subtitle, segments, init_len)
+    return DASH.collapsible_single_url(is_subtitle, segments, init_len)
 
 
 def test_segmentbase_single_range_eligible():

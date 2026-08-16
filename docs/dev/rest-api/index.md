@@ -22,8 +22,9 @@ calls you can script against:
 
 - **Discovery**: list the services available on the server, run a service's search,
   and enumerate the titles and tracks behind a title ID.
-- **Downloading**: submit a download as a background *job*, then poll its status and
-  live progress, cancel it, retry it, or bump it to the front of the queue.
+- **Downloading**: submit a download as a background *job*, then follow its status and
+  live progress (by polling, or by subscribing to its Server-Sent Events stream),
+  cancel it, retry it, or bump it to the front of the queue.
 - **History and housekeeping**: read the log of finished jobs, inspect the server's
   effective (redacted) configuration, check external tool versions, and clear caches
   or temp files.
@@ -161,6 +162,7 @@ request and response in full.
 | `GET` | `/api/download/jobs` | List jobs, with filtering and sorting. |
 | `POST` | `/api/download/jobs/clear-finished` | Remove all finished jobs. |
 | `GET` | `/api/download/jobs/{job_id}` | Full detail for one job. |
+| `GET` | `/api/download/jobs/{job_id}/events` | Stream one job's progress as Server-Sent Events. |
 | `DELETE` | `/api/download/jobs/{job_id}` | Cancel a running job, or remove a finished one. |
 | `POST` | `/api/download/jobs/{job_id}/retry` | Re-queue a finished job's parameters as a new job. |
 | `POST` | `/api/download/jobs/{job_id}/priority` | Move a queued job to the front. |

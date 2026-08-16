@@ -223,6 +223,16 @@ Service-specific CLI options may also be passed as additional keys.
 
 Each serialized title carries `type` (`"episode"`, `"movie"`, or `"other"`), `name`, `id`, `language`, `description`, `date`, and `cover_url`. Episodes and movies add `year`; episodes additionally add `series_title`, `season`, and `number`.
 
+These keys are sent only when the title carries them, so a title without them serializes exactly as before:
+
+| Key | Type | On | Meaning |
+| --- | --- | --- | --- |
+| `part` | integer | episode | Part index of a [split episode](../creating-a-service.md#split-episodes), counting from 1. |
+| `air_date` | string | episode | ISO air date of [dated content](../../guide/downloading.md#daily-and-date-based-content). unshackle names the episode by date instead of `SxxExx`. |
+| `absolute` | integer | episode | Absolute episode number across all seasons. |
+| `daily` | boolean | episode | The episode is daily/date-based. Set from the title, or from the service's `DAILY` class attribute. |
+| `anime` | boolean | episode, movie | The title is anime, so metadata lookups prefer AniList. Set from the title, or from the service's `ANIME` class attribute. |
+
 !!! info "`part` on a split episode"
     A service that splits one episode into several separately playable videos reports each
     one as its own episode. Those titles share a `season` and `number` and add a `part`
@@ -368,7 +378,7 @@ Create a download job. Requires `service` and `title_id`; every other field is a
 | `range` | string[] | `["SDR"]` | Dynamic range(s). |
 | `channels` | number | `null` | Audio channel count. |
 | `no_atmos` | boolean | `false` | Exclude Atmos tracks. |
-| `wanted` | string[] | `[]` | Episode/season selectors. Accepts the part form, `"S01E01.2"`. |
+| `wanted` | string[] | `[]` | Episode/season selectors. Accepts the part form, `"S01E01.2"`, and the air-date form, `"2026-08-11"` or `"2026-08-01:2026-08-31"`. |
 | `latest_episode` | boolean | `false` | Only the newest episode. |
 | `lang` / `v_lang` / `a_lang` / `s_lang` | string[] | `["orig"]` / `[]` / `[]` / `["all"]` | Language filters. |
 | `require_subs` | string[] | `[]` | Required subtitle languages. |
@@ -392,9 +402,10 @@ Create a download job. Requires `service` and `title_id`; every other field is a
 | `best_available` | boolean | `false` | Fall back to best available. |
 | `repack` | boolean | `false` | Add REPACK tag. |
 | `tag` | string | `null` | Release group tag. |
-| `tmdb_id` / `imdb_id` / `tvdb_id` / `animeapi_id` | - | `null` | External ID overrides for tagging. |
+| `tmdb_id` / `imdb_id` / `tvdb_id` / `anilist_id` | - | `null` | External ID overrides. Each resolves its metadata directly instead of by a title search, and is used for tagging. Set `enrich` to also take the title, year and original language. Give at most one of `tmdb_id`, `imdb_id` and `tvdb_id`, since unshackle resolves the others from it. Sending two returns `400`. `anilist_id` still combines with one of them. `tmdb_id` and `tvdb_id` must be positive integers, `imdb_id` must look like `tt1375666`, and `anilist_id` must be a positive integer or a string like `mal:12345`, or the request returns `400`. An ID whose provider is unconfigured, such as `tmdb_id` with no `tmdb_api_key`, fails the job rather than returning `400`. `anilist_id` needs no key. |
 | `tvdb_order` | `official`, `dvd`, `absolute`, `alternate`, `regional` | `null` | Renumber episodes to a TVDB season order. Falls back to the `tvdb_order` config option. |
-| `enrich` | boolean | `false` | Override title/year from external source. |
+| `enrich` | boolean | `false` | Overwrite title, year and original language with the external source's. Needs one of `tmdb_id`, `imdb_id`, `tvdb_id` or `anilist_id`. Without one the job fails instead of returning `400`. |
+| `daily` | boolean | `false` | Treat the title as daily/date-based content and fill missing episode air dates from TVDB. The fill needs `enrich` and a TVDB ID. An air date the service already set is kept. |
 | `output_dir` | string | `null` | Override output directory. |
 | `no_cache` / `reset_cache` | boolean | `false` | Title cache controls. |
 
@@ -479,6 +490,73 @@ Fetch a single job with full details (equivalent to a `full=true` list entry).
 | Status | Error code | Meaning |
 | --- | --- | --- |
 | `200` | - | Job returned. |
+| `404` | `JOB_NOT_FOUND` | No such job. |
+
+### `GET /api/download/jobs/{job_id}/events`
+
+Stream the job's progress as [Server-Sent Events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events). Use this instead of polling `GET /api/download/jobs/{job_id}`.
+
+The response has the content type `text/event-stream`. Each event has this format:
+
+```
+event: <name>
+data: <job JSON>
+
+```
+
+The `data` field of every event is the same job object that `GET /api/download/jobs/{job_id}` returns.
+
+| Event | When it is sent |
+| --- | --- |
+| `snapshot` | Immediately, as the first event. Gives the job's current state. |
+| `status` | The job leaves the queue and starts to download. |
+| `progress` | The worker's progress record changed. The server reads that record every 0.5 seconds, so you get at most two of these events each second, and none while the record stays the same. |
+| `completed` | The job finished. The server then closes the stream. |
+| `failed` | The job failed. The server then closes the stream. |
+| `cancelled` | The job was cancelled. The server then closes the stream. |
+
+The server sends a `: keep-alive` comment each 15 seconds while the job is quiet, to keep proxies from closing an idle connection. Ignore these lines.
+
+If the job is already in a terminal state, the server sends the `snapshot` event, then the terminal event, and closes the stream immediately.
+
+!!! tip "Authentication from a browser"
+    `EventSource` cannot set headers. For this endpoint only, the server also accepts the key in the `secret_key` query parameter. This works in both server modes, the default integrated server and `--api-only`:
+
+    ```javascript
+    const events = new EventSource(
+      `http://127.0.0.1:8786/api/download/jobs/${jobId}/events?secret_key=${key}`
+    );
+    events.addEventListener("progress", (e) => console.log(JSON.parse(e.data).progress));
+    events.addEventListener("completed", () => events.close());
+    ```
+
+    The header always wins. Send the key in the query parameter *or* in the header, not both: if an `X-Secret-Key` header is present, the server checks that header and ignores the query parameter. See [Authentication](authentication.md#how-clients-present-credentials).
+
+=== "Request"
+
+    ```bash
+    curl -N -H "X-Secret-Key: $KEY" \
+      "http://127.0.0.1:8786/api/download/jobs/b0f7c8e2-.../events"
+    ```
+
+=== "Response `200`"
+
+    ```
+    event: snapshot
+    data: {"job_id":"b0f7c8e2-...","status":"downloading","progress":42.5,...}
+
+    event: progress
+    data: {"job_id":"b0f7c8e2-...","status":"downloading","progress":48.0,...}
+
+    : keep-alive
+
+    event: completed
+    data: {"job_id":"b0f7c8e2-...","status":"completed","progress":100.0,...}
+    ```
+
+| Status | Error code | Meaning |
+| --- | --- | --- |
+| `200` | - | Event stream started. |
 | `404` | `JOB_NOT_FOUND` | No such job. |
 
 ### `DELETE /api/download/jobs/{job_id}`

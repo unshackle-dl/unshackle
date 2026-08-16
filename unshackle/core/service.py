@@ -16,11 +16,10 @@ import requests
 from requests.adapters import HTTPAdapter, Retry
 from rich.padding import Padding
 from rich.rule import Rule
-from rich.text import Text
 
 from unshackle.core.cacher import Cacher
 from unshackle.core.config import config
-from unshackle.core.console import console
+from unshackle.core.console import console, prompt_user
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.drm import DRM_T
@@ -132,7 +131,7 @@ def sanitize_proxy_for_log(uri: Optional[str]) -> Optional[str]:
             netloc = f"REDACTED@{netloc.split('@', 1)[1]}"
 
         return urlunparse(parsed._replace(netloc=netloc))
-    except Exception:
+    except ValueError:
         if "@" in uri:
             return f"REDACTED@{uri.split('@', 1)[1]}"
         return uri
@@ -144,6 +143,8 @@ class Service(metaclass=ABCMeta):
     # Abstract class variables
     ALIASES: tuple[str, ...] = ()  # list of aliases for the service; alternatives to the service tag.
     GEOFENCE: tuple[str, ...] = ()  # list of ip regions required to use the service. empty list == no specific region.
+    ANIME: bool = False  # service catalogue is anime; metadata lookups prefer AniList. Title.anime overrides per title.
+    DAILY: bool = False  # catalog is daily/date-based. episodes are named by air date. Title.daily overrides per title.
     # vault namespace override; when set, key vault read/write uses this tag instead of the service's own.
     VAULT_TAG: Optional[str] = None
     # Auth methods the service accepts ("cookies"/"credentials"); when None the REST /services
@@ -289,7 +290,7 @@ class Service(metaclass=ABCMeta):
                     self.log.debug(f"Failed to get cached IP info: {e}")
                     self.current_region = None
 
-    def _get_tracks_for_variants(
+    def get_tracks_for_variants(
         self,
         title: Title_T,
         fetch_fn: Callable[..., Tracks],
@@ -360,6 +361,9 @@ class Service(metaclass=ABCMeta):
                             all_tracks.add(video, warn_only=True)
 
         return all_tracks
+
+    # Deprecated 5.5.0 shim for service repos still on the old underscored name; drop once they migrate.
+    _get_tracks_for_variants = get_tracks_for_variants
 
     # Optional Abstract functions
     # The following functions may be implemented by the Service.
@@ -432,9 +436,7 @@ class Service(metaclass=ABCMeta):
         """
         if self._input_bridge is not None:
             return self._input_bridge.request_input(prompt)
-        indent = " " * 5
-        padded = indent + prompt.replace("\n", "\n" + indent)
-        return console.input(Text(padded, style="text"))
+        return prompt_user(prompt)
 
     def search(self) -> Generator[SearchResult, None, None]:
         """

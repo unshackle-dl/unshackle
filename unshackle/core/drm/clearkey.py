@@ -50,7 +50,7 @@ class ClearKey:
         self.iv: bytes = iv
         self._warned_clear: bool = False
 
-    def _warn_clear(self, reason: str) -> None:
+    def warn_clear(self, reason: str) -> None:
         """Warn once per track that a segment was passed through undecrypted."""
         if not self._warned_clear:
             log.warning("ClearKey: manifest signaled AES-128 encryption but %s; passing segment through.", reason)
@@ -71,13 +71,13 @@ class ClearKey:
             and len(data) >= TS_PACKET_SIZE * TS_SYNC_CHECKS
             and all(data[i * TS_PACKET_SIZE] == SYNC_BYTE for i in range(TS_SYNC_CHECKS))
         ):
-            self._warn_clear("the segment is clear MPEG-TS")
+            self.warn_clear("the segment is clear MPEG-TS")
             return
 
         # Valid AES-128-CBC ciphertext is always a 16-byte multiple; anything else is not
         # ciphertext (truncated/clear/SAMPLE-AES). Decrypting would raise, so pass it through.
         if len(data) % AES.block_size != 0:
-            self._warn_clear(f"the segment length ({len(data)} bytes) is not a multiple of {AES.block_size}")
+            self.warn_clear(f"the segment length ({len(data)} bytes) is not a multiple of {AES.block_size}")
             return
 
         log_event(

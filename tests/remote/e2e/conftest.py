@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 
-def _load_scenarios(config: pytest.Config) -> dict:
+def load_scenarios(config: pytest.Config) -> dict:
     cached = getattr(config, "_e2e_scenarios_cache", None)
     if cached is not None:
         return cached
@@ -31,7 +31,7 @@ def _load_scenarios(config: pytest.Config) -> dict:
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     if "service_case" in metafunc.fixturenames:
-        scenarios = _load_scenarios(metafunc.config)
+        scenarios = load_scenarios(metafunc.config)
         params = [pytest.param((tag, conf), id=tag) for tag, conf in (scenarios.get("services") or {}).items()]
         if not params:
             params = [

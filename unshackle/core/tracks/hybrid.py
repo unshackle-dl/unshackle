@@ -435,7 +435,7 @@ class Hybrid:
                     max_fall = int(float(stripped.split("MaxFALL:")[1].split("nits")[0].strip().rstrip(",")))
 
         if any(v is None for v in (max_cll, max_fall, max_mdl, min_mdl)):
-            base_max_mdl, base_min_mdl, base_cll, base_fall = self._probe_hdr_metadata()
+            base_max_mdl, base_min_mdl, base_cll, base_fall = self.probe_hdr_metadata()
             if max_cll is None:
                 max_cll = base_cll
             if max_fall is None:
@@ -536,7 +536,7 @@ class Hybrid:
             success=True,
         )
 
-    def extract_hdr10plus(self, _video):
+    def extract_hdr10plus(self, video):
         """Extract HDR10+ metadata from the video stream"""
         if os.path.isfile(config.directories.temp / self.hdr10plus_file):
             return
@@ -584,7 +584,7 @@ class Hybrid:
             success=True,
         )
 
-    def _probe_hdr_metadata(self):
+    def probe_hdr_metadata(self):
         """Extract mastering display and content light level metadata from the HDR10 stream via ffprobe.
 
         Returns (max_mdl, min_mdl, max_cll, max_fall) in dovi_tool level6 units:
@@ -652,7 +652,7 @@ class Hybrid:
 
         with console.status("Converting HDR10+ metadata to Dolby Vision...", spinner="dots"):
             # Extract actual HDR metadata from the source stream
-            max_mdl, min_mdl, max_cll, max_fall = self._probe_hdr_metadata()
+            max_mdl, min_mdl, max_cll, max_fall = self.probe_hdr_metadata()
             max_mdl, min_mdl, max_cll, max_fall = self.sanitize_l6(max_mdl, min_mdl, max_cll, max_fall)
 
             # First create the extra metadata JSON for dovi_tool

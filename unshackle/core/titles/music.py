@@ -144,9 +144,9 @@ class Song(Title):
             artist=self.artist, album=self.album, year=self.year, track=self.track, name=self.name
         ).strip()
 
-    def _build_template_context(self, media_info: MediaInfo, show_service: bool = True) -> dict:
+    def build_template_context(self, media_info: MediaInfo, show_service: bool = True) -> dict:
         """Build template context dictionary from MediaInfo."""
-        context = self._build_base_template_context(media_info, show_service)
+        context = self.build_base_template_context(media_info, show_service)
         context["title"] = self.name.replace("$", "S")
         context["year"] = self.year or ""
         context["track_number"] = f"{self.track:02}"
@@ -170,7 +170,7 @@ class Song(Title):
             # legacy "songs" folder template, then to "{artist} - {album} ({year})".
             template = config.get_folder_template("albums") or config.get_folder_template("songs")
             if template:
-                context = self._build_template_context(media_info, show_service)
+                context = self.build_template_context(media_info, show_service)
                 spacer = detect_spacer(template)  # one style for the whole path
                 segments = [
                     TemplateFormatter(seg, spacer).format(context)
@@ -185,7 +185,7 @@ class Song(Title):
 
         template = config.output_template.get("songs") or "{track_number}. {title}"
         formatter = TemplateFormatter(template)
-        context = self._build_template_context(media_info, show_service)
+        context = self.build_template_context(media_info, show_service)
         return formatter.format(context)
 
 

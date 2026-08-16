@@ -97,10 +97,10 @@ class Subtitle(Track):
             raise ValueError(f"The Content Profile '{profile}' is not a supported Subtitle Codec")
 
     # WebVTT sanitization patterns (compiled once for performance)
-    _CUE_ID_PATTERN = re.compile(r"^[A-Za-z]+\d+$")
-    _TIMING_START_PATTERN = re.compile(r"^\d+:\d+[:\.]")
-    _TIMING_LINE_PATTERN = re.compile(r"^((?:\d+:)?\d+:\d+[.,]\d+)\s*-->\s*((?:\d+:)?\d+:\d+[.,]\d+)(.*)$")
-    _LINE_POS_PATTERN = re.compile(r"line:(\d+(?:\.\d+)?%?)")
+    CUE_ID_PATTERN = re.compile(r"^[A-Za-z]+\d+$")
+    TIMING_START_PATTERN = re.compile(r"^\d+:\d+[:\.]")
+    TIMING_LINE_PATTERN = re.compile(r"^((?:\d+:)?\d+:\d+[.,]\d+)\s*-->\s*((?:\d+:)?\d+:\d+[.,]\d+)(.*)$")
+    LINE_POS_PATTERN = re.compile(r"line:(\d+(?:\.\d+)?%?)")
 
     def __init__(
         self,
@@ -302,6 +302,9 @@ class Subtitle(Track):
                     Subtitle.filter_unwanted_cues(caption_set)
                     subtitle_text = pycaption.WebVTTWriter().write(caption_set)
                     self.path.write_text(subtitle_text, encoding="utf8")
+                except pycaption.exceptions.CaptionReadNoCaptions:
+                    # some renditions carry headers but no cues; write them out rather than fail the download
+                    self.path.write_text(text, encoding="utf8")
                 except pycaption.exceptions.CaptionReadSyntaxError:
                     # If first attempt fails, try more aggressive sanitization
                     text = Subtitle.sanitize_webvtt(text)
@@ -355,12 +358,12 @@ class Subtitle(Track):
 
         for i, line in enumerate(lines):
             line = line.strip()
-            if Subtitle._CUE_ID_PATTERN.match(line):
+            if Subtitle.CUE_ID_PATTERN.match(line):
                 # Look ahead to see if next non-empty line is a timing line
                 j = i + 1
                 while j < len(lines) and not lines[j].strip():
                     j += 1
-                if j < len(lines) and ("-->" in lines[j] or Subtitle._TIMING_START_PATTERN.match(lines[j].strip())):
+                if j < len(lines) and ("-->" in lines[j] or Subtitle.TIMING_START_PATTERN.match(lines[j].strip())):
                     return True
         return False
 
@@ -391,12 +394,12 @@ class Subtitle(Track):
             line = lines[i].strip()
 
             # Check if this line is a cue identifier followed by a timing line
-            if Subtitle._CUE_ID_PATTERN.match(line):
+            if Subtitle.CUE_ID_PATTERN.match(line):
                 # Look ahead to see if next non-empty line is a timing line
                 j = i + 1
                 while j < len(lines) and not lines[j].strip():
                     j += 1
-                if j < len(lines) and ("-->" in lines[j] or Subtitle._TIMING_START_PATTERN.match(lines[j].strip())):
+                if j < len(lines) and ("-->" in lines[j] or Subtitle.TIMING_START_PATTERN.match(lines[j].strip())):
                     # This is a cue identifier, skip it
                     i += 1
                     continue
@@ -407,7 +410,7 @@ class Subtitle(Track):
         return "\n".join(sanitized_lines)
 
     @staticmethod
-    def _parse_vtt_time(t: str) -> int:
+    def parse_vtt_time(t: str) -> int:
         """Parse WebVTT timestamp to milliseconds. Returns 0 for malformed input."""
         try:
             t = t.replace(",", ".")
@@ -443,10 +446,10 @@ class Subtitle(Track):
         """
         timings = []
         for line in text.split("\n"):
-            match = Subtitle._TIMING_LINE_PATTERN.match(line)
+            match = Subtitle.TIMING_LINE_PATTERN.match(line)
             if match:
                 start_str, end_str = match.group(1), match.group(2)
-                timings.append((Subtitle._parse_vtt_time(start_str), Subtitle._parse_vtt_time(end_str)))
+                timings.append((Subtitle.parse_vtt_time(start_str), Subtitle.parse_vtt_time(end_str)))
 
         # Check for overlapping cues (within 50ms start, same end)
         for i in range(len(timings) - 1):
@@ -493,11 +496,11 @@ class Subtitle(Track):
                     i += 1
                     continue
 
-            match = Subtitle._TIMING_LINE_PATTERN.match(line)
+            match = Subtitle.TIMING_LINE_PATTERN.match(line)
             if match:
                 start_str, end_str, settings = match.groups()
                 line_pos = 100.0  # Default to bottom
-                line_match = Subtitle._LINE_POS_PATTERN.search(settings)
+                line_match = Subtitle.LINE_POS_PATTERN.search(settings)
                 if line_match:
                     pos_str = line_match.group(1).rstrip("%")
                     line_pos = float(pos_str)
@@ -510,8 +513,8 @@ class Subtitle(Track):
 
                 cues.append(
                     {
-                        "start_ms": Subtitle._parse_vtt_time(start_str),
-                        "end_ms": Subtitle._parse_vtt_time(end_str),
+                        "start_ms": Subtitle.parse_vtt_time(start_str),
+                        "end_ms": Subtitle.parse_vtt_time(end_str),
                         "start_str": start_str,
                         "end_str": end_str,
                         "line_pos": line_pos,
@@ -1049,8 +1052,8 @@ class Subtitle(Track):
                     if status is True:
                         stripped.save(self.path)
                     return
-                except Exception:
-                    pass  # Fall through to other methods
+                except Exception as e:  # Fall through to other methods
+                    logging.getLogger("Subtitle").debug(f"subby SDH strip failed, falling back: {e!r}")
 
         conversion_method = config.subtitle.get("conversion_method", "auto")
         use_subtitleedit = sdh_method == "subtitleedit" or (
@@ -1102,8 +1105,9 @@ class Subtitle(Track):
                 sub.save()
             except (IOError, OSError) as e:
                 if "is not valid subtitle file" in str(e):
-                    self.log.warning(f"Failed to strip SDH from {self.path.name}: {e}")
-                    self.log.warning("Continuing without SDH stripping for this subtitle")
+                    log = logging.getLogger("Subtitle")
+                    log.warning(f"Failed to strip SDH from {self.path.name}: {e}")
+                    log.warning("Continuing without SDH stripping for this subtitle")
                 else:
                     raise
 

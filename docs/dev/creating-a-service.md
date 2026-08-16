@@ -99,6 +99,8 @@ Declared at class level to configure framework behaviour:
 | `VAULT_TAG` | `Optional[str]` | Overrides the key-vault namespace so sibling services can share one vault. Default `None` (use the service's own tag). |
 | `AUTH_METHODS` | `Optional[tuple[str, ...]]` | Auth methods accepted (`"cookies"` / `"credentials"`). When `None`, the REST `/services` endpoint infers them from `authenticate()`. |
 | `NO_SUBTITLES` | `bool` | Set `True` on a service with no subtitle tracks to skip subtitle handling entirely. |
+| `ANIME` | `bool` | Set `True` when the catalog is anime, so metadata lookups prefer AniList. A title's own `anime` flag overrides it. |
+| `DAILY` | `bool` | Set `True` when the catalog is daily/date-based (talk shows, news, sports), so episodes are named by air date. A title's own `daily` flag overrides it. |
 
 !!! note "`NO_SUBTITLES` is a convention, not a base-class attribute"
     `NO_SUBTITLES` is checked by `dl.py` via `hasattr` and is deliberately **not**
@@ -240,7 +242,7 @@ use `self.request_input(prompt)`, never a bare `input()`. Under `serve` mode
 there is no local terminal, so a bare `input()` would hang the server waiting on
 stdin that never arrives; `request_input` instead relays the prompt to the
 remote client through the attached `InputBridge`. Locally it routes through the
-shared Rich console (`console.input`) so the prompt renders correctly alongside
+shared Rich console (`prompt_user`) so the prompt renders correctly alongside
 progress and log output.
 
 !!! warning "Key token caches by whatever varies per session"
@@ -427,22 +429,22 @@ Each exposes `from_url(url, session=...)` (or `from_text(text, url)`) and then
     token.
 
 Some services deliver a **separate manifest per codec/range**. The base class
-provides `_get_tracks_for_variants(title, fetch_fn)` to fan out over every
+provides `get_tracks_for_variants(title, fetch_fn)` to fan out over every
 codec×range in the `TrackRequest`, including `HYBRID` (fetch HDR10 + DV and
 merge) and `--best-available` skip-on-error handling:
 
 ```python
 def get_tracks(self, title: Title_T) -> Tracks:
-    def _fetch_variant(title, codec, range_) -> Tracks:
+    def fetch_variant(title, codec, range_) -> Tracks:
         vcodec = "H265" if codec == Video.Codec.HEVC else "H264"
-        return self._fetch_dash_manifest(title, vcodec=vcodec, range_=range_)
-    return self._get_tracks_for_variants(title, _fetch_variant)
+        return self.fetch_dash_manifest(title, vcodec=vcodec, range_=range_)
+    return self.get_tracks_for_variants(title, fetch_variant)
 ```
 
 After parsing, you may **correct** track metadata the manifest gets wrong:
 stamp the real `video.range`, fix odd audio channel counts, mark descriptive
 audio, add hand-built subtitles or an `Attachment` (e.g. cover art). Do *not*
-filter for resolution/bitrate. See `_fetch_dash_manifest` in the EXAMPLE service
+filter for resolution/bitrate. See `fetch_dash_manifest` in the EXAMPLE service
 for a thorough demonstration.
 
 !!! note "Flip HDR10 → HDR10+ by hand when you know the platform embeds it"

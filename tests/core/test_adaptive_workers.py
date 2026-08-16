@@ -15,11 +15,11 @@ from unshackle.core.downloaders.requests import (
     TAIL_BOOST_MIN_SEGMENT_SIZE,
     TAIL_BOOST_PART_SIZE,
     AdaptiveWorkerController,
-    _has_range_header,
-    _plan_tail_parts,
-    _split_ranges,
-    _tail_boost_engages,
+    has_range_header,
+    plan_tail_parts,
     requests,
+    split_ranges,
+    tail_boost_engages,
 )
 from unshackle.core.tracks.track import DownloadContext
 
@@ -179,7 +179,7 @@ def test_tail_guard_still_halves_on_error_burst() -> None:
 
 def test_plan_tail_parts_full_coverage_no_gaps() -> None:
     size = 20 * 1024 * 1024
-    parts = _plan_tail_parts(size, spare=8)
+    parts = plan_tail_parts(size, spare=8)
     assert parts, "expected a split for a large segment with spare capacity"
     assert parts[0][0] == 0
     assert parts[-1][1] == size - 1
@@ -191,27 +191,27 @@ def test_plan_tail_parts_full_coverage_no_gaps() -> None:
 
 def test_plan_tail_parts_respects_spare_cap() -> None:
     size = 100 * 1024 * 1024  # would want ~25 parts at 4MB, but spare caps it
-    parts = _plan_tail_parts(size, spare=3)
+    parts = plan_tail_parts(size, spare=3)
     assert len(parts) <= 3
     assert parts[0][0] == 0 and parts[-1][1] == size - 1
 
 
 def test_plan_tail_parts_part_size_bounded() -> None:
     size = 40 * 1024 * 1024
-    parts = _plan_tail_parts(size, spare=16)
+    parts = plan_tail_parts(size, spare=16)
     # never more parts than ~ceil(size / TAIL_BOOST_PART_SIZE)
     assert len(parts) <= -(-size // TAIL_BOOST_PART_SIZE)
 
 
 def test_plan_tail_parts_skips_small_or_no_spare() -> None:
-    assert _plan_tail_parts(TAIL_BOOST_MIN_SEGMENT_SIZE - 1, spare=8) == []  # too small
-    assert _plan_tail_parts(20 * 1024 * 1024, spare=1) == []  # not enough spare workers
-    assert _plan_tail_parts(20 * 1024 * 1024, spare=0) == []
+    assert plan_tail_parts(TAIL_BOOST_MIN_SEGMENT_SIZE - 1, spare=8) == []  # too small
+    assert plan_tail_parts(20 * 1024 * 1024, spare=1) == []  # not enough spare workers
+    assert plan_tail_parts(20 * 1024 * 1024, spare=0) == []
 
 
 def test_split_ranges_covers_exactly_no_gaps_no_overlaps() -> None:
     for size in (1, 100, 4 * 1024 * 1024, 16 * 1024 * 1024 + 7, 64 * 1024 * 1024):
-        parts = _split_ranges(size, max_parts=8, part_target=4 * 1024 * 1024)
+        parts = split_ranges(size, max_parts=8, part_target=4 * 1024 * 1024)
         assert parts[0][0] == 0 and parts[-1][1] == size - 1
         for (_, prev_end), (start, _) in zip(parts, parts[1:]):
             assert start == prev_end + 1
@@ -220,37 +220,37 @@ def test_split_ranges_covers_exactly_no_gaps_no_overlaps() -> None:
 
 
 def test_split_ranges_respects_max_parts_and_target() -> None:
-    assert len(_split_ranges(100 * 1024 * 1024, max_parts=4, part_target=16 * 1024 * 1024)) == 4  # capped
-    assert len(_split_ranges(10 * 1024 * 1024, max_parts=8, part_target=16 * 1024 * 1024)) == 1  # below one target
-    assert _split_ranges(1, max_parts=8, part_target=16 * 1024 * 1024) == [(0, 0)]
+    assert len(split_ranges(100 * 1024 * 1024, max_parts=4, part_target=16 * 1024 * 1024)) == 4  # capped
+    assert len(split_ranges(10 * 1024 * 1024, max_parts=8, part_target=16 * 1024 * 1024)) == 1  # below one target
+    assert split_ranges(1, max_parts=8, part_target=16 * 1024 * 1024) == [(0, 0)]
 
 
 def test_tail_boost_engages_on_idle_capacity() -> None:
     # engages at the tail: idle workers outnumber the remaining whole segments
-    assert _tail_boost_engages(remaining=4, pending=2, target=8)  # spare 6 >= 4
-    assert _tail_boost_engages(remaining=6, pending=6, target=16)  # spare 10 >= 6
+    assert tail_boost_engages(remaining=4, pending=2, target=8)  # spare 6 >= 4
+    assert tail_boost_engages(remaining=6, pending=6, target=16)  # spare 10 >= 6
 
 
 def test_tail_boost_engages_when_remaining_is_a_full_stride() -> None:
     # remaining sits at 6 (one worker stride) while the target has climbed to 16, so 14 workers
     # are idle. idle capacity far exceeds the remaining segments, so the boost must engage.
-    assert _tail_boost_engages(remaining=6, pending=2, target=16)
+    assert tail_boost_engages(remaining=6, pending=2, target=16)
 
 
 def test_tail_boost_does_not_engage_early_or_saturated() -> None:
-    assert not _tail_boost_engages(remaining=54, pending=2, target=6)  # early: 54 > spare 4
-    assert not _tail_boost_engages(remaining=1, pending=8, target=8)  # saturated: spare 0
-    assert not _tail_boost_engages(remaining=0, pending=2, target=8)  # nothing left
-    assert not _tail_boost_engages(remaining=5, pending=10, target=8)  # over-subscribed: spare < 0
+    assert not tail_boost_engages(remaining=54, pending=2, target=6)  # early: 54 > spare 4
+    assert not tail_boost_engages(remaining=1, pending=8, target=8)  # saturated: spare 0
+    assert not tail_boost_engages(remaining=0, pending=2, target=8)  # nothing left
+    assert not tail_boost_engages(remaining=5, pending=10, target=8)  # over-subscribed: spare < 0
 
 
 def test_has_range_header_detects_byte_range_slices() -> None:
     # items carrying a Range header are byte-range slices; ranged-parallel must skip them
-    assert _has_range_header({"url": "u", "headers": {"Range": "bytes=0-99"}})
-    assert _has_range_header({"url": "u", "headers": {"range": "bytes=0-99"}})  # case-insensitive
-    assert not _has_range_header({"url": "u", "headers": {"Authorization": "Bearer x"}})
-    assert not _has_range_header({"url": "u", "headers": {}})
-    assert not _has_range_header({"url": "u"})
+    assert has_range_header({"url": "u", "headers": {"Range": "bytes=0-99"}})
+    assert has_range_header({"url": "u", "headers": {"range": "bytes=0-99"}})  # case-insensitive
+    assert not has_range_header({"url": "u", "headers": {"Authorization": "Bearer x"}})
+    assert not has_range_header({"url": "u", "headers": {}})
+    assert not has_range_header({"url": "u"})
 
 
 def test_download_context_adaptive_default_false() -> None:

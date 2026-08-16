@@ -47,7 +47,7 @@ def count_mode(monkeypatch):
 
 
 def ctx(language, languages) -> dict:
-    return make_movie(language)._build_base_template_context(make_media_info(languages))
+    return make_movie(language).build_base_template_context(make_media_info(languages))
 
 
 def test_strict_dual_with_original(strict_mode):

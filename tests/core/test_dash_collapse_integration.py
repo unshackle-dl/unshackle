@@ -1,6 +1,6 @@
 """Integration coverage for the CONSUMING side of the DASH single-URL byte-range collapse.
 
-The pure predicate ``DASH._collapsible_single_url`` is unit-tested in
+The pure predicate ``DASH.collapsible_single_url`` is unit-tested in
 ``test_dash_collapse.py``; this file drives the real ``DASH.download_track`` code path that
 acts on it. A minimal MPD is parsed with ``DASH.from_text().to_tracks()`` (so the track's
 ``data["dash"]`` is built by real parser code, not hand-faked) and downloaded against a
@@ -92,7 +92,7 @@ def _base(srv) -> str:
 
 def _collapse_mpd(srv) -> str:
     # SegmentList on one media.mp4: init is bytes [0, INIT_LEN), media ranges cover the rest
-    # contiguously -> _collapsible_single_url returns the URL and download_track collapses.
+    # contiguously -> collapsible_single_url returns the URL and download_track collapses.
     return f"""<?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011">
   <BaseURL>{_base(srv)}</BaseURL>

@@ -58,7 +58,7 @@ def direct_session(session: Union[Session, "RnetSession"]) -> Session:
     return new
 
 
-def _read_top_level_box(path: Path, box_type: bytes) -> Optional[bytes]:
+def read_top_level_box(path: Path, box_type: bytes) -> Optional[bytes]:
     # seek through top-level box headers; only the wanted box's bytes are read into RAM
     file_size = path.stat().st_size
     with path.open("rb") as f:
@@ -94,8 +94,8 @@ def has_encrypted_sample_entry(path: Path) -> bool:
     scoping avoids chance byte collisions in mdat. Any read error -> False.
     """
     try:
-        moov = _read_top_level_box(path, b"moov")
-    except Exception:
+        moov = read_top_level_box(path, b"moov")
+    except OSError:
         return False
     if not moov:
         return False
@@ -110,7 +110,7 @@ def has_encrypted_sample_entry(path: Path) -> bool:
     return False
 
 
-def _senc_protects_samples(buf: bytes, body: int, end: int) -> bool:
+def senc_protects_samples(buf: bytes, body: int, end: int) -> bool:
     """True if a senc/PIFF-uuid box describes protected samples.
 
     An empty senc (sample_count 0) sits on a genuinely clear fragment, so treating it as
@@ -124,7 +124,7 @@ def _senc_protects_samples(buf: bytes, body: int, end: int) -> bool:
     return int.from_bytes(buf[pos : pos + 4], "big") > 0
 
 
-def _moof_still_encrypted(moof: bytes) -> bool:
+def moof_still_encrypted(moof: bytes) -> bool:
     # senc only: a decrypter detaches just the atom it consumed, so a PIFF uuid can
     # outlive a good decrypt. ISM arrives as senc via piff_senc_to_cenc.
     # structural walk: a 4CC byte scan collides with trun payload
@@ -135,7 +135,7 @@ def _moof_still_encrypted(moof: bytes) -> bool:
         if box_type != b"traf":
             continue
         for child, _usertype, child_body, child_end in iter_boxes(moof, traf_body, traf_end):
-            if child == b"senc" and _senc_protects_samples(moof, child_body, child_end):
+            if child == b"senc" and senc_protects_samples(moof, child_body, child_end):
                 return True
     return False
 
@@ -194,7 +194,7 @@ def assert_fragments_decrypted(path: Path) -> None:
                 if header[4:8] == b"moof":
                     total += 1
                     f.seek(start)
-                    if _moof_still_encrypted(f.read(size)):
+                    if moof_still_encrypted(f.read(size)):
                         surviving += 1
                         if first_offset is None:
                             first_offset = start
@@ -926,7 +926,7 @@ class Track:
         original_path = self.path
         output_path = original_path.with_stem(f"{original_path.stem}_repack")
 
-        def _ffmpeg(extra_args: list[str] = None, bsf: Optional[str] = None):
+        def ffmpeg(extra_args: list[str] = None, bsf: Optional[str] = None):
             args = [
                 binaries.FFMPEG,
                 "-nostdin",
@@ -983,18 +983,18 @@ class Track:
 
         bsf_applied = False
         try:
-            _ffmpeg(bsf=bsf_v)
+            ffmpeg(bsf=bsf_v)
             bsf_applied = bsf_v is not None
         except subprocess.CalledProcessError as e:
             if b"Malformed AAC bitstream detected" in e.stderr:
                 # e.g., TruTV's dodgy encodes
-                _ffmpeg(["-y", "-bsf:a", "aac_adtstoasc"], bsf=bsf_v)
+                ffmpeg(["-y", "-bsf:a", "aac_adtstoasc"], bsf=bsf_v)
                 bsf_applied = bsf_v is not None
             elif bsf_v is not None:
                 # Repack is mandatory, the VUI bitstream filter is best-effort: retry
                 # without it so the remux still succeeds; caller falls back to normalize_vui.
                 output_path.unlink(missing_ok=True)
-                _ffmpeg()
+                ffmpeg()
             else:
                 raise
 

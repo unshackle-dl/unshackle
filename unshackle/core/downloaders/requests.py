@@ -101,8 +101,8 @@ class TokenBucket:
             DOWNLOAD_CANCELLED.wait(wait)
 
 
-_speed_limiter: Optional[TokenBucket] = None
-_speed_limit_locked = False
+speed_limiter: Optional[TokenBucket] = None
+speed_limit_locked = False
 
 SPEED_UNITS = {
     "": 1,
@@ -152,14 +152,14 @@ def set_speed_limit(bytes_per_sec: Optional[float], lock: bool = False) -> None:
     A locked limit (serve's global_speed_limit) wins: later unlocked calls,
     like the per-job one in dl.result(), become no-ops for the process.
     """
-    global _speed_limiter, _speed_limit_locked
-    if _speed_limit_locked and not lock:
+    global speed_limiter, speed_limit_locked
+    if speed_limit_locked and not lock:
         return
-    _speed_limit_locked = lock
-    _speed_limiter = TokenBucket(bytes_per_sec) if bytes_per_sec else None
+    speed_limit_locked = lock
+    speed_limiter = TokenBucket(bytes_per_sec) if bytes_per_sec else None
 
 
-def _adaptive_chunk_size(content_length: int) -> int:
+def adaptive_chunk_size(content_length: int) -> int:
     """Pick chunk size based on content length. Benchmarked sweet spot: 512KB-4MB."""
     if content_length <= 0:
         return DEFAULT_CHUNK
@@ -204,7 +204,7 @@ class AdaptiveWorkerController:
         self._cooldown = False
         self._ramping = True  # slow-start: double per probe until the first plateau or error burst
 
-    def _prune(self, now: float) -> None:
+    def prune(self, now: float) -> None:
         cutoff = now - self.window
         while self._samples and self._samples[0][0] < cutoff:
             self._samples.popleft()
@@ -213,14 +213,14 @@ class AdaptiveWorkerController:
         if self._first_sample is None:
             self._first_sample = now
         self._samples.append((now, n))
-        self._prune(now)
+        self.prune(now)
 
     def record_error(self, now: float) -> None:
         self._errors += 1
 
     def speed(self, now: float) -> float:
         """Rolling bytes/sec over the window."""
-        self._prune(now)
+        self.prune(now)
         if not self._samples:
             return 0.0
         span = now - self._samples[0][0]
@@ -228,7 +228,7 @@ class AdaptiveWorkerController:
             return 0.0
         return sum(n for _, n in self._samples) / span
 
-    def _warmed_up(self, now: float) -> bool:
+    def warmed_up(self, now: float) -> bool:
         # half a tick of samples gives enough of a baseline to probe against; waiting for
         # a full speed window would idle the ramp at the start of every download.
         # measured from the first-ever sample so pruning cannot starve the check
@@ -251,7 +251,7 @@ class AdaptiveWorkerController:
         self._last_tick = now
 
         # hold until half a tick of throughput history has accumulated
-        if not self._warmed_up(now):
+        if not self.warmed_up(now):
             self._errors = 0
             return self.target
 
@@ -307,7 +307,7 @@ class AdaptiveWorkerController:
         return self.target
 
 
-def _retry_sleep(exc: Exception, attempts: int) -> float:
+def retry_sleep(exc: Exception, attempts: int) -> float:
     """Seconds to wait before retry number ``attempts``.
 
     download() owns segment retries (session-level retries are suppressed), so backoff
@@ -344,19 +344,19 @@ def _retry_sleep(exc: Exception, attempts: int) -> float:
     return min(backoff + random.uniform(0, backoff * 0.1), MAX_BACKOFF)
 
 
-def _is_requests_session(session: Any) -> bool:
+def is_requests_session(session: Any) -> bool:
     """Check if the session is a standard requests.Session (supports resp.raw)."""
     return isinstance(session, Session)
 
 
-def _is_rnet_session(session: Any) -> bool:
+def is_rnet_session(session: Any) -> bool:
     """Check if the session is an RnetSession (uses resp.stream())."""
     from unshackle.core.session import RnetSession
 
     return isinstance(session, RnetSession)
 
 
-def _is_content_encoded(value: Optional[str]) -> bool:
+def is_content_encoded(value: Optional[str]) -> bool:
     """
     Check a Content-Encoding value for any coding other than absent or `identity`.
 
@@ -368,10 +368,10 @@ def _is_content_encoded(value: Optional[str]) -> bool:
     return any(coding.strip() not in ("", "identity") for coding in (value or "").lower().split(","))
 
 
-def _probe_ranged(url: str, session: Any, **kwargs: Any) -> tuple[int, bool]:
+def probe_ranged(url: str, session: Any, **kwargs: Any) -> tuple[int, bool]:
     headers = {**(kwargs.get("headers") or {}), "Range": "bytes=0-0"}
     rest = {k: v for k, v in kwargs.items() if k != "headers"}
-    if _is_rnet_session(session):
+    if is_rnet_session(session):
         rest.setdefault("read_timeout", READ_TIMEOUT)
         # let download() own segment retries, with no nested session-level retry loop
         rest.setdefault("max_retries", 0)
@@ -384,7 +384,7 @@ def _probe_ranged(url: str, session: Any, **kwargs: Any) -> tuple[int, bool]:
     try:
         if resp.status_code != 206:
             return 0, False
-        if _is_content_encoded(resp.headers.get("Content-Encoding") or resp.headers.get("content-encoding")):
+        if is_content_encoded(resp.headers.get("Content-Encoding") or resp.headers.get("content-encoding")):
             return 0, False
         content_range = resp.headers.get("Content-Range") or resp.headers.get("content-range") or ""
         total = content_range.rsplit("/", 1)[-1].strip()
@@ -396,7 +396,7 @@ def _probe_ranged(url: str, session: Any, **kwargs: Any) -> tuple[int, bool]:
             pass
 
 
-def _has_range_header(item: dict[str, Any]) -> bool:
+def has_range_header(item: dict[str, Any]) -> bool:
     """True when a URL item's per-request headers already carry a Range.
 
     Such an item is itself a byte-range slice of a larger resource (DASH SegmentBase,
@@ -406,7 +406,7 @@ def _has_range_header(item: dict[str, Any]) -> bool:
     return any(k.lower() == "range" for k in (item.get("headers") or {}))
 
 
-def _range_covers_full_body(headers: MutableMapping[str, Any], content_length: int) -> bool:
+def range_covers_full_body(headers: MutableMapping[str, Any], content_length: int) -> bool:
     """True when a 200 body is exactly the bytes the item's Range slice asked for.
 
     A server may ignore Range and answer 200 with the whole resource (RFC 9110
@@ -422,7 +422,7 @@ def _range_covers_full_body(headers: MutableMapping[str, Any], content_length: i
     return start == 0 and content_length == end + 1
 
 
-def _force_unblock_stream(stream: Any) -> None:
+def force_unblock_stream(stream: Any) -> None:
     """Best-effort: shut the stream's socket so a thread parked in a blocking read returns now.
 
     A superseded hedge loser can sit in a full-chunk ``raw.read`` on a slow connection; the
@@ -437,7 +437,7 @@ def _force_unblock_stream(stream: Any) -> None:
         pass
 
 
-def _split_ranges(size: int, max_parts: int, part_target: int) -> list[tuple[int, int]]:
+def split_ranges(size: int, max_parts: int, part_target: int) -> list[tuple[int, int]]:
     """Split ``[0, size)`` into inclusive ``[start, end]`` byte ranges with no gaps or overlaps.
 
     At most ``max_parts`` parts of ~``part_target`` bytes each. Pure, with no I/O, so testable.
@@ -449,7 +449,7 @@ def _split_ranges(size: int, max_parts: int, part_target: int) -> list[tuple[int
     ]
 
 
-def _plan_tail_parts(size: int, spare: int) -> list[tuple[int, int]]:
+def plan_tail_parts(size: int, spare: int) -> list[tuple[int, int]]:
     """Plan intra-segment range parts for a tail segment.
 
     Returns inclusive ``[start, end]`` byte ranges covering ``[0, size)`` with no gaps or
@@ -459,10 +459,10 @@ def _plan_tail_parts(size: int, spare: int) -> list[tuple[int, int]]:
     """
     if size < TAIL_BOOST_MIN_SEGMENT_SIZE or spare < 2:
         return []
-    return _split_ranges(size, spare, TAIL_BOOST_PART_SIZE)
+    return split_ranges(size, spare, TAIL_BOOST_PART_SIZE)
 
 
-def _tail_boost_engages(remaining: int, pending: int, target: int) -> bool:
+def tail_boost_engages(remaining: int, pending: int, target: int) -> bool:
     """True when idle workers outnumber the remaining whole segments.
 
     That is the tail condition where running one worker per remaining segment would leave
@@ -474,7 +474,7 @@ def _tail_boost_engages(remaining: int, pending: int, target: int) -> bool:
     return remaining > 0 and spare >= 2 and remaining <= spare
 
 
-def _dispatch_parts(
+def dispatch_parts(
     url: str,
     save_path: Path,
     session: Any,
@@ -485,7 +485,7 @@ def _dispatch_parts(
     save_path.parent.mkdir(parents=True, exist_ok=True)
     control_file = save_path.with_name(f"{save_path.name}.!dev")
 
-    parts = _split_ranges(total_size, max_workers, RANGE_PARALLEL_PART_SIZE)
+    parts = split_ranges(total_size, max_workers, RANGE_PARALLEL_PART_SIZE)
 
     control_file.write_bytes(b"")
     with open(save_path, "wb") as f:
@@ -496,7 +496,7 @@ def _dispatch_parts(
     # DOWNLOAD_CANCELLED (which would kill the sequential fallback and sibling tracks)
     abort = threading.Event()
 
-    def _worker(start: int, end: int) -> None:
+    def worker(start: int, end: int) -> None:
         for ev in download(
             url=url,
             save_path=save_path,
@@ -509,7 +509,7 @@ def _dispatch_parts(
             events.put(ev)
 
     pool = ThreadPoolExecutor(max_workers=len(parts))
-    futures = [pool.submit(_worker, s, e) for s, e in parts]
+    futures = [pool.submit(worker, s, e) for s, e in parts]
     pending = set(futures)
 
     yield {"total": total_size}
@@ -637,7 +637,7 @@ def download(
         register: Optional callback ``(stream, active)`` invoked with active=True while a
             response is being read and active=False when that read ends. Lets the batch reach
             a superseded loser's socket to unblock its in-flight read at teardown (see
-            _force_unblock_stream) instead of waiting the slow read out.
+            force_unblock_stream) instead of waiting the slow read out.
         kwargs: Any extra keyword arguments to pass to the session.get() call. Use this
             for one-time request changes like a header, cookie, or proxy. For example,
             to request Byte-ranges use e.g., `headers={"Range": "bytes=0-128"}`.
@@ -665,11 +665,11 @@ def download(
             resume_offset = tmp_file.stat().st_size
 
     _time = time.time
-    use_raw = _is_requests_session(session)
+    use_raw = is_requests_session(session)
     # item carries its own Range (DASH SegmentBase / HLS EXT-X-BYTERANGE slice): never
     # overwrite it with a resume Range (that would fetch the parent's tail, not the slice);
     # retries rewrite the whole slice in "wb" mode instead
-    item_range = _has_range_header(kwargs)
+    item_range = has_range_header(kwargs)
 
     attempts = 1
     written = 0
@@ -685,7 +685,7 @@ def download(
         last_speed_refresh = _time()
 
         try:
-            use_rnet = _is_rnet_session(session)
+            use_rnet = is_rnet_session(session)
 
             request_kwargs = dict(kwargs)
             if use_rnet:
@@ -697,7 +697,8 @@ def download(
             req_headers = dict(request_kwargs.get("headers", {}) or {})
             # media bytes must arrive unrecoded: transparent CDN (de)compression breaks
             # Content-Length accounting and is meaningless on ranged requests
-            req_headers.setdefault("Accept-Encoding", "identity")
+            if not any(str(k).lower() == "accept-encoding" for k in req_headers):
+                req_headers["Accept-Encoding"] = "identity"
             if part_mode:
                 req_headers["Range"] = f"bytes={part_offset + written}-{part_end}"
             elif resume_offset > 0 and not item_range:
@@ -727,12 +728,12 @@ def download(
             if part_mode and stream.status_code != 206:
                 raise IOError(f"expected 206 for ranged part, got {stream.status_code}")
             if use_rnet:
-                content_encoded = _is_content_encoded(
+                content_encoded = is_content_encoded(
                     stream.headers.get("Content-Encoding") or stream.headers.get("content-encoding")
                 )
                 content_length = 0 if content_encoded else (stream.content_length or 0)
             else:
-                content_encoded = _is_content_encoded(stream.headers.get("Content-Encoding"))
+                content_encoded = is_content_encoded(stream.headers.get("Content-Encoding"))
                 try:
                     content_length = int(stream.headers.get("Content-Length", "0"))
                     if content_encoded:
@@ -745,7 +746,7 @@ def download(
                 # a 200 here); writing that as the segment would silently corrupt the merge, so
                 # fail the attempt unless the slice spans the whole resource, in which case the
                 # 200 body is byte-identical to the 206 and safe to keep
-                if not (stream.status_code == 200 and _range_covers_full_body(req_headers, content_length)):
+                if not (stream.status_code == 200 and range_covers_full_body(req_headers, content_length)):
                     raise IOError(f"expected 206 for byte-range segment, got {stream.status_code}")
 
             if resumed and content_encoded:
@@ -757,8 +758,8 @@ def download(
                 resume_offset = 0
                 continue
 
-            limiter = _speed_limiter
-            chunk_size = _adaptive_chunk_size(content_length)
+            limiter = speed_limiter
+            chunk_size = adaptive_chunk_size(content_length)
             if limiter:
                 chunk_size = min(chunk_size, max(8192, int(limiter.rate / 4)))
             total_size = (resume_offset + content_length) if resumed and content_length > 0 else content_length
@@ -781,7 +782,7 @@ def download(
             # offset is derived from the tmp file's size, so preallocating to content_length
             # would make an interrupted write look fully downloaded and poison the resume
             # (unsatisfiable Range on retry, silent zero-padded corruption). part_mode still
-            # pre-truncates in _dispatch_parts because its workers seek to fixed offsets.
+            # pre-truncates in dispatch_parts because its workers seek to fixed offsets.
             with open(save_path if part_mode else tmp_file, file_mode, buffering=file_buffering) as f:
                 if part_mode:
                     f.seek(part_offset + written)
@@ -894,7 +895,7 @@ def download(
                     pass
             if not part_mode:
                 resume_offset = tmp_file.stat().st_size if tmp_file.exists() else 0
-            delay = _retry_sleep(exc, attempts)
+            delay = retry_sleep(exc, attempts)
             if abort is not None:
                 # interruptible nap: backoff can reach MAX_BACKOFF, and teardown always
                 # sets the batch abort, so a parked worker must wake and exit at once
@@ -906,7 +907,7 @@ def download(
             attempts += 1
 
 
-def _build_session_spec(session: Optional[Any]) -> Optional[dict[str, Any]]:
+def build_session_spec(session: Optional[Any]) -> Optional[dict[str, Any]]:
     """Picklable spec to rebuild ``session`` in a child process; None if not cheaply rebuildable.
 
     Live sessions (sockets, TLS state, threads) can't cross a process boundary, so each child
@@ -915,14 +916,14 @@ def _build_session_spec(session: Optional[Any]) -> Optional[dict[str, Any]]:
     """
     if session is None:
         return {"kind": "none"}
-    if _is_requests_session(session):
+    if is_requests_session(session):
         return {
             "kind": "requests",
             "headers": dict(session.headers),
             "cookies": session.cookies,  # RequestsCookieJar pickles cleanly
             "proxies": dict(session.proxies),
         }
-    if _is_rnet_session(session):
+    if is_rnet_session(session):
         name = session.impersonate_name
         if not name:
             return None
@@ -936,8 +937,8 @@ def _build_session_spec(session: Optional[Any]) -> Optional[dict[str, Any]]:
     return None
 
 
-def _rebuild_session(spec: dict[str, Any]) -> Optional[Any]:
-    """Reconstruct a session inside a child process from a spec built by ``_build_session_spec``."""
+def rebuild_session(spec: dict[str, Any]) -> Optional[Any]:
+    """Reconstruct a session inside a child process from a spec built by ``build_session_spec``."""
     kind = spec["kind"]
     if kind == "requests":
         rs = Session()
@@ -961,7 +962,7 @@ def _rebuild_session(spec: dict[str, Any]) -> Optional[Any]:
     return None  # "none": child builds its own Session from the passed headers/cookies/proxy
 
 
-def _mp_worker(queue: Any, kwargs: dict[str, Any]) -> None:
+def mp_worker(queue: Any, kwargs: dict[str, Any]) -> None:
     """Child entry point (top-level so ``spawn`` can pickle it).
 
     Rebuilds the session, iterates ``requests()`` for its url chunk, and relays every event over
@@ -980,7 +981,7 @@ def _mp_worker(queue: Any, kwargs: dict[str, Any]) -> None:
                 if name in ("READ_TIMEOUT", "RETRY_WAIT", "HEDGE_MIN_WAIT"):
                     setattr(sys.modules[__name__], name, float(value))
         spec = kwargs.pop("_session_spec")
-        kwargs["session"] = _rebuild_session(spec)
+        kwargs["session"] = rebuild_session(spec)
         for event in requests(**kwargs):
             queue.put(event)
     except Exception:
@@ -989,7 +990,7 @@ def _mp_worker(queue: Any, kwargs: dict[str, Any]) -> None:
         queue.put({"__mp_done__": True})
 
 
-def _download_multiprocess(
+def download_multiprocess(
     urls: list[Any],
     output_dir: Path,
     filename: str,
@@ -1056,7 +1057,7 @@ def _download_multiprocess(
             index_stride=processes,
             _session_spec=spec,
         )
-        p = mp_ctx.Process(target=_mp_worker, args=(queue, child_kwargs), daemon=True)
+        p = mp_ctx.Process(target=mp_worker, args=(queue, child_kwargs), daemon=True)
         p.start()
         procs.append(p)
 
@@ -1246,24 +1247,24 @@ def requests(
 
     # A spawned child re-imports this module and would start with no TokenBucket, so the
     # configured cap would silently stop applying; the cap wins over the fan-out, matching
-    # the _speed_limiter gates on the ranged-parallel paths.
-    speed_limiter = _speed_limiter
-    if processes > 1 and len(urls) >= MP_MIN_SEGMENTS and speed_limiter is not None:
+    # the speed_limiter gates on the ranged-parallel paths.
+    limiter = speed_limiter
+    if processes > 1 and len(urls) >= MP_MIN_SEGMENTS and limiter is not None:
         processes = 1
         if debug_logger:
             debug_logger.log(
                 level="DEBUG",
                 operation="downloader_mp_fallback",
                 message="Speed limit is set; spawned children cannot share its budget, using a single process",
-                context={"url_count": len(urls), "speed_limit": speed_limiter.rate},
+                context={"url_count": len(urls), "speed_limit": limiter.rate},
             )
 
     # Process fan-out: split a large segment batch across spawned children. Single-URL and small
     # batches keep the in-process path (a lone file is already parallelized by ranged parts).
     if processes > 1 and len(urls) >= MP_MIN_SEGMENTS:
-        spec = _build_session_spec(session)
+        spec = build_session_spec(session)
         if spec is not None:
-            yield from _download_multiprocess(
+            yield from download_multiprocess(
                 urls=cast("list[Any]", urls),  # normalized to a list above
                 output_dir=output_dir,
                 filename=filename,
@@ -1342,11 +1343,11 @@ def requests(
         url_item = urls[0]
         try:
             ranged_used = False
-            if max_workers > 1 and _speed_limiter is None and not _has_range_header(url_item):
-                total_size, supports_ranges = _probe_ranged(url_item["url"], session)
+            if max_workers > 1 and speed_limiter is None and not has_range_header(url_item):
+                total_size, supports_ranges = probe_ranged(url_item["url"], session)
                 if supports_ranges and total_size >= RANGE_PARALLEL_MIN_SIZE:
                     try:
-                        yield from _dispatch_parts(
+                        yield from dispatch_parts(
                             session=session,
                             total_size=total_size,
                             max_workers=max_workers,
@@ -1401,11 +1402,11 @@ def requests(
         batch_abort = threading.Event()
 
         # streams currently being read, so teardown can unblock a superseded loser parked in a
-        # slow read instead of the wait-gated shutdown draining it (see _force_unblock_stream)
+        # slow read instead of the wait-gated shutdown draining it (see force_unblock_stream)
         active_streams: set = set()
         active_lock = threading.Lock()
 
-        def _register_stream(stream: Any, active: bool) -> None:
+        def register_stream(stream: Any, active: bool) -> None:
             with active_lock:
                 if active:
                     active_streams.add(stream)
@@ -1419,7 +1420,7 @@ def requests(
         # feed CDN error signals (429/timeout/reset) from each retrying segment into the controller
         on_retry_cb = (lambda _exc: controller.record_error(time.time())) if controller else None
 
-        def _download_worker(index: int, url_item: dict[str, Any], hedge: bool = False) -> None:
+        def download_worker(index: int, url_item: dict[str, Any], hedge: bool = False) -> None:
             item = dict(url_item)
             save_path = item.pop("save_path")
             if save_path.exists():  # finished in a previous run
@@ -1449,7 +1450,7 @@ def requests(
                 racing=(lambda: True) if hedge else (lambda: index in hedged),
                 abort=batch_abort,
                 on_retry=on_retry_cb,
-                register=_register_stream,
+                register=register_stream,
                 **item,
             ):
                 if "file_downloaded" in event:
@@ -1474,7 +1475,7 @@ def requests(
         tail_boosted: set[int] = set()
         tail_skipped: set[int] = set()
 
-        def _submit(count: int, only: Optional[set[int]] = None) -> None:
+        def submit(count: int, only: Optional[set[int]] = None) -> None:
             # only=<set> submits just those indices (used in the tail window to release
             # segments the boost declined while holding back boost candidates); with no
             # `only`, submits the leading `count` segments in FIFO order.
@@ -1486,13 +1487,13 @@ def requests(
                     break
                 if only is not None and item[0] not in only:
                     continue
-                pending.add(pool.submit(_download_worker, item[0], item[1]))
+                pending.add(pool.submit(download_worker, item[0], item[1]))
                 picked.append(item)
                 count -= 1
             for item in picked:
                 remaining.remove(item)
 
-        def _tail_part_worker(
+        def tail_part_worker(
             index: int,
             url: str,
             part_target: Path,
@@ -1540,7 +1541,7 @@ def requests(
             event_queue.put(dict(file_downloaded=save_path, written=size))
             event_queue.put(dict(advance=1))
 
-        def _maybe_tail_boost(target: int) -> None:
+        def maybe_tail_boost(target: int) -> None:
             # Tail boost: near the end, split the few not-yet-started segments across idle
             # workers with intra-segment range parts so aggregate throughput doesn't collapse
             # to (few segments)x(per-connection speed). Only not-yet-started segments in
@@ -1549,7 +1550,7 @@ def requests(
             # Engage on idle capacity so the boost fires despite `remaining` draining in strides
             # of the worker target; probe at most TAIL_BOOST_MAX_PER_CYCLE per cycle so a run of
             # blocking range probes can't stall the drain loop.
-            if DOWNLOAD_CANCELLED.is_set() or not _tail_boost_engages(len(remaining), len(pending), target):
+            if DOWNLOAD_CANCELLED.is_set() or not tail_boost_engages(len(remaining), len(pending), target):
                 return
             # completed segments predict the tail's sizes: below the min every probe would
             # decline anyway, and at real-CDN RTT those sequential probes cost seconds on the
@@ -1571,12 +1572,12 @@ def requests(
                 if save_path.exists():  # finished in a previous run; let the normal fast-path handle it
                     tail_skipped.add(index)
                     continue
-                if _has_range_header(item):  # byte-range slice; part-mode would clobber its Range
+                if has_range_header(item):  # byte-range slice; part-mode would clobber its Range
                     tail_skipped.add(index)
                     continue
                 req_kwargs = {k: v for k, v in item.items() if k != "url"}
-                size, supports_ranges = _probe_ranged(item["url"], session, **req_kwargs)
-                parts = _plan_tail_parts(size, spare) if supports_ranges else []
+                size, supports_ranges = probe_ranged(item["url"], session, **req_kwargs)
+                parts = plan_tail_parts(size, spare) if supports_ranges else []
                 if not parts:
                     tail_skipped.add(index)  # no ranges / too small / no capacity -> normal path
                     continue
@@ -1599,7 +1600,7 @@ def requests(
                 for start, end in parts:
                     pending.add(
                         pool.submit(
-                            _tail_part_worker,
+                            tail_part_worker,
                             index,
                             item["url"],
                             part_target,
@@ -1615,10 +1616,14 @@ def requests(
                     )
                 boosted += 1
 
+        # submitting every segment up front convoys on the pool's global lock and starves the
+        # event drain, so fixed mode meters submission through a window the loop tops up
+        queue_depth = max_workers * 2
+
         if controller:
-            _submit(controller.update(time.time()))
+            submit(controller.update(time.time()))
         else:
-            _submit(len(remaining))
+            submit(queue_depth)
 
         pending_advance = 0
 
@@ -1655,16 +1660,18 @@ def requests(
                 target = max_workers
                 if controller:
                     target = controller.update(now, len(pending) + len(remaining))
-                    _maybe_tail_boost(target)  # spend spare workers on the tail before topping up
+                    maybe_tail_boost(target)  # spend spare workers on the tail before topping up
                     if len(pending) < target:
                         # In the final stride (unstarted segments <= one worker target), hold back
                         # boost candidates so idle workers accumulate for a range-split; only
                         # release segments the boost already declined (too small / no range) so
                         # nothing stalls. Otherwise top up in FIFO order as usual.
                         if remaining and len(remaining) <= target:
-                            _submit(target - len(pending), only=tail_skipped)
+                            submit(target - len(pending), only=tail_skipped)
                         else:
-                            _submit(target - len(pending))
+                            submit(target - len(pending))
+                elif len(pending) < queue_depth:
+                    submit(queue_depth - len(pending))
 
                 # Yield speed every 0.5s (throttled to avoid spamming Rich)
                 if now - last_speed_report > 0.5:
@@ -1684,7 +1691,7 @@ def requests(
                 if (
                     len(pending) < target
                     and seg_durations
-                    and _speed_limiter is None
+                    and speed_limiter is None
                     and now - last_hedge_check > 0.5
                     and not DOWNLOAD_CANCELLED.is_set()
                 ):
@@ -1705,7 +1712,7 @@ def requests(
                         ]
                     for i in stuck[: target - len(pending)]:
                         hedged.add(i)
-                        pending.add(pool.submit(_download_worker, i, urls[i], True))
+                        pending.add(pool.submit(download_worker, i, urls[i], True))
 
                 # all segments claimed; superseded losers exit via their claimed() check
                 if len(seg_done) == len(urls):
@@ -1753,7 +1760,7 @@ def requests(
                 with active_lock:
                     losers = list(active_streams)
                 for stream in losers:
-                    _force_unblock_stream(stream)
+                    force_unblock_stream(stream)
             pool.shutdown(wait=not DOWNLOAD_CANCELLED.is_set(), cancel_futures=True)
 
         # Drain remaining events

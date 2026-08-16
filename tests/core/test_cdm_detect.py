@@ -24,7 +24,7 @@ from unshackle.core.cdm.detect import (
     is_remote_widevine_cdm,
     is_widevine_cdm,
 )
-from unshackle.core.cdm.loader import _stamp_remote
+from unshackle.core.cdm.loader import stamp_remote
 
 pytestmark = pytest.mark.unit
 
@@ -125,7 +125,7 @@ def test_custom_remote_cdm_classification(device, expect_pr):
 
 def test_stamp_remote_sets_attrs_and_returns_same_object():
     obj = SimpleNamespace()
-    out = _stamp_remote(obj, "playready")
+    out = stamp_remote(obj, "playready")
     assert out is obj
     assert obj.drm == "playready"
     assert obj.is_remote_cdm is True
@@ -136,14 +136,14 @@ def test_stamp_remote_is_best_effort_on_unsettable_object():
         __slots__ = ()
 
     obj = Slotted()
-    out = _stamp_remote(obj, "widevine")  # must not raise
+    out = stamp_remote(obj, "widevine")  # must not raise
     assert out is obj
     assert not hasattr(obj, "drm")
 
 
 def test_load_remote_decryptlabs_playready_is_stamped():
     cdm_api = {"name": "dl-pr", "type": "decrypt_labs", "secret": "x", "device_name": "SL3000"}
-    cdm = loader_mod._load_remote_cdm(dict(cdm_api), "dl-pr", "AMZN", None)
+    cdm = loader_mod.load_remote_cdm(dict(cdm_api), "dl-pr", "AMZN", None)
     assert cdm.drm == "playready"
     assert cdm.is_remote_cdm is True
     assert is_remote_playready_cdm(cdm)
@@ -151,7 +151,7 @@ def test_load_remote_decryptlabs_playready_is_stamped():
 
 def test_load_remote_decryptlabs_widevine_is_stamped():
     cdm_api = {"name": "dl-wv", "type": "decrypt_labs", "secret": "x", "device_name": "ChromeCDM"}
-    cdm = loader_mod._load_remote_cdm(dict(cdm_api), "dl-wv", "AMZN", None)
+    cdm = loader_mod.load_remote_cdm(dict(cdm_api), "dl-wv", "AMZN", None)
     assert cdm.drm == "widevine"
     assert is_remote_widevine_cdm(cdm)
 
@@ -165,7 +165,7 @@ def test_load_remote_native_playready_is_stamped(monkeypatch):
 
     monkeypatch.setattr(prmod, "RemoteCdm", FakePlayReadyRemote)
     cdm_api = {"name": "pr", "Device Type": "PLAYREADY", "host": "h", "secret": "s", "device_name": "d"}
-    cdm = loader_mod._load_remote_cdm(dict(cdm_api), "pr", "AMZN", None)
+    cdm = loader_mod.load_remote_cdm(dict(cdm_api), "pr", "AMZN", None)
     assert isinstance(cdm, FakePlayReadyRemote)
     assert cdm.drm == "playready"
     assert cdm.is_remote_cdm is True
@@ -181,7 +181,7 @@ def test_load_remote_native_widevine_is_stamped(monkeypatch):
 
     monkeypatch.setattr(wvmod, "RemoteCdm", FakeWidevineRemote)
     cdm_api = {"name": "wv", "Device Type": "ANDROID", "host": "h", "secret": "s", "device_name": "d"}
-    cdm = loader_mod._load_remote_cdm(dict(cdm_api), "wv", "AMZN", None)
+    cdm = loader_mod.load_remote_cdm(dict(cdm_api), "wv", "AMZN", None)
     assert isinstance(cdm, FakeWidevineRemote)
     assert cdm.drm == "widevine"
     assert is_remote_widevine_cdm(cdm)

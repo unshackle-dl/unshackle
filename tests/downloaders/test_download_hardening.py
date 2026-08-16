@@ -99,7 +99,7 @@ def test_small_segments_never_probed(server, tmp_path, monkeypatch):
     def no_probe(*args, **kw):
         raise AssertionError("tail boost probed a small-segment batch")
 
-    monkeypatch.setattr(dl, "_probe_ranged", no_probe)
+    monkeypatch.setattr(dl, "probe_ranged", no_probe)
     files = _run(server, tmp_path, [{"url": _url(server)} for _ in range(30)], max_workers=4, adaptive=True)
     assert len(files) == 30
     assert all(f.read_bytes() == PARENT for f in files)
@@ -149,24 +149,24 @@ def _exc_with_headers(headers):
 
 
 def test_retry_sleep_honors_numeric_retry_after():
-    assert dl._retry_sleep(_exc_with_headers({"Retry-After": "3"}), 1) == 3.0
-    assert dl._retry_sleep(_exc_with_headers({"Retry-After": "9999"}), 1) == 60.0  # session.MAX_BACKOFF cap
+    assert dl.retry_sleep(_exc_with_headers({"Retry-After": "3"}), 1) == 3.0
+    assert dl.retry_sleep(_exc_with_headers({"Retry-After": "9999"}), 1) == 60.0  # session.MAX_BACKOFF cap
 
 
 def test_retry_sleep_honors_http_date_retry_after():
     when = format_datetime(datetime.now(timezone.utc) + timedelta(seconds=10), usegmt=True)
-    assert 5 <= dl._retry_sleep(_exc_with_headers({"Retry-After": when}), 1) <= 10
+    assert 5 <= dl.retry_sleep(_exc_with_headers({"Retry-After": when}), 1) <= 10
 
 
 def test_retry_sleep_exponential_backoff_with_jitter():
     # no response on the failure: exponential from RETRY_WAIT with up to 10% jitter
     for attempts, base in ((1, dl.RETRY_WAIT), (2, dl.RETRY_WAIT * 2), (3, dl.RETRY_WAIT * 4)):
-        assert base <= dl._retry_sleep(Exception("reset"), attempts) <= base * 1.1
-    assert dl._retry_sleep(Exception("reset"), 30) == 60.0  # capped
+        assert base <= dl.retry_sleep(Exception("reset"), attempts) <= base * 1.1
+    assert dl.retry_sleep(Exception("reset"), 30) == 60.0  # capped
 
 
 def test_retry_sleep_invalid_retry_after_falls_back():
-    v = dl._retry_sleep(_exc_with_headers({"Retry-After": "soon"}), 1)
+    v = dl.retry_sleep(_exc_with_headers({"Retry-After": "soon"}), 1)
     assert dl.RETRY_WAIT <= v <= dl.RETRY_WAIT * 1.1
 
 
@@ -174,13 +174,13 @@ def test_retry_sleep_naive_http_date_treated_as_utc():
     # "-0000" makes parsedate_to_datetime return a naive datetime; must clamp, not raise
     when = format_datetime(datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=10))
     assert when.endswith("-0000")
-    v = dl._retry_sleep(_exc_with_headers({"Retry-After": when}), 1)
+    v = dl.retry_sleep(_exc_with_headers({"Retry-After": when}), 1)
     assert 5 <= v <= 10
 
 
 def test_retry_sleep_nan_retry_after_falls_back():
     # float("nan") parses; a non-finite wait must fall back to the exponential path
-    v = dl._retry_sleep(_exc_with_headers({"Retry-After": "nan"}), 1)
+    v = dl.retry_sleep(_exc_with_headers({"Retry-After": "nan"}), 1)
     assert dl.RETRY_WAIT <= v <= dl.RETRY_WAIT * 1.1
 
 
@@ -188,7 +188,7 @@ def test_retry_sleep_honors_retry_after_on_wrapped_cause():
     # RnetSession raises MaxRetriesError whose __cause__ HTTPError carries the response
     exc = Exception("max retries exceeded")
     exc.__cause__ = _exc_with_headers({"Retry-After": "3"})
-    assert dl._retry_sleep(exc, 1) == 3.0
+    assert dl.retry_sleep(exc, 1) == 3.0
 
 
 def test_transient_429_with_retry_after_does_not_abort_track(server, tmp_path, monkeypatch):

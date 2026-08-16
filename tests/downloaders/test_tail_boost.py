@@ -17,7 +17,7 @@ Determinism: with ``max_workers`` < segment count <= 2*max_workers and adaptive=
 the leading ``max_workers`` segments submit upfront and the trailing few stay in
 ``remaining`` (the tail top-up only releases boost-declined indices). The controller
 starts at the cap and never grows, so as soon as two leaders finish the spare workers
-outnumber the tail and ``_tail_boost_engages`` fires. Module timing/size constants are
+outnumber the tail and ``tail_boost_engages`` fires. Module timing/size constants are
 lowered via monkeypatch; the whole batch runs in-process (threads), so the patched
 values are seen by the workers.
 """

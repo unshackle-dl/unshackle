@@ -1,11 +1,11 @@
-"""Unit tests for resolve_server / _resolve_proxy in unshackle.core.remote_service."""
+"""Unit tests for resolve_server / resolve_proxy_arg in unshackle.core.remote_service."""
 
 from __future__ import annotations
 
 import click
 import pytest
 
-from unshackle.core.remote_service import _resolve_proxy, resolve_server
+from unshackle.core.remote_service import resolve_proxy_arg, resolve_server
 
 pytestmark = pytest.mark.unit
 
@@ -49,6 +49,43 @@ def multi_remote_services(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
+def test_resolve_server_default_auth_headers(single_remote_service) -> None:
+    _, _, services = resolve_server("primary")
+    assert services["_auth_headers"] == ["X-Secret-Key", "X-Api-Key"]
+
+
+def test_resolve_server_custom_auth_headers_extend_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    from unshackle.core import remote_service as rs
+
+    monkeypatch.setattr(
+        rs.config, "remote_services", {"p": {"url": "https://p:8080", "auth_headers": ["Authorization"]}}
+    )
+    _, _, services = resolve_server("p")
+    assert services["_auth_headers"] == ["Authorization", "X-Secret-Key", "X-Api-Key"]
+
+
+def test_resolve_server_auth_headers_dedup_is_case_insensitive(monkeypatch: pytest.MonkeyPatch) -> None:
+    from unshackle.core import remote_service as rs
+
+    monkeypatch.setattr(
+        rs.config,
+        "remote_services",
+        {"p": {"url": "https://p:8080", "auth_headers": ["Authorization", "x-secret-key"]}},
+    )
+    _, _, services = resolve_server("p")
+    assert services["_auth_headers"] == ["Authorization", "x-secret-key", "X-Api-Key"]
+
+
+@pytest.mark.parametrize("bad", ["X-Api-Key", [], [""], ["X-Api-Key", 3]])
+def test_resolve_server_bad_auth_headers_raises(monkeypatch: pytest.MonkeyPatch, bad: object) -> None:
+    from unshackle.core import remote_service as rs
+
+    monkeypatch.setattr(rs.config, "remote_services", {"p": {"url": "https://p:8080", "auth_headers": bad}})
+    with pytest.raises(click.ClickException) as exc:
+        resolve_server("p")
+    assert "auth_headers" in str(exc.value.message)
+
+
 def test_resolve_server_no_config_raises_click(empty_remote_services) -> None:
     with pytest.raises(click.ClickException) as exc:
         resolve_server(None)
@@ -89,8 +126,8 @@ def test_resolve_server_multi_with_name(multi_remote_services) -> None:
 
 
 def test_resolve_proxy_none_returns_none() -> None:
-    assert _resolve_proxy(None) is None
-    assert _resolve_proxy("") is None
+    assert resolve_proxy_arg(None) is None
+    assert resolve_proxy_arg("") is None
 
 
 def test_resolve_proxy_passes_through_value(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -99,7 +136,7 @@ def test_resolve_proxy_passes_through_value(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(resolve_mod, "initialize_proxy_providers", lambda: [])
     monkeypatch.setattr(resolve_mod, "resolve_proxy", lambda arg, providers: f"http://proxy/{arg}")
 
-    assert _resolve_proxy("us") == "http://proxy/us"
+    assert resolve_proxy_arg("us") == "http://proxy/us"
 
 
 def test_resolve_proxy_value_error_becomes_click(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -113,5 +150,5 @@ def test_resolve_proxy_value_error_becomes_click(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(resolve_mod, "resolve_proxy", boom)
 
     with pytest.raises(click.ClickException) as exc:
-        _resolve_proxy("xx")
+        resolve_proxy_arg("xx")
     assert "no such country" in str(exc.value.message)

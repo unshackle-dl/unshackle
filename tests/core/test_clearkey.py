@@ -88,7 +88,7 @@ def test_warns_once_per_instance(tmp_path, caplog) -> None:
     assert len(warnings) == 1
 
 
-def _data_key(raw: bytes, base64_encoded: bool = True) -> Key:
+def data_key(raw: bytes, base64_encoded: bool = True) -> Key:
     if base64_encoded:
         uri = "data:text/plain;base64," + base64.b64encode(raw).decode("ascii")
     else:
@@ -97,24 +97,24 @@ def _data_key(raw: bytes, base64_encoded: bool = True) -> Key:
 
 
 def test_data_uri_key_decodes_and_validates_length() -> None:
-    drm = ClearKey.from_m3u_key(_data_key(KEY))
+    drm = ClearKey.from_m3u_key(data_key(KEY))
     assert drm.key == KEY
 
 
 def test_data_uri_key_wrong_length_rejected() -> None:
     with pytest.raises(ValueError, match="Unexpected Length"):
-        ClearKey.from_m3u_key(_data_key(b"\x00" * 8))
+        ClearKey.from_m3u_key(data_key(b"\x00" * 8))
 
 
 def test_raw_data_uri_key_materialises_and_validates() -> None:
     # A raw (non-base64) data: payload must be taken as literal key bytes, not hex-parsed.
-    drm = ClearKey.from_m3u_key(_data_key(KEY, base64_encoded=False))
+    drm = ClearKey.from_m3u_key(data_key(KEY, base64_encoded=False))
     assert drm.key == KEY
 
 
 def test_raw_data_uri_key_wrong_length_rejected() -> None:
     with pytest.raises(ValueError, match="Unexpected Length"):
-        ClearKey.from_m3u_key(_data_key(b"\x01" * 8, base64_encoded=False))
+        ClearKey.from_m3u_key(data_key(b"\x01" * 8, base64_encoded=False))
 
 
 def test_data_uri_split_tolerates_commas_in_payload() -> None:

@@ -7,7 +7,13 @@ import click
 import pytest
 
 from unshackle.core.tracks.subtitle import Subtitle
-from unshackle.core.utils.click_types import QUALITY_LIST, SLOW_DELAY_RANGE, SeasonRange, SubtitleCodecChoice
+from unshackle.core.utils.click_types import (
+    LANGUAGE_RANGE,
+    QUALITY_LIST,
+    SLOW_DELAY_RANGE,
+    SeasonRange,
+    SubtitleCodecChoice,
+)
 
 choice = SubtitleCodecChoice(Subtitle.Codec)
 
@@ -58,6 +64,23 @@ def test_quality_list_accepts_yaml_native_values(value, expected):
 )
 def test_slow_delay_range_accepts_bool(value, expected):
     assert SLOW_DELAY_RANGE.convert(value, None, None) == expected
+
+
+# --- LanguageRange ----------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("all,-es", ["all", "-es"]),
+        ("-es", ["-es"]),
+        ("all, -es ; -fr", ["all", "-es", "-fr"]),
+        (["all", "-es"], ["all", "-es"]),
+    ],
+)
+def test_language_range_passes_exclusion_tokens_through(value, expected):
+    """The '-' prefix is resolved at filter time, so the type must keep the token intact."""
+    assert LANGUAGE_RANGE.convert(value) == expected
 
 
 # --- SeasonRange ------------------------------------------------------------
@@ -129,5 +152,46 @@ def test_exclusion_removes_duplicate_keys():
     ],
 )
 def test_bad_part_tokens_fail(token):
+    with pytest.raises(click.UsageError):
+        parse(token)
+
+
+# --- SeasonRange date tokens ------------------------------------------------
+
+
+def test_single_date_token_is_its_own_key():
+    assert parse("2026-08-11") == ["2026-08-11"]
+
+
+def test_date_range_expands_every_day_inclusive():
+    assert sorted(parse("2026-08-01:2026-08-03")) == ["2026-08-01", "2026-08-02", "2026-08-03"]
+
+
+def test_date_range_crosses_a_month():
+    assert sorted(parse("2026-01-30:2026-02-02")) == ["2026-01-30", "2026-01-31", "2026-02-01", "2026-02-02"]
+
+
+def test_date_exclusion_removes_the_day():
+    assert sorted(parse("2026-08-01:2026-08-03", "-2026-08-02")) == ["2026-08-01", "2026-08-03"]
+
+
+def test_dates_mix_with_season_episode_tokens():
+    assert sorted(parse("S01E01", "2026-08-11")) == ["1x1", "2026-08-11"]
+
+
+def test_comma_separated_dates_convert():
+    assert sorted(SeasonRange().convert("2026-08-11, 2026-08-12")) == ["2026-08-11", "2026-08-12"]
+
+
+@pytest.mark.parametrize(
+    "token",
+    [
+        "2026-13-01",  # not a real month
+        "2026-02-30",  # not a real day
+        "2026-08-03:2026-08-01",  # reversed range
+        "2020-01-01:2026-01-01",  # over MAX_DATE_SPAN
+    ],
+)
+def test_bad_date_tokens_fail(token):
     with pytest.raises(click.UsageError):
         parse(token)

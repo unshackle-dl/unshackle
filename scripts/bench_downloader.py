@@ -464,7 +464,7 @@ def _procs_notice(procs: int, n_urls: int, session: Optional[Any]) -> None:
             f"[yellow]--procs {procs} will NOT engage: {n_urls} segments < MP_MIN_SEGMENTS "
             f"({dl_mod.MP_MIN_SEGMENTS}); the single-process path runs instead[/]"
         )
-    elif dl_mod._build_session_spec(session) is None:
+    elif dl_mod.build_session_spec(session) is None:
         console.print(
             f"[yellow]--procs {procs} will NOT engage: session not rebuildable in child processes; "
             f"the single-process path runs instead[/]"

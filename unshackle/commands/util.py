@@ -9,7 +9,7 @@ from unshackle.core import binaries
 from unshackle.core.constants import context_settings
 
 
-def _natural_sort_key(path: Path) -> list:
+def natural_sort_key(path: Path) -> list:
     """Sort key for natural sorting (S01E01 before S01E10)."""
     return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", path.name)]
 
@@ -83,7 +83,7 @@ def crop(path: Path, aspect: str, letter: bool, offset: int, preview: bool) -> N
         raise click.ClickException('FFmpeg executable "ffmpeg" not found but is required.')
 
     if path.is_dir():
-        paths = sorted(list(path.glob("*.mkv")) + list(path.glob("*.mp4")), key=_natural_sort_key)
+        paths = sorted(list(path.glob("*.mkv")) + list(path.glob("*.mp4")), key=natural_sort_key)
     else:
         paths = [path]
     for video_path in paths:
@@ -186,7 +186,7 @@ def range_(path: Path, full: bool, preview: bool) -> None:
         raise click.ClickException('FFmpeg executable "ffmpeg" not found but is required.')
 
     if path.is_dir():
-        paths = sorted(list(path.glob("*.mkv")) + list(path.glob("*.mp4")), key=_natural_sort_key)
+        paths = sorted(list(path.glob("*.mkv")) + list(path.glob("*.mp4")), key=natural_sort_key)
     else:
         paths = [path]
     for video_path in paths:
@@ -272,7 +272,7 @@ def test(path: Path, map_: str) -> None:
         raise click.ClickException('FFmpeg executable "ffmpeg" not found but is required.')
 
     if path.is_dir():
-        paths = sorted(list(path.glob("*.mkv")) + list(path.glob("*.mp4")), key=_natural_sort_key)
+        paths = sorted(list(path.glob("*.mkv")) + list(path.glob("*.mp4")), key=natural_sort_key)
     else:
         paths = [path]
     for video_path in paths:

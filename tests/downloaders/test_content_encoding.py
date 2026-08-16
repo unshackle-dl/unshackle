@@ -6,7 +6,7 @@ import threading
 import pytest
 import requests as rq
 
-from unshackle.core.downloaders.requests import _is_content_encoded, download
+from unshackle.core.downloaders.requests import download, is_content_encoded
 
 
 @pytest.mark.parametrize(
@@ -35,7 +35,7 @@ from unshackle.core.downloaders.requests import _is_content_encoded, download
     ],
 )
 def test_is_content_encoded(value, expected):
-    assert _is_content_encoded(value) is expected
+    assert is_content_encoded(value) is expected
 
 
 PLAIN = b"WEBVTT\n\n" + b"".join(f"{i:05d} cue text\n".encode() for i in range(2000))
@@ -51,9 +51,9 @@ class _EncodingServer:
         self.sock.bind(("127.0.0.1", 0))
         self.sock.listen(8)
         self.url = f"http://127.0.0.1:{self.sock.getsockname()[1]}/sub.vtt"
-        threading.Thread(target=self._serve, daemon=True).start()
+        threading.Thread(target=self.serve, daemon=True).start()
 
-    def _serve(self):
+    def serve(self):
         while True:
             try:
                 conn, _ = self.sock.accept()
@@ -146,7 +146,7 @@ class _FakeRnetSession:
 
 def test_rnet_encoded_body_discards_a_partial_instead_of_range_resuming(tmp_path, monkeypatch):
     dl = importlib.import_module("unshackle.core.downloaders.requests")
-    monkeypatch.setattr(dl, "_is_rnet_session", lambda s: isinstance(s, _FakeRnetSession))
+    monkeypatch.setattr(dl, "is_rnet_session", lambda s: isinstance(s, _FakeRnetSession))
     session = _FakeRnetSession(PLAIN)
     save_path = tmp_path / "sub.vtt"
     save_path.with_name("sub.vtt.!dev").write_bytes(PLAIN[:5000])

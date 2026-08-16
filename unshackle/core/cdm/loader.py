@@ -13,7 +13,7 @@ from typing import Any, Optional
 log = logging.getLogger("cdm")
 
 
-def _stamp_remote(cdm: Any, drm: str) -> Any:
+def stamp_remote(cdm: Any, drm: str) -> Any:
     """Record a remote CDM's DRM type and mark it as remote.
 
     The loader knows the DRM type from config, so it sets it here as the value
@@ -49,12 +49,12 @@ def load_cdm(
 
     cdm_api = next(iter(x.copy() for x in config.remote_cdm if x["name"] == cdm_name), None)
     if cdm_api:
-        return _load_remote_cdm(cdm_api, cdm_name, service_name, vaults)
+        return load_remote_cdm(cdm_api, cdm_name, service_name, vaults)
 
-    return _load_local_cdm(cdm_name)
+    return load_local_cdm(cdm_name)
 
 
-def _load_remote_cdm(
+def load_remote_cdm(
     cdm_api: dict,
     cdm_name: str,
     service_name: str,
@@ -80,7 +80,7 @@ def _load_remote_cdm(
                 )
 
         cdm: Any = DecryptLabsRemoteCDM(service_name=service_name, vaults=vaults, **cdm_api)
-        return _stamp_remote(cdm, "playready" if cdm.is_playready else "widevine")
+        return stamp_remote(cdm, "playready" if cdm.is_playready else "widevine")
 
     if cdm_type == "custom_api":
         from unshackle.core.cdm.custom_remote_cdm import CustomRemoteCDM
@@ -88,13 +88,13 @@ def _load_remote_cdm(
         del cdm_api["name"]
         del cdm_api["type"]
         cdm = CustomRemoteCDM(service_name=service_name, vaults=vaults, **cdm_api)
-        return _stamp_remote(cdm, "playready" if cdm.is_playready else "widevine")
+        return stamp_remote(cdm, "playready" if cdm.is_playready else "widevine")
 
     device_type = cdm_api.get("Device Type", cdm_api.get("device_type", ""))
     if str(device_type).upper() == "PLAYREADY":
         from pyplayready.remote.remotecdm import RemoteCdm as PlayReadyRemoteCdm
 
-        return _stamp_remote(
+        return stamp_remote(
             PlayReadyRemoteCdm(
                 security_level=cdm_api.get("Security Level", cdm_api.get("security_level", 3000)),
                 host=cdm_api.get("Host", cdm_api.get("host")),
@@ -106,7 +106,7 @@ def _load_remote_cdm(
 
     from pywidevine.remotecdm import RemoteCdm
 
-    return _stamp_remote(
+    return stamp_remote(
         RemoteCdm(
             device_type=cdm_api.get("Device Type", cdm_api.get("device_type", "")),
             system_id=cdm_api.get("System ID", cdm_api.get("system_id", "")),
@@ -119,7 +119,7 @@ def _load_remote_cdm(
     )
 
 
-def _load_local_cdm(cdm_name: str) -> Any:
+def load_local_cdm(cdm_name: str) -> Any:
     """Instantiate a local CDM from a .prd or .wvd file."""
     from unshackle.core.config import config
 

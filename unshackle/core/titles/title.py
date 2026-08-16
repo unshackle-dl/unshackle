@@ -47,13 +47,15 @@ class Title:
         self.service = service
         self.language = language
         self.data = data
+        self.anime: Optional[bool] = None
+        self.daily: Optional[bool] = None
 
         self.tracks = Tracks()
 
     def __eq__(self, other: Title) -> bool:
         return self.id == other.id
 
-    def _build_base_template_context(self, media_info: MediaInfo, show_service: bool = True) -> dict:
+    def build_base_template_context(self, media_info: MediaInfo, show_service: bool = True) -> dict:
         """Build base template context dictionary from MediaInfo.
 
         Extracts video, audio, HDR, HFR, and multi-language information shared
@@ -130,7 +132,8 @@ class Title:
                         track_height = primary_video_track.height
                         if abs(resolution - track_height) <= 10 or track_height in (2160, 1440, 1080, 720, 480):
                             resolution = track_height
-            except Exception:
+            # garbage DAR strings or a missing height fall back to the plain min(width, height)
+            except (ValueError, TypeError, ZeroDivisionError):
                 pass
 
             scan_suffix = "i" if str(getattr(primary_video_track, "scan_type", "")).lower() == "interlaced" else "p"

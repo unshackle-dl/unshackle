@@ -70,5 +70,5 @@ def test_unreadable_source_yields_empty_string() -> None:
 def test_unwalkable_source_yields_empty_string(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A dir os.walk cannot enter must yield "", not a valid-looking hash of fewer files."""
     (tmp_path / "__main__.py").write_bytes(b"")
-    monkeypatch.setattr(unshackle.core, "_PKG", tmp_path)
+    monkeypatch.setattr(unshackle.core, "PKG", tmp_path)
     assert code_hash() == ""

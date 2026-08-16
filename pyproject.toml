@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "unshackle"
-version = "5.3.0"
+version = "5.5.0"
 description = "Modular Movie, TV, and Music Archival Software."
 authors = [{ name = "unshackle team" }]
 requires-python = ">=3.11,<3.15"
@@ -64,12 +64,12 @@ dependencies = [
     "pycountry>=24.6.1",
     "language-data>=1.4.0",
     "wasmtime>=41.0.0",
-    "animeapi-py>=0.6.0",
     "rnet>=2.4.2",
     "bandit>=1.9.4",
     "jsonpath-ng>=1.8.0",
     "mutagen>=1.47.0,<2",
     "defusedxml>=0.7.1",
+    "rich-click>=1.9.8",
 ]
 
 [project.urls]

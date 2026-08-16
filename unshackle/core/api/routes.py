@@ -11,6 +11,8 @@ from aiohttp_swagger3 import SwaggerDocs, SwaggerInfo, SwaggerUiSettings
 from unshackle.core import __code_hash__, __version__
 from unshackle.core.api.errors import APIError, APIErrorCode, build_error_response, handle_api_exception
 from unshackle.core.api.handlers import (
+    CORS_HEADERS,
+    JOB_EVENTS_ROUTE,
     cancel_download_job_handler,
     clear_cache_handler,
     clear_finished_download_jobs_handler,
@@ -18,6 +20,7 @@ from unshackle.core.api.handlers import (
     delete_history_handler,
     download_handler,
     download_history_handler,
+    download_job_events_handler,
     env_check_handler,
     get_allowed_services,
     get_download_job_handler,
@@ -56,26 +59,22 @@ async def cors_middleware(
     else:
         response = await handler(request)
 
-    # Add CORS headers
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Secret-Key, Authorization"
-    response.headers["Access-Control-Max-Age"] = "3600"
+    response.headers.update(CORS_HEADERS)
 
     return response
 
 
 log = logging.getLogger("api")
 
-# Route handler signature: takes the request, returns a response.
-Handler = Callable[[web.Request], Awaitable[web.Response]]
+# Route handler signature: takes the request, returns a response (streamed or complete).
+Handler = Callable[[web.Request], Awaitable[web.StreamResponse]]
 
 
 def api_handler(handler: Handler) -> Handler:
     """Wrap a route handler so any raised APIError becomes a structured error response."""
 
     @functools.wraps(handler)
-    async def wrapper(request: web.Request) -> web.Response:
+    async def wrapper(request: web.Request) -> web.StreamResponse:
         try:
             return await handler(request)
         except APIError as e:
@@ -665,22 +664,22 @@ async def download(request: web.Request) -> web.Response:
                 type: array
                 items:
                   type: string
-                description: Language for video and audio (use 'orig' for original) (default - ["orig"])
+                description: Language for video and audio (use 'orig' for original; a '-' prefix excludes, e.g. ["all", "-es"]) (default - ["orig"])
               v_lang:
                 type: array
                 items:
                   type: string
-                description: Language for video tracks only (default - [])
+                description: Language for video tracks only (a '-' prefix excludes) (default - [])
               a_lang:
                 type: array
                 items:
                   type: string
-                description: Language for audio tracks only (default - [])
+                description: Language for audio tracks only (a '-' prefix excludes) (default - [])
               s_lang:
                 type: array
                 items:
                   type: string
-                description: Language for subtitle tracks (default - ["all"])
+                description: Language for subtitle tracks (a '-' prefix excludes, e.g. ["all", "-es"]) (default - ["all"])
               require_subs:
                 type: array
                 items:
@@ -693,7 +692,7 @@ async def download(request: web.Request) -> web.Response:
                 type: array
                 items:
                   type: string
-                description: Languages wanted for forced subtitles, implies forced_subs (default - [])
+                description: Languages wanted for forced subtitles, implies forced_subs (a '-' prefix excludes) (default - [])
               exact_lang:
                 type: boolean
                 description: Use exact language matching (no variants) (default - false)
@@ -758,13 +757,18 @@ async def download(request: web.Request) -> web.Response:
                 description: Set the group tag to be used (default - None)
               tmdb_id:
                 type: integer
-                description: Use this TMDB ID for tagging (default - None)
-              animeapi_id:
-                type: string
-                description: Anime database ID via AnimeAPI, e.g. mal:12345 (default - None)
+                description: Use this TMDB ID for tagging instead of a title search. Set enrich to also take its title, year and original language. Mutually exclusive with imdb_id and tvdb_id. Needs tmdb_api_key (default - None)
+              anilist_id:
+                oneOf:
+                  - type: integer
+                  - type: string
+                description: AniList ID for tagging instead of a title search, or a MyAnimeList ID as the string mal:21. Combines with one of tmdb_id, imdb_id and tvdb_id, which AniList does not know (default - None)
               enrich:
                 type: boolean
-                description: Override show title and year from external source (default - false)
+                description: Overwrite show title, year and original language with the external source's. Requires one of tmdb_id, imdb_id, tvdb_id or anilist_id (default - false)
+              daily:
+                type: boolean
+                description: Treat the title as daily/date-based content and fill missing air dates from TVDB. Needs enrich (default - false)
               no_folder:
                 type: boolean
                 description: Disable folder creation for TV shows (default - false)
@@ -791,10 +795,10 @@ async def download(request: web.Request) -> web.Response:
                 description: Add REPACK tag to the output filename (default - false)
               imdb_id:
                 type: string
-                description: Use this IMDB ID (e.g. tt1375666) for tagging (default - None)
+                description: Use this IMDB ID (e.g. tt1375666) for tagging instead of a title search. Set enrich to also take its title, year and original language. Mutually exclusive with tmdb_id and tvdb_id (default - None)
               tvdb_id:
                 type: integer
-                description: Use this TVDB ID for tagging and episode ordering (default - None)
+                description: Use this TVDB ID for tagging and episode ordering instead of a series lookup. Set enrich to also take its title, year and original language. Mutually exclusive with tmdb_id and imdb_id. Needs tvdb_api_key (default - None)
               tvdb_order:
                 type: string
                 enum: [official, dvd, absolute, alternate, regional]
@@ -949,6 +953,46 @@ async def download_job_detail(request: web.Request) -> web.Response:
     """
     job_id = request.match_info["job_id"]
     return await get_download_job_handler(job_id, request)
+
+
+@api_handler
+async def download_job_events(request: web.Request) -> web.StreamResponse:
+    """
+    Stream download job events.
+    ---
+    summary: Stream download job events
+    description: >
+      Server-Sent Events stream of a job's progress. Emits a `snapshot` event, then
+      `progress` and `status` events, and closes after the terminal `completed`, `failed`
+      or `cancelled` event. Every event carries the same full job object that
+      GET /api/download/jobs/{job_id} returns. A browser EventSource can authenticate with
+      the `secret_key` query parameter instead of the X-Secret-Key header; when both are
+      sent the header is used.
+    parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: secret_key
+        in: query
+        required: false
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Event stream
+        content:
+          text/event-stream:
+            schema:
+              type: string
+      '404':
+        description: Job not found
+      '500':
+        description: Server error
+    """
+    job_id = request.match_info["job_id"]
+    return await download_job_events_handler(job_id, request)
 
 
 @api_handler
@@ -1796,6 +1840,7 @@ ROUTES: list[tuple[str, str, Handler, bool]] = [
     ("GET", "/api/download/jobs", download_jobs, False),
     ("POST", "/api/download/jobs/clear-finished", clear_finished_download_jobs, False),
     ("GET", "/api/download/jobs/{job_id}", download_job_detail, False),
+    ("GET", JOB_EVENTS_ROUTE, download_job_events, False),
     ("DELETE", "/api/download/jobs/{job_id}", cancel_download_job, False),
     ("POST", "/api/download/jobs/{job_id}/retry", retry_download_job, False),
     ("POST", "/api/download/jobs/{job_id}/priority", prioritize_download_job, False),

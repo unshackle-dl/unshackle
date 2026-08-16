@@ -36,7 +36,8 @@ Where the file lives, how unshackle discovers it, and how to edit it:
 | [DRM & CDM](drm.md) | `cdm`, `remote_cdm`, `decryption` |
 | [Network & proxy](network.md) | `network`, `headers`, `proxy_providers` |
 | [Key vaults](vaults.md) | `key_vaults`, `vault_timeout` |
-| [External API keys](misc.md#external-api-keys) | `imdb_api_enabled`, `omdb_api_key`, `tmdb_api_key`, `tvdb_api_key`, `tvdb_pin`, `tvdb_order`, `simkl_client_id`, `metadata_providers`, `decrypt_labs_api_key`, `ipinfo_api_key` |
+| [External API keys](misc.md#external-api-keys) | `omdb_api_key`, `tmdb_api_key`, `tvdb_api_key`, `tvdb_pin`, `tvdb_order`, `simkl_client_id`, `metadata_providers`, `anilist_title_language`, `disable_metadata`, `decrypt_labs_api_key`, `ipinfo_api_key` |
 | [Caching & updates](misc.md#caching-updates) | `title_cache_enabled`, `title_cache_time`, `title_cache_max_retention`, `update_checks`, `update_check_interval` |
+| [Appearance](misc.md#appearance) | `theme` |
 | [Logging, privacy & debug](misc.md#logging-privacy-debug) | `redact_paths`, `debug`, `debug_keys`, `debug_requests`, `set_terminal_bg` |
 | [Deprecated & removed](misc.md#deprecated-removed-keys) | `curl_impersonate`, `downloader`, `scene_naming` |

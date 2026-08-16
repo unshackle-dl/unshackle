@@ -127,6 +127,7 @@ Every variable below is valid in both output and folder templates. Values are de
 | `season_episode` | Combined | `S01E05` |
 | `episode_name` | Episode title | `Pilot` |
 | `part` | Part index of a [split episode](#split-episodes), empty otherwise | `2` |
+| `absolute` | Absolute episode number, zero-padded to 3 digits, empty when unknown | `007` |
 | `date` | ISO air date for daily/dated content | `2024-06-01` |
 
 !!! note "Daily & sports content"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import logging
 import re
 from pathlib import Path
@@ -14,39 +15,37 @@ from unshackle.core.utils.redact import redact_path
 
 log = logging.getLogger("services")
 
-_raw = config.directories.services
-if not isinstance(_raw, list):
-    _raw = [_raw]
-# resolve in config order — priority IS list order: the first source to define a tag is the source,
+raw = config.directories.services
+if not isinstance(raw, list):
+    raw = [raw]
+# resolve in config order - priority IS list order: the first source to define a tag is the source,
 # later sources (local or repo) with the same tag are shadowed. List local last to make it a fallback.
-_service_dirs: list[Path] = []
+service_dirs: list[Path] = []
 DIRTY_REPOS: list[str] = []
-for _entry in _raw:
+for _entry in raw:
     if isinstance(_entry, str) and is_repo_spec(_entry):
         try:
             _resolved = resolve_service_repo(_entry)
         except DirtyServiceRepo as e:
-            # local edits in the clone — record it and let check_load_errors() exit cleanly
+            # local edits in the clone - record it and let check_load_errors() exit cleanly
             DIRTY_REPOS.append(redact_path(str(e.path)))
             _resolved = None
         if _resolved:
-            _service_dirs.append(_resolved)
+            service_dirs.append(_resolved)
     else:
-        _service_dirs.append(Path(_entry))
+        service_dirs.append(Path(_entry))
 
 # dedupe by tag honoring list order (first wins); track shadows for the load summary
-_seen: dict[str, Path] = {}
+seen: dict[str, Path] = {}
 SHADOWED: list[str] = []
-for _dir in _service_dirs:
+for _dir in service_dirs:
     for _path in _dir.glob("*/__init__.py"):
         tag = _path.parent.stem
-        if tag in _seen:
-            SHADOWED.append(
-                f"{tag}: using {redact_path(str(_seen[tag]))}, ignoring duplicate {redact_path(str(_path))}"
-            )
+        if tag in seen:
+            SHADOWED.append(f"{tag}: using {redact_path(str(seen[tag]))}, ignoring duplicate {redact_path(str(_path))}")
         else:
-            _seen[tag] = _path
-_SERVICES = sorted(_seen.values(), key=lambda x: x.parent.stem)
+            seen[tag] = _path
+SERVICES = sorted(seen.values(), key=lambda x: x.parent.stem)
 
 
 def load_service(path: Path) -> object:
@@ -59,12 +58,12 @@ def load_service(path: Path) -> object:
     try:
         module = import_module_by_path(path)
     except Exception as e:
-        raise RuntimeError(f"{tag}: failed to import — {type(e).__name__}: {e} ({path})") from e
+        raise RuntimeError(f"{tag}: failed to import - {type(e).__name__}: {e} ({path})") from e
     try:
         return getattr(module, tag)
     except AttributeError as e:
         raise RuntimeError(
-            f"{tag}: no class named '{tag}' found in {path} — the class name must match the directory name"
+            f"{tag}: no class named '{tag}' found in {path} - the class name must match the directory name"
         ) from e
 
 
@@ -86,12 +85,12 @@ def load_services(paths: list[Path]) -> tuple[dict[str, object], list[str]]:
     return modules, errors
 
 
-_MODULES, LOAD_ERRORS = load_services(_SERVICES)
+MODULES, LOAD_ERRORS = load_services(SERVICES)
 
-_ALIASES = {tag: getattr(module, "ALIASES", ()) for tag, module in _MODULES.items()}
+ALIASES = {tag: getattr(module, "ALIASES", ()) for tag, module in MODULES.items()}
 
 
-_SUMMARY_LOGGED = False
+SUMMARY_LOGGED = False
 
 
 def check_load_errors() -> None:
@@ -101,18 +100,18 @@ def check_load_errors() -> None:
     is rendered once by Click, without a traceback and without cascading through
     every command that imports this module. Duplicate services (a tag also served by an
     earlier, higher-priority source, which is ignored) are summarised here; the full
-    list — naming the path used and the duplicate ignored — is debug-only.
+    list - naming the path used and the duplicate ignored - is debug-only.
     """
     if DIRTY_REPOS:
         joined = "\n".join(f"  - {p}" for p in DIRTY_REPOS)
         raise click.ClickException(
-            "Service repo has local changes — refusing to refresh so your edits are not lost.\n"
+            "Service repo has local changes - refusing to refresh so your edits are not lost.\n"
             "Commit and push them to the upstream repo (or revert them), then retry:\n" + joined
         )
-    global _SUMMARY_LOGGED
-    if not _SUMMARY_LOGGED:
-        _SUMMARY_LOGGED = True
-        summary = f"Loaded {len(_MODULES)} services"
+    global SUMMARY_LOGGED
+    if not SUMMARY_LOGGED:
+        SUMMARY_LOGGED = True
+        summary = f"Loaded {len(MODULES)} services"
         if SHADOWED:
             summary += f" ({len(SHADOWED)} duplicate(s) ignored)"
         log.info(summary)
@@ -126,7 +125,7 @@ def check_load_errors() -> None:
 class Services(click.Group):
     """Lazy-loaded command group of project services."""
 
-    _remote_services_cache: list[dict] | None = None
+    remote_services_cache: list[dict] | None = None
 
     # Click-specific methods
 
@@ -155,7 +154,7 @@ class Services(click.Group):
         """
         remote = ctx.params.get("remote") or (ctx.parent and ctx.parent.params.get("remote"))
         if remote:
-            remote_services = Services._fetch_remote_services(ctx)
+            remote_services = Services.fetch_remote_services(ctx)
             if remote_services is not None:
                 return [s["tag"] for s in remote_services]
             tags = Services.get_tags()
@@ -174,11 +173,11 @@ class Services(click.Group):
 
         import_file = ctx.params.get("import_file") or (ctx.parent and ctx.parent.params.get("import_file"))
         if import_file:
-            return Services._make_import_command(tag, ctx)
+            return Services.make_import_command(tag, ctx)
 
         remote = ctx.params.get("remote") or (ctx.parent and ctx.parent.params.get("remote"))
         if remote:
-            return Services._make_remote_command(tag, ctx)
+            return Services.make_remote_command(tag, ctx)
 
         try:
             service = Services.load(tag)
@@ -191,35 +190,58 @@ class Services(click.Group):
             raise click.ClickException(f"{e}. Available Services: {', '.join(available_services)}")
 
         if hasattr(service, "cli"):
-            return service.cli
+            cli = service.cli
+            cli.name = tag
+            doc = service.__doc__
+            if doc and doc.strip() and cli.help in (None, "", doc):
+                cli.help = Services.docstring_help(doc)
+            return cli
 
         raise click.ClickException(f"Service '{tag}' has no 'cli' method configured.")
 
     @staticmethod
-    def _fetch_remote_services(ctx: click.Context) -> list[dict] | None:
+    def docstring_help(doc: str) -> str:
+        """Format a service docstring for Click help, one \\b per paragraph so Click keeps the layout.
+
+        The first paragraph stays unprefixed: it is the summary line, and a \\b there
+        renders as a stray blank line and empties click's derived short help.
+        """
+        doc = inspect.cleandoc(doc)
+        if "\b" in doc:
+            return doc
+        first, *rest = doc.split("\n\n")
+        return "\n\n".join([first] + [f"\b\n{p}" for p in rest])
+
+    @staticmethod
+    def fetch_remote_services(ctx: click.Context) -> list[dict] | None:
         """Fetch the service list from the remote server (cached per process)."""
-        if Services._remote_services_cache is not None:
-            return Services._remote_services_cache
+        if Services.remote_services_cache is not None:
+            return Services.remote_services_cache
         try:
             from unshackle.core.remote_service import RemoteClient, resolve_server
 
             server_name = ctx.params.get("server")
-            server_url, api_key, _ = resolve_server(server_name)
-            client = RemoteClient(server_url, api_key)
+            server_url, api_key, services_config = resolve_server(server_name)
+            client = RemoteClient(server_url, api_key, services_config.get("_auth_headers"))
             result = client.get("/api/services")
-            Services._remote_services_cache = result.get("services", [])
-            return Services._remote_services_cache
+            Services.remote_services_cache = result.get("services", [])
+            return Services.remote_services_cache
+        except click.ClickException:
+            raise
         except Exception:
             return None
 
     @staticmethod
-    def _make_remote_command(tag: str, ctx: click.Context) -> click.Command:
+    def make_remote_command(tag: str, ctx: click.Context) -> click.Command:
         """Create a Click command for a remote service with server-provided options."""
-        svc_info = Services._fetch_remote_service_info(tag, ctx)
+        svc_info = Services.fetch_remote_service_info(tag, ctx)
         short_help = svc_info.get("url") if svc_info else None
+        help_text = svc_info.get("help") if svc_info else None
+        if help_text:
+            help_text = Services.docstring_help(help_text)
         cli_params = svc_info.get("cli_params") if svc_info else None
 
-        @click.command(name=tag, short_help=short_help)
+        @click.command(name=tag, short_help=short_help, help=help_text)
         @click.argument("title", type=str)
         @click.pass_context
         def remote_cli(ctx: click.Context, title: str, **kwargs: object) -> object:
@@ -248,7 +270,7 @@ class Services(click.Group):
         return remote_cli
 
     @staticmethod
-    def _make_import_command(tag: str, ctx: click.Context) -> click.Command:
+    def make_import_command(tag: str, ctx: click.Context) -> click.Command:
         """Create a synthetic command that yields an ImportService from an export JSON.
 
         Mirrors how remote services are wired so dl.py's result() runs unchanged.
@@ -266,16 +288,16 @@ class Services(click.Group):
         return import_cli
 
     @staticmethod
-    def _fetch_remote_service_info(tag: str, ctx: click.Context) -> dict | None:
+    def fetch_remote_service_info(tag: str, ctx: click.Context) -> dict | None:
         """Fetch service info for a specific service from the remote server."""
         try:
-            services = Services._fetch_remote_services(ctx)
+            services = Services.fetch_remote_services(ctx)
             if services:
                 for svc in services:
                     if svc.get("tag") == tag:
                         return svc
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug(f"Remote service info lookup failed for {tag}: {e!r}")
         return None
 
     # Methods intended to be used anywhere
@@ -283,14 +305,14 @@ class Services(click.Group):
     @staticmethod
     def get_tags() -> list[str]:
         """Returns a list of service tags from all available Services."""
-        return [x.parent.stem for x in _SERVICES]
+        return [x.parent.stem for x in SERVICES]
 
     @staticmethod
     def get_path(name: str) -> Path:
         """Get the directory path of a command."""
         tag = Services.get_tag(name)
 
-        for service in _SERVICES:
+        for service in SERVICES:
             if service.parent.stem == tag:
                 return service.parent
         raise KeyError(f"There is no Service added by the Tag '{name}'")
@@ -305,9 +327,9 @@ class Services(click.Group):
         original_value = value
         value = value.lower()
 
-        for path in _SERVICES:
+        for path in SERVICES:
             tag = path.parent.stem
-            if value in (tag.lower(), *_ALIASES.get(tag, [])):
+            if value in (tag.lower(), *ALIASES.get(tag, [])):
                 return tag
 
         return original_value
@@ -315,7 +337,7 @@ class Services(click.Group):
     @staticmethod
     def load(tag: str) -> Service:
         """Load a Service module by Service tag."""
-        module = _MODULES.get(tag)
+        module = MODULES.get(tag)
         if module:
             return module
 

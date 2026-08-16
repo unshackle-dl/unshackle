@@ -115,7 +115,7 @@ class DASH:
                 if period_id := period.get("id"):
                     filtered_period_ids.append(period_id)
                 continue
-            if not DASH._is_content_period(period, []):
+            if not DASH.is_content_period(period, []):
                 if period_id := period.get("id"):
                     filtered_period_ids.append(period_id)
                 continue
@@ -126,8 +126,8 @@ class DASH:
                     continue
 
                 for rep in adaptation_set.findall("Representation"):
-                    get = partial(self._get, adaptation_set=adaptation_set, representation=rep)
-                    findall = partial(self._findall, adaptation_set=adaptation_set, representation=rep, both=True)
+                    get = partial(self.get_attr, adaptation_set=adaptation_set, representation=rep)
+                    findall = partial(self.find_elements, adaptation_set=adaptation_set, representation=rep, both=True)
                     segment_base = rep.find("SegmentBase")
 
                     codecs = get("codecs")
@@ -346,33 +346,29 @@ class DASH:
         init_data: Optional[bytes] = None
         track_kid: Optional[UUID] = None
 
-        content_periods = [p for p in all_periods if DASH._is_content_period(p, filtered_period_ids)]
+        content_periods = [p for p in all_periods if DASH.is_content_period(p, filtered_period_ids)]
         period_count = len(content_periods)
 
         if period_count > 1:
             log.debug(f"Multi-period manifest detected with {period_count} content periods")
 
+        stored_period: Optional[Element] = track.data["dash"].get("period")
+
         for period_idx, content_period in enumerate(content_periods):
-            # Find the matching representation in this period
-            matched_rep = None
-            matched_as = None
-            for as_ in content_period.findall("AdaptationSet"):
-                if DASH.is_trick_mode(as_):
-                    continue
-                for rep in as_.findall("Representation"):
-                    if rep.get("id") == rep_id:
-                        matched_rep = rep
-                        matched_as = as_
-                        break
-                if matched_rep is not None:
-                    break
+            if content_period is stored_period:
+                matched_as, matched_rep = adaptation_set, representation
+            else:
+                matched_as, matched_rep = DASH.resolve_representation(content_period, rep_id, adaptation_set) or (
+                    None,
+                    None,
+                )
 
             if matched_rep is None or matched_as is None:
                 period_id = content_period.get("id", period_idx)
                 log.warning(f"Representation '{rep_id}' not found in period '{period_id}', skipping")
                 continue
 
-            p_init, p_segments, p_timescale, p_durations, p_kid = DASH._get_period_segments(
+            p_init, p_segments, p_timescale, p_durations, p_kid = DASH.get_period_segments(
                 period=content_period,
                 adaptation_set=matched_as,
                 representation=matched_rep,
@@ -454,7 +450,7 @@ class DASH:
         # When every segment is a byte range of one parent resource and init is its [0, len)
         # prefix, the whole resource is itself a valid MP4, so one direct download to save_path
         # replaces the per-segment files, init write and merge pass.
-        collapse_single_url = DASH._collapsible_single_url(
+        collapse_single_url = DASH.collapsible_single_url(
             isinstance(track, Subtitle),
             segments,
             len(init_data) if init_data is not None else None,
@@ -620,7 +616,7 @@ class DASH:
         progress(downloaded="Downloaded")
 
     @staticmethod
-    def _collapsible_single_url(
+    def collapsible_single_url(
         is_subtitle: bool,
         segments: list[tuple[str, Optional[str]]],
         init_len: Optional[int],
@@ -663,7 +659,7 @@ class DASH:
         return True
 
     @staticmethod
-    def _is_content_period(period: Element, filtered_period_ids: list[str]) -> bool:
+    def is_content_period(period: Element, filtered_period_ids: list[str]) -> bool:
         """Check if a period is a valid content period (not an ad, not filtered, not trick mode)."""
         period_id = period.get("id")
         if period_id and period_id in filtered_period_ids:
@@ -677,7 +673,7 @@ class DASH:
         return True
 
     @staticmethod
-    def _merge_segment_templates(adaptation_set: Element, representation: Element) -> Optional[Element]:
+    def merge_segment_templates(adaptation_set: Element, representation: Element) -> Optional[Element]:
         """
         Build the effective SegmentTemplate for a Representation by cascading the
         AdaptationSet > Representation levels (ISO/IEC 23009-1 5.3.9.1).
@@ -703,7 +699,7 @@ class DASH:
         return merged
 
     @staticmethod
-    def _get_period_segments(
+    def get_period_segments(
         period: Element,
         adaptation_set: Element,
         representation: Element,
@@ -736,7 +732,7 @@ class DASH:
         period_duration = period.get("duration") or manifest.get("mediaPresentationDuration")
         init_data: Optional[bytes] = None
 
-        segment_template = DASH._merge_segment_templates(adaptation_set, representation)
+        segment_template = DASH.merge_segment_templates(adaptation_set, representation)
 
         segment_list = representation.find("SegmentList")
         if segment_list is None:
@@ -891,8 +887,12 @@ class DASH:
 
         return init_data, segments, segment_timescale, segment_durations, track_kid
 
+    # Deprecated 5.5.0 shims for service repos still on the old underscored names; drop once they migrate.
+    _is_content_period = is_content_period
+    _get_period_segments = get_period_segments
+
     @staticmethod
-    def _get(item: str, adaptation_set: Element, representation: Optional[Element] = None) -> Optional[Any]:
+    def get_attr(item: str, adaptation_set: Element, representation: Optional[Element] = None) -> Optional[Any]:
         """Helper to get a requested item from the Representation, otherwise from the AdaptationSet."""
         adaptation_set_item = adaptation_set.get(item)
         if representation is None:
@@ -905,7 +905,7 @@ class DASH:
         return adaptation_set_item
 
     @staticmethod
-    def _findall(
+    def find_elements(
         item: str, adaptation_set: Element, representation: Optional[Element] = None, both: bool = False
     ) -> list[Any]:
         """
@@ -1011,6 +1011,54 @@ class DASH:
         )
 
     @staticmethod
+    def adaptation_set_key(adaptation_set: Element) -> tuple[Optional[str], ...]:
+        """Identity of an AdaptationSet, used to re-find its counterpart in another Period."""
+        return tuple(
+            adaptation_set.get(attr)
+            for attr in ("contentType", "mimeType", "lang", "audioTrackId", "audioTrackSubtype", "id")
+        )
+
+    @staticmethod
+    def resolve_representation(
+        period: Element, rep_id: Optional[str], adaptation_set: Element
+    ) -> Optional[tuple[Element, Element]]:
+        """
+        Find the (AdaptationSet, Representation) in another Period matching rep_id.
+
+        Representation ids are only unique within an AdaptationSet, so the set matching
+        `adaptation_set`'s identity wins over an earlier sibling that reuses the same id
+        for different content (e.g. audio description vs dialog).
+        """
+        as_key = DASH.adaptation_set_key(adaptation_set)
+
+        def candidates(within: Element) -> list[tuple[Element, Element]]:
+            found = []
+            for as_ in within.findall("AdaptationSet"):
+                if DASH.is_trick_mode(as_) or DASH.adaptation_set_key(as_) != as_key:
+                    continue
+                for rep in as_.findall("Representation"):
+                    if rep.get("id") == rep_id:
+                        found.append((as_, rep))
+                        break
+            return found
+
+        matches = candidates(period)
+        if matches:
+            parent = adaptation_set.getparent()
+            siblings = [as_ for as_, _ in candidates(parent)] if parent is not None else []
+            ordinal = siblings.index(adaptation_set) if adaptation_set in siblings else 0
+            return matches[min(ordinal, len(matches) - 1)]
+
+        for as_ in period.findall("AdaptationSet"):
+            if DASH.is_trick_mode(as_):
+                continue
+            for rep in as_.findall("Representation"):
+                if rep.get("id") == rep_id:
+                    return as_, rep
+
+        return None
+
+    @staticmethod
     def is_descriptive(adaptation_set: Element) -> bool:
         """Check if contents of Adaptation Set is Descriptive."""
         return any(
@@ -1050,7 +1098,7 @@ class DASH:
         return next(
             (
                 int(x.get("value"))
-                for x in DASH._findall("SupplementalProperty", adaptation_set, representation, both=True)
+                for x in DASH.find_elements("SupplementalProperty", adaptation_set, representation, both=True)
                 if x.get("schemeIdUri") == "tag:dolby.com,2018:dash:EC3_ExtensionComplexityIndex:2018"
             ),
             None,
@@ -1112,7 +1160,7 @@ class DASH:
                 if kid_b64:
                     try:
                         kid = UUID(bytes=base64.b64decode(kid_b64))
-                    except Exception:
+                    except ValueError:
                         kid = None
 
                 drm.append(PlayReady(pssh=pr_pssh, kid=kid, pssh_b64=pr_pssh_b64))
@@ -1128,7 +1176,7 @@ class DASH:
                     except ValueError:
                         try:
                             kid = UUID(bytes=base64.b64decode(kid_attr))
-                        except Exception:
+                        except ValueError:
                             kid = None
 
                 if not kid:
@@ -1183,7 +1231,7 @@ class DASH:
 
     @staticmethod
     @lru_cache(maxsize=None)
-    def _field_format_pattern(field: str) -> re.Pattern:
+    def field_format_pattern(field: str) -> re.Pattern:
         # printf-style `$Field%fmt$` matcher, compiled once per field name
         return re.compile(rf"\${re.escape(field)}%([a-z0-9]+)\$", flags=re.I)
 
@@ -1197,7 +1245,7 @@ class DASH:
         for field, value in kwargs.items():
             url = url.replace(f"${field}$", str(value))
             if has_fmt:
-                m = DASH._field_format_pattern(field).search(url)
+                m = DASH.field_format_pattern(field).search(url)
                 if m:
                     url = url.replace(m.group(), f"{value:{m.group(1)}}")
         return url

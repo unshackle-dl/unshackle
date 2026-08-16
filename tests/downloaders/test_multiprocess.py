@@ -1,6 +1,6 @@
 """Multiprocess segment-download invariants.
 
-Pins the spawned-child fan-out path in ``requests()``/``_download_multiprocess``:
+Pins the spawned-child fan-out path in ``requests()``/``download_multiprocess``:
 
 - Strided assignment plus the ``index_offset``/``index_stride`` filename mapping puts every
   segment's bytes in the correctly named file (a broken stride mapping misfiles content).
@@ -109,13 +109,13 @@ def test_multiprocess_stride_downloads_all_segments_correctly(server, tmp_path):
 
 
 def test_multiprocess_child_crash_raises(server, tmp_path):
-    # _download_multiprocess has no MP_MIN_SEGMENTS gate, so drive it directly with 2 urls.
+    # download_multiprocess has no MP_MIN_SEGMENTS gate, so drive it directly with 2 urls.
     # a dict url without "url" raises KeyError while requests() builds the save path (before
     # any retry loop), so the child sends __mp_error__ fast; the sibling downloads normally.
     good = {"url": _url(server, "/seg/0.bin")}
     bad = {"nourl": True}
     with pytest.raises(RuntimeError):
-        for _ in dl._download_multiprocess(
+        for _ in dl.download_multiprocess(
             urls=[good, bad],
             output_dir=tmp_path,
             filename="seg_{i:04}.bin",
@@ -163,7 +163,7 @@ def test_speed_limit_forces_single_process(server, tmp_path, monkeypatch):
     def _no_mp(**kwargs):
         raise AssertionError("multiprocess fan-out engaged despite a speed limit")
 
-    monkeypatch.setattr(dl, "_download_multiprocess", _no_mp)
+    monkeypatch.setattr(dl, "download_multiprocess", _no_mp)
     n = dl.MP_MIN_SEGMENTS
     urls = [{"url": _url(server, f"/seg/{i}.bin")} for i in range(n)]
     dl.set_speed_limit(1_000_000_000)  # far above the tiny batch, so the test is not slowed
