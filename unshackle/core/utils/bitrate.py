@@ -261,7 +261,7 @@ def uniform_segments(
     """
     Build Segments giving each an equal share of the total duration.
 
-    Used for DASH: ``DASH._get_period_segments`` returns timeline *start times*
+    Used for DASH: ``DASH.get_period_segments`` returns timeline *start times*
     rather than per-segment durations, so they cannot be trusted. Segment lengths
     are near-uniform in practice, so the track duration (from
     ``mediaPresentationDuration``) split evenly is both correct and timeline-safe.
@@ -285,7 +285,7 @@ def extract_dash(track: "Track", session: Union[Session, RnetSession]) -> list[S
     stored_period = data.get("period")
     track_url = track.url if isinstance(track.url, str) else track.url[0]
 
-    content_periods = [p for p in manifest.findall("Period") if DASH._is_content_period(p, filtered_period_ids)]
+    content_periods = [p for p in manifest.findall("Period") if DASH.is_content_period(p, filtered_period_ids)]
 
     raw_segments: list[tuple[str, Optional[str]]] = []
     for period in content_periods:
@@ -297,7 +297,7 @@ def extract_dash(track: "Track", session: Union[Session, RnetSession]) -> list[S
         if matched_rep is None or matched_as is None:
             continue
 
-        _, period_segments, _, _, _ = DASH._get_period_segments(
+        _, period_segments, _, _, _ = DASH.get_period_segments(
             period=period,
             adaptation_set=matched_as,
             representation=matched_rep,

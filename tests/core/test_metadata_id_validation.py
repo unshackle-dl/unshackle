@@ -11,11 +11,11 @@ from unshackle.core.config import config
 
 
 @pytest.fixture(autouse=True)
-def _default_order(monkeypatch: pytest.MonkeyPatch) -> None:
+def default_order(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "metadata_providers", [])
 
 
-def _with_keys(monkeypatch: pytest.MonkeyPatch, **keys: str) -> None:
+def with_keys(monkeypatch: pytest.MonkeyPatch, **keys: str) -> None:
     for name in ("tmdb_api_key", "tvdb_api_key", "omdb_api_key", "simkl_client_id"):
         monkeypatch.setattr(config, name, keys.get(name, ""))
 
@@ -38,7 +38,7 @@ def test_no_ids_is_fine() -> None:
 
 
 def test_imdb_alone_passes_on_the_keyless_provider(monkeypatch: pytest.MonkeyPatch) -> None:
-    _with_keys(monkeypatch)
+    with_keys(monkeypatch)
     assert validate_metadata_ids(None, "tt1375666", None) is None
 
 
@@ -46,26 +46,26 @@ def test_imdb_alone_passes_on_the_keyless_provider(monkeypatch: pytest.MonkeyPat
 
 
 def test_tmdb_without_its_key_names_the_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    _with_keys(monkeypatch)
+    with_keys(monkeypatch)
     with pytest.raises(click.UsageError) as exc:
         validate_metadata_ids(27205, None, None)
     assert "--tmdb" in str(exc.value) and "tmdb_api_key" in str(exc.value)
 
 
 def test_tvdb_without_its_key_names_the_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    _with_keys(monkeypatch)
+    with_keys(monkeypatch)
     with pytest.raises(click.UsageError) as exc:
         validate_metadata_ids(None, None, 73871)
     assert "--tvdb" in str(exc.value) and "tvdb_api_key" in str(exc.value)
 
 
 def test_tmdb_with_its_key_passes(monkeypatch: pytest.MonkeyPatch) -> None:
-    _with_keys(monkeypatch, tmdb_api_key="k")
+    with_keys(monkeypatch, tmdb_api_key="k")
     assert validate_metadata_ids(27205, None, None) is None
 
 
 def test_a_provider_filtered_out_of_the_order_points_at_the_config(monkeypatch: pytest.MonkeyPatch) -> None:
-    _with_keys(monkeypatch, tmdb_api_key="k")
+    with_keys(monkeypatch, tmdb_api_key="k")
     monkeypatch.setattr(config, "metadata_providers", ["imdb", "omdb"])
     with pytest.raises(click.UsageError) as exc:
         validate_metadata_ids(27205, None, None)
@@ -73,7 +73,7 @@ def test_a_provider_filtered_out_of_the_order_points_at_the_config(monkeypatch: 
 
 
 def test_imdb_is_unresolvable_when_the_order_drops_both_of_its_providers(monkeypatch: pytest.MonkeyPatch) -> None:
-    _with_keys(monkeypatch)
+    with_keys(monkeypatch)
     monkeypatch.setattr(config, "metadata_providers", ["tmdb", "tvdb"])
     with pytest.raises(click.UsageError) as exc:
         validate_metadata_ids(None, "tt1375666", None)
@@ -83,7 +83,7 @@ def test_imdb_is_unresolvable_when_the_order_drops_both_of_its_providers(monkeyp
 
 def test_one_kind_keeping_the_provider_is_enough(monkeypatch: pytest.MonkeyPatch) -> None:
     """A per-kind order can drop tvdb for movies and keep it for tv, so this must not error."""
-    _with_keys(monkeypatch, tvdb_api_key="k")
+    with_keys(monkeypatch, tvdb_api_key="k")
     monkeypatch.setattr(config, "metadata_providers", {"tv": ["tvdb"], "movie": ["tmdb"]})
     assert validate_metadata_ids(None, None, 73871) is None
 
@@ -119,17 +119,17 @@ def test_api_still_reports_a_malformed_id_first() -> None:
 
 @pytest.mark.parametrize("value", [21, "21", "mal:21"])
 def test_anilist_alone_passes_without_any_key(monkeypatch: pytest.MonkeyPatch, value: object) -> None:
-    _with_keys(monkeypatch)
+    with_keys(monkeypatch)
     assert validate_metadata_ids(None, None, None, value) is None
 
 
 def test_anilist_pairs_with_one_other_id(monkeypatch: pytest.MonkeyPatch) -> None:
-    _with_keys(monkeypatch)
+    with_keys(monkeypatch)
     assert validate_metadata_ids(None, "tt1375666", None, 21) is None
 
 
 def test_anilist_does_not_excuse_two_western_ids(monkeypatch: pytest.MonkeyPatch) -> None:
-    _with_keys(monkeypatch)
+    with_keys(monkeypatch)
     with pytest.raises(click.UsageError) as exc:
         validate_metadata_ids(27205, "tt1375666", None, 21)
     assert "cannot be used together" in str(exc.value)
@@ -137,7 +137,7 @@ def test_anilist_does_not_excuse_two_western_ids(monkeypatch: pytest.MonkeyPatch
 
 @pytest.mark.parametrize("value", ["tt1375666", "anilist:21", "mal:", "abc", "-3"])
 def test_a_malformed_anilist_value_is_refused(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
-    _with_keys(monkeypatch)
+    with_keys(monkeypatch)
     with pytest.raises(click.UsageError) as exc:
         validate_metadata_ids(None, None, None, value)
     assert "--anilist" in str(exc.value)
@@ -165,7 +165,7 @@ def test_api_refuses_a_malformed_anilist_id(value: object) -> None:
 
 @pytest.mark.parametrize("value", ["0", "mal:0", "²", "21.5"])
 def test_a_non_positive_or_non_decimal_anilist_value_is_refused(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
-    _with_keys(monkeypatch)
+    with_keys(monkeypatch)
     with pytest.raises(click.UsageError) as exc:
         validate_metadata_ids(None, None, None, value)
     assert "--anilist" in str(exc.value)

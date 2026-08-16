@@ -57,12 +57,12 @@ class SessionStore:
         self._cleanup_task: Optional[asyncio.Task] = None
 
     @property
-    def _ttl(self) -> int:
+    def ttl(self) -> int:
         """Session TTL in seconds from config."""
         return config.serve.get("session_ttl", 300)  # 5 min default
 
     @property
-    def _max_sessions(self) -> int:
+    def max_sessions(self) -> int:
         """Max concurrent sessions from config."""
         return config.serve.get("max_sessions", 100)
 
@@ -74,9 +74,9 @@ class SessionStore:
     ) -> SessionEntry:
         """Create a new session with an authenticated service instance."""
         async with self._lock:
-            if len(self._sessions) >= self._max_sessions:
+            if len(self._sessions) >= self.max_sessions:
                 oldest_id = min(self._sessions, key=lambda k: self._sessions[k].last_accessed)
-                log.warning(f"Max sessions reached ({self._max_sessions}), evicting oldest: {oldest_id}")
+                log.warning(f"Max sessions reached ({self.max_sessions}), evicting oldest: {oldest_id}")
                 del self._sessions[oldest_id]
 
             session_id = session_id or str(uuid.uuid4())
@@ -98,8 +98,8 @@ class SessionStore:
 
             if entry.auth_status not in (AuthStatus.AUTHENTICATING, AuthStatus.PENDING_INPUT):
                 elapsed = (datetime.now(timezone.utc) - entry.last_accessed).total_seconds()
-                if elapsed > self._ttl:
-                    log.info(f"Session {sanitize_log(session_id)} expired (elapsed={elapsed:.0f}s, ttl={self._ttl}s)")
+                if elapsed > self.ttl:
+                    log.info(f"Session {sanitize_log(session_id)} expired (elapsed={elapsed:.0f}s, ttl={self.ttl}s)")
                     del self._sessions[session_id]
                     return None
 
@@ -113,7 +113,7 @@ class SessionStore:
             if entry:
                 if entry.input_bridge:
                     entry.input_bridge.cancel()
-                self._cleanup_cache_dir(entry.cache_tag)
+                self.cleanup_cache_dir(entry.cache_tag)
                 log.info(f"Deleted session {sanitize_log(session_id)}")
                 return True
             return False
@@ -128,13 +128,13 @@ class SessionStore:
                 if entry.auth_status in (AuthStatus.AUTHENTICATING, AuthStatus.PENDING_INPUT):
                     if elapsed > AUTH_INPUT_TIMEOUT:
                         expired.append(sid)
-                elif elapsed > self._ttl:
+                elif elapsed > self.ttl:
                     expired.append(sid)
             for sid in expired:
                 entry = self._sessions.pop(sid)
                 if entry.input_bridge:
                     entry.input_bridge.cancel()
-                self._cleanup_cache_dir(entry.cache_tag)
+                self.cleanup_cache_dir(entry.cache_tag)
             if expired:
                 log.info(f"Cleaned up {len(expired)} expired sessions")
             return len(expired)
@@ -144,7 +144,7 @@ class SessionStore:
         if self._cleanup_task is not None:
             return
 
-        async def _loop() -> None:
+        async def loop() -> None:
             while True:
                 await asyncio.sleep(60)  # Check every minute
                 try:
@@ -152,7 +152,7 @@ class SessionStore:
                 except Exception:
                     log.exception("Error during session cleanup")
 
-        self._cleanup_task = asyncio.create_task(_loop())
+        self._cleanup_task = asyncio.create_task(loop())
         log.info("Session cleanup loop started")
 
     async def stop_cleanup_loop(self) -> None:
@@ -172,7 +172,7 @@ class SessionStore:
             log.info(f"Cancelled bridges for {count} active session(s)")
 
     @staticmethod
-    def _cleanup_cache_dir(cache_tag: Optional[str]) -> None:
+    def cleanup_cache_dir(cache_tag: Optional[str]) -> None:
         """Remove session cache directory and empty parents."""
         if not cache_tag:
             return
@@ -190,7 +190,7 @@ class SessionStore:
             try:
                 if parent.is_dir() and not any(parent.iterdir()):
                     parent.rmdir()
-            except Exception:
+            except OSError:
                 break
 
     @property
@@ -200,12 +200,12 @@ class SessionStore:
 
 
 # Singleton instance
-_session_store: Optional[SessionStore] = None
+session_store: Optional[SessionStore] = None
 
 
 def get_session_store() -> SessionStore:
     """Get or create the global session store singleton."""
-    global _session_store
-    if _session_store is None:
-        _session_store = SessionStore()
-    return _session_store
+    global session_store
+    if session_store is None:
+        session_store = SessionStore()
+    return session_store

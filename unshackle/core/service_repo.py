@@ -54,10 +54,10 @@ def parse_spec(spec: str) -> tuple[str, Optional[str], str]:
         url, branch = spec.rsplit("@", 1)
     if SHORTHAND_RE.match(url) and not url.startswith(("http", "ssh", "git@")):
         url = f"https://github.com/{url}"
-    return url, branch, _slug(url)
+    return url, branch, slug(url)
 
 
-def _slug(url: str) -> str:
+def slug(url: str) -> str:
     """Filesystem-safe clone dir name from a repo URL, host included so same owner/repo on
     different hosts don't collide, e.g. github.com__owner__repo."""
     cleaned = re.sub(r"^[a-z]+://", "", url).split("@")[-1].replace(":", "/")
@@ -91,15 +91,15 @@ def resolve_service_repo(spec: str, *, ttl: int = DEFAULT_TTL, force: bool = Fal
     stamp = stamp_for(dest)
 
     if not dest.exists():
-        return _clone(url, branch, dest, stamp)
+        return clone(url, branch, dest, stamp)
     if force:
-        _force_sync(dest, stamp)
-    elif _is_stale(stamp, ttl):
-        _pull(dest, stamp)
+        force_sync(dest, stamp)
+    elif is_stale(stamp, ttl):
+        pull(dest, stamp)
     return dest  # ponytail: git IS the cache layer — no bespoke fetch/integrity code
 
 
-def _clone(url: str, branch: Optional[str], dest: Path, stamp: Path) -> Optional[Path]:
+def clone(url: str, branch: Optional[str], dest: Path, stamp: Path) -> Optional[Path]:
     if not binaries.Git:
         log.error("git not found on PATH — cannot fetch service repo %s", url)
         return None
@@ -111,26 +111,26 @@ def _clone(url: str, branch: Optional[str], dest: Path, stamp: Path) -> Optional
     try:
         subprocess.run(args, check=True, capture_output=True)  # nosec B603
     except subprocess.CalledProcessError as e:
-        log.error("failed to clone service repo %s: %s", url, _stderr(e))
+        log.error("failed to clone service repo %s: %s", url, stderr_text(e))
         shutil.rmtree(dest, ignore_errors=True)  # don't leave a half-cloned dir that sticks on retries
         return None
-    _write_stamp(stamp)
+    write_stamp(stamp)
     log.info("cloned service repo %s", url)
     return dest
 
 
-def _pull(dest: Path, stamp: Path) -> None:
+def pull(dest: Path, stamp: Path) -> None:
     if not binaries.Git:
-        _write_stamp(stamp)
+        write_stamp(stamp)
         return
     # never clobber local edits — refuse to refresh a dirty clone and let the caller exit cleanly
-    if _is_dirty(dest):
+    if is_dirty(dest):
         raise DirtyServiceRepo(dest)
     try:
         subprocess.run([str(binaries.Git), "-C", str(dest), "pull", "--ff-only"], check=True, capture_output=True)  # nosec B603
     except subprocess.CalledProcessError as e:
-        log.warning("could not update service repo at %s, using existing copy: %s", dest, _stderr(e))
-    _write_stamp(stamp)  # stamp regardless so a flaky remote can't trigger a fetch every run (force overrides)
+        log.warning("could not update service repo at %s, using existing copy: %s", dest, stderr_text(e))
+    write_stamp(stamp)  # stamp regardless so a flaky remote can't trigger a fetch every run (force overrides)
 
 
 def refresh_repo(spec: str) -> tuple[Optional[Path], list[str]]:
@@ -143,23 +143,23 @@ def refresh_repo(spec: str) -> tuple[Optional[Path], list[str]]:
     dest = repos_base() / dest_name
     stamp = stamp_for(dest)
     if not dest.exists():
-        return _clone(url, branch, dest, stamp), ["cloned (new)"]
+        return clone(url, branch, dest, stamp), ["cloned (new)"]
     if not binaries.Git:
         return dest, []
-    old = _head(dest)
-    discarded = _local_dirty_services(dest)  # uncommitted edits the force reset is about to wipe
-    _force_sync(dest, stamp)
+    old = head(dest)
+    discarded = local_dirty_services(dest)  # uncommitted edits the force reset is about to wipe
+    force_sync(dest, stamp)
     lines = [f"! {tag} (local changes discarded)" for tag in discarded]
-    lines += _changed_services(dest, old, _head(dest))  # upstream changes pulled in
+    lines += changed_services(dest, old, head(dest))  # upstream changes pulled in
     return dest, lines
 
 
-def _head(dest: Path) -> Optional[str]:
+def head(dest: Path) -> Optional[str]:
     r = subprocess.run([str(binaries.Git), "-C", str(dest), "rev-parse", "HEAD"], capture_output=True)  # nosec B603
     return r.stdout.decode(errors="ignore").strip() if r.returncode == 0 else None
 
 
-def _local_dirty_services(dest: Path) -> list[str]:
+def local_dirty_services(dest: Path) -> list[str]:
     """Top-level service dirs with uncommitted edits to tracked files (lost on a force reset)."""
     r = subprocess.run([str(binaries.Git), "-C", str(dest), "diff", "--name-only", "HEAD"], capture_output=True)  # nosec B603
     if r.returncode != 0:
@@ -167,7 +167,7 @@ def _local_dirty_services(dest: Path) -> list[str]:
     return sorted({line.split("/")[0] for line in r.stdout.decode(errors="ignore").splitlines() if line})
 
 
-def _changed_services(dest: Path, old: Optional[str], new: Optional[str]) -> list[str]:
+def changed_services(dest: Path, old: Optional[str], new: Optional[str]) -> list[str]:
     """Summarise a HEAD old->new diff grouped by top-level service dir, plus a line shortstat."""
     if not old or not new or old == new:
         return []
@@ -192,21 +192,21 @@ def _changed_services(dest: Path, old: Optional[str], new: Optional[str]) -> lis
     return lines
 
 
-def _force_sync(dest: Path, stamp: Path) -> None:
+def force_sync(dest: Path, stamp: Path) -> None:
     """Hard-reset the clone to its upstream, discarding local changes (manual refresh only)."""
     if not binaries.Git:
-        _write_stamp(stamp)
+        write_stamp(stamp)
         return
     git = str(binaries.Git)
     try:
         subprocess.run([git, "-C", str(dest), "fetch", "--depth", "1", "origin"], check=True, capture_output=True)  # nosec B603
         subprocess.run([git, "-C", str(dest), "reset", "--hard", "@{u}"], check=True, capture_output=True)  # nosec B603
     except subprocess.CalledProcessError as e:
-        log.warning("could not force-refresh service repo at %s, using existing copy: %s", dest, _stderr(e))
-    _write_stamp(stamp)
+        log.warning("could not force-refresh service repo at %s, using existing copy: %s", dest, stderr_text(e))
+    write_stamp(stamp)
 
 
-def _is_dirty(dest: Path) -> bool:
+def is_dirty(dest: Path) -> bool:
     """True if the clone has uncommitted edits to tracked files or local commits not on its upstream.
 
     Untracked files are intentionally ignored: a `git pull --ff-only` only touches tracked files, so
@@ -230,14 +230,14 @@ def _is_dirty(dest: Path) -> bool:
     return False
 
 
-def _is_stale(stamp: Path, ttl: int) -> bool:
+def is_stale(stamp: Path, ttl: int) -> bool:
     try:
         return (time.time() - float(stamp.read_text().strip())) >= ttl
     except (OSError, ValueError):
         return True
 
 
-def _write_stamp(stamp: Path) -> None:
+def write_stamp(stamp: Path) -> None:
     try:
         stamp.parent.mkdir(parents=True, exist_ok=True)
         stamp.write_text(str(time.time()))
@@ -245,5 +245,5 @@ def _write_stamp(stamp: Path) -> None:
         pass
 
 
-def _stderr(e: subprocess.CalledProcessError) -> str:
+def stderr_text(e: subprocess.CalledProcessError) -> str:
     return (e.stderr or b"").decode(errors="ignore").strip()

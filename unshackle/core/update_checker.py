@@ -67,7 +67,7 @@ class UpdateChecker:
         return version_string.lstrip("v")
 
     @staticmethod
-    def _is_valid_version(version: str) -> bool:
+    def is_valid_version(version: str) -> bool:
         """
         Validate version string format.
 
@@ -93,7 +93,7 @@ class UpdateChecker:
             return False
 
     @classmethod
-    def _fetch_latest_version(cls) -> Optional[str]:
+    def fetch_latest_version(cls) -> Optional[str]:
         """
         Fetch the latest version from GitHub API.
 
@@ -109,13 +109,13 @@ class UpdateChecker:
             data = response.json()
             latest_version = cls.parse_version(data.get("tag_name", ""))
 
-            return latest_version if cls._is_valid_version(latest_version) else None
+            return latest_version if cls.is_valid_version(latest_version) else None
 
         except Exception:
             return None
 
     @classmethod
-    def _should_check_for_updates(cls, check_interval: int = DEFAULT_CHECK_INTERVAL) -> bool:
+    def should_check_for_updates(cls, check_interval: int = DEFAULT_CHECK_INTERVAL) -> bool:
         """
         Check if enough time has passed since the last update check.
 
@@ -136,7 +136,7 @@ class UpdateChecker:
         return (current_time - last_check) >= check_interval
 
     @classmethod
-    def _update_cache(cls, latest_version: Optional[str] = None, current_version: Optional[str] = None) -> None:
+    def update_cache(cls, latest_version: Optional[str] = None, current_version: Optional[str] = None) -> None:
         """
         Update the cache file with the current timestamp and version info.
 
@@ -158,11 +158,12 @@ class UpdateChecker:
             with open(cache_file, "w") as f:
                 json.dump(cache_data, f, indent=2)
 
-        except (OSError, json.JSONEncodeError):
+        # json.dump signals encode failures as TypeError/ValueError, not a json-specific class
+        except (OSError, TypeError, ValueError):
             pass
 
     @staticmethod
-    def _compare_versions(current: str, latest: str) -> bool:
+    def compare_versions(current: str, latest: str) -> bool:
         """
         Simple semantic version comparison.
 
@@ -173,7 +174,7 @@ class UpdateChecker:
         Returns:
             True if latest > current, False otherwise
         """
-        if not UpdateChecker._is_valid_version(current) or not UpdateChecker._is_valid_version(latest):
+        if not UpdateChecker.is_valid_version(current) or not UpdateChecker.is_valid_version(latest):
             return False
 
         try:
@@ -205,13 +206,13 @@ class UpdateChecker:
         Returns:
             The latest version string if an update is available, None otherwise
         """
-        if not cls._is_valid_version(current_version):
+        if not cls.is_valid_version(current_version):
             return None
 
         try:
-            latest_version = await asyncio.to_thread(cls._fetch_latest_version)
+            latest_version = await asyncio.to_thread(cls.fetch_latest_version)
 
-            if latest_version and cls._compare_versions(current_version, latest_version):
+            if latest_version and cls.compare_versions(current_version, latest_version):
                 return latest_version
 
         except Exception:
@@ -220,7 +221,7 @@ class UpdateChecker:
         return None
 
     @classmethod
-    def _get_cached_update_info(cls, current_version: str) -> Optional[str]:
+    def get_cached_update_info(cls, current_version: str) -> Optional[str]:
         """
         Check if there's a cached update available for the current version.
 
@@ -239,7 +240,7 @@ class UpdateChecker:
         cached_latest = cache_data.get("latest_version")
 
         if cached_current == current_version and cached_latest:
-            if cls._compare_versions(current_version, cached_latest):
+            if cls.compare_versions(current_version, cached_latest):
                 return cached_latest
 
         return None
@@ -256,7 +257,7 @@ class UpdateChecker:
         Returns:
             The latest version string if an update is available, None otherwise
         """
-        if not cls._is_valid_version(current_version):
+        if not cls.is_valid_version(current_version):
             return None
 
         if check_interval is None:
@@ -264,12 +265,12 @@ class UpdateChecker:
 
             check_interval = config.update_check_interval * 60 * 60
 
-        if not cls._should_check_for_updates(check_interval):
-            return cls._get_cached_update_info(current_version)
+        if not cls.should_check_for_updates(check_interval):
+            return cls.get_cached_update_info(current_version)
 
-        latest_version = cls._fetch_latest_version()
-        cls._update_cache(latest_version, current_version)
-        if latest_version and cls._compare_versions(current_version, latest_version):
+        latest_version = cls.fetch_latest_version()
+        cls.update_cache(latest_version, current_version)
+        if latest_version and cls.compare_versions(current_version, latest_version):
             return latest_version
 
         return None

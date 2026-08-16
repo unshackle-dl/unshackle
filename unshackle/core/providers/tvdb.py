@@ -7,7 +7,7 @@ from typing import Any, Optional, Union
 import requests
 
 from unshackle.core.config import config
-from unshackle.core.providers._base import ExternalIds, MetadataProvider, MetadataResult, _clean, _strip_year
+from unshackle.core.providers._base import ExternalIds, MetadataProvider, MetadataResult, clean, strip_year
 
 
 def primary_language(data: dict) -> Optional[str]:
@@ -26,14 +26,14 @@ AIRED_ORDER = "official"
 _token: Optional[str] = None
 
 
-def _parse_int(value: Optional[str]) -> Optional[int]:
+def parse_int(value: Optional[str]) -> Optional[int]:
     try:
         return int(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return None
 
 
-def _ids_from_remote(remote_ids: Optional[list], tvdb_id: Optional[int]) -> ExternalIds:
+def ids_from_remote(remote_ids: Optional[list], tvdb_id: Optional[int]) -> ExternalIds:
     """Build ExternalIds from a TVDB remote_ids/remoteIds list."""
     ext = ExternalIds(tvdb_id=tvdb_id)
     for entry in remote_ids or []:
@@ -42,11 +42,11 @@ def _ids_from_remote(remote_ids: Optional[list], tvdb_id: Optional[int]) -> Exte
         if source == "imdb":
             ext.imdb_id = value
         elif source.startswith("themoviedb"):
-            ext.tmdb_id = _parse_int(value)
+            ext.tmdb_id = parse_int(value)
     return ext
 
 
-def _pick_match(
+def pick_match(
     results: list[dict], search_title: str, year: Optional[int]
 ) -> tuple[Optional[dict], Optional[str], float]:
     """Best title match among results, ignoring any whose year is more than a year out."""
@@ -54,13 +54,13 @@ def _pick_match(
     best_title: Optional[str] = None
     best_ratio = 0.0
     for result in results:
-        result_year = _parse_int(result.get("year"))
+        result_year = parse_int(result.get("year"))
         if year and result_year and abs(result_year - year) > 1:
             continue
         for candidate in [result.get("name"), *(result.get("aliases") or [])]:
             if not candidate:
                 continue
-            ratio = SequenceMatcher(None, _clean(search_title), _clean(candidate)).ratio()
+            ratio = SequenceMatcher(None, clean(search_title), clean(candidate)).ratio()
             if ratio > best_ratio:
                 best, best_title, best_ratio = result, candidate, ratio
     return best, best_title, best_ratio
@@ -81,7 +81,7 @@ class TVDBProvider(MetadataProvider):
     def is_available(self) -> bool:
         return bool(config.tvdb_api_key)
 
-    def _login(self) -> Optional[str]:
+    def login(self) -> Optional[str]:
         global _token
         payload: dict[str, str] = {"apikey": config.tvdb_api_key}
         if config.tvdb_pin:
@@ -95,10 +95,10 @@ class TVDBProvider(MetadataProvider):
             _token = None
         return _token
 
-    def _get(self, path: str, params: Optional[dict] = None) -> Any:
+    def api_get(self, path: str, params: Optional[dict] = None) -> Any:
         """The `data` payload of a TVDB response: a dict for entities, a list for searches."""
         global _token
-        token = _token or self._login()
+        token = _token or self.login()
         if not token:
             return None
         for _ in range(2):
@@ -111,7 +111,7 @@ class TVDBProvider(MetadataProvider):
                 )
                 if r.status_code == 401:
                     _token = None
-                    token = self._login()
+                    token = self.login()
                     if not token:
                         return None
                     continue
@@ -123,7 +123,7 @@ class TVDBProvider(MetadataProvider):
         return None
 
     def search(self, title: str, year: Optional[int], kind: str) -> Optional[MetadataResult]:
-        search_title = _strip_year(title)
+        search_title = strip_year(title)
         self.log.debug("Searching TVDB for %r (%s, %s)", search_title, kind, year)
 
         params: dict[str, str | int] = {"query": search_title, "limit": 10}
@@ -133,23 +133,23 @@ class TVDBProvider(MetadataProvider):
         if year is not None:
             params["year"] = year
 
-        results = self._get("/search", params)
+        results = self.api_get("/search", params)
         if not results and year is not None:
             del params["year"]
-            results = self._get("/search", params)
+            results = self.api_get("/search", params)
         if not results:
             self.log.debug("No TVDB results for %r", search_title)
             return None
 
         # year first, so an identically named remake cannot win on title alone
-        best, best_title, best_ratio = _pick_match(results, search_title, year)
+        best, best_title, best_ratio = pick_match(results, search_title, year)
         if best is None:
-            best, best_title, best_ratio = _pick_match(results, search_title, None)
+            best, best_title, best_ratio = pick_match(results, search_title, None)
         if best is None:
             best, best_title = results[0], results[0].get("name")
 
-        tvdb_id = _parse_int(best.get("tvdb_id"))
-        ext = _ids_from_remote(best.get("remote_ids"), tvdb_id)
+        tvdb_id = parse_int(best.get("tvdb_id"))
+        ext = ids_from_remote(best.get("remote_ids"), tvdb_id)
         if ext.tmdb_id:
             ext.tmdb_kind = kind
 
@@ -157,7 +157,7 @@ class TVDBProvider(MetadataProvider):
 
         return MetadataResult(
             title=best_title or best.get("name"),
-            year=_parse_int(best.get("year")),
+            year=parse_int(best.get("year")),
             kind=kind,
             external_ids=ext,
             original_language=primary_language(best),
@@ -165,23 +165,23 @@ class TVDBProvider(MetadataProvider):
             raw=best,
         )
 
-    def _fetch_extended(self, tvdb_id: int, kind: str) -> Optional[dict]:
+    def fetch_extended(self, tvdb_id: int, kind: str) -> Optional[dict]:
         path = KIND_TO_PATH.get(kind, "series")
-        return self._get(f"/{path}/{tvdb_id}/extended", {"short": "true"})
+        return self.api_get(f"/{path}/{tvdb_id}/extended", {"short": "true"})
 
     def get_by_id(self, provider_id: Union[int, str], kind: str) -> Optional[MetadataResult]:
         tvdb_id = int(provider_id)
-        detail = self._fetch_extended(tvdb_id, kind)
+        detail = self.fetch_extended(tvdb_id, kind)
         if not detail:
             return None
 
-        ext = _ids_from_remote(detail.get("remoteIds"), tvdb_id)
+        ext = ids_from_remote(detail.get("remoteIds"), tvdb_id)
         if ext.tmdb_id:
             ext.tmdb_kind = kind
 
         return MetadataResult(
             title=detail.get("name"),
-            year=_parse_int(detail.get("year")),
+            year=parse_int(detail.get("year")),
             kind=kind,
             external_ids=ext,
             original_language=primary_language(detail),
@@ -191,10 +191,10 @@ class TVDBProvider(MetadataProvider):
 
     def get_external_ids(self, provider_id: Union[int, str], kind: str) -> ExternalIds:
         tvdb_id = int(provider_id)
-        detail = self._fetch_extended(tvdb_id, kind)
+        detail = self.fetch_extended(tvdb_id, kind)
         if not detail:
             return ExternalIds(tvdb_id=tvdb_id)
-        ext = _ids_from_remote(detail.get("remoteIds"), tvdb_id)
+        ext = ids_from_remote(detail.get("remoteIds"), tvdb_id)
         if ext.tmdb_id:
             ext.tmdb_kind = kind
         return ext
@@ -207,7 +207,7 @@ class TVDBProvider(MetadataProvider):
 
         episodes: list[dict] = []
         for page in range(20):  # ponytail: hard page cap, 500 eps/page covers any real series
-            data = self._get(f"/series/{tvdb_id}/episodes/{order}", {"page": page})
+            data = self.api_get(f"/series/{tvdb_id}/episodes/{order}", {"page": page})
             if data is None and page:
                 # a partial listing would renumber episodes wrongly
                 self.log.warning("TVDB %s order listing for series %s failed at page %d", order, tvdb_id, page)
@@ -232,7 +232,7 @@ class TVDBProvider(MetadataProvider):
             episodes = self.get_episodes(tvdb_id, order)
             if not episodes:
                 continue
-            slots = {(_parse_int(e.get("seasonNumber")), _parse_int(e.get("number"))) for e in episodes}
+            slots = {(parse_int(e.get("seasonNumber")), parse_int(e.get("number"))) for e in episodes}
             score = sum(1 for key in keys if key in slots)
             self.log.debug("TVDB order %s matches %d/%d of the service's episodes", order, score, len(keys))
             if score > best_score:
@@ -264,8 +264,8 @@ class TVDBProvider(MetadataProvider):
             match = by_id.get(ep.get("id"))
             if not match:
                 continue
-            src_season, src_number = _parse_int(ep.get("seasonNumber")), _parse_int(ep.get("number"))
-            dst_season, dst_number = _parse_int(match.get("seasonNumber")), _parse_int(match.get("number"))
+            src_season, src_number = parse_int(ep.get("seasonNumber")), parse_int(ep.get("number"))
+            dst_season, dst_number = parse_int(match.get("seasonNumber")), parse_int(match.get("number"))
             if src_season is None or src_number is None or dst_season is None or dst_number is None:
                 continue
             mapping[(src_season, src_number)] = (dst_season, dst_number, match.get("name"))
@@ -275,7 +275,7 @@ class TVDBProvider(MetadataProvider):
 
     def find_by_imdb_id(self, imdb_id: str, kind: str) -> Optional[ExternalIds]:
         """Resolve a TVDB ID from an IMDb ID via /search/remoteid."""
-        results = self._get(f"/search/remoteid/{imdb_id}")
+        results = self.api_get(f"/search/remoteid/{imdb_id}")
         if not results:
             self.log.debug("No TVDB results for IMDB ID %s", imdb_id)
             return None
@@ -290,6 +290,6 @@ class TVDBProvider(MetadataProvider):
         if not entity:
             return None
 
-        tvdb_id = _parse_int(entity.get("id"))
+        tvdb_id = parse_int(entity.get("id"))
         self.log.debug("TVDB find -> TVDB %s for IMDB %s", tvdb_id, imdb_id)
         return ExternalIds(imdb_id=imdb_id, tvdb_id=tvdb_id)

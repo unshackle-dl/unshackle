@@ -55,7 +55,7 @@ class EXAMPLE(Service):
         search                SearchResult generator
         get_titles            Movies / Series / Album (music) + data passthrough
         get_tracks            DASH variant fan-out (default) + HLS/ISM alternates
-        _fetch_dash_manifest  range override, HDR10+ flip, DV-composite, Atmos,
+        fetch_dash_manifest  range override, HDR10+ flip, DV-composite, Atmos,
                               descriptive audio, channel fixups, cover-art attachment,
                               VUI normalize, bitrate-window awareness
         get_chapters          Chapters() with named + unnamed markers
@@ -298,14 +298,14 @@ class EXAMPLE(Service):
         return Series(episodes)
 
     # DEFAULT (shown live): this service needs a SEPARATE manifest per codec/range,
-    # so we fan out with the base helper `_get_tracks_for_variants`. It walks every
+    # so we fan out with the base helper `get_tracks_for_variants`. It walks every
     # codec x range in the TrackRequest, handles HYBRID (HDR10 + DV merge), and -
     # when --best-available is set - skips combos the service can't deliver.
     def get_tracks(self, title: Title_T) -> Tracks:
-        def _fetch_variant(title: Title_T, codec: Optional[Video.Codec], range_: Video.Range) -> Tracks:
+        def fetch_variant(title: Title_T, codec: Optional[Video.Codec], range_: Video.Range) -> Tracks:
             vcodec_str = "H265" if codec == Video.Codec.HEVC else "H264"
             self.log.info(f" + Fetching {vcodec_str} {range_.name} manifest")
-            tracks = self._fetch_dash_manifest(title, vcodec=vcodec_str, range_=range_)
+            tracks = self.fetch_dash_manifest(title, vcodec=vcodec_str, range_=range_)
 
             # Guard: if we asked for HDR/DV but the manifest came back SDR-only, raise
             # so the helper can fall back (best-available) or fail loudly otherwise.
@@ -314,7 +314,7 @@ class EXAMPLE(Service):
                     raise ValueError(f"{range_.name} requested but unavailable")
             return tracks
 
-        return self._get_tracks_for_variants(title, _fetch_variant)
+        return self.get_tracks_for_variants(title, fetch_variant)
 
     # ── ALTERNATE A - HLS (one master playlist returns every codec/range) ───────
     # When a service exposes a single master playlist, you do NOT need the variant
@@ -332,7 +332,7 @@ class EXAMPLE(Service):
     #   from unshackle.core.manifests import ISM
     #   return ISM.from_url(url=ism_url, session=self.session).to_tracks(title.language)
 
-    def _fetch_dash_manifest(
+    def fetch_dash_manifest(
         self, title: Title_T, vcodec: str = "H264", range_: Video.Range = Video.Range.SDR
     ) -> Tracks:
         video_format = self.VIDEO_RANGE_MAP.get(range_, "sdr")

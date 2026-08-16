@@ -84,9 +84,9 @@ class MonaLisa:
         self.data: dict = kwargs or {}
 
         # Extract keys immediately
-        self._extract_keys()
+        self.extract_keys()
 
-    def _extract_keys(self) -> None:
+    def extract_keys(self) -> None:
         """Extract keys from the ticket using the MonaLisa CDM."""
         # Import here to avoid circular import
         from unshackle.core.cdm.monalisa import MonaLisaCDM
@@ -183,7 +183,7 @@ class MonaLisa:
                 # Validate it looks like a content ID
                 if content_id.startswith("H5DCID-"):
                     return content_id
-        except Exception:
+        except (ValueError, TypeError):
             pass
 
         return None

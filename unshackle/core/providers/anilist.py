@@ -5,7 +5,7 @@ from typing import Optional, Union
 
 import requests
 
-from unshackle.core.providers._base import ExternalIds, MetadataProvider, MetadataResult, _clean
+from unshackle.core.providers._base import ExternalIds, MetadataProvider, MetadataResult, clean
 
 GRAPHQL_URL = "https://graphql.anilist.co"
 
@@ -55,7 +55,7 @@ class AniListProvider(MetadataProvider):
     def is_available(self) -> bool:
         return True
 
-    def _graphql(self, query: str, variables: dict) -> Optional[dict]:
+    def graphql(self, query: str, variables: dict) -> Optional[dict]:
         try:
             r = self.session.post(GRAPHQL_URL, json={"query": query, "variables": variables}, timeout=30)
             body = r.json()
@@ -69,7 +69,7 @@ class AniListProvider(MetadataProvider):
             return None
         return body.get("data")
 
-    def _title_variant(self, titles: dict) -> Optional[str]:
+    def title_variant(self, titles: dict) -> Optional[str]:
         from unshackle.core.config import config
 
         configured = (config.anilist_title_language or "english").lower()
@@ -79,8 +79,8 @@ class AniListProvider(MetadataProvider):
                 return str(value)
         return None
 
-    def _to_result(self, node: dict) -> Optional[MetadataResult]:
-        title = self._title_variant(node.get("title") or {})
+    def to_result(self, node: dict) -> Optional[MetadataResult]:
+        title = self.title_variant(node.get("title") or {})
         if not title:
             return None
         return MetadataResult(
@@ -96,7 +96,7 @@ class AniListProvider(MetadataProvider):
     def search(self, title: str, year: Optional[int], kind: str) -> Optional[MetadataResult]:
         self.log.debug("Searching AniList for %r (%s, %s)", title, kind, year)
 
-        data = self._graphql(SEARCH_QUERY, {"search": title})
+        data = self.graphql(SEARCH_QUERY, {"search": title})
         nodes = ((data or {}).get("Page") or {}).get("media") or []
         if not nodes:
             self.log.debug("AniList returned no results for %r", title)
@@ -110,8 +110,8 @@ class AniListProvider(MetadataProvider):
             dated = [n for n in nodes if (n.get("startDate") or {}).get("year") == year]
             nodes = dated or nodes
 
-        best = max(nodes, key=lambda n: _match_ratio(n, title))
-        result = self._to_result(best)
+        best = max(nodes, key=lambda n: match_ratio(n, title))
+        result = self.to_result(best)
         if result:
             self.log.debug("AniList -> %s (ID %s)", result.title, result.external_ids.anilist_id)
         return result
@@ -126,14 +126,14 @@ class AniListProvider(MetadataProvider):
         namespace, number = ref
         self.log.debug("Fetching AniList media %s:%d", namespace, number)
         if namespace == "mal":
-            data = self._graphql(MAL_QUERY, {"idMal": number})
+            data = self.graphql(MAL_QUERY, {"idMal": number})
         else:
-            data = self._graphql(MEDIA_QUERY, {"id": number})
+            data = self.graphql(MEDIA_QUERY, {"id": number})
 
         node = (data or {}).get("Media")
         if not node:
             return None
-        return self._to_result(node)
+        return self.to_result(node)
 
     def get_external_ids(self, provider_id: Union[int, str], kind: str) -> ExternalIds:
         """Return external IDs. AniList knows no western IDs, so only its own."""
@@ -147,6 +147,6 @@ class AniListProvider(MetadataProvider):
         return result.external_ids if result else ExternalIds()
 
 
-def _match_ratio(node: dict, title: str) -> float:
+def match_ratio(node: dict, title: str) -> float:
     names = (node.get("title") or {}).values()
-    return max((SequenceMatcher(None, _clean(title), _clean(n)).ratio() for n in names if n), default=0.0)
+    return max((SequenceMatcher(None, clean(title), clean(n)).ratio() for n in names if n), default=0.0)

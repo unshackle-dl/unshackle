@@ -523,12 +523,12 @@ def try_ensure_utf8(data: bytes) -> bytes:
     if data[:2] == b"\x1f\x8b":
         try:
             data = gzip.decompress(data)
-        except Exception:
+        except (OSError, EOFError, zlib.error):
             pass
     elif data[:1] == b"\x78" and len(data) > 1 and data[1:2] in (b"\x01", b"\x5e", b"\x9c", b"\xda"):
         try:
             data = zlib.decompress(data)
-        except Exception:
+        except zlib.error:
             pass
 
     try:
@@ -1165,12 +1165,12 @@ class DebugLogger:
 
 
 # Global debug logger instance
-_debug_logger: Optional[DebugLogger] = None
+debug_logger: Optional[DebugLogger] = None
 
 
 def get_debug_logger() -> Optional[DebugLogger]:
     """Get the global debug logger instance."""
-    return _debug_logger
+    return debug_logger
 
 
 def log_event(operation: str, *, level: str = "DEBUG", message: str = "", **kwargs: Any) -> None:
@@ -1180,7 +1180,7 @@ def log_event(operation: str, *, level: str = "DEBUG", message: str = "", **kwar
     ``if dl := get_debug_logger(): dl.log(...)`` guard boilerplate. To add logging to a new
     feature, call ``log_event("my_feature_event", message="...", context={...})``.
     """
-    dl = _debug_logger
+    dl = debug_logger
     if dl:
         dl.log(level=level, operation=operation, message=message, **kwargs)
 
@@ -1198,7 +1198,7 @@ def timed_operation(operation: str, *, level: str = "DEBUG", message: str = "", 
         with timed_operation("mux", context={"output": str(path)}):
             run_mkvmerge(...)
     """
-    dl = _debug_logger
+    dl = debug_logger
     if not dl:
         yield
         return
@@ -1235,18 +1235,18 @@ def init_debug_logger(log_path: Optional[Path] = None, enabled: bool = False, lo
         enabled: Whether debug logging is enabled
         log_keys: Whether to log decryption keys (for debugging key issues)
     """
-    global _debug_logger
-    if _debug_logger:
-        _debug_logger.close()
-    _debug_logger = DebugLogger(log_path=log_path, enabled=enabled, log_keys=log_keys)
+    global debug_logger
+    if debug_logger:
+        debug_logger.close()
+    debug_logger = DebugLogger(log_path=log_path, enabled=enabled, log_keys=log_keys)
 
 
 def close_debug_logger():
     """Close the global debug logger."""
-    global _debug_logger
-    if _debug_logger:
-        _debug_logger.close()
-        _debug_logger = None
+    global debug_logger
+    if debug_logger:
+        debug_logger.close()
+        debug_logger = None
 
 
 __all__ = (

@@ -80,7 +80,7 @@ def sanitize_proxy_for_log(uri: Optional[str]) -> Optional[str]:
             netloc = f"REDACTED@{netloc.split('@', 1)[1]}"
 
         return urlunparse(parsed._replace(netloc=netloc))
-    except Exception:
+    except ValueError:
         if "@" in uri:
             return f"REDACTED@{uri.split('@', 1)[1]}"
         return uri
@@ -239,7 +239,7 @@ class Service(metaclass=ABCMeta):
                     self.log.debug(f"Failed to get cached IP info: {e}")
                     self.current_region = None
 
-    def _get_tracks_for_variants(
+    def get_tracks_for_variants(
         self,
         title: Title_T,
         fetch_fn: Callable[..., Tracks],
@@ -310,6 +310,9 @@ class Service(metaclass=ABCMeta):
                             all_tracks.add(video, warn_only=True)
 
         return all_tracks
+
+    # Deprecated 5.5.0 shim for service repos still on the old underscored name; drop once they migrate.
+    _get_tracks_for_variants = get_tracks_for_variants
 
     # Optional Abstract functions
     # The following functions may be implemented by the Service.

@@ -38,7 +38,7 @@ class FakeProvider(MetadataProvider):
 
 
 @pytest.fixture(autouse=True)
-def _isolate(monkeypatch: pytest.MonkeyPatch) -> None:
+def isolate(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep every test off the network and on the default provider order."""
     monkeypatch.setattr(config, "metadata_providers", [])
     monkeypatch.setattr(providers, "fetch_external_ids", lambda *a, **kw: ExternalIds())
@@ -50,7 +50,7 @@ def _isolate(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def _patch_providers(monkeypatch: pytest.MonkeyPatch, available: dict[str, FakeProvider]) -> None:
+def patch_providers(monkeypatch: pytest.MonkeyPatch, available: dict[str, FakeProvider]) -> None:
     monkeypatch.setattr(providers, "get_provider", lambda name: available.get(name))
 
 
@@ -60,7 +60,7 @@ def test_supplied_ids_survive_a_providers_own_answer(monkeypatch: pytest.MonkeyP
         "tmdb",
         MetadataResult(title="Inception", year=2010, kind="movie", external_ids=ExternalIds(imdb_id="tt9999999")),
     )
-    _patch_providers(monkeypatch, {"tmdb": tmdb})
+    patch_providers(monkeypatch, {"tmdb": tmdb})
 
     result = providers.resolve_by_ids(27205, "tt1375666", kind="movie")
 
@@ -73,7 +73,7 @@ def test_supplied_ids_survive_a_providers_own_answer(monkeypatch: pytest.MonkeyP
 def test_imdb_falls_through_to_omdb(monkeypatch: pytest.MonkeyPatch) -> None:
     imdb = FakeProvider("imdb", raises=True)
     omdb = FakeProvider("omdb", MetadataResult(title="Inception", year=2010, kind="movie"))
-    _patch_providers(monkeypatch, {"imdb": imdb, "omdb": omdb})
+    patch_providers(monkeypatch, {"imdb": imdb, "omdb": omdb})
 
     result = providers.resolve_by_ids(imdb_id="tt1375666", kind="movie")
 
@@ -84,7 +84,7 @@ def test_imdb_falls_through_to_omdb(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_all_providers_down_synthesizes_a_result(monkeypatch: pytest.MonkeyPatch) -> None:
-    _patch_providers(monkeypatch, {})
+    patch_providers(monkeypatch, {})
 
     result = providers.resolve_by_ids(tvdb_id=73871, title="Futurama", year=1999, kind="tv")
 
@@ -97,7 +97,7 @@ def test_all_providers_down_synthesizes_a_result(monkeypatch: pytest.MonkeyPatch
 def test_no_ids_searches(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[tuple] = []
     monkeypatch.setattr(providers, "search_metadata", lambda *a, **kw: calls.append(a) or None)
-    _patch_providers(monkeypatch, {})
+    patch_providers(monkeypatch, {})
 
     providers.resolve_by_ids(title="Futurama", year=1999, kind="tv")
 
@@ -105,7 +105,7 @@ def test_no_ids_searches(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_no_ids_and_no_title_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
-    _patch_providers(monkeypatch, {})
+    patch_providers(monkeypatch, {})
     assert providers.resolve_by_ids(kind="tv") is None
 
 
@@ -113,7 +113,7 @@ def test_per_kind_order_puts_tvdb_first_for_tv(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(config, "metadata_providers", {"tv": ["tvdb", "tmdb", "imdb", "omdb"]})
     tvdb = FakeProvider("tvdb", MetadataResult(title="Futurama", year=1999, kind="tv"))
     tmdb = FakeProvider("tmdb", MetadataResult(title="Wrong Show", year=2020, kind="tv"))
-    _patch_providers(monkeypatch, {"tvdb": tvdb, "tmdb": tmdb})
+    patch_providers(monkeypatch, {"tvdb": tvdb, "tmdb": tmdb})
 
     result = providers.resolve_by_ids(615, tvdb_id=73871, kind="tv")
 
@@ -140,7 +140,7 @@ def test_an_anilist_id_reaches_the_anilist_provider(monkeypatch: pytest.MonkeyPa
         MetadataResult(title="One Piece", year=1999, kind="tv", external_ids=ExternalIds(anilist_id=21)),
     )
     tmdb = FakeProvider("tmdb", MetadataResult(title="Wrong Show", year=2020, kind="tv"))
-    _patch_providers(monkeypatch, {"anilist": anilist, "tmdb": tmdb})
+    patch_providers(monkeypatch, {"anilist": anilist, "tmdb": tmdb})
 
     result = providers.resolve_by_ids(anilist_id=21, kind="tv")
 
@@ -152,7 +152,7 @@ def test_an_anilist_id_reaches_the_anilist_provider(monkeypatch: pytest.MonkeyPa
 
 
 def test_a_supplied_anilist_id_survives_a_provider_miss(monkeypatch: pytest.MonkeyPatch) -> None:
-    _patch_providers(monkeypatch, {})
+    patch_providers(monkeypatch, {})
 
     result = providers.resolve_by_ids(anilist_id="21", title="One Piece", kind="tv")
 
@@ -162,7 +162,7 @@ def test_a_supplied_anilist_id_survives_a_provider_miss(monkeypatch: pytest.Monk
 
 def test_a_mal_reference_carries_only_what_the_lookup_answered(monkeypatch: pytest.MonkeyPatch) -> None:
     anilist = FakeProvider("anilist", MetadataResult(title="One Piece", external_ids=ExternalIds(anilist_id=21)))
-    _patch_providers(monkeypatch, {"anilist": anilist})
+    patch_providers(monkeypatch, {"anilist": anilist})
 
     result = providers.resolve_by_ids(anilist_id="mal:21", kind="tv")
 
@@ -172,7 +172,7 @@ def test_a_mal_reference_carries_only_what_the_lookup_answered(monkeypatch: pyte
 
 
 def test_a_mal_reference_that_misses_leaves_no_anilist_id(monkeypatch: pytest.MonkeyPatch) -> None:
-    _patch_providers(monkeypatch, {})
+    patch_providers(monkeypatch, {})
 
     result = providers.resolve_by_ids(anilist_id="mal:21", title="One Piece", kind="tv")
 
@@ -183,7 +183,7 @@ def test_a_mal_reference_that_misses_leaves_no_anilist_id(monkeypatch: pytest.Mo
 def test_anilist_combines_with_a_western_id(monkeypatch: pytest.MonkeyPatch) -> None:
     tmdb = FakeProvider("tmdb", MetadataResult(title="One Piece", year=1999, kind="tv"))
     anilist = FakeProvider("anilist", MetadataResult(title="One Piece", external_ids=ExternalIds(anilist_id=21)))
-    _patch_providers(monkeypatch, {"tmdb": tmdb, "anilist": anilist})
+    patch_providers(monkeypatch, {"tmdb": tmdb, "anilist": anilist})
 
     result = providers.resolve_by_ids(37854, anilist_id=21, kind="tv")
 
@@ -215,7 +215,7 @@ def test_an_anime_hint_falls_through_to_the_normal_order_on_a_miss(monkeypatch: 
     """anilist is asked first but knows no imdb ids, so imdb still answers."""
     anilist = FakeProvider("anilist", None)
     imdb = FakeProvider("imdb", MetadataResult(title="One Piece", year=1999, kind="tv"))
-    _patch_providers(monkeypatch, {"anilist": anilist, "imdb": imdb})
+    patch_providers(monkeypatch, {"anilist": anilist, "imdb": imdb})
 
     result = providers.resolve_by_ids(imdb_id="tt0388629", kind="tv", anime=True)
 
@@ -229,7 +229,7 @@ def test_an_anime_hint_falls_through_to_the_normal_order_on_a_miss(monkeypatch: 
 def test_the_anime_hint_reaches_search(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict] = []
     monkeypatch.setattr(providers, "search_metadata", lambda *a, **kw: calls.append({"args": a}) or None)
-    _patch_providers(monkeypatch, {})
+    patch_providers(monkeypatch, {})
 
     providers.resolve_by_ids(title="One Piece", year=1999, kind="tv", anime=True)
 
@@ -242,7 +242,7 @@ def test_all_supplied_ids_survive_together(monkeypatch: pytest.MonkeyPatch) -> N
         "tvdb",
         MetadataResult(title="One Piece", year=1999, kind="tv", external_ids=ExternalIds(tvdb_id=81797)),
     )
-    _patch_providers(monkeypatch, {"tvdb": tvdb})
+    patch_providers(monkeypatch, {"tvdb": tvdb})
 
     result = providers.resolve_by_ids(tvdb_id=81797, anilist_id="mal:21", imdb_id="tt0388629", kind="tv")
 

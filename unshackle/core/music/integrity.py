@@ -56,7 +56,7 @@ def verify_music_audio(
     if not audio_track:
         raise MusicAudioIntegrityError(f"MediaInfo could not find an audio stream in: {path.name}")
 
-    duration = _duration_seconds(getattr(audio_track, "duration", None))
+    duration = duration_seconds(getattr(audio_track, "duration", None))
     expected_duration = _expected_duration(song, track)
     warnings: list[str] = []
     if expected_duration and duration:
@@ -69,15 +69,15 @@ def verify_music_audio(
     result = MusicAudioIntegrityResult(
         path=path,
         size=size,
-        codec=_first_text(
+        codec=first_text(
             getattr(audio_track, "format", None),
             getattr(audio_track, "commercial_name", None),
             getattr(audio_track, "codec_id", None),
         ),
         duration=duration,
-        bit_depth=_first_int(getattr(audio_track, "bit_depth", None)),
-        sample_rate=_first_int(getattr(audio_track, "sampling_rate", None)),
-        channels=_first_float(
+        bit_depth=first_int(getattr(audio_track, "bit_depth", None)),
+        sample_rate=first_int(getattr(audio_track, "sampling_rate", None)),
+        channels=first_float(
             getattr(audio_track, "channel_s", None),
             getattr(audio_track, "channel_s_original", None),
             getattr(track, "channels", None),
@@ -115,13 +115,13 @@ def _expected_duration(song: Any, track: Any) -> Optional[float]:
     data = getattr(song, "data", None)
     if isinstance(data, dict):
         metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
-        value = _first_float(data.get("duration"), metadata.get("duration"))
+        value = first_float(data.get("duration"), metadata.get("duration"))
         if value:
             return value
     track_data = getattr(track, "data", None)
     if isinstance(track_data, dict):
         metadata = track_data.get("metadata") if isinstance(track_data.get("metadata"), dict) else {}
-        value = _first_float(track_data.get("duration"), metadata.get("duration"))
+        value = first_float(track_data.get("duration"), metadata.get("duration"))
         if value:
             return value
     return None
@@ -140,7 +140,7 @@ def _expected_size(track: Any) -> Optional[int]:
         data.get("metadata") if isinstance(data.get("metadata"), dict) else {},
     ]
     for source in sources:
-        value = _first_int(
+        value = first_int(
             source.get("content_length"),
             source.get("contentLength"),
             source.get("file_size"),
@@ -152,8 +152,8 @@ def _expected_size(track: Any) -> Optional[int]:
     return None
 
 
-def _duration_seconds(value: Any) -> Optional[float]:
-    number = _first_float(value)
+def duration_seconds(value: Any) -> Optional[float]:
+    number = first_float(value)
     if number is None:
         return None
     if number > 1000:
@@ -161,7 +161,7 @@ def _duration_seconds(value: Any) -> Optional[float]:
     return number
 
 
-def _first_text(*values: Any) -> str:
+def first_text(*values: Any) -> str:
     for value in values:
         text = str(value or "").strip()
         if text:
@@ -169,7 +169,7 @@ def _first_text(*values: Any) -> str:
     return ""
 
 
-def _first_float(*values: Any) -> Optional[float]:
+def first_float(*values: Any) -> Optional[float]:
     for value in values:
         if value in (None, "", [], {}):
             continue
@@ -181,8 +181,8 @@ def _first_float(*values: Any) -> Optional[float]:
     return None
 
 
-def _first_int(*values: Any) -> Optional[int]:
-    value = _first_float(*values)
+def first_int(*values: Any) -> Optional[int]:
+    value = first_float(*values)
     return int(value) if value is not None else None
 
 

@@ -151,7 +151,7 @@ class Config:
             )
 
         if self.output_template:
-            self._validate_output_templates()
+            self.validate_output_templates()
 
         self.unicode_filenames: bool = kwargs.get("unicode_filenames", False)
 
@@ -163,7 +163,7 @@ class Config:
         self.debug_keys: bool = kwargs.get("debug_keys", False)
         self.debug_requests: bool = kwargs.get("debug_requests", False)
 
-    def _validate_output_templates(self) -> None:
+    def validate_output_templates(self) -> None:
         """Validate output template configurations and warn about potential issues."""
         if not self.output_template:
             return

@@ -115,8 +115,8 @@ class MonaLisaCDM:
             memory_type = wasmtime.MemoryType(wasmtime.Limits(256, 256))
             self.memory = wasmtime.Memory(self.store, memory_type)
 
-            self._write_i32(self.DYNAMICTOP_PTR, self.DYNAMIC_BASE)
-            imports = self._build_imports()
+            self.write_i32(self.DYNAMICTOP_PTR, self.DYNAMIC_BASE)
+            imports = self.build_imports()
             self.instance = wasmtime.Instance(self.store, self.module, imports)
 
             ex = self.instance.exports(self.store)
@@ -140,7 +140,7 @@ class MonaLisaCDM:
             # Treat 0/negative/non-int-like values as allocation failure.
             try:
                 ctx_int = int(ctx)
-            except Exception:
+            except (TypeError, ValueError):
                 ctx_int = None
 
             if ctx_int is None or ctx_int <= 0:
@@ -193,7 +193,7 @@ class MonaLisaCDM:
         else:
             license_b64 = license_data
 
-        ret = self._ccall(
+        ret = self.ccall(
             "monalisa_set_license",
             int,
             self.ctx,
@@ -205,7 +205,7 @@ class MonaLisaCDM:
         if ret != 0:
             raise RuntimeError(f"License validation failed with code: {ret}")
 
-        key_bytes = self._extract_license_key_bytes()
+        key_bytes = self.extract_license_key_bytes()
 
         # Extract DCID from license to generate KID
         try:
@@ -225,7 +225,7 @@ class MonaLisaCDM:
             # No DCID in the license: derive a deterministic per-license KID to avoid collisions.
             try:
                 license_raw = base64.b64decode(license_b64)
-            except Exception:
+            except ValueError:
                 license_raw = license_b64.encode("utf-8", errors="replace")
 
             license_hash = hashlib.sha256(license_raw).hexdigest()
@@ -233,7 +233,7 @@ class MonaLisaCDM:
 
         return {"kid": kid_bytes.hex(), "key": key_bytes.hex(), "type": "CONTENT"}
 
-    def _extract_license_key_bytes(self) -> bytes:
+    def extract_license_key_bytes(self) -> bytes:
         """Extract the 16-byte decryption key from WASM memory."""
         data_ptr = self.memory.data_ptr(self.store)
         data_len = self.memory.data_len(self.store)
@@ -247,7 +247,7 @@ class MonaLisaCDM:
 
         return bytes(mem_ptr.contents[start:end])
 
-    def _ccall(self, func_name: str, return_type: type, *args):
+    def ccall(self, func_name: str, return_type: type, *args):
         """Call a WASM function with automatic string conversion."""
         stack = 0
         converted_args = []
@@ -259,7 +259,7 @@ class MonaLisaCDM:
                         stack = self.exports["stackSave"](self.store)
                     max_length = (len(arg) << 2) + 1
                     ptr = self.exports["stackAlloc"](self.store, max_length)
-                    self._string_to_utf8(arg, ptr, max_length)
+                    self.string_to_utf8(arg, ptr, max_length)
                     converted_args.append(ptr)
                 else:
                     converted_args.append(arg)
@@ -280,7 +280,7 @@ class MonaLisaCDM:
             return bool(result)
         return result
 
-    def _write_i32(self, addr: int, value: int) -> None:
+    def write_i32(self, addr: int, value: int) -> None:
         """Write a 32-bit integer to WASM memory."""
         if addr % 4 != 0:
             raise ValueError(f"Unaligned i32 write: addr={addr} (must be 4-byte aligned)")
@@ -293,7 +293,7 @@ class MonaLisaCDM:
         mem_ptr = ctypes.cast(data, ctypes.POINTER(ctypes.c_int32))
         mem_ptr[addr >> 2] = value
 
-    def _string_to_utf8(self, data: str, ptr: int, max_length: int) -> int:
+    def string_to_utf8(self, data: str, ptr: int, max_length: int) -> int:
         """Convert string to UTF-8 and write to WASM memory."""
         encoded = data.encode("utf-8")
         write_length = min(len(encoded), max_length - 1)
@@ -306,7 +306,7 @@ class MonaLisaCDM:
         mem_ptr[ptr + write_length] = 0
         return write_length
 
-    def _write_ascii_to_memory(self, string: str, buffer: int, dont_add_null: int = 0) -> None:
+    def write_ascii_to_memory(self, string: str, buffer: int, dont_add_null: int = 0) -> None:
         """Write ASCII string to WASM memory."""
         mem_data = self.memory.data_ptr(self.store)
         mem_ptr = ctypes.cast(mem_data, ctypes.POINTER(ctypes.c_ubyte))
@@ -318,7 +318,7 @@ class MonaLisaCDM:
         if dont_add_null == 0:
             mem_ptr[buffer + len(encoded)] = 0
 
-    def _build_imports(self):
+    def build_imports(self):
         """Build the WASM import stubs required by the MonaLisa module."""
 
         def sys_fcntl64(a, b, c):
@@ -381,15 +381,15 @@ class MonaLisaCDM:
             buf_size = 0
             for index, string in enumerate(self.ENV_STRINGS):
                 ptr = environ_buf + buf_size
-                self._write_i32(environ_ptr + index * 4, ptr)
-                self._write_ascii_to_memory(string, ptr)
+                self.write_i32(environ_ptr + index * 4, ptr)
+                self.write_ascii_to_memory(string, ptr)
                 buf_size += len(string) + 1
             return 0
 
         def environ_sizes_get(penviron_count, penviron_buf_size):
-            self._write_i32(penviron_count, len(self.ENV_STRINGS))
+            self.write_i32(penviron_count, len(self.ENV_STRINGS))
             buf_size = sum(len(s) + 1 for s in self.ENV_STRINGS)
-            self._write_i32(penviron_buf_size, buf_size)
+            self.write_i32(penviron_buf_size, buf_size)
             return 0
 
         i32 = wasmtime.ValType.i32()

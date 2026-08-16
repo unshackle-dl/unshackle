@@ -50,7 +50,7 @@ Dialogue: 0,0:00:03.00,0:00:04.00,Default,,0,0,0,,World
 
 
 @pytest.fixture(autouse=True)
-def _no_subtitleedit(monkeypatch):
+def no_subtitleedit(monkeypatch):
     """Default every test to a SubtitleEdit-less environment; tests opt in when needed."""
     monkeypatch.setattr(binaries, "SubtitleEdit", None)
 

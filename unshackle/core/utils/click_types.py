@@ -181,7 +181,7 @@ class SeasonRange(click.ParamType):
 
     DATE_TOKEN = re.compile(r"^(?P<left>\d{4}-\d{2}-\d{2})(:(?P<right>\d{4}-\d{2}-\d{2}))?$")
 
-    def _parse_date_token(self, token: str, match: re.Match) -> list[str]:
+    def parse_date_token(self, token: str, match: re.Match) -> list[str]:
         """Expand an ISO date token or ':'-separated date range into ISO day keys."""
         try:
             left = date.fromisoformat(match.group("left"))
@@ -237,7 +237,7 @@ class SeasonRange(click.ParamType):
             # dates carry their own '-' separators, so they must be read before the range split
             date_match = self.DATE_TOKEN.match(token)
             if date_match:
-                (computed if not exclude else exclusions).extend(self._parse_date_token(token, date_match))
+                (computed if not exclude else exclusions).extend(self.parse_date_token(token, date_match))
                 continue
             parsed = [
                 re.match(r"^S(?P<season>\d+)(E(?P<episode>\d+)(\.(?P<part>\d+))?)?$", x, re.IGNORECASE)

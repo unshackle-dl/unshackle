@@ -1,11 +1,11 @@
-"""Unit tests for resolve_server / _resolve_proxy in unshackle.core.remote_service."""
+"""Unit tests for resolve_server / resolve_proxy_arg in unshackle.core.remote_service."""
 
 from __future__ import annotations
 
 import click
 import pytest
 
-from unshackle.core.remote_service import _resolve_proxy, resolve_server
+from unshackle.core.remote_service import resolve_proxy_arg, resolve_server
 
 pytestmark = pytest.mark.unit
 
@@ -126,8 +126,8 @@ def test_resolve_server_multi_with_name(multi_remote_services) -> None:
 
 
 def test_resolve_proxy_none_returns_none() -> None:
-    assert _resolve_proxy(None) is None
-    assert _resolve_proxy("") is None
+    assert resolve_proxy_arg(None) is None
+    assert resolve_proxy_arg("") is None
 
 
 def test_resolve_proxy_passes_through_value(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -136,7 +136,7 @@ def test_resolve_proxy_passes_through_value(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(resolve_mod, "initialize_proxy_providers", lambda: [])
     monkeypatch.setattr(resolve_mod, "resolve_proxy", lambda arg, providers: f"http://proxy/{arg}")
 
-    assert _resolve_proxy("us") == "http://proxy/us"
+    assert resolve_proxy_arg("us") == "http://proxy/us"
 
 
 def test_resolve_proxy_value_error_becomes_click(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -150,5 +150,5 @@ def test_resolve_proxy_value_error_becomes_click(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(resolve_mod, "resolve_proxy", boom)
 
     with pytest.raises(click.ClickException) as exc:
-        _resolve_proxy("xx")
+        resolve_proxy_arg("xx")
     assert "no such country" in str(exc.value.message)

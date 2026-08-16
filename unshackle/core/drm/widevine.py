@@ -331,9 +331,9 @@ class Widevine:
 
         decrypt_start = time.monotonic()
         if decrypter == "mp4decrypt":
-            self._decrypt_with_mp4decrypt(path)
+            self.decrypt_with_mp4decrypt(path)
         else:
-            self._decrypt_with_shaka_packager(path)
+            self.decrypt_with_shaka_packager(path)
 
         log_event(
             "drm_decrypt_complete",
@@ -346,7 +346,7 @@ class Widevine:
             output_size=path.stat().st_size if path.exists() else 0,
         )
 
-    def _decrypt_with_mp4decrypt(self, path: Path) -> None:
+    def decrypt_with_mp4decrypt(self, path: Path) -> None:
         """Decrypt using mp4decrypt"""
         if not binaries.Mp4decrypt:
             raise EnvironmentError("mp4decrypt executable not found but is required.")
@@ -399,7 +399,7 @@ class Widevine:
         path.unlink()
         shutil.move(output_path, path)
 
-    def _decrypt_with_shaka_packager(self, path: Path) -> None:
+    def decrypt_with_shaka_packager(self, path: Path) -> None:
         """Decrypt using Shaka Packager (original method)"""
         if not binaries.ShakaPackager:
             raise EnvironmentError("Shaka Packager executable not found but is required.")

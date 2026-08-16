@@ -391,7 +391,7 @@ and base64-encoding, **excluding** `titles_*` files) and returns them under a
 Source: `unshackle/core/remote_service.py`. This is the canonical consumer of the
 session API and a good template for any client.
 
-- **`RemoteClient._request`** sets `X-Secret-Key` and `User-Agent: unshackle/<version>`,
+- **`RemoteClient.request`** sets `X-Secret-Key` and `User-Agent: unshackle/<version>`,
   uses a 120s timeout for `POST` and 30s for `GET`/`DELETE`, and treats any
   `status_code >= 400` as fatal: it logs `Server error [<error_code>]: <message>`
   and raises `SystemExit(1)`.

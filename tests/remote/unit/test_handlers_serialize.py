@@ -5,8 +5,10 @@ from __future__ import annotations
 import pytest
 from langcodes import Language
 
+from unshackle.core.api.errors import APIError, APIErrorCode
 from unshackle.core.api.handlers import (
     sanitize_log,
+    search_handler,
     serialize_audio_track,
     serialize_drm,
     serialize_subtitle_track,
@@ -27,7 +29,7 @@ class _FakeSvc:
     pass
 
 
-def _video(**overrides) -> Video:
+def video(**overrides) -> Video:
     base = dict(
         url="https://example.com/v.mpd",
         language=Language.get("en"),
@@ -44,7 +46,7 @@ def _video(**overrides) -> Video:
     return Video(**base)
 
 
-def _audio(**overrides) -> Audio:
+def audio(**overrides) -> Audio:
     base = dict(
         url="https://example.com/a.mpd",
         language=Language.get("en"),
@@ -60,7 +62,7 @@ def _audio(**overrides) -> Audio:
     return Audio(**base)
 
 
-def _subtitle(**overrides) -> Subtitle:
+def subtitle(**overrides) -> Subtitle:
     base = dict(
         url="https://example.com/s.vtt",
         language=Language.get("en"),
@@ -142,7 +144,7 @@ def test_serialize_title_episode_unnamed_falls_back_to_number() -> None:
 
 
 def test_serialize_video_track_basic() -> None:
-    d = serialize_video_track(_video())
+    d = serialize_video_track(video())
     assert d["id"] == "video-001"
     assert d["codec"] == "AVC"
     assert d["bitrate"] == 5000  # kbps
@@ -155,12 +157,12 @@ def test_serialize_video_track_basic() -> None:
 
 
 def test_serialize_video_track_include_url() -> None:
-    d = serialize_video_track(_video(), include_url=True)
+    d = serialize_video_track(video(), include_url=True)
     assert d["url"] == "https://example.com/v.mpd"
 
 
 def test_serialize_audio_track_basic() -> None:
-    d = serialize_audio_track(_audio())
+    d = serialize_audio_track(audio())
     assert d["id"] == "audio-001"
     assert d["codec"] == "AAC"
     assert d["bitrate"] == 128
@@ -169,7 +171,7 @@ def test_serialize_audio_track_basic() -> None:
 
 
 def test_serialize_subtitle_track_basic() -> None:
-    d = serialize_subtitle_track(_subtitle(forced=True))
+    d = serialize_subtitle_track(subtitle(forced=True))
     assert d["id"] == "sub-001"
     assert d["codec"] == "WebVTT"
     assert d["forced"] is True
@@ -287,3 +289,20 @@ def test_validate_download_params_accepts_valid_values() -> None:
         )
         is None
     )
+
+
+async def test_search_missing_service_raises_invalid_input() -> None:
+    # MISSING_SERVICE was never an APIErrorCode member, so this raised AttributeError
+    # and routes.py surfaced a 500 instead of the intended 400.
+    with pytest.raises(APIError) as exc:
+        await search_handler({"query": "dune"}, None)
+    assert exc.value.error_code == APIErrorCode.INVALID_INPUT
+    assert APIError.default_http_status(exc.value.error_code) == 400
+
+
+async def test_search_unknown_service_raises_invalid_service() -> None:
+    # get_tag echoes unknown tags back, so the old `not normalized_service` guard
+    # never fired and Services.get_path leaked a KeyError as a 500.
+    with pytest.raises(APIError) as exc:
+        await search_handler({"service": "NOPE_THIS_IS_NOT_REAL_", "query": "x"}, None)
+    assert exc.value.error_code == APIErrorCode.INVALID_SERVICE

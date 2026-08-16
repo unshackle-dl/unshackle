@@ -64,7 +64,7 @@ def b58encode(v: Union[str, bytes], alphabet: bytes = BITCOIN_ALPHABET) -> bytes
 
 
 @lru_cache()
-def _get_base58_decode_map(alphabet: bytes, autofix: bool) -> Mapping[int, int]:
+def get_base58_decode_map(alphabet: bytes, autofix: bool) -> Mapping[int, int]:
     invmap = {char: index for index, char in enumerate(alphabet)}
 
     if autofix:
@@ -86,7 +86,7 @@ def b58decode_int(v: Union[str, bytes], alphabet: bytes = BITCOIN_ALPHABET, *, a
         v = v.rstrip()
     v = scrub_input(v)
 
-    map = _get_base58_decode_map(alphabet, autofix=autofix)
+    map = get_base58_decode_map(alphabet, autofix=autofix)
 
     decimal = 0
     base = len(alphabet)

@@ -361,7 +361,7 @@ class SyncLive(Live):
 
 
 class GradientPulseBarColumn(BarColumn):
-    _LUT_SIZE = 32
+    LUT_SIZE = 32
 
     def __init__(self, *args: Any, pulse_period: float = 40.0, pulse_speed: float = 15.0, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -371,7 +371,7 @@ class GradientPulseBarColumn(BarColumn):
         hi = Color.parse(primary_scheme["pink"]).triplet
         assert lo and hi
         self._lut = [
-            Style(color=Color.from_triplet(blend_rgb(lo, hi, i / (self._LUT_SIZE - 1)))) for i in range(self._LUT_SIZE)
+            Style(color=Color.from_triplet(blend_rgb(lo, hi, i / (self.LUT_SIZE - 1)))) for i in range(self.LUT_SIZE)
         ]
 
     def render(self, task: Task) -> RenderableType:  # type: ignore[override]

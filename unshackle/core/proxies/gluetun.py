@@ -17,17 +17,17 @@ from unshackle.core.utilities import get_country_code, get_country_name, get_deb
 from unshackle.core.utils.ip_info import get_ip_info
 
 # Global registry for cleanup on exit
-_gluetun_instances: list["Gluetun"] = []
-_cleanup_lock = threading.Lock()
-_cleanup_registered = False
+gluetun_instances: list["Gluetun"] = []
+cleanup_lock = threading.Lock()
+cleanup_registered = False
 
 
-def _cleanup_all_gluetun_containers():
+def cleanup_all_gluetun_containers():
     """Cleanup all Gluetun containers on exit."""
     # Get instances without holding the lock during cleanup
-    with _cleanup_lock:
-        instances = list(_gluetun_instances)
-        _gluetun_instances.clear()
+    with cleanup_lock:
+        instances = list(gluetun_instances)
+        gluetun_instances.clear()
 
     # Cleanup each instance (no lock held, so no deadlock possible)
     for instance in instances:
@@ -37,15 +37,15 @@ def _cleanup_all_gluetun_containers():
             pass
 
 
-def _register_cleanup():
+def register_cleanup():
     """Register cleanup handlers (only once)."""
-    global _cleanup_registered
-    with _cleanup_lock:
-        if not _cleanup_registered:
+    global cleanup_registered
+    with cleanup_lock:
+        if not cleanup_registered:
             # Only use atexit for cleanup - don't override signal handlers
             # This allows Ctrl+C to work normally while still cleaning up on exit
-            atexit.register(_cleanup_all_gluetun_containers)
-            _cleanup_registered = True
+            atexit.register(cleanup_all_gluetun_containers)
+            cleanup_registered = True
 
 
 class Gluetun(Proxy):
@@ -215,12 +215,12 @@ class Gluetun(Proxy):
 
         # Validate provider configurations
         for provider_name, config in self.providers.items():
-            self._validate_provider_config(provider_name, config)
+            self.validate_provider_config(provider_name, config)
 
         # Register this instance for cleanup on exit
-        _register_cleanup()
-        with _cleanup_lock:
-            _gluetun_instances.append(self)
+        register_cleanup()
+        with cleanup_lock:
+            gluetun_instances.append(self)
 
         # Log initialization
         log_event(
@@ -271,7 +271,7 @@ class Gluetun(Proxy):
         # This handles multiple concurrent Unshackle sessions
         if query_key in self.active_containers:
             container = self.active_containers[query_key]
-            if self._is_container_running(container["container_name"]):
+            if self.is_container_running(container["container_name"]):
                 log_event(
                     "gluetun_container_reuse",
                     level="DEBUG",
@@ -284,11 +284,11 @@ class Gluetun(Proxy):
                 )
                 # Re-verify if needed
                 if self.verify_ip:
-                    self._verify_container(query_key)
-                return self._build_proxy_uri(container["port"])
+                    self.verify_container(query_key)
+                return self.build_proxy_uri(container["port"])
         else:
             # Not in memory, but might exist in Docker (from another session)
-            existing_info = self._get_existing_container_info(container_name)
+            existing_info = self.get_existing_container_info(container_name)
             if existing_info:
                 # Container exists in Docker, reuse it
                 self.active_containers[query_key] = existing_info
@@ -304,8 +304,8 @@ class Gluetun(Proxy):
                 )
                 # Re-verify if needed
                 if self.verify_ip:
-                    self._verify_container(query_key)
-                return self._build_proxy_uri(existing_info["port"])
+                    self.verify_container(query_key)
+                return self.build_proxy_uri(existing_info["port"])
 
         # Get provider configuration
         provider_config = self.providers[provider_name]
@@ -329,7 +329,7 @@ class Gluetun(Proxy):
             server_num = specific_server_match.group(2)
 
             # Build hostname based on provider
-            hostname = self._build_server_hostname(provider_name, country_code, server_num)
+            hostname = self.build_server_hostname(provider_name, country_code, server_num)
             country = country_code  # Set country for verification
 
         # If not explicitly mapped and not a specific server, try to use query as country code
@@ -349,14 +349,14 @@ class Gluetun(Proxy):
                 )
 
         # Remove any stopped container with the same name
-        self._remove_stopped_container(container_name)
+        self.remove_stopped_container(container_name)
 
         # Find available port
-        port = self._get_available_port()
+        port = self.get_available_port()
 
         # Create container (name already set above)
         try:
-            self._create_container(
+            self.create_container(
                 container_name=container_name,
                 port=port,
                 provider_name=provider_name,
@@ -378,9 +378,9 @@ class Gluetun(Proxy):
             }
 
             # Wait for container to be ready (60s timeout for VPN connection)
-            if not self._wait_for_container(container_name, timeout=60):
+            if not self.wait_for_container(container_name, timeout=60):
                 # Get container logs for better error message
-                logs = self._get_container_logs(container_name, tail=30)
+                logs = self.get_container_logs(container_name, tail=30)
                 error_msg = f"Gluetun container '{container_name}' failed to start"
                 if hasattr(self, "_last_wait_error") and self._last_wait_error:
                     error_msg += f": {self._last_wait_error}"
@@ -392,13 +392,13 @@ class Gluetun(Proxy):
 
             # Verify IP and region if enabled
             if self.verify_ip:
-                self._verify_container(query_key)
+                self.verify_container(query_key)
 
-            return self._build_proxy_uri(port)
+            return self.build_proxy_uri(port)
 
         except Exception as e:
             # Cleanup on failure
-            self._remove_container(container_name)
+            self.remove_container(container_name)
             if query_key in self.active_containers:
                 del self.active_containers[query_key]
             raise RuntimeError(f"Failed to create Gluetun container: {e}")
@@ -420,7 +420,7 @@ class Gluetun(Proxy):
 
         for query_key, container_info in list(self.active_containers.items()):
             container_name = container_info["container_name"]
-            self._remove_container(container_name)
+            self.remove_container(container_name)
 
             log_event(
                 "gluetun_container_removed",
@@ -474,7 +474,7 @@ class Gluetun(Proxy):
             "org": container.get("ip_org"),
         }
 
-    def _validate_provider_config(self, provider_name: str, config: dict):
+    def validate_provider_config(self, provider_name: str, config: dict):
         """Validate a provider's configuration."""
         vpn_type = config.get("vpn_type", "wireguard").lower()
         credentials = config.get("credentials", {})
@@ -517,16 +517,16 @@ class Gluetun(Proxy):
                     f"Provider '{provider_name}': OpenVPN requires 'username' and 'password' in credentials"
                 )
 
-    def _get_available_port(self) -> int:
+    def get_available_port(self) -> int:
         """Find an available port starting from base_port (thread-safe)."""
         with self._port_lock:
             used_ports = {info["port"] for info in self.active_containers.values()}
             port = self.base_port
-            while port in used_ports or self._is_port_in_use(port):
+            while port in used_ports or self.is_port_in_use(port):
                 port += 1
             return port
 
-    def _is_port_in_use(self, port: int) -> bool:
+    def is_port_in_use(self, port: int) -> bool:
         """Check if a port is in use on the system or by any Docker container."""
         import socket
 
@@ -554,7 +554,7 @@ class Gluetun(Proxy):
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
 
-    def _build_server_hostname(self, provider_name: str, country_code: str, server_num: str) -> str:
+    def build_server_hostname(self, provider_name: str, country_code: str, server_num: str) -> str:
         """
         Build a server hostname for specific server selection.
 
@@ -585,7 +585,7 @@ class Gluetun(Proxy):
             # Generic format: country_code + server_num
             return f"{country_lower}{server_num}"
 
-    def _ensure_image_available(self, image: str = "qmcgaw/gluetun:latest") -> bool:
+    def ensure_image_available(self, image: str = "qmcgaw/gluetun:latest") -> bool:
         """
         Ensure the Gluetun Docker image is available locally.
 
@@ -637,7 +637,7 @@ class Gluetun(Proxy):
         except subprocess.TimeoutExpired:
             raise RuntimeError(f"Timed out pulling Docker image '{image}'")
 
-    def _create_container(
+    def create_container(
         self,
         container_name: str,
         port: int,
@@ -666,7 +666,7 @@ class Gluetun(Proxy):
 
         # Ensure the Gluetun image is available (pulls if needed)
         gluetun_image = "qmcgaw/gluetun:latest"
-        if not self._ensure_image_available(gluetun_image):
+        if not self.ensure_image_available(gluetun_image):
             log_event(
                 "gluetun_image_pull_failed",
                 level="ERROR",
@@ -880,7 +880,7 @@ class Gluetun(Proxy):
                 except Exception:
                     pass
 
-    def _is_container_running(self, container_name: str) -> bool:
+    def is_container_running(self, container_name: str) -> bool:
         """Check if a Docker container is running."""
         try:
             result = subprocess.run(
@@ -906,7 +906,7 @@ class Gluetun(Proxy):
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
 
-    def _get_existing_container_info(self, container_name: str) -> Optional[dict]:
+    def get_existing_container_info(self, container_name: str) -> Optional[dict]:
         """
         Check if a container exists in Docker and get its info.
 
@@ -921,7 +921,7 @@ class Gluetun(Proxy):
         """
         try:
             # Check if container is running
-            if not self._is_container_running(container_name):
+            if not self.is_container_running(container_name):
                 return None
 
             # Get container port mapping
@@ -964,7 +964,7 @@ class Gluetun(Proxy):
             if specific_server_match:
                 country_code = specific_server_match.group(1).upper()
                 server_num = specific_server_match.group(2)
-                hostname = self._build_server_hostname(provider_name, country_code, server_num)
+                hostname = self.build_server_hostname(provider_name, country_code, server_num)
                 country = country_code
 
             # Otherwise check config
@@ -989,7 +989,7 @@ class Gluetun(Proxy):
         except (subprocess.TimeoutExpired, FileNotFoundError, ValueError):
             return None
 
-    def _wait_for_container(self, container_name: str, timeout: int = 60) -> bool:
+    def wait_for_container(self, container_name: str, timeout: int = 60) -> bool:
         """
         Wait for Gluetun container to be ready by checking logs for proxy readiness.
 
@@ -1015,9 +1015,9 @@ class Gluetun(Proxy):
         while time.time() - start_time < timeout:
             try:
                 # First check if container is still running
-                if not self._is_container_running(container_name):
+                if not self.is_container_running(container_name):
                     # Container may have exited - check if it crashed
-                    exit_info = self._get_container_exit_info(container_name)
+                    exit_info = self.get_container_exit_info(container_name)
                     if exit_info:
                         last_error = f"Container exited with code {exit_info.get('exit_code', 'unknown')}"
                     time.sleep(1)
@@ -1108,7 +1108,7 @@ class Gluetun(Proxy):
         )
         return False
 
-    def _get_container_exit_info(self, container_name: str) -> Optional[dict]:
+    def get_container_exit_info(self, container_name: str) -> Optional[dict]:
         """Get exit information for a stopped container."""
         try:
             result = subprocess.run(
@@ -1129,7 +1129,7 @@ class Gluetun(Proxy):
         except (subprocess.TimeoutExpired, FileNotFoundError, ValueError):
             return None
 
-    def _get_container_logs(self, container_name: str, tail: int = 50) -> str:
+    def get_container_logs(self, container_name: str, tail: int = 50) -> str:
         """Get recent logs from a container for error reporting."""
         try:
             result = subprocess.run(
@@ -1144,7 +1144,7 @@ class Gluetun(Proxy):
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return ""
 
-    def _verify_container(self, query_key: str, max_retries: int = 3):
+    def verify_container(self, query_key: str, max_retries: int = 3):
         """
         Verify container's VPN IP and region using ipinfo.io lookup.
 
@@ -1165,7 +1165,7 @@ class Gluetun(Proxy):
             return
 
         container = self.active_containers[query_key]
-        proxy_url = self._build_proxy_uri(container["port"])
+        proxy_url = self.build_proxy_uri(container["port"])
         expected_country = container.get("country", "").upper()
 
         log_event(
@@ -1299,7 +1299,7 @@ class Gluetun(Proxy):
             f"after {max_retries} attempts. Last error: {last_error}"
         )
 
-    def _remove_stopped_container(self, container_name: str) -> bool:
+    def remove_stopped_container(self, container_name: str) -> bool:
         """
         Remove a stopped container with the given name if it exists.
 
@@ -1349,7 +1349,7 @@ class Gluetun(Proxy):
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
 
-    def _remove_container(self, container_name: str):
+    def remove_container(self, container_name: str):
         """Stop and remove a Docker container."""
         try:
             if self.auto_cleanup:
@@ -1386,7 +1386,7 @@ class Gluetun(Proxy):
             except subprocess.TimeoutExpired:
                 pass
 
-    def _build_proxy_uri(self, port: int) -> str:
+    def build_proxy_uri(self, port: int) -> str:
         """Build HTTP proxy URI."""
         if self.auth_user and self.auth_password:
             return f"http://{self.auth_user}:{self.auth_password}@localhost:{port}"

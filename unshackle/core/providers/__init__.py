@@ -95,7 +95,7 @@ def search_metadata(
                 continue
             cached = title_cacher.get_cached_provider(p.NAME, cache_title_id, kind, cache_region, cache_account_hash)
             if cached:
-                result = _cached_to_result(cached, p.NAME, kind)
+                result = cached_to_result(cached, p.NAME, kind)
                 if result and result.title and fuzzy_match(result.title, title):
                     log.debug("Using cached %s data for %r", p.NAME, title)
                     return result
@@ -120,7 +120,7 @@ def search_metadata(
                     if result.external_ids.tmdb_id or result.external_ids.tvdb_id:
                         cache_data = {
                             **result.raw,
-                            "_enriched_ids": _external_ids_to_dict(result.external_ids),
+                            "_enriched_ids": external_ids_to_dict(result.external_ids),
                         }
                     title_cacher.cache_provider(
                         p.NAME, cache_title_id, cache_data, kind, cache_region, cache_account_hash
@@ -165,7 +165,7 @@ def get_title_by_id(
             title_cacher.cache_provider(
                 "tmdb",
                 cache_title_id,
-                {"detail": result.raw, "external_ids": _external_ids_to_dict(ext_ids)},
+                {"detail": result.raw, "external_ids": external_ids_to_dict(ext_ids)},
                 kind,
                 cache_region,
                 cache_account_hash,
@@ -210,7 +210,7 @@ def get_year_by_id(
             title_cacher.cache_provider(
                 "tmdb",
                 cache_title_id,
-                {"detail": result.raw, "external_ids": _external_ids_to_dict(ext_ids)},
+                {"detail": result.raw, "external_ids": external_ids_to_dict(ext_ids)},
                 kind,
                 cache_region,
                 cache_account_hash,
@@ -282,7 +282,7 @@ def fetch_external_ids(
                 title_cacher.cache_provider(
                     "tmdb",
                     cache_title_id,
-                    {"detail": detail, "external_ids": _external_ids_to_dict(ext)},
+                    {"detail": detail, "external_ids": external_ids_to_dict(ext)},
                     kind,
                     cache_region,
                     cache_account_hash,
@@ -378,13 +378,13 @@ def resolve_by_ids(
 
 # trust ranking for cross-validating enrichments; `metadata_providers` filters this
 # set but sets search order only, not the ranking
-_ENRICHMENT_AUTHORITY: tuple[str, ...] = ("tmdb", "simkl", "tvdb")
+ENRICHMENT_AUTHORITY: tuple[str, ...] = ("tmdb", "simkl", "tvdb")
 
 
-def _enrichment_providers(kind: Optional[str] = None) -> list[str]:
+def enrichment_providers(kind: Optional[str] = None) -> list[str]:
     """Names of configured providers that can resolve an IMDB ID, most trusted first."""
     configured = {cls.NAME for cls in provider_order(kind) if hasattr(cls, "find_by_imdb_id")}
-    return [name for name in _ENRICHMENT_AUTHORITY if name in configured]
+    return [name for name in ENRICHMENT_AUTHORITY if name in configured]
 
 
 def enrich_ids(result: MetadataResult) -> None:
@@ -403,7 +403,7 @@ def enrich_ids(result: MetadataResult) -> None:
     kind = result.kind or "movie"
 
     # Step 1: Collect enrichment results from all available providers
-    authority = {name: i for i, name in enumerate(_enrichment_providers(kind))}
+    authority = {name: i for i, name in enumerate(enrichment_providers(kind))}
     enrichments: list[tuple[str, ExternalIds]] = []
     for provider_name in authority:
         p = get_provider(provider_name)
@@ -421,7 +421,7 @@ def enrich_ids(result: MetadataResult) -> None:
         return
 
     # Step 2: Cross-validate using tmdb_id as anchor — drop providers that disagree
-    validated = _validate_enrichments(enrichments, authority)
+    validated = validate_enrichments(enrichments, authority)
 
     # Step 3: Merge validated data (fill gaps only)
     for _provider_name, ext in validated:
@@ -432,7 +432,7 @@ def enrich_ids(result: MetadataResult) -> None:
             ids.tvdb_id = ext.tvdb_id
 
 
-def _validate_enrichments(
+def validate_enrichments(
     enrichments: list[tuple[str, ExternalIds]],
     authority: dict[str, int],
 ) -> list[tuple[str, ExternalIds]]:
@@ -484,7 +484,7 @@ def _validate_enrichments(
     return validated
 
 
-def _external_ids_to_dict(ext: ExternalIds) -> dict:
+def external_ids_to_dict(ext: ExternalIds) -> dict:
     """Convert ExternalIds to a dict for caching."""
     result: dict = {}
     if ext.imdb_id:
@@ -500,7 +500,7 @@ def _external_ids_to_dict(ext: ExternalIds) -> dict:
     return result
 
 
-def _cached_to_result(cached: dict, provider_name: str, kind: str) -> Optional[MetadataResult]:
+def cached_to_result(cached: dict, provider_name: str, kind: str) -> Optional[MetadataResult]:
     """Convert a cached provider dict back to a MetadataResult."""
     if provider_name == "tmdb":
         detail = cached.get("detail", {})
@@ -566,10 +566,10 @@ def _cached_to_result(cached: dict, provider_name: str, kind: str) -> Optional[M
             raw=cached,
         )
     elif provider_name == "tvdb":
-        from unshackle.core.providers.tvdb import _ids_from_remote, _parse_int
+        from unshackle.core.providers.tvdb import ids_from_remote, parse_int
 
-        tvdb_id = _parse_int(cached.get("tvdb_id") or cached.get("id"))
-        ext = _ids_from_remote(cached.get("remote_ids") or cached.get("remoteIds"), tvdb_id)
+        tvdb_id = parse_int(cached.get("tvdb_id") or cached.get("id"))
+        ext = ids_from_remote(cached.get("remote_ids") or cached.get("remoteIds"), tvdb_id)
         # restore IDs that enrichment filled in beyond the raw remote_ids
         enriched = cached.get("_enriched_ids", {})
         ext.imdb_id = ext.imdb_id or enriched.get("imdb_id")
@@ -578,14 +578,14 @@ def _cached_to_result(cached: dict, provider_name: str, kind: str) -> Optional[M
             ext.tmdb_kind = kind
         return MetadataResult(
             title=cached.get("name"),
-            year=_parse_int(cached.get("year")),
+            year=parse_int(cached.get("year")),
             kind=kind,
             external_ids=ext,
             source="tvdb",
             raw=cached,
         )
     elif provider_name == "anilist":
-        return AniListProvider()._to_result(cached)
+        return AniListProvider().to_result(cached)
     elif provider_name == "imdb":
         from unshackle.core.providers.imdb import primary_language
 

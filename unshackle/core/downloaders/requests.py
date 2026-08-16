@@ -84,8 +84,8 @@ class TokenBucket:
             DOWNLOAD_CANCELLED.wait(wait)
 
 
-_speed_limiter: Optional[TokenBucket] = None
-_speed_limit_locked = False
+speed_limiter: Optional[TokenBucket] = None
+speed_limit_locked = False
 
 SPEED_UNITS = {
     "": 1,
@@ -135,33 +135,33 @@ def set_speed_limit(bytes_per_sec: Optional[float], lock: bool = False) -> None:
     A locked limit (serve's global_speed_limit) wins: later unlocked calls,
     like the per-job one in dl.result(), become no-ops for the process.
     """
-    global _speed_limiter, _speed_limit_locked
-    if _speed_limit_locked and not lock:
+    global speed_limiter, speed_limit_locked
+    if speed_limit_locked and not lock:
         return
-    _speed_limit_locked = lock
-    _speed_limiter = TokenBucket(bytes_per_sec) if bytes_per_sec else None
+    speed_limit_locked = lock
+    speed_limiter = TokenBucket(bytes_per_sec) if bytes_per_sec else None
 
 
-def _adaptive_chunk_size(content_length: int) -> int:
+def adaptive_chunk_size(content_length: int) -> int:
     """Pick chunk size based on content length. Benchmarked sweet spot: 512KB-4MB."""
     if content_length <= 0:
         return DEFAULT_CHUNK
     return min(MAX_CHUNK, max(MIN_CHUNK, content_length // 4))
 
 
-def _is_requests_session(session: Any) -> bool:
+def is_requests_session(session: Any) -> bool:
     """Check if the session is a standard requests.Session (supports resp.raw)."""
     return isinstance(session, Session)
 
 
-def _is_rnet_session(session: Any) -> bool:
+def is_rnet_session(session: Any) -> bool:
     """Check if the session is an RnetSession (uses resp.stream())."""
     from unshackle.core.session import RnetSession
 
     return isinstance(session, RnetSession)
 
 
-def _is_content_encoded(value: Optional[str]) -> bool:
+def is_content_encoded(value: Optional[str]) -> bool:
     """
     Check a Content-Encoding value for any coding other than absent or `identity`.
 
@@ -173,7 +173,7 @@ def _is_content_encoded(value: Optional[str]) -> bool:
     return any(coding.strip() not in ("", "identity") for coding in (value or "").lower().split(","))
 
 
-def _has_range_header(item: dict[str, Any]) -> bool:
+def has_range_header(item: dict[str, Any]) -> bool:
     """
     Whether the caller asked for a byte-range slice of a parent resource
     (DASH SegmentBase, HLS EXT-X-BYTERANGE).
@@ -184,10 +184,10 @@ def _has_range_header(item: dict[str, Any]) -> bool:
     return any(str(k).lower() == "range" for k in (item.get("headers") or {}))
 
 
-def _probe_ranged(url: str, session: Any, **kwargs: Any) -> tuple[int, bool]:
+def probe_ranged(url: str, session: Any, **kwargs: Any) -> tuple[int, bool]:
     headers = {**(kwargs.get("headers") or {}), "Range": "bytes=0-0"}
     rest = {k: v for k, v in kwargs.items() if k != "headers"}
-    if _is_rnet_session(session):
+    if is_rnet_session(session):
         rest.setdefault("read_timeout", READ_TIMEOUT)
     else:
         rest.setdefault("timeout", (CONNECT_TIMEOUT, READ_TIMEOUT))
@@ -198,7 +198,7 @@ def _probe_ranged(url: str, session: Any, **kwargs: Any) -> tuple[int, bool]:
     try:
         if resp.status_code != 206:
             return 0, False
-        if _is_content_encoded(resp.headers.get("Content-Encoding") or resp.headers.get("content-encoding")):
+        if is_content_encoded(resp.headers.get("Content-Encoding") or resp.headers.get("content-encoding")):
             return 0, False
         content_range = resp.headers.get("Content-Range") or resp.headers.get("content-range") or ""
         total = content_range.rsplit("/", 1)[-1].strip()
@@ -210,7 +210,7 @@ def _probe_ranged(url: str, session: Any, **kwargs: Any) -> tuple[int, bool]:
             pass
 
 
-def _dispatch_parts(
+def dispatch_parts(
     url: str,
     save_path: Path,
     session: Any,
@@ -239,7 +239,7 @@ def _dispatch_parts(
     # poison the plain-download fallback and silently stand down sibling tracks
     abort = threading.Event()
 
-    def _worker(start: int, end: int) -> None:
+    def worker(start: int, end: int) -> None:
         for ev in download(
             url=url,
             save_path=save_path,
@@ -252,7 +252,7 @@ def _dispatch_parts(
             events.put(ev)
 
     pool = ThreadPoolExecutor(max_workers=len(parts))
-    futures = [pool.submit(_worker, s, e) for s, e in parts]
+    futures = [pool.submit(worker, s, e) for s, e in parts]
     pending = set(futures)
 
     yield {"total": total_size}
@@ -387,8 +387,8 @@ def download(
             resume_offset = tmp_file.stat().st_size
 
     _time = time.time
-    use_raw = _is_requests_session(session)
-    item_range = _has_range_header(kwargs)
+    use_raw = is_requests_session(session)
+    item_range = has_range_header(kwargs)
 
     attempts = 1
     written = 0
@@ -402,7 +402,7 @@ def download(
         last_speed_refresh = _time()
 
         try:
-            use_rnet = _is_rnet_session(session)
+            use_rnet = is_rnet_session(session)
 
             request_kwargs = dict(kwargs)
             if use_rnet:
@@ -442,7 +442,7 @@ def download(
             if use_rnet:
                 content_length = stream.content_length or 0
             else:
-                content_encoded = _is_content_encoded(stream.headers.get("Content-Encoding"))
+                content_encoded = is_content_encoded(stream.headers.get("Content-Encoding"))
                 try:
                     content_length = int(stream.headers.get("Content-Length", "0"))
                     if content_encoded:
@@ -459,8 +459,8 @@ def download(
                 resume_offset = 0
                 continue
 
-            limiter = _speed_limiter
-            chunk_size = _adaptive_chunk_size(content_length)
+            limiter = speed_limiter
+            chunk_size = adaptive_chunk_size(content_length)
             if limiter:
                 chunk_size = min(chunk_size, max(8192, int(limiter.rate / 4)))
             total_size = (resume_offset + content_length) if resumed and content_length > 0 else content_length
@@ -483,7 +483,7 @@ def download(
                 if part_mode:
                     f.seek(part_offset + written)
 
-                _write = f.write
+                write = f.write
 
                 if use_rnet:
                     chunks = stream.stream()
@@ -511,7 +511,7 @@ def download(
                         return
                     if limiter is not None:
                         limiter.consume(len(chunk))
-                    _write(chunk)
+                    write(chunk)
                     download_size = len(chunk)
                     written += download_size
 
@@ -701,11 +701,11 @@ def requests(
         url_item = urls[0]
         try:
             ranged_used = False
-            if max_workers > 1 and _speed_limiter is None and not _has_range_header(url_item):
-                total_size, supports_ranges = _probe_ranged(url_item["url"], session)
+            if max_workers > 1 and speed_limiter is None and not has_range_header(url_item):
+                total_size, supports_ranges = probe_ranged(url_item["url"], session)
                 if supports_ranges and total_size >= RANGE_PARALLEL_MIN_SIZE:
                     try:
-                        yield from _dispatch_parts(
+                        yield from dispatch_parts(
                             session=session,
                             total_size=total_size,
                             max_workers=max_workers,
@@ -770,7 +770,7 @@ def requests(
         seg_durations: list[float] = []
         hedged: set[int] = set()
 
-        def _download_worker(index: int, url_item: dict[str, Any], hedge: bool = False) -> None:
+        def download_worker(index: int, url_item: dict[str, Any], hedge: bool = False) -> None:
             with seg_lock:
                 seg_active[index] = seg_active.get(index, 0) + 1
             left = False
@@ -824,7 +824,7 @@ def requests(
                     with seg_lock:
                         seg_active[index] -= 1
 
-        futures = [pool.submit(_download_worker, i, url) for i, url in enumerate(urls)]
+        futures = [pool.submit(download_worker, i, url) for i, url in enumerate(urls)]
         pending = set(futures)
 
         pending_advance = 0
@@ -867,7 +867,7 @@ def requests(
                 if (
                     len(pending) < max_workers
                     and seg_durations
-                    and _speed_limiter is None
+                    and speed_limiter is None
                     and now - last_hedge_check > 0.5
                     and not DOWNLOAD_CANCELLED.is_set()
                 ):
@@ -885,7 +885,7 @@ def requests(
                         ]
                     for i in stuck[: max_workers - len(pending)]:
                         hedged.add(i)
-                        pending.add(pool.submit(_download_worker, i, urls[i], True))
+                        pending.add(pool.submit(download_worker, i, urls[i], True))
 
                 # all segments claimed; superseded losers exit via their claimed() check
                 if len(seg_done) == len(urls):

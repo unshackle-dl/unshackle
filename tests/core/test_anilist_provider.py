@@ -50,7 +50,7 @@ def _provider(monkeypatch: pytest.MonkeyPatch, body: dict) -> tuple[AniListProvi
 
 
 @pytest.fixture(autouse=True)
-def _default_title_language(monkeypatch: pytest.MonkeyPatch) -> None:
+def default_title_language(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "anilist_title_language", "english")
 
 
@@ -263,12 +263,12 @@ def test_the_provider_needs_no_api_key() -> None:
 
 def test_a_cached_node_rebuilds_with_the_read_time_title_language(monkeypatch: pytest.MonkeyPatch) -> None:
     """The raw node is cached; which title variant it yields follows the config at read time."""
-    from unshackle.core.providers import _cached_to_result
+    from unshackle.core.providers import cached_to_result
 
     node = {**ONE_PIECE, "title": {"romaji": "WAN PIISU", "english": "One Piece", "native": "ワンピース"}}
 
     monkeypatch.setattr(config, "anilist_title_language", "native")
-    result = _cached_to_result(node, "anilist", "tv")
+    result = cached_to_result(node, "anilist", "tv")
 
     assert result is not None
     assert result.title == "ワンピース"

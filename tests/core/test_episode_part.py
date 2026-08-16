@@ -144,7 +144,7 @@ def test_spaced_template_uses_spaces(reset_template):
 
 
 def test_template_context_leaves_the_season_token_alone(reset_template):
-    ctx = make_episode(part=2)._build_template_context(StubMediaInfo())
+    ctx = make_episode(part=2).build_template_context(StubMediaInfo())
     assert ctx["season"] == "S01"
     assert ctx["episode"] == "E01.Part.2"
     assert ctx["season_episode"] == "S01E01.Part.2"
@@ -152,7 +152,7 @@ def test_template_context_leaves_the_season_token_alone(reset_template):
 
 
 def test_part_token_is_empty_without_a_part(reset_template):
-    assert make_episode()._build_template_context(StubMediaInfo())["part"] == ""
+    assert make_episode().build_template_context(StubMediaInfo())["part"] == ""
 
 
 def test_parts_share_one_season_folder(reset_template):

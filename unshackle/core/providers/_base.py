@@ -86,15 +86,15 @@ class MetadataProvider(metaclass=ABCMeta):
         """Fetch external IDs for a title by this provider's native ID."""
 
 
-def _clean(s: str) -> str:
+def clean(s: str) -> str:
     return STRIP_RE.sub("", s).lower()
 
 
-def _strip_year(s: str) -> str:
+def strip_year(s: str) -> str:
     return YEAR_RE.sub("", s).strip()
 
 
 def fuzzy_match(a: str, b: str, threshold: float = 0.8) -> bool:
     """Return True if ``a`` and ``b`` are a close match."""
-    ratio = SequenceMatcher(None, _clean(a), _clean(b)).ratio()
+    ratio = SequenceMatcher(None, clean(a), clean(b)).ratio()
     return ratio >= threshold

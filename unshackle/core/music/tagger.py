@@ -74,49 +74,49 @@ def write_music_metadata(path: Path, song: Any, *, session: Any = None, source_m
     if extension in {".m4a", ".mp4"} and MP4 is None:
         return MusicMetadataResult(skipped=True, reason="install mutagen to write MP4/M4A tags")
 
-    tags = _build_tag_values(song, source_md5=source_md5)
-    artwork_url = _first_text(getattr(song, "artwork_url", None), _metadata(song).get("artwork_url"))
-    cover_data, mime_type = _download_cover(session, artwork_url)
+    tags = build_tag_values(song, source_md5=source_md5)
+    artwork_url = first_text(getattr(song, "artwork_url", None), _metadata(song).get("artwork_url"))
+    cover_data, mime_type = download_cover(session, artwork_url)
 
     if extension == ".flac":
-        _write_flac_tags(path, tags, cover_data, mime_type)
+        write_flac_tags(path, tags, cover_data, mime_type)
     elif extension == ".mp3":
-        _write_mp3_tags(path, tags, cover_data, mime_type)
+        write_mp3_tags(path, tags, cover_data, mime_type)
     else:
-        _write_mp4_tags(path, tags, cover_data, mime_type)
+        write_mp4_tags(path, tags, cover_data, mime_type)
 
     return MusicMetadataResult(written=True, artwork_embedded=bool(cover_data))
 
 
-def _build_tag_values(song: Any, *, source_md5: str = "") -> dict[str, str]:
+def build_tag_values(song: Any, *, source_md5: str = "") -> dict[str, str]:
     metadata = _metadata(song)
-    track_number = _string_tag(getattr(song, "track", None) or metadata.get("track_number"))
-    track_total = _string_tag(getattr(song, "total_tracks", None) or metadata.get("total_tracks"))
-    disc_number = _string_tag(getattr(song, "disc", None) or metadata.get("disc_number"))
-    disc_total = _string_tag(getattr(song, "total_discs", None) or metadata.get("total_discs"))
-    explicit = _as_bool(getattr(song, "explicit", None), metadata.get("explicit"), metadata.get("parental_warning"))
+    track_number = string_tag(getattr(song, "track", None) or metadata.get("track_number"))
+    track_total = string_tag(getattr(song, "total_tracks", None) or metadata.get("total_tracks"))
+    disc_number = string_tag(getattr(song, "disc", None) or metadata.get("disc_number"))
+    disc_total = string_tag(getattr(song, "total_discs", None) or metadata.get("total_discs"))
+    explicit = as_bool(getattr(song, "explicit", None), metadata.get("explicit"), metadata.get("parental_warning"))
 
     tags = {
-        "TITLE": _first_text(getattr(song, "name", None), metadata.get("title")),
-        "ARTIST": _first_text(getattr(song, "artist", None), metadata.get("artist"), metadata.get("performer")),
-        "ALBUM": _first_text(getattr(song, "album", None), metadata.get("album")),
-        "ALBUMARTIST": _first_text(getattr(song, "album_artist", None), metadata.get("album_artist")),
+        "TITLE": first_text(getattr(song, "name", None), metadata.get("title")),
+        "ARTIST": first_text(getattr(song, "artist", None), metadata.get("artist"), metadata.get("performer")),
+        "ALBUM": first_text(getattr(song, "album", None), metadata.get("album")),
+        "ALBUMARTIST": first_text(getattr(song, "album_artist", None), metadata.get("album_artist")),
         "TRACKNUMBER": f"{track_number}/{track_total}" if track_number and track_total else track_number,
         "TRACKTOTAL": track_total,
         "DISCNUMBER": f"{disc_number}/{disc_total}" if disc_number and disc_total else disc_number,
         "DISCTOTAL": disc_total,
-        "DATE": _string_tag(metadata.get("release_date") or metadata.get("year") or getattr(song, "year", None)),
-        "RELEASEDATE": _string_tag(metadata.get("release_date")),
-        "GENRE": _first_text(getattr(song, "genre", None), metadata.get("genre")),
-        "COMPOSER": _first_text(metadata.get("composer")),
-        "PERFORMER": _first_text(metadata.get("performer")),
-        "ISRC": _string_tag(getattr(song, "isrc", None) or metadata.get("isrc")),
-        "BARCODE": _string_tag(getattr(song, "upc", None) or metadata.get("upc") or metadata.get("barcode")),
-        "UPC": _string_tag(getattr(song, "upc", None) or metadata.get("upc") or metadata.get("barcode")),
-        "COPYRIGHT": _string_tag(getattr(song, "copyright", None) or metadata.get("copyright")),
-        "LABEL": _first_text(getattr(song, "label", None), metadata.get("label")),
-        "COMMENT": _first_text(metadata.get("comment"), metadata.get("quality")),
-        "SOURCE": _first_text(metadata.get("source"), metadata.get("service")),
+        "DATE": string_tag(metadata.get("release_date") or metadata.get("year") or getattr(song, "year", None)),
+        "RELEASEDATE": string_tag(metadata.get("release_date")),
+        "GENRE": first_text(getattr(song, "genre", None), metadata.get("genre")),
+        "COMPOSER": first_text(metadata.get("composer")),
+        "PERFORMER": first_text(metadata.get("performer")),
+        "ISRC": string_tag(getattr(song, "isrc", None) or metadata.get("isrc")),
+        "BARCODE": string_tag(getattr(song, "upc", None) or metadata.get("upc") or metadata.get("barcode")),
+        "UPC": string_tag(getattr(song, "upc", None) or metadata.get("upc") or metadata.get("barcode")),
+        "COPYRIGHT": string_tag(getattr(song, "copyright", None) or metadata.get("copyright")),
+        "LABEL": first_text(getattr(song, "label", None), metadata.get("label")),
+        "COMMENT": first_text(metadata.get("comment"), metadata.get("quality")),
+        "SOURCE": first_text(metadata.get("source"), metadata.get("service")),
         "ENCODEDBY": "Unshackle",
         "UNSHACKLE_SOURCE_MD5": source_md5,
     }
@@ -126,22 +126,22 @@ def _build_tag_values(song: Any, *, source_md5: str = "") -> dict[str, str]:
     if config.tag and config.tag_group_name:
         tags["GROUP"] = config.tag
 
-    service = _first_text(metadata.get("service"), metadata.get("source"))
+    service = first_text(metadata.get("service"), metadata.get("source"))
     if service:
         prefix = service.upper().replace(" ", "_").replace("-", "_")
         if metadata.get("track_id"):
-            tags[f"{prefix}_TRACK_ID"] = _string_tag(metadata.get("track_id"))
+            tags[f"{prefix}_TRACK_ID"] = string_tag(metadata.get("track_id"))
         if metadata.get("album_id"):
-            tags[f"{prefix}_ALBUM_ID"] = _string_tag(metadata.get("album_id"))
+            tags[f"{prefix}_ALBUM_ID"] = string_tag(metadata.get("album_id"))
         if metadata.get("track_url"):
-            tags[f"{prefix}_TRACK_URL"] = _string_tag(metadata.get("track_url"))
+            tags[f"{prefix}_TRACK_URL"] = string_tag(metadata.get("track_url"))
         if metadata.get("album_url"):
-            tags[f"{prefix}_ALBUM_URL"] = _string_tag(metadata.get("album_url"))
+            tags[f"{prefix}_ALBUM_URL"] = string_tag(metadata.get("album_url"))
 
     return {key: value for key, value in tags.items() if value}
 
 
-def _write_flac_tags(path: Path, tags: dict[str, str], cover_data: Optional[bytes], mime_type: str) -> None:
+def write_flac_tags(path: Path, tags: dict[str, str], cover_data: Optional[bytes], mime_type: str) -> None:
     audio = FLAC(path)
     for key, value in tags.items():
         audio[key] = [value]
@@ -163,7 +163,7 @@ def _write_flac_tags(path: Path, tags: dict[str, str], cover_data: Optional[byte
     audio.save()
 
 
-def _write_mp3_tags(path: Path, tags: dict[str, str], cover_data: Optional[bytes], mime_type: str) -> None:
+def write_mp3_tags(path: Path, tags: dict[str, str], cover_data: Optional[bytes], mime_type: str) -> None:
     try:
         audio = MP3(path)
     except ID3NoHeaderError:
@@ -203,7 +203,7 @@ def _write_mp3_tags(path: Path, tags: dict[str, str], cover_data: Optional[bytes
     audio.save()
 
 
-def _write_mp4_tags(path: Path, tags: dict[str, str], cover_data: Optional[bytes], mime_type: str) -> None:
+def write_mp4_tags(path: Path, tags: dict[str, str], cover_data: Optional[bytes], mime_type: str) -> None:
     audio = MP4(path)
     if tags.get("TITLE"):
         audio["\xa9nam"] = [tags["TITLE"]]
@@ -224,10 +224,10 @@ def _write_mp4_tags(path: Path, tags: dict[str, str], cover_data: Optional[bytes
     if tags.get("COPYRIGHT"):
         audio["cprt"] = [tags["COPYRIGHT"]]
 
-    track_number, track_total = _split_number_pair(tags.get("TRACKNUMBER", ""))
+    track_number, track_total = split_number_pair(tags.get("TRACKNUMBER", ""))
     if track_number:
         audio["trkn"] = [(track_number, track_total or 0)]
-    disc_number, disc_total = _split_number_pair(tags.get("DISCNUMBER", ""))
+    disc_number, disc_total = split_number_pair(tags.get("DISCNUMBER", ""))
     if disc_number:
         audio["disk"] = [(disc_number, disc_total or 0)]
 
@@ -254,7 +254,7 @@ def _write_mp4_tags(path: Path, tags: dict[str, str], cover_data: Optional[bytes
     audio.save()
 
 
-def _download_cover(session: Any, artwork_url: str) -> tuple[Optional[bytes], str]:
+def download_cover(session: Any, artwork_url: str) -> tuple[Optional[bytes], str]:
     if not session or not artwork_url:
         return None, ""
     try:
@@ -264,7 +264,7 @@ def _download_cover(session: Any, artwork_url: str) -> tuple[Optional[bytes], st
             if not data:
                 return None, ""
             content_type = str(response.headers.get("Content-Type") or "").split(";")[0].strip().lower()
-            return data, _mime_from_image(data, content_type or "image/jpeg")
+            return data, mime_from_image(data, content_type or "image/jpeg")
     except Exception as error:
         log.debug("Music cover download failed for %s: %s", artwork_url, error)
         return None, ""
@@ -275,14 +275,14 @@ def _metadata(song: Any) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def _first_text(*values: Any) -> str:
+def first_text(*values: Any) -> str:
     for value in values:
         if isinstance(value, dict):
-            text = _first_text(value.get("name"), value.get("title"), value.get("display_name"), value.get("value"))
+            text = first_text(value.get("name"), value.get("title"), value.get("display_name"), value.get("value"))
             if text:
                 return text
         elif isinstance(value, list):
-            parts = [_first_text(item) for item in value]
+            parts = [first_text(item) for item in value]
             text = ", ".join(part for part in parts if part)
             if text:
                 return text
@@ -293,7 +293,7 @@ def _first_text(*values: Any) -> str:
     return ""
 
 
-def _string_tag(value: Any) -> str:
+def string_tag(value: Any) -> str:
     if value in (None, "", [], {}):
         return ""
     if isinstance(value, bool):
@@ -301,7 +301,7 @@ def _string_tag(value: Any) -> str:
     return str(value).strip()
 
 
-def _as_bool(*values: Any) -> bool:
+def as_bool(*values: Any) -> bool:
     for value in values:
         if value in (None, "", [], {}):
             continue
@@ -317,7 +317,7 @@ def _as_bool(*values: Any) -> bool:
     return False
 
 
-def _mime_from_image(data: bytes, fallback: str = "image/jpeg") -> str:
+def mime_from_image(data: bytes, fallback: str = "image/jpeg") -> str:
     if data.startswith(b"\x89PNG\r\n\x1a\n"):
         return "image/png"
     if data.startswith(b"\xff\xd8\xff"):
@@ -327,7 +327,7 @@ def _mime_from_image(data: bytes, fallback: str = "image/jpeg") -> str:
     return fallback
 
 
-def _split_number_pair(value: str) -> tuple[int, int]:
+def split_number_pair(value: str) -> tuple[int, int]:
     if not value:
         return 0, 0
     first, _, second = str(value).partition("/")

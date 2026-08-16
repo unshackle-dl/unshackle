@@ -64,7 +64,7 @@ def apply_tags(path: Path, tags: dict[str, str]) -> None:
         tmp_path.unlink(missing_ok=True)
 
 
-def _build_tags_from_ids(ids: ExternalIds, kind: str) -> dict[str, str]:
+def build_tags_from_ids(ids: ExternalIds, kind: str) -> dict[str, str]:
     """Build standard MKV tags from external IDs."""
     tags: dict[str, str] = {}
     if ids.imdb_id:
@@ -129,7 +129,7 @@ def tag_file(
             )
 
             if result and result.external_ids:
-                standard_tags = _build_tags_from_ids(result.external_ids, kind)
+                standard_tags = build_tags_from_ids(result.external_ids, kind)
         except Exception as e:
             log.warning("Metadata lookup failed, applying custom tags only: %s", e)
 

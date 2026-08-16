@@ -136,18 +136,18 @@ class Episode(Title):
             return False
         return any(k in wanted for k in keys)
 
-    def _part_suffix(self) -> str:
+    def part_suffix(self) -> str:
         """``.Part.2`` / `` Part 2`` in the series template's own separator style."""
         if self.part is None:
             return ""
         sep = config.get_template_separator("series") if config.output_template.get("series") else "."
         return f"{sep}Part{sep}{self.part}"
 
-    def _build_template_context(
+    def build_template_context(
         self, media_info: MediaInfo, show_service: bool = True, include_part: bool = True
     ) -> dict:
         """Build template context dictionary from MediaInfo."""
-        context = self._build_base_template_context(media_info, show_service)
+        context = self.build_base_template_context(media_info, show_service)
         context["title"] = self.title.replace("$", "S")
         context["year"] = self.year or ""
         context["season"] = f"S{self.season:02}"
@@ -159,7 +159,7 @@ class Episode(Title):
         context["absolute"] = f"{self.absolute:03}" if self.absolute is not None else ""
         if self.air_date:
             # daily/sports: air date replaces SxxExx
-            disp = self._air_date_display()
+            disp = self.air_date_display()
             context["season"] = disp
             context["episode"] = ""
             context["season_episode"] = disp
@@ -168,25 +168,25 @@ class Episode(Title):
         if include_part and self.part is not None:
             # folded into the identity tokens, not a token of its own: a standalone {part} is
             # absent from every shipped template, so two parts would render the same filename
-            suffix = self._part_suffix()
+            suffix = self.part_suffix()
             context["episode"] = f"{context['episode']}{suffix}"
             context["season_episode"] = f"{context['season_episode']}{suffix}"
         return context
 
-    def _air_date_display(self) -> str:
+    def air_date_display(self) -> str:
         """Render air_date using the series template's own separator (dots or spaces)."""
         if isinstance(self.air_date, date):
             sep = config.get_template_separator("series") if config.output_template.get("series") else "."
             return f"{self.air_date.year:04}{sep}{self.air_date.month:02}{sep}{self.air_date.day:02}"
         return str(self.air_date)
 
-    def _folder_season(self) -> str:
+    def folder_season(self) -> str:
         """Season folder label: air year for dated content, else SxxExx-style season."""
         if isinstance(self.air_date, date):
             return f"{self.air_date.year:04}"
         return f"S{self.season:02}"
 
-    def _part_label(self) -> str:
+    def part_label(self) -> str:
         """``.2`` selection-syntax suffix for console output, empty when part-less."""
         return f".{self.part}" if self.part is not None else ""
 
@@ -197,8 +197,8 @@ class Episode(Title):
             return "{title}{year} {date}{part} {name}".format(
                 title=self.title,
                 year=f" {self.year}" if self.year else "",
-                date=self._air_date_display(),
-                part=self._part_label(),
+                date=self.air_date_display(),
+                part=self.part_label(),
                 name=self.name or "",
             ).strip()
         # the console shows the -w selection syntax (S01E01.2), not the filename form
@@ -207,7 +207,7 @@ class Episode(Title):
             year=f" {self.year}" if self.year else "",
             season=self.season,
             number=self.number,
-            part=self._part_label(),
+            part=self.part_label(),
             name=self.name or "",
         ).strip()
 
@@ -216,8 +216,8 @@ class Episode(Title):
             template = config.get_folder_template("series")
             if template:
                 # all parts of an episode land in the same season folder
-                context = self._build_template_context(media_info, show_service, include_part=False)
-                context["season"] = self._folder_season()
+                context = self.build_template_context(media_info, show_service, include_part=False)
+                context["season"] = self.folder_season()
                 context["year"] = self.year or ""  # folders keep the year
                 spacer = detect_spacer(template)  # one style for the whole path
                 segments = [
@@ -240,8 +240,8 @@ class Episode(Title):
                 derived_template = re.sub(r"^[\.\s]+|[\.\s]+$", "", derived_template)
 
                 formatter = TemplateFormatter(derived_template)
-                context = self._build_template_context(media_info, show_service, include_part=False)
-                context["season"] = self._folder_season()
+                context = self.build_template_context(media_info, show_service, include_part=False)
+                context["season"] = self.folder_season()
                 context["year"] = self.year or ""  # folders keep the year
 
                 folder_name = formatter.format(context)
@@ -253,11 +253,11 @@ class Episode(Title):
                 name = f"{self.title}"
                 if self.year:
                     name += f" {self.year}"
-                name += f" {self._folder_season()}"
+                name += f" {self.folder_season()}"
                 return sanitize_filename(name, " ")
 
         formatter = TemplateFormatter(config.output_template["series"])
-        context = self._build_template_context(media_info, show_service)
+        context = self.build_template_context(media_info, show_service)
         return formatter.format(context)
 
 
@@ -289,10 +289,10 @@ class Series(SortedKeyList, ABC):
                 for episode in self:
                     if episode.season == season:
                         label = (
-                            episode._air_date_display()
+                            episode.air_date_display()
                             if episode.air_date
                             else str(episode.number).zfill(len(str(episodes)))
-                        ) + episode._part_label()
+                        ) + episode.part_label()
                         if episode.name:
                             season_tree.add(f"[bold]{label}.[/] [bright_black]{episode.name}")
                         elif episode.air_date:

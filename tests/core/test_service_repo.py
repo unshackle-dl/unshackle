@@ -66,11 +66,11 @@ def test_repos_base_uses_configured_local_dir(monkeypatch, tmp_path):
 
 def test_is_stale(tmp_path):
     stamp = tmp_path / "stamp"
-    assert service_repo._is_stale(stamp, ttl=10) is True  # missing → stale
+    assert service_repo.is_stale(stamp, ttl=10) is True  # missing → stale
     stamp.write_text(str(time.time()))
-    assert service_repo._is_stale(stamp, ttl=10) is False  # fresh
+    assert service_repo.is_stale(stamp, ttl=10) is False  # fresh
     stamp.write_text(str(time.time() - 100))
-    assert service_repo._is_stale(stamp, ttl=10) is True  # old
+    assert service_repo.is_stale(stamp, ttl=10) is True  # old
 
 
 def test_clone_invokes_git(monkeypatch, tmp_path):
@@ -110,7 +110,7 @@ def test_fresh_clone_skips_pull(monkeypatch, tmp_path):
     assert service_repo.resolve_service_repo("a/b") == dest
 
 
-def _git_stub(porcelain=b"", ahead=b"0"):
+def git_stub(porcelain=b"", ahead=b"0"):
     """Fake subprocess.run for git: dirty checks return given output, pull succeeds."""
 
     def run(args, **kw):
@@ -126,20 +126,20 @@ def _git_stub(porcelain=b"", ahead=b"0"):
 
 def test_is_dirty_uncommitted(monkeypatch):
     monkeypatch.setattr(service_repo.binaries, "Git", "git")
-    monkeypatch.setattr(service_repo.subprocess, "run", _git_stub(porcelain=b" M EXAMPLE/__init__.py\n"))
-    assert service_repo._is_dirty(Path("/x")) is True
+    monkeypatch.setattr(service_repo.subprocess, "run", git_stub(porcelain=b" M EXAMPLE/__init__.py\n"))
+    assert service_repo.is_dirty(Path("/x")) is True
 
 
 def test_is_dirty_commits_ahead(monkeypatch):
     monkeypatch.setattr(service_repo.binaries, "Git", "git")
-    monkeypatch.setattr(service_repo.subprocess, "run", _git_stub(porcelain=b"", ahead=b"2"))
-    assert service_repo._is_dirty(Path("/x")) is True
+    monkeypatch.setattr(service_repo.subprocess, "run", git_stub(porcelain=b"", ahead=b"2"))
+    assert service_repo.is_dirty(Path("/x")) is True
 
 
 def test_is_dirty_clean(monkeypatch):
     monkeypatch.setattr(service_repo.binaries, "Git", "git")
-    monkeypatch.setattr(service_repo.subprocess, "run", _git_stub(porcelain=b"", ahead=b"0"))
-    assert service_repo._is_dirty(Path("/x")) is False
+    monkeypatch.setattr(service_repo.subprocess, "run", git_stub(porcelain=b"", ahead=b"0"))
+    assert service_repo.is_dirty(Path("/x")) is False
 
 
 def test_is_dirty_ignores_untracked_files(monkeypatch):
@@ -153,7 +153,7 @@ def test_is_dirty_ignores_untracked_files(monkeypatch):
         return subprocess.CompletedProcess(args, 0, out, b"")
 
     monkeypatch.setattr(service_repo.subprocess, "run", run)
-    service_repo._is_dirty(Path("/x"))
+    service_repo.is_dirty(Path("/x"))
     status_args = next(a for a in seen if a[3] == "status")
     assert "--untracked-files=no" in status_args
 
@@ -165,7 +165,7 @@ def test_auto_refresh_refuses_dirty_clone(monkeypatch, tmp_path):
     service_repo.stamp_for(dest).write_text("0")  # stale → refresh due
     monkeypatch.setattr(service_repo, "repos_base", lambda: tmp_path)
     monkeypatch.setattr(service_repo.binaries, "Git", "git")
-    monkeypatch.setattr(service_repo.subprocess, "run", _git_stub(porcelain=b" M f\n"))
+    monkeypatch.setattr(service_repo.subprocess, "run", git_stub(porcelain=b" M f\n"))
     with pytest.raises(service_repo.DirtyServiceRepo) as ei:
         service_repo.resolve_service_repo("a/b")
     assert ei.value.path == dest
@@ -201,7 +201,7 @@ def test_changed_services_groups_by_top_dir(monkeypatch):
         return subprocess.CompletedProcess(args, 0, out, b"")
 
     monkeypatch.setattr(service_repo.subprocess, "run", run)
-    lines = service_repo._changed_services(Path("/x"), "aaa", "bbb")
+    lines = service_repo.changed_services(Path("/x"), "aaa", "bbb")
     assert "+ NEW (added)" in lines
     assert "~ OLD (modified)" in lines
     assert "- GONE (removed)" in lines
@@ -215,7 +215,7 @@ def test_local_dirty_services_lists_edited_dirs(monkeypatch):
         "run",
         lambda *a, **k: subprocess.CompletedProcess(a, 0, b"CR/__init__.py\nCR/config.yaml\nNF/__init__.py\n", b""),
     )
-    assert service_repo._local_dirty_services(Path("/x")) == ["CR", "NF"]
+    assert service_repo.local_dirty_services(Path("/x")) == ["CR", "NF"]
 
 
 def test_refresh_reports_discarded_local_edits(monkeypatch, tmp_path):
@@ -241,7 +241,7 @@ def test_changed_services_up_to_date(monkeypatch):
     monkeypatch.setattr(service_repo.binaries, "Git", "git")
     # same HEAD before/after → no diff computed at all
     monkeypatch.setattr(service_repo.subprocess, "run", lambda *a, **k: pytest.fail("no git diff when HEAD unchanged"))
-    assert service_repo._changed_services(Path("/x"), "same", "same") == []
+    assert service_repo.changed_services(Path("/x"), "same", "same") == []
 
 
 @pytest.mark.parametrize("order", [["a", "b"], ["b", "a"]])

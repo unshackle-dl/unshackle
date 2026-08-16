@@ -38,7 +38,7 @@ def encodebytes(barray, charset=CHARSET_DEFAULT):
     :rtype: str
     """
 
-    _check_type(barray, bytes)
+    check_type(barray, bytes)
 
     # Count the number of leading zeros.
     leading_zeros_count = 0
@@ -68,11 +68,11 @@ def decode(encoded, charset=CHARSET_DEFAULT):
     :type encoded: str
     :rtype: int
     """
-    _check_type(encoded, str)
+    check_type(encoded, str)
 
     length, i, v = len(encoded), 0, 0
     for x in encoded:
-        v += _value(x, charset=charset) * (BASE ** (length - (i + 1)))
+        v += value(x, charset=charset) * (BASE ** (length - (i + 1)))
         i += 1
 
     return v
@@ -88,7 +88,7 @@ def decodebytes(encoded, charset=CHARSET_DEFAULT):
 
     leading_null_bytes = b""
     while encoded.startswith("0") and len(encoded) >= 2:
-        leading_null_bytes += b"\x00" * _value(encoded[1], charset)
+        leading_null_bytes += b"\x00" * value(encoded[1], charset)
         encoded = encoded[2:]
 
     decoded = decode(encoded, charset=charset)
@@ -101,7 +101,7 @@ def decodebytes(encoded, charset=CHARSET_DEFAULT):
     return leading_null_bytes + bytes(buf)
 
 
-def _value(ch, charset):
+def value(ch, charset):
     """Decodes an individual digit of a base62 encoded string."""
 
     try:
@@ -110,7 +110,7 @@ def _value(ch, charset):
         raise ValueError("base62: Invalid character (%s)" % ch)
 
 
-def _check_type(value, expected_type):
+def check_type(value, expected_type):
     """Checks if the input is in an appropriate type."""
 
     if not isinstance(value, expected_type):

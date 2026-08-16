@@ -7,7 +7,7 @@ from typing import Optional, Union
 
 import requests
 
-from unshackle.core.providers._base import ExternalIds, MetadataProvider, MetadataResult, _clean, fuzzy_match
+from unshackle.core.providers._base import ExternalIds, MetadataProvider, MetadataResult, clean, fuzzy_match
 
 GRAPHQL_URL = "https://caching.graphql.imdb.com/"
 
@@ -41,7 +41,7 @@ def primary_language(data: dict) -> Optional[str]:
     return langs[0].get("id") if langs else None
 
 
-def _title_to_result(node: dict, kind: str) -> Optional[MetadataResult]:
+def title_to_result(node: dict, kind: str) -> Optional[MetadataResult]:
     title = (node.get("titleText") or {}).get("text") or (node.get("originalTitleText") or {}).get("text")
     if not title:
         return None
@@ -66,7 +66,7 @@ class IMDBProvider(MetadataProvider):
     def is_available(self) -> bool:
         return True
 
-    def _graphql(self, operation: str, query: str) -> Optional[dict]:
+    def graphql(self, operation: str, query: str) -> Optional[dict]:
         """Run a persisted query, registering it with one POST the first time it is seen."""
         extensions = {"persistedQuery": {"version": 1, "sha256Hash": hashlib.sha256(query.encode()).hexdigest()}}
         # IMDb's GraphQL gateway decodes "+" literally, so these JSON params must carry no spaces
@@ -79,7 +79,7 @@ class IMDBProvider(MetadataProvider):
         try:
             r = self.session.get(GRAPHQL_URL, params=params, headers=GRAPHQL_HEADERS, timeout=30)
             body = r.json()
-            if _persisted_query_missing(body):
+            if persisted_query_missing(body):
                 self.log.debug("Registering persisted query %s", operation)
                 payload = {"operationName": operation, "variables": {}, "query": query, "extensions": extensions}
                 r = self.session.post(GRAPHQL_URL, json=payload, headers=GRAPHQL_HEADERS, timeout=30)
@@ -110,15 +110,15 @@ class IMDBProvider(MetadataProvider):
             "{ edges { node { title { %s } } } } }" % (", ".join(constraints), TITLE_FIELDS)
         )
 
-        data = self._graphql("UnshackleTitleSearch", query)
+        data = self.graphql("UnshackleTitleSearch", query)
         edges = ((data or {}).get("advancedTitleSearch") or {}).get("edges") or []
         nodes = [edge["node"]["title"] for edge in edges if (edge.get("node") or {}).get("title")]
         if not nodes:
             self.log.debug("IMDb returned no results for %r", title)
             return None
 
-        best = max(nodes, key=lambda n: _match_ratio(n, title))
-        result = _title_to_result(best, kind)
+        best = max(nodes, key=lambda n: match_ratio(n, title))
+        result = title_to_result(best, kind)
         if not result or not result.title or not fuzzy_match(result.title, title):
             self.log.debug("IMDb title mismatch: searched %r, got %r", title, result.title if result else None)
             return None
@@ -132,23 +132,23 @@ class IMDBProvider(MetadataProvider):
         self.log.debug("Fetching IMDb title %s", imdb_id)
 
         query = 'query UnshackleTitle { title(id: "%s") { %s } }' % (escape_graphql(imdb_id), TITLE_FIELDS)
-        data = self._graphql("UnshackleTitle", query)
+        data = self.graphql("UnshackleTitle", query)
         node = (data or {}).get("title")
         if not node:
             return None
-        return _title_to_result(node, kind)
+        return title_to_result(node, kind)
 
     def get_external_ids(self, provider_id: Union[int, str], kind: str) -> ExternalIds:
         """Return external IDs. For IMDB, the provider_id IS the IMDB ID."""
         return ExternalIds(imdb_id=str(provider_id))
 
 
-def _match_ratio(node: dict, title: str) -> float:
+def match_ratio(node: dict, title: str) -> float:
     names = [(node.get("titleText") or {}).get("text"), (node.get("originalTitleText") or {}).get("text")]
-    return max((SequenceMatcher(None, _clean(title), _clean(n)).ratio() for n in names if n), default=0.0)
+    return max((SequenceMatcher(None, clean(title), clean(n)).ratio() for n in names if n), default=0.0)
 
 
-def _persisted_query_missing(body: dict) -> bool:
+def persisted_query_missing(body: dict) -> bool:
     for error in body.get("errors") or []:
         code = (error.get("extensions") or {}).get("code")
         if code == "PERSISTED_QUERY_NOT_FOUND" or error.get("message") == "PersistedQueryNotFound":

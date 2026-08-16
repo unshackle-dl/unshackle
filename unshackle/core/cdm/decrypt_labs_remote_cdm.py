@@ -132,7 +132,7 @@ class DecryptLabsRemoteCDM:
 
         self._device_type_str = device_type
         if device_type:
-            self.device_type = self._get_device_type_enum(device_type)
+            self.device_type = self.get_device_type_enum(device_type)
 
         self._is_playready = (device_type and device_type.upper() == "PLAYREADY") or (
             bool(device_name) and device_name.upper().startswith("SL")
@@ -157,7 +157,7 @@ class DecryptLabsRemoteCDM:
             }
         )
 
-    def _get_device_type_enum(self, device_type: str):
+    def get_device_type_enum(self, device_type: str):
         """Convert device type string to enum for compatibility."""
         device_type_upper = device_type.upper()
         if device_type_upper == "ANDROID":
@@ -204,11 +204,11 @@ class DecryptLabsRemoteCDM:
             else:
                 self._required_kids.append(str(kid).replace("-", "").lower())
 
-    def _generate_session_id(self) -> bytes:
+    def generate_session_id(self) -> bytes:
         """Generate a unique session ID."""
         return secrets.token_bytes(16)
 
-    def _get_init_data_from_pssh(self, pssh: Any) -> str:
+    def get_init_data_from_pssh(self, pssh: Any) -> str:
         """Extract init data from various PSSH formats."""
         if self.is_playready and self._pssh_b64:
             return self._pssh_b64
@@ -220,7 +220,7 @@ class DecryptLabsRemoteCDM:
                 try:
                     base64.b64decode(dumps_result)
                     return dumps_result
-                except Exception:
+                except ValueError:
                     return base64.b64encode(dumps_result.encode("utf-8")).decode("utf-8")
             else:
                 return base64.b64encode(dumps_result).decode("utf-8")
@@ -249,7 +249,7 @@ class DecryptLabsRemoteCDM:
         Returns:
             Session identifier as bytes
         """
-        session_id = self._generate_session_id()
+        session_id = self.generate_session_id()
         self._sessions[session_id] = {
             "service_certificate": None,
             "keys": [],
@@ -395,7 +395,7 @@ class DecryptLabsRemoteCDM:
         session = self._sessions[session_id]
 
         session["pssh"] = pssh_or_wrm
-        init_data = self._get_init_data_from_pssh(pssh_or_wrm)
+        init_data = self.get_init_data_from_pssh(pssh_or_wrm)
         already_tried_cache = session.get("tried_cache", False)
 
         if self.vaults and self._required_kids:
@@ -470,7 +470,7 @@ class DecryptLabsRemoteCDM:
             for missing keys.
             """
             cached_keys = data.get("cached_keys", [])
-            parsed_keys = self._parse_cached_keys(cached_keys)
+            parsed_keys = self.parse_cached_keys(cached_keys)
 
             all_available_keys = list(parsed_keys)
             if "vault_keys" in session:
@@ -588,11 +588,11 @@ class DecryptLabsRemoteCDM:
             else:
                 try:
                     license_message = base64.b64decode(license_message)
-                except Exception:
+                except ValueError:
                     license_message = license_message.encode("utf-8")
 
         pssh = session["pssh"]
-        init_data = self._get_init_data_from_pssh(pssh)
+        init_data = self.get_init_data_from_pssh(pssh)
 
         license_request_b64 = base64.b64encode(session["challenge"]).decode("utf-8")
         license_response_b64 = base64.b64encode(license_message).decode("utf-8")
@@ -620,7 +620,7 @@ class DecryptLabsRemoteCDM:
                 error_msg += f" - Details: {data['details']}"
             raise requests.RequestException(f"License decrypt error: {error_msg}")
 
-        license_keys = self._parse_keys_response(data)
+        license_keys = self.parse_keys_response(data)
 
         all_keys = []
 
@@ -705,7 +705,7 @@ class DecryptLabsRemoteCDM:
 
         return keys
 
-    def _parse_cached_keys(self, cached_keys_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def parse_cached_keys(self, cached_keys_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Parse cached keys from API response.
 
         Args:
@@ -721,11 +721,12 @@ class DecryptLabsRemoteCDM:
                 for key_data in cached_keys_data:
                     if "kid" in key_data and "key" in key_data:
                         keys.append({"kid": key_data["kid"], "key": key_data["key"], "type": "CONTENT"})
-        except Exception:
+        # non-dict entries in the API payload raise TypeError on membership/index
+        except TypeError:
             pass
         return keys
 
-    def _parse_keys_response(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def parse_keys_response(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Parse keys from decrypt response."""
         keys = []
 

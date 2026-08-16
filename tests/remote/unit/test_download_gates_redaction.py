@@ -12,9 +12,9 @@ from unshackle.core.api import handlers
 from unshackle.core.api.download_manager import (
     DownloadJob,
     JobStatus,
-    _redact_parameters,
     _redact_text,
-    _secret_values,
+    redact_parameters,
+    secret_values,
 )
 from unshackle.core.api.errors import APIError, APIErrorCode
 
@@ -34,7 +34,7 @@ def test_redact_parameters_masks_secrets_and_proxy_userinfo():
         "proxy": "http://bob:secret@proxy.example:8080",
         "quality": "1080p",
     }
-    red = _redact_parameters(params)
+    red = redact_parameters(params)
     assert red["credential"] == "***"
     assert red["password"] == "***"
     assert red["token"] == "***"
@@ -45,11 +45,11 @@ def test_redact_parameters_masks_secrets_and_proxy_userinfo():
 
 
 def test_redact_parameters_masks_credentials_dict():
-    assert _redact_parameters({"credentials": {"default": "u:p"}})["credentials"] == "***"
+    assert redact_parameters({"credentials": {"default": "u:p"}})["credentials"] == "***"
 
 
 def test_secret_values_includes_password_half_and_dict_values():
-    secrets = _secret_values({"credential": "user:hunter2", "credentials": {"d": "alice:wonder"}})
+    secrets = secret_values({"credential": "user:hunter2", "credentials": {"d": "alice:wonder"}})
     assert "user:hunter2" in secrets  # full credential
     assert "hunter2" in secrets  # password half of user:pass
     assert "alice:wonder" in secrets  # value from the credentials map
@@ -98,10 +98,10 @@ def stub_handler(monkeypatch):
     forbidden request raises APIError *before* the try block and an allowed one is caught inside it."""
     monkeypatch.setattr(handlers, "validate_service", lambda tag, request=None: tag)
 
-    def _boom(*_args, **_kwargs):
+    def boom(*_args, **_kwargs):
         raise _PastGate()
 
-    monkeypatch.setattr(handlers.Services, "load", _boom)
+    monkeypatch.setattr(handlers.Services, "load", boom)
     return monkeypatch
 
 

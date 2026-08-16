@@ -73,10 +73,10 @@ class APIError(Exception):
         self.message = message
         self.details = details or {}
         self.retryable = retryable
-        self.http_status = http_status or self._default_http_status(error_code)
+        self.http_status = http_status or self.default_http_status(error_code)
 
     @staticmethod
-    def _default_http_status(error_code: APIErrorCode) -> int:
+    def default_http_status(error_code: APIErrorCode) -> int:
         """Map error codes to default HTTP status codes."""
         status_map = {
             # 400 Bad Request

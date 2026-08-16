@@ -28,7 +28,7 @@ class TitleCacher:
         self.stats = {"hits": 0, "misses": 0, "fallbacks": 0}
         self.no_cache = False
 
-    def _generate_cache_key(
+    def generate_cache_key(
         self, title_id: str, region: Optional[str] = None, account_hash: Optional[str] = None
     ) -> str:
         """
@@ -92,7 +92,7 @@ class TitleCacher:
             return fetch_function()
 
         # Generate cache key
-        cache_key = self._generate_cache_key(title_id, region, account_hash)
+        cache_key = self.generate_cache_key(title_id, region, account_hash)
 
         # If reset_cache flag is set, clear the cache entry
         if reset_cache:
@@ -193,7 +193,7 @@ class TitleCacher:
         if not config.title_cache_enabled or self.no_cache:
             return None
 
-        cache_key = self._generate_cache_key(title_id, region, account_hash)
+        cache_key = self.generate_cache_key(title_id, region, account_hash)
         cache = self.cacher.get(cache_key, version=1)
 
         if not cache or not cache.data:
@@ -246,7 +246,7 @@ class TitleCacher:
         if not config.title_cache_enabled or self.no_cache:
             return
 
-        cache_key = self._generate_cache_key(title_id, region, account_hash)
+        cache_key = self.generate_cache_key(title_id, region, account_hash)
         cache = self.cacher.get(cache_key, version=1)
 
         if not cache or not cache.data:

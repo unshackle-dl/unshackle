@@ -9,9 +9,9 @@ _patch_click_help()
 
 __version__ = "5.5.0"
 
-_PKG = Path(__file__).parent.parent
+PKG = Path(__file__).parent.parent
 # Framework code only. Services are user-swappable, so they are not part of the identity.
-_CODE_DIRS = ("core", "commands", "utils", "vaults")
+CODE_DIRS = ("core", "commands", "utils", "vaults")
 
 
 def _raise(error: OSError) -> None:
@@ -20,9 +20,9 @@ def _raise(error: OSError) -> None:
 
 def code_files() -> list[str]:
     """Framework source paths relative to the package root, in a platform-stable order."""
-    pkg = str(_PKG)
+    pkg = str(PKG)
     rels = ["__main__.py"]
-    for name in _CODE_DIRS:
+    for name in CODE_DIRS:
         for root, dirs, files in os.walk(os.path.join(pkg, name), onerror=_raise):
             dirs[:] = [d for d in dirs if d != "__pycache__"]
             rel = os.path.relpath(root, pkg).replace(os.sep, "/")
@@ -41,7 +41,7 @@ def code_hash(
     (see tools/resolve_code_hash.py). Returns "" when the source cannot be read.
     """
     if read is None:
-        pkg = str(_PKG)
+        pkg = str(PKG)
 
         def read(rel: str) -> bytes:
             with open(os.path.join(pkg, rel), "rb") as fh:

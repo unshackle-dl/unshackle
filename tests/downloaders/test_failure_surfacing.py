@@ -6,7 +6,7 @@ import pytest
 import requests as rq
 
 from unshackle.core.constants import DOWNLOAD_CANCELLED
-from unshackle.core.downloaders.requests import _has_range_header, download
+from unshackle.core.downloaders.requests import download, has_range_header
 from unshackle.core.downloaders.requests import requests as requests_downloader
 
 # the package re-exports the `requests` function, shadowing the module of the same name
@@ -26,9 +26,9 @@ class _Server:
         self.sock.listen(8)
         self.url = f"http://127.0.0.1:{self.sock.getsockname()[1]}/seg.mp4"
         self.requests = []
-        threading.Thread(target=self._serve, daemon=True).start()
+        threading.Thread(target=self.serve, daemon=True).start()
 
-    def _serve(self):
+    def serve(self):
         while True:
             try:
                 conn, _ = self.sock.accept()
@@ -63,7 +63,7 @@ class _Server:
 
 
 @pytest.fixture(autouse=True)
-def _clear_cancel():
+def clear_cancel():
     # the batch failure path sets the process-global cancel; leaking it makes every later
     # test that waits on the event (the speed limiter) return instantly
     DOWNLOAD_CANCELLED.clear()
@@ -161,4 +161,4 @@ def test_failed_segment_fails_the_batch(tmp_path, server):
     ],
 )
 def test_has_range_header(item, expected):
-    assert _has_range_header(item) is expected
+    assert has_range_header(item) is expected

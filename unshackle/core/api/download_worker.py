@@ -10,17 +10,17 @@ import traceback
 from pathlib import Path
 from typing import Any, Dict
 
-from .download_manager import _perform_download
+from .download_manager import perform_download
 
 log = logging.getLogger("download_worker")
 
 
-def _read_payload(path: Path) -> Dict[str, Any]:
+def read_payload(path: Path) -> Dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
 
 
-def _write_result(path: Path, payload: Dict[str, Any]) -> None:
+def write_result(path: Path, payload: Dict[str, Any]) -> None:
     # Atomic replace: the parent polls this file while it is being rewritten.
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
@@ -44,7 +44,7 @@ def main(argv: list[str]) -> int:
     exit_code = 0
 
     try:
-        payload = _read_payload(payload_path)
+        payload = read_payload(payload_path)
         job_id = payload["job_id"]
         service = payload["service"]
         title_id = payload["title_id"]
@@ -61,12 +61,12 @@ def main(argv: list[str]) -> int:
                 try:
                     progress_state.update(progress_data)
                     log.info(f"Writing progress update: {progress_data}")
-                    _write_result(progress_path, progress_state)
+                    write_result(progress_path, progress_state)
                     log.info(f"Progress update written to {progress_path}")
                 except Exception as e:
                     log.error(f"Failed to write progress update: {e}")
 
-        output_files = _perform_download(job_id, service, title_id, params, progress_callback=progress_callback)
+        output_files = perform_download(job_id, service, title_id, params, progress_callback=progress_callback)
 
         result = {"status": "success", "output_files": output_files}
 
@@ -96,7 +96,7 @@ def main(argv: list[str]) -> int:
 
     finally:
         try:
-            _write_result(result_path, result)
+            write_result(result_path, result)
         except Exception as exc:  # noqa: BLE001 - last resort logging
             log.error(f"Failed to write worker result file: {exc}")
 

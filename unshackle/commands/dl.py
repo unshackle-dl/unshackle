@@ -62,7 +62,7 @@ from unshackle.core.music import (
     write_music_metadata,
 )
 from unshackle.core.providers.anilist import parse_anilist_ref
-from unshackle.core.providers.tvdb import SEASON_TYPES, _parse_int
+from unshackle.core.providers.tvdb import SEASON_TYPES, parse_int
 from unshackle.core.proxies import Basic, ExpressVPN, Gluetun, Hola, NordVPN, ProtonVPN, SurfsharkVPN, WindscribeVPN
 from unshackle.core.service import Service
 from unshackle.core.services import Services
@@ -2063,10 +2063,10 @@ class dl:
                         _progress.update(task_id=task_id, **kwargs)
 
                     track_table = Table.grid()
-                    track_table.add_row(music_renderer._song_line(song, titles))
+                    track_table.add_row(music_renderer.song_line(song, titles))
                     song_plan = music_song_plans.get(id(song))
                     if song_plan and song_plan.selected:
-                        track_table.add_row(music_renderer._option_line(song_plan.selected), style="text2")
+                        track_table.add_row(music_renderer.option_line(song_plan.selected), style="text2")
                     else:
                         track_table.add_row(str(track)[6:], style="text2")
                     track_table.add_row(progress)
@@ -3977,7 +3977,7 @@ class dl:
 
         aired_by_key: dict[tuple[int, int], str] = {}
         for episode in episodes:
-            season, number = _parse_int(episode.get("seasonNumber")), _parse_int(episode.get("number"))
+            season, number = parse_int(episode.get("seasonNumber")), parse_int(episode.get("number"))
             aired = episode.get("aired")
             if season is None or number is None or not aired:
                 continue

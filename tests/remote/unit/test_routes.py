@@ -21,20 +21,20 @@ pytestmark = pytest.mark.unit
 def make_app():
     """Factory that builds an aiohttp app for tests."""
 
-    def _factory(remote_only: bool = False, with_auth_middleware: bool = False):
+    def factory(remote_only: bool = False, with_auth_middleware: bool = False):
         middlewares = [cors_middleware, compression_middleware]
         if with_auth_middleware:
-            middlewares.insert(1, _no_key_required_auth())
+            middlewares.insert(1, no_key_required_auth())
         app = web.Application(middlewares=middlewares)
         app["config"] = {"users": {}}
         app["debug_api"] = False
         setup_routes(app, remote_only=remote_only)
         return app
 
-    return _factory
+    return factory
 
 
-def _no_key_required_auth():
+def no_key_required_auth():
     """Mirror serve.py's api_key_authentication middleware: required X-Secret-Key
     on every endpoint except /api/health."""
 
@@ -52,13 +52,13 @@ def _no_key_required_auth():
     return mw
 
 
-def _collect_paths(app: web.Application) -> list[tuple[str, str]]:
+def collect_paths(app: web.Application) -> list[tuple[str, str]]:
     return sorted({(r.method, r.resource.canonical) for r in app.router.routes()})
 
 
 def test_setup_routes_full_mode_wires_all_endpoints(make_app) -> None:
     app = make_app(remote_only=False)
-    paths = _collect_paths(app)
+    paths = collect_paths(app)
     expected = {
         ("GET", "/api/health"),
         ("GET", "/api/services"),
@@ -84,7 +84,7 @@ def test_setup_routes_full_mode_wires_all_endpoints(make_app) -> None:
 
 def test_setup_routes_remote_only_excludes_list_and_download(make_app) -> None:
     app = make_app(remote_only=True)
-    paths = set(_collect_paths(app))
+    paths = set(collect_paths(app))
     assert ("POST", "/api/list-titles") not in paths
     assert ("POST", "/api/list-tracks") not in paths
     assert ("POST", "/api/download") not in paths
@@ -121,7 +121,7 @@ async def test_api_handler_maps_apierror(aiohttp_client) -> None:
     client = await aiohttp_client(app)
 
     resp = await client.get("/boom")
-    assert resp.status == 404  # NOT_FOUND -> 404 per errors.APIError._default_http_status
+    assert resp.status == 404  # NOT_FOUND -> 404 per errors.APIError.default_http_status
     body = await resp.json()
     assert body["status"] == "error"
     assert body["error_code"] == "NOT_FOUND"
@@ -142,10 +142,10 @@ async def test_cors_preflight_returns_headers(make_app, aiohttp_client) -> None:
 async def test_health_endpoint_responds_ok(make_app, aiohttp_client, monkeypatch: pytest.MonkeyPatch) -> None:
     from unshackle.core.api import routes as routes_mod
 
-    async def _no_update(_):
+    async def no_update(_):
         return None
 
-    monkeypatch.setattr(routes_mod.UpdateChecker, "check_for_updates", _no_update)
+    monkeypatch.setattr(routes_mod.UpdateChecker, "check_for_updates", no_update)
     app = make_app(remote_only=True)
     client = await aiohttp_client(app)
     resp = await client.get("/api/health")
@@ -158,10 +158,10 @@ async def test_health_endpoint_responds_ok(make_app, aiohttp_client, monkeypatch
 async def test_health_bypasses_api_key_auth_middleware(make_app, aiohttp_client, monkeypatch) -> None:
     from unshackle.core.api import routes as routes_mod
 
-    async def _no_update(_):
+    async def no_update(_):
         return None
 
-    monkeypatch.setattr(routes_mod.UpdateChecker, "check_for_updates", _no_update)
+    monkeypatch.setattr(routes_mod.UpdateChecker, "check_for_updates", no_update)
 
     app = make_app(remote_only=True, with_auth_middleware=True)
     client = await aiohttp_client(app)

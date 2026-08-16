@@ -77,7 +77,7 @@ class Harness:
 
 
 @pytest.fixture(autouse=True)
-def _clear_event():
+def clear_event():
     DOWNLOAD_CANCELLED.clear()
     yield
     DOWNLOAD_CANCELLED.clear()

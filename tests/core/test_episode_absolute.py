@@ -90,15 +90,15 @@ def test_old_cache_entry_reads_as_absolute_less():
 
 
 def test_absolute_token_is_three_wide(reset_template):
-    assert make_episode(absolute=7)._build_template_context(StubMediaInfo())["absolute"] == "007"
+    assert make_episode(absolute=7).build_template_context(StubMediaInfo())["absolute"] == "007"
 
 
 def test_absolute_token_does_not_truncate_past_three_digits(reset_template):
-    assert make_episode(absolute=1042)._build_template_context(StubMediaInfo())["absolute"] == "1042"
+    assert make_episode(absolute=1042).build_template_context(StubMediaInfo())["absolute"] == "1042"
 
 
 def test_absolute_token_is_empty_without_a_value(reset_template):
-    assert make_episode()._build_template_context(StubMediaInfo())["absolute"] == ""
+    assert make_episode().build_template_context(StubMediaInfo())["absolute"] == ""
 
 
 def test_filename_renders_the_absolute_number(reset_template):
@@ -112,7 +112,7 @@ def test_optional_absolute_token_drops_out(reset_template):
 
 
 def test_absolute_is_a_known_template_variable(reset_template, recwarn):
-    reset_template._validate_output_templates()
+    reset_template.validate_output_templates()
     assert not [w for w in recwarn.list if "absolute" in str(w.message)]
 
 
@@ -139,7 +139,7 @@ class _FakeProvider:
         return self.mapping
 
 
-def _fill(
+def fill(
     monkeypatch: pytest.MonkeyPatch, episodes: list, mapping: dict, tvdb_id=73871, provider=True, order="official"
 ):
     from unshackle.commands.dl import dl
@@ -163,7 +163,7 @@ MAPPING = {(1, 1): (1, 1, "One"), (1, 2): (1, 2, "Two"), (2, 1): (1, 3, "Three")
 
 def test_fill_populates_missing_absolute_numbers(monkeypatch: pytest.MonkeyPatch) -> None:
     episodes = [make_episode(season=1, number=1), make_episode(season=1, number=2), make_episode(season=2, number=1)]
-    titles, fake, _ = _fill(monkeypatch, episodes, MAPPING)
+    titles, fake, _ = fill(monkeypatch, episodes, MAPPING)
     assert [t.absolute for t in titles] == [1, 2, 3]
     assert fake.orders == ["absolute"]
 
@@ -171,45 +171,45 @@ def test_fill_populates_missing_absolute_numbers(monkeypatch: pytest.MonkeyPatch
 def test_a_service_already_in_absolute_order_fills_from_its_own_numbers(monkeypatch: pytest.MonkeyPatch) -> None:
     """get_order_map returns {} for the same-order case; the numbers are their own fill."""
     episodes = [make_episode(season=1, number=26), make_episode(season=1, number=27)]
-    titles, fake, _ = _fill(monkeypatch, episodes, {}, order="absolute")
+    titles, fake, _ = fill(monkeypatch, episodes, {}, order="absolute")
     assert [t.absolute for t in titles] == [26, 27]
     assert fake.orders == []
 
 
 def test_fill_never_touches_season_or_number(monkeypatch: pytest.MonkeyPatch) -> None:
     episodes = [make_episode(season=2, number=1)]
-    titles, _, _ = _fill(monkeypatch, episodes, MAPPING)
+    titles, _, _ = fill(monkeypatch, episodes, MAPPING)
     assert [(t.season, t.number) for t in titles] == [(2, 1)]
 
 
 def test_a_service_set_absolute_number_wins(monkeypatch: pytest.MonkeyPatch) -> None:
     episodes = [make_episode(season=1, number=1, absolute=99), make_episode(season=1, number=2)]
-    titles, _, _ = _fill(monkeypatch, episodes, MAPPING)
+    titles, _, _ = fill(monkeypatch, episodes, MAPPING)
     assert [t.absolute for t in titles] == [99, 2]
 
 
 def test_an_unmapped_episode_keeps_no_absolute_number(monkeypatch: pytest.MonkeyPatch) -> None:
     episodes = [make_episode(season=9, number=9)]
-    titles, _, _ = _fill(monkeypatch, episodes, MAPPING)
+    titles, _, _ = fill(monkeypatch, episodes, MAPPING)
     assert titles[0].absolute is None
 
 
 def test_fill_skips_silently_without_an_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     episodes = [make_episode(season=1, number=1)]
-    titles, _, logged = _fill(monkeypatch, episodes, MAPPING, provider=False)
+    titles, _, logged = fill(monkeypatch, episodes, MAPPING, provider=False)
     assert titles[0].absolute is None
     assert [level for level, _ in logged] == ["debug"]
 
 
 def test_fill_skips_silently_without_a_tvdb_id(monkeypatch: pytest.MonkeyPatch) -> None:
     episodes = [make_episode(season=1, number=1)]
-    titles, _, logged = _fill(monkeypatch, episodes, MAPPING, tvdb_id=None)
+    titles, _, logged = fill(monkeypatch, episodes, MAPPING, tvdb_id=None)
     assert titles[0].absolute is None
     assert [level for level, _ in logged] == ["debug"]
 
 
 def test_fill_skips_silently_when_tvdb_has_no_absolute_order(monkeypatch: pytest.MonkeyPatch) -> None:
     episodes = [make_episode(season=1, number=1)]
-    titles, _, logged = _fill(monkeypatch, episodes, {})
+    titles, _, logged = fill(monkeypatch, episodes, {})
     assert titles[0].absolute is None
     assert [level for level, _ in logged] == ["debug"]
