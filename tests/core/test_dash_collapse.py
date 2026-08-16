@@ -48,6 +48,12 @@ def test_first_segment_gap_after_init_ineligible():
     assert collapsible([(URL, "900-1999")], init_len=863) is False
 
 
+def test_gap_between_segments_ineligible():
+    # the merge path would skip 2000-2999; collapsing the parent would include it
+    segments = [(URL, "863-1999"), (URL, "3000-3999")]
+    assert collapsible(segments, init_len=863) is False
+
+
 def test_overlapping_ranges_ineligible():
     segments = [(URL, "863-2500"), (URL, "2000-3999")]
     assert collapsible(segments, init_len=863) is False

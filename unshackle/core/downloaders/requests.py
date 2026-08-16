@@ -166,10 +166,9 @@ def adaptive_chunk_size(content_length: int) -> int:
     return min(MAX_CHUNK, max(MIN_CHUNK, content_length // 4))
 
 
-# Adaptive worker controller (opt-in): slow-start then AIMD hill-climb over segment concurrency
+# Adaptive worker controller (opt-in): AIMD hill-climb over segment concurrency
 ADAPTIVE_TICK = 4.0  # seconds between target re-evaluations
-ADAPTIVE_START = 6  # initial worker target, clamped to cap
-ADAPTIVE_STEP = 2  # additive increase per tick once slow-start ends
+ADAPTIVE_STEP = 2  # additive increase per tick
 ADAPTIVE_MIN = 2  # never drop below this many workers
 ADAPTIVE_ERROR_BURST = 3  # errors within a tick that trigger multiplicative decrease
 ADAPTIVE_PLATEAU_GAIN = 1.10  # min speed ratio to justify keeping an increase
@@ -180,17 +179,17 @@ class AdaptiveWorkerController:
 
     Pure and synchronous (no threads or sockets), so the policy is unit-testable.
     ``update`` is evaluated once per ``tick``, starting once half a tick of throughput
-    samples exists. It slow-starts (doubles the target) while every probe keeps paying
-    off, then drops to AIMD (+``ADAPTIVE_STEP``) after the first plateau or error burst:
-    a plateau reverts the last increase, an error burst halves the target with a
-    one-tick cooldown. Target is always clamped to ``[ADAPTIVE_MIN, cap]``.
+    samples exists. The target starts at ``start`` (the cap by default) and follows AIMD
+    from there: an error burst halves it and takes a one-tick cooldown, a probe upward
+    that plateaus is reverted, and otherwise it climbs by ``ADAPTIVE_STEP``. Target is
+    always clamped to ``[ADAPTIVE_MIN, cap]``.
     """
 
     def __init__(
         self, cap: int, start: Optional[int] = None, tick: float = ADAPTIVE_TICK, window: float = SPEED_ROLLING_WINDOW
     ) -> None:
         self.cap = max(ADAPTIVE_MIN, cap)
-        base = ADAPTIVE_START if start is None else start
+        base = self.cap if start is None else start
         self.target = max(ADAPTIVE_MIN, min(base, self.cap))
         self.tick = tick
         self.window = window
@@ -202,7 +201,6 @@ class AdaptiveWorkerController:
         self._speed_before_increase = 0.0
         self._target_before_increase = self.target  # restore point for a plateau revert
         self._cooldown = False
-        self._ramping = True  # slow-start: double per probe until the first plateau or error burst
 
     def prune(self, now: float) -> None:
         cutoff = now - self.window
@@ -271,24 +269,20 @@ class AdaptiveWorkerController:
             self.target = max(ADAPTIVE_MIN, self.target // 2)
             self._cooldown = True
             self._last_action = None
-            self._ramping = False
             reason = "error_burst"
         elif inflight_plus_remaining is not None and inflight_plus_remaining < self.target:
             # tail guard: too little work to saturate the target, so a low measured speed
             # here reflects starvation rather than a plateau, so hold and skip the probe/revert this tick
             pass
         elif self._last_action == "increase" and speed_now < ADAPTIVE_PLATEAU_GAIN * self._speed_before_increase:
-            # last probe upward did not pay off: revert it and hold. step size varies
-            # during slow-start, hence the recorded restore point rather than -STEP
+            # last probe upward did not pay off: revert it and hold
             self.target = max(ADAPTIVE_MIN, self._target_before_increase)
             self._last_action = None
-            self._ramping = False
             reason = "plateau"
         elif self.target < self.cap:
             self._speed_before_increase = speed_now
             self._target_before_increase = self.target
-            step = self.target if self._ramping else ADAPTIVE_STEP
-            self.target = min(self.cap, self.target + step)
+            self.target = min(self.cap, self.target + ADAPTIVE_STEP)
             self._last_action = "increase"
             reason = "increase"
         else:
@@ -436,11 +430,18 @@ def parse_content_range(value: Any) -> Optional[tuple[int, int, Optional[int]]]:
     return int(match.group(1)), int(match.group(2)), None if match.group(3) == "*" else int(match.group(3))
 
 
-def request_range_start(headers: MutableMapping[str, Any]) -> Optional[int]:
-    """Start byte of the request's ``Range`` header; None when absent or not ``bytes=start-...``."""
+def request_range(headers: MutableMapping[str, Any]) -> Optional[tuple[int, Optional[int]]]:
+    """
+    The request's ``Range`` as ``(start, end)``; None when absent or not ``bytes=start-...``.
+
+    ``end`` is None for an open-ended ``bytes=start-``, which the caller cannot hold a
+    response to.
+    """
     value = str(next((v for k, v in headers.items() if str(k).lower() == "range"), ""))
-    match = re.match(r"bytes=(\d+)-", value.strip())
-    return int(match.group(1)) if match else None
+    match = re.match(r"bytes=(\d+)-(\d+)?", value.strip())
+    if not match:
+        return None
+    return int(match.group(1)), int(match.group(2)) if match.group(2) else None
 
 
 def force_unblock_stream(stream: Any) -> None:
@@ -596,6 +597,11 @@ def dispatch_parts(
         pool.shutdown(wait=False, cancel_futures=True)
         raise
     finally:
+        # abort outlives the shutdown so a leaked part exits at its next check instead of
+        # writing into save_path after the caller moved on; a consumer that abandons the
+        # generator (GeneratorExit) reaches here with abort still unset
+        if not completed:
+            abort.set()
         pool.shutdown(wait=worker_error, cancel_futures=True)
         if completed:
             control_file.unlink(missing_ok=True)
@@ -803,16 +809,23 @@ def download(
                     raise IOError(f"expected 206 for byte-range segment, got {stream.status_code}")
 
             if item_range and not part_mode and stream.status_code == 206:
-                # a 206 for a different range than the slice asked for (e.g. the whole
-                # parent) would be written as the segment and silently corrupt the merge
-                slice_start = request_range_start(req_headers)
-                if slice_start is not None:
+                # a 206 for a different range than the slice asked for (e.g. the whole parent,
+                # or the short range a size-capping CDN chose to serve) would be written as the
+                # whole segment and silently corrupt the merge
+                slice_range = request_range(req_headers)
+                if slice_range is not None:
+                    slice_start, slice_end = slice_range
                     content_range = parse_content_range(
                         stream.headers.get("Content-Range") or stream.headers.get("content-range")
                     )
-                    if content_range is None or content_range[0] != slice_start:
+                    if (
+                        content_range is None
+                        or content_range[0] != slice_start
+                        or (slice_end is not None and content_range[1] != slice_end)
+                    ):
                         raise IOError(
-                            f"byte-range segment got Content-Range {content_range!r}, expected start {slice_start}"
+                            f"byte-range segment got Content-Range {content_range!r}, "
+                            f"expected {slice_start}-{slice_end if slice_end is not None else ''}"
                         )
 
             if resumed and content_encoded:
@@ -969,7 +982,10 @@ def download(
                 if abort.wait(delay):
                     return
             else:
-                time.sleep(delay)
+                # no batch abort on this path, but a cross-track cancel must still wake a
+                # parked worker rather than stall teardown for the full backoff
+                if DOWNLOAD_CANCELLED.wait(delay):
+                    return
             attempts += 1
 
 
@@ -997,14 +1013,19 @@ def build_session_spec(session: Optional[Any]) -> Optional[dict[str, Any]]:
             "kind": "rnet",
             "impersonate": name,
             "headers": dict(session.headers),
-            "cookies": session.cookies.get_dict(),
+            "cookies": session.cookies.get_dict_by_domain(),
             "proxy": session.proxies.get("all") or session.proxies.get("https") or session.proxies.get("http"),
         }
     return None
 
 
-def rebuild_session(spec: dict[str, Any]) -> Optional[Any]:
-    """Reconstruct a session inside a child process from a spec built by ``build_session_spec``."""
+def rebuild_session(spec: dict[str, Any], max_workers: int) -> Optional[Any]:
+    """Reconstruct a session inside a child process from a spec built by ``build_session_spec``.
+
+    ``max_workers`` sizes the connection pool to what this child actually runs; the rebuilt
+    session belongs to one child alone, so mounting an adapter here is safe where remounting a
+    caller-provided session in ``requests()`` is not.
+    """
     kind = spec["kind"]
     if kind == "requests":
         rs = Session()
@@ -1013,6 +1034,9 @@ def rebuild_session(spec: dict[str, Any]) -> Optional[Any]:
             rs.cookies.update(spec["cookies"])
         if spec.get("proxies"):
             rs.proxies.update(spec["proxies"])
+        adapter = HTTPAdapter(pool_connections=max_workers, pool_maxsize=max_workers, pool_block=True)
+        rs.mount("https://", adapter)
+        rs.mount("http://", adapter)
         return rs
     if kind == "rnet":
         from unshackle.core.session import session as make_session
@@ -1020,8 +1044,13 @@ def rebuild_session(spec: dict[str, Any]) -> Optional[Any]:
         ns = make_session(spec["impersonate"])
         if spec.get("headers"):
             ns.headers.update(spec["headers"])
-        if spec.get("cookies"):
-            ns.cookies.update(spec["cookies"])
+        for domain, jar in spec.get("cookies", {}).items():
+            if domain:
+                for name, value in jar.items():
+                    ns.cookies.set(name, value, domain=domain)
+            else:
+                # no domain to scope to; update() reproduces the parent's localhost-scoped state
+                ns.cookies.update(jar)
         if spec.get("proxy"):
             ns.proxies.update({"all": spec["proxy"]})
         return ns
@@ -1047,7 +1076,7 @@ def mp_worker(queue: Any, kwargs: dict[str, Any]) -> None:
                 if name in ("READ_TIMEOUT", "RETRY_WAIT", "HEDGE_MIN_WAIT"):
                     setattr(sys.modules[__name__], name, float(value))
         spec = kwargs.pop("_session_spec")
-        kwargs["session"] = rebuild_session(spec)
+        kwargs["session"] = rebuild_session(spec, int(kwargs.get("max_workers") or 1))
         for event in requests(**kwargs):
             queue.put(event)
     except Exception:
@@ -1426,9 +1455,9 @@ def requests(
                         save_path = url_item.get("save_path")
                         if save_path:
                             sp = Path(save_path)
-                            for target in (sp, sp.with_name(f"{sp.name}.!dev")):
+                            for stray in (sp, sp.with_name(f"{sp.name}.!dev")):
                                 try:
-                                    target.unlink(missing_ok=True)
+                                    stray.unlink(missing_ok=True)
                                 except OSError:
                                     pass
             if not ranged_used:
@@ -1815,7 +1844,9 @@ def requests(
             raise
         finally:
             # losers must close their handles before merge sweeps *.!dev (WinError 32);
-            # no wait on cancel/fail: merge never runs and workers may be blocked in reads.
+            # no wait on cancel/fail: the merge below never runs and workers may be blocked
+            # in reads. The caller's own cleanup does still sweep on failure, so a worker
+            # parked in a read can briefly hold a handle there (Windows).
             # batch_abort outlives the shutdown so a leaked worker exits at its next
             # arrival/timeout instead of retrying after the global flag is cleared
             batch_abort.set()

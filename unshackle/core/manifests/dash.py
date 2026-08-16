@@ -512,7 +512,10 @@ class DASH:
                     status_update["downloaded"] = f"DASH {downloaded}"
                 progress(**status_update)
 
-        if not collapse_single_url:
+        if collapse_single_url:
+            with open(save_path, "r+b") as collapsed:
+                collapsed.truncate(int(segments[-1][1].split("-")[1]) + 1)
+        else:
             # Verify output directory exists and contains files
             if not save_dir.exists():
                 error_msg = f"Output directory does not exist: {save_dir}"
@@ -626,8 +629,9 @@ class DASH:
         prefix is the init segment, so the whole resource can be downloaded in one pass.
 
         Returns False for subtitle tracks, an unknown init length, mixed URLs, malformed
-        ranges, a gap between the init prefix and the first media byte, and ranges that
-        overlap or regress in document order.
+        ranges, and anything but one gapless run in document order starting at the init
+        prefix. A gap would pull bytes the segmented merge path excludes (a period the
+        manifest filters out) into the collapsed file, so it fails closed.
         """
         if is_subtitle or init_len is None or not segments:
             return False
@@ -648,12 +652,9 @@ class DASH:
                 return False
             ranges.append((start, end))
 
-        if min(start for start, _ in ranges) != init_len:
-            return False
-
         prev_end = init_len - 1
         for start, end in ranges:
-            if start <= prev_end:
+            if start != prev_end + 1:
                 return False
             prev_end = end
         return True

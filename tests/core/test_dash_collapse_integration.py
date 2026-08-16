@@ -27,6 +27,8 @@ from unshackle.core.tracks.track import DownloadContext
 # distinctive parent resource for the collapse case; init is its [0, INIT_LEN) prefix
 PARENT = bytes(i % 256 for i in range(10240))
 INIT_LEN = 512
+# last indexed byte for the clipped case; the parent carries 1024 bytes past it
+CLIP_END = len(PARENT) - 1025
 
 # separate resources for the non-collapse (mixed-URL) case
 INIT2 = bytes(range(100))
@@ -111,6 +113,27 @@ def collapse_mpd(srv) -> str:
 </MPD>"""
 
 
+def clipped_mpd(srv) -> str:
+    # same parent, but the ranges stop short of its end -> the collapsed file must be trimmed
+    # to the last indexed byte, not left holding the parent's trailing bytes.
+    return f"""<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011">
+  <BaseURL>{base(srv)}</BaseURL>
+  <Period id="0">
+    <AdaptationSet contentType="video" mimeType="video/mp4" lang="en">
+      <Representation id="v0" codecs="avc1.640028" bandwidth="1000000" width="1920" height="1080">
+        <BaseURL>media.mp4</BaseURL>
+        <SegmentList timescale="1">
+          <Initialization range="0-{INIT_LEN - 1}"/>
+          <SegmentURL mediaRange="{INIT_LEN}-5119"/>
+          <SegmentURL mediaRange="5120-{CLIP_END}"/>
+        </SegmentList>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>"""
+
+
 def mixed_mpd(srv) -> str:
     # Two SegmentURLs on distinct paths -> mixed URLs -> predicate False -> segmented path.
     return f"""<?xml version="1.0"?>
@@ -160,6 +183,17 @@ def test_collapse_downloads_parent_whole_in_one_direct_request(server, tmp_path)
     assert not ctx.save_dir.exists()
     assert not list(tmp_path.glob("*.!dev"))
     assert not list(tmp_path.glob("**/*.!dev"))
+
+
+def test_collapse_trims_parent_bytes_past_the_last_segment(server, tmp_path):
+    server.routes["/media.mp4"] = PARENT
+    track = make_track(clipped_mpd(server), server)
+    ctx = make_ctx(tmp_path, "clipped.mp4")
+
+    DASH.download_track(track, ctx)
+
+    # the parent's trailing 1024 bytes are not part of any segment, so they must not survive
+    assert ctx.save_path.read_bytes() == PARENT[: CLIP_END + 1]
 
 
 def test_non_collapse_takes_segmented_merge_path(server, tmp_path):

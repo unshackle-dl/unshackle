@@ -6,7 +6,7 @@ import pytest
 import requests as rq
 
 from unshackle.core.constants import DOWNLOAD_CANCELLED
-from unshackle.core.downloaders.requests import download, has_range_header, parse_content_range, request_range_start
+from unshackle.core.downloaders.requests import download, has_range_header, parse_content_range, request_range
 from unshackle.core.downloaders.requests import requests as requests_downloader
 
 # the package re-exports the `requests` function, shadowing the module of the same name
@@ -76,6 +76,12 @@ class _Server:
                     self.send_206(conn, BODY[5:], f"bytes 5-{len(BODY) - 1}/{len(BODY)}")
                 elif self.mode == "resume_missing_content_range":
                     self.send_206(conn, BODY)
+                elif self.mode == "range_capped_206":
+                    # honors the requested start but caps the span, as size-capping CDNs do
+                    start, _, end = headers["range"].removeprefix("bytes=").partition("-")
+                    start, end = int(start), int(end)
+                    capped = start + (end - start) // 2
+                    self.send_206(conn, BODY[start : capped + 1], f"bytes {start}-{capped}/{len(BODY)}")
                 else:
                     conn.sendall(
                         b"HTTP/1.1 416 Range Not Satisfiable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
@@ -197,6 +203,23 @@ def test_slice_segment_rejects_a_206_for_the_wrong_range(tmp_path, server):
     assert len(server.requests) == downloader.MAX_ATTEMPTS
 
 
+@pytest.mark.parametrize("server", ["range_capped_206"], indirect=True)
+def test_slice_segment_rejects_a_206_capped_short_of_the_requested_end(tmp_path, server):
+    # the body is a valid prefix of the slice, so only the Content-Range end catches it;
+    # writing it would finalize a truncated segment and corrupt the merge
+    save_path = tmp_path / "0.mp4"
+    with pytest.raises(OSError):
+        list(
+            download(
+                url=server.url,
+                save_path=save_path,
+                session=rq.Session(),
+                headers={"Range": f"bytes=0-{len(BODY) - 1}"},
+            )
+        )
+    assert not save_path.exists()
+
+
 @pytest.mark.parametrize("server", ["range_unsatisfiable"], indirect=True)
 def test_slice_segment_never_gets_a_resume_range(tmp_path, server):
     save_path = tmp_path / "0.mp4"
@@ -295,9 +318,9 @@ def test_parse_content_range(value, expected):
         ({}, None),
         ({"Accept": "*/*"}, None),
         ({"Range": "bytes=-500"}, None),
-        ({"Range": "bytes=100-"}, 100),
-        ({"range": "bytes=100-227"}, 100),
+        ({"Range": "bytes=100-"}, (100, None)),
+        ({"range": "bytes=100-227"}, (100, 227)),
     ],
 )
-def test_request_range_start(headers, expected):
-    assert request_range_start(headers) == expected
+def test_request_range(headers, expected):
+    assert request_range(headers) == expected

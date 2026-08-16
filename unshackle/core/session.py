@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import http
 import logging
+import math
 import random
 import time
 from collections.abc import Iterator, MutableMapping
@@ -405,6 +406,21 @@ class RnetCookieAdapter(MutableMapping):
             return dict(self._cookies.get(domain, {}))
         return dict(self._flat)
 
+    def get_dict_by_domain(self) -> dict[str, dict[str, str]]:
+        """Return cookies grouped by domain, domain-less ones under ``""``.
+
+        rnet scopes each cookie to the host of the URL it was set on, so a copy made with
+        ``get_dict`` can only ever be replayed against one host. Cookies that arrived as a
+        plain dict are recorded flat only, and are reported under the empty domain to match
+        the localhost fallback in :meth:`flush_to_client`.
+        """
+        grouped = {domain: dict(cookies) for domain, cookies in self._cookies.items() if cookies}
+        scoped = {name for cookies in grouped.values() for name in cookies}
+        leftovers = {name: value for name, value in self._flat.items() if name not in scoped}
+        if leftovers:
+            grouped[""] = {**grouped.get("", {}), **leftovers}
+        return grouped
+
     def clear(self, domain: Optional[str] = None, path: Optional[str] = None, name: Optional[str] = None) -> None:
         """Remove cookies (requests RequestsCookieJar compat).
 
@@ -616,11 +632,22 @@ class RnetSession:
         if response:
             retry_after = response.headers.get("Retry-After")
             if retry_after:
+                wait: Optional[float] = None
                 try:
-                    return float(retry_after)
+                    wait = float(retry_after)
                 except ValueError:
-                    if retry_date := parsedate_to_datetime(retry_after):
-                        return (retry_date - datetime.now(timezone.utc)).total_seconds()
+                    try:
+                        retry_date = parsedate_to_datetime(retry_after)
+                        if retry_date.tzinfo is None:
+                            retry_date = retry_date.replace(tzinfo=timezone.utc)
+                        wait = (retry_date - datetime.now(timezone.utc)).total_seconds()
+                    except Exception:
+                        # parsedate_to_datetime itself raises ValueError on malformed dates
+                        # (Python >= 3.10); an unusable header must not escape the retry loop
+                        wait = None
+                if wait is not None and math.isfinite(wait):
+                    # a hostile Retry-After (e.g. 86400) would otherwise park the caller for a day
+                    return min(wait, self.max_backoff)
 
         if attempt == 0:
             return 0.0
