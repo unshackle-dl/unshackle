@@ -2023,16 +2023,64 @@
 <td>Force HTTP/2.</td>
 </tr>
 <tr>
-<td><code>pool_max_idle_per_host</code></td>
+<td><code>connect_timeout</code></td>
+<td>int</td>
+<td><code>10</code></td>
+<td>Connect timeout in seconds.</td>
+</tr>
+<tr>
+<td><code>read_timeout</code></td>
+<td>int</td>
+<td><code>30</code></td>
+<td>Read timeout in seconds (max gap between response chunks).</td>
+</tr>
+<tr>
+<td><code>timeout</code></td>
 <td>int</td>
 <td><em>(unset)</em></td>
-<td>Connection-pool tuning.</td>
+<td>Total request timeout in seconds.</td>
+</tr>
+<tr>
+<td><code>allow_redirects</code></td>
+<td>bool</td>
+<td><em>(unset)</em></td>
+<td>Follow redirects automatically (rnet client default when unset).</td>
+</tr>
+<tr>
+<td><code>pool_idle_timeout</code></td>
+<td>int</td>
+<td><code>55</code></td>
+<td>Seconds an idle pooled connection is kept (default stays under typical ~60s CDN idle kills).</td>
+</tr>
+<tr>
+<td><code>pool_max_idle_per_host</code></td>
+<td>int</td>
+<td><code>64</code></td>
+<td>Max idle connections kept per host.</td>
 </tr>
 <tr>
 <td><code>pool_max_size</code></td>
 <td>int</td>
 <td><em>(unset)</em></td>
-<td>Connection-pool tuning.</td>
+<td>Max total connections in the pool.</td>
+</tr>
+<tr>
+<td><code>tcp_keepalive</code></td>
+<td>int</td>
+<td><code>30</code></td>
+<td>TCP keepalive time in seconds.</td>
+</tr>
+<tr>
+<td><code>tcp_keepalive_interval</code></td>
+<td>int</td>
+<td><em>(unset)</em></td>
+<td>TCP keepalive probe interval in seconds.</td>
+</tr>
+<tr>
+<td><code>tcp_keepalive_retries</code></td>
+<td>int</td>
+<td><em>(unset)</em></td>
+<td>TCP keepalive probe retry count.</td>
 </tr>
 <tr>
 <td><code>tcp_nodelay</code></td>

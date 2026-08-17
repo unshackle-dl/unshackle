@@ -3124,6 +3124,8 @@ with <a href="../../reference/configuration/download/#language_tags"><code>langu
 </span></code></pre></div>
 <p>The date separator follows your template style: dots here, spaces if your <code>series</code>
 template uses spaces.</p>
+<p>In folder names, <code>{season}</code> becomes the air year (<code>Season 2024</code> style grouping), and a
+<code>{year?}</code> in the folder template is skipped when it would just repeat that year.</p>
 </div>
 <div class="tabbed-block">
 <p><div class="language-yaml highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="nt">output_template</span><span class="p">:</span>

@@ -3670,6 +3670,18 @@ configured proxy providers), or a <code>provider:region</code> form.</p>
 <td>Threads used per track for segment downloads. Default depends on the downloader.</td>
 </tr>
 <tr>
+<td><code>--adaptive-workers</code></td>
+<td>Opt-in: start with a moderate per-track worker count and ramp it up or back off based on measured CDN throughput and errors, capped at <code>--workers</code>. Off by default (fixed worker count).</td>
+</tr>
+<tr>
+<td><code>--download-processes N</code></td>
+<td>Opt-in: split a large segment batch across <code>N</code> download processes, each with its own worker pool. A single process tops out around 1.3 Gb/s (Python interpreter limit); <code>2</code> reaches 2.5GbE line rate on fast CDNs. Only engages for batches of 24+ segments. Ignored while <code>--speed-limit</code> (or serve's <code>global_speed_limit</code>) is set: the cap is one shared budget, which extra processes cannot share, so the download stays in a single process. Default <code>1</code>.</td>
+</tr>
+<tr>
+<td><code>--continue-downloads</code></td>
+<td>Opt-in: keep completed segment files when a download fails so the next run resumes instead of restarting from zero. One-off enable of the <a href="../../reference/configuration/download/#continue_downloads"><code>continue_downloads</code></a> config option, which documents what can and cannot resume.</td>
+</tr>
+<tr>
 <td><code>--downloads N</code></td>
 <td>Number of tracks downloaded concurrently. Default <code>1</code>.</td>
 </tr>

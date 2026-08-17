@@ -1115,6 +1115,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#continue_downloads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        continue_downloads
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#subtitle" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1980,6 +1991,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#continue_downloads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        continue_downloads
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#subtitle" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2274,6 +2296,32 @@ applies to that service only.</p>
 to set server-wide download defaults for every request it handles. Keys the API does not know
 are ignored there (<code>speed_limit</code>, for example; <code>serve</code> has its own <code>global_speed_limit</code>).</p>
 </div>
+<h2 id="continue_downloads"><code>continue_downloads</code><a class="headerlink" href="#continue_downloads" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Type:</strong> <code>bool</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>false</code></li>
+</ul>
+<p>Keep a failed download's completed segment files so the next attempt resumes from where it
+stopped instead of restarting from byte zero.</p>
+<p>Only whole, fully downloaded segments are reused; partially written segments are always
+discarded, and no partial-byte (<code>Range</code>) resume across runs takes place. Reuse also
+requires proof that the remote content is unchanged: the manifest URL, segment count, and
+byte ranges must all match the previous run, otherwise the download silently restarts
+clean.</p>
+<div class="admonition note">
+<p class="admonition-title">What can and cannot resume</p>
+<ul>
+<li>Segmented DASH, ISM, and HLS tracks resume.</li>
+<li>Single-file (non-segmented) downloads and DASH tracks collapsed to a single ranged
+  download never produce segment files, so this option does not apply to them (the
+  downloader has its own in-flight partial-file handling for those).</li>
+<li>HLS resumes Widevine/PlayReady and unencrypted content only; AES-128 content always
+  restarts. An HLS failure during the post-download merge step also restarts.</li>
+</ul>
+</div>
+<p>For a one-off resume without changing config, pass <code>dl --continue-downloads</code> on the
+command line (the flag can only enable resume, never disable it).</p>
+<div class="language-yaml highlight"><span class="filename">Resume failed downloads</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">continue_downloads</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span></code></pre></div>
 <h2 id="subtitle"><code>subtitle</code><a class="headerlink" href="#subtitle" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
@@ -2352,10 +2400,10 @@ written as sidecar files. See <a href="../../../guide/subtitles/">Subtitles</a> 
 </tr>
 </tbody>
 </table>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">subtitle</span><span class="p">:</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">strip_sdh</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">output_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sidecar</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nt">sidecar_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">srt</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">subtitle</span><span class="p">:</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">strip_sdh</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">output_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sidecar</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">sidecar_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">srt</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title"><code>group_by</code> track order</p>
@@ -2382,9 +2430,9 @@ controls the order inside each language.</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title"><code>language_priority</code> sorts languages, it does not select them</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">subtitle</span><span class="p">:</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">group_by</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">language</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">language_priority</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">es</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">fr</span><span class="p p-Indicator">]</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">subtitle</span><span class="p">:</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">group_by</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">language</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">language_priority</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">es</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">fr</span><span class="p p-Indicator">]</span>
 </span></code></pre></div>
 <table>
 <thead>
@@ -2419,11 +2467,11 @@ first audio track, so a full dialogue track never becomes default on its own.
 <code>type_priority</code> alone does not change that. Name a subtitle language in
 <a href="#muxing"><code>muxing.default_language</code></a> and the first track in that language gets the flag
 instead, which is where <code>type_priority</code> decides which track that is:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">muxing</span><span class="p">:</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">default_language</span><span class="p">:</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="nt">subtitle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="nt">subtitle</span><span class="p">:</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span><span class="nt">type_priority</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">normal</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">sdh</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">forced</span><span class="p p-Indicator">]</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">muxing</span><span class="p">:</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">default_language</span><span class="p">:</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="nt">subtitle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="nt">subtitle</span><span class="p">:</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span><span class="nt">type_priority</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">normal</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">sdh</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">forced</span><span class="p p-Indicator">]</span>
 </span></code></pre></div>
 </div>
 <h2 id="audio"><code>audio</code><a class="headerlink" href="#audio" title="Permanent link">&para;</a></h2>
@@ -2433,13 +2481,13 @@ instead, which is where <code>type_priority</code> decides which track that is:<
 <p>Audio handling options. The most notable sub-key is <strong><code>codec_priority</code></strong>, an ordered list of
 audio codecs used to break ties in track selection. <strong><code>language_priority</code></strong> is an ordered list
 of languages that sort to the top of the audio tracks.</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">audio</span><span class="p">:</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">codec_priority</span><span class="p">:</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EAC3</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AC3</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span><span class="nt">language_priority</span><span class="p">:</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">orig</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">audio</span><span class="p">:</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">codec_priority</span><span class="p">:</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EAC3</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AC3</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span><span class="nt">language_priority</span><span class="p">:</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">orig</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title"><code>codec_priority</code> is a soft priority: nothing is dropped</p>
@@ -2491,11 +2539,11 @@ bitrate alone, with those same Atmos/descriptive rules still applied.</p>
 </tr>
 </tbody>
 </table>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">muxing</span><span class="p">:</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">set_title</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">default_language</span><span class="p">:</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="nt">audio</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span><span class="nt">subtitle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">muxing</span><span class="p">:</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">set_title</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">default_language</span><span class="p">:</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="nt">audio</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span><span class="nt">subtitle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
 </span></code></pre></div>
 <h2 id="language_tags"><code>language_tags</code><a class="headerlink" href="#language_tags" title="Permanent link">&para;</a></h2>
 <ul>
@@ -2526,11 +2574,11 @@ A rule may test:</p>
 </tr>
 </tbody>
 </table>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">language_tags</span><span class="p">:</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">rules</span><span class="p">:</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">audio</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">ja</span><span class="p p-Indicator">]</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">      </span><span class="nt">subs_contain</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">]</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">      </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;SUBBED&quot;</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">language_tags</span><span class="p">:</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nt">rules</span><span class="p">:</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">audio</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">ja</span><span class="p p-Indicator">]</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">      </span><span class="nt">subs_contain</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">]</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">      </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;SUBBED&quot;</span>
 </span></code></pre></div>
 <h2 id="dual_multi_mode"><code>dual_multi_mode</code><a class="headerlink" href="#dual_multi_mode" title="Permanent link">&para;</a></h2>
 <ul>
@@ -2589,7 +2637,7 @@ A rule may test:</p>
 </div>
 </div>
 </div>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">dual_multi_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">strict</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">dual_multi_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">strict</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Dialects count as one language</p>

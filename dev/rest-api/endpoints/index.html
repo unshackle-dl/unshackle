@@ -3651,6 +3651,18 @@ is unaffected. See <a href="../../creating-a-service/#split-episodes">Split epis
 <td>Threads per track.</td>
 </tr>
 <tr>
+<td><code>adaptive_workers</code></td>
+<td>boolean</td>
+<td><code>false</code></td>
+<td>Scale segment workers to measured CDN throughput, up to the <code>workers</code> cap.</td>
+</tr>
+<tr>
+<td><code>download_processes</code></td>
+<td>int</td>
+<td><code>1</code></td>
+<td>Split a track's segments across this many processes. Only engages for large batches.</td>
+</tr>
+<tr>
 <td><code>downloads</code></td>
 <td>int</td>
 <td><code>1</code></td>

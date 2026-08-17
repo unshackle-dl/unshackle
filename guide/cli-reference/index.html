@@ -3303,6 +3303,21 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 <td>Per-track download threads.</td>
 </tr>
 <tr>
+<td><code>--adaptive-workers</code></td>
+<td>off</td>
+<td>Scale per-track segment workers dynamically (up to the <code>--workers</code> cap) based on measured CDN throughput and errors.</td>
+</tr>
+<tr>
+<td><code>--download-processes</code></td>
+<td><code>1</code></td>
+<td>Split large segment batches (24+) across this many download processes to exceed the single-process throughput cap on multi-gigabit connections. Ignored while a speed limit is set: the cap is one shared budget, which extra processes cannot share, so the download stays in a single process.</td>
+</tr>
+<tr>
+<td><code>--continue-downloads</code></td>
+<td>off</td>
+<td>Keep completed segment files across runs and resume a previously failed download. One-off enable of the <a href="../../reference/configuration/download/#continue_downloads"><code>continue_downloads</code></a> config option.</td>
+</tr>
+<tr>
 <td><code>--downloads</code></td>
 <td><code>1</code></td>
 <td>Number of tracks downloaded concurrently.</td>
