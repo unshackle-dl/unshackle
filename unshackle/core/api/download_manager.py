@@ -360,6 +360,10 @@ def perform_download(
         ]
         config.directories.cache = config.directories.cache / "_jobs" / cred_hash
 
+    for banned in ("postscript", "post_script", "post_scripts"):
+        if params.pop(banned, None) is not None:
+            log.warning(f"Ignoring '{banned}' in API download parameters; post-scripts are config-only")
+
     vcodec_raw = params.get("vcodec")
     if vcodec_raw:
         if isinstance(vcodec_raw, str):

@@ -22,7 +22,7 @@ from http.cookiejar import CookieJar, MozillaCookieJar
 from itertools import product
 from pathlib import Path
 from threading import Lock
-from typing import Any, Callable, Optional, TypedDict, Union
+from typing import Any, Callable, Optional, Sequence, TypedDict, Union
 from uuid import UUID
 
 import click
@@ -107,6 +107,7 @@ from unshackle.core.utils.click_types import (
     SubtitleCodecChoice,
 )
 from unshackle.core.utils.collections import ci_get, merge_dict
+from unshackle.core.utils.post_scripts import build_context, dispatch
 from unshackle.core.utils.selector import select_multiple
 from unshackle.core.utils.subprocess import ffprobe
 from unshackle.core.vaults import Vaults
@@ -466,6 +467,14 @@ class dl:
 
         return created_paths
 
+    def post_script_ids(self) -> dict[str, Any]:
+        """Tagging IDs as they stand right now.
+
+        Read per dispatch, never snapshotted: an Episode's TMDB ID is resolved by the
+        search inside the title loop, so a snapshot taken before it is always empty.
+        """
+        return {"tmdb": self.tmdb_id, "imdb": self.imdb_id, "tvdb": self.tvdb_id}
+
     @click.command(
         short_help="Download, Decrypt, and Mux tracks for titles from a Service.",
         cls=Services,
@@ -791,6 +800,17 @@ class dl:
         "--no-source", is_flag=True, default=False, help="Disable the source tag from the output file name and path."
     )
     @click.option("--no-mux", is_flag=True, default=False, help="Do not mux tracks into a container file.")
+    @click.option(
+        "--postscript",
+        "postscript",
+        type=str,
+        multiple=True,
+        metavar="COMMAND",
+        help=(
+            "Run COMMAND after each downloaded file, with {filepath}, {title}, {season} and other "
+            "variables substituted. Repeatable. Replaces the post_scripts config for this run."
+        ),
+    )
     @click.option(
         "--workers",
         type=int,
@@ -1423,6 +1443,7 @@ class dl:
         real_video_bitrate: bool = False,
         real_audio_bitrate: bool = False,
         progress_sink: Optional[Callable[[dict[str, Any]], None]] = None,
+        postscript: Sequence[str] = (),
         *_: Any,
         **__: Any,
     ) -> None:
@@ -1714,6 +1735,7 @@ class dl:
         )
         music_titles = list(titles) if music_collection_mode else ([titles] if music_mode else [])
         music_plans = {}
+        music_post_script: dict[Path, dict[str, str]] = {}
 
         if music_titles:
             music_renderer = MusicRenderer()
@@ -1907,6 +1929,22 @@ class dl:
         if music_group_download:
 
             def download_music_title(titles: Music, plan: Any) -> bool:
+                album_post_script: dict[Path, dict[str, str]] = {}
+
+                def music_failure(error: BaseException) -> None:
+                    """The music twin of the video worker's failure hook, keyed to the release."""
+                    dispatch(
+                        "failure",
+                        "file",
+                        build_context(
+                            titles,
+                            service=self.service,
+                            ids=self.post_script_ids(),
+                            error=f"{type(error).__name__}: {error}",
+                        ),
+                        postscript,
+                    )
+
                 music_items: list[tuple[Song, Audio, Callable[..., None]]] = []
                 music_song_plans = {id(song_plan.song): song_plan for disc in plan.discs for song_plan in disc.songs}
                 music_renderer = MusicRenderer()
@@ -2146,6 +2184,7 @@ class dl:
                         )
                     )
                     console.print_exception()
+                    music_failure(e)
                     return
 
                 if skip_dl:
@@ -2182,6 +2221,7 @@ class dl:
                                 )
                     except MusicAudioIntegrityError as error:
                         console.print(Padding(f"Audio integrity failed: {error}", (0, 5, 1, 5)))
+                        music_failure(error)
                         return
                     integrity_time = format_elapsed_seconds(time.time() - integrity_start)
 
@@ -2276,6 +2316,16 @@ class dl:
                             }
                         )
 
+                        song_context = build_context(
+                            song,
+                            media_infos.get(id(track)),
+                            filepath=final_path,
+                            service=self.service,
+                            ids=self.post_script_ids(),
+                        )
+                        dispatch("success", "file", song_context, postscript)
+                        album_post_script[final_path.parent] = song_context
+
                     if final_paths:
                         manifest_slug = ".".join(
                             part
@@ -2347,12 +2397,30 @@ class dl:
                         Padding(f"{release_label} downloaded in [progress.elapsed]{album_time}[/]!", (0, 5, 1, 5))
                     )
 
+                for folder, context in album_post_script.items():
+                    album_context = dict(context)
+                    for key in ("filepath", "filename", "ext", "sidecars", "episode", "episode_name"):
+                        album_context[key] = ""
+                    for key in ("track_number", "disc", "isrc"):
+                        if key in album_context:
+                            album_context[key] = ""
+                    album_context["title"] = album_context["title_raw"] = album_context.get("album", "")
+                    album_context["folder"] = str(folder)
+                    dispatch("success", "season", album_context, postscript)
+                music_post_script.update(album_post_script)
+
                 return True
 
             for music_title in music_titles:
                 current_plan = music_plans.get(id(music_title)) or MusicPlanner(service).build(music_title)
                 if not download_music_title(music_title, current_plan):
                     return
+
+            if music_post_script:
+                run_context = dict.fromkeys(next(iter(music_post_script.values())), "")
+                for folder in music_post_script:
+                    run_context["folder"] = str(folder)
+                    dispatch("success", "run", run_context, postscript)
 
             if not hasattr(service, "close"):
                 cookie_file = self.get_cookie_path(self.service, self.profile)
@@ -2370,6 +2438,32 @@ class dl:
             raise click.ClickException("Music collections require grouped audio downloads.")
 
         base_selection = (v_lang, a_lang, s_lang, range_)
+
+        def post_script_group(candidate: Any) -> Any:
+            """Key a title by the folder its outputs share, for post-scripts in season mode."""
+            if isinstance(candidate, Episode):
+                return ("episode", candidate.title, candidate.season)
+            if isinstance(candidate, (Song, Music)):
+                artist = getattr(candidate, "album_artist", None) or getattr(candidate, "artist", "")
+                return ("album", artist, getattr(candidate, "album", ""))
+            return ("title", id(candidate))
+
+        def post_script_queued(candidate: Any) -> bool:
+            """Mirror of the filters the loop below applies, so the season counter matches it."""
+            if isinstance(candidate, Episode) and latest_episode and latest_episode_id:
+                return f"{candidate.season}x{candidate.number}" == latest_episode_id
+            if isinstance(candidate, Episode) and wanted:
+                return bool(candidate.matches_wanted(wanted))
+            return True
+
+        post_script_pending: dict[Any, int] = {}
+        for candidate in titles:
+            if post_script_queued(candidate):
+                key = post_script_group(candidate)
+                post_script_pending[key] = post_script_pending.get(key, 0) + 1
+        post_script_last: dict[Any, dict[Path, dict[str, str]]] = {}
+        post_script_folders: list[Path] = []
+        post_script_sample: dict[str, str] = {}
 
         for i, title in enumerate(titles):
             v_lang, a_lang, s_lang, range_ = base_selection
@@ -3376,6 +3470,18 @@ class dl:
                             "returncode": getattr(e, "returncode", None),
                         },
                     )
+
+                dispatch(
+                    "failure",
+                    "file",
+                    build_context(
+                        title,
+                        service=self.service,
+                        ids=self.post_script_ids(),
+                        error=f"{type(e).__name__}: {e}",
+                    ),
+                    postscript,
+                )
                 return
 
             if skip_dl:
@@ -3389,6 +3495,7 @@ class dl:
                 skip_subtitle_mux = subtitle_output_mode == "sidecar" and (title.tracks.videos or title.tracks.audio)
                 sidecar_subtitles: list[Subtitle] = []
                 sidecar_original_paths: dict[str, Path] = {}
+                sidecar_files: dict[Optional[Path], list[Path]] = {}
                 if subtitle_output_mode in ("sidecar", "both") and not no_mux:
                     sidecar_subtitles = [s for s in title.tracks.subtitles if s.path and s.path.exists()]
                     if sidecar_format == "original":
@@ -3750,36 +3857,53 @@ class dl:
                                 sys.exit(1)
 
                             if sidecar_subtitles and not no_mux:
-                                media_info = MediaInfo.parse(muxed_paths[0]) if muxed_paths else None
-                                if media_info:
-                                    base_filename = title.get_filename(media_info, show_service=not no_source)
-                                else:
-                                    base_filename = str(title)
+                                sidecar_targets: list[tuple[Optional[Path], str, Path]] = []
+                                for muxed_path in muxed_paths or [None]:
+                                    media_info = MediaInfo.parse(muxed_path) if muxed_path else None
+                                    if media_info:
+                                        base_filename = title.get_filename(media_info, show_service=not no_source)
+                                    else:
+                                        base_filename = str(title)
 
-                                sidecar_dir = self.output_dir or config.directories.downloads
-                                if (
-                                    not no_folder
-                                    and media_info
-                                    and (
-                                        isinstance(title, (Episode, Song))
-                                        or (isinstance(title, Movie) and config.get_folder_template("movies"))
-                                    )
-                                ):
-                                    sidecar_dir /= title.get_filename(
-                                        media_info, show_service=not no_source, folder=True
-                                    )
-                                sidecar_dir.mkdir(parents=True, exist_ok=True)
+                                    sidecar_dir = self.output_dir or config.directories.downloads
+                                    if (
+                                        not no_folder
+                                        and media_info
+                                        and (
+                                            isinstance(title, (Episode, Song))
+                                            or (isinstance(title, Movie) and config.get_folder_template("movies"))
+                                        )
+                                    ):
+                                        sidecar_dir /= title.get_filename(
+                                            media_info, show_service=not no_source, folder=True
+                                        )
+                                    sidecar_targets.append((muxed_path, base_filename, sidecar_dir))
 
                                 with console.status("Saving subtitle sidecar files..."):
+                                    first_path, first_base, first_dir = sidecar_targets[0]
+                                    first_dir.mkdir(parents=True, exist_ok=True)
                                     created = self.output_subtitle_sidecars(
                                         sidecar_subtitles,
-                                        base_filename,
-                                        sidecar_dir,
+                                        first_base,
+                                        first_dir,
                                         sidecar_format,
                                         original_paths=sidecar_original_paths or None,
                                     )
                                     if created:
+                                        sidecar_files[first_path] = list(created)
                                         self.log.info(f"Saved {len(created)} sidecar subtitle files")
+
+                                    for muxed_path, base_filename, sidecar_dir in sidecar_targets[1:]:
+                                        sidecar_dir.mkdir(parents=True, exist_ok=True)
+                                        copies = []
+                                        for source in created:
+                                            target = sidecar_dir / f"{base_filename}{source.name[len(first_base) :]}"
+                                            if target != source:
+                                                shutil.copy2(source, target)
+                                            copies.append(target)
+                                        if copies:
+                                            sidecar_files[muxed_path] = copies
+                                            self.log.info(f"Saved {len(copies)} sidecar subtitle files")
 
                             for track in title.tracks:
                                 track.delete()
@@ -3910,6 +4034,33 @@ class dl:
                             self.anime_hint(title),
                         )
 
+                        post_script_context = build_context(
+                            title,
+                            media_info,
+                            filepath=final_path,
+                            sidecars=sidecar_files.get(muxed_path, []),
+                            service=self.service,
+                            ids=self.post_script_ids(),
+                        )
+                        dispatch("success", "file", post_script_context, postscript)
+                        post_script_last.setdefault(post_script_group(title), {})[final_path.parent] = (
+                            post_script_context
+                        )
+                        post_script_sample = post_script_context
+                        if final_path.parent not in post_script_folders:
+                            post_script_folders.append(final_path.parent)
+
+                if not no_mux:
+                    group_key = post_script_group(title)
+                    post_script_pending[group_key] = post_script_pending.get(group_key, 1) - 1
+                    if post_script_pending[group_key] <= 0:
+                        for folder, context in post_script_last.get(group_key, {}).items():
+                            season_context = dict(context)
+                            for key in ("filepath", "filename", "ext", "sidecars", "episode", "episode_name"):
+                                season_context[key] = ""
+                            season_context["folder"] = str(folder)
+                            dispatch("success", "season", season_context, postscript)
+
                 title_dl_time = time_elapsed_since(dl_start_time)
                 downloaded_label = "Track" if music_mode and isinstance(title, Song) else "Title"
                 console.print(
@@ -3929,6 +4080,12 @@ class dl:
 
         if hasattr(service, "close"):
             service.close()
+
+        if post_script_folders and post_script_sample:
+            run_context = dict.fromkeys(post_script_sample, "")
+            for folder in post_script_folders:
+                run_context["folder"] = str(folder)
+                dispatch("success", "run", run_context, postscript)
 
         dl_time = time_elapsed_since(start_time)
 

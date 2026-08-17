@@ -942,6 +942,10 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
     Returns:
         None if valid, error message string if invalid
     """
+    for banned in ("postscript", "post_script", "post_scripts"):
+        if data.get(banned):
+            return f"'{banned}' is not accepted over the API. Define post_scripts in unshackle.yaml."
+
     if "vcodec" in data and data["vcodec"]:
         err = check_codec(data["vcodec"], VALID_VCODECS, "vcodec")
         if err:

@@ -413,6 +413,13 @@ Create a download job. Requires `service` and `title_id`; every other field is a
 
 **Validation.** Invalid values return `400 INVALID_PARAMETERS`. Notably: `vcodec` must be one of H264/H265/H.264/H.265/AVC/HEVC/VC1/VC-1/VP8/VP9/AV1; `acodec` one of AAC/AC3/EC3/EAC3/DD/DD+/AC4/OPUS/FLAC/ALAC/VORBIS/OGG/DTS; `range` one of SDR/HDR10/HDR10P/DV/HLG/HYBRID (`HDR10+` is accepted); bitrate/worker/download counts must be positive integers; at most one of the `*_only` flags may be set; `no_subs` cannot be combined with `subs_only`, `no_audio` with `audio_only`, or `s_lang` with `require_subs`.
 
+!!! danger "Rejected parameters"
+    `postscript`, `post_script` and `post_scripts` are never accepted. A body containing any
+    of them is rejected with `400 INVALID_PARAMETERS`, because a command string arriving from
+    an HTTP caller would be remote code execution. Post-download hooks are configured only in
+    `unshackle.yaml`, where they still run for API jobs. See
+    [Post-download scripts](../../reference/configuration/post-scripts.md).
+
 !!! warning "Gated parameters (developer)"
     A few keys are accepted but only permitted when the server config opts in, otherwise the request is rejected with `403 FORBIDDEN`:
 

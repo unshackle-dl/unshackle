@@ -579,6 +579,21 @@ flags change how the output is assembled:
 | `--split-audio` | Write a separate output file per audio codec instead of merging all audio. | config `muxing.merge_audio` (on) |
 | `--merge-video` | Mux video tracks that share a height, range, and codec into one file, so only language varies inside a file. | config `muxing.merge_video` (off) |
 
+### After the download
+
+`--postscript "<command>"` runs your own command once per output file, with unshackle's
+metadata substituted into `{variable}` placeholders. It is repeatable, and it replaces the
+`post_scripts` config for that run. Nothing runs under `--no-mux`, since no output is
+written.
+
+```shell title="Hand each finished file to an uploader"
+unshackle dl --postscript "python /opt/upload.py {filepath} --service={service}" EXAMPLE 81234567
+```
+
+For hooks that persist across runs, for the `season` and `run` modes, for `failure` hooks
+and for the full variable list, see
+[Post-download scripts](../reference/configuration/post-scripts.md).
+
 ### Naming tags
 
 - `--tag`: set the release group tag (overrides the configured tag).
@@ -815,6 +830,7 @@ authoritative list.
 | `--best-available` | | Degrade gracefully instead of failing. |
 | `--output` | `-o` | Output directory for this run. |
 | `--split-audio` / `--merge-video` / `--no-mux` | | Muxing behaviour. |
+| `--postscript` | | Run a command after each output file. Repeatable. |
 | `--proxy` / `--no-proxy` / `--no-proxy-download` | | Proxy control. |
 | `--workers` / `--downloads` / `--slow` | | Concurrency and pacing. |
 | `--list` / `--list-titles` / `--skip-dl` | | Dry runs. |

@@ -132,7 +132,7 @@ def sanitize_filename(filename: str, spacer: str = ".") -> str:
         filename = unidecode(filename)
         filename = re.sub(r"\[\(+", "[", filename)
         filename = re.sub(r"\)+\]", "]", filename)
-    filename = "".join(c for c in filename if unicodedata.category(c) != "Mn")  # hidden characters
+    filename = "".join(c for c in filename if unicodedata.category(c) not in ("Mn", "Cc"))
     filename = filename.replace("/", " & ").replace(";", " & ")  # e.g. multi-episode filenames
     if spacer == ".":
         filename = re.sub(r" - ", spacer, filename)  # title separators to spacer (avoids .-. pattern)

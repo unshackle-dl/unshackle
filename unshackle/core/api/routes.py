@@ -594,7 +594,10 @@ async def download(request: web.Request) -> web.Response:
     Download content based on provided parameters.
     ---
     summary: Download content
-    description: Download video content based on specified parameters
+    description: >-
+      Download video content based on specified parameters.
+      'postscript', 'post_script' and 'post_scripts' are never accepted and return 400;
+      post-download hooks are configured only in unshackle.yaml.
     requestBody:
       required: true
       content:

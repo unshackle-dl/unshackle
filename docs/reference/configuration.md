@@ -14,5 +14,6 @@ This page has moved. The configuration reference is now split by area under
 | DRM & CDM | [configuration/drm.md](configuration/drm.md) |
 | Network & proxy | [configuration/network.md](configuration/network.md) |
 | Key vaults | [configuration/vaults.md](configuration/vaults.md) |
+| Post-download scripts | [configuration/post-scripts.md](configuration/post-scripts.md) |
 | Other settings | [configuration/misc.md](configuration/misc.md) |
 | Complete annotated example | [configuration/example.md](configuration/example.md) |

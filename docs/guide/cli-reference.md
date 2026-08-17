@@ -145,6 +145,7 @@ Keep only certain track types, or skip certain track types. Attachments are alwa
 | `--no-mux` | Do not mux; keep individual track files. |
 | `--tag` | Group tag override. |
 | `--repack` | Add a `REPACK` tag to the filename. |
+| `--postscript` | Run a command after each output file, with `{variable}` placeholders substituted. Repeatable. Replaces the `post_scripts` config for this run. See [Post-download scripts](../reference/configuration/post-scripts.md). |
 
 ### Metadata & tagging
 
