@@ -70,6 +70,9 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "no_source": False,
     "no_mux": False,
     "workers": None,
+    "adaptive_workers": False,
+    "download_processes": 1,
+    "continue_downloads": False,
     "downloads": 1,
     "worst": False,
     "best_available": False,
@@ -983,6 +986,10 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
     if "workers" in data and data["workers"] is not None:
         if not isinstance(data["workers"], int) or data["workers"] <= 0:
             return "workers must be a positive integer"
+
+    if "download_processes" in data and data["download_processes"] is not None:
+        if not isinstance(data["download_processes"], int) or data["download_processes"] <= 0:
+            return "download_processes must be a positive integer"
 
     if "downloads" in data and data["downloads"] is not None:
         if not isinstance(data["downloads"], int) or data["downloads"] <= 0:

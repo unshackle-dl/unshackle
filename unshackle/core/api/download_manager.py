@@ -189,8 +189,12 @@ def history_limit() -> int:
         return 100
 
 
+_history_appends_since_trim = 0  # module-level; record_job_history runs serialized on the event loop
+
+
 def record_job_history(job: DownloadJob) -> None:
     """Append a terminal job's summary as one JSON line to the history file (best effort)."""
+    global _history_appends_since_trim
     if job.history_recorded or job.status not in TERMINAL_STATUSES:
         return
     job.history_recorded = True
@@ -211,14 +215,18 @@ def record_job_history(job: DownloadJob) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         line = json.dumps(entry)
         limit = history_limit()
-        # Serialized on the manager's event loop, so read-append-trim doesn't race.
-        if limit > 0 and path.exists():
-            existing = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
-            existing.append(line)
-            path.write_text("\n".join(existing[-limit:]) + "\n", encoding="utf-8")  # keep newest N
-        else:
-            with open(path, "a", encoding="utf-8") as handle:
-                handle.write(line + "\n")
+        # Serialized on the manager's event loop, so append + periodic trim doesn't race.
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
+        # Appending is O(1); only pay the full read-rewrite once appends drift past a slack
+        # margin, keeping the newest N.
+        if limit > 0:
+            _history_appends_since_trim += 1
+            if _history_appends_since_trim >= max(16, limit // 4):
+                _history_appends_since_trim = 0
+                existing = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+                if len(existing) > limit:
+                    path.write_text("\n".join(existing[-limit:]) + "\n", encoding="utf-8")  # keep newest N
     except OSError as e:
         log.warning(f"Could not write job history: {e}")
 
@@ -298,6 +306,21 @@ def to_enum(values: List[str], enum_cls: type[Enum]) -> List[Enum]:
     return [lookup[v.upper()] for v in values if v.upper() in lookup]
 
 
+def normalize_sub_format(sub_format_raw: str) -> Any:
+    """Normalize an API sub_format string to what dl.py expects.
+
+    "original" is a sentinel meaning "keep source format" (dl.py skips conversion), so it must
+    pass through unchanged to match the CLI (SubtitleCodecChoice returns the same string). Any
+    other value maps to a Subtitle.Codec, or None when unrecognized.
+    """
+    from unshackle.core.tracks import Subtitle
+
+    if sub_format_raw.lower() == "original":
+        return "original"
+    mapped = to_enum([sub_format_raw], Subtitle.Codec)
+    return mapped[0] if mapped else None
+
+
 def perform_download(
     job_id: str,
     service: str,
@@ -318,7 +341,7 @@ def perform_download(
     from unshackle.core.api.errors import APIError, APIErrorCode
     from unshackle.core.config import config
     from unshackle.core.services import Services
-    from unshackle.core.tracks import Subtitle, Video
+    from unshackle.core.tracks import Video
     from unshackle.core.utils.click_types import ContextData
     from unshackle.core.utils.collections import merge_dict
 
@@ -357,8 +380,7 @@ def perform_download(
 
     sub_format_raw = params.get("sub_format")
     if sub_format_raw and isinstance(sub_format_raw, str):
-        mapped = to_enum([sub_format_raw], Subtitle.Codec)
-        params["sub_format"] = mapped[0] if mapped else None
+        params["sub_format"] = normalize_sub_format(sub_format_raw)
 
     if params.get("export"):
         params["export"] = bool(params["export"])
@@ -564,6 +586,9 @@ def perform_download(
                 no_source=params.get("no_source", False),
                 no_mux=params.get("no_mux", False),
                 workers=params.get("workers"),
+                adaptive_workers=params.get("adaptive_workers", False),
+                download_processes=params.get("download_processes", 1),
+                continue_downloads=params.get("continue_downloads", False),
                 downloads=params.get("downloads", 1),
                 worst=params.get("worst", False),
                 best_available=params.get("best_available", False),
@@ -964,6 +989,7 @@ class DownloadQueueManager:
 
         stdout_bytes = b""
         stderr_bytes = b""
+        last_progress_stat: Optional[tuple[int, int]] = None  # (st_mtime_ns, st_size) of last parse
         last_published: Optional[Dict[str, Any]] = None
 
         try:
@@ -973,9 +999,12 @@ class DownloadQueueManager:
                     stdout_bytes, stderr_bytes = communicate_task.result()
                     break
 
-                # Check for progress updates
+                # Check for progress updates (skip re-parse when the file hasn't changed since last tick)
                 try:
-                    if os.path.exists(progress_path):
+                    stat = os.stat(progress_path)
+                    stat_key = (stat.st_mtime_ns, stat.st_size)
+                    if stat_key != last_progress_stat:
+                        last_progress_stat = stat_key
                         with open(progress_path, "r", encoding="utf-8") as handle:
                             progress_data = json.load(handle)
                             if progress_data.get("phase") and progress_data["phase"] != job.phase:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import PureWindowsPath
 from typing import Optional
 
 
@@ -17,9 +17,12 @@ def safe_cache_key(key: object) -> Optional[str]:
     Cache keys are written as ``<key>.json`` inside a fixed directory. A key containing a
     path separator, ``..``, or an absolute path would let the peer write outside that
     directory, so anything that is not already a plain filename is rejected.
+
+    PureWindowsPath treats both ``/`` and ``\\`` as separators, so a key like
+    ``..\\..\\secret`` is rejected even on POSIX (where backslash is a plain character).
     """
     text = str(key)
-    name = Path(text).name
+    name = PureWindowsPath(text).name
     if not name or name != text or name in {".", ".."}:
         return None
     return name

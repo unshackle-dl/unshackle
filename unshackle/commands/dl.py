@@ -801,6 +801,33 @@ class dl:
         default=None,
         help="Max workers/threads to download with per-track. Default depends on the downloader.",
     )
+    @click.option(
+        "--adaptive-workers",
+        is_flag=True,
+        default=False,
+        help=(
+            "Dynamically scale per-track segment workers up to the --workers cap (or the built-in cap "
+            "when --workers is unset) based on measured CDN throughput and errors. Off by default."
+        ),
+    )
+    @click.option(
+        "--download-processes",
+        type=int,
+        default=1,
+        help=(
+            "Split a track's segment downloads across this many processes to beat the single-interpreter "
+            "throughput cap. Only engages for large segment batches. Default 1 (single process)."
+        ),
+    )
+    @click.option(
+        "--continue-downloads",
+        is_flag=True,
+        default=False,
+        help=(
+            "Keep completed segment files across runs and resume a previously failed download. "
+            "One-off enable of the continue_downloads config option."
+        ),
+    )
     @click.option("--downloads", type=int, default=1, help="Amount of tracks to download concurrently.")
     @click.option(
         "--speed-limit",
@@ -1388,6 +1415,9 @@ class dl:
         no_source: bool,
         no_mux: bool,
         workers: Optional[int],
+        adaptive_workers: bool,
+        download_processes: int,
+        continue_downloads: bool,
         downloads: int,
         worst: bool,
         best_available: bool,
@@ -1400,6 +1430,8 @@ class dl:
         *_: Any,
         **__: Any,
     ) -> None:
+        if continue_downloads:
+            config.continue_downloads = True
         self.tmdb_searched = False
         self.search_source = None
         self.service_anime = bool(getattr(service, "ANIME", False))
@@ -2107,6 +2139,8 @@ class dl:
                                     ),
                                     cdm=self.cdm,
                                     max_workers=workers,
+                                    adaptive_workers=adaptive_workers,
+                                    download_processes=download_processes,
                                     progress=progress_call,
                                 )
                                 for song, track, progress_call in music_items
@@ -3286,6 +3320,8 @@ class dl:
                             ),
                             cdm=self.cdm,
                             max_workers=workers,
+                            adaptive_workers=adaptive_workers,
+                            download_processes=download_processes,
                             progress=tracks_progress_callables[i],
                         )
                         # DRM-free and HLS-ClearKey tracks never reach prepare_drm, so export here.

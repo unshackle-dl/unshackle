@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import http
 import logging
+import math
 import random
 import time
 from collections.abc import Iterator, MutableMapping
@@ -18,6 +19,25 @@ from requests import HTTPError, Request
 from requests.structures import CaseInsensitiveDict
 
 from unshackle.core.config import config
+
+# ---------------------------------------------------------------------------
+# Shared retry / pool / timeout policy: single source of truth
+# ---------------------------------------------------------------------------
+# rnet's only distinguishing role is TLS fingerprinting; retry, backoff,
+# pooling, and timeouts must match the plain-requests path. Both RnetSession
+# (below) and Service.get_session import these so the two can't drift.
+# The unified downloader keeps its own copies (downloaders/requests.py) by design.
+
+MAX_RETRIES = 5
+BACKOFF_FACTOR = 0.2
+MAX_BACKOFF = 60.0  # shared backoff cap (rnet max_backoff == requests Retry backoff_max)
+STATUS_FORCELIST = [429, 500, 502, 503, 504]
+RETRY_METHODS = frozenset({"GET", "POST", "HEAD", "OPTIONS", "PUT", "DELETE", "TRACE"})
+# pool_block=True means a pool smaller than the in-flight request count stalls threads
+POOL_MAX_SIZE = 64  # rnet pool_max_idle_per_host == requests pool_maxsize/pool_connections
+CONNECT_TIMEOUT = 10
+READ_TIMEOUT = 30
+
 
 # ---------------------------------------------------------------------------
 # Impersonate preset mapping — rnet uses named presets (no custom JA3/Akamai)
@@ -386,6 +406,21 @@ class RnetCookieAdapter(MutableMapping):
             return dict(self._cookies.get(domain, {}))
         return dict(self._flat)
 
+    def get_dict_by_domain(self) -> dict[str, dict[str, str]]:
+        """Return cookies grouped by domain, domain-less ones under ``""``.
+
+        rnet scopes each cookie to the host of the URL it was set on, so a copy made with
+        ``get_dict`` can only ever be replayed against one host. Cookies that arrived as a
+        plain dict are recorded flat only, and are reported under the empty domain to match
+        the localhost fallback in :meth:`flush_to_client`.
+        """
+        grouped = {domain: dict(cookies) for domain, cookies in self._cookies.items() if cookies}
+        scoped = {name for cookies in grouped.values() for name in cookies}
+        leftovers = {name: value for name, value in self._flat.items() if name not in scoped}
+        if leftovers:
+            grouped[""] = {**grouped.get("", {}), **leftovers}
+        return grouped
+
     def clear(self, domain: Optional[str] = None, path: Optional[str] = None, name: Optional[str] = None) -> None:
         """Remove cookies (requests RequestsCookieJar compat).
 
@@ -483,9 +518,9 @@ class RnetSession:
 
     def __init__(
         self,
-        max_retries: int = 5,
-        backoff_factor: float = 0.2,
-        max_backoff: float = 60.0,
+        max_retries: int = MAX_RETRIES,
+        backoff_factor: float = BACKOFF_FACTOR,
+        max_backoff: float = MAX_BACKOFF,
         status_forcelist: Optional[list[int]] = None,
         allowed_methods: Optional[set[str]] = None,
         catch_exceptions: Optional[tuple[type[Exception], ...]] = None,
@@ -494,10 +529,11 @@ class RnetSession:
         self.max_retries = max_retries
         self.backoff_factor = backoff_factor
         self.max_backoff = max_backoff
-        self.status_forcelist = status_forcelist or [429, 500, 502, 503, 504]
-        self.allowed_methods = allowed_methods or {"GET", "POST", "HEAD", "OPTIONS", "PUT", "DELETE", "TRACE"}
+        self.status_forcelist = status_forcelist or list(STATUS_FORCELIST)
+        self.allowed_methods = allowed_methods or set(RETRY_METHODS)
         self.catch_exceptions = catch_exceptions or (
             rnet.ConnectionError,
+            rnet.ConnectionResetError,  # sibling of ConnectionError; mid-request resets are retryable
             rnet.TimeoutError,
             rnet.RequestError,
         )
@@ -511,9 +547,13 @@ class RnetSession:
             "read_timeout",
             "proxies",
             "verify",
-            "redirect",
+            "allow_redirects",
+            "pool_idle_timeout",
             "pool_max_idle_per_host",
             "pool_max_size",
+            "tcp_keepalive",
+            "tcp_keepalive_interval",
+            "tcp_keepalive_retries",
             "http1_only",
             "http2_only",
             "tcp_nodelay",
@@ -544,6 +584,19 @@ class RnetSession:
             self.cookies.update(session_kwargs.pop("cookies"))
         if "proxies" in session_kwargs:
             self.proxies.update(session_kwargs.pop("proxies"))
+
+    @property
+    def impersonate_name(self) -> Optional[str]:
+        """Preset name (e.g. 'Chrome131') for rebuilding this session in another process.
+
+        rnet enums stringify as 'Impersonate.Chrome131'; return the trailing name, or None
+        when no preset was set (then the session is not cheaply rebuildable across processes).
+        """
+        preset = self._client_kwargs.get("impersonate")
+        if preset is None:
+            return None
+        name = str(preset).rsplit(".", 1)[-1]
+        return name or None
 
     def ensure_client(self) -> rnet.BlockingClient:
         """Lazily create the rnet client on first use, flushing any buffered state."""
@@ -579,11 +632,22 @@ class RnetSession:
         if response:
             retry_after = response.headers.get("Retry-After")
             if retry_after:
+                wait: Optional[float] = None
                 try:
-                    return float(retry_after)
+                    wait = float(retry_after)
                 except ValueError:
-                    if retry_date := parsedate_to_datetime(retry_after):
-                        return (retry_date - datetime.now(timezone.utc)).total_seconds()
+                    try:
+                        retry_date = parsedate_to_datetime(retry_after)
+                        if retry_date.tzinfo is None:
+                            retry_date = retry_date.replace(tzinfo=timezone.utc)
+                        wait = (retry_date - datetime.now(timezone.utc)).total_seconds()
+                    except Exception:
+                        # parsedate_to_datetime itself raises ValueError on malformed dates
+                        # (Python >= 3.10); an unusable header must not escape the retry loop
+                        wait = None
+                if wait is not None and math.isfinite(wait):
+                    # a hostile Retry-After (e.g. 86400) would otherwise park the caller for a day
+                    return min(wait, self.max_backoff)
 
         if attempt == 0:
             return 0.0
@@ -596,6 +660,12 @@ class RnetSession:
     def request(self, method: str, url: str, **kwargs: Any) -> RnetResponse:
         client = self.ensure_client()
         method_upper = method.upper() if isinstance(method, str) else str(method).upper()
+
+        # Per-request override of the session retry budget (rnet.request() would reject the kwarg).
+        # max_retries=0 means a single attempt with no session-level retries.
+        max_retries = kwargs.pop("max_retries", None)
+        if max_retries is None:
+            max_retries = self.max_retries
 
         # Build URL with params
         url = self.build_url(url, kwargs.pop("params", None))
@@ -637,7 +707,7 @@ class RnetSession:
         last_exception: Optional[Exception] = None
         response: Optional[RnetResponse] = None
 
-        for attempt in range(self.max_retries + 1):
+        for attempt in range(max_retries + 1):
             try:
                 raw_resp = client.request(rnet_method, url, **kwargs)
                 response = RnetResponse(raw_resp)
@@ -659,20 +729,20 @@ class RnetSession:
 
                 if response.status_code not in self.status_forcelist:
                     return response
-                last_exception = HTTPError(f"Received status code: {response.status_code}")
+                last_exception = HTTPError(f"Received status code: {response.status_code}", response=response)
                 self.log.warning(
                     f"{response.status_code} {response.reason}({urlparse(url).path}). Retrying... "
-                    f"({attempt + 1}/{self.max_retries})"
+                    f"({attempt + 1}/{max_retries})"
                 )
 
             except self.catch_exceptions as e:
                 last_exception = e
                 response = None
                 self.log.warning(
-                    f"{e.__class__.__name__}({urlparse(url).path}). Retrying... ({attempt + 1}/{self.max_retries})"
+                    f"{e.__class__.__name__}({urlparse(url).path}). Retrying... ({attempt + 1}/{max_retries})"
                 )
 
-            if attempt < self.max_retries:
+            if attempt < max_retries:
                 if sleep_duration := self.get_sleep_time(response, attempt + 1):
                     if sleep_duration > 0:
                         time.sleep(sleep_duration)
@@ -774,10 +844,36 @@ def session(
 
     session_kwargs: dict[str, Any] = {"impersonate": impersonate}
     # optional rnet client knobs, see docs/NETWORK_CONFIG.md
-    for key in ("http1_only", "http2_only", "pool_max_idle_per_host", "pool_max_size", "tcp_nodelay"):
+    for key in (
+        "http1_only",
+        "http2_only",
+        "pool_max_idle_per_host",
+        "pool_max_size",
+        "tcp_nodelay",
+        "connect_timeout",
+        "read_timeout",
+        "timeout",
+        "pool_idle_timeout",
+        "tcp_keepalive",
+        "tcp_keepalive_interval",
+        "tcp_keepalive_retries",
+        "allow_redirects",
+    ):
         if key in config.network:
             session_kwargs[key] = config.network[key]
     session_kwargs.update(kwargs)
+
+    # Connection-pool / timeout defaults applied only when neither config.network nor the caller set them.
+    # connect_timeout + read_timeout mirror the requests-path default timeout (CONNECT_TIMEOUT, READ_TIMEOUT)
+    # so an unset config still gets a bounded connect and read like requests; pool_idle_timeout stays under
+    # the typical ~60s CDN idle kill; pool_max_idle_per_host follows POOL_MAX_SIZE, sized above the worker
+    # cap because hedge racers and tail-boost parts push in-flight requests past it; tcp_keepalive keeps
+    # long idle segments warm.
+    session_kwargs.setdefault("connect_timeout", CONNECT_TIMEOUT)
+    session_kwargs.setdefault("read_timeout", READ_TIMEOUT)
+    session_kwargs.setdefault("pool_idle_timeout", 55)
+    session_kwargs.setdefault("pool_max_idle_per_host", POOL_MAX_SIZE)
+    session_kwargs.setdefault("tcp_keepalive", 30)
 
     session_obj = RnetSession(**session_kwargs)
     session_obj.headers.update(config.headers)

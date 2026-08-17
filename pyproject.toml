@@ -116,6 +116,7 @@ filterwarnings = [
     "ignore::DeprecationWarning:ast",
     "ignore::aiohttp.web_exceptions.NotAppKeyWarning",
     "ignore::DeprecationWarning:pycaption.*",
+    "ignore::DeprecationWarning:pytest_asyncio.*",
     "ignore::bs4.XMLParsedAsHTMLWarning",
 ]
 addopts = "-ra --strict-markers"

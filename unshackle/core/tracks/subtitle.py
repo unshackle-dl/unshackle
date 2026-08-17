@@ -246,8 +246,19 @@ class Subtitle(Track):
         *,
         cdm: Optional[object] = None,
         no_proxy_download: bool = False,
+        adaptive_workers: bool = False,
+        download_processes: int = 1,
     ):
-        super().download(session, prepare_drm, max_workers, progress, cdm=cdm, no_proxy_download=no_proxy_download)
+        super().download(
+            session,
+            prepare_drm,
+            max_workers,
+            progress,
+            cdm=cdm,
+            no_proxy_download=no_proxy_download,
+            adaptive_workers=adaptive_workers,
+            download_processes=download_processes,
+        )
         if not self.path:
             return
 
@@ -1071,8 +1082,9 @@ class Subtitle(Track):
             )
         else:
             if config.subtitle.get("convert_before_strip", True) and self.codec != Subtitle.Codec.SubRip:
-                self.path = self.convert(Subtitle.Codec.SubRip)
-                self.codec = Subtitle.Codec.SubRip
+                # Filter reads SRT only; force the (possibly lossy) conversion so content and
+                # codec label stay in sync. convert() relabels path/codec only on real conversion.
+                self.convert(Subtitle.Codec.SubRip, forced=True)
 
             try:
                 sub = Subtitles(self.path)

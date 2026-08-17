@@ -262,6 +262,37 @@ def test_sdh_stripping_removes_effects_keeps_dialogue(tmp_path, monkeypatch):
     assert "door creaks" not in out  # bracketed effect removed (subby SDHStripper)
 
 
+SDH_ASS = """[Script Info]
+ScriptType: v4.00+
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,1,2,10,10,18,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,[door creaks]
+Dialogue: 0,0:00:03.00,0:00:04.00,Default,,0,0,0,,Hello there.
+"""
+
+
+def test_sdh_stripping_ass_without_subtitleedit_content_matches_codec(tmp_path, monkeypatch):
+    # Regression: SDH-strip fallback must actually convert ASS->SRT so the file content and the
+    # relabeled codec stay in sync (previously it mislabeled codec=SubRip over unchanged ASS bytes).
+    # sdh_method="auto" + SubtitleEdit absent -> convert_before_strip fallback.
+    monkeypatch.setattr("unshackle.core.config.config.subtitle", {"sdh_method": "auto"}, raising=False)
+    sub = make_sub(tmp_path, "x.ass", SDH_ASS, Codec.SubStationAlphav4)
+    sub.strip_hearing_impaired()
+
+    assert sub.codec == Codec.SubRip  # relabeled to SRT...
+    assert sub.path.suffix == ".srt"
+    text = sub.path.read_text("utf8")
+    assert "[Script Info]" not in text and "Dialogue:" not in text  # ...and content is real SRT, not ASS
+    assert "-->" in text  # SRT cue timing present
+    assert "Hello there." in text  # real dialogue kept
+    assert "door creaks" not in text  # bracketed effect removed
+
+
 # --- segmented (box-encapsulated) formats: fVTT (wvtt) / fTTML (stpp) --------------------
 # These ship from DASH/HLS as fragmented MP4 (e.g. HBO Max). The downloader concatenates
 # init + media segments into one file; parse() reads the MP4 boxes directly.

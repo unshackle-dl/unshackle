@@ -62,8 +62,10 @@ def merge_segmented_webvtt(vtt_raw: str, segment_durations: Optional[list[int]] 
 
         normalized = "\n".join(line.strip() for line in payload)
         if prev is not None and timestamp_ms(start) - prev_end_ms <= 1 and normalized == prev[4]:
-            prev[1] = end  # splice: extend the kept cue, drop the duplicate
-            prev_end_ms = timestamp_ms(end)
+            end_ms = timestamp_ms(end)
+            if end_ms > prev_end_ms:  # splice: extend only, never shorten the kept cue
+                prev[1] = end
+                prev_end_ms = end_ms
             continue
 
         prev = [start, end, settings, "\n".join(payload), normalized]

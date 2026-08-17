@@ -218,7 +218,8 @@ class Episode(Title):
                 # all parts of an episode land in the same season folder
                 context = self.build_template_context(media_info, show_service, include_part=False)
                 context["season"] = self.folder_season()
-                context["year"] = self.year or ""  # folders keep the year
+                # folders keep the year, unless the season label is already the air year
+                context["year"] = "" if str(self.year) == context["season"] else self.year or ""
                 spacer = detect_spacer(template)  # one style for the whole path
                 segments = [
                     TemplateFormatter(seg, spacer).format(context)
@@ -242,7 +243,8 @@ class Episode(Title):
                 formatter = TemplateFormatter(derived_template)
                 context = self.build_template_context(media_info, show_service, include_part=False)
                 context["season"] = self.folder_season()
-                context["year"] = self.year or ""  # folders keep the year
+                # folders keep the year, unless the season label is already the air year
+                context["year"] = "" if str(self.year) == context["season"] else self.year or ""
 
                 folder_name = formatter.format(context)
 

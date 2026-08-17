@@ -28,11 +28,12 @@ from requests import Session
 
 from unshackle.core import binaries
 from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
+from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.drm import DRM_T, ClearKey, MonaLisa, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.session import RnetResponse, RnetSession
-from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video
+from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video, resume
 from unshackle.core.tracks.track import assert_fragments_decrypted
 from unshackle.core.utilities import get_extension, is_close_match, log_event, try_ensure_utf8
 from unshackle.core.utils.redact import safe_display_url
@@ -525,6 +526,8 @@ class HLS:
         progress = ctx.progress
         proxy = ctx.proxy
         max_workers = ctx.max_workers
+        adaptive = ctx.adaptive_workers
+        processes = ctx.download_processes
         license_widevine = ctx.license_widevine
         cdm = ctx.cdm
 
@@ -665,6 +668,22 @@ class HLS:
 
         segment_save_dir = save_dir / "segments"
 
+        # no resume for AES-128/ClearKey: in-place decryption at merge time makes numbered files ambiguous
+        resumable_drm = (session_drm is None or isinstance(session_drm, (Widevine, PlayReady))) and not any(
+            key and key.method == "AES-128" for key in (master.keys or [])
+        )
+        # media_sequence feeds AES IVs; total_segments pins the OnSegmentFilter verdict (shifts every index)
+        digest = resume.fingerprint(
+            track.url,
+            [(url["url"], url["headers"].get("Range")) for url in urls],
+            extra=[str(getattr(master, "media_sequence", None) or 0), str(total_segments)],
+        )
+        if not (config.continue_downloads and resumable_drm and resume.reusable(save_dir, digest)):
+            shutil.rmtree(save_dir, ignore_errors=True)
+        segment_save_dir.mkdir(parents=True, exist_ok=True)
+        if config.continue_downloads and resumable_drm:
+            resume.write_sidecar(save_dir, digest)
+
         downloader_args = dict(
             urls=urls,
             output_dir=segment_save_dir,
@@ -674,6 +693,8 @@ class HLS:
             proxy=proxy,
             max_workers=max_workers,
             session=session,
+            adaptive=adaptive,
+            processes=processes,
         )
 
         log_event(
@@ -702,6 +723,9 @@ class HLS:
 
         for control_file in segment_save_dir.glob("*.!dev"):
             control_file.unlink(missing_ok=True)
+
+        # merge mutates segment files in place from here on; withdraw the reuse proof
+        resume.clear_sidecar(save_dir)
 
         progress(total=total_segments, completed=0, downloaded="Merging")
 

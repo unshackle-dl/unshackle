@@ -11,8 +11,16 @@ TLS-fingerprinting and HTTP client settings for the rnet-based session.
 | `browser` | str | `"Chrome131"` | Impersonation preset. Must be an exact preset name (e.g. `Chrome131`, `Firefox135`, `Edge101`, `Safari18`, `OkHttp4_12`, `OkHttp5`, `Opera118`); unknown names raise an error. |
 | `http1_only` | bool | *(unset)* | Force HTTP/1.1. |
 | `http2_only` | bool | *(unset)* | Force HTTP/2. |
-| `pool_max_idle_per_host` | int | *(unset)* | Connection-pool tuning. |
-| `pool_max_size` | int | *(unset)* | Connection-pool tuning. |
+| `connect_timeout` | int | `10` | Connect timeout in seconds. |
+| `read_timeout` | int | `30` | Read timeout in seconds (max gap between response chunks). |
+| `timeout` | int | *(unset)* | Total request timeout in seconds. |
+| `allow_redirects` | bool | *(unset)* | Follow redirects automatically (rnet client default when unset). |
+| `pool_idle_timeout` | int | `55` | Seconds an idle pooled connection is kept (default stays under typical ~60s CDN idle kills). |
+| `pool_max_idle_per_host` | int | `64` | Max idle connections kept per host. |
+| `pool_max_size` | int | *(unset)* | Max total connections in the pool. |
+| `tcp_keepalive` | int | `30` | TCP keepalive time in seconds. |
+| `tcp_keepalive_interval` | int | *(unset)* | TCP keepalive probe interval in seconds. |
+| `tcp_keepalive_retries` | int | *(unset)* | TCP keepalive probe retry count. |
 | `tcp_nodelay` | bool | *(unset)* | Disable Nagle's algorithm. |
 
 ```yaml
