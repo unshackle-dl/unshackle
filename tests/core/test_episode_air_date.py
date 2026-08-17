@@ -109,6 +109,19 @@ def test_dated_folder_groups_by_year(reset_template):
     assert "S2024" not in folder  # season folder is the year, not the faked season
 
 
+def test_dated_folder_drops_year_matching_air_year(reset_template):
+    """{year?} would repeat the air-year season label (Title.2024.2024); it must render once."""
+    folder = make_episode(air_date=date(2024, 6, 30)).get_filename(StubMediaInfo(), folder=True)
+    assert "2024.2024" not in folder
+
+
+def test_dated_folder_keeps_distinct_year(reset_template):
+    """A series year different from the air year is real information and stays."""
+    folder = make_episode(year=2010, air_date=date(2013, 10, 30)).get_filename(StubMediaInfo(), folder=True)
+    assert "2010" in folder
+    assert "2013" in folder
+
+
 # --- selection by date ------------------------------------------------------
 
 

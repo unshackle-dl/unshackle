@@ -494,6 +494,9 @@ how the optional (`?`) variables appear and disappear.
     The date separator follows your template style: dots here, spaces if your `series`
     template uses spaces.
 
+    In folder names, `{season}` becomes the air year (`Season 2024` style grouping), and a
+    `{year?}` in the folder template is skipped when it would just repeat that year.
+
 === "Music"
 
     ```yaml
