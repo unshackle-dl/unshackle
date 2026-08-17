@@ -26,6 +26,7 @@ from unshackle.core.downloaders import requests
 from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.session import RnetSession
+from unshackle.core.tracks import resume
 from unshackle.core.utilities import get_boxes, log_event, try_ensure_utf8
 from unshackle.core.utils.subprocess import ffprobe
 
@@ -437,10 +438,19 @@ class Track:
         else:
             save_dir = save_path.parent
 
-        def cleanup():
+        keep_segments = config.continue_downloads and self.descriptor != self.Descriptor.URL
+
+        def cleanup() -> None:
             save_path.unlink(missing_ok=True)
-            if save_dir.exists() and save_dir.name.endswith("_segments"):
-                shutil.rmtree(save_dir)
+            if save_dir.name.endswith("_segments"):
+                if keep_segments:
+                    if save_dir.exists():
+                        for partial in save_dir.rglob("*.!dev"):
+                            partial.unlink(missing_ok=True)
+                else:
+                    if save_dir.exists():
+                        shutil.rmtree(save_dir)
+                    resume.clear_sidecar(save_dir)
 
         if not DOWNLOAD_LICENCE_ONLY.is_set():
             if config.directories.temp.is_file():
@@ -448,10 +458,8 @@ class Track:
 
             config.directories.temp.mkdir(parents=True, exist_ok=True)
 
-            # Delete any pre-existing temp files matching this track.
-            # We can't re-use or continue downloading these tracks as they do not use a
-            # lock file. Or at least the majority don't. Even if they did I've encountered
-            # corruptions caused by sudden interruptions to the lock file.
+            # completed segments are reusable once the parser proves the segmentation
+            # unchanged (resume sidecar); partial .!dev files never survive a run boundary
             cleanup()
 
         try:

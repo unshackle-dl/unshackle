@@ -31,7 +31,7 @@ Where the file lives, how unshackle discovers it, and how to edit it:
 |------|------|
 | [Directories](directories.md) | `directories`, `filenames` |
 | [Services & authentication](services.md) | `services`, `credentials`, `firefox_cookies`, `remote_services`, `serve` |
-| [Download & processing](download.md) | `dl`, `subtitle`, `audio`, `muxing`, `language_tags`, `dual_multi_mode` |
+| [Download & processing](download.md) | `dl`, `continue_downloads`, `subtitle`, `audio`, `muxing`, `language_tags`, `dual_multi_mode` |
 | [Output & naming](output.md) | `output_template`, `tag`, `tag_rules`, `tag_group_name`, `tag_imdb_tmdb`, `chapter_fallback_name`, `unicode_filenames` |
 | [DRM & CDM](drm.md) | `cdm`, `remote_cdm`, `decryption` |
 | [Network & proxy](network.md) | `network`, `headers`, `proxy_providers` |

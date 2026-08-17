@@ -92,6 +92,34 @@ dl:
     to set server-wide download defaults for every request it handles. Keys the API does not know
     are ignored there (`speed_limit`, for example; `serve` has its own `global_speed_limit`).
 
+## `continue_downloads`
+
+- **Type:** `bool` &nbsp;·&nbsp; **Default:** `false`
+
+Keep a failed download's completed segment files so the next attempt resumes from where it
+stopped instead of restarting from byte zero.
+
+Only whole, fully downloaded segments are reused; partially written segments are always
+discarded, and no partial-byte (`Range`) resume across runs takes place. Reuse also
+requires proof that the remote content is unchanged: the manifest URL, segment count, and
+byte ranges must all match the previous run, otherwise the download silently restarts
+clean.
+
+!!! note "What can and cannot resume"
+    - Segmented DASH, ISM, and HLS tracks resume.
+    - Single-file (non-segmented) downloads and DASH tracks collapsed to a single ranged
+      download never produce segment files, so this option does not apply to them (the
+      downloader has its own in-flight partial-file handling for those).
+    - HLS resumes Widevine/PlayReady and unencrypted content only; AES-128 content always
+      restarts. An HLS failure during the post-download merge step also restarts.
+
+For a one-off resume without changing config, pass `dl --continue-downloads` on the
+command line (the flag can only enable resume, never disable it).
+
+```yaml title="Resume failed downloads"
+continue_downloads: true
+```
+
 ## `subtitle`
 
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`

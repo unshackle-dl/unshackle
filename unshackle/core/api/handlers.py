@@ -72,6 +72,7 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "workers": None,
     "adaptive_workers": False,
     "download_processes": 1,
+    "continue_downloads": False,
     "downloads": 1,
     "worst": False,
     "best_available": False,

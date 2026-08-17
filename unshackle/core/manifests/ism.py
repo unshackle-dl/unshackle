@@ -17,6 +17,7 @@ from pyplayready.system.pssh import PSSH as PR_PSSH
 from pywidevine.pssh import PSSH
 from requests import Session
 
+from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
 from unshackle.core.events import events
@@ -28,7 +29,7 @@ from unshackle.core.manifests.ism_init import (
     read_track_id,
 )
 from unshackle.core.session import RnetSession
-from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Track, Tracks, Video
+from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Track, Tracks, Video, resume
 from unshackle.core.tracks.track import assert_fragments_decrypted
 from unshackle.core.utilities import log_event, try_ensure_utf8
 from unshackle.core.utils.redact import safe_display_url
@@ -430,6 +431,14 @@ class ISM:
         progress(total=len(segments))
 
         downloader = track.downloader
+
+        digest = resume.fingerprint(track.url, [(url, None) for url in segments])
+        if not (config.continue_downloads and resume.reusable(save_dir, digest)):
+            shutil.rmtree(save_dir, ignore_errors=True)
+        save_dir.mkdir(parents=True, exist_ok=True)
+        if config.continue_downloads:
+            resume.write_sidecar(save_dir, digest)
+
         downloader_args = dict(
             urls=[{"url": url} for url in segments],
             output_dir=save_dir,
@@ -573,6 +582,7 @@ class ISM:
         except OSError:
             # a superseded hedge download may still drop a .!dev file here
             shutil.rmtree(save_dir, ignore_errors=True)
+        resume.clear_sidecar(save_dir)
         progress(downloaded="Downloaded")
 
 

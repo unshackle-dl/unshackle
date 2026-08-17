@@ -819,6 +819,15 @@ class dl:
             "throughput cap. Only engages for large segment batches. Default 1 (single process)."
         ),
     )
+    @click.option(
+        "--continue-downloads",
+        is_flag=True,
+        default=False,
+        help=(
+            "Keep completed segment files across runs and resume a previously failed download. "
+            "One-off enable of the continue_downloads config option."
+        ),
+    )
     @click.option("--downloads", type=int, default=1, help="Amount of tracks to download concurrently.")
     @click.option(
         "--speed-limit",
@@ -1408,6 +1417,7 @@ class dl:
         workers: Optional[int],
         adaptive_workers: bool,
         download_processes: int,
+        continue_downloads: bool,
         downloads: int,
         worst: bool,
         best_available: bool,
@@ -1420,6 +1430,8 @@ class dl:
         *_: Any,
         **__: Any,
     ) -> None:
+        if continue_downloads:
+            config.continue_downloads = True
         self.tmdb_searched = False
         self.search_source = None
         self.service_anime = bool(getattr(service, "ANIME", False))

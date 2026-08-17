@@ -23,11 +23,12 @@ from pywidevine.pssh import PSSH
 from requests import Session
 
 from unshackle.core.cdm.detect import is_playready_cdm
+from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.session import RnetSession
-from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video
+from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video, resume
 from unshackle.core.tracks.track import assert_fragments_decrypted
 from unshackle.core.utilities import is_close_match, log_event, try_ensure_utf8
 from unshackle.core.utils.redact import safe_display_url
@@ -456,6 +457,15 @@ class DASH:
             len(init_data) if init_data is not None else None,
         )
 
+        if not collapse_single_url:
+            # reuse a prior run's segments only when the fingerprint proves the segmentation unchanged
+            digest = resume.fingerprint(track.url, segments)
+            if not (config.continue_downloads and resume.reusable(save_dir, digest)):
+                shutil.rmtree(save_dir, ignore_errors=True)
+            save_dir.mkdir(parents=True, exist_ok=True)
+            if config.continue_downloads:
+                resume.write_sidecar(save_dir, digest)
+
         if collapse_single_url:
             # must carry no Range header, or the downloader would skip its ranged-parallel path
             downloader_args = dict(
@@ -615,6 +625,7 @@ class DASH:
             except OSError:
                 # Directory might not be empty, try removing recursively
                 shutil.rmtree(save_dir, ignore_errors=True)
+        resume.clear_sidecar(save_dir)
 
         progress(downloaded="Downloaded")
 
