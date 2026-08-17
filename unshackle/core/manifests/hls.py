@@ -76,7 +76,6 @@ class HLS:
 
         res = session.get(url, **args)
 
-        # Handle requests and rnet response objects
         if isinstance(res, requests.Response):
             if not res.ok:
                 raise requests.ConnectionError("Failed to request the M3U(8) document.", response=res)
@@ -227,7 +226,6 @@ class HLS:
                     descriptor=Video.Descriptor.HLS,
                     drm=session_drm,
                     data={"hls": {"playlist": playlist}},
-                    # video track args
                     **(
                         dict(
                             range_=video_range,
@@ -287,7 +285,6 @@ class HLS:
                     descriptor=Audio.Descriptor.HLS,
                     drm=session_drm if media.type == "AUDIO" else None,
                     data={"hls": {"media": media}},
-                    # audio track args
                     **(
                         dict(
                             bitrate=0,  # TODO: M3U doesn't seem to state bitrate?
@@ -390,9 +387,9 @@ class HLS:
                 val = self.ue()
                 return (val + 1) // 2 if val & 1 else -(val // 2)
 
-        # Find SPS NAL unit via start code
         # H.264: NAL type 7 (SPS), identified by byte & 0x1F == 7
         # H.265: NAL type 33 (SPS), identified by (byte >> 1) & 0x3F == 33
+        # Find SPS NAL unit via start code
         for i in range(len(data) - 4):
             start3 = data[i : i + 3] == b"\x00\x00\x01"
             start4 = data[i : i + 4] == b"\x00\x00\x00\x01"
@@ -532,7 +529,6 @@ class HLS:
         cdm = ctx.cdm
 
         if proxy:
-            # Handle proxies differently based on session type
             if isinstance(session, Session):
                 session.proxies.update({"all": proxy})
 
@@ -541,7 +537,6 @@ class HLS:
         if track.from_file:
             master = m3u8.load(str(track.from_file))
         else:
-            # Get the playlist text and handle both session types
             response = session.get(track.url)
             if isinstance(response, requests.Response) or isinstance(response, RnetResponse):
                 if not response.ok:
@@ -595,14 +590,11 @@ class HLS:
                         raise
                 elif isinstance(media_drm, ClearKey):
                     # AES-128 (ClearKey) needs no license server - the key is already fetched.
-                    # Without this branch session_drm stayed None and segments were never
-                    # decrypted (they were merged still-encrypted, producing a broken file).
                     track.drm = [media_drm]
                     session_drm = media_drm
                     initial_drm_key = media_playlist_key
                     initial_drm_licensed = True
 
-        # Fall back to session DRM if media playlist has no matching keys
         if not initial_drm_licensed and session_drm and isinstance(session_drm, (Widevine, PlayReady)):
             try:
                 if not license_widevine:
@@ -817,14 +809,13 @@ class HLS:
                     raise ValueError(f"Missing {range_len - len(files)} segment files for {segment_range}...")
 
                 if isinstance(drm, (Widevine, PlayReady)):
-                    # with widevine we can merge all segments and decrypt once
                     merge(to=merged_path, via=files, delete=True, include_map_data=True)
                     drm.decrypt(merged_path)
                     assert_fragments_decrypted(merged_path)
                     merged_path.rename(decrypted_path)
                 else:
-                    # with other drm we must decrypt separately and then merge them
-                    # for aes this is because each segment likely has 16-byte padding
+                    # AES segments must be decrypted individually before merging: each segment
+                    # likely carries its own 16-byte padding
                     key_obj = encryption_data[0]
                     # AES-128 with no explicit IV: each segment's IV is its media sequence
                     # number (RFC 8216 §5.2). Without this the engine used a zero IV and the
@@ -904,13 +895,11 @@ class HLS:
                     else:
                         init_range_header = {}
 
-                    # Handle both session types for init section request
                     res = session.get(
                         url=urljoin(segment.init_section.base_uri, segment.init_section.uri),
                         headers=init_range_header,
                     )
 
-                    # Check response based on session type
                     if isinstance(res, requests.Response) or isinstance(res, RnetResponse):
                         res.raise_for_status()
                         init_content = res.content
@@ -982,11 +971,9 @@ class HLS:
             """Find all segment files recursively in any directory structure created by downloaders."""
             segments = []
 
-            # First check direct files in the directory
             if directory.exists():
                 segments.extend([x for x in directory.iterdir() if x.is_file()])
 
-                # If no direct files, recursively search subdirectories
                 if not segments:
                     for subdir in directory.iterdir():
                         if subdir.is_dir():
@@ -994,7 +981,6 @@ class HLS:
 
             return sorted(segments)
 
-        # finally merge all the discontinuity save files together to the final path
         segments_to_merge = find_segments_recursively(save_dir)
 
         log_event(
@@ -1007,7 +993,7 @@ class HLS:
                 "save_dir": str(save_dir),
                 "save_dir_exists": save_dir.exists(),
                 "segments_found": len(segments_to_merge),
-                "segment_files": [f.name for f in segments_to_merge[:10]],  # Limit to first 10
+                "segment_files": [f.name for f in segments_to_merge[:10]],
                 "downloader": "requests",
             },
         )
@@ -1045,12 +1031,10 @@ class HLS:
                         os.fsync(f.fileno())
                         discontinuity_file.unlink()
 
-        # Clean up empty segment directory
         if save_dir.exists() and save_dir.name.endswith("_segments"):
             try:
                 save_dir.rmdir()
             except OSError:
-                # Directory might not be empty, try removing recursively
                 shutil.rmtree(save_dir, ignore_errors=True)
 
         progress(downloaded="Downloaded", completed=100, total=100)
@@ -1069,10 +1053,8 @@ class HLS:
 
         Returns the file size of the merged file.
         """
-        # Track segment directories for cleanup
         segment_dirs = set()
         for segment in segments:
-            # Track all parent directories that contain segments
             current_dir = segment.parent
             while current_dir.name and "_segments" in str(current_dir):
                 segment_dirs.add(current_dir)
@@ -1089,7 +1071,6 @@ class HLS:
                     except OSError:
                         pass  # Directory cleanup failed, but merge succeeded
 
-        # Try FFmpeg concat first (preferred method)
         if binaries.FFMPEG:
             try:
                 demuxer_file = save_path.parent / f"ffmpeg_concat_demuxer_{save_path.stem}.txt"
@@ -1130,13 +1111,10 @@ class HLS:
                 return save_path.stat().st_size
 
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
-                # FFmpeg failed, clean up demuxer file and fall back to binary concat
                 logging.getLogger("HLS").debug(f"FFmpeg concat failed ({e}), falling back to binary concatenation")
                 demuxer_file.unlink(missing_ok=True)
-                # Remove partial output file if it exists
                 save_path.unlink(missing_ok=True)
 
-        # Fallback: Binary concatenation
         logging.getLogger("HLS").debug(f"Using binary concatenation for {len(segments)} segments")
         with open(save_path, "wb") as output_file:
             for segment in segments:

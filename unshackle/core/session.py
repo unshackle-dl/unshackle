@@ -20,9 +20,6 @@ from requests.structures import CaseInsensitiveDict
 
 from unshackle.core.config import config
 
-# ---------------------------------------------------------------------------
-# Shared retry / pool / timeout policy: single source of truth
-# ---------------------------------------------------------------------------
 # rnet's only distinguishing role is TLS fingerprinting; retry, backoff,
 # pooling, and timeouts must match the plain-requests path. Both RnetSession
 # (below) and Service.get_session import these so the two can't drift.
@@ -38,10 +35,6 @@ POOL_MAX_SIZE = 64  # rnet pool_max_idle_per_host == requests pool_maxsize/pool_
 CONNECT_TIMEOUT = 10
 READ_TIMEOUT = 30
 
-
-# ---------------------------------------------------------------------------
-# Impersonate preset mapping — rnet uses named presets (no custom JA3/Akamai)
-# ---------------------------------------------------------------------------
 
 DEFAULT_IMPERSONATE = rnet.Impersonate.Chrome131
 
@@ -62,7 +55,6 @@ def resolve_impersonate(browser: str) -> rnet.Impersonate:
     )
 
 
-# Map string method names to rnet.Method enum
 METHOD_MAP: dict[str, rnet.Method] = {
     "GET": rnet.Method.GET,
     "POST": rnet.Method.POST,
@@ -73,11 +65,6 @@ METHOD_MAP: dict[str, rnet.Method] = {
     "PATCH": rnet.Method.PATCH,
     "TRACE": rnet.Method.TRACE,
 }
-
-
-# ---------------------------------------------------------------------------
-# Response headers adapter — bytes → str
-# ---------------------------------------------------------------------------
 
 
 class RnetResponseHeaders(MutableMapping):
@@ -123,11 +110,6 @@ class RnetResponseHeaders(MutableMapping):
 
     def items(self) -> list[tuple[str, str]]:
         return [(self.decode(k), self.decode(v)) for k, v in self._map.items()]
-
-
-# ---------------------------------------------------------------------------
-# Response wrapper — requests-compatible interface
-# ---------------------------------------------------------------------------
 
 
 class RnetResponse:
@@ -245,11 +227,6 @@ class RnetResponse:
             pass
 
 
-# ---------------------------------------------------------------------------
-# Session headers adapter — persists via client.update()
-# ---------------------------------------------------------------------------
-
-
 class RnetSessionHeaders(CaseInsensitiveDict):
     """Dict-like headers that persist to the rnet client via update()."""
 
@@ -286,11 +263,6 @@ class RnetSessionHeaders(CaseInsensitiveDict):
 
     def __delitem__(self, key: str) -> None:
         super().__delitem__(key)
-
-
-# ---------------------------------------------------------------------------
-# Session cookies adapter
-# ---------------------------------------------------------------------------
 
 
 class RnetCookieAdapter(MutableMapping):
@@ -455,11 +427,6 @@ class RnetCookieAdapter(MutableMapping):
         return list(self._flat.values())
 
 
-# ---------------------------------------------------------------------------
-# Session proxy adapter
-# ---------------------------------------------------------------------------
-
-
 class RnetProxyDict(dict):
     """Dict-like proxy config that syncs to the rnet client.
 
@@ -488,20 +455,10 @@ class RnetProxyDict(dict):
         self.sync()
 
 
-# ---------------------------------------------------------------------------
-# Exceptions
-# ---------------------------------------------------------------------------
-
-
 class MaxRetriesError(Exception):
     def __init__(self, message: str, cause: Optional[Exception] = None) -> None:
         super().__init__(message)
         self.__cause__ = cause
-
-
-# ---------------------------------------------------------------------------
-# RnetSession — main session class
-# ---------------------------------------------------------------------------
 
 
 class RnetSession:
@@ -658,29 +615,30 @@ class RnetSession:
         return min(sleep_time, self.max_backoff)
 
     def request(self, method: str, url: str, **kwargs: Any) -> RnetResponse:
+        """Send a request, retrying on the status forcelist and on the caught exception types.
+
+        Only methods in allowed_methods are retried; any other method gets a single attempt.
+        A max_retries kwarg overrides the session retry budget for this call alone, where 0 means
+        one attempt with no retries. Once the budget is spent, MaxRetriesError is raised with the
+        last failure as its cause.
+        """
         client = self.ensure_client()
         method_upper = method.upper() if isinstance(method, str) else str(method).upper()
 
-        # Per-request override of the session retry budget (rnet.request() would reject the kwarg).
-        # max_retries=0 means a single attempt with no session-level retries.
         max_retries = kwargs.pop("max_retries", None)
         if max_retries is None:
             max_retries = self.max_retries
 
-        # Build URL with params
         url = self.build_url(url, kwargs.pop("params", None))
 
-        # Default allow_redirects=True
         kwargs.setdefault("allow_redirects", True)
 
-        # Pass verify setting
         if not self.verify:
             kwargs.setdefault("verify", False)
 
         # Remove kwargs rnet doesn't understand
         kwargs.pop("stream", None)  # rnet responses are always lazy
 
-        # Translate requests-compatible 'data' kwarg to rnet equivalents
         data = kwargs.pop("data", None)
         if data is not None:
             if isinstance(data, dict):
@@ -690,7 +648,6 @@ class RnetSession:
             else:
                 kwargs["body"] = data
 
-        # Resolve method enum
         rnet_method = METHOD_MAP.get(method_upper)
         if rnet_method is None:
             raise ValueError(f"Unsupported HTTP method: {method}")
@@ -699,7 +656,6 @@ class RnetSession:
         if kwargs.get("headers") is not None:
             kwargs["headers"] = dict(kwargs["headers"])
 
-        # Skip retry for non-allowed methods
         if method_upper not in self.allowed_methods:
             raw_resp = client.request(rnet_method, url, **kwargs)
             return RnetResponse(raw_resp)
@@ -712,7 +668,6 @@ class RnetSession:
                 raw_resp = client.request(rnet_method, url, **kwargs)
                 response = RnetResponse(raw_resp)
 
-                # Log requests when debug_requests is enabled
                 if config.debug_requests:
                     parsed_url = urlparse(url)
                     port_str = f":{parsed_url.port}" if parsed_url.port else ""
@@ -806,11 +761,6 @@ class RnetSession:
     def close(self) -> None:
         """No-op — rnet manages its own resources."""
         pass
-
-
-# ---------------------------------------------------------------------------
-# session() factory
-# ---------------------------------------------------------------------------
 
 
 def session(

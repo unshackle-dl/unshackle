@@ -28,15 +28,15 @@ class SessionEntry:
 
     session_id: str
     service_tag: str
-    service_instance: Any  # Service instance (authenticated)
+    service_instance: Any
     titles: Any = None  # Titles_T from get_titles()
-    title_map: Dict[str, Any] = field(default_factory=dict)  # title_id -> Title object
-    tracks: Dict[str, Track] = field(default_factory=dict)  # track_id -> Track object
-    tracks_by_title: Dict[str, Dict[str, Track]] = field(default_factory=dict)  # title_key -> {track_id -> Track}
-    chapters_by_title: Dict[str, List[Any]] = field(default_factory=dict)  # title_key -> [Chapter]
+    title_map: Dict[str, Any] = field(default_factory=dict)
+    tracks: Dict[str, Track] = field(default_factory=dict)
+    tracks_by_title: Dict[str, Dict[str, Track]] = field(default_factory=dict)
+    chapters_by_title: Dict[str, List[Any]] = field(default_factory=dict)
     creator_ip: Optional[str] = None
     owner_key: Optional[str] = None  # X-Secret-Key that owns this session
-    cache_tag: Optional[str] = None  # per-session cache directory tag
+    cache_tag: Optional[str] = None
     input_bridge: Optional[InputBridge] = None
     auth_status: AuthStatus = AuthStatus.AUTHENTICATED
     auth_error: Optional[str] = None
@@ -59,7 +59,7 @@ class SessionStore:
     @property
     def ttl(self) -> int:
         """Session TTL in seconds from config."""
-        return config.serve.get("session_ttl", 300)  # 5 min default
+        return config.serve.get("session_ttl", 300)
 
     @property
     def max_sessions(self) -> int:
@@ -146,7 +146,7 @@ class SessionStore:
 
         async def loop() -> None:
             while True:
-                await asyncio.sleep(60)  # Check every minute
+                await asyncio.sleep(60)
                 try:
                     await self.cleanup_expired()
                 except Exception:
@@ -199,7 +199,6 @@ class SessionStore:
         return len(self._sessions)
 
 
-# Singleton instance
 session_store: Optional[SessionStore] = None
 
 

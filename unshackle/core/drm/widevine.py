@@ -353,7 +353,6 @@ class Widevine:
 
         output_path = path.with_stem(f"{path.stem}_decrypted")
 
-        # Build key arguments
         key_args = []
         for kid, key in self.content_keys.items():
             kid_hex = kid.hex if hasattr(kid, "hex") else str(kid).replace("-", "")
@@ -456,7 +455,6 @@ class Widevine:
                 if ":ERROR:" in line:
                     had_error = True
                 if "Insufficient bits in bitstream for given AVC profile" in line:
-                    # this is a warning and is something we don't have to worry about
                     continue
                 shaka_log_buffer += f"{line.strip()}\n"
 

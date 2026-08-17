@@ -89,7 +89,6 @@ class PlayReady:
             pssh_bytes = base64.b64decode(pssh_b64)
 
             # Try to find XML in the PSSH data
-            # PlayReady PSSH usually has XML embedded in it
             pssh_str = pssh_bytes.decode("utf-16le", errors="ignore")
 
             # Find WRMHEADER
@@ -109,7 +108,6 @@ class PlayReady:
 
                 kids = []
 
-                # Extract from CUSTOMATTRIBUTES/KIDS
                 kid_elements = root.findall(".//pr:CUSTOMATTRIBUTES/pr:KIDS/pr:KID", ns)
                 for kid_elem in kid_elements:
                     value = kid_elem.get("VALUE")
@@ -439,7 +437,6 @@ class PlayReady:
 
         output_path = path.with_stem(f"{path.stem}_decrypted")
 
-        # Build key arguments
         key_args = []
         for kid, key in self.content_keys.items():
             kid_hex = kid.hex if hasattr(kid, "hex") else str(kid).replace("-", "")

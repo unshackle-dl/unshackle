@@ -35,7 +35,6 @@ for _entry in raw:
     else:
         service_dirs.append(Path(_entry))
 
-# dedupe by tag honoring list order (first wins); track shadows for the load summary
 seen: dict[str, Path] = {}
 SHADOWED: list[str] = []
 for _dir in service_dirs:
@@ -126,8 +125,6 @@ class Services(click.Group):
     """Lazy-loaded command group of project services."""
 
     remote_services_cache: list[dict] | None = None
-
-    # Click-specific methods
 
     def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
         """Preprocess --slow to support optional range value before Click parses args."""
@@ -299,8 +296,6 @@ class Services(click.Group):
         except Exception as e:
             log.debug(f"Remote service info lookup failed for {tag}: {e!r}")
         return None
-
-    # Methods intended to be used anywhere
 
     @staticmethod
     def get_tags() -> list[str]:

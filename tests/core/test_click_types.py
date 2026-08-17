@@ -66,9 +66,6 @@ def test_slow_delay_range_accepts_bool(value, expected):
     assert SLOW_DELAY_RANGE.convert(value, None, None) == expected
 
 
-# --- LanguageRange ----------------------------------------------------------
-
-
 @pytest.mark.parametrize(
     "value,expected",
     [
@@ -81,9 +78,6 @@ def test_slow_delay_range_accepts_bool(value, expected):
 def test_language_range_passes_exclusion_tokens_through(value, expected):
     """The '-' prefix is resolved at filter time, so the type must keep the token intact."""
     assert LANGUAGE_RANGE.convert(value) == expected
-
-
-# --- SeasonRange ------------------------------------------------------------
 
 
 def parse(*tokens: str) -> list[str]:
@@ -154,9 +148,6 @@ def test_exclusion_removes_duplicate_keys():
 def test_bad_part_tokens_fail(token):
     with pytest.raises(click.UsageError):
         parse(token)
-
-
-# --- SeasonRange date tokens ------------------------------------------------
 
 
 def test_single_date_token_is_its_own_key():

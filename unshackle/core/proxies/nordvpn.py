@@ -53,42 +53,37 @@ class NordVPN(Proxy):
         - Country ID: "228"
         - Specific server: "us1234"
         - City selection: "us:seattle", "ca:calgary"
+
+        Returns None if the country code or ID is not one NordVPN lists. A country with no recommended
+        servers, or a city with no matching server, raises ValueError.
         """
         query = query.lower()
         city = None
 
-        # Check if query includes city specification (e.g., "ca:calgary")
         if ":" in query:
             query, city = query.split(":", maxsplit=1)
             city = city.strip()
 
         if re.match(r"^[a-z]{2}\d+$", query):
-            # country and nordvpn server id, e.g., us1, fr1234
             hostname = f"{query}.proxy.nordvpn.com"
         else:
             if query.isdigit():
-                # country id
                 country = self.get_country(by_id=int(query))
             elif re.match(r"^[a-z]+$", query):
-                # country code
                 country = self.get_country(by_code=query)
             else:
                 raise ValueError(f"The query provided is unsupported and unrecognized: {query}")
             if not country:
-                # NordVPN doesnt have servers in this region
                 return
 
-            # Check server_map for pinned servers (can include city)
             server_map_key = f"{country['code'].lower()}:{city}" if city else country["code"].lower()
             server_mapping = self.server_map.get(server_map_key) or (
                 self.server_map.get(country["code"].lower()) if not city else None
             )
 
             if server_mapping:
-                # country was set to a specific server ID in config
                 hostname = f"{country['code'].lower()}{server_mapping}.proxy.nordvpn.com"
             else:
-                # get the recommended server ID
                 recommended_servers = self.get_recommended_servers(country["id"])
                 if not recommended_servers:
                     raise ValueError(
@@ -96,7 +91,6 @@ class NordVPN(Proxy):
                         "Try again later. If the issue persists, double-check the query."
                     )
 
-                # Filter by city if specified
                 if city:
                     city_servers = self.filter_servers_by_city(recommended_servers, city)
                     if not city_servers:
@@ -106,7 +100,6 @@ class NordVPN(Proxy):
                         )
                     recommended_servers = city_servers
 
-                # Pick a random server from the filtered list
                 hostname = random.choice(recommended_servers)["hostname"]
 
         if hostname.startswith("gb"):
@@ -148,7 +141,6 @@ class NordVPN(Proxy):
         filtered = []
 
         for server in servers:
-            # Each server has a 'locations' list with location data
             locations = server.get("locations", [])
             for location in locations:
                 # City data can be in different formats:
@@ -156,7 +148,6 @@ class NordVPN(Proxy):
                 # - {"city": "Seattle"}
                 city_data = location.get("city")
                 if city_data:
-                    # Handle both dict and string formats
                     city_name = city_data.get("name") if isinstance(city_data, dict) else city_data
                     if city_name and city_name.lower() == city_lower:
                         filtered.append(server)

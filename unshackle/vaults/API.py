@@ -133,15 +133,12 @@ class API(Vault):
         if error:
             raise error(f"{message} ({code})")
 
-        # the kid:key was new to the vault (optional)
         added = bool(data.get("added"))
-        # the key for kid was changed/updated (optional)
         updated = bool(data.get("updated"))
 
         return added or updated
 
     def add_keys(self, service: str, kid_keys: dict[Union[UUID, str], str]) -> int:
-        # Normalize keys
         normalized_keys = {str(kid).replace("-", ""): key for kid, key in kid_keys.items()}
         kid_list = list(normalized_keys.keys())
 
@@ -200,9 +197,7 @@ class API(Vault):
             if error:
                 raise error(f"{message} ({code})")
 
-            # each kid:key that was new to the vault (optional)
             added = int(data.get("added", 0))
-            # each key for a kid that was changed/updated (optional)
             updated = int(data.get("updated", 0))
 
             total_added += added + updated

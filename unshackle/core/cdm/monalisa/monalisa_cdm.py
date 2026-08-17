@@ -207,7 +207,6 @@ class MonaLisaCDM:
 
         key_bytes = self.extract_license_key_bytes()
 
-        # Extract DCID from license to generate KID
         try:
             decoded = base64.b64decode(license_b64).decode("ascii", errors="ignore")
         except Exception as e:

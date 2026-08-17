@@ -20,7 +20,6 @@ class VideoCodecChoice(click.Choice):
 
     def __init__(self, codec_enum):
         self.codec_enum = codec_enum
-        # Build choices from both enum names and values
         choices = []
         for codec in codec_enum:
             choices.append(codec.name.lower())  # e.g., "avc", "hevc"
@@ -31,17 +30,14 @@ class VideoCodecChoice(click.Choice):
         if not value:
             return None
 
-        # First try to convert using the parent class
         converted_value = super().convert(value, param, ctx)
 
-        # Now map the converted value back to the enum
         for codec in self.codec_enum:
             if converted_value.lower() == codec.name.lower():
                 return codec
             if converted_value == codec.value:
                 return codec
 
-        # This shouldn't happen if the parent conversion worked
         self.fail(f"'{value}' is not a valid video codec", param, ctx)
 
 
@@ -84,17 +80,14 @@ class SubtitleCodecChoice(click.Choice):
 
     def __init__(self, codec_enum):
         self.codec_enum = codec_enum
-        # Build choices from enum names, values, and common aliases
         choices = []
         aliases = {}
 
         for codec in codec_enum:
             choices.append(codec.name.lower())  # e.g., "subrip", "webvtt"
 
-            # Only add the value if it's different from common aliases
             value_lower = codec.value.lower()
 
-            # Add common aliases and track them
             if codec.name == "SubRip":
                 if "srt" not in choices:
                     choices.append("srt")
@@ -103,32 +96,27 @@ class SubtitleCodecChoice(click.Choice):
                 if "vtt" not in choices:
                     choices.append("vtt")
                 aliases["vtt"] = codec
-                # Also add the enum value if different
                 if value_lower != "vtt" and value_lower not in choices:
                     choices.append(value_lower)
             elif codec.name == "SubStationAlpha":
                 if "ssa" not in choices:
                     choices.append("ssa")
                 aliases["ssa"] = codec
-                # Also add the enum value if different
                 if value_lower != "ssa" and value_lower not in choices:
                     choices.append(value_lower)
             elif codec.name == "SubStationAlphav4":
                 if "ass" not in choices:
                     choices.append("ass")
                 aliases["ass"] = codec
-                # Also add the enum value if different
                 if value_lower != "ass" and value_lower not in choices:
                     choices.append(value_lower)
             elif codec.name == "TimedTextMarkupLang":
                 if "ttml" not in choices:
                     choices.append("ttml")
                 aliases["ttml"] = codec
-                # Also add the enum value if different
                 if value_lower != "ttml" and value_lower not in choices:
                     choices.append(value_lower)
             else:
-                # For other codecs, just add the enum value
                 if value_lower not in choices:
                     choices.append(value_lower)
 
@@ -144,21 +132,17 @@ class SubtitleCodecChoice(click.Choice):
         if str(value).lower() == "original":
             return "original"
 
-        # First try to convert using the parent class
         converted_value = super().convert(value, param, ctx)
 
-        # Check aliases first
         if converted_value.lower() in self.aliases:
             return self.aliases[converted_value.lower()]
 
-        # Now map the converted value back to the enum
         for codec in self.codec_enum:
             if converted_value.lower() == codec.name.lower():
                 return codec
             if converted_value.lower() == codec.value.lower():
                 return codec
 
-        # This shouldn't happen if the parent conversion worked
         self.fail(f"'{value}' is not a valid subtitle codec", param, ctx)
 
 
@@ -460,5 +444,3 @@ LANGUAGE_RANGE = LanguageRange()
 QUALITY_LIST = QualityList()
 AUDIO_CODEC_LIST = AudioCodecList(Audio.Codec)
 SLOW_DELAY_RANGE = SlowDelayRange()
-
-# VIDEO_CODEC_CHOICE will be created dynamically when imported

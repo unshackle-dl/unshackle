@@ -63,9 +63,6 @@ def get_provider(name: str) -> Optional[MetadataProvider]:
     return p if p.is_available() else None
 
 
-# -- Public API (replaces tags.py functions) --
-
-
 def search_metadata(
     title: str,
     year: Optional[int],
@@ -87,7 +84,6 @@ def search_metadata(
 
     ordered = provider_order(kind, anime)
 
-    # Check cache first
     if title_cacher and cache_title_id:
         for cls in ordered:
             p = cls()
@@ -100,7 +96,6 @@ def search_metadata(
                     log.debug("Using cached %s data for %r", p.NAME, title)
                     return result
 
-    # Search providers in priority order
     for cls in ordered:
         p = cls()
         if not p.is_available():
@@ -111,9 +106,7 @@ def search_metadata(
             log.debug("%s search failed: %s", p.NAME, exc)
             continue
         if result and result.title and fuzzy_match(result.title, title):
-            # Enrich with cross-referenced IDs if we have IMDB but missing TMDB/TVDB
             enrich_ids(result)
-            # Cache the result (include enriched IDs so they survive round-trip)
             if title_cacher and cache_title_id and result.raw:
                 try:
                     cache_data = result.raw
@@ -141,7 +134,6 @@ def get_title_by_id(
     cache_account_hash: Optional[str] = None,
 ) -> Optional[str]:
     """Get title name by TMDB ID."""
-    # Check cache first
     if title_cacher and cache_title_id:
         cached = title_cacher.get_cached_provider("tmdb", cache_title_id, kind, cache_region, cache_account_hash)
         if cached and cached.get("detail"):
@@ -158,7 +150,6 @@ def get_title_by_id(
     if not result:
         return None
 
-    # Cache if possible
     if title_cacher and cache_title_id and result.raw:
         try:
             ext_ids = tmdb.get_external_ids(tmdb_id, kind)
@@ -185,7 +176,6 @@ def get_year_by_id(
     cache_account_hash: Optional[str] = None,
 ) -> Optional[int]:
     """Get release year by TMDB ID."""
-    # Check cache first
     if title_cacher and cache_title_id:
         cached = title_cacher.get_cached_provider("tmdb", cache_title_id, kind, cache_region, cache_account_hash)
         if cached and cached.get("detail"):
@@ -203,7 +193,6 @@ def get_year_by_id(
     if not result:
         return None
 
-    # Cache if possible
     if title_cacher and cache_title_id and result.raw:
         try:
             ext_ids = tmdb.get_external_ids(tmdb_id, kind)
@@ -253,7 +242,6 @@ def fetch_external_ids(
     cache_account_hash: Optional[str] = None,
 ) -> ExternalIds:
     """Get external IDs by TMDB ID."""
-    # Check cache first
     if title_cacher and cache_title_id:
         cached = title_cacher.get_cached_provider("tmdb", cache_title_id, kind, cache_region, cache_account_hash)
         if cached and cached.get("external_ids"):
@@ -271,7 +259,6 @@ def fetch_external_ids(
         return ExternalIds()
     ext = tmdb.get_external_ids(tmdb_id, kind)
 
-    # Cache if possible
     if title_cacher and cache_title_id:
         try:
             detail = None
@@ -373,9 +360,6 @@ def resolve_by_ids(
     return result
 
 
-# -- Internal helpers --
-
-
 # trust ranking for cross-validating enrichments; `metadata_providers` filters this
 # set but sets search order only, not the ranking
 ENRICHMENT_AUTHORITY: tuple[str, ...] = ("tmdb", "simkl", "tvdb")
@@ -402,7 +386,6 @@ def enrich_ids(result: MetadataResult) -> None:
 
     kind = result.kind or "movie"
 
-    # Step 1: Collect enrichment results from all available providers
     authority = {name: i for i, name in enumerate(enrichment_providers(kind))}
     enrichments: list[tuple[str, ExternalIds]] = []
     for provider_name in authority:
@@ -420,10 +403,8 @@ def enrich_ids(result: MetadataResult) -> None:
     if not enrichments:
         return
 
-    # Step 2: Cross-validate using tmdb_id as anchor — drop providers that disagree
     validated = validate_enrichments(enrichments, authority)
 
-    # Step 3: Merge validated data (fill gaps only)
     for _provider_name, ext in validated:
         if not ids.tmdb_id and ext.tmdb_id:
             ids.tmdb_id = ext.tmdb_id
@@ -444,7 +425,6 @@ def validate_enrichments(
     """
     from collections import Counter
 
-    # Collect tmdb_id votes
     tmdb_votes: dict[str, int] = {}
     for provider_name, ext in enrichments:
         if ext.tmdb_id is not None:
@@ -453,7 +433,6 @@ def validate_enrichments(
     if len(set(tmdb_votes.values())) <= 1:
         return enrichments  # all agree or only one voted — no conflict
 
-    # Find the authoritative tmdb_id
     value_counts = Counter(tmdb_votes.values())
     most_common_val, most_common_count = value_counts.most_common(1)[0]
 
@@ -467,7 +446,6 @@ def validate_enrichments(
         )
         anchor_tmdb_id = tmdb_votes[best_provider]
 
-    # Drop any provider that disagrees
     validated: list[tuple[str, ExternalIds]] = []
     for provider_name, ext in enrichments:
         if ext.tmdb_id is not None and ext.tmdb_id != anchor_tmdb_id:

@@ -8,8 +8,6 @@ from langcodes import Language
 from unshackle.core.utilities import excluded_language_tags, partition_exclusions
 from unshackle.core.utils.click_types import LANGUAGE_RANGE
 
-# --- partition_exclusions ---------------------------------------------------
-
 
 @pytest.mark.parametrize(
     "tokens,expected",
@@ -41,9 +39,6 @@ def test_partition_trims_whitespace_around_a_token():
 
 def test_partition_reads_the_tokens_language_range_produces():
     assert partition_exclusions(LANGUAGE_RANGE.convert("all,-es;-fr")) == (["all"], ["es", "fr"])
-
-
-# --- excluded_language_tags ---------------------------------------------------
 
 
 def test_close_match_excludes_the_regional_variants():

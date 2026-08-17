@@ -102,7 +102,6 @@ def get_firefox_cookies(service_settings: dict) -> Optional[CookieJar]:
 
     cookie_jar = CookieJar()
 
-    # Use a secure temporary directory with restricted permissions (Finding #5)
     with tempfile.TemporaryDirectory(prefix="unshackle_ff_") as tmp_dir:
         tmp_dir_path = Path(tmp_dir)
         os.chmod(tmp_dir, 0o700)
@@ -131,7 +130,6 @@ def get_firefox_cookies(service_settings: dict) -> Optional[CookieJar]:
                 rows = cursor.fetchall()
 
                 for h, n, v, p, e, secure, httponly in rows:
-                    # Final validation to ensure proper domain suffix
                     if h == host or h.endswith(f".{host}"):
                         c = Cookie(
                             version=0,
@@ -155,7 +153,6 @@ def get_firefox_cookies(service_settings: dict) -> Optional[CookieJar]:
                         cookie_jar.set_cookie(c)
             conn.close()
 
-            # Optional LocalStorage harvesting (Finding #4)
             if use_local_storage:
                 storage_data = get_local_storage_data(profile_path, priority_hosts, tmp_dir_path)
                 for key, val in storage_data.items():

@@ -77,9 +77,6 @@ def subtitle(**overrides) -> Subtitle:
     return Subtitle(**base)
 
 
-# ---------- sanitize_log ----------
-
-
 @pytest.mark.parametrize(
     "raw, expected",
     [
@@ -91,9 +88,6 @@ def subtitle(**overrides) -> Subtitle:
 )
 def test_sanitize_log(raw, expected: str) -> None:
     assert sanitize_log(raw) == expected
-
-
-# ---------- serialize_title ----------
 
 
 def test_serialize_title_movie() -> None:
@@ -140,9 +134,6 @@ def test_serialize_title_episode_unnamed_falls_back_to_number() -> None:
     assert d["name"] == "Episode 05"
 
 
-# ---------- serialize_video/audio/subtitle ----------
-
-
 def test_serialize_video_track_basic() -> None:
     d = serialize_video_track(video())
     assert d["id"] == "video-001"
@@ -177,9 +168,6 @@ def test_serialize_subtitle_track_basic() -> None:
     assert d["forced"] is True
     assert d["sdh"] is False
     assert d["cc"] is False
-
-
-# ---------- serialize_drm ----------
 
 
 def test_serialize_drm_none_returns_none() -> None:
@@ -224,14 +212,8 @@ def test_serialize_drm_playready_pssh_without_dumps_is_omitted() -> None:
     assert info["kids"] == ["00112233445566778899aabbccddeeff"]
 
 
-# ---------- validate_service ----------
-
-
 def test_validate_service_unknown_returns_none() -> None:
     assert validate_service("NOPE_THIS_IS_NOT_REAL_") is None
-
-
-# ---------- validate_download_parameters ----------
 
 
 def test_validate_download_params_accepts_defaults() -> None:

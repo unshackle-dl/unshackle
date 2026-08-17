@@ -191,7 +191,7 @@ class Tracks:
 
     def exists(self, by_id: Optional[str] = None, by_url: Optional[Union[str, list[str]]] = None) -> bool:
         """Check if a track already exists by various methods."""
-        if by_id:  # recommended
+        if by_id:
             return any(x.id == by_id for x in self)
         if by_url:
             return any(x.url == by_url for x in self)
@@ -251,7 +251,6 @@ class Tracks:
             return
         # resolution first, then bitrate (unknown-bitrate tracks still rank by resolution)
         self.videos.sort(key=lambda x: (x.height or 0, float(x.bitrate or 0.0)), reverse=True)
-        # language
         for language in reversed(by_language or []):
             if str(language) in ("all", "best"):
                 language = next((x.language for x in self.videos if x.is_original_lang), "")
@@ -279,9 +278,7 @@ class Tracks:
             self.audio.sort(key=lambda x: rank.get(x.codec.name if x.codec else "", default_rank))
         # Atmos tracks first (prioritize over higher bitrate non-Atmos)
         self.audio.sort(key=lambda x: not x.atmos)
-        # descriptive tracks last
         self.audio.sort(key=lambda x: x.descriptive)
-        # language
         for language in reversed(by_language or []):
             if str(language) in ("all", "best"):
                 language = next((x.language for x in self.audio if x.is_original_lang), "")
@@ -349,7 +346,6 @@ class Tracks:
         else:
             by_lang()
             by_type()
-        # sections
         for language in reversed(by_language or []):
             if str(language) in ("all", "best"):
                 language = next((x.language for x in self.subtitles if x.is_original_lang), "")
@@ -495,6 +491,9 @@ class Tracks:
         """
         Multiplex all the Tracks into a Matroska Container file.
 
+        A failed mux does not raise. mkvmerge's exit code and error lines come back alongside the
+        output path, and the caller must check them.
+
         Parameters:
             title: Set the Matroska Container file title. Usually displayed in players
                 instead of the filename if set.
@@ -580,7 +579,6 @@ class Tracks:
             else:
                 is_default = i == 0
 
-            # Prepare base arguments
             video_args = [
                 "--language",
                 f"0:{vt.language}",
@@ -589,7 +587,7 @@ class Tracks:
                 "--original-flag",
                 f"0:{vt.is_original_lang}",
                 "--compression",
-                "0:none",  # disable extra compression
+                "0:none",
             ]
 
             # Add FPS fix if needed (typically for hybrid mode to prevent sync issues)
@@ -646,7 +644,7 @@ class Tracks:
                     "--original-flag",
                     f"0:{at.is_original_lang}",
                     "--compression",
-                    "0:none",  # disable extra compression
+                    "0:none",
                     "(",
                     str(at.path),
                     ")",
@@ -679,7 +677,7 @@ class Tracks:
                         "--original-flag",
                         f"0:{st.is_original_lang}",
                         "--compression",
-                        "0:none",  # disable extra compression (probably zlib)
+                        "0:none",
                         "(",
                         str(st.path),
                         ")",
@@ -755,7 +753,6 @@ class Tracks:
             },
         )
 
-        # let potential failures go to caller, caller should handle
         try:
             errors = []
             warnings = []

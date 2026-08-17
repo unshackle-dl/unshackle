@@ -72,7 +72,6 @@ class MonaLisa:
 
         self._ticket = ticket
 
-        # Store AES key for second-stage decryption
         if isinstance(aes_key, str):
             self._aes_key = bytes.fromhex(aes_key)
         else:
@@ -83,7 +82,6 @@ class MonaLisa:
         self._key: Optional[str] = None
         self.data: dict = kwargs or {}
 
-        # Extract keys immediately
         self.extract_keys()
 
     def extract_keys(self) -> None:
@@ -171,7 +169,6 @@ class MonaLisa:
         import base64
 
         try:
-            # Decode base64 PSSH to get raw bytes
             if isinstance(self._ticket, bytes):
                 data = self._ticket
             else:
@@ -180,7 +177,6 @@ class MonaLisa:
             # Content ID is at bytes 21-75 (55 bytes)
             if len(data) >= 76:
                 content_id = data[21:76].decode("ascii")
-                # Validate it looks like a content ID
                 if content_id.startswith("H5DCID-"):
                     return content_id
         except (ValueError, TypeError):
@@ -233,7 +229,6 @@ class MonaLisa:
             else:
                 raise MonaLisa.Exceptions.DecryptionFailed(f"Segment file does not exist: {segment_path}")
 
-            # Stage 1: ML-Worker decryption
             cmd = [str(worker_path), str(self._key), str(bbts_path), str(ents_path)]
 
             startupinfo = None
@@ -263,14 +258,12 @@ class MonaLisa:
                     f"Decrypted .ents file was not created for {segment_path.name}"
                 )
 
-            # Stage 2: AES-ECB decryption
             with open(ents_path, "rb") as f:
                 ents_data = f.read()
 
             crypto = AES.new(self._aes_key, AES.MODE_ECB)
             decrypted_data = unpad(crypto.decrypt(ents_data), AES.block_size)
 
-            # Write decrypted segment back to original path
             with open(segment_path, "wb") as f:
                 f.write(decrypted_data)
 

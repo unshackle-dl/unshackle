@@ -105,6 +105,10 @@ class DASH:
                 track language value if the manifest does not list language information.
             period_filter: Filter out period's within the manifest.
 
+        Only the first main-content period becomes tracks. Later periods do not add tracks of their
+        own, but download_track stitches the segments of every content period into each returned
+        track.
+
         All Track URLs will be a list of segment URLs.
         """
         tracks = Tracks()
@@ -253,7 +257,6 @@ class DASH:
                         )
                     )
 
-            # only get tracks from the first main-content period
             break
 
         tracks.manifest_url = self.url
@@ -338,10 +341,9 @@ class DASH:
                         if kid not in drm_obj.content_keys:
                             drm_obj.content_keys[kid] = key
 
-        # Collect segments from all content periods in the manifest
         all_periods = manifest.findall("Period")
         segments: list[tuple[str, Optional[str]]] = []
-        seen_segments: set[tuple[str, Optional[str]]] = set()  # dedupe segments across periods in O(1)
+        seen_segments: set[tuple[str, Optional[str]]] = set()
         segment_durations: list[int] = []
         segment_timescale: float = 0
         init_data: Optional[bytes] = None
@@ -526,7 +528,6 @@ class DASH:
             with open(save_path, "r+b") as collapsed:
                 collapsed.truncate(int(segments[-1][1].split("-")[1]) + 1)
         else:
-            # Verify output directory exists and contains files
             if not save_dir.exists():
                 error_msg = f"Output directory does not exist: {save_dir}"
                 log_event(
@@ -558,14 +559,13 @@ class DASH:
                     "save_dir": str(save_dir),
                     "save_dir_exists": save_dir.exists(),
                     "segments_found": len(segments_to_merge),
-                    "segment_files": [f.name for f in segments_to_merge[:10]],  # Limit to first 10
+                    "segment_files": [f.name for f in segments_to_merge[:10]],
                     "downloader": "requests",
                 },
             )
 
             if not segments_to_merge:
                 error_msg = f"No segment files found in output directory: {save_dir}"
-                # List all contents of the directory for debugging
                 all_contents = list(save_dir.iterdir()) if save_dir.exists() else []
                 log_event(
                     "manifest_dash_download_no_segments",
@@ -618,7 +618,6 @@ class DASH:
             events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=drm, segment=None)
             progress(downloaded="Decrypted", completed=100, total=100)
 
-        # Clean up empty segment directory
         if save_dir.exists() and save_dir.name.endswith("_segments"):
             try:
                 save_dir.rmdir()
@@ -1235,9 +1234,9 @@ class DASH:
         if d[0:2] != "PT" and not has_ymd:
             raise ValueError("Input data is not a valid time string.")
         if has_ymd:
-            d = d[6:].upper()  # skip `P0Y0M0DT`
+            d = d[6:].upper()
         else:
-            d = d[2:].upper()  # skip `PT`
+            d = d[2:].upper()
         m = re.findall(r"([\d.]+.)", d)
         return sum(float(x[0:-1]) * {"H": 60 * 60, "M": 60, "S": 1}[x[-1].upper()] for x in m)
 

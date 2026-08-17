@@ -166,12 +166,10 @@ class Song(Title):
 
     def get_filename(self, media_info: MediaInfo, folder: bool = False, show_service: bool = True) -> str:
         if folder:
-            # Album folder name: prefer the dedicated "albums" template, fall back to the
-            # legacy "songs" folder template, then to "{artist} - {album} ({year})".
             template = config.get_folder_template("albums") or config.get_folder_template("songs")
             if template:
                 context = self.build_template_context(media_info, show_service)
-                spacer = detect_spacer(template)  # one style for the whole path
+                spacer = detect_spacer(template)
                 segments = [
                     TemplateFormatter(seg, spacer).format(context)
                     for seg in re.split(r"[\\/]", template)

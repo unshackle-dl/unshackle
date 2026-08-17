@@ -49,9 +49,6 @@ def _movie(**overrides: Any) -> Movie:
     return Movie(**base)
 
 
-# ---------- serialize_title: the new conditional keys ----------
-
-
 NEW_KEYS = ("air_date", "absolute", "daily", "anime")
 
 
@@ -92,9 +89,6 @@ def test_a_movie_carries_the_anime_flag_but_never_daily() -> None:
     d = serialize_title(movie)
     assert d["anime"] is True
     assert "daily" not in d
-
-
-# ---------- the service-class ANIME/DAILY stamp ----------
 
 
 class _AnimeDailySvc:
@@ -149,9 +143,6 @@ def test_list_titles_stamps_the_service_flags(monkeypatch: pytest.MonkeyPatch) -
     assert (title["anime"], title["daily"]) == (True, True)
 
 
-# ---------- round trips through build_title ----------
-
-
 def round_trip(episode: Episode, stamp: Optional[Any] = None) -> Episode:
     info = serialize_title(episode)
     if stamp is not None:
@@ -194,9 +185,6 @@ def test_a_movie_round_trip_keeps_the_anime_flag() -> None:
     rebuilt = build_title(serialize_title(movie), "FAKE", "fallback-id")
     assert isinstance(rebuilt, Movie)
     assert rebuilt.anime is True
-
-
-# ---------- round trips through title_to_meta (the export/import path) ----------
 
 
 def test_title_to_meta_omits_the_new_keys_for_a_plain_episode() -> None:

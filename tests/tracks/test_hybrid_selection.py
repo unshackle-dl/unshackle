@@ -58,11 +58,6 @@ def ids(tracks: list[Video]) -> set[str]:
     return {t.id for t in tracks}
 
 
-# ---------------------------------------------------------------------------
-# select_hybrid
-# ---------------------------------------------------------------------------
-
-
 def test_select_hybrid_picks_base_per_resolution_and_lowest_dv(ladder: list[Video]) -> None:
     chosen = list(filter(Tracks().select_hybrid(ladder, [2160, 1080]), ladder))
     # HDR10+ base at each requested resolution, plus the single lowest DV ingredient.
@@ -107,11 +102,6 @@ def test_select_hybrid_no_dv_selects_only_base() -> None:
     assert ids(chosen) == {"hdr10p-2160"}
 
 
-# ---------------------------------------------------------------------------
-# merge_video_selections (the dedup fix)
-# ---------------------------------------------------------------------------
-
-
 def test_merge_dedups_shared_ingredient_and_deliverable() -> None:
     H = Video.Codec.HEVC
     dv = make_video("dv-1080", range_=Video.Range.DV, height=1080, bitrate=9_000_000, codec=H)
@@ -139,11 +129,6 @@ def test_merge_dedup_uses_track_identity_by_id() -> None:
     b = make_video("same", range_=Video.Range.DV, height=1080, bitrate=9_000_000, codec=H)
     assert a == b
     assert len(Tracks.merge_video_selections([a], [b])) == 1
-
-
-# ---------------------------------------------------------------------------
-# partition_hybrid_videos
-# ---------------------------------------------------------------------------
 
 
 def test_partition_hybrid_only_keeps_ingredients_out_of_pool(ladder: list[Video]) -> None:
@@ -176,11 +161,6 @@ def test_partition_hdr10_requested_does_not_admit_hdr10p() -> None:
     ]
     _, pool = Tracks.partition_hybrid_videos(tracks, [Video.Range.HDR10])
     assert ids(pool) == {"hdr10-2160"}
-
-
-# ---------------------------------------------------------------------------
-# flag_hybrid_ingredients
-# ---------------------------------------------------------------------------
 
 
 def flagged(tracks: list[Video]) -> set[str]:
@@ -226,11 +206,6 @@ def test_flag_single_dv_rendition_as_deliverable_stays_unflagged() -> None:
     dv = next(t for t in tracks if t.id == "dv-1080")
     Tracks.flag_hybrid_ingredients(hybrid_selected, [dv])
     assert flagged(tracks) == {"hdr10p-1080"}
-
-
-# ---------------------------------------------------------------------------
-# documented end-state for the reported command
-# ---------------------------------------------------------------------------
 
 
 def test_hybrid_plus_dv_deliverable_end_state(ladder: list[Video]) -> None:

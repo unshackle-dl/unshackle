@@ -18,34 +18,32 @@ from aiohttp import web
 class APIErrorCode(str, Enum):
     """Standard API error codes for programmatic error handling."""
 
-    # Client errors (4xx)
-    INVALID_INPUT = "INVALID_INPUT"  # Missing or malformed request data
-    INVALID_SERVICE = "INVALID_SERVICE"  # Unknown service name
-    INVALID_PROXY = "INVALID_PROXY"  # Invalid proxy specification
-    INVALID_PARAMETERS = "INVALID_PARAMETERS"  # Invalid download parameters
+    INVALID_INPUT = "INVALID_INPUT"
+    INVALID_SERVICE = "INVALID_SERVICE"
+    INVALID_PROXY = "INVALID_PROXY"
+    INVALID_PARAMETERS = "INVALID_PARAMETERS"
 
-    AUTH_FAILED = "AUTH_FAILED"  # Authentication failure (invalid credentials/cookies)
-    FORBIDDEN = "FORBIDDEN"  # Action not allowed
-    GEOFENCE = "GEOFENCE"  # Content not available in region
+    AUTH_FAILED = "AUTH_FAILED"
+    FORBIDDEN = "FORBIDDEN"
+    GEOFENCE = "GEOFENCE"
 
-    NOT_FOUND = "NOT_FOUND"  # Resource not found (title, job, etc.)
-    NO_CONTENT = "NO_CONTENT"  # No titles/tracks/episodes found
-    JOB_NOT_FOUND = "JOB_NOT_FOUND"  # Download job doesn't exist
-    SESSION_NOT_FOUND = "SESSION_NOT_FOUND"  # Remote-dl session doesn't exist or expired
-    TRACK_NOT_FOUND = "TRACK_NOT_FOUND"  # Track ID not found in session
+    NOT_FOUND = "NOT_FOUND"
+    NO_CONTENT = "NO_CONTENT"
+    JOB_NOT_FOUND = "JOB_NOT_FOUND"
+    SESSION_NOT_FOUND = "SESSION_NOT_FOUND"
+    TRACK_NOT_FOUND = "TRACK_NOT_FOUND"
 
-    CONFLICT = "CONFLICT"  # Job/resource is in a state that disallows the action
+    CONFLICT = "CONFLICT"
 
-    RATE_LIMITED = "RATE_LIMITED"  # Service rate limiting
+    RATE_LIMITED = "RATE_LIMITED"
 
-    # Server errors (5xx)
-    INTERNAL_ERROR = "INTERNAL_ERROR"  # Unexpected server error
-    SERVICE_ERROR = "SERVICE_ERROR"  # Streaming service API error
-    NETWORK_ERROR = "NETWORK_ERROR"  # Network connectivity issue
-    DRM_ERROR = "DRM_ERROR"  # DRM/license acquisition failure
-    DOWNLOAD_ERROR = "DOWNLOAD_ERROR"  # Download process failure
-    SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"  # Service temporarily unavailable
-    WORKER_ERROR = "WORKER_ERROR"  # Download worker process error
+    INTERNAL_ERROR = "INTERNAL_ERROR"
+    SERVICE_ERROR = "SERVICE_ERROR"
+    NETWORK_ERROR = "NETWORK_ERROR"
+    DRM_ERROR = "DRM_ERROR"
+    DOWNLOAD_ERROR = "DOWNLOAD_ERROR"
+    SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
+    WORKER_ERROR = "WORKER_ERROR"
 
 
 class APIError(Exception):
@@ -79,32 +77,23 @@ class APIError(Exception):
     def default_http_status(error_code: APIErrorCode) -> int:
         """Map error codes to default HTTP status codes."""
         status_map = {
-            # 400 Bad Request
             APIErrorCode.INVALID_INPUT: 400,
             APIErrorCode.INVALID_SERVICE: 400,
             APIErrorCode.INVALID_PROXY: 400,
             APIErrorCode.INVALID_PARAMETERS: 400,
-            # 401 Unauthorized
             APIErrorCode.AUTH_FAILED: 401,
-            # 403 Forbidden
             APIErrorCode.FORBIDDEN: 403,
             APIErrorCode.GEOFENCE: 403,
-            # 404 Not Found
             APIErrorCode.NOT_FOUND: 404,
             APIErrorCode.NO_CONTENT: 404,
             APIErrorCode.JOB_NOT_FOUND: 404,
             APIErrorCode.SESSION_NOT_FOUND: 404,
             APIErrorCode.TRACK_NOT_FOUND: 404,
-            # 409 Conflict
             APIErrorCode.CONFLICT: 409,
-            # 429 Too Many Requests
             APIErrorCode.RATE_LIMITED: 429,
-            # 500 Internal Server Error
             APIErrorCode.INTERNAL_ERROR: 500,
-            # 502 Bad Gateway
             APIErrorCode.SERVICE_ERROR: 502,
             APIErrorCode.DRM_ERROR: 502,
-            # 503 Service Unavailable
             APIErrorCode.NETWORK_ERROR: 503,
             APIErrorCode.SERVICE_UNAVAILABLE: 503,
             APIErrorCode.DOWNLOAD_ERROR: 500,
@@ -136,7 +125,6 @@ def build_error_response(
         http_status = error.http_status
         retryable = error.retryable
     else:
-        # Generic exception - convert to INTERNAL_ERROR
         error_code = APIErrorCode.INTERNAL_ERROR.value
         message = str(error) or "An unexpected error occurred"
         details = {}
@@ -150,25 +138,20 @@ def build_error_response(
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
-    # Add details if present
     if details:
         response_data["details"] = details
 
-    # Add retryable hint if specified
     if retryable:
         response_data["retryable"] = True
 
-    # Add debug information if in debug mode
     if debug_mode:
         debug_info: dict[str, Any] = {
             "exception_type": type(error).__name__,
         }
 
-        # Add traceback for debugging
         if isinstance(error, Exception):
             debug_info["traceback"] = traceback.format_exc()
 
-        # Add any extra debug info provided
         if extra_debug_info:
             debug_info.update(extra_debug_info)
 
@@ -198,7 +181,6 @@ def categorize_exception(
     exc_str = str(exc).lower()
     exc_type = type(exc).__name__
 
-    # Authentication errors
     if any(keyword in exc_str for keyword in ["auth", "login", "credential", "unauthorized", "forbidden", "token"]):
         return APIError(
             error_code=APIErrorCode.AUTH_FAILED,
@@ -207,7 +189,6 @@ def categorize_exception(
             retryable=False,
         )
 
-    # Network errors
     if any(
         keyword in exc_str
         for keyword in [
@@ -228,7 +209,6 @@ def categorize_exception(
             http_status=503,
         )
 
-    # Geofence/region errors
     if any(keyword in exc_str for keyword in ["geofence", "region", "not available in", "territory"]):
         return APIError(
             error_code=APIErrorCode.GEOFENCE,
@@ -237,7 +217,6 @@ def categorize_exception(
             retryable=False,
         )
 
-    # Not found errors
     if any(keyword in exc_str for keyword in ["not found", "404", "does not exist", "invalid id"]):
         return APIError(
             error_code=APIErrorCode.NOT_FOUND,
@@ -246,7 +225,6 @@ def categorize_exception(
             retryable=False,
         )
 
-    # Rate limiting
     if any(keyword in exc_str for keyword in ["rate limit", "too many requests", "429", "throttle"]):
         return APIError(
             error_code=APIErrorCode.RATE_LIMITED,
@@ -256,7 +234,6 @@ def categorize_exception(
             http_status=429,
         )
 
-    # DRM errors
     if any(keyword in exc_str for keyword in ["drm", "license", "widevine", "playready", "decrypt"]):
         return APIError(
             error_code=APIErrorCode.DRM_ERROR,
@@ -265,7 +242,6 @@ def categorize_exception(
             retryable=False,
         )
 
-    # Service unavailable
     if any(keyword in exc_str for keyword in ["service unavailable", "503", "maintenance", "temporarily unavailable"]):
         return APIError(
             error_code=APIErrorCode.SERVICE_UNAVAILABLE,
@@ -275,7 +251,6 @@ def categorize_exception(
             http_status=503,
         )
 
-    # Validation errors
     if any(keyword in exc_str for keyword in ["invalid", "malformed", "validation"]) or exc_type in [
         "ValueError",
         "ValidationError",
@@ -287,7 +262,6 @@ def categorize_exception(
             retryable=False,
         )
 
-    # Default to internal error for unknown exceptions
     return APIError(
         error_code=APIErrorCode.INTERNAL_ERROR,
         message=f"An unexpected error occurred: {exc}",

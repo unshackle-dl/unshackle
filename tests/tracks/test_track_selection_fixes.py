@@ -55,9 +55,7 @@ def make_audio(
     )
 
 
-# ---------------------------------------------------------------------------
 # by_resolutions: width=None must not crash the canvas fallback
-# ---------------------------------------------------------------------------
 
 
 def test_by_resolutions_tolerates_width_none_track() -> None:
@@ -73,9 +71,7 @@ def test_by_resolutions_tolerates_width_none_track() -> None:
     assert [t.id for t in tracks.videos] == ["canvas-720"]
 
 
-# ---------------------------------------------------------------------------
 # sort_videos: resolution before bitrate
-# ---------------------------------------------------------------------------
 
 
 def test_sort_videos_resolution_outranks_bitrate() -> None:
@@ -102,9 +98,7 @@ def test_sort_videos_unknown_bitrate_still_wins_on_resolution() -> None:
     assert [t.id for t in tracks.videos] == ["unknown-1080", "known-720"]
 
 
-# ---------------------------------------------------------------------------
 # sort_audio: first track after sort is the "best" the dl layer picks
-# ---------------------------------------------------------------------------
 
 
 def test_sort_audio_atmos_ranks_first() -> None:

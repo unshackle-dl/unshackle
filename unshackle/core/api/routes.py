@@ -52,7 +52,6 @@ async def cors_middleware(
     request: web.Request, handler: Callable[[web.Request], Awaitable[web.StreamResponse]]
 ) -> web.StreamResponse:
     """Add CORS headers to all responses."""
-    # Handle preflight requests
     response: web.StreamResponse
     if request.method == "OPTIONS":
         response = web.Response()
@@ -234,7 +233,6 @@ async def services(request: web.Request) -> web.Response:
 
                 if hasattr(service_module, "TITLE_RE"):
                     title_re = service_module.TITLE_RE
-                    # Handle different types of TITLE_RE
                     if isinstance(title_re, re.Pattern):
                         service_data["title_regex"] = title_re.pattern
                     elif isinstance(title_re, str):

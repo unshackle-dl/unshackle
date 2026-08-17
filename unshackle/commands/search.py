@@ -89,9 +89,7 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
         if proxy:
             requested_provider = None
             if re.match(r"^[a-z]+:.+$", proxy, re.IGNORECASE):
-                # requesting proxy from a specific proxy provider
                 requested_provider, proxy = proxy.split(":", maxsplit=1)
-            # Match simple region codes (us, ca, uk1) or provider:region format (nordvpn:ca, windscribe:us)
             if re.match(r"^[a-z]{2}(?:[-][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE) or re.match(
                 r"^[a-z]+:[a-z]{2}(?:[-][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE
             ):
@@ -161,7 +159,6 @@ def result(service: Service, profile: Optional[str] = None, **_: Any) -> None:
             result_text += f"\n[bright_black]id: {result.id}[/]"
             search_results.add(result_text + "\n")
 
-    # update cookies
     cookie_file = dl.get_cookie_path(service_tag, profile)
     if cookie_file:
         dl.save_cookies(cookie_file, service.session.cookies)

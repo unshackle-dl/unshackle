@@ -18,7 +18,7 @@ PALETTES: dict[str, dict[str, str]] = {
     "catppuccin-mocha": {
         "bg": "rgb(30,30,46)",
         "text": "rgb(205,214,244)",
-        "text2": "rgb(162,169,193)",  # slightly darker
+        "text2": "rgb(162,169,193)",
         "black": "rgb(69,71,90)",
         "bright_black": "rgb(88,91,112)",
         "red": "rgb(243,139,168)",

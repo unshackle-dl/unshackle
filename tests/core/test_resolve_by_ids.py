@@ -131,9 +131,6 @@ def test_flat_list_config_applies_to_both_kinds(monkeypatch: pytest.MonkeyPatch)
     assert [cls.NAME for cls in providers.provider_order()] == ["tvdb", "tmdb"]
 
 
-# ---------- the anilist namespace ----------
-
-
 def test_an_anilist_id_reaches_the_anilist_provider(monkeypatch: pytest.MonkeyPatch) -> None:
     anilist = FakeProvider(
         "anilist",
@@ -190,9 +187,6 @@ def test_anilist_combines_with_a_western_id(monkeypatch: pytest.MonkeyPatch) -> 
     assert result is not None
     assert result.external_ids.tmdb_id == 37854
     assert result.external_ids.anilist_id == 21
-
-
-# ---------- the anime hint ----------
 
 
 def test_anime_puts_anilist_first_with_the_rest_behind_it() -> None:

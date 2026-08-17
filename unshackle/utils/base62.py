@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 base62
 ~~~~~~
@@ -40,7 +39,6 @@ def encodebytes(barray, charset=CHARSET_DEFAULT):
 
     check_type(barray, bytes)
 
-    # Count the number of leading zeros.
     leading_zeros_count = 0
     for i in range(len(barray)):
         if barray[i] != 0:

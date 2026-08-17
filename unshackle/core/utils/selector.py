@@ -49,7 +49,6 @@ class Selector:
         self.minimal_count = minimal_count
         self.dependencies = dependencies or {}
 
-        # Parent-Child mapping for quick lookup
         self.child_to_parent = {}
         for parent, children in self.dependencies.items():
             for child in children:
@@ -59,10 +58,8 @@ class Selector:
         self.selected_indices = set()
         self.scroll_offset = 0
 
-        # Tree view state
         self.expanded_headers = set()
         if not collapse_on_start:
-            # Expand all by default
             self.expanded_headers.update(self.dependencies.keys())
 
     def get_visible_indices(self) -> list[int]:
@@ -72,13 +69,11 @@ class Selector:
         """
         visible = []
         for idx in range(len(self.options)):
-            # If it's a child, check if parent is expanded
             if idx in self.child_to_parent:
                 parent = self.child_to_parent[idx]
                 if parent in self.expanded_headers:
                     visible.append(idx)
             else:
-                # It's a header or independent item, always visible
                 visible.append(idx)
         return visible
 
@@ -88,7 +83,6 @@ class Selector:
         """
         visible_indices = self.get_visible_indices()
 
-        # Adjust scroll offset to ensure cursor is visible
         if self.cursor_index not in visible_indices:
             # Fallback if cursor got hidden (should be handled in move, but safety check)
             self.cursor_index = visible_indices[0] if visible_indices else 0
@@ -99,17 +93,14 @@ class Selector:
             cursor_visual_pos = 0
             self.cursor_index = visible_indices[0]
 
-        # Calculate logical page start/end based on VISIBLE items
         start_idx = self.scroll_offset
         end_idx = start_idx + self.page_size
 
-        # Dynamic scroll adjustment
         if cursor_visual_pos < start_idx:
             self.scroll_offset = cursor_visual_pos
         elif cursor_visual_pos >= end_idx:
             self.scroll_offset = cursor_visual_pos - self.page_size + 1
 
-        # Re-calc render range
         render_indices = visible_indices[self.scroll_offset : self.scroll_offset + self.page_size]
 
         table = Table(show_header=False, show_edge=False, box=None, pad_edge=False, padding=(0, 1, 0, 0))
@@ -130,7 +121,6 @@ class Selector:
 
             table.add_row(indicator_text, content_text)
 
-        # Fill empty rows to maintain height
         rows_rendered = len(render_indices)
         for _ in range(self.page_size - rows_rendered):
             table.add_row(Text(" "), Text(" "))
@@ -310,17 +300,15 @@ class Selector:
         if char == "\x03":
             return "CANCEL"
 
-        # ANSI Escape Sequences for Arrow Keys
         mapping = {
-            "\x1b[A": "UP",  # Escape + [ + A
-            "\x1b[B": "DOWN",  # Escape + [ + B
-            "\x1b[C": "RIGHT",  # Escape + [ + C
-            "\x1b[D": "LEFT",  # Escape + [ + D
+            "\x1b[A": "UP",
+            "\x1b[B": "DOWN",
+            "\x1b[C": "RIGHT",
+            "\x1b[D": "LEFT",
         }
         if char in mapping:
             return mapping[char]
 
-        # Handling manual Escape sequences
         if char == "\x1b":  # ESC
             try:
                 next1 = click.getchar()

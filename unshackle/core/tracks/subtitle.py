@@ -284,11 +284,8 @@ class Subtitle(Track):
                         timescale=1,  # ?
                     )
 
-            # Sanitize WebVTT timestamps before parsing
             text = Subtitle.sanitize_webvtt_timestamps(text)
-            # Remove cue identifiers that confuse parsers like pysubs2
             text = Subtitle.sanitize_webvtt_cue_identifiers(text)
-            # Merge overlapping cues with line positioning into single multi-line cues
             text = Subtitle.merge_overlapping_webvtt_cues(text)
 
             preserve_formatting = config.subtitle.get("preserve_formatting", True)
@@ -306,7 +303,6 @@ class Subtitle(Track):
                     # some renditions carry headers but no cues; write them out rather than fail the download
                     self.path.write_text(text, encoding="utf8")
                 except pycaption.exceptions.CaptionReadSyntaxError:
-                    # If first attempt fails, try more aggressive sanitization
                     text = Subtitle.sanitize_webvtt(text)
                     try:
                         caption_set = pycaption.WebVTTReader().read(text)
@@ -340,7 +336,6 @@ class Subtitle(Track):
         Returns:
             Sanitized WebVTT content
         """
-        # Replace negative timestamps with 00:00:00.000
         return re.sub(r"(-\d+:\d+:\d+\.\d+)", "00:00:00.000", text)
 
     @staticmethod
@@ -359,7 +354,6 @@ class Subtitle(Track):
         for i, line in enumerate(lines):
             line = line.strip()
             if Subtitle.CUE_ID_PATTERN.match(line):
-                # Look ahead to see if next non-empty line is a timing line
                 j = i + 1
                 while j < len(lines) and not lines[j].strip():
                     j += 1
@@ -393,14 +387,11 @@ class Subtitle(Track):
         while i < len(lines):
             line = lines[i].strip()
 
-            # Check if this line is a cue identifier followed by a timing line
             if Subtitle.CUE_ID_PATTERN.match(line):
-                # Look ahead to see if next non-empty line is a timing line
                 j = i + 1
                 while j < len(lines) and not lines[j].strip():
                     j += 1
                 if j < len(lines) and ("-->" in lines[j] or Subtitle.TIMING_START_PATTERN.match(lines[j].strip())):
-                    # This is a cue identifier, skip it
                     i += 1
                     continue
 
@@ -451,7 +442,6 @@ class Subtitle(Track):
                 start_str, end_str = match.group(1), match.group(2)
                 timings.append((Subtitle.parse_vtt_time(start_str), Subtitle.parse_vtt_time(end_str)))
 
-        # Check for overlapping cues (within 50ms start, same end)
         for i in range(len(timings) - 1):
             curr_start, curr_end = timings[i]
             next_start, next_end = timings[i + 1]
@@ -542,9 +532,7 @@ class Subtitle(Track):
                     break
 
             if len(group) > 1:
-                # Sort by line position (lower % = higher on screen = first)
                 group.sort(key=lambda x: x["line_pos"])
-                # Use the earliest start time from the group
                 earliest = min(group, key=lambda x: x["start_ms"])
                 merged_cues.append(
                     {
@@ -582,6 +570,10 @@ class Subtitle(Track):
         """
         More thorough sanitization of WebVTT files to handle multiple potential issues.
 
+        This is lossy, so use it only as a fallback once normal parsing has failed. Everything before the
+        WEBVTT header line is discarded and the header itself is reduced to a bare "WEBVTT" line. Negative
+        timestamps become 00:00:00.000 and timestamps missing the hours field are padded to HH:MM:SS.mmm.
+
         Parameters:
             text: The WebVTT content as string
 
@@ -596,7 +588,6 @@ class Subtitle(Track):
         sanitized_lines = []
         timestamp_pattern = re.compile(r"^((?:\d+:)?\d+:\d+\.\d+)\s+-->\s+((?:\d+:)?\d+:\d+\.\d+)")
 
-        # Skip invalid headers - keep only WEBVTT
         header_done = False
         for line in lines:
             if not header_done:
@@ -605,17 +596,14 @@ class Subtitle(Track):
                     header_done = True
                 continue
 
-            # Replace negative timestamps
             if "-" in line and "-->" in line:
                 line = re.sub(r"(-\d+:\d+:\d+\.\d+)", "00:00:00.000", line)
 
-            # Validate timestamp format
             match = timestamp_pattern.match(line)
             if match:
                 start_time = match.group(1)
                 end_time = match.group(2)
 
-                # Ensure proper format with hours if missing
                 if start_time.count(":") == 1:
                     start_time = f"00:{start_time}"
                 if end_time.count(":") == 1:
@@ -768,28 +756,22 @@ class Subtitle(Track):
 
         i = 0
         while i < len(lines):
-            # Skip empty lines
             if not lines[i].strip():
                 sanitized_lines.append(lines[i])
                 i += 1
                 continue
 
-            # Check for timestamp lines
             if "-->" in lines[i]:
-                # Validate timestamp format
                 timestamp_parts = lines[i].split("-->")
                 if len(timestamp_parts) != 2 or not timestamp_parts[1].strip() or timestamp_parts[1].strip() == "0":
-                    # Skip this timestamp and its content until next timestamp or end
                     j = i + 1
                     while j < len(lines) and "-->" not in lines[j] and lines[j].strip():
                         j += 1
                     i = j
                     continue
 
-                # Add valid timestamp line
                 sanitized_lines.append(lines[i])
             else:
-                # Add non-timestamp line
                 sanitized_lines.append(lines[i])
 
             i += 1
@@ -909,14 +891,10 @@ class Subtitle(Track):
 
             # media
             if box.type == b"styp":
-                # essentially the start of each segment
-                # media var resets
-                # > tfhd
+                # styp opens a new segment, so reset per-segment fragment state
                 default_duration = None
-                # > tfdt
                 saw_tfdt_box = False
                 base_time = 0
-                # > trun
                 saw_trun_box = False
                 samples = []
 
@@ -963,7 +941,6 @@ class Subtitle(Track):
 
                     for cue_box in vttc_box.children:
                         if cue_box.type == b"vsid":
-                            # this is a V(?) Source ID box, we don't care
                             continue
                         if cue_box.type == b"sttg":
                             layout = Layout(webvtt_positioning=cue_box.settings)
@@ -1009,11 +986,9 @@ class Subtitle(Track):
         if not self.path or not self.path.exists():
             raise ValueError("You must download the subtitle track first.")
 
-        # Check configuration for SDH stripping method
         sdh_method = config.subtitle.get("sdh_method", "auto")
 
         if sdh_method == "subby" and self.codec == Subtitle.Codec.SubRip:
-            # Use subby's SDHStripper directly on the file
             fixer = CommonIssuesFixer()
             stripper = SDHStripper()
             srt, _ = fixer.from_file(self.path)
@@ -1022,10 +997,8 @@ class Subtitle(Track):
                 stripped.save(self.path)
             return
         elif sdh_method == "subtitleedit" and binaries.SubtitleEdit:
-            # Force use of SubtitleEdit
             pass  # Continue to SubtitleEdit section below
         elif sdh_method == "filter-subs":
-            # Force use of filter-subs
             sub = Subtitles(self.path)
             try:
                 sub.filter(rm_fonts=True, rm_ast=True, rm_music=True, rm_effects=True, rm_names=True, rm_author=True)
@@ -1042,7 +1015,6 @@ class Subtitle(Track):
             sub.save()
             return
         elif sdh_method == "auto":
-            # Try subby first for SRT files, then fall back
             if self.codec == Subtitle.Codec.SubRip:
                 try:
                     fixer = CommonIssuesFixer()

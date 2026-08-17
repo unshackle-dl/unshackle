@@ -144,26 +144,21 @@ class CustomRemoteCDM:
         self.vaults = vaults
         self.timeout = timeout
 
-        # Device configuration
         device = device or {}
         self.device_name = device.get("name", "ChromeCDM")
         self.device_type_str = device.get("type", "CHROME")
         self.system_id = device.get("system_id", 26830)
         self.security_level = device.get("security_level", 3)
 
-        # Determine if this is a PlayReady CDM
         self._is_playready = self.device_type_str.upper() == "PLAYREADY" or (
             bool(self.device_name) and self.device_name.upper().startswith("SL")
         )
 
-        # Get device type enum for compatibility
         if self.device_type_str:
             self.device_type = self.get_device_type_enum(self.device_type_str)
 
-        # Authentication configuration
         self.auth_config = auth or {"type": "header", "header_name": "Authorization", "key": ""}
 
-        # Endpoints configuration with defaults
         endpoints = endpoints or {}
         self.endpoints = {
             "get_request": {
@@ -198,33 +193,26 @@ class CustomRemoteCDM:
             },
         }
 
-        # Request mapping configuration
         self.request_mapping = request_mapping or {}
 
-        # Response mapping configuration
         self.response_mapping = response_mapping or {}
 
-        # Caching configuration
         caching = caching or {}
         self.caching_enabled = caching.get("enabled", True)
         self.use_vaults = caching.get("use_vaults", True) and self.vaults is not None
         self.check_cached_first = caching.get("check_cached_first", True)
 
-        # Legacy configuration
         self.legacy_config = legacy or {"enabled": False}
 
-        # Session management
         self._sessions: Dict[bytes, Dict[str, Any]] = {}
         self._pssh_b64 = None
         self._required_kids: Optional[List[str]] = None
 
-        # HTTP session setup
         self._http_session = Session()
         self._http_session.headers.update(
             {"Content-Type": "application/json", "User-Agent": f"unshackle-custom-cdm/{__version__}"}
         )
 
-        # Apply custom headers from auth config
         custom_headers = self.auth_config.get("custom_headers", {})
         if custom_headers:
             self._http_session.headers.update(custom_headers)
@@ -353,7 +341,7 @@ class CustomRemoteCDM:
             transform_type: Type of transformation to apply
 
         Returns:
-            Transformed value
+            Transformed value. An unknown transform_type returns the value unchanged instead of raising.
 
         Supported transforms:
             - base64_encode: Encode bytes/string to base64
@@ -362,7 +350,7 @@ class CustomRemoteCDM:
             - hex_decode: Decode hex string to bytes
             - json_stringify: Convert object to JSON string
             - json_parse: Parse JSON string to object
-            - parse_key_string: Parse "kid:key" format strings
+            - parse_key_string: Parse newline-separated "kid:key" lines, with or without a leading "--key "
         """
         if transform_type == "base64_encode":
             if isinstance(value, str):
@@ -399,7 +387,6 @@ class CustomRemoteCDM:
             return value
 
         elif transform_type == "parse_key_string":
-            # Handle key formats like "kid:key" or "--key kid:key"
             if isinstance(value, str):
                 keys = []
                 for line in value.split("\n"):
@@ -412,7 +399,6 @@ class CustomRemoteCDM:
                 return keys
             return value
 
-        # Unknown transform type - return value unchanged
         return value
 
     def evaluate_condition(self, condition: str, context: Dict[str, Any]) -> bool:
@@ -424,7 +410,8 @@ class CustomRemoteCDM:
             context: Context dictionary with values to check
 
         Returns:
-            True if condition is met, False otherwise
+            True if condition is met, False otherwise. A condition that matches none of the supported
+            forms is treated as unmet and returns False.
 
         Supported conditions:
             - "field == value": Equality check
@@ -435,12 +422,10 @@ class CustomRemoteCDM:
         """
         condition = condition.strip()
 
-        # Check for existence
         if " exists" in condition:
             field = condition.replace(" exists", "").strip()
             return self.get_nested_field(context, field) is not None
 
-        # Check for null comparisons
         if " == null" in condition:
             field = condition.replace(" == null", "").strip()
             return self.get_nested_field(context, field) is None
@@ -449,7 +434,6 @@ class CustomRemoteCDM:
             field = condition.replace(" != null", "").strip()
             return self.get_nested_field(context, field) is not None
 
-        # Check for equality
         if " == " in condition:
             parts = condition.split(" == ", 1)
             field = parts[0].strip()
@@ -457,7 +441,6 @@ class CustomRemoteCDM:
             actual_value = self.get_nested_field(context, field)
             return str(actual_value) == expected_value
 
-        # Check for inequality
         if " != " in condition:
             parts = condition.split(" != ", 1)
             field = parts[0].strip()
@@ -465,7 +448,6 @@ class CustomRemoteCDM:
             actual_value = self.get_nested_field(context, field)
             return str(actual_value) != expected_value
 
-        # Unknown condition format - return False
         return False
 
     def build_request_params(
@@ -490,13 +472,10 @@ class CustomRemoteCDM:
         5. Nested parameter structure (create nested objects)
         6. Parameter exclusions (remove unwanted params)
         """
-        # Get mapping config for this endpoint
         mapping_config = self.request_mapping.get(endpoint_name, {})
 
-        # Start with base parameters
         params = base_params.copy()
 
-        # 1. Apply parameter name mappings
         param_names = mapping_config.get("param_names", {})
         if param_names:
             renamed_params = {}
@@ -505,16 +484,13 @@ class CustomRemoteCDM:
                     renamed_params[new_name] = params.pop(old_name)
             params.update(renamed_params)
 
-        # 2. Add static parameters
         static_params = mapping_config.get("static_params", {})
         if static_params:
             params.update(static_params)
 
-        # 3. Add conditional parameters
         conditional_params = mapping_config.get("conditional_params", [])
         for condition_block in conditional_params:
             condition = condition_block.get("condition", "")
-            # Create context for condition evaluation
             context = {
                 "device_type": self.device_type_str,
                 "device_name": self.device_name,
@@ -526,7 +502,6 @@ class CustomRemoteCDM:
             if self.evaluate_condition(condition, context):
                 params.update(condition_block.get("params", {}))
 
-        # 4. Apply parameter transforms
         transforms = mapping_config.get("transforms", [])
         for transform in transforms:
             param_name = transform.get("param")
@@ -534,7 +509,6 @@ class CustomRemoteCDM:
             if param_name in params:
                 params[param_name] = self.apply_transform(params[param_name], transform_type)
 
-        # 5. Handle nested parameter structure
         nested_params = mapping_config.get("nested_params", {})
         if nested_params:
             for parent_key, child_keys in nested_params.items():
@@ -545,7 +519,6 @@ class CustomRemoteCDM:
                 if nested_obj:
                     params[parent_key] = nested_obj
 
-        # 6. Exclude unwanted parameters
         exclude_params = mapping_config.get("exclude_params", [])
         for param_name in exclude_params:
             params.pop(param_name, None)
@@ -601,10 +574,8 @@ class CustomRemoteCDM:
         This method extracts fields from the response using the response_mapping
         configuration, handling nested fields, type detection, and transformations.
         """
-        # Get mapping config for this endpoint
         mapping_config = self.response_mapping.get(endpoint_name, {})
 
-        # Extract fields based on mapping
         fields_config = mapping_config.get("fields", {})
         parsed = {}
 
@@ -613,7 +584,6 @@ class CustomRemoteCDM:
             if value is not None:
                 parsed[standard_name] = value
 
-        # Apply response transforms
         transforms = mapping_config.get("transforms", [])
         for transform in transforms:
             field_name = transform.get("field")
@@ -621,7 +591,6 @@ class CustomRemoteCDM:
             if field_name in parsed:
                 parsed[field_name] = self.apply_transform(parsed[field_name], transform_type)
 
-        # Determine response type
         response_types = mapping_config.get("response_types", [])
         for response_type_config in response_types:
             condition = response_type_config.get("condition", "")
@@ -629,14 +598,12 @@ class CustomRemoteCDM:
                 parsed["_response_type"] = response_type_config.get("type")
                 break
 
-        # Check success conditions
         success_conditions = mapping_config.get("success_conditions", [])
         is_success = True
         if success_conditions:
             is_success = all(self.evaluate_condition(cond, parsed) for cond in success_conditions)
         parsed["_is_success"] = is_success
 
-        # Extract error messages if not successful
         if not is_success:
             error_fields = mapping_config.get("error_fields", ["error", "message", "details"])
             error_messages = []
@@ -675,7 +642,6 @@ class CustomRemoteCDM:
                     if kid and key:
                         keys.append({"kid": str(kid), "key": str(key), "type": str(key_type)})
 
-        # Handle string format keys (e.g., "kid:key" format)
         elif isinstance(keys_data, str):
             keys = self.apply_transform(keys_data, "parse_key_string")
 
@@ -819,7 +785,6 @@ class CustomRemoteCDM:
         session["pssh"] = pssh_or_wrm
         init_data = self.get_init_data_from_pssh(pssh_or_wrm)
 
-        # Check vaults for cached keys first
         if self.use_vaults and self._required_kids:
             vault_keys = []
             for kid_str in self._required_kids:
@@ -845,7 +810,6 @@ class CustomRemoteCDM:
                 else:
                     session["vault_keys"] = vault_keys
 
-        # Build request parameters
         base_params = {
             "scheme": self.device_name,
             "init_data": init_data,
@@ -857,13 +821,10 @@ class CustomRemoteCDM:
         if session["service_certificate"]:
             base_params["service_certificate"] = base64.b64encode(session["service_certificate"]).decode("utf-8")
 
-        # Transform parameters based on configuration
         request_params = self.build_request_params("get_request", base_params, session)
 
-        # Apply authentication
         self.apply_authentication(self._http_session)
 
-        # Make API request
         endpoint_config = self.endpoints["get_request"]
         url = f"{self.host}{endpoint_config['path']}"
         timeout = endpoint_config["timeout"]
@@ -873,19 +834,15 @@ class CustomRemoteCDM:
         if response.status_code != 200:
             raise requests.RequestException(f"API request failed: {response.status_code} {response.text}")
 
-        # Parse response
         response_data = response.json()
         parsed_response = self.parse_response_data("get_request", response_data)
 
-        # Check if request was successful
         if not parsed_response.get("_is_success", False):
             error_msg = parsed_response.get("_error_message", "Unknown error")
             raise requests.RequestException(f"API error: {error_msg}")
 
-        # Determine response type
         response_type = parsed_response.get("_response_type")
 
-        # Handle cached keys response
         if response_type == "cached_keys" or "cached_keys" in parsed_response:
             cached_keys = self.parse_keys_from_response("get_request", parsed_response)
 
@@ -895,7 +852,6 @@ class CustomRemoteCDM:
 
             session["tried_cache"] = True
 
-            # Check if we have all required keys
             if self._required_kids:
                 available_kids = set()
                 for key in all_available_keys:
@@ -910,20 +866,16 @@ class CustomRemoteCDM:
                     # This allows parse_license() to properly combine cached + license keys
                     session["cached_keys"] = cached_keys
                 else:
-                    # All required keys are available from cache
                     session["keys"] = all_available_keys
                     return b""
             else:
-                # No required KIDs specified - return cached keys
                 session["keys"] = all_available_keys
                 return b""
 
-        # Handle license request response or fetch license if keys missing
         challenge = parsed_response.get("challenge")
         remote_session_id = parsed_response.get("session_id")
 
         if challenge and remote_session_id:
-            # Decode challenge if it's base64
             if isinstance(challenge, str):
                 try:
                     challenge = base64.b64decode(challenge)
@@ -934,7 +886,6 @@ class CustomRemoteCDM:
             session["remote_session_id"] = remote_session_id
             return challenge
 
-        # If we have some keys but not all, return empty to skip license parsing
         if session.get("keys"):
             return b""
 
@@ -944,8 +895,10 @@ class CustomRemoteCDM:
         """
         Parse license response using the custom CDM API.
 
-        This method intelligently combines cached keys with newly obtained license keys,
-        avoiding duplicates while ensuring all required keys are available.
+        Vault keys and cached keys are collected first, then any license key whose key ID is not
+        already present is appended. Key IDs are matched with dashes stripped and case ignored, so
+        an existing key wins over a license key for the same ID. If the session already holds final
+        keys and has no cached keys left to combine, the call is a no-op.
 
         Args:
             session_id: Session identifier
@@ -960,16 +913,13 @@ class CustomRemoteCDM:
 
         session = self._sessions[session_id]
 
-        # Skip parsing if we already have final keys (no cached keys to combine)
         # If cached_keys exist (Widevine or PlayReady), we need to combine them with license keys
         if session["keys"] and "cached_keys" not in session:
             return
 
-        # Ensure we have a challenge and session ID
         if not session.get("challenge") or not session.get("remote_session_id"):
             raise ValueError("No challenge available - call get_license_challenge first")
 
-        # Prepare license message
         if isinstance(license_message, str):
             if self.is_playready and license_message.strip().startswith("<?xml"):
                 license_message = license_message.encode("utf-8")
@@ -979,7 +929,6 @@ class CustomRemoteCDM:
                 except ValueError:
                     license_message = license_message.encode("utf-8")
 
-        # Build request parameters
         pssh = session["pssh"]
         init_data = self.get_init_data_from_pssh(pssh)
         license_request_b64 = base64.b64encode(session["challenge"]).decode("utf-8")
@@ -993,13 +942,10 @@ class CustomRemoteCDM:
             "license_response": license_response_b64,
         }
 
-        # Transform parameters based on configuration
         request_params = self.build_request_params("decrypt_response", base_params, session)
 
-        # Apply authentication
         self.apply_authentication(self._http_session)
 
-        # Make API request
         endpoint_config = self.endpoints["decrypt_response"]
         url = f"{self.host}{endpoint_config['path']}"
         timeout = endpoint_config["timeout"]
@@ -1009,19 +955,15 @@ class CustomRemoteCDM:
         if response.status_code != 200:
             raise requests.RequestException(f"License decrypt failed: {response.status_code} {response.text}")
 
-        # Parse response
         response_data = response.json()
         parsed_response = self.parse_response_data("decrypt_response", response_data)
 
-        # Check if request was successful
         if not parsed_response.get("_is_success", False):
             error_msg = parsed_response.get("_error_message", "Unknown error")
             raise requests.RequestException(f"License decrypt error: {error_msg}")
 
-        # Extract keys from response
         license_keys = self.parse_keys_from_response("decrypt_response", parsed_response)
 
-        # Combine all keys (vault + cached + license)
         all_keys = []
 
         if "vault_keys" in session:
@@ -1030,7 +972,6 @@ class CustomRemoteCDM:
         if "cached_keys" in session:
             all_keys.extend(session["cached_keys"])
 
-        # Add license keys, avoiding duplicates
         for license_key in license_keys:
             license_kid = license_key["kid"].replace("-", "").lower()
             already_exists = False
@@ -1048,7 +989,6 @@ class CustomRemoteCDM:
         session.pop("cached_keys", None)
         session.pop("vault_keys", None)
 
-        # Store keys to vaults
         if self.use_vaults and session["keys"]:
             key_dict = {}
             for key in session["keys"]:

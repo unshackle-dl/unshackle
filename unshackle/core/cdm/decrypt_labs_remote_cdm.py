@@ -506,7 +506,6 @@ class DecryptLabsRemoteCDM:
                         license_request_data = request_data.copy()
                         license_request_data["get_cached_keys_if_exists"] = False
 
-                    # Make license request for missing keys
                     response = self._http_session.post(
                         f"{self.host}/get-request", json=license_request_data, timeout=30
                     )
@@ -520,11 +519,9 @@ class DecryptLabsRemoteCDM:
 
                     return b""
                 else:
-                    # All required keys are available from cache
                     session["keys"] = all_available_keys
                     return b""
             else:
-                # No required KIDs specified - return cached keys
                 session["keys"] = all_available_keys
                 return b""
 

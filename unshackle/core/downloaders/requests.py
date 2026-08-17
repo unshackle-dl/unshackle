@@ -39,10 +39,9 @@ READ_TIMEOUT = 30
 HEDGE_FACTOR = 3
 HEDGE_MIN_WAIT = 5.0
 
-# Adaptive chunk sizing — benchmarked optimal range
-MIN_CHUNK = 524_288  # 512KB
-MAX_CHUNK = 4_194_304  # 4MB
-DEFAULT_CHUNK = 524_288  # 512KB
+MIN_CHUNK = 524_288
+MAX_CHUNK = 4_194_304
+DEFAULT_CHUNK = 524_288
 SPEED_ROLLING_WINDOW = 10  # seconds of history to keep for speed calculation
 
 RANGE_PARALLEL_MIN_SIZE = 64 * 1024 * 1024
@@ -57,8 +56,8 @@ MP_MIN_SEGMENTS = 24
 # would otherwise idle, split each remaining segment into intra-segment range parts so
 # aggregate throughput holds to the end instead of collapsing to (few)x(per-connection).
 TAIL_BOOST_MAX_PER_CYCLE = 4  # cap on segments probed/split per drain cycle so blocking probes can't stall the loop
-TAIL_BOOST_MIN_SEGMENT_SIZE = 8 * 1024 * 1024  # don't probe+split segments smaller than this
-TAIL_BOOST_PART_SIZE = 4 * 1024 * 1024  # target size per tail part (smaller than the whole-file part size)
+TAIL_BOOST_MIN_SEGMENT_SIZE = 8 * 1024 * 1024
+TAIL_BOOST_PART_SIZE = 4 * 1024 * 1024
 
 
 class SpeedWindow:
@@ -166,12 +165,11 @@ def adaptive_chunk_size(content_length: int) -> int:
     return min(MAX_CHUNK, max(MIN_CHUNK, content_length // 4))
 
 
-# Adaptive worker controller (opt-in): AIMD hill-climb over segment concurrency
-ADAPTIVE_TICK = 4.0  # seconds between target re-evaluations
-ADAPTIVE_STEP = 2  # additive increase per tick
-ADAPTIVE_MIN = 2  # never drop below this many workers
-ADAPTIVE_ERROR_BURST = 3  # errors within a tick that trigger multiplicative decrease
-ADAPTIVE_PLATEAU_GAIN = 1.10  # min speed ratio to justify keeping an increase
+ADAPTIVE_TICK = 4.0
+ADAPTIVE_STEP = 2
+ADAPTIVE_MIN = 2
+ADAPTIVE_ERROR_BURST = 3
+ADAPTIVE_PLATEAU_GAIN = 1.10
 
 
 class AdaptiveWorkerController:
@@ -194,12 +192,12 @@ class AdaptiveWorkerController:
         self.tick = tick
         self.window = window
         self._samples: deque[tuple[float, int]] = deque()
-        self._first_sample: Optional[float] = None  # first-ever sample time (survives pruning)
-        self._errors = 0  # errors observed since the last tick evaluation
+        self._first_sample: Optional[float] = None
+        self._errors = 0
         self._last_tick: Optional[float] = None
-        self._last_action: Optional[str] = None  # "increase" once we have probed upward
+        self._last_action: Optional[str] = None
         self._speed_before_increase = 0.0
-        self._target_before_increase = self.target  # restore point for a plateau revert
+        self._target_before_increase = self.target
         self._cooldown = False
 
     def prune(self, now: float) -> None:
@@ -248,7 +246,6 @@ class AdaptiveWorkerController:
             return self.target
         self._last_tick = now
 
-        # hold until half a tick of throughput history has accumulated
         if not self.warmed_up(now):
             self._errors = 0
             return self.target
@@ -259,7 +256,6 @@ class AdaptiveWorkerController:
         old = self.target
 
         if self._cooldown:
-            # one tick of quiet after a decrease before probing again
             self._cooldown = False
             self._last_action = None
             return self.target
@@ -1198,9 +1194,9 @@ def download_multiprocess(
                         p.terminate()
                     raise RuntimeError(f"segment download child failed:\n{event['__mp_error__']}")
                 if "total" in event:
-                    continue  # parent owns the aggregate total
+                    continue
                 if "downloaded" in event:
-                    continue  # child speed/status string; parent computes its own aggregate speed
+                    continue
                 if "advance" in event:
                     # children report mixed granularity (segment counts, or raw bytes when a
                     # length-1 strided chunk routes through the single-file path); the parent
@@ -1255,6 +1251,10 @@ def requests(
     Supports both requests.Session and RnetSession. When a RnetSession is
     provided (e.g. from a service's get_session()), TLS fingerprinting is preserved
     on all segment downloads.
+
+    A file already at its computed save path counts as finished from an earlier run. It is reported as
+    downloaded at its on-disk size without any request, so calling this again resumes a batch from the
+    segments the earlier run completed.
 
     Yields the following download status updates while chunks are downloading:
 
@@ -1360,7 +1360,7 @@ def requests(
         spec = build_session_spec(session)
         if spec is not None:
             yield from download_multiprocess(
-                urls=cast("list[Any]", urls),  # normalized to a list above
+                urls=cast("list[Any]", urls),
                 output_dir=output_dir,
                 filename=filename,
                 headers=headers,
@@ -1471,8 +1471,6 @@ def requests(
             yield dict(downloaded="[yellow]CANCELLED")
             raise
     else:
-        # Segmented download with thread pool
-        # Speed is tracked here on the main thread, not in workers
         total_bytes = 0
         start_time = time.time()
         last_speed_report = start_time
@@ -1518,7 +1516,7 @@ def requests(
         def download_worker(index: int, url_item: dict[str, Any], hedge: bool = False) -> None:
             item = dict(url_item)
             save_path = item.pop("save_path")
-            if save_path.exists():  # finished in a previous run
+            if save_path.exists():
                 with seg_lock:
                     if index in seg_done:
                         return
@@ -1664,7 +1662,7 @@ def requests(
                     continue
                 item = dict(url_item)
                 save_path = item.pop("save_path")
-                if save_path.exists():  # finished in a previous run; let the normal fast-path handle it
+                if save_path.exists():
                     tail_skipped.add(index)
                     continue
                 if has_range_header(item):  # byte-range slice; part-mode would clobber its Range
@@ -1724,38 +1722,32 @@ def requests(
 
         try:
             while pending or remaining:
-                # Drain queued events — batch advances, track bytes for speed
                 while True:
                     try:
                         event = event_queue.get_nowait()
                     except Empty:
                         break
-                    # Accumulate advance events for batched yield
                     advance = event.get("advance")
                     if advance:
                         pending_advance += advance
                         continue
-                    # Track bytes from completed segments for speed calculation
                     written = event.get("written")
                     if written:
                         total_bytes += written
                         if controller:
                             controller.record_bytes(written, time.time())
-                    # Pass through other events (file_downloaded, total, etc.)
                     yield event
 
-                # Yield batched advances every drain cycle for responsive progress bar
                 if pending_advance > 0:
                     yield dict(advance=pending_advance)
                     pending_advance = 0
 
                 now = time.time()
 
-                # Adaptive: re-evaluate the worker target and top up in-flight futures
                 target = max_workers
                 if controller:
                     target = controller.update(now, len(pending) + len(remaining))
-                    maybe_tail_boost(target)  # spend spare workers on the tail before topping up
+                    maybe_tail_boost(target)
                     if len(pending) < target:
                         # In the final stride (unstarted segments <= one worker target), hold back
                         # boost candidates so idle workers accumulate for a range-split; only
@@ -1768,7 +1760,6 @@ def requests(
                 elif len(pending) < queue_depth:
                     submit(queue_depth - len(pending))
 
-                # Yield speed every 0.5s (throttled to avoid spamming Rich)
                 if now - last_speed_report > 0.5:
                     if controller:
                         rolling = controller.speed(now)
@@ -1813,7 +1804,6 @@ def requests(
                 if len(seg_done) == len(urls):
                     break
 
-                # Wait efficiently for next future completion (OS condition variable)
                 completed, pending = wait(pending, timeout=0.1, return_when=FIRST_COMPLETED)
                 for future in completed:
                     exc = future.exception()
@@ -1860,7 +1850,6 @@ def requests(
                     force_unblock_stream(stream)
             pool.shutdown(wait=not DOWNLOAD_CANCELLED.is_set(), cancel_futures=True)
 
-        # Drain remaining events
         while True:
             try:
                 event = event_queue.get_nowait()
@@ -1875,7 +1864,6 @@ def requests(
                 total_bytes += written
             yield event
 
-        # Flush remaining advances and final speed
         if pending_advance > 0:
             yield dict(advance=pending_advance)
         elapsed = time.time() - start_time

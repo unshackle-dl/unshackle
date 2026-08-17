@@ -20,7 +20,6 @@ import binascii
 import struct
 from typing import Iterator, Optional
 
-# Big-endian field packers (named for the bit widths they encode).
 u8 = struct.Struct(">B")
 u16 = struct.Struct(">H")
 u32 = struct.Struct(">I")
@@ -31,8 +30,7 @@ s1616 = struct.Struct(">hxx")  # 16.16 fixed-point
 u1616 = struct.Struct(">Hxx")
 s32 = struct.Struct(">i")
 
-# 3x3 transformation matrix (identity), as stored in tkhd/mvhd.
-# Exactly 9 int32s; extras shift every field after it and desync pymp4.
+# The tkhd/mvhd matrix is exactly 9 int32s; extras shift every field after it and desync pymp4.
 UNITY_MATRIX = (
     s32.pack(0x10000)
     + s32.pack(0) * 2
@@ -62,7 +60,6 @@ PIFF_SENC_UUID = bytes.fromhex("A2394F525A9B4F14A2446C427C648DF4")
 
 TTML_NAMESPACE = b"http://www.w3.org/ns/ttml\0"
 
-# ISO/IEC 14496-3 samplingFrequencyIndex table for AudioSpecificConfig.
 AAC_SAMPLING_FREQUENCY_INDEX = {
     96000: 0x0,
     88200: 0x1,
@@ -639,7 +636,7 @@ def synthesize_aac_codec_private_data(fourcc: str, sampling_rate: int, channels:
                 (0x05 << 3) | (freq >> 1),
                 ((freq & 0x01) << 7) | (channels << 3) | (ext_freq >> 1),
                 ((ext_freq & 0x01) << 7) | (0x02 << 2),  # core object type = AAC LC
-                0x00,  # alignment bits
+                0x00,
             )
         )
     return bytes(((0x02 << 3) | (freq >> 1), ((freq & 0x01) << 7) | (channels << 3)))
@@ -715,11 +712,9 @@ def build_init_segment(
     if len(lang) != 3 or not all("a" <= c <= "z" for c in lang):
         lang = "und"
 
-    # --- ftyp ---
     ftyp = box(b"ftyp", b"isml" + u32.pack(1) + b"iso5" + b"iso6" + b"piff" + b"msdh")
 
-    # --- mvhd ---
-    # version 1: at the 10 MHz ISM timescale a 32-bit duration overflows after ~429s
+    # version 1: at the 10 MHz ISM timescale a 32-bit duration overflows after ~429s.
     mvhd = full_box(
         b"mvhd",
         1,
@@ -737,7 +732,6 @@ def build_init_segment(
         + u32.pack(0xFFFFFFFF),
     )
 
-    # --- tkhd ---
     tkhd = full_box(
         b"tkhd",
         1,
@@ -757,7 +751,6 @@ def build_init_segment(
         + u1616.pack(height),
     )
 
-    # --- mdhd + hdlr ---
     packed_lang = ((ord(lang[0]) - 0x60) << 10) | ((ord(lang[1]) - 0x60) << 5) | (ord(lang[2]) - 0x60)
     mdhd = full_box(
         b"mdhd",
@@ -780,11 +773,9 @@ def build_init_segment(
         hdlr = full_box(b"hdlr", 0, 0, u32.pack(0) + b"vide" + u32.pack(0) * 3 + b"VideoHandler\0")
         media_header = full_box(b"vmhd", 0, 1, u16.pack(0) + u16.pack(0) * 3)
 
-    # --- dinf ---
     dref = full_box(b"dref", 0, 0, u32.pack(1) + full_box(b"url ", 0, SELF_CONTAINED, b""))
     dinf = box(b"dinf", dref)
 
-    # --- stsd sample entry ---
     sample_entry_payload = u8.pack(0) * 6 + u16.pack(1)  # reserved + data reference index
     if stream_type == "video":
         sample_entry_payload += (
@@ -850,7 +841,7 @@ def build_init_segment(
             sample_entry_box = box(b"enca", sample_entry_payload)
         else:
             sample_entry_box = box(codec_fourcc, sample_entry_payload)
-    else:  # text
+    else:
         if fourcc in ("TTML", "STPP", "DFXP"):
             # XMLSubtitleSampleEntry: namespace + schema_location + aux mime types.
             sample_entry_payload += TTML_NAMESPACE + b"\0" + b"\0"
@@ -864,7 +855,6 @@ def build_init_segment(
     # second config to build. The server's larger second entry only repeats its VPS.
     stsd = full_box(b"stsd", 0, 0, u32.pack(2) + sample_entry_box * 2)
 
-    # --- empty sample tables (fragmented: real samples live in moof/traf) ---
     stbl = box(
         b"stbl",
         stsd
@@ -878,7 +868,6 @@ def build_init_segment(
     mdia = box(b"mdia", mdhd + hdlr + minf)
     trak = box(b"trak", tkhd + mdia)
 
-    # --- mvex (mehd + trex) signals a fragmented file ---
     mehd = full_box(b"mehd", 1, 0, u64.pack(duration))
     trex = full_box(
         b"trex",

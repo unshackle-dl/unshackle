@@ -21,9 +21,6 @@ from unshackle.core.api.errors import APIError, APIErrorCode
 pytestmark = pytest.mark.unit
 
 
-# ---------- redaction ----------
-
-
 def test_redact_parameters_masks_secrets_and_proxy_userinfo():
     params = {
         "service": "ATV",
@@ -85,9 +82,6 @@ def test_to_dict_full_details_redacts_error_fields_and_parameters():
     assert d["parameters"]["credential"] == "***"
 
 
-# ---------- gates ----------
-
-
 class _PastGate(Exception):
     """Raised by the stubbed Services.load to prove a request got past the gate into the try block."""
 
@@ -138,9 +132,6 @@ async def test_credential_allowed_when_enabled(stub_handler):
     stub_handler.setattr(handlers.config, "serve", {"allow_job_credentials": True})
     resp = await handlers.download_handler({"service": "ATV", "title_id": "t", "credential": "u:p"})
     assert isinstance(resp, web.Response)
-
-
-# ---------- range validation ----------
 
 
 def test_range_validation_accepts_hdr10p_and_alias():

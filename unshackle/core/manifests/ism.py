@@ -477,7 +477,6 @@ class ISM:
                     status_update["downloaded"] = f"ISM {downloaded}"
                 progress(**status_update)
 
-        # Verify output directory exists and contains files
         if not save_dir.exists():
             error_msg = f"Output directory does not exist: {save_dir}"
             log_event(
@@ -509,7 +508,7 @@ class ISM:
                 "save_dir": str(save_dir),
                 "save_dir_exists": save_dir.exists(),
                 "segments_found": len(segments_to_merge),
-                "segment_files": [f.name for f in segments_to_merge[:10]],  # Limit to first 10
+                "segment_files": [f.name for f in segments_to_merge[:10]],
                 "downloader": "requests",
             },
         )

@@ -51,9 +51,6 @@ def debug_log_with_keys(tmp_path: Path):
     close_debug_logger()
 
 
-# ---------- JSONL output shape ----------
-
-
 def test_every_line_is_valid_json_with_required_fields(debug_log: Path):
     log_event("sample_event", message="hi", context={"a": 1})
     close_debug_logger()  # flush session_end
@@ -72,9 +69,6 @@ def test_session_id_is_stable_across_entries(debug_log: Path):
     assert len(ids) == 1
 
 
-# ---------- log_event ----------
-
-
 def test_log_event_emits_with_level_message_and_context(debug_log: Path):
     log_event("feature_done", level="INFO", message="did it", context={"count": 3})
     e = find(read_entries(debug_log), "feature_done")
@@ -87,9 +81,6 @@ def test_log_event_noop_when_disabled():
     close_debug_logger()
     assert get_debug_logger() is None
     log_event("should_not_explode", message="no logger")  # must not raise
-
-
-# ---------- timed_operation ----------
 
 
 def test_timed_operation_logs_success_and_duration(debug_log: Path):
@@ -118,9 +109,6 @@ def test_timed_operation_noop_when_disabled():
     with timed_operation("disabled_block"):  # must not raise, must still run body
         value = 1 + 1
     assert value == 2
-
-
-# ---------- secret redaction / key gating ----------
 
 
 def test_sanitize_redacts_sensitive_key_names(debug_log: Path):
@@ -195,9 +183,6 @@ def test_logged_content_url_is_collapsed_on_disk(debug_log: Path):
     assert "redacted.mp4" in raw
 
 
-# ---------- redact.py helpers ----------
-
-
 @pytest.mark.parametrize(
     ("text", "expected"),
     [
@@ -221,9 +206,6 @@ def test_safe_display_url_strips_userinfo_and_query():
     assert safe_display_url("https://u:p@host:8080/a/b?token=x&y=2") == "https://host:8080/a/b"
 
 
-# ---------- redact_url ----------
-
-
 @pytest.mark.parametrize(
     ("url", "expected"),
     [
@@ -244,9 +226,6 @@ def test_redact_url_leaves_nonurl_untouched():
 
 def test_redact_url_handles_url_embedded_in_text():
     assert redact_url("got https://cdn.x/a.mp4 ok") == "got redacted.mp4 ok"
-
-
-# ---------- redact_path ----------
 
 
 def test_redact_path_strips_install_root():
@@ -279,9 +258,6 @@ def test_redact_path_disabled_by_config(monkeypatch):
     assert redact_path(full) == "<unshackle>/temp/Audio.mp4"
 
 
-# ---------- redact_all + output_dir integration ----------
-
-
 def test_redact_all_composes_secrets_urls_and_paths():
     root = str(Path(__import__("unshackle.core.utils.redact", fromlist=["x"]).__file__).resolve().parents[3])
     out = redact_all(f"dl https://u:p@cdn.x/seg.mp4?token=t into {root}/temp")
@@ -296,9 +272,6 @@ def test_logged_output_dir_is_path_redacted(debug_log: Path):
     e = find(read_entries(debug_log), "downloader_start")
     assert e["context"]["output_dir"] == "<unshackle>/temp"
     assert e["context"]["filename"] == "Audio_3eeab4ed.mp4"  # bare filename untouched
-
-
-# ---------- convenience-helper message override (footgun regression) ----------
 
 
 def test_log_drm_operation_accepts_message_and_level_override(debug_log: Path):
@@ -330,9 +303,6 @@ def test_log_service_call_accepts_message_override(debug_log: Path):
     assert e["message"] == "license"
     assert e["request"]["method"] == "POST"
     assert e["request"]["status"] == 200
-
-
-# ---------- tool_run ----------
 
 
 def test_log_tool_run_success_is_debug(debug_log: Path):

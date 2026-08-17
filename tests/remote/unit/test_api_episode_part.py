@@ -82,9 +82,6 @@ def selected(result: Dict[str, Any]) -> List[str]:
     return keys
 
 
-# ---------- serialize_title: the JSON contract ----------
-
-
 def test_partless_episode_json_has_no_part_key() -> None:
     d = serialize_title(ep(part=None))
     assert "part" not in d
@@ -137,9 +134,6 @@ def test_movie_json_unaffected() -> None:
     assert "part" not in d
 
 
-# ---------- list_tracks_handler: the REST wanted filter ----------
-
-
 @pytest.fixture
 def split_titles() -> List[Episode]:
     """E1 split into three parts, E2 unsplit."""
@@ -170,9 +164,6 @@ def test_rest_partless_episode_unchanged(monkeypatch, split_titles) -> None:
 def test_rest_part_of_unsplit_episode_selects_nothing(monkeypatch, split_titles) -> None:
     result = run_list_tracks(monkeypatch, split_titles, wanted="S01E02.1")
     assert result["status"] == 404
-
-
-# ---------- discrete season/episode/part request fields ----------
 
 
 def test_discrete_fields_without_part_select_every_part(monkeypatch, split_titles) -> None:
@@ -207,16 +198,10 @@ def test_part_is_a_transport_key_not_a_service_option() -> None:
     assert "part" in handlers.SESSION_TRANSPORT_KEYS
 
 
-# ---------- ordering ----------
-
-
 def test_rest_multi_episode_order_is_stable_across_parts(monkeypatch) -> None:
     titles = [ep(1, 2, None), ep(1, 1, 3), ep(1, 1, 1), ep(1, 1, 2)]
     result = run_list_tracks(monkeypatch, titles, wanted="S01")
     assert selected(result) == ["1x1.1", "1x1.2", "1x1.3", "1x2"]
-
-
-# ---------- download_manager: already-internal wanted sniff ----------
 
 
 SNIFF = r"^!?\d+x\d+(\.\d+)?$"
@@ -281,9 +266,6 @@ def test_perform_download_still_converts_cli_style_tokens(monkeypatch) -> None:
 
     assert calls == [("S01E01",)]
     assert params["wanted"] == ["1x1"]
-
-
-# ---------- CLI / REST agreement ----------
 
 
 def test_dl_and_handlers_share_the_one_match_helper() -> None:

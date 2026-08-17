@@ -194,9 +194,6 @@ def test_get_episodes_does_not_cache_an_empty_listing(monkeypatch: pytest.Monkey
     assert p._episodes == {}
 
 
-# --- apply_tvdb_order over multi-part episodes -------------------------------
-
-
 class _Svc:
     pass
 

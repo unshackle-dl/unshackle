@@ -60,7 +60,6 @@ class MySQL(Vault):
 
     def get_keys(self, service: str) -> Iterator[tuple[str, str]]:
         if not self.has_table(service):
-            # no table, no keys, simple
             return None
 
         conn = self.conn_factory.get()
@@ -103,7 +102,6 @@ class MySQL(Vault):
                 (kid, key),
             )
             if cursor.fetchone():
-                # table already has this exact KID:KEY stored
                 return True
             cursor.execute(
                 # TODO: SQL injection risk

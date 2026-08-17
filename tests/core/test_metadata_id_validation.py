@@ -20,9 +20,6 @@ def with_keys(monkeypatch: pytest.MonkeyPatch, **keys: str) -> None:
         monkeypatch.setattr(config, name, keys.get(name, ""))
 
 
-# ---------- one ID at a time ----------
-
-
 @pytest.mark.parametrize(
     ("tmdb", "imdb", "tvdb"),
     [(27205, "tt1375666", None), (27205, None, 73871), (None, "tt1375666", 73871), (27205, "tt1375666", 73871)],
@@ -40,9 +37,6 @@ def test_no_ids_is_fine() -> None:
 def test_imdb_alone_passes_on_the_keyless_provider(monkeypatch: pytest.MonkeyPatch) -> None:
     with_keys(monkeypatch)
     assert validate_metadata_ids(None, "tt1375666", None) is None
-
-
-# ---------- the ID must have a provider that can resolve it ----------
 
 
 def test_tmdb_without_its_key_names_the_key(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -88,9 +82,6 @@ def test_one_kind_keeping_the_provider_is_enough(monkeypatch: pytest.MonkeyPatch
     assert validate_metadata_ids(None, None, 73871) is None
 
 
-# ---------- the REST path rejects the same combinations ----------
-
-
 @pytest.mark.parametrize(
     "payload",
     [
@@ -112,9 +103,6 @@ def test_api_accepts_one_id(payload: dict) -> None:
 def test_api_still_reports_a_malformed_id_first() -> None:
     err = validate_download_parameters({"tmdb_id": "12345", "imdb_id": "tt1"})
     assert err and "positive integer" in err
-
-
-# ---------- --anilist stays outside the mutual exclusion ----------
 
 
 @pytest.mark.parametrize("value", [21, "21", "mal:21"])

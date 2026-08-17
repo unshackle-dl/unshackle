@@ -51,7 +51,6 @@ PYCAPTION_WRITERS = {
     Codec.WebVTT: pycaption.WebVTTWriter,
 }
 
-# pysubs2 format identifiers per codec.
 PYSUBS2_FORMATS: dict[Codec, str] = {
     Codec.SubRip: "srt",
     Codec.SubStationAlpha: "ssa",

@@ -85,7 +85,6 @@ def build_job_progress_callables(
                 phase += f" (+{len(active) - 3} more)"
         else:
             phase = f"downloading {completed}/{total} tracks"
-        # segment counts and transfer speed of the track downloading now, for a granular display
         active_i = next((i for i in range(total) if started[i] and not done[i]), None)
         sink(
             {

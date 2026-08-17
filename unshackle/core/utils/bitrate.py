@@ -139,11 +139,9 @@ def apply_real_bitrates(
     for group in groups.values():
         group.sort(key=lambda t: getattr(t, "bitrate", None) or 0, reverse=True)
 
-    # Initial pass: top per_group of every group, all probed concurrently.
     initial = [track for group in groups.values() for track in group[:per_group]]
     probe_batch(initial, session, log=log, workers=workers)
 
-    # Extend each group downward until unprobed tracks can't outrank probed ones.
     for group in groups.values():
         probed = min(per_group, len(group))
         while probed < len(group):

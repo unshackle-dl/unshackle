@@ -21,7 +21,6 @@ from unshackle.core.temp import TASK_PREFIX, is_stale
 def get_dependencies() -> list[dict]:
     """Binary dependency inventory shared by `env check` and the API env check."""
     return [
-        # Core Media Tools
         {"name": "FFmpeg", "binary": binaries.FFMPEG, "required": True, "desc": "Media processing", "cat": "Core"},
         {"name": "FFprobe", "binary": binaries.FFProbe, "required": True, "desc": "Media analysis", "cat": "Core"},
         {"name": "MKVToolNix", "binary": binaries.MKVToolNix, "required": True, "desc": "MKV muxing", "cat": "Core"},
@@ -46,7 +45,6 @@ def get_dependencies() -> list[dict]:
             "desc": "DRM decryption",
             "cat": "DRM",
         },
-        # HDR Processing
         {"name": "dovi_tool", "binary": binaries.DoviTool, "required": False, "desc": "Dolby Vision", "cat": "HDR"},
         {
             "name": "HDR10Plus_tool",
@@ -55,7 +53,6 @@ def get_dependencies() -> list[dict]:
             "desc": "HDR10+ metadata",
             "cat": "HDR",
         },
-        # Subtitle Tools
         {
             "name": "SubtitleEdit",
             "binary": binaries.SubtitleEdit,
@@ -70,10 +67,8 @@ def get_dependencies() -> list[dict]:
             "desc": "CC extraction",
             "cat": "Subtitle",
         },
-        # Media Players
         {"name": "FFplay", "binary": binaries.FFPlay, "required": False, "desc": "Simple player", "cat": "Player"},
         {"name": "MPV", "binary": binaries.MPV, "required": False, "desc": "Advanced player", "cat": "Player"},
-        # Network Tools
         {
             "name": "HolaProxy",
             "binary": binaries.HolaProxy,
@@ -132,13 +127,11 @@ def check() -> None:
     """Checks environment for the required dependencies."""
     all_deps = get_dependencies()
 
-    # Track overall status
     all_required_installed = True
     total_installed = 0
     total_required = 0
     missing_required = []
 
-    # Create a single table
     table = Table(
         title="Environment Dependencies", title_style="bold", show_header=True, header_style="bold", expand=False
     )
@@ -152,11 +145,9 @@ def check() -> None:
     for dep in all_deps:
         path = dep["binary"]
 
-        # Category column (only show when it changes)
         category = dep["cat"] if dep["cat"] != last_cat else ""
         last_cat = dep["cat"]
 
-        # Status
         if path:
             status = "[green]✓[/green]"
             total_installed += 1
@@ -169,15 +160,12 @@ def check() -> None:
         if dep["required"]:
             total_required += 1
 
-        # Required column (compact)
         req = "[red]Y[/red]" if dep["required"] else "[bright_black]-[/bright_black]"
 
-        # Add row
         table.add_row(category, dep["name"], status, req, dep["desc"])
 
     console.print(Padding(table, (1, 2)))
 
-    # Compact summary
     summary_parts = [f"[bold]Total:[/bold] {total_installed}/{len(all_deps)}"]
 
     if all_required_installed:
@@ -321,13 +309,10 @@ def info() -> None:
             continue
         attr_value = getattr(config.directories, name)
 
-        # Handle both single Path objects and lists of Path objects
         if isinstance(attr_value, list):
-            # For lists, show each path on a separate line
             paths_str = "\n".join(str(p.resolve()) if isinstance(p, Path) else str(p) for p in attr_value)
             table.add_row(name.title(), paths_str)
         else:
-            # For single Path objects, use the original logic
             path = attr_value.resolve()
             for var, var_path in path_vars.items():
                 if path.is_relative_to(var_path):

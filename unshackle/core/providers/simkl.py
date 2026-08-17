@@ -21,7 +21,6 @@ class SimklProvider(MetadataProvider):
     def search(self, title: str, year: Optional[int], kind: str) -> Optional[MetadataResult]:
         self.log.debug("Searching Simkl for %r (%s, %s)", title, kind, year)
 
-        # Construct appropriate filename based on type
         filename = f"{title}"
         if year:
             filename = f"{title} {year}"
@@ -42,7 +41,6 @@ class SimklProvider(MetadataProvider):
             self.log.debug("Simkl search failed: %s", exc)
             return None
 
-        # Handle case where SIMKL returns empty list (no results)
         if isinstance(data, list):
             self.log.debug("Simkl returned list (no matches) for %r", filename)
             return None
@@ -77,11 +75,9 @@ class SimklProvider(MetadataProvider):
         if not simkl_id:
             return None
 
-        # Map SIMKL type to endpoint
         simkl_type = entry.get("type", "")
         endpoint = "tv" if simkl_type in ("tv", "anime") else "movies"
 
-        # Fetch full details to get cross-referenced IDs
         try:
             r2 = self.session.get(
                 f"{self.BASE_URL}/{endpoint}/{simkl_id}",

@@ -142,7 +142,6 @@ def test_handle_api_exception_categorizes_generic() -> None:
     assert body["error_code"] == "NETWORK_ERROR"
 
 
-# --- Error contract harness (PRD 05 gate) ---------------------------------
 # Locks the FULL observable response — (http status, error_code, retryable) — that
 # a client sees for a generic (non-APIError) exception flowing through the
 # handle_api_exception funnel that every route's `except Exception` path calls.

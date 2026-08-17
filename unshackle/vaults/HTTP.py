@@ -201,7 +201,7 @@ class HTTP(Vault):
             # JSON API doesn't support getting all keys, so return empty iterator
             # This will cause the copy command to rely on the API's internal duplicate handling
             return iter([])
-        else:  # query mode
+        else:
             response = self.session.get(
                 self.url,
                 params={"service": service.lower(), "username": self.username, "password": self.password},
@@ -244,7 +244,7 @@ class HTTP(Vault):
                 return response.get("inserted", False)
             except Exception:
                 return False
-        else:  # query mode
+        else:
             response = self.session.get(
                 self.url,
                 params={
@@ -295,7 +295,7 @@ class HTTP(Vault):
                         inserted_count += 1
                 except Exception:
                     continue
-        else:  # query mode
+        else:
             for kid, key in processed_kid_keys.items():
                 response = self.session.get(
                     self.url,
@@ -328,7 +328,7 @@ class HTTP(Vault):
                     yield service
             except Exception:
                 return iter([])
-        else:  # query mode
+        else:
             response = self.session.get(
                 self.url,
                 params={"username": self.username, "password": self.password, "list_services": True},
@@ -393,7 +393,7 @@ class HTTP(Vault):
 
             except Exception:
                 return InsertResult.FAILURE
-        else:  # query mode
+        else:
             response = self.session.get(
                 self.url,
                 params={

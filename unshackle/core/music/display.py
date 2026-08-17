@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from io import BytesIO
 from typing import Any, Optional
 
-# RenderableType is rich's union of "things that can be printed to a console".
 from rich import box
 from rich.console import Group, RenderableType
 from rich.padding import Padding
@@ -154,7 +153,6 @@ def render_album_header(
     artwork: Optional[RenderableType] = None,
 ) -> Optional[RenderableType]:
     """Render the release metadata grid, optionally placing artwork beside it."""
-    # Table.grid is a borderless table used purely for column alignment.
     grid = Table.grid(padding=(0, 2))
     grid.add_column(style="orchid1", no_wrap=True)
     grid.add_column()

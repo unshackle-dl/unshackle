@@ -30,7 +30,6 @@ def stamp_for(dest: Path) -> Path:
     return dest.parent / f"{dest.name}{STAMP_SUFFIX}"
 
 
-# owner/repo shorthand: exactly two path-like segments, no scheme
 SHORTHAND_RE = re.compile(r"^[\w.-]+/[\w.-]+$")
 
 
@@ -147,10 +146,10 @@ def refresh_repo(spec: str) -> tuple[Optional[Path], list[str]]:
     if not binaries.Git:
         return dest, []
     old = head(dest)
-    discarded = local_dirty_services(dest)  # uncommitted edits the force reset is about to wipe
+    discarded = local_dirty_services(dest)
     force_sync(dest, stamp)
     lines = [f"! {tag} (local changes discarded)" for tag in discarded]
-    lines += changed_services(dest, old, head(dest))  # upstream changes pulled in
+    lines += changed_services(dest, old, head(dest))
     return dest, lines
 
 

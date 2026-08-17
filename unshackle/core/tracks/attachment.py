@@ -59,7 +59,6 @@ class Attachment:
             parsed_url = urlparse(url)
             file_name = os.path.basename(parsed_url.path) or "attachment"
 
-            # Use provided name for the file if available
             if name:
                 safe_name = re.sub(r'[<>:"/\\|?*]', "", name).replace(" ", "_")
                 file_name = f"{safe_name}{os.path.splitext(file_name)[1]}"

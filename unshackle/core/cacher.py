@@ -32,7 +32,6 @@ class Cacher:
         self.expiration = expiration
 
         if self.expiration and self.expired:
-            # if its expired, remove the data for safety and delete cache file
             self.data = None
             self.path.unlink()
 

@@ -183,7 +183,6 @@ def serve(
                 app["config"] = {"users": api_users}
             app["debug_api"] = debug_api
 
-            # Start session cleanup loop for remote-dl sessions
             from unshackle.core.api.session_store import get_session_store
 
             session_store = get_session_store()
@@ -277,7 +276,6 @@ def serve(
             app["config"] = serve_config
             app["debug_api"] = debug_api
 
-            # Start session cleanup loop for remote-dl sessions
             from unshackle.core.api.session_store import get_session_store
 
             session_store = get_session_store()

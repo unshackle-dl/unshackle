@@ -90,7 +90,6 @@ class Episode(Title):
 
         if name is not None:
             name = name.strip()
-            # ignore episode names that are the episode number or title name
             if re.match(r"Episode ?#?\d+", name, re.IGNORECASE):
                 name = None
             elif name.lower() == title.lower():

@@ -521,11 +521,9 @@ def serialize_drm(drm_list) -> Optional[List[Dict[str, Any]]]:
                     exc_info=True,
                 )
 
-        # Get KIDs
         if hasattr(drm, "kids") and drm.kids:
             drm_info["kids"] = [str(kid) for kid in drm.kids]
 
-        # Get content keys if available
         if hasattr(drm, "content_keys") and drm.content_keys:
             drm_info["content_keys"] = {str(k): v for k, v in drm.content_keys.items()}
 
@@ -693,12 +691,10 @@ async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = 
             details={"service": normalized_service},
         )
 
-    # Authenticate
     cookies = dl.get_cookie_jar(normalized_service, profile)
     credential = dl.get_credentials(normalized_service, profile)
     service_instance.authenticate(cookies, credential)
 
-    # Search
     results = []
     try:
         for result in service_instance.search():
@@ -867,7 +863,6 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                             log.debug(f"Episode {title.season}x{title.number} not available, skipping")
                             continue
                         except (Exception, SystemExit) as e:
-                            # Handle other errors gracefully
                             failed_episodes.append(f"S{title.season}E{title.number:02d}{part_key_suffix(title.part)}")
                             log.debug(f"Error getting tracks for {title.season}x{title.number}: {e}")
                             continue
@@ -888,7 +883,6 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                             },
                         )
                 else:
-                    # Single episode or movie
                     first_title = matching_titles[0]
             else:
                 first_title = titles_list[0]
@@ -1116,25 +1110,20 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
     enforce_download_gates(data, request)
 
     try:
-        # Load service module to extract service-specific parameter defaults
         service_module = Services.load(normalized_service)
         service_specific_defaults = {}
 
-        # Extract default values from the service's click command.
         # Skip None defaults here: this dict overlays into job params; injecting
         # None for keys like `profile` would clobber serve-config overrides.
         # Missing required __init__ params are handled in download_manager.perform_download.
         if hasattr(service_module, "cli") and hasattr(service_module.cli, "params"):
             for param in service_module.cli.params:
                 if hasattr(param, "name") and param.default is not None and not isinstance(param.default, enum.Enum):
-                    # Store service-specific defaults (e.g. drm_system, hydrate_track, profile)
                     service_specific_defaults[param.name] = param.default
 
-        # Get download manager and start workers if needed
         manager = get_download_manager()
         await manager.start_workers()
 
-        # Create download job with filtered parameters (exclude service and title_id as they're already passed)
         filtered_params = {k: v for k, v in data.items() if k not in ["service", "title_id"]}
         # Overlay any dl-relevant keys from `serve:` config (e.g. downloads, workers) so the API
         # respects server-side defaults without each client having to send them.
@@ -1488,11 +1477,6 @@ async def prioritize_download_job_handler(job_id: str, request: Optional[web.Req
         )
 
 
-# ---------------------------------------------------------------------------
-# Platform Handlers (profiles, config, history, maintenance)
-# ---------------------------------------------------------------------------
-
-
 CONFIG_SECRET_KEY_RE = re.compile(r"secret|password|token|api_key|credential", re.IGNORECASE)
 
 
@@ -1752,11 +1736,6 @@ async def env_check_handler(request: Optional[web.Request] = None) -> web.Respon
         return handle_api_exception(e, context={"operation": "env_check"}, debug_mode=debug_mode)
 
 
-# ---------------------------------------------------------------------------
-# Remote-DL Session Handlers
-# ---------------------------------------------------------------------------
-
-
 SESSION_TRANSPORT_KEYS = {
     "service",
     "title_id",
@@ -2005,7 +1984,6 @@ async def session_titles_handler(session_id: str, request: Optional[web.Request]
         titles = service_instance.get_titles()
         session.titles = titles
 
-        # Serialize titles and build title map
         if hasattr(titles, "__iter__") and not isinstance(titles, str):
             titles_list = list(titles)
         else:
@@ -2196,10 +2174,8 @@ async def session_segments_handler(
                 "drm": serialize_drm(track.drm) if hasattr(track, "drm") and track.drm else None,
             }
 
-            # Extract session headers/cookies for CDN access
             service_session = session.service_instance.session
             if hasattr(service_session, "headers"):
-                # Only include relevant headers, not all session headers
                 headers = dict(service_session.headers) if service_session.headers else {}
                 track_info["headers"] = headers
             else:
@@ -2496,7 +2472,6 @@ def ensure_track_drm(track: Any) -> None:
     if track.drm:
         return
 
-    # DASH: extract from ContentProtection elements
     if track.data.get("dash"):
         from unshackle.core.manifests import DASH as DASHManifest
 
@@ -2507,7 +2482,6 @@ def ensure_track_drm(track: Any) -> None:
             if track.drm:
                 return
 
-    # HLS: fetch playlist and extract DRM from EXT-X-KEY
     if track.data.get("hls") and track.url:
         try:
             import m3u8
@@ -2530,7 +2504,6 @@ def ensure_track_drm(track: Any) -> None:
         except Exception as e:
             log.debug(f"HLS DRM prefetch failed for {track.id}: {e!r}")
 
-    # ISM: extract from ProtectionHeader elements
     if track.data.get("ism"):
         try:
             from unshackle.core.manifests import ISM as ISMManifest

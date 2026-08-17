@@ -54,9 +54,6 @@ def default_title_language(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "anilist_title_language", "english")
 
 
-# ---------- reference parsing ----------
-
-
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
@@ -80,9 +77,6 @@ def default_title_language(monkeypatch: pytest.MonkeyPatch) -> None:
 )
 def test_parse_anilist_ref(value: Any, expected: Optional[tuple[str, int]]) -> None:
     assert parse_anilist_ref(value) == expected
-
-
-# ---------- search ----------
 
 
 def test_search_returns_the_best_match(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -151,9 +145,6 @@ def test_graphql_errors_are_a_miss_not_a_raise(monkeypatch: pytest.MonkeyPatch) 
     assert provider.get_by_id(21, "tv") is None
 
 
-# ---------- id lookup ----------
-
-
 def test_get_by_id_queries_the_anilist_id(monkeypatch: pytest.MonkeyPatch) -> None:
     provider, sent = _provider(monkeypatch, {"data": {"Media": ONE_PIECE}})
 
@@ -189,9 +180,6 @@ def test_get_external_ids_needs_no_lookup_for_a_bare_id(monkeypatch: pytest.Monk
     assert sent[0]["variables"] == {"idMal": 21}
 
 
-# ---------- title variant ----------
-
-
 @pytest.mark.parametrize(
     ("configured", "expected"),
     [("english", "One Piece"), ("romaji", "ONE PIECE"), ("native", "ONE PIECE"), ("klingon", "One Piece")],
@@ -220,9 +208,6 @@ def test_a_title_with_no_variant_at_all_is_a_miss(monkeypatch: pytest.MonkeyPatc
     node = {**ONE_PIECE, "title": {"romaji": None, "english": None, "native": None}}
     provider, _ = _provider(monkeypatch, {"data": {"Media": node}})
     assert provider.get_by_id(21, "tv") is None
-
-
-# ---------- derived fields ----------
 
 
 @pytest.mark.parametrize(
@@ -256,9 +241,6 @@ def test_the_provider_needs_no_api_key() -> None:
     assert AniListProvider().is_available() is True
     assert AniListProvider.REQUIRES_KEY is False
     assert AniListProvider.ID_KIND == "anilist"
-
-
-# ---------- cache round-trip ----------
 
 
 def test_a_cached_node_rebuilds_with_the_read_time_title_language(monkeypatch: pytest.MonkeyPatch) -> None:

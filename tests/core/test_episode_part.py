@@ -44,9 +44,6 @@ def reset_template():
     config.output_template, config.folder_templates, config.folder_template, config.tag = saved
 
 
-# --- validation -------------------------------------------------------------
-
-
 def test_part_defaults_to_none():
     assert make_episode().part is None
 
@@ -77,9 +74,6 @@ def test_old_cache_entry_reads_as_part_less():
     restored = Episode.__new__(Episode)
     restored.__dict__.update(title="The Show", season=1, number=1, name=None, year=None)
     assert restored.part is None
-
-
-# --- display ----------------------------------------------------------------
 
 
 def test_str_is_unchanged_without_a_part():
@@ -125,9 +119,6 @@ def test_series_sorts_parts_within_their_episode():
     assert [(e.number, e.part) for e in series] == [(1, None), (1, 1), (1, 2), (2, None)]
 
 
-# --- naming -----------------------------------------------------------------
-
-
 def test_filename_is_unchanged_without_a_part(reset_template):
     assert make_episode().get_filename(StubMediaInfo()) == "The.Show.S01E01.DummyService-GROUP"
 
@@ -167,8 +158,6 @@ def test_parts_share_one_derived_season_folder(reset_template):
     assert len(folders) == 1
     assert folders == {make_episode().get_filename(StubMediaInfo(), folder=True)}
 
-
-# --- matching ---------------------------------------------------------------
 
 # the worked key scheme from the design: (token, part-less E1 selected, E1 part 2 selected)
 MATCH_TABLE = [

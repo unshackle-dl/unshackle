@@ -9,7 +9,6 @@ from langcodes import Language
 from unshackle.core.config import config
 from unshackle.core.providers._base import ExternalIds, MetadataProvider, MetadataResult, clean, fuzzy_match
 
-# Mapping from our kind ("movie"/"tv") to OMDb title types
 KIND_TO_TYPE: dict[str, str] = {
     "movie": "movie",
     "tv": "series",

@@ -60,7 +60,11 @@ def direct_session(session: Union[Session, "RnetSession"]) -> Session:
 
 
 def read_top_level_box(path: Path, box_type: bytes) -> Optional[bytes]:
-    # seek through top-level box headers; only the wanted box's bytes are read into RAM
+    """Read a single top-level box from an MP4 file.
+
+    Only box headers are walked, so the wanted box is the only payload read into memory. Returns None if the
+    file has no such top-level box, or if a box header is truncated or declares an impossible size.
+    """
     file_size = path.stat().st_size
     with path.open("rb") as f:
         start = 0
@@ -69,12 +73,12 @@ def read_top_level_box(path: Path, box_type: bytes) -> Optional[bytes]:
             if len(header) < 8:
                 return None
             size = int.from_bytes(header[:4], "big")
-            if size == 1:  # 64-bit largesize
+            if size == 1:
                 large = f.read(8)
                 if len(large) < 8:
                     return None
                 size = int.from_bytes(large, "big")
-            elif size == 0:  # box runs to EOF
+            elif size == 0:
                 size = file_size - start
             if size < 8:
                 return None
@@ -177,15 +181,14 @@ def assert_fragments_decrypted(path: Path) -> None:
                     break
                 size = int.from_bytes(header[:4], "big")
                 box_header = 8
-                if size == 1:  # 64-bit largesize
+                if size == 1:
                     large = f.read(8)
                     if len(large) < 8:
                         break
                     size = int.from_bytes(large, "big")
                     box_header = 16
-                elif size == 0:  # box runs to EOF
+                elif size == 0:
                     size = file_size - start
-                # below the consumed header the cursor stalls and desyncs onto payload
                 if size < box_header or start + size > file_size:
                     logging.getLogger("track").warning(
                         f"{path.name}: malformed box size at offset {start}; cannot verify the "
@@ -247,7 +250,7 @@ class DownloadContext:
 
 class Track:
     class Descriptor(Enum):
-        URL = 1  # Direct URL, nothing fancy
+        URL = 1
         HLS = 2  # https://en.wikipedia.org/wiki/HTTP_Live_Streaming
         DASH = 3  # https://en.wikipedia.org/wiki/Dynamic_Adaptive_Streaming_over_HTTP
         ISM = 4  # https://learn.microsoft.com/en-us/silverlight/smooth-streaming
@@ -328,7 +331,7 @@ class Track:
         if self.name is None:
             lang = Language.get(self.language)
             if (lang.language or "").lower() == (lang.territory or "").lower():
-                lang.territory = None  # e.g. en-en, de-DE
+                lang.territory = None
             reduced = lang.simplify_script()
             extra_parts = []
             if reduced.script is not None:
@@ -409,7 +412,11 @@ class Track:
         adaptive_workers: bool = False,
         download_processes: int = 1,
     ):
-        """Download and optionally Decrypt this Track."""
+        """Download and optionally Decrypt this Track.
+
+        A URL-descriptor Video or Audio track with no `drm` set has its DRM probed from the init data of the
+        stream and stored on the track, so a service need not declare `drm` itself.
+        """
         from unshackle.core.manifests import DASH, HLS, ISM
 
         if DOWNLOAD_LICENCE_ONLY.is_set():
@@ -485,8 +492,6 @@ class Track:
             elif self.descriptor == self.Descriptor.URL:
                 try:
                     if not self.drm and track_type in ("Video", "Audio"):
-                        # the service might not have explicitly defined the `drm` property
-                        # try find DRM information from the init data of URL based on CDM type
                         if is_playready_cdm(cdm):
                             try:
                                 self.drm = [PlayReady.from_track(self, session)]
@@ -512,21 +517,18 @@ class Track:
                         track_kid = self.get_key_id(session=session)
                         drm = self.get_drm_for_cdm(cdm)
                         if isinstance(drm, Widevine):
-                            # license and grab content keys
                             if not prepare_drm:
                                 raise ValueError("prepare_drm func must be supplied to use Widevine DRM")
                             progress(downloaded="LICENSING")
                             prepare_drm(drm, track_kid=track_kid)
                             progress(downloaded="[yellow]LICENSED")
                         elif isinstance(drm, PlayReady):
-                            # license and grab content keys
                             if not prepare_drm:
                                 raise ValueError("prepare_drm func must be supplied to use PlayReady DRM")
                             progress(downloaded="LICENSING")
                             prepare_drm(drm, track_kid=track_kid)
                             progress(downloaded="[yellow]LICENSED")
                         elif isinstance(drm, ClearKeyCENC):
-                            # license and grab content keys (no CDM involved)
                             if not prepare_drm:
                                 raise ValueError("prepare_drm func must be supplied to use ClearKey DRM")
                             progress(downloaded="LICENSING")
@@ -598,7 +600,6 @@ class Track:
             raise
 
         if DOWNLOAD_CANCELLED.is_set():
-            # we stopped during the download, let's exit
             return
 
         if not DOWNLOAD_LICENCE_ONLY.is_set():
@@ -750,7 +751,7 @@ class Track:
                 return tenc.key_ID
 
         for uuid_box in get_boxes(init_data, b"uuid"):
-            if uuid_box.extended_type == UUID("8974dbce-7be7-4c51-84f9-7148f9882554"):  # tenc
+            if uuid_box.extended_type == UUID("8974dbce-7be7-4c51-84f9-7148f9882554"):
                 tenc = uuid_box.data
                 if tenc.key_ID.int != 0:
                     return tenc.key_ID
@@ -962,11 +963,10 @@ class Track:
 
             args.extend(
                 [
-                    # Following are very important!
                     "-map_metadata",
-                    "-1",  # don't transfer metadata to output file
+                    "-1",
                     "-fflags",
-                    "bitexact",  # only have minimal tag data, reproducible mux
+                    "bitexact",
                     "-codec",
                     "copy",
                 ]
@@ -995,7 +995,6 @@ class Track:
             bsf_applied = bsf_v is not None
         except subprocess.CalledProcessError as e:
             if b"Malformed AAC bitstream detected" in e.stderr:
-                # e.g., TruTV's dodgy encodes
                 ffmpeg(["-y", "-bsf:a", "aac_adtstoasc"], bsf=bsf_v)
                 bsf_applied = bsf_v is not None
             elif bsf_v is not None:

@@ -8,13 +8,9 @@ from typing import Any, Callable
 class Events:
     class Types(Enum):
         _reserved = 0
-        # A Track's segment has finished downloading
         SEGMENT_DOWNLOADED = 1
-        # Track has finished downloading
         TRACK_DOWNLOADED = 2
-        # Track has finished decrypting
         TRACK_DECRYPTED = 3
-        # Track has finished repacking
         TRACK_REPACKED = 4
         # Track is about to be Multiplexed into a Container
         TRACK_MULTIPLEX = 5

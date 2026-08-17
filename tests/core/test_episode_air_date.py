@@ -122,9 +122,6 @@ def test_dated_folder_keeps_distinct_year(reset_template):
     assert "2013" in folder
 
 
-# --- selection by date ------------------------------------------------------
-
-
 def test_a_dated_episode_matches_its_iso_date_key():
     assert make_episode(air_date=date(2024, 6, 30)).matches_wanted({"2024-06-30"})
 
@@ -145,9 +142,6 @@ def test_an_undated_episode_is_unaffected_by_date_keys():
     episode = make_episode()
     assert not episode.matches_wanted({"2024-06-30"})
     assert episode.matches_wanted({"2024x181"})
-
-
-# --- the air-date guard -----------------------------------------------------
 
 
 def test_a_pre_1970_air_date_is_rejected():

@@ -315,17 +315,14 @@ class dl:
         Returns:
             Path to temp font file
         """
-        # Find the matched name for logging
         matched_name = next((name for name, path in system_fonts.items() if path == matched_font), None)
 
         if matched_name and matched_name.lower() != font_name.lower():
             self.log.info(f"Using '{matched_name}' as fallback for '{font_name}'")
 
-        # Create unique temp file path
         safe_name = font_name.replace(" ", "_").replace("/", "_")
         temp_path = config.directories.temp / f"font_{safe_name}{matched_font.suffix}"
 
-        # Copy if not already exists
         if not temp_path.exists():
             shutil.copy2(matched_font, temp_path)
             temp_font_files.append(temp_path)
@@ -352,13 +349,11 @@ class dl:
         missing_fonts = []
 
         for font_name in set(font_names):
-            # Try custom fonts first
             if custom_font := self.find_custom_font(font_name):
                 title.tracks.add(Attachment(path=custom_font, name=f"{font_name} ({custom_font.stem})"))
                 font_count += 1
                 continue
 
-            # Try system fonts with fallback
             if system_font := find_font_with_fallbacks(font_name, system_fonts):
                 temp_path = self.prepare_temp_font(font_name, system_font, system_fonts, temp_font_files)
                 title.tracks.add(Attachment(path=temp_path, name=f"{font_name} ({system_font.stem})"))
@@ -410,7 +405,11 @@ class dl:
         sidecar_format: str,
         original_paths: Optional[dict[str, Path]] = None,
     ) -> list[Path]:
-        """Output subtitles as sidecar files, converting if needed."""
+        """
+        Output subtitles as sidecar files, converting if needed.
+
+        Conversion runs on a temp copy, so each subtitle's own file is left untouched and can still be muxed.
+        """
         created_paths: list[Path] = []
         config.directories.temp.mkdir(parents=True, exist_ok=True)
 
@@ -422,7 +421,6 @@ class dl:
             if not source_path or not source_path.exists():
                 continue
 
-            # Determine target codec
             if sidecar_format == "original":
                 target_codec = None
                 if source_path.suffix:
@@ -437,11 +435,9 @@ class dl:
                 subtitle, base_filename, output_dir, target_codec, source_path=source_path
             )
 
-            # Copy or convert
             if not target_codec or subtitle.codec == target_codec:
                 shutil.copy2(source_path, sidecar_path)
             else:
-                # Create temp copy for conversion to preserve original
                 temp_path = config.directories.temp / f"sidecar_{subtitle.id}{source_path.suffix}"
                 shutil.copy2(source_path, temp_path)
 
@@ -1505,7 +1501,6 @@ class dl:
         else:
             export_path = None
 
-        # Parse bitrate range options
         vbitrate_min, vbitrate_max = None, None
         if vbitrate_range:
             if vbitrate and vbitrate_range:
@@ -1559,7 +1554,6 @@ class dl:
             self.log.error("--select-titles and -w/--wanted cannot be used together")
             sys.exit(1)
 
-        # Check if dovi_tool is available when hybrid mode is requested
         if any(r == Video.Range.HYBRID for r in range_):
             from unshackle.core.binaries import DoviTool
 
@@ -1796,12 +1790,9 @@ class dl:
                     selection_titles.append(header_text)
                     current_season_header_idx = len(selection_titles) - 1
                     dependencies[current_season_header_idx] = []
-                    # Note: Headers are not mapped to actual title indices
 
-                # Format display name
                 display_name = ((t.name[:30].rstrip() + "...") if len(t.name) > 30 else t.name) if t.name else None
 
-                # Apply indentation only for multiple seasons
                 prefix = " " if multiple_seasons else ""
                 part_label = f".{t.part}" if t.part is not None else ""
                 option_text = f"{prefix}{t.number}{part_label}" + (f". {display_name}" if t.name else "")
@@ -1809,16 +1800,13 @@ class dl:
                 selection_titles.append(option_text)
                 current_ui_idx = len(selection_titles) - 1
 
-                # Map UI index to actual title index
                 original_indices[current_ui_idx] = i
 
-                # Link episode to season header for group selection
                 if current_season_header_idx != -1:
                     dependencies[current_season_header_idx].append(current_ui_idx)
 
             selection_start = time.time()
 
-            # Execute selector with dependencies (headers select all children)
             selected_ui_idx = select_multiple(
                 selection_titles,
                 minimal_count=1,
@@ -1835,7 +1823,6 @@ class dl:
             selection_end = time.time()
             start_time += selection_end - selection_start
 
-            # Map UI indices back to title indices (excluding headers)
             selected_idx = []
             for idx in selected_ui_idx:
                 if idx in original_indices:
@@ -1845,17 +1832,14 @@ class dl:
             selected_idx = sorted(set(selected_idx))
             keep = set(selected_idx)
 
-            # In-place filter: remove unselected items (iterate backwards)
             for i in range(len(titles) - 1, -1, -1):
                 if i not in keep:
                     del titles[i]
 
-            # Show selected count
             if titles:
                 count = len(titles)
                 console.print(Padding(f"[text]Total selected: {count}[/]", (0, 5)))
 
-        # Determine the latest episode if --latest-episode is set
         latest_episode_id = None
         if latest_episode and isinstance(titles, Series) and len(titles) > 0:
             # Series is already sorted by (season, number, year)
@@ -2625,7 +2609,6 @@ class dl:
                 )
                 continue
 
-            # Determine which tracks to keep
             keep_videos = True
             keep_audio = True
             keep_subtitles = True
@@ -2663,7 +2646,6 @@ class dl:
             if no_proxy_download and any(service.session.proxies.values()):
                 console.log("Bypassing proxy for downloads as --no-proxy-download was used...")
 
-            # Clear unwanted tracks
             if not keep_videos:
                 title.tracks.videos = []
             if not keep_audio:
@@ -2692,7 +2674,6 @@ class dl:
                 fsl_excl_r = resolve_excludes(fsl_excl)
 
                 if isinstance(title, (Movie, Episode)):
-                    # filter video tracks
                     if keep_videos and vcodec:
                         title.tracks.select_video(lambda x: x.codec in vcodec)
                         missing_codecs = [c for c in vcodec if not any(x.codec == c for x in title.tracks.videos)]
@@ -2876,10 +2857,8 @@ class dl:
                                 self.log.error(f"There's no {res_list} Video Track{plural}...")
                                 sys.exit(1)
 
-                    # choose best track by range and quality
                     pre_hybrid_videos: list[Video] = list(title.tracks.videos) if has_hybrid else []
                     if keep_videos and has_hybrid:
-                        # Apply hybrid selection for HYBRID tracks
                         hybrid_candidate_tracks, non_hybrid_tracks = Tracks.partition_hybrid_videos(
                             title.tracks.videos, non_hybrid_ranges
                         )
@@ -2899,10 +2878,8 @@ class dl:
                             )
                             hybrid_selected = list(filter(hybrid_filter, hybrid_candidate_tracks))
 
-                        # For non-hybrid ranges, apply Cartesian product selection
                         non_hybrid_selected: list[Video] = []
                         if non_hybrid_ranges and non_hybrid_tracks:
-                            # Include language dimension when multiple video languages were requested
                             if video_multi_lang:
                                 non_hybrid_langs = list(dict.fromkeys(str(v.language) for v in non_hybrid_tracks))
                             else:
@@ -2958,7 +2935,6 @@ class dl:
                                 selected_videos.append(match)
                         title.tracks.videos = selected_videos
 
-                    # validate hybrid mode requirements
                     if keep_videos and any(r == Video.Range.HYBRID for r in range_):
                         base_tracks = [
                             v for v in title.tracks.videos if v.range in (Video.Range.HDR10, Video.Range.HDR10P)
@@ -3022,7 +2998,6 @@ class dl:
                                 self.log.error(msg_detail)
                                 sys.exit(1)
 
-                    # filter subtitle tracks
                     fsl = [t for t in forced_s_lang if t != "orig"]
                     if "orig" in forced_s_lang and title.language:
                         fsl.append(str(title.language))
@@ -3105,11 +3080,10 @@ class dl:
                             )
                             title.tracks.select_subtitles(lambda x: not (x.forced and str(x.language) in drop))
 
-                # filter audio tracks
                 # might have no audio tracks if part of the video, e.g. transport stream hls
                 if keep_audio and len(title.tracks.audio) > 0:
                     if not audio_description:
-                        title.tracks.select_audio(lambda x: not x.descriptive)  # exclude descriptive audio
+                        title.tracks.select_audio(lambda x: not x.descriptive)
                     if acodec:
                         title.tracks.select_audio(lambda x: x.codec in acodec)
                         if not title.tracks.audio:
@@ -3208,7 +3182,6 @@ class dl:
                             )
                             sys.exit(1)
 
-                # Reconstruct track set to only include kept tracks
                 kept_tracks = []
                 if keep_videos:
                     kept_tracks.extend(title.tracks.videos)
@@ -3411,7 +3384,6 @@ class dl:
                 dl_time = time_elapsed_since(dl_start_time)
                 console.print(Padding(f"Track downloads finished in [progress.elapsed]{dl_time}[/]", (0, 5)))
 
-                # Subtitle output mode configuration (for sidecar originals)
                 subtitle_output_mode = config.subtitle.get("output_mode", "mux")
                 sidecar_format = config.subtitle.get("sidecar_format", "srt")
                 skip_subtitle_mux = subtitle_output_mode == "sidecar" and (title.tracks.videos or title.tracks.audio)
@@ -3493,7 +3465,6 @@ class dl:
                         if has_decrypted:
                             self.log.info(f"Decrypted tracks with {decrypt_tool}")
 
-                # Extract Closed Captions from decrypted video tracks
                 if (
                     not no_subs
                     and not (hasattr(service, "NO_SUBTITLES") and service.NO_SUBTITLES)
@@ -3562,7 +3533,6 @@ class dl:
                                     "decryption likely failed and the muxed output may be unplayable."
                                 )
                     if has_repacked:
-                        # we don't want to fill up the log with "Repacked x track"
                         self.log.info("Repacked one or more tracks with FFMPEG")
 
                 with console.status("Normalizing video VUI..."):
@@ -3579,7 +3549,6 @@ class dl:
                 append_audio_codec_suffix = True
 
                 if no_mux:
-                    # Skip muxing, handle individual track files
                     for track in title.tracks:
                         if track.path and track.path.exists():
                             muxed_paths.append(track.path)
@@ -3601,7 +3570,6 @@ class dl:
                     # When we split audio (merge_audio=False), multiple outputs may exist per title, so suffix codec.
                     append_audio_codec_suffix = not merge_audio
 
-                    # Mux all selected video tracks into one file instead of one file per track.
                     merge_video = merge_video if merge_video is not None else config.muxing.get("merge_video", False)
 
                     multiplex_tasks: list[tuple[TaskID, Tracks, Optional[Audio.Codec]]] = []
@@ -3709,7 +3677,7 @@ class dl:
                                 hybrid_track = deepcopy(hdr10_track)
                                 hybrid_track.id = f"hybrid_{hdr10_track.id}_{resolution}"
                                 hybrid_track.path = hybrid_output_path
-                                hybrid_track.range = Video.Range.DV  # It's now a DV track
+                                hybrid_track.range = Video.Range.DV
                                 hybrid_track.needs_duration_fix = True
                                 title.tracks.add(hybrid_track)
                                 task_tracks.videos = [hybrid_track]
@@ -3781,7 +3749,6 @@ class dl:
                             if mux_failed:
                                 sys.exit(1)
 
-                            # Output sidecar subtitles before deleting track files
                             if sidecar_subtitles and not no_mux:
                                 media_info = MediaInfo.parse(muxed_paths[0]) if muxed_paths else None
                                 if media_info:
@@ -3817,14 +3784,12 @@ class dl:
                             for track in title.tracks:
                                 track.delete()
 
-                            # Clear temp font attachment paths and delete other attachments
                             for attachment in title.tracks.attachments:
                                 if attachment.path and attachment.path in temp_font_files:
                                     attachment.path = None
                                 else:
                                     attachment.delete()
 
-                            # Clean up temp fonts
                             for temp_path in temp_font_files:
                                 temp_path.unlink(missing_ok=True)
                             for temp_path in sidecar_original_paths.values():
@@ -3845,18 +3810,14 @@ class dl:
                             )
 
                 else:
-                    # dont mux
                     muxed_paths.append(title.tracks.audio[0].path)
 
                 if no_mux:
-                    # Handle individual track files without muxing
                     final_dir = self.output_dir or config.directories.downloads
                     if not no_folder and (
                         isinstance(title, (Episode, Song))
                         or (isinstance(title, Movie) and config.get_folder_template("movies"))
                     ):
-                        # Create folder based on title
-                        # Use first available track for filename generation
                         sample_track = (
                             title.tracks.videos[0]
                             if title.tracks.videos
@@ -3873,11 +3834,9 @@ class dl:
                     final_dir.mkdir(parents=True, exist_ok=True)
 
                     for track_path in muxed_paths:
-                        # Generate appropriate filename for each track
                         media_info = MediaInfo.parse(track_path)
                         base_filename = title.get_filename(media_info, show_service=not no_source)
 
-                        # Add track type suffix to filename
                         track = next((t for t in title.tracks if t.path == track_path), None)
                         if track:
                             if isinstance(track, Video):
@@ -3903,7 +3862,6 @@ class dl:
                         self.completed_files.append(final_path)
                         self.log.debug(f"Saved: {final_path.name}")
                 else:
-                    # Handle muxed files
                     used_final_paths: set[Path] = set()
                     for muxed_path in muxed_paths:
                         media_info = MediaInfo.parse(muxed_path)
@@ -4929,8 +4887,12 @@ class dl:
 
     @staticmethod
     def get_cookie_jar(service: str, profile: Optional[str]) -> Optional[CookieJar]:
-        """Get Service Cookies for Profile."""
-        # Check if automatic Firefox cookie extraction is configured for this service
+        """
+        Get Service Cookies for Profile.
+
+        If firefox_cookies is configured for the service, cookies come from Firefox first. If that extraction
+        raises or returns nothing, the profile's cookie file is used instead and the failure is not logged.
+        """
         ff_settings = getattr(config, "firefox_cookies", {}).get(service)
         if ff_settings:
             try:
@@ -4940,7 +4902,6 @@ class dl:
                 if extracted_jar:
                     return extracted_jar
             except Exception:
-                # Fallback to file-based if Firefox extraction fails
                 pass
 
         cookie_file = dl.get_cookie_path(service, profile)

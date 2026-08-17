@@ -72,7 +72,6 @@ class TMDBProvider(MetadataProvider):
         if best_id is None:
             return None
 
-        # Fetch full detail for caching
         detail = self.fetch_detail(best_id, kind)
         ext_raw = self.fetch_external_ids_raw(best_id, kind)
 
@@ -127,7 +126,12 @@ class TMDBProvider(MetadataProvider):
         )
 
     def find_by_imdb_id(self, imdb_id: str, kind: str) -> Optional[ExternalIds]:
-        """Look up TMDB/TVDB IDs from an IMDB ID using TMDB's /find endpoint."""
+        """Look up TMDB/TVDB IDs from an IMDB ID using TMDB's /find endpoint.
+
+        When the requested kind has no results, the other kind is tried, so the returned
+        tmdb_kind can differ from the kind asked for. Returns None if the request fails or
+        nothing matches.
+        """
         self.log.debug("Looking up IMDB ID %s on TMDB", imdb_id)
         try:
             r = self.session.get(
@@ -141,14 +145,12 @@ class TMDBProvider(MetadataProvider):
             self.log.debug("TMDB find by IMDB ID failed: %s", exc)
             return None
 
-        # Check movie_results or tv_results based on kind
         if kind == "movie":
             results = data.get("movie_results") or []
         else:
             results = data.get("tv_results") or []
 
         if not results:
-            # Try the other type as fallback
             fallback_key = "tv_results" if kind == "movie" else "movie_results"
             results = data.get(fallback_key) or []
             if results:
@@ -165,7 +167,6 @@ class TMDBProvider(MetadataProvider):
 
         self.log.debug("TMDB find -> ID %s (%s) for IMDB %s", tmdb_id, kind, imdb_id)
 
-        # Now fetch the full external IDs from TMDB to get TVDB etc.
         ext_raw = self.fetch_external_ids_raw(tmdb_id, kind)
 
         return ExternalIds(

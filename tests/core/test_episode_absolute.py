@@ -46,9 +46,6 @@ def reset_template():
     config.output_template, config.folder_templates, config.folder_template, config.tag = saved
 
 
-# --- validation -------------------------------------------------------------
-
-
 def test_absolute_defaults_to_none():
     assert make_episode().absolute is None
 
@@ -86,9 +83,6 @@ def test_old_cache_entry_reads_as_absolute_less():
     assert restored.absolute is None
 
 
-# --- naming -----------------------------------------------------------------
-
-
 def test_absolute_token_is_three_wide(reset_template):
     assert make_episode(absolute=7).build_template_context(StubMediaInfo())["absolute"] == "007"
 
@@ -120,9 +114,6 @@ def test_str_and_sorting_ignore_the_absolute_number():
     assert str(make_episode(absolute=7)) == "The Show S01E01 The Reckoning"
     series = Series([make_episode(number=2, absolute=1), make_episode(number=1, absolute=2)])
     assert [e.number for e in series] == [1, 2]
-
-
-# --- the enrich fill --------------------------------------------------------
 
 
 class _FakeProvider:

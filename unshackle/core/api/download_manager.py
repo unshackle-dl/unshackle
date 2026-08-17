@@ -91,12 +91,10 @@ class DownloadJob:
     title_id: str
     parameters: Dict[str, Any]
 
-    # Progress tracking
     started_time: Optional[datetime] = None
     completed_time: Optional[datetime] = None
     progress: float = 0.0
 
-    # Results and error info
     output_files: List[str] = field(default_factory=list)
     error_message: Optional[str] = None
     error_details: Optional[str] = None
@@ -104,7 +102,6 @@ class DownloadJob:
     error_traceback: Optional[str] = None
     worker_stderr: Optional[str] = None
 
-    # Current phase, track counts, and labels of the tracks downloading now.
     phase: Optional[str] = None
     title: Optional[str] = None
     current_title: Optional[str] = None
@@ -112,7 +109,6 @@ class DownloadJob:
     total_tracks: int = 0
     active_tracks: List[str] = field(default_factory=list)
     track_progress: List[Dict[str, Any]] = field(default_factory=list)
-    # Segment counts and transfer speed of the track downloading now (granular display)
     segments_done: float = 0.0
     segments_total: float = 0.0
     speed: Optional[str] = None
@@ -121,7 +117,6 @@ class DownloadJob:
     # dict (id / language / title) so a client can report which weren't available.
     skipped_subtitles: List[Dict[str, Any]] = field(default_factory=list)
 
-    # Cancellation support
     cancel_event: threading.Event = field(default_factory=threading.Event)
 
     # Guards against writing the same job to the persistent history file twice.
@@ -255,7 +250,7 @@ def read_job_history(limit: int = 100, service: Optional[str] = None) -> List[Di
         if service and str(entry.get("service") or "").upper() != service.upper():
             continue
         entries.append(entry)
-    entries.reverse()  # newest first
+    entries.reverse()
     return entries[:limit] if limit and limit > 0 else entries
 
 
@@ -328,7 +323,13 @@ def perform_download(
     params: Dict[str, Any],
     progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
 ) -> List[str]:
-    """Execute the synchronous download logic for a job."""
+    """Execute the synchronous download logic for a job.
+
+    `params` holds the API's string form of the `dl` options and is normalized in place before
+    dl.result() sees it: vcodec and range names become enums, `slow` accepts "MIN-MAX", a two-item
+    list, or True (which means 60-120), and `wanted` accepts forms such as "S01E01", "S01-S03",
+    "s1e1", or "1x1" as well as the internal "SxE" form.
+    """
 
     from contextlib import redirect_stderr, redirect_stdout
     from io import StringIO
@@ -359,7 +360,6 @@ def perform_download(
         ]
         config.directories.cache = config.directories.cache / "_jobs" / cred_hash
 
-    # Convert string parameters to enums (API receives strings, dl.result() expects enums)
     vcodec_raw = params.get("vcodec")
     if vcodec_raw:
         if isinstance(vcodec_raw, str):
@@ -385,7 +385,6 @@ def perform_download(
     if params.get("export"):
         params["export"] = bool(params["export"])
 
-    # Normalize slow: accept string "MIN-MAX", list/tuple, or True (default 60-120)
     slow_raw = params.get("slow")
     if slow_raw is not None and not isinstance(slow_raw, tuple):
         if isinstance(slow_raw, bool):
@@ -400,22 +399,18 @@ def perform_download(
             except click.BadParameter as exc:
                 raise Exception(f"Invalid slow parameter: {exc}")
 
-    # Convert wanted episode strings to internal "SxE" format
-    # Accepts: "S01E01", "S01-S03", "s1e1", "1x1", or already-parsed format
     wanted_raw = params.get("wanted")
     if wanted_raw:
         from unshackle.core.utils.click_types import SeasonRange
 
         if isinstance(wanted_raw, str):
             wanted_raw = [wanted_raw]
-        # Only convert if not already in internal "SxE" format
         # the !? keeps a pre-parsed part exclusion from being re-fed through parse_tokens
         needs_conversion = any(not re.match(r"^!?\d+x\d+(\.\d+)?$", w) for w in wanted_raw)
         if needs_conversion:
             season_range = SeasonRange()
             params["wanted"] = season_range.parse_tokens(*wanted_raw)
 
-    # Load service configuration
     service_config_path = Services.get_path(service) / config.filenames.config
     if service_config_path.exists():
         service_config = yaml.safe_load(service_config_path.read_text(encoding="utf8"))
@@ -619,7 +614,6 @@ def perform_download(
         detail = (stdout_capture.getvalue() + stderr_capture.getvalue())[-200:].strip()
         raise APIError(APIErrorCode.WORKER_ERROR, "download worker failed: " + (detail or "see logs"))
 
-    # Surface any subtitles that were skipped (non-fatal failures) so the client can report them.
     if progress_callback:
         skipped_subs = getattr(dl_instance, "skipped_subtitles", None)
         if skipped_subs:
@@ -738,12 +732,10 @@ class DownloadQueueManager:
             log.info(f"Cancelled queued job {sanitize_log(job_id)}")
             return True
         elif job.status == JobStatus.DOWNLOADING:
-            # Set the cancellation event first - this will be checked by the download thread
             job.cancel_event.set()
             job.status = JobStatus.CANCELLED
             log.info(f"Signaled cancellation for downloading job {sanitize_log(job_id)}")
 
-            # Cancel the active download task
             task = self._active_downloads.get(job_id)
             if task:
                 task.cancel()
@@ -881,7 +873,6 @@ class DownloadQueueManager:
                 if self._priority_jobs:
                     job = self._priority_jobs.popleft()
                 else:
-                    # Wait for a job or shutdown signal
                     job = await asyncio.wait_for(self._job_queue.get(), timeout=1.0)
                     if job.job_id in self._promoted_ids:
                         self._promoted_ids.discard(job.job_id)
@@ -1116,7 +1107,7 @@ class DownloadQueueManager:
         """Worker that periodically cleans up old jobs."""
         while not self._shutdown_event.is_set():
             try:
-                await asyncio.sleep(3600)  # Run every hour
+                await asyncio.sleep(3600)
                 self.cleanup_old_jobs()
             except Exception as e:
                 log.error(f"Cleanup worker error: {e}")
@@ -1130,7 +1121,6 @@ def get_download_manager() -> DownloadQueueManager:
     """Get the global download manager instance."""
     global download_manager
     if download_manager is None:
-        # Load configuration from unshackle config
         from unshackle.core.config import config
 
         max_concurrent = getattr(config, "max_concurrent_downloads", 2)

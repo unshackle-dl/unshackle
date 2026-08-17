@@ -80,7 +80,6 @@ def rotate_log_file(log_path: Path, keep: int = 20) -> Path:
     if log_path.parent.exists():
         log_files = [x for x in log_path.parent.iterdir() if x.suffix == log_path.suffix]
         for log_file in log_files[::-1][keep - 1 :]:
-            # keep n newest files and delete the rest
             log_file.unlink()
 
     log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -129,19 +128,16 @@ def sanitize_filename(filename: str, spacer: str = ".") -> str:
     characters (Korean, Japanese, Chinese, etc.) instead of transliterating
     them to ASCII equivalents.
     """
-    # optionally replace non-ASCII characters with ASCII equivalents
     if not config.unicode_filenames:
         filename = unidecode(filename)
         filename = re.sub(r"\[\(+", "[", filename)
         filename = re.sub(r"\)+\]", "]", filename)
-
-    # remove or replace further characters as needed
     filename = "".join(c for c in filename if unicodedata.category(c) != "Mn")  # hidden characters
     filename = filename.replace("/", " & ").replace(";", " & ")  # e.g. multi-episode filenames
     if spacer == ".":
         filename = re.sub(r" - ", spacer, filename)  # title separators to spacer (avoids .-. pattern)
-    filename = re.sub(r"[:; ]", spacer, filename)  # structural chars to (spacer)
-    filename = re.sub(r"[\\*!?¿,'\"" "<>|$#~]", "", filename)  # not filename safe chars
+    filename = re.sub(r"[:; ]", spacer, filename)
+    filename = re.sub(r"[\\*!?¿,'\"" "<>|$#~]", "", filename)
     filename = re.sub(rf"[{spacer}]{{2,}}", spacer, filename)  # remove extra neighbouring (spacer)s
     filename = filename.strip(" .")  # strip leading and trailing spaces and dots for OS path safety
 
@@ -439,7 +435,6 @@ def get_country_name(code: str) -> Optional[str]:
         >>> get_country_name('uk')
         'United Kingdom'
     """
-    # Handle common aliases
     code = COUNTRY_CODE_ALIASES.get(code.lower(), code.lower())
 
     try:
@@ -470,17 +465,14 @@ def get_country_code(name: str) -> Optional[str]:
         'GB'
     """
     try:
-        # Try exact name match first
         country = pycountry.countries.get(name=name.title())
         if country:
             return country.alpha_2.upper()
 
-        # Try common name (e.g., "Bolivia" vs "Bolivia, Plurinational State of")
         country = pycountry.countries.get(common_name=name.title())
         if country:
             return country.alpha_2.upper()
 
-        # Try fuzzy search as fallback
         results = pycountry.countries.search_fuzzy(name)
         if results:
             return results[0].alpha_2.upper()
@@ -765,25 +757,19 @@ def find_font_with_fallbacks(font_name: str, system_fonts: dict[str, Path]) -> O
     if not system_fonts:
         return None
 
-    # Strategy 1: Exact match (case-sensitive)
     if font_name in system_fonts:
         return system_fonts[font_name]
 
-    # Strategy 2: Case-insensitive match
     if result := find_case_insensitive(font_name, system_fonts):
         return result
 
-    # Strategy 3: Alias lookup
     if font_name in FONT_ALIASES:
         for alias in FONT_ALIASES[font_name]:
-            # Try exact match for alias
             if alias in system_fonts:
                 return system_fonts[alias]
-            # Try case-insensitive match for alias
             if result := find_case_insensitive(alias, system_fonts):
                 return result
 
-    # Strategy 4: Partial/prefix match as last resort
     font_name_lower = font_name.lower()
     for name, path in system_fonts.items():
         if name.lower().startswith(font_name_lower):

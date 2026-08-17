@@ -138,9 +138,14 @@ def sanitize_proxy_for_log(uri: Optional[str]) -> Optional[str]:
 
 
 class Service(metaclass=ABCMeta):
-    """The Service Base Class."""
+    """The Service Base Class.
 
-    # Abstract class variables
+    A Service must implement the abstract methods; the rest are optional overrides that fall back to the base
+    implementation when a Service does not define them. The main flow runs the session and authentication
+    methods first, then titles, then tracks and chapters. The license callbacks run later still, during track
+    download.
+    """
+
     ALIASES: tuple[str, ...] = ()  # list of aliases for the service; alternatives to the service tag.
     GEOFENCE: tuple[str, ...] = ()  # list of ip regions required to use the service. empty list == no specific region.
     ANIME: bool = False  # service catalogue is anime; metadata lookups prefer AniList. Title.anime overrides per title.
@@ -163,7 +168,6 @@ class Service(metaclass=ABCMeta):
         self.title_cache = TitleCacher(self.__class__.__name__)
         self.cache_dir = config.directories.cache / self.__class__.__name__
 
-        # Store context for cache control flags and credential
         self.ctx = ctx
         self.credential = None  # Will be set in authenticate()
         self.current_region = None  # Will be set based on proxy/geolocation
@@ -189,25 +193,21 @@ class Service(metaclass=ABCMeta):
                 proxy_query = None
                 proxy_provider_name = None
 
-            # Check for service-specific proxy mapping
             service_name = self.__class__.__name__
             service_config_dict = config.services.get(service_name, {})
             proxy_map = service_config_dict.get("proxy_map", {})
 
             if proxy_map and proxy_query:
-                # Build the full proxy query key (e.g., "nordvpn:ca" or "us")
                 if proxy_provider_name:
                     full_proxy_key = f"{proxy_provider_name}:{proxy_query}"
                 else:
                     full_proxy_key = proxy_query
 
-                # Check if there's a mapping for this query
                 mapped_value = proxy_map.get(full_proxy_key)
                 if mapped_value:
                     self.log.info(
                         f"Found service-specific proxy mapping: {full_proxy_key} -> {sanitize_proxy_for_log(mapped_value)}"
                     )
-                    # Query the proxy provider with the mapped value
                     if proxy_provider_name:
                         # Specific provider requested
                         proxy_provider = next(
@@ -228,7 +228,6 @@ class Service(metaclass=ABCMeta):
                         else:
                             self.log.warning(f"Proxy provider '{proxy_provider_name}' not found, using default proxy")
                     else:
-                        # No specific provider, try all providers
                         for proxy_provider in ctx.obj.proxy_providers:
                             mapped_proxy_uri = proxy_provider.get_proxy(mapped_value)
                             if mapped_proxy_uri:
@@ -246,7 +245,6 @@ class Service(metaclass=ABCMeta):
                 # don't override the explicit proxy set by the user, even if they may be geoblocked
                 with console.status("Checking if current region is Geoblocked...", spinner="dots"):
                     if self.GEOFENCE:
-                        # Service has geofence - need fresh IP check to determine if proxy needed
                         try:
                             current_region = get_ip_info(self.session)["country"].lower()
                             if any(x.lower() == current_region for x in self.GEOFENCE):
@@ -279,7 +277,6 @@ class Service(metaclass=ABCMeta):
                     self.current_region = proxy_ip_info.get("country", "").lower() if proxy_ip_info else None
                 except Exception as e:
                     self.log.warning(f"Failed to verify proxy IP: {e}")
-                    # Fallback to extracting region from proxy config
                     self.current_region = get_region_from_proxy(proxy)
             else:
                 # No proxy, use cached IP info for title caching (non-critical)
@@ -364,11 +361,6 @@ class Service(metaclass=ABCMeta):
 
     # Deprecated 5.5.0 shim for service repos still on the old underscored name; drop once they migrate.
     _get_tracks_for_variants = get_tracks_for_variants
-
-    # Optional Abstract functions
-    # The following functions may be implemented by the Service.
-    # Otherwise, the base service code (if any) of the function will be executed on call.
-    # The functions will be executed in shown order.
 
     @staticmethod
     def get_session() -> requests.Session:
@@ -527,10 +519,6 @@ class Service(metaclass=ABCMeta):
         """
         return None
 
-    # Required Abstract functions
-    # The following functions *must* be implemented by the Service.
-    # The functions will be executed in shown order.
-
     @abstractmethod
     def get_titles(self) -> Titles_T:
         """
@@ -560,7 +548,6 @@ class Service(metaclass=ABCMeta):
         Returns:
             Titles object (Movies, Series, or Album)
         """
-        # Try to get title_id from service instance if not provided
         if title_id is None:
             # Different services store the title ID in different attributes
             if hasattr(self, "title"):
@@ -572,7 +559,6 @@ class Service(metaclass=ABCMeta):
                 self.log.debug("Cannot determine title_id for caching, bypassing cache")
                 return self.apply_title_map(self.get_titles())
 
-        # Get cache control flags from context
         no_cache = False
         reset_cache = False
         if self.ctx and self.ctx.parent:
@@ -582,7 +568,6 @@ class Service(metaclass=ABCMeta):
         # Get account hash for cache key
         account_hash = get_account_hash(self.credential)
 
-        # Use title cache to get titles with fallback support
         titles = self.title_cache.get_cached_titles(
             title_id=str(title_id),
             fetch_function=self.get_titles,

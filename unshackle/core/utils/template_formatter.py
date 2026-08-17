@@ -107,15 +107,14 @@ class TemplateFormatter:
                     safe_value = str(value).strip()
                     result = result.replace(placeholder, safe_value)
 
-            # Clean up multiple consecutive dots/separators and other artifacts
-            result = re.sub(r"\.{2,}", ".", result)  # Multiple dots -> single dot
+            result = re.sub(r"\.{2,}", ".", result)
             result = re.sub(r"\.-", "-", result)  # Remove dots before dashes (for dot-based templates)
-            result = re.sub(r"[\.\s]+([)\]])", r"\1", result)  # Remove dots/spaces before closing bracket
-            result = re.sub(r"\(\s*\)|\[\s*\]", "", result)  # Remove empty brackets (empty conditional)
+            result = re.sub(r"[\.\s]+([)\]])", r"\1", result)
+            result = re.sub(r"\(\s*\)|\[\s*\]", "", result)
             # bracket removal is what creates neighbouring separators, so collapse after it
-            result = re.sub(r"\s{2,}", " ", result)  # Multiple spaces -> single space
-            result = re.sub(r"(?:-\s*)+-", "-", result)  # Multiple dashes (with optional spaces) -> single dash
-            result = re.sub(r"^[\.\s\-]+|[\.\s\-]+$", "", result)  # Remove leading/trailing dots, spaces, dashes
+            result = re.sub(r"\s{2,}", " ", result)
+            result = re.sub(r"(?:-\s*)+-", "-", result)
+            result = re.sub(r"^[\.\s\-]+|[\.\s\-]+$", "", result)
 
             result = sanitize_filename(result, spacer=self.spacer)
 

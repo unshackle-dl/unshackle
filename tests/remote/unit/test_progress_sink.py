@@ -19,7 +19,6 @@ from unshackle.core.api.progress import (
 pytestmark = pytest.mark.unit
 
 
-# --- lightweight track stand-ins (label/weight key off class name + attributes) ---
 class _Range:
     def __init__(self, value):
         self.value = value

@@ -67,9 +67,6 @@ def cue_count(path) -> int:
     return len(re.findall(r"-->", path.read_text("utf8")))
 
 
-# --- capability matrix / resolver -------------------------------------------------------
-
-
 def test_resolve_webvtt_to_srt_order():
     chain = [b.name for b in sc.resolve_backends(Codec.WebVTT, Codec.SubRip)]
     assert chain == ["subby", "pysubs2", "pycaption"]
@@ -131,9 +128,6 @@ def test_no_backend_for_unsupported_target_raises(tmp_path):
         sub.convert(Codec.fVTT, forced=True)  # no backend writes segmented fVTT
 
 
-# --- styled-ASS protection --------------------------------------------------------------
-
-
 def test_ass_to_srt_kept_as_is_when_not_forced(tmp_path, monkeypatch):
     monkeypatch.setattr("unshackle.core.config.config.subtitle", {}, raising=False)
     sub = make_sub(tmp_path, "x.ass", ASS_SAMPLE, Codec.SubStationAlphav4)
@@ -153,9 +147,6 @@ def test_ass_to_srt_converts_when_forced(tmp_path, monkeypatch):
     assert "{\\" not in out.read_text("utf8")  # override tags stripped
 
 
-# --- conversion paths -------------------------------------------------------------------
-
-
 def test_webvtt_to_srt_conversion(tmp_path, monkeypatch):
     monkeypatch.setattr("unshackle.core.config.config.subtitle", {}, raising=False)
     sub = make_sub(tmp_path, "x.vtt", VTT_SAMPLE, Codec.WebVTT)
@@ -169,8 +160,6 @@ def test_same_codec_is_noop(tmp_path):
     assert sub.convert(Codec.SubRip) == sub.path
     assert sub.codec == Codec.SubRip
 
-
-# --- ASS/SSA font detection ------------------------------------------------------------
 
 FONT_ASS = """[Script Info]
 ScriptType: v4.00+
@@ -205,8 +194,6 @@ def test_extract_fonts_handles_non_default_column_order():
     assert Subtitle.extract_fonts(ass) == {"Verdana"}
 
 
-# --- non-Latin scripts (RTL / CJK) preserved through conversion ------------------------
-
 CJK_RTL_VTT = """WEBVTT
 
 1
@@ -235,8 +222,6 @@ def test_non_latin_scripts_survive_vtt_to_srt(tmp_path, monkeypatch, pattern):
     assert cue_count(out) == 3
     assert re.search(pattern, text)  # script survived the round-trip, no mojibake
 
-
-# --- SDH stripping ----------------------------------------------------------------------
 
 SDH_SRT = """1
 00:00:01,000 --> 00:00:02,000
@@ -293,9 +278,8 @@ def test_sdh_stripping_ass_without_subtitleedit_content_matches_codec(tmp_path, 
     assert "door creaks" not in text  # bracketed effect removed
 
 
-# --- segmented (box-encapsulated) formats: fVTT (wvtt) / fTTML (stpp) --------------------
-# These ship from DASH/HLS as fragmented MP4 (e.g. HBO Max). The downloader concatenates
-# init + media segments into one file; parse() reads the MP4 boxes directly.
+# Segmented fVTT (wvtt) / fTTML (stpp) ship from DASH/HLS as fragmented MP4 (e.g. HBO Max). The
+# downloader concatenates init + media segments into one file; parse() reads the MP4 boxes directly.
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 
