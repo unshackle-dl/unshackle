@@ -14,6 +14,7 @@ localhost server, asserting that:
 
 from __future__ import annotations
 
+import shutil
 import threading
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -23,6 +24,8 @@ import pytest
 from unshackle.core.constants import DOWNLOAD_CANCELLED
 from unshackle.core.manifests import DASH
 from unshackle.core.tracks.track import DownloadContext
+
+pytestmark = pytest.mark.skipif(shutil.which("ffprobe") is None, reason="requires ffprobe")
 
 # distinctive parent resource for the collapse case; init is its [0, INIT_LEN) prefix
 PARENT = bytes(i % 256 for i in range(10240))

@@ -10,6 +10,7 @@ asserts the stale directory is wiped rather than mixed into the new download.
 from __future__ import annotations
 
 import importlib
+import shutil
 import threading
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -21,6 +22,8 @@ from unshackle.core.constants import DOWNLOAD_CANCELLED
 from unshackle.core.manifests import DASH
 from unshackle.core.tracks import resume
 from unshackle.core.tracks.track import DownloadContext
+
+pytestmark = pytest.mark.skipif(shutil.which("ffprobe") is None, reason="requires ffprobe")
 
 INIT = bytes(range(100))
 PART0 = bytes([0xA0]) * 300
