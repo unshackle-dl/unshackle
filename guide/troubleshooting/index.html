@@ -1157,6 +1157,8 @@
       
         
       
+        
+      
     
     
     
@@ -1394,6 +1396,34 @@
     
   
     Key Vaults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/post-scripts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Post-Download Scripts
   
 
     
@@ -2345,7 +2375,7 @@
 </div>
 <h3 id="what-a-log-entry-looks-like">What a log entry looks like<a class="headerlink" href="#what-a-log-entry-looks-like" title="Permanent link">&para;</a></h3>
 <p>Every line is a self-contained JSON object. The first line of a session records the environment:</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="p">{</span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="s2">&quot;2026-07-03T14:25:30.123456+00:00&quot;</span><span class="p">,</span><span class="nt">&quot;session_id&quot;</span><span class="p">:</span><span class="s2">&quot;a1b2c3d4&quot;</span><span class="p">,</span><span class="nt">&quot;level&quot;</span><span class="p">:</span><span class="s2">&quot;INFO&quot;</span><span class="p">,</span><span class="nt">&quot;operation&quot;</span><span class="p">:</span><span class="s2">&quot;session_start&quot;</span><span class="p">,</span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="s2">&quot;Debug logging session started&quot;</span><span class="p">,</span><span class="nt">&quot;context&quot;</span><span class="p">:{</span><span class="nt">&quot;unshackle_version&quot;</span><span class="p">:</span><span class="s2">&quot;5.3.0&quot;</span><span class="p">,</span><span class="nt">&quot;unshackle_code_hash&quot;</span><span class="p">:</span><span class="s2">&quot;1d22a1e&quot;</span><span class="p">,</span><span class="nt">&quot;python_version&quot;</span><span class="p">:</span><span class="s2">&quot;3.12.4 ...&quot;</span><span class="p">,</span><span class="nt">&quot;platform&quot;</span><span class="p">:</span><span class="s2">&quot;Linux-6.18.5-x86_64&quot;</span><span class="p">,</span><span class="nt">&quot;platform_system&quot;</span><span class="p">:</span><span class="s2">&quot;Linux&quot;</span><span class="p">,</span><span class="nt">&quot;platform_release&quot;</span><span class="p">:</span><span class="s2">&quot;6.18.5&quot;</span><span class="p">}}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="p">{</span><span class="nt">"timestamp"</span><span class="p">:</span><span class="s2">"2026-07-03T14:25:30.123456+00:00"</span><span class="p">,</span><span class="nt">"session_id"</span><span class="p">:</span><span class="s2">"a1b2c3d4"</span><span class="p">,</span><span class="nt">"level"</span><span class="p">:</span><span class="s2">"INFO"</span><span class="p">,</span><span class="nt">"operation"</span><span class="p">:</span><span class="s2">"session_start"</span><span class="p">,</span><span class="nt">"message"</span><span class="p">:</span><span class="s2">"Debug logging session started"</span><span class="p">,</span><span class="nt">"context"</span><span class="p">:{</span><span class="nt">"unshackle_version"</span><span class="p">:</span><span class="s2">"5.3.0"</span><span class="p">,</span><span class="nt">"unshackle_code_hash"</span><span class="p">:</span><span class="s2">"1d22a1e"</span><span class="p">,</span><span class="nt">"python_version"</span><span class="p">:</span><span class="s2">"3.12.4 ..."</span><span class="p">,</span><span class="nt">"platform"</span><span class="p">:</span><span class="s2">"Linux-6.18.5-x86_64"</span><span class="p">,</span><span class="nt">"platform_system"</span><span class="p">:</span><span class="s2">"Linux"</span><span class="p">,</span><span class="nt">"platform_release"</span><span class="p">:</span><span class="s2">"6.18.5"</span><span class="p">}}</span>
 </span></code></pre></div>
 <p>Quote <code>unshackle_code_hash</code> in a bug report. It fingerprints the framework source you are running, so it tells us the exact code state even when you did not install from git. A hash that matches no release means the source was edited locally.</p>
 <p>Subsequent lines describe operations: service calls, DRM licence requests, vault lookups, downloader progress, and errors. Common fields include:</p>
@@ -2406,16 +2436,16 @@
 <h3 id="reading-and-filtering-the-log">Reading and filtering the log<a class="headerlink" href="#reading-and-filtering-the-log" title="Permanent link">&para;</a></h3>
 <p>Because each line is independent JSON, <code>jq</code> is the natural tool:</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="gp"># </span>Show<span class="w"> </span>only<span class="w"> </span>error-level<span class="w"> </span>entries
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="go">jq &#39;select(.level == &quot;ERROR&quot;)&#39; unshackle_debug_EXAMPLE_20260703-142530.jsonl</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="go">jq 'select(.level == "ERROR")' unshackle_debug_EXAMPLE_20260703-142530.jsonl</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="gp"># </span>List<span class="w"> </span>every<span class="w"> </span>operation<span class="w"> </span>and<span class="w"> </span>whether<span class="w"> </span>it<span class="w"> </span>succeeded
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="go">jq -c &#39;{operation, success}&#39; unshackle_debug_EXAMPLE_20260703-142530.jsonl</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="go">jq -c '{operation, success}' unshackle_debug_EXAMPLE_20260703-142530.jsonl</span>
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
 </span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="gp"># </span>Pull<span class="w"> </span>the<span class="w"> </span>traceback<span class="w"> </span>out<span class="w"> </span>of<span class="w"> </span>the<span class="w"> </span>first<span class="w"> </span>error
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="go">jq -r &#39;select(.error) | .error.traceback[]&#39; unshackle_debug_EXAMPLE_20260703-142530.jsonl</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="go">jq -r 'select(.error) | .error.traceback[]' unshackle_debug_EXAMPLE_20260703-142530.jsonl</span>
 </span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
 </span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="gp"># </span>Show<span class="w"> </span>only<span class="w"> </span>DRM<span class="w"> </span>/<span class="w"> </span>licensing<span class="w"> </span>operations
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="go">jq &#39;select(.operation | startswith(&quot;drm_&quot;))&#39; unshackle_debug_EXAMPLE_20260703-142530.jsonl</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="go">jq 'select(.operation | startswith("drm_"))' unshackle_debug_EXAMPLE_20260703-142530.jsonl</span>
 </span></code></pre></div>
 <p>The session's binary-tool versions (Shaka Packager, mp4decrypt, mkvmerge, FFmpeg, FFprobe) are logged near the start of a <code>dl</code> run, which is often the fastest way to confirm a muxing or decryption failure is really a wrong-version problem.</p>
 <hr />
@@ -2512,7 +2542,7 @@
 <h3 id="env-clear"><code>env clear</code><a class="headerlink" href="#env-clear" title="Permanent link">&para;</a></h3>
 <p>Stale cache or leftover temp files can cause confusing behaviour (an old cached title list, a half-written temp file). <code>env clear</code> wipes those directories safely:</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="go">unshackle env clear cache            # clear the whole cache directory</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="go">unshackle env clear cache EXAMPLE    # clear just one service&#39;s cache subdirectory</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="go">unshackle env clear cache EXAMPLE    # clear just one service's cache subdirectory</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="go">unshackle env clear temp             # clear the temp working directory</span>
 </span></code></pre></div>
 <p>Each command reports how many files it removed and how much space it freed, then recreates the empty directory.</p>
@@ -2566,8 +2596,8 @@
 <div class="admonition tip">
 <p class="admonition-title">Log levels are a flow skeleton, not just severity</p>
 <p>Treat <code>level</code> as structure, not decoration. Emit exactly <strong>one <code>INFO</code> milestone per pipeline stage</strong> so that <code>jq 'select(.level=="INFO")'</code> reads back the whole end-to-end flow of a run. Everything internal goes to <code>DEBUG</code>; failures go to <code>ERROR</code>. Keeping <code>INFO</code> sparse is the whole point. It is the line a developer skims first to see where a run got to before it broke.</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="gp"># </span>Read<span class="w"> </span>the<span class="w"> </span>pipeline<span class="err">&#39;</span>s<span class="w"> </span>high-level<span class="w"> </span>flow,<span class="w"> </span>one<span class="w"> </span>line<span class="w"> </span>per<span class="w"> </span>stage
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="go">jq &#39;select(.level == &quot;INFO&quot;)&#39; unshackle_debug_EXAMPLE_20260703-142530.jsonl</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="gp"># </span>Read<span class="w"> </span>the<span class="w"> </span>pipeline<span class="err">'</span>s<span class="w"> </span>high-level<span class="w"> </span>flow,<span class="w"> </span>one<span class="w"> </span>line<span class="w"> </span>per<span class="w"> </span>stage
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="go">jq 'select(.level == "INFO")' unshackle_debug_EXAMPLE_20260703-142530.jsonl</span>
 </span></code></pre></div>
 </div>
 <div class="admonition warning">

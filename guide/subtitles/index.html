@@ -1174,6 +1174,8 @@
       
         
       
+        
+      
     
     
     
@@ -1411,6 +1413,34 @@
     
   
     Key Vaults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/post-scripts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Post-Download Scripts
   
 
     
@@ -2501,7 +2531,7 @@ variants. If a requested language is missing but others were found, unshackle co
 with whatever remains and tells you which languages it dropped.</p>
 <p>For strict matching, where <code>es-419</code> matches only <code>es-419</code> and never <code>es-ES</code>, add
 <code>--exact-lang</code>:</p>
-<div class="language-shell highlight"><span class="filename">Only Latin-American Spanish, no other Spanish variants</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--s-lang<span class="w"> </span>es-419<span class="w"> </span>--exact-lang<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s1">&#39;https://www.example.com/...&#39;</span>
+<div class="language-shell highlight"><span class="filename">Only Latin-American Spanish, no other Spanish variants</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--s-lang<span class="w"> </span>es-419<span class="w"> </span>--exact-lang<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s1">'https://www.example.com/...'</span>
 </span></code></pre></div>
 <h3 id="requiring-languages-before-downloading">Requiring languages before downloading<a class="headerlink" href="#requiring-languages-before-downloading" title="Permanent link">&para;</a></h3>
 <p><code>--require-subs</code> is a gate rather than a filter. It downloads <strong>all</strong> available
@@ -2591,7 +2621,7 @@ TTML to WebVTT for muxing, as noted above). To force a specific output format, u
 <p><code>--sub-format</code> accepts the common format names and aliases, including <code>srt</code>, <code>vtt</code>,
 <code>ssa</code>, <code>ass</code>, and <code>ttml</code>. Pass <code>original</code> to explicitly keep the source format and skip
 all conversion:</p>
-<div class="language-shell highlight"><span class="filename">Keep whatever the service delivered</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--sub-format<span class="w"> </span>original<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s1">&#39;https://www.example.com/...&#39;</span>
+<div class="language-shell highlight"><span class="filename">Keep whatever the service delivered</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--sub-format<span class="w"> </span>original<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s1">'https://www.example.com/...'</span>
 </span></code></pre></div>
 <p>Conversion only runs when the source format differs from the target, so
 <code>--sub-format srt</code> on a track that is already SRT is a no-op.</p>

@@ -1428,6 +1428,8 @@
       
         
       
+        
+      
     
     
     
@@ -1665,6 +1667,34 @@
     
   
     Key Vaults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/post-scripts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Post-Download Scripts
   
 
     
@@ -2893,7 +2923,7 @@
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">1080</span><span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># 4K HDR10, English audio + subs, from a URL</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">2160</span><span class="w"> </span>-r<span class="w"> </span>HDR10<span class="w"> </span>-l<span class="w"> </span>en<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s2">&quot;https://www.example.com/...&quot;</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">2160</span><span class="w"> </span>-r<span class="w"> </span>HDR10<span class="w"> </span>-l<span class="w"> </span>en<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s2">"https://www.example.com/..."</span>
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># A season range, HEVC video, EC3 audio</span>
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01-S03<span class="w"> </span>-v<span class="w"> </span>H.265<span class="w"> </span>-a<span class="w"> </span>EC3<span class="w"> </span>SERVICE<span class="w"> </span>TITLE-ID
@@ -3173,6 +3203,10 @@ configuration file.</p>
 <td><code>--repack</code></td>
 <td>Add a <code>REPACK</code> tag to the filename.</td>
 </tr>
+<tr>
+<td><code>--postscript</code></td>
+<td>Run a command after each output file, with <code>{variable}</code> placeholders substituted. Repeatable. Replaces the <code>post_scripts</code> config for this run. See <a href="../../reference/configuration/post-scripts/">Post-download scripts</a>.</td>
+</tr>
 </tbody>
 </table>
 <h3 id="metadata-tagging">Metadata &amp; tagging<a class="headerlink" href="#metadata-tagging" title="Permanent link">&para;</a></h3>
@@ -3383,9 +3417,9 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 </table>
 <div class="admonition example">
 <p class="admonition-title">Example</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>unshackle<span class="w"> </span>search<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s2">&quot;My Show&quot;</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>unshackle<span class="w"> </span>search<span class="w"> </span>-p<span class="w"> </span>myprofile<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s2">&quot;Another Show&quot;</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>unshackle<span class="w"> </span>search<span class="w"> </span>--proxy<span class="w"> </span>nordvpn:ca<span class="w"> </span>SERVICE<span class="w"> </span><span class="s2">&quot;query&quot;</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>unshackle<span class="w"> </span>search<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s2">"My Show"</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>unshackle<span class="w"> </span>search<span class="w"> </span>-p<span class="w"> </span>myprofile<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s2">"Another Show"</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>unshackle<span class="w"> </span>search<span class="w"> </span>--proxy<span class="w"> </span>nordvpn:ca<span class="w"> </span>SERVICE<span class="w"> </span><span class="s2">"query"</span>
 </span></code></pre></div>
 </div>
 <hr />
@@ -3660,7 +3694,7 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>unshackle<span class="w"> </span>wvd<span class="w"> </span>add<span class="w"> </span>device.wvd
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>unshackle<span class="w"> </span>wvd<span class="w"> </span>parse<span class="w"> </span>nexus_6p_1234_l1
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>unshackle<span class="w"> </span>wvd<span class="w"> </span>dump<span class="w"> </span>device.wvd<span class="w"> </span>./out_dir
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>unshackle<span class="w"> </span>wvd<span class="w"> </span>new<span class="w"> </span><span class="s2">&quot;Nexus 6P&quot;</span><span class="w"> </span>private_key.pem<span class="w"> </span>client_id.bin<span class="w"> </span>vmp.bin<span class="w"> </span>-t<span class="w"> </span>ANDROID<span class="w"> </span>-l<span class="w"> </span><span class="m">3</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>unshackle<span class="w"> </span>wvd<span class="w"> </span>new<span class="w"> </span><span class="s2">"Nexus 6P"</span><span class="w"> </span>private_key.pem<span class="w"> </span>client_id.bin<span class="w"> </span>vmp.bin<span class="w"> </span>-t<span class="w"> </span>ANDROID<span class="w"> </span>-l<span class="w"> </span><span class="m">3</span>
 </span></code></pre></div>
 </div>
 <hr />
@@ -3797,11 +3831,11 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 <p class="admonition-title">Configure <code>api_secret</code> first</p>
 <p>Unless you pass <code>--no-key</code>, <code>serve.api_secret</code> must be set in your config. Requests authenticate with the <code>X-Secret-Key</code> header. Running with <code>--no-key</code> disables authentication entirely and should only be used on a trusted, private network.</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nt">serve</span><span class="p">:</span>
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="w">  </span><span class="nt">api_secret</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;your-api-secret&quot;</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="w">  </span><span class="nt">api_secret</span><span class="p">:</span><span class="w"> </span><span class="s">"your-api-secret"</span>
 </span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="w">  </span><span class="nt">users</span><span class="p">:</span>
 </span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="w">    </span><span class="nt">your-secret-key</span><span class="p">:</span>
-</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="w">      </span><span class="nt">devices</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;device_name&quot;</span><span class="p p-Indicator">]</span><span class="w">           </span><span class="c1"># Widevine devices</span>
-</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="w">      </span><span class="nt">playready_devices</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;device_name&quot;</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="c1"># PlayReady devices</span>
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="w">      </span><span class="nt">devices</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"device_name"</span><span class="p p-Indicator">]</span><span class="w">           </span><span class="c1"># Widevine devices</span>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="w">      </span><span class="nt">playready_devices</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"device_name"</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="c1"># PlayReady devices</span>
 </span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="w">      </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">user</span>
 </span></code></pre></div>
 </div>

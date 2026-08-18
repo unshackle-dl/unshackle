@@ -922,6 +922,8 @@
       
         
       
+        
+      
     
     
     
@@ -1159,6 +1161,34 @@
     
   
     Key Vaults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/post-scripts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Post-Download Scripts
   
 
     
@@ -4726,7 +4756,7 @@ it to an integer.</p>
 
 
 <a href="#unshackle.core.tracks.Chapters.dumps" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">dumps</span><span class="p">(</span><span class="n">fallback_name</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">)</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">dumps</span><span class="p">(</span><span class="n">fallback_name</span><span class="o">=</span><span class="s1">''</span><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -4887,7 +4917,7 @@ any existing data.</p>
   </span>
 
 <a href="#unshackle.core.tracks.Hybrid.log" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">log</span> <span class="o">=</span> <span class="n"><span title="logging">logging</span></span><span class="o">.</span><span class="n"><span title="logging.getLogger">getLogger</span></span><span class="p">(</span><span class="s1">&#39;hybrid&#39;</span><span class="p">)</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">log</span> <span class="o">=</span> <span class="n"><span title="logging">logging</span></span><span class="o">.</span><span class="n"><span title="logging.getLogger">getLogger</span></span><span class="p">(</span><span class="s1">'hybrid'</span><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -5707,6 +5737,9 @@ line: position (lower percentage = higher on screen = first line).</p>
     <div class="doc doc-contents ">
 
         <p>More thorough sanitization of WebVTT files to handle multiple potential issues.</p>
+<p>This is lossy, so use it only as a fallback once normal parsing has failed. Everything before the
+WEBVTT header line is discarded and the header itself is reduced to a bare "WEBVTT" line. Negative
+timestamps become 00:00:00.000 and timestamps missing the hours field are padded to HH:MM:SS.mmm.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -6263,6 +6296,8 @@ or be removed at any point.</p>
     <div class="doc doc-contents ">
 
         <p>Download and optionally Decrypt this Track.</p>
+<p>A URL-descriptor Video or Audio track with no <code>drm</code> set has its DRM probed from the init data of the
+stream and stored on the track, so a service need not declare <code>drm</code> itself.</p>
 
 
     </div>
@@ -7038,6 +7073,8 @@ selections) stays unflagged and is muxed standalone alongside the hybrid.</p>
     <div class="doc doc-contents ">
 
         <p>Multiplex all the Tracks into a Matroska Container file.</p>
+<p>A failed mux does not raise. mkvmerge's exit code and error lines come back alongside the
+output path, and the caller must check them.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>

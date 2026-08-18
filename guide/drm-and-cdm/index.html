@@ -1246,6 +1246,8 @@
       
         
       
+        
+      
     
     
     
@@ -1483,6 +1485,34 @@
     
   
     Key Vaults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/post-scripts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Post-Download Scripts
   
 
     
@@ -2641,7 +2671,7 @@ Client ID, and VMP are present. A bare name (no extension) is resolved inside th
 WVDs directory; a path with an extension is used as-is.</p>
 </div>
 <div class="tabbed-block">
-<div class="language-console highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>wvd<span class="w"> </span>new<span class="w"> </span><span class="s2">&quot;Nexus 6P&quot;</span><span class="w"> </span>./private_key.pem<span class="w"> </span>./client_id.bin<span class="w"> </span>./vmp.bin<span class="w"> </span>-t<span class="w"> </span>ANDROID<span class="w"> </span>-l<span class="w"> </span><span class="m">3</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>wvd<span class="w"> </span>new<span class="w"> </span><span class="s2">"Nexus 6P"</span><span class="w"> </span>./private_key.pem<span class="w"> </span>./client_id.bin<span class="w"> </span>./vmp.bin<span class="w"> </span>-t<span class="w"> </span>ANDROID<span class="w"> </span>-l<span class="w"> </span><span class="m">3</span>
 </span></code></pre></div>
 <p>Builds a <code>.wvd</code> from a PEM private key, a Client ID blob, and an optional
 FileHashes (VMP) blob. <code>-t/--type</code> is the device type (default <code>Android</code>) and
@@ -2725,7 +2755,7 @@ profile.</p>
 comparisons (<code>&gt;=1080</code>, <code>&gt;720</code>, <code>&lt;=576</code>, <code>&lt;480</code>). More specific matches win.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">cdm</span><span class="p">:</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span><span class="nt">SOMESERVICE</span><span class="p">:</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span><span class="s">&quot;&gt;=1080&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sm_g935f_l1</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span><span class="s">"&gt;=1080"</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sm_g935f_l1</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
 </span></code></pre></div>
 </div>
@@ -2912,7 +2942,7 @@ there is nothing to set up. Such tracks are handled automatically during downloa
 <p>The CENC ClearKey scheme is a proper license flow, but the "license server" simply
 returns the keys as a JWK Set rather than a DRM-wrapped blob. unshackle builds a W3C
 EME request of the form:</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="p">{</span><span class="nt">&quot;kids&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;&lt;base64url-kid&gt;&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">],</span><span class="w"> </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;temporary&quot;</span><span class="p">}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="p">{</span><span class="nt">"kids"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"&lt;base64url-kid&gt;"</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">],</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"temporary"</span><span class="p">}</span>
 </span></code></pre></div>
 <p>It sends this to the manifest's license URL (or to whatever a service's ClearKey
 license hook returns) and reads the JSON Web Key set back. No device file is needed.

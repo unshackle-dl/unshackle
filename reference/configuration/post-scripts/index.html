@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://docs.unshackle.dev/reference/configuration/vaults/">
+        <link rel="canonical" href="https://docs.unshackle.dev/reference/configuration/post-scripts/">
       
       
-        <link rel="prev" href="../network/">
+        <link rel="prev" href="../vaults/">
       
       
-        <link rel="next" href="../post-scripts/">
+        <link rel="next" href="../misc/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Key Vaults - unshackle</title>
+        <title>Post-Download Scripts - unshackle</title>
       
     
     
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#key-vaults" class="md-skip">
+        <a href="#post-scripts" class="md-skip">
           Skip to content
         </a>
       
@@ -114,7 +114,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Key Vaults
+              Post-Download Scripts
             
           </span>
         </div>
@@ -1155,6 +1155,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../vaults/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Key Vaults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -1174,7 +1202,7 @@
   <span class="md-ellipsis">
     
   
-    Key Vaults
+    Post-Download Scripts
   
 
     
@@ -1192,7 +1220,7 @@
   <span class="md-ellipsis">
     
   
-    Key Vaults
+    Post-Download Scripts
   
 
     
@@ -1218,10 +1246,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#key_vaults" class="md-nav__link">
+  <a href="#post_scripts" class="md-nav__link">
     <span class="md-ellipsis">
       
-        key_vaults
+        post_scripts
       
     </span>
   </a>
@@ -1229,10 +1257,143 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#vault_timeout" class="md-nav__link">
+  <a href="#how-the-command-runs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        vault_timeout
+        How the command runs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Variables
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Variables">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#music-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Music variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tagging-ids" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tagging IDs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sidecar-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sidecar files
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Modes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Modes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#music" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Music
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Events
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#-postscript" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --postscript
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-rest-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The REST API
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#logging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logging
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limitations
       
     </span>
   </a>
@@ -1243,34 +1404,6 @@
   
 </nav>
       
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../post-scripts/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Post-Download Scripts
-  
-
-    
-  </span>
-  
-  
-
-      </a>
     </li>
   
 
@@ -1955,10 +2088,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#key_vaults" class="md-nav__link">
+  <a href="#post_scripts" class="md-nav__link">
     <span class="md-ellipsis">
       
-        key_vaults
+        post_scripts
       
     </span>
   </a>
@@ -1966,10 +2099,143 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#vault_timeout" class="md-nav__link">
+  <a href="#how-the-command-runs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        vault_timeout
+        How the command runs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Variables
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Variables">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#music-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Music variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tagging-ids" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tagging IDs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sidecar-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sidecar files
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Modes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Modes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#music" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Music
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Events
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#-postscript" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --postscript
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-rest-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The REST API
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#logging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logging
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limitations
       
     </span>
   </a>
@@ -1996,80 +2262,380 @@
   
 
 
-<h1 id="key-vaults">Key vaults<a class="headerlink" href="#key-vaults" title="Permanent link">&para;</a></h1>
-<p>The full guide is at <a href="../../../guide/vaults/">Vaults</a>. Two keys configure them.</p>
-<h2 id="key_vaults"><code>key_vaults</code><a class="headerlink" href="#key_vaults" title="Permanent link">&para;</a></h2>
+<h1 id="post-scripts">Post-download scripts<a class="headerlink" href="#post-scripts" title="Permanent link">&para;</a></h1>
+<p>Run your own script when a download finishes, with unshackle's metadata passed in as
+<code>{variable}</code> placeholders. Use it to hand a finished file to an uploader, send a
+notification, or start a library scan.</p>
+<h2 id="post_scripts"><code>post_scripts</code><a class="headerlink" href="#post_scripts" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Type:</strong> <code>list[dict]</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>[]</code></li>
+<li><strong>Type:</strong> <code>list[dict]</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>[]</code> (no scripts run)</li>
 </ul>
-<p>An ordered list of key-vault backends. unshackle queries them in order and reuses content
-keys instead of re-licensing. Each entry needs a <code>type</code> (the backend module name) and a
-<code>name</code>, plus backend-specific keys.</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">post_scripts</span><span class="p">:</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="s">"python</span><span class="nv"> </span><span class="s">/opt/upload.py</span><span class="nv"> </span><span class="s">{filepath}</span><span class="nv"> </span><span class="s">--service={service}</span><span class="nv"> </span><span class="s">--season={season}</span><span class="nv"> </span><span class="s">--episode={episode}</span><span class="nv"> </span><span class="s">--tmdb={tmdb}</span><span class="nv"> </span><span class="s">--subs={sidecars}"</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">event</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">success</span><span class="w"> </span><span class="c1"># success | failure</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">file</span><span class="w"> </span><span class="c1"># file | season | run</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="s">"python</span><span class="nv"> </span><span class="s">/opt/notify.py</span><span class="nv"> </span><span class="s">--title={title}</span><span class="nv"> </span><span class="s">--episode={episode}"</span>
+</span></code></pre></div>
+<p>Every entry that matches the event and mode runs, so one download can feed an uploader and
+a notifier without a wrapper script. An entry may also be written as a plain string, which
+is the same as <code>{command: "...", event: success, mode: file}</code>.</p>
 <table>
 <thead>
 <tr>
-<th><code>type</code></th>
-<th>Purpose</th>
-<th>Required keys</th>
-<th>Notes</th>
+<th>Key</th>
+<th>Default</th>
+<th>Meaning</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>SQLite</code></td>
-<td>Local SQLite database</td>
-<td><code>name</code>, <code>path</code></td>
-<td>Loaded <strong>critically</strong>; a failure aborts the run.</td>
+<td><code>command</code></td>
+<td>required</td>
+<td>The command to run, with <code>{variable}</code> placeholders</td>
 </tr>
 <tr>
-<td><code>MySQL</code></td>
-<td>Remote MySQL database</td>
-<td><code>name</code>, <code>host</code>, <code>database</code>, <code>username</code></td>
-<td>Extra keys (e.g. <code>password</code>, <code>port</code>) forwarded to pymysql.</td>
+<td><code>event</code></td>
+<td><code>success</code></td>
+<td><code>success</code> when a file was written, <code>failure</code> when the download failed</td>
 </tr>
 <tr>
-<td><code>API</code></td>
-<td>RESTful JSON API</td>
-<td><code>name</code>, <code>uri</code>, <code>token</code></td>
-<td>Optional <code>headers</code> map is sent with every request. Honours <code>vault_timeout</code>.</td>
-</tr>
-<tr>
-<td><code>HTTP</code></td>
-<td>HTTP API with modes</td>
-<td><code>name</code>, <code>host</code>, one of <code>password</code>/<code>api_key</code>, and <code>username</code> in query mode</td>
-<td><code>api_mode</code>: <code>query</code> (default), <code>json</code>, <code>decrypt_labs</code>. Honours <code>vault_timeout</code>.</td>
+<td><code>mode</code></td>
+<td><code>file</code></td>
+<td><code>file</code>, <code>season</code>, or <code>run</code>. See <a href="#modes">Modes</a></td>
 </tr>
 </tbody>
 </table>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">key_vaults</span><span class="p">:</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SQLite</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Local</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/.unshackle/keys.db</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MySQL</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Team</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">db.example.com</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">    </span><span class="nt">database</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keys</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unshackle</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hunter2</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">    </span><span class="nt">no_push</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
-</span></code></pre></div>
-<div class="admonition note">
-<p class="admonition-title">Per-entry options</p>
-<ul>
-<li><code>no_push: true</code> makes a vault read-only (keys are fetched but never written to it).</li>
-<li>A vault of <code>type: API</code> whose <code>name</code> contains <code>decrypt_labs</code> auto-fills its <code>token</code> from
-  <a href="../misc/#external-api-keys"><code>decrypt_labs_api_key</code></a> when not set inline. Vault <code>type</code> values are
-  case-sensitive module names.</li>
-<li>An all-zero content key (32 zeros) is treated as "no key" everywhere and is never
-  stored.</li>
-</ul>
+<p>An entry whose <code>event</code> or <code>mode</code> is not one of the listed values is skipped and logs a
+warning naming the bad value, once per command. An entry whose <code>command</code> cannot be split
+into arguments, such as one with an unbalanced quote, is skipped with a warning too. Neither
+stops the download or the other entries.</p>
+<h2 id="how-the-command-runs">How the command runs<a class="headerlink" href="#how-the-command-runs" title="Permanent link">&para;</a></h2>
+<p>The command is split into arguments <strong>first</strong>, and variables are substituted into those
+arguments afterwards. The process runs without a shell.</p>
+<p>This is what keeps a title like <code>Bob"; rm -rf ~</code> harmless: a value can never turn into an
+extra argument or a shell operator, and you never have to think about quoting. It also
+means a path containing spaces always arrives as a single argument on every OS.</p>
+<div class="admonition warning">
+<p class="admonition-title">Prefix your variables</p>
+<p>Titles, episode names and IDs come from the streaming service, not from you. Tokenizing
+first stops a value becoming a <em>new</em> argument, but a value on its own can still be a
+whole argument. A bare <code>{title}</code> whose value is <code>--upload-file=/etc/passwd</code> would arrive
+as an option to your script, not as text. Write <code>--title={title}</code>, not a bare <code>{title}</code>,
+so a service can never forge a flag. unshackle refuses to run a command when a
+substituted value would become an option-like token (one that starts with <code>-</code>), and logs
+a warning instead.</p>
 </div>
-<h2 id="vault_timeout"><code>vault_timeout</code><a class="headerlink" href="#vault_timeout" title="Permanent link">&para;</a></h2>
+<div class="admonition warning">
+<p class="admonition-title">No shell features, and name your interpreter</p>
+<p>Pipes, <code>&amp;&amp;</code>, <code>&gt;</code> redirection, <code>~</code> and globs do not work, because no shell is involved.
+If you want them, make the shell explicit: <code>bash -c "..."</code>.</p>
+<p>For the same reason there is no interpreter lookup. Write <code>python /opt/upload.py</code>
+rather than <code>/opt/upload.py</code>. unshackle will not guess whether you meant the system
+Python or the one in its own virtual environment.</p>
+<p>On Windows, when a <strong>fixed</strong> part of an argument contains a space, quote the whole
+argument (<code>"--out=C:\My Dir\{filename}"</code>), not just the value. Substituted values
+never need quoting on any OS.</p>
+<p>On Windows, do not target a <code>.bat</code> or <code>.cmd</code> file directly. Windows runs batch files
+through <code>cmd.exe</code>, whose argument quoting differs from every other program and has a
+history of letting a crafted value break out (CVE-2024-3566). Call the interpreter and
+pass the script as an argument (<code>python upload.py</code>, <code>pwsh -File upload.ps1</code>) instead.</p>
+</div>
+<p>Scripts are fire and forget. unshackle starts the process, writes the command to the debug
+log, and carries on. It does not wait for the script, capture its output, time it out, or
+change its own exit code when a script fails. A script keeps running if unshackle exits
+first, and <kbd>Ctrl</kbd>+<kbd>C</kbd> during a season pack does not kill the scripts
+already started.</p>
+<div class="admonition note">
+<p class="admonition-title">One process per file</p>
+<p>In <code>file</code> mode a large season pack starts one process per episode with nothing
+throttling them. If your script is heavy, queue the work inside it or use <code>mode: season</code>.</p>
+</div>
+<h2 id="variables">Variables<a class="headerlink" href="#variables" title="Permanent link">&para;</a></h2>
+<p>Metadata comes from the same naming context that produced the file's name, built per output
+file. So <code>{quality}</code> and <code>{hdr}</code> always describe the file being passed. Downloading
+<code>-q 1080,2160 -r HDR10,SDR</code> produces four files, each with its own invocation and its own
+values.</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>{filepath}</code></td>
+<td>Absolute path of the output file</td>
+</tr>
+<tr>
+<td><code>{filename}</code></td>
+<td>Its filename, with extension</td>
+</tr>
+<tr>
+<td><code>{folder}</code></td>
+<td>Absolute path of its parent folder</td>
+</tr>
+<tr>
+<td><code>{ext}</code></td>
+<td>Its extension, including the dot</td>
+</tr>
+<tr>
+<td><code>{sidecars}</code></td>
+<td>Sidecar subtitle files written for this output, newline separated</td>
+</tr>
+<tr>
+<td><code>{title}</code></td>
+<td>Show, movie or track name, sanitized</td>
+</tr>
+<tr>
+<td><code>{title_raw}</code></td>
+<td>Exactly what the service returned, untouched</td>
+</tr>
+<tr>
+<td><code>{title_id}</code></td>
+<td>The service's ID for the title</td>
+</tr>
+<tr>
+<td><code>{service}</code></td>
+<td>Service tag</td>
+</tr>
+<tr>
+<td><code>{year}</code> <code>{season}</code> <code>{episode}</code> <code>{episode_name}</code></td>
+<td>Season and episode are plain numbers (<code>1</code>, <code>5</code>)</td>
+</tr>
+<tr>
+<td><code>{quality}</code> <code>{resolution}</code> <code>{hdr}</code> <code>{hfr}</code> <code>{vcodec}</code> <code>{acodec}</code> <code>{edition}</code> <code>{tag}</code> <code>{lang_tag}</code></td>
+<td>As in the filename template, for this file</td>
+</tr>
+<tr>
+<td><code>{tmdb}</code> <code>{imdb}</code> <code>{tvdb}</code></td>
+<td>The tagging IDs in use, otherwise empty. See <a href="#tagging-ids">Tagging IDs</a></td>
+</tr>
+<tr>
+<td><code>{error}</code></td>
+<td>Failure message. Empty on success</td>
+</tr>
+</tbody>
+</table>
+<p>Every variable from your <code>output_template</code> is available here as well, including
+<code>{video}</code> and <code>{audio}</code>, of which <code>{vcodec}</code> and <code>{acodec}</code> are aliases.</p>
+<div class="admonition warning">
+<p class="admonition-title">Empty variables become an empty string</p>
+<p><code>--tmdb={tmdb}</code> with no ID resolved hands your script <code>--tmdb=</code>, so treat an empty
+string as absent. Write your script to handle every variable being empty.</p>
+<p>Empty is common, and not only when data is missing:</p>
 <ul>
-<li><strong>Type:</strong> <code>float</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>10.0</code></li>
+<li>Nothing was resolved. <code>{tmdb}</code> is empty when no metadata provider found the title,
+  the matching API key is missing, or the title is a movie you gave no ID for.</li>
+<li>The title has no such field. Movies have no <code>{season}</code> or <code>{episode}</code>, and music has
+  neither.</li>
+<li><strong>The naming context renders it empty on purpose.</strong> <code>{hdr}</code> is empty for an SDR
+  file, because SDR is the absence of an HDR tag in a filename rather than a tag that
+  reads <code>SDR</code>. <code>{edition}</code>, <code>{atmos}</code>, <code>{multi}</code>, <code>{dual}</code> and <code>{hfr}</code> behave the same
+  way. If your script needs the word <code>SDR</code>, derive it from an empty <code>{hdr}</code> yourself.</li>
+<li>The hook is a <code>failure</code> hook. A failed download has no output file to read metadata
+  from, so everything that comes from the naming context is empty. See
+  <a href="#events">Events</a>.</li>
 </ul>
-<p>Timeout in seconds for vault operations. Injected automatically into any backend whose
-constructor accepts a <code>timeout</code> parameter (a per-vault <code>timeout</code> still wins).</p>
+<p>There is no <code>{variable?}</code> conditional here, unlike <code>output_template</code>. The token is
+always passed, so the argument list your script receives keeps the same shape on every
+run and your argument parser does not have to cope with a flag appearing and
+disappearing.</p>
+<p>Season and episode are the plain numbers, not the <code>S01E05</code> form used in filenames. The
+padding and the separator belong to the filename template rather than to the data.</p>
+</div>
+<h3 id="music-variables">Music variables<a class="headerlink" href="#music-variables" title="Permanent link">&para;</a></h3>
+<p>A music download builds its variables from the music naming context, so a hook gets the
+release fields instead of the season and episode ones. <code>{season}</code>, <code>{episode}</code> and
+<code>{episode_name}</code> are always empty for music.</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>{artist}</code></td>
+<td>Track artist</td>
+</tr>
+<tr>
+<td><code>{album_artist}</code></td>
+<td>Album artist, falling back to the track artist</td>
+</tr>
+<tr>
+<td><code>{album}</code></td>
+<td>Album name</td>
+</tr>
+<tr>
+<td><code>{track_number}</code> <code>{disc}</code></td>
+<td>Zero padded. <code>{disc}</code> is empty on a single-disc release</td>
+</tr>
+<tr>
+<td><code>{track_total}</code> <code>{disc_total}</code></td>
+<td>Zero padded totals, empty when the service did not give them</td>
+</tr>
+<tr>
+<td><code>{isrc}</code> <code>{upc}</code> <code>{label}</code> <code>{genre}</code> <code>{release_type}</code> <code>{explicit}</code></td>
+<td>As the service reported them, empty when absent</td>
+</tr>
+</tbody>
+</table>
+<p>In a <code>file</code> hook <code>{title}</code> is the track name. See <a href="#modes">Modes</a> for what an album hook
+puts in <code>{title}</code>.</p>
+<h3 id="tagging-ids">Tagging IDs<a class="headerlink" href="#tagging-ids" title="Permanent link">&para;</a></h3>
+<p><code>{tmdb}</code>, <code>{imdb}</code> and <code>{tvdb}</code> carry the IDs unshackle is tagging the file with, read at
+the moment the hook is dispatched rather than snapshotted at the start of the run. An
+episode's TMDB ID is resolved by the title search inside the download loop, so a hook fires
+with it already filled in.</p>
+<p>They hold an ID you passed with <code>--tmdb</code>, <code>--imdb</code> or <code>--tvdb</code>, plus a TMDB ID the episode
+search resolved. No such search runs for a movie, so a movie hook gets them empty unless you
+passed one.</p>
+<h3 id="sidecar-files">Sidecar files<a class="headerlink" href="#sidecar-files" title="Permanent link">&para;</a></h3>
+<p><code>{sidecars}</code> holds the sidecar subtitle files written beside the output, which are the only
+extra files a download leaves next to it. Attachments such as fonts are muxed into the
+container and temporary artwork is deleted, so neither appears. Expect <code>{sidecars}</code> to be
+empty unless <a href="../download/#subtitle"><code>subtitle.output_mode</code></a> is <code>sidecar</code> or <code>both</code>, which is
+not the default. A music download writes no sidecars at all.</p>
+<p>Paths are absolute and separated by a newline, because a newline is the only character that
+cannot appear in a filename on any supported OS. The whole list arrives as a single
+argument, so no quoting is needed in your template.</p>
+<p>When one download writes several outputs (<code>-q 1080,720</code>), each output's folder gets its own
+copy of the sidecar files, and each invocation lists the copies sitting beside its own
+<code>{filepath}</code>.</p>
+<div class="language-python highlight"><span class="filename">Reading {sidecars} in Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">subs</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="s2">"--subs="</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span> <span class="k">if</span> <span class="n">p</span><span class="p">]</span>
+</span></code></pre></div>
+<h2 id="modes">Modes<a class="headerlink" href="#modes" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th><code>mode</code></th>
+<th>Runs</th>
+<th><code>{filepath}</code></th>
+<th><code>{sidecars}</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>file</code></td>
+<td>Once per output file</td>
+<td>That file</td>
+<td>That output's sidecars</td>
+</tr>
+<tr>
+<td><code>season</code></td>
+<td>Once per season folder, after that season's last queued title</td>
+<td>Empty</td>
+<td>Empty</td>
+</tr>
+<tr>
+<td><code>run</code></td>
+<td>Once per folder written, at the end of the run</td>
+<td>Empty</td>
+<td>Empty</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition warning">
+<p class="admonition-title"><code>season</code> means everything this run asked for</p>
+<p>A <code>season</code> hook fires when the last title <strong>this run queued</strong> for that season finishes.
+With <code>-w S01-S02</code> the S01 hook runs while S02 is still downloading. It says nothing
+about whether the season is complete on disk. Downloading a single episode fires the
+hook for that season as soon as the episode lands.</p>
+<p>A title that fails takes its group with it. If one episode of S01 fails, the S01 hook
+does not fire at all, because the run never finished everything it queued for that
+season.</p>
+</div>
+<p>The hook is keyed to the folder, not to the season, so one season landing in several
+folders (<code>-q 1080,720</code> with a quality-dependent folder template) fires it once per folder,
+each with its own <code>{folder}</code>. A movie is a group of its own: a <code>season</code> hook fires for a
+movie's folder as soon as the movie finishes.</p>
+<p>In <code>run</code> mode every variable except <code>{folder}</code> is empty, because one run can cover several
+shows. Only <code>{folder}</code> is meaningful, which makes it useful for starting a library scan
+once.</p>
+<h3 id="music">Music<a class="headerlink" href="#music" title="Permanent link">&para;</a></h3>
+<p>Music uses the same three modes, with the album standing in for the season.</p>
+<table>
+<thead>
+<tr>
+<th><code>mode</code></th>
+<th>Runs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>file</code></td>
+<td>Once per track, after its metadata has been written</td>
+</tr>
+<tr>
+<td><code>season</code></td>
+<td>Once per album folder, after every queued track of that album has landed</td>
+</tr>
+<tr>
+<td><code>run</code></td>
+<td>Once per folder written, at the end of the run</td>
+</tr>
+</tbody>
+</table>
+<p>In a <code>file</code> hook <code>{title}</code> and <code>{title_raw}</code> are the track name. In an album hook they are
+the album name, and the per-track variables <code>{track_number}</code>, <code>{disc}</code> and <code>{isrc}</code> are
+empty, in the same way that <code>{episode}</code> is empty in a season hook.</p>
+<h2 id="events">Events<a class="headerlink" href="#events" title="Permanent link">&para;</a></h2>
+<p><code>success</code> runs after the file has moved to its final path. <code>failure</code> runs when the download
+fails, with <code>{filepath}</code> empty and <code>{error}</code> set. A music <code>failure</code> hook describes the
+release rather than a track, because the whole album stops when one track fails.</p>
+<div class="admonition warning">
+<p class="admonition-title"><code>failure</code> only fires in <code>file</code> mode</p>
+<p>A <code>failure</code> entry with <code>mode: season</code> or <code>mode: run</code> never runs. Leave <code>mode</code> at its
+default on a failure entry.</p>
+</div>
+<p>A <code>failure</code> hook has no output file to read metadata from, so it carries only what the
+title object already knew: <code>{title}</code>, <code>{title_raw}</code>, <code>{title_id}</code>, <code>{year}</code>, <code>{season}</code>,
+<code>{episode}</code>, <code>{episode_name}</code>, <code>{service}</code>, the tagging IDs and <code>{error}</code>. Everything that
+comes from the naming context, such as <code>{quality}</code>, <code>{hdr}</code>, <code>{artist}</code> and <code>{album}</code>, is
+empty.</p>
+<p>A resumed <code>--continue</code> download that finishes runs <code>success</code> as usual. Because unshackle
+does not wait for your script, it never sees its exit code, so a failing script is not
+reported anywhere. Your script owns its own error handling and logging.</p>
+<p>A <code>success</code> hook always names a file this run wrote. There is no skip-if-exists path in
+<code>dl</code> today, so nothing fires for a title that was not downloaded.</p>
+<h2 id="-postscript"><code>--postscript</code><a class="headerlink" href="#-postscript" title="Permanent link">&para;</a></h2>
+<p><code>dl</code> accepts <code>--postscript "&lt;command&gt;"</code>, repeatable. Every command given this way runs with
+<code>event: success</code> and <code>mode: file</code>.</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>dl<span class="w"> </span>--postscript<span class="w"> </span><span class="s2">"python /opt/upload.py {filepath}"</span><span class="w"> </span>SERVICE<span class="w"> </span>TITLE_ID
+</span></code></pre></div>
+<p>It replaces the <code>post_scripts</code> config for that run rather than adding to it, so no
+configured entry runs while it is in use. That includes your <code>season</code>, <code>run</code> and <code>failure</code>
+entries, which have no <code>--postscript</code> equivalent.</p>
+<h2 id="the-rest-api">The REST API<a class="headerlink" href="#the-rest-api" title="Permanent link">&para;</a></h2>
+<p>The API never accepts a post-script command. <code>postscript</code>, <code>post_script</code> and <code>post_scripts</code>
+in a <code>POST /api/download</code> body are rejected with <code>400 INVALID_PARAMETERS</code>, because a command
+arriving from an HTTP caller would be remote code execution.</p>
+<p>Scripts defined in <code>unshackle.yaml</code> do run for API jobs, music jobs included. Only the
+command itself may not cross the network.</p>
+<h2 id="logging">Logging<a class="headerlink" href="#logging" title="Permanent link">&para;</a></h2>
+<p>The command that was run is logged twice: at <code>DEBUG</code> level on the console, and as a
+<code>post_script_dispatch</code> entry in the
+<a href="../../../guide/troubleshooting/#the-structured-json-debug-log">structured JSON debug log</a>
+when that log is enabled.</p>
+<p>Both are masked the same way, honouring <a href="../misc/"><code>redact_paths</code></a>, which is on by default.
+Debug logs get shared in issue reports, and a hook command line is mostly paths. URL
+credentials and <code>token=</code> / <code>api_key=</code> query parameters are also masked.</p>
+<div class="admonition warning">
+<p class="admonition-title">Do not hardcode secrets in the command</p>
+<p>An arbitrary secret in the command line, such as <code>-H "Authorization: Bearer &lt;key&gt;"</code>,
+cannot be recognised and is logged verbatim. Read the secret from a file or an
+environment variable inside your script rather than putting it in the <code>command</code>.</p>
+</div>
+<h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
+<ul>
+<li>No <code>success</code> hooks run under <code>--no-mux</code> or <code>--skip-dl</code>, because neither writes a muxed
+  output. A <code>failure</code> hook still runs under <code>--no-mux</code> if the download itself fails.</li>
+<li><code>failure</code> hooks only run in <code>file</code> mode.</li>
+<li>There is no webhook sender. Call <code>curl</code> from a script instead.</li>
+<li>Script output is not captured. Redirect it inside your own script if you want a log.</li>
+</ul>
 
 
 
@@ -2107,7 +2673,7 @@ constructor accepts a <code>timeout</code> parameter (a per-vault <code>timeout<
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../network/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Network &amp; Proxy">
+          <a href="../vaults/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Key Vaults">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -2117,20 +2683,20 @@ constructor accepts a <code>timeout</code> parameter (a per-vault <code>timeout<
                 Previous
               </span>
               <div class="md-ellipsis">
-                Network & Proxy
+                Key Vaults
               </div>
             </div>
           </a>
         
         
           
-          <a href="../post-scripts/" class="md-footer__link md-footer__link--next" aria-label="Next: Post-Download Scripts">
+          <a href="../misc/" class="md-footer__link md-footer__link--next" aria-label="Next: Other Settings">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Post-Download Scripts
+                Other Settings
               </div>
             </div>
             <div class="md-footer__button md-icon">
