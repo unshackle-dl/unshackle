@@ -138,6 +138,19 @@ def build_context(
     return context
 
 
+def season_context(context: dict[str, str], folder: Path) -> dict[str, str]:
+    """Blank the file-level variables so a season/album hook describes the folder."""
+    out = dict(context)
+    for key in ("filepath", "filename", "ext", "sidecars", "episode", "episode_name"):
+        out[key] = ""
+    if out.get("album"):  # music: the album stands in for the season
+        for key in ("track_number", "disc", "isrc"):
+            if key in out:
+                out[key] = ""
+        out["title"] = out["title_raw"] = out["album"]
+    return out | {"folder": str(folder)}
+
+
 def _entries(event: str, mode: str, overrides: Sequence[str] = ()) -> Iterator[str]:
     """Commands configured for this event and mode; --postscript replaces the config list."""
     if overrides:

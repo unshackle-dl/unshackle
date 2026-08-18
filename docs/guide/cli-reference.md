@@ -112,7 +112,7 @@ The special language tokens `orig`, `all`, and `best` are honoured everywhere a 
 
 | Flag | Description |
 |---|---|
-| `-w`, `--wanted` | Wanted episodes, e.g. `S01-S05,S07`, `S01E01-S02E03`. Supports exclusions with a leading `-` (e.g. `-S03`). For a [split episode](downloading.md#split-episodes), `.N` picks one part (`S01E01.2`), a range must stay inside the episode (`S01E01.1-S01E01.3`), and `S01E01` on its own takes every part. For [dated content](downloading.md#daily-and-date-based-content), a token can also be an ISO air date (`2026-08-11`) or a date range with a colon (`2026-08-01:2026-08-31`). |
+| `-w`, `--wanted` | Wanted episodes, e.g. `S01-S05,S07`, `S01E01-S02E03`. Supports exclusions with a leading `-` (e.g. `-S03`). For a [split episode](downloading.md#split-episodes), `.N` picks one part (`S01E01.2`), a range must stay inside the episode (`S01E01.1-S01E01.3`), and `S01E01` on its own takes every part. For [dated content](downloading.md#daily-and-date-based-content), a token can also be an ISO air date (`2026-08-11`) or a date range with a colon (`2026-08-01:2026-08-31`). For a [music release](downloading.md#music-tracks), a token is a track number (`1-5`, `1,3,7`), or `{disc}x{track}` (`2x3`) when the release has more than one disc. |
 | `--select-titles` | Interactively select what to download: episodes of a series, or films when a title has more than one. **Cannot combine with `-w`.** |
 | `--latest-episode` | Download only the single most recent episode. |
 | `--list-titles` | List titles only; do not download. |

@@ -13,8 +13,7 @@ import pytest
 from unshackle.core.config import config
 from unshackle.core.titles.episode import Episode
 from unshackle.core.titles.movie import Movie
-from unshackle.core.titles.music import Song as MusicSong
-from unshackle.core.titles.song import Song
+from unshackle.core.titles.music import Song
 from unshackle.core.utilities import sanitize_filename
 from unshackle.core.utils.template_formatter import TemplateFormatter, detect_spacer
 
@@ -183,7 +182,7 @@ def make_album_song(**overrides):
         album_artist="Some Artist",
     )
     kwargs.update(overrides)
-    return MusicSong(**kwargs)
+    return Song(**kwargs)
 
 
 def assert_safe_path(result: str):

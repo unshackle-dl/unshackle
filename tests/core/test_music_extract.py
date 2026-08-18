@@ -9,7 +9,6 @@ import pytest
 from unshackle.core.music.extract import (
     build_music_from_songs,
     classify_release_kind,
-    dedupe_track_options,
     duration_seconds,
     first_number,
     first_text,
@@ -17,7 +16,6 @@ from unshackle.core.music.extract import (
     format_names,
     year_from_value,
 )
-from unshackle.core.music.models import MusicTrackOption
 from unshackle.core.titles.music import Music, Song
 
 
@@ -169,18 +167,6 @@ def test_format_names(value: Any, sep: str, expected: str) -> None:
 )
 def test_classify_release_kind(raw_kind: str, count: Optional[float], expected: str) -> None:
     assert classify_release_kind(raw_kind, count) == expected
-
-
-def test_dedupe_track_options() -> None:
-    a = MusicTrackOption(codec="flac", bit_depth=16, sample_rate=44100, bitrate=None, quality_label="L", explicit=False)
-    a_dup = MusicTrackOption(
-        codec="FLAC", bit_depth=16, sample_rate=44100, bitrate=None, quality_label="L", explicit=False
-    )  # codec case-insensitive duplicate of `a`
-    b = MusicTrackOption(codec="flac", bit_depth=24, sample_rate=96000, bitrate=None, quality_label="H", explicit=False)
-    c = MusicTrackOption(codec="flac", bit_depth=16, sample_rate=44100, bitrate=None, quality_label="L", explicit=True)
-
-    result = dedupe_track_options([a, a_dup, b, c])
-    assert result == [a, b, c]
 
 
 def test_build_music_from_songs() -> None:

@@ -187,7 +187,7 @@ keys through your CDM (and any key vaults), then decrypt, mux, and tag the resul
 | `-sl`, `--s-lang` | Subtitle language(s); defaults to `all`. |
 | `-v`, `--vcodec` | Video codec, e.g. `-v H.265`. Defaults to any. |
 | `-r`, `--range` | Dynamic range, e.g. `-r HDR10` or `-r DV`. Defaults to `SDR`. |
-| `-w`, `--wanted` | Which episodes, e.g. `-w S01` or `-w S01E01-S01E03`. |
+| `-w`, `--wanted` | Which episodes, e.g. `-w S01` or `-w S01E01-S01E03`. For music, which tracks, e.g. `-w 1-5` or `-w 2x3` for disc 2 track 3. |
 | `-o`, `--output` | Override the output directory for this run. |
 | `--list` | List the tracks that would be downloaded, then stop. |
 

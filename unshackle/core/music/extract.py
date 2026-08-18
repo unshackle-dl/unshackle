@@ -2,9 +2,9 @@
 
 These functions consolidate the generic data-shaping logic that music services
 otherwise each duplicate: first-non-empty getters, duration/year/name
-formatting, release-kind classification, track-option dedupe, and Song -> Music
-assembly. They take plain data in and return plain data out (no ``self``), so
-any music service can reuse them.
+formatting, release-kind classification, and Song -> Music assembly. They take
+plain data in and return plain data out (no ``self``), so any music service can
+reuse them.
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ from __future__ import annotations
 import re
 from typing import Any, Optional
 
-from unshackle.core.music.models import MusicTrackOption
 from unshackle.core.titles.music import Music, Song
 
 
@@ -26,7 +25,7 @@ def first_text(*values: Any, default: str = "") -> str:
         if value in (None, "", [], {}):
             continue
         if isinstance(value, dict):
-            for key in ("name", "title", "display", "display_name", "description", "url"):
+            for key in ("name", "title", "display", "display_name", "description", "label", "value", "url"):
                 nested = value.get(key)
                 text = first_text(nested) if isinstance(nested, (dict, list)) else str(nested or "").strip()
                 if text:
@@ -111,7 +110,7 @@ def classify_release_kind(raw_kind: str, tracks_count: Optional[float]) -> str:
     Returns one of ``single | ep | album | compilation | live | download |
     playlist | other``. ``tracks_count`` disambiguates "single" (1 track) from
     an EP (more than 1 track) for sources that label EPs as singles; pass the
-    real track count (or ``None`` only when genuinely unknown) — it is required
+    real track count (or ``None`` only when genuinely unknown) - it is required
     so no caller silently mislabels a multi-track "single" as an EP by omission.
     """
     key = re.sub(r"[^a-z0-9]+", "", str(raw_kind or "").lower())
@@ -133,26 +132,6 @@ def classify_release_kind(raw_kind: str, tracks_count: Optional[float]) -> str:
     if key in {"other"}:
         return "other"
     return "album"
-
-
-def dedupe_track_options(options: list[MusicTrackOption]) -> list[MusicTrackOption]:
-    """Drop duplicate track options keyed on codec/quality identity, preserving order."""
-    seen: set[tuple[str, Optional[int], Optional[int], Optional[int], str, bool]] = set()
-    unique: list[MusicTrackOption] = []
-    for option in options:
-        key = (
-            str(option.codec or "").upper(),
-            option.bit_depth,
-            option.sample_rate,
-            option.bitrate,
-            option.quality_label,
-            option.explicit,
-        )
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append(option)
-    return unique
 
 
 def build_music_from_songs(

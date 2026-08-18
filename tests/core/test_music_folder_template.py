@@ -26,13 +26,13 @@ def make_song(**overrides) -> Song:
     kwargs = dict(
         id_="track-0001",
         service=DummyService,
-        name="NUEVAYoL",
-        artist="Bad Bunny",
-        album="DeBI TiRAR MaS FOToS",
+        name="Example Track",
+        artist="Example Artist",
+        album="Example Album",
         track=1,
         disc=1,
         year=2025,
-        album_artist="Bad Bunny",
+        album_artist="Example Artist",
     )
     kwargs.update(overrides)
     return Song(**kwargs)
@@ -52,13 +52,13 @@ def reset_folder_config():
 def test_folder_fallback_when_no_templates(reset_folder_config):
     song = make_song()
     result = song.get_filename(StubMediaInfo(), folder=True)
-    assert result == sanitize_filename("Bad Bunny - DeBI TiRAR MaS FOToS (2025)", " ")
+    assert result == sanitize_filename("Example Artist - Example Album (2025)", " ")
 
 
 def test_albums_template_used(reset_folder_config):
     reset_folder_config.folder_templates = {"albums": "{album_artist} - {album} ({year})"}
     result = make_song().get_filename(StubMediaInfo(), folder=True)
-    assert result == sanitize_filename("Bad Bunny - DeBI TiRAR MaS FOToS (2025)", " ")
+    assert result == sanitize_filename("Example Artist - Example Album (2025)", " ")
     # Album folder must NOT carry per-track info like the song file name does.
     assert "01" not in result
 
@@ -91,3 +91,37 @@ def test_validation_warns_on_unknown_folder_kind():
     with pytest.warns(UserWarning, match="Unknown folder template kind"):
         # A non-folder key is required so output-template validation actually runs.
         Config(output_template={"songs": "{track_number}. {title}", "folder": {"bogus": "{album}"}})
+
+
+def test_undated_single_degrades_cleanly(reset_folder_config):
+    """A single with no release year and no disc must not leave empty parens behind."""
+    song = Song(
+        id_="track-0001",
+        service=DummyService,
+        name="Example Track",
+        artist="Example Artist",
+        album="Example Album",
+        track=1,
+        album_artist="Example Artist",
+    )  # no disc, no year: both are optional
+
+    assert str(song) == "Example Artist - Example Album (?) / 01. Example Track"
+    assert song.get_filename(StubMediaInfo(), folder=True) == sanitize_filename("Example Artist - Example Album", " ")
+    assert song.get_filename(StubMediaInfo()) == "01.Example.Track"  # spacer applies to the title too
+
+    context = song.build_template_context(StubMediaInfo())
+    assert context["year"] == ""
+    assert context["disc"] == ""  # a lone disc is never numbered
+    assert context["track_number"] == "01"
+
+
+def test_undated_album_template_omits_the_year_group(reset_folder_config):
+    reset_folder_config.folder_templates = {"albums": "{album_artist} - {album} ({year?})"}
+    result = make_song(year=None).get_filename(StubMediaInfo(), folder=True)
+    assert result == "Example Artist - Example Album"
+
+
+def test_songs_separator_survives_a_config_without_a_songs_template(reset_folder_config):
+    """A user config with output_template but no `songs` key used to raise a KeyError."""
+    reset_folder_config.output_template = {"movies": "{title}.{year}"}
+    assert reset_folder_config.get_template_separator("songs") == "."

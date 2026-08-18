@@ -328,7 +328,8 @@ def perform_download(
     `params` holds the API's string form of the `dl` options and is normalized in place before
     dl.result() sees it: vcodec and range names become enums, `slow` accepts "MIN-MAX", a two-item
     list, or True (which means 60-120), and `wanted` accepts forms such as "S01E01", "S01-S03",
-    "s1e1", or "1x1" as well as the internal "SxE" form.
+    "s1e1", or "1x1" as well as the internal "SxE" form. Music takes track numbers in the same
+    field, such as "1-5" or "2x3" for disc 2 track 3.
     """
 
     from contextlib import redirect_stderr, redirect_stdout
@@ -408,7 +409,8 @@ def perform_download(
         from unshackle.core.utils.click_types import SeasonRange
 
         if isinstance(wanted_raw, str):
-            wanted_raw = [wanted_raw]
+            # the CLI splits a comma-separated value before parsing, so a raw string must too
+            wanted_raw = re.split(r"\s*[,;]\s*", wanted_raw)
         # the !? keeps a pre-parsed part exclusion from being re-fed through parse_tokens
         needs_conversion = any(not re.match(r"^!?\d+x\d+(\.\d+)?$", w) for w in wanted_raw)
         if needs_conversion:

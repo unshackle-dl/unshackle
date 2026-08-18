@@ -18,7 +18,7 @@ from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_C
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.proxies.resolve import initialize_proxy_providers, resolve_proxy
 from unshackle.core.services import Services
-from unshackle.core.titles import Episode, Movie, Title_T
+from unshackle.core.titles import Episode, Movie, Song, Title_T
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE
@@ -791,7 +791,9 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                     if isinstance(wanted_param, list):
                         wanted = season_range.parse_tokens(*wanted_param)
                     else:
-                        wanted = season_range.parse_tokens(wanted_param)
+                        # convert(), not parse_tokens(), so a comma-separated string splits
+                        # into tokens the way the CLI splits it
+                        wanted = season_range.convert(wanted_param)
                     log.debug(
                         f"Parsed wanted '{sanitize_log(wanted_param)}' into {len(wanted)} episodes: {wanted[:10]}..."
                     )
@@ -806,7 +808,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
 
             if wanted:
                 # Filter titles based on wanted episodes, similar to how dl.py does it
-                matching_titles = []
+                matching_titles: list[Any] = []
                 log.debug(f"Filtering {len(titles_list)} titles with {len(wanted)} wanted episodes")
                 for title in titles_list:
                     if isinstance(title, Episode):
@@ -816,6 +818,13 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                             matching_titles.append(title)
                         else:
                             log.debug(f"Episode {episode_key} not in wanted list")
+                    elif isinstance(title, Song):
+                        song_key = f"{title.disc}x{title.track}"
+                        if title.matches_wanted(wanted):
+                            log.debug(f"Song {song_key} matches wanted list")
+                            matching_titles.append(title)
+                        else:
+                            log.debug(f"Song {song_key} not in wanted list")
                     else:
                         matching_titles.append(title)
 
@@ -824,7 +833,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                 if not matching_titles:
                     raise APIError(
                         APIErrorCode.NO_CONTENT,
-                        "No episodes found matching wanted criteria",
+                        "No titles found matching wanted criteria",
                         details={
                             "service": normalized_service,
                             "title_id": title_id,

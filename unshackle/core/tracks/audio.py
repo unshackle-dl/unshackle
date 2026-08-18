@@ -86,7 +86,7 @@ class Audio(Track):
             codec: An Audio.Codec enum representing the audio codec.
                 If not specified, MediaInfo will be used to retrieve the codec
                 once the track has been downloaded.
-            bitrate: A number or float representing the average bandwidth in bytes/s.
+            bitrate: A number or float representing the average bandwidth in bits/s.
                 Float values are rounded up to the nearest integer.
             channels: A number, float, or string representing the number of audio channels.
                 Strings may represent numbers or floats. Expanded layouts like 7.1.1 is

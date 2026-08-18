@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from base64 import b64encode
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
@@ -30,15 +31,18 @@ try:
         TRCK,
         TSRC,
         TXXX,
+        USLT,
         ID3NoHeaderError,
     )
     from mutagen.mp3 import MP3
     from mutagen.mp4 import MP4, MP4Cover
+    from mutagen.oggvorbis import OggVorbis
 except ImportError:  # pragma: no cover - optional tagging dependency
     FLAC = Picture = None
-    MP3 = MP4 = MP4Cover = None
+    MP3 = MP4 = MP4Cover = OggVorbis = None
     ID3NoHeaderError = Exception
     APIC = COMM = TALB = TCOM = TCON = TCOP = TDRC = TIT2 = TPE1 = TPE2 = TPOS = TRCK = TSRC = TXXX = None
+    USLT = None
 
 
 log = logging.getLogger("MUSIC_TAGGER")
@@ -61,10 +65,10 @@ class MusicMetadataResult:
 
 
 def write_music_metadata(path: Path, song: Any, *, session: Any = None, source_md5: str = "") -> MusicMetadataResult:
-    """Write normalized music metadata for FLAC, MP3, and M4A/MP4 audio files."""
+    """Write normalized music metadata for FLAC, Ogg, MP3, and M4A/MP4 audio files."""
     path = Path(path)
     extension = path.suffix.lower()
-    if extension not in {".flac", ".mp3", ".m4a", ".mp4"}:
+    if extension not in {".flac", ".mp3", ".m4a", ".mp4", ".ogg"}:
         return MusicMetadataResult(skipped=True, reason=f"Unsupported music metadata container: {extension}")
 
     if extension == ".flac" and FLAC is None:
@@ -73,6 +77,8 @@ def write_music_metadata(path: Path, song: Any, *, session: Any = None, source_m
         return MusicMetadataResult(skipped=True, reason="install mutagen to write MP3 tags")
     if extension in {".m4a", ".mp4"} and MP4 is None:
         return MusicMetadataResult(skipped=True, reason="install mutagen to write MP4/M4A tags")
+    if extension == ".ogg" and OggVorbis is None:
+        return MusicMetadataResult(skipped=True, reason="install mutagen to write Ogg tags")
 
     tags = build_tag_values(song, source_md5=source_md5)
     artwork_url = first_text(getattr(song, "artwork_url", None), _metadata(song).get("artwork_url"))
@@ -80,6 +86,8 @@ def write_music_metadata(path: Path, song: Any, *, session: Any = None, source_m
 
     if extension == ".flac":
         write_flac_tags(path, tags, cover_data, mime_type)
+    elif extension == ".ogg":
+        write_ogg_tags(path, tags, cover_data, mime_type)
     elif extension == ".mp3":
         write_mp3_tags(path, tags, cover_data, mime_type)
     else:
@@ -116,6 +124,7 @@ def build_tag_values(song: Any, *, source_md5: str = "") -> dict[str, str]:
         "COPYRIGHT": string_tag(getattr(song, "copyright", None) or metadata.get("copyright")),
         "LABEL": first_text(getattr(song, "label", None), metadata.get("label")),
         "COMMENT": first_text(metadata.get("comment"), metadata.get("quality")),
+        "LYRICS": first_text(getattr(song, "lyrics", None), metadata.get("lyrics")),
         "SOURCE": first_text(metadata.get("source"), metadata.get("service")),
         "ENCODEDBY": "Unshackle",
         "UNSHACKLE_SOURCE_MD5": source_md5,
@@ -145,21 +154,40 @@ def write_flac_tags(path: Path, tags: dict[str, str], cover_data: Optional[bytes
     audio = FLAC(path)
     for key, value in tags.items():
         audio[key] = [value]
-    if cover_data and Picture is not None:
-        picture = Picture()
-        picture.type = 3
-        picture.mime = mime_type or "image/jpeg"
-        picture.desc = "Cover"
-        picture.data = cover_data
-        if Image is not None:
-            try:
-                with Image.open(BytesIO(cover_data)) as image:
-                    picture.width, picture.height = image.size
-                    picture.depth = len(image.getbands()) * 8
-            except Exception:
-                pass
+    picture = build_picture(cover_data, mime_type)
+    if picture is not None:
         audio.clear_pictures()
         audio.add_picture(picture)
+    audio.save()
+
+
+def build_picture(cover_data: Optional[bytes], mime_type: str) -> Optional[Any]:
+    """Build a FLAC Picture block, which Ogg reuses base64-encoded."""
+    if not cover_data or Picture is None:
+        return None
+    picture = Picture()
+    picture.type = 3
+    picture.mime = mime_type or "image/jpeg"
+    picture.desc = "Cover"
+    picture.data = cover_data
+    if Image is not None:
+        try:
+            with Image.open(BytesIO(cover_data)) as image:
+                picture.width, picture.height = image.size
+                picture.depth = len(image.getbands()) * 8
+        except Exception:
+            pass
+    return picture
+
+
+def write_ogg_tags(path: Path, tags: dict[str, str], cover_data: Optional[bytes], mime_type: str) -> None:
+    audio = OggVorbis(path)
+    for key, value in tags.items():
+        audio[key] = [value]
+    picture = build_picture(cover_data, mime_type)
+    if picture is not None:
+        # Ogg carries no picture block of its own, so the FLAC block goes in base64
+        audio["METADATA_BLOCK_PICTURE"] = [b64encode(picture.write()).decode("ascii")]
     audio.save()
 
 
@@ -191,11 +219,13 @@ def write_mp3_tags(path: Path, tags: dict[str, str], cover_data: Optional[bytes]
             audio.tags.setall(frame_id, [frame_class(encoding=3, text=[value])])
     if tags.get("COMMENT") and COMM is not None:
         audio.tags.setall("COMM", [COMM(encoding=3, lang="eng", desc="", text=[tags["COMMENT"]])])
+    if tags.get("LYRICS") and USLT is not None:
+        audio.tags.setall("USLT", [USLT(encoding=3, lang="eng", desc="", text=tags["LYRICS"])])
     if cover_data and APIC is not None:
         audio.tags.delall("APIC")
         audio.tags.add(APIC(encoding=3, mime=mime_type or "image/jpeg", type=3, desc="Cover", data=cover_data))
 
-    custom_keys = set(tags) - set(frame_map) - {"COMMENT"}
+    custom_keys = set(tags) - set(frame_map) - {"COMMENT", "LYRICS"}
     for key in sorted(custom_keys):
         if TXXX is not None and tags[key]:
             audio.tags.delall(f"TXXX:{key}")
@@ -223,6 +253,8 @@ def write_mp4_tags(path: Path, tags: dict[str, str], cover_data: Optional[bytes]
         audio["\xa9cmt"] = [tags["COMMENT"]]
     if tags.get("COPYRIGHT"):
         audio["cprt"] = [tags["COPYRIGHT"]]
+    if tags.get("LYRICS"):
+        audio["\xa9lyr"] = [tags["LYRICS"]]
 
     track_number, track_total = split_number_pair(tags.get("TRACKNUMBER", ""))
     if track_number:
@@ -244,6 +276,7 @@ def write_mp4_tags(path: Path, tags: dict[str, str], cover_data: Optional[bytes]
         "COMPOSER",
         "COMMENT",
         "COPYRIGHT",
+        "LYRICS",
         "TRACKNUMBER",
         "DISCNUMBER",
     }
@@ -272,7 +305,12 @@ def download_cover(session: Any, artwork_url: str) -> tuple[Optional[bytes], str
 
 def _metadata(song: Any) -> dict[str, Any]:
     data = getattr(song, "data", None)
-    return data if isinstance(data, dict) else {}
+    if not isinstance(data, dict):
+        return {}
+    # the renderer reads a nested "metadata" sub-dict as well as the top level, so a
+    # service that follows it would otherwise lose every tag read through this helper
+    nested = data.get("metadata")
+    return {**data, **nested} if isinstance(nested, dict) else data
 
 
 def first_text(*values: Any) -> str:

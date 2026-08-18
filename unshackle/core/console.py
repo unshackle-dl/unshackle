@@ -4,6 +4,7 @@ from datetime import datetime
 from types import ModuleType
 from typing import IO, Any, Callable, Iterable, List, Literal, Mapping, Optional, TextIO, Union
 
+from rich import box
 from rich._log_render import FormatTimeCallable, LogRender
 from rich.color import Color, blend_rgb
 from rich.console import Console, ConsoleOptions, ConsoleRenderable, HighlighterType, RenderableType, RenderResult
@@ -13,6 +14,7 @@ from rich.live import Live
 from rich.logging import RichHandler
 from rich.measure import Measurement
 from rich.padding import Padding, PaddingDimensions
+from rich.panel import Panel
 from rich.progress import BarColumn, Task
 from rich.status import Status
 from rich.style import Style, StyleType
@@ -427,6 +429,11 @@ console = ComfyConsole(
 )
 
 
+def listing_panel(renderable: RenderableType, title: str) -> Panel:
+    """Box a listing in the shared panel style, so every listing restyles from one place."""
+    return Panel(renderable, title=title, box=box.SQUARE, border_style="bright_black")
+
+
 def prompt_user(prompt: str) -> str:
     """Ask the user for input on the shared console, themed and indented like the rest of the output."""
     indent = " " * 5
@@ -442,5 +449,6 @@ __all__ = (
     "GradientPulseBarColumn",
     "SyncLive",
     "console",
+    "listing_panel",
     "prompt_user",
 )

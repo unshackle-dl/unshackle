@@ -6,7 +6,7 @@ If you have not configured `unshackle.yaml` yet, read [Configuration File](../ge
 
 ## How an output path is assembled
 
-When a download finishes muxing, unshackle builds the final path from three pieces:
+When a download finishes, unshackle builds the final path from three pieces:
 
 ```text
 <output directory> / <folder template> / <filename template><extension>
@@ -15,7 +15,7 @@ When a download finishes muxing, unshackle builds the final path from three piec
 - **Output directory**: `directories.downloads` from your config, or whatever you pass to `-o/--output` on the command line for a single run.
 - **Folder template**: an optional per-title subfolder. TV episodes and music tracks are **always** placed in a folder; movies only get one if you define a `movies` folder template, or a single-string `folder` template that applies to all title kinds (see [Folder templates](#folder-templates)).
 - **Filename template**: the `output_template` for the title kind (movie, series, or song).
-- **Extension**: chosen by the muxer: `.mkv` for video, `.mka` for audio-only, `.mks` for subtitle-only.
+- **Extension**: chosen by the muxer for a movie or an episode: `.mkv` for video, `.mka` for audio-only, `.mks` for subtitle-only. A music track is not muxed. It keeps the container the service delivered, such as `.flac`, `.m4a`, or `.mp3`. Read [Music output files](#music-output-files).
 
 !!! example "A typical episode path"
     ```text
@@ -218,14 +218,52 @@ The per-kind folder keys are `movies`, `series`, `songs`, and `albums`. Any othe
 **Fallback behavior:**
 
 - A per-kind folder template wins if present; otherwise the single `folder` string is used; otherwise unshackle falls back to a built-in default.
-- Built-in defaults when no folder template is set: movies get no folder at all unless a `movies` folder template (or a single-string `folder` template) exists; series fall back to a folder *derived* from the `series` output template (stripping `{episode}`, `{episode_name}`, and collapsing `{season_episode}` down to `{season}`); music albums fall back to `{artist} - {album} ({year})`.
+- Built-in defaults when no folder template is set. Movies get no folder at all unless a `movies` folder template (or a single-string `folder` template) exists. Series fall back to a folder *derived* from the `series` output template (stripping `{episode}`, `{episode_name}`, and collapsing `{season_episode}` down to `{season}`). Music albums fall back to `{artist} - {album} ({year})`. If the song has no year, the folder name is only `{artist} - {album}`.
 
 !!! note "Movies are flat by default"
     Episodes and songs are always foldered. Movies are written directly into the output directory *unless* you define a `movies` folder template (or a single-string `folder` template, which folders every kind). Set one if you want each movie in its own directory.
 
+## Music output files
+
+A music track does not go through the muxer. unshackle moves the downloaded audio file to
+its final path. It keeps the container that the service delivered. A lossless download
+arrives as a `.flac` file. An AAC download arrives as a `.m4a` file. unshackle writes no
+`.mkv` file for music, and the [muxing options](#muxing-options) below do not apply.
+
+The `songs` output template names the file. The `albums` folder template names the folder
+around it.
+
+```text
+/home/user/Downloads/
+  └─ The Artist - The Album (2024)/
+     ├─ 01. First Track.flac
+     └─ 02. Second Track.flac
+```
+
+### Music metadata
+
+After the file moves, unshackle writes the metadata into the audio file. It uses Vorbis
+comments for FLAC and Ogg, ID3 frames for MP3, and MP4 atoms for M4A. The tags hold the
+track title, artist, album artist, track and disc numbers, date, genre, ISRC, UPC,
+copyright, and record label. When `tag` and `tag_group_name` are set, unshackle also writes the group
+name into a `GROUP` tag.
+
+Cover art is embedded when the service gives an artwork URL. unshackle downloads the image
+and puts it in the file.
+
+Lyrics are written when the service supplies them: a `LYRICS` Vorbis comment for FLAC, a
+`USLT` frame for MP3, and a `©lyr` atom for M4A. Ogg uses the same `LYRICS` field as
+FLAC. unshackle does not write synchronized lyrics (`SYLT`).
+
+A metadata fault does not stop the run. The file is already in place, so unshackle writes a
+warning and continues.
+
+!!! warning "`--no-mux` leaves music files untagged"
+    [`--no-mux`](cli-reference.md#output-muxing-files) moves each downloaded track file to the output path without the tagging step. A music file from such a run holds only the metadata that the service put in it.
+
 ## Muxing options
 
-Muxing (combining video, audio, subtitle, chapter and attachment tracks into a single Matroska file with `mkvmerge`) is configured under the `muxing` key.
+Muxing (combining video, audio, subtitle, chapter and attachment tracks into a single Matroska file with `mkvmerge`) is configured under the `muxing` key. Only movies and episodes are muxed. Read [Music output files](#music-output-files) for what a music download does instead.
 
 ```yaml title="unshackle.yaml"
 muxing:

@@ -268,7 +268,7 @@ class Config:
         Args:
             template_type: One of "movies", "series", or "songs".
         """
-        template = self.output_template[template_type]
+        template = self.output_template.get(template_type) or ""
         between_vars = re.findall(r"\}([^{]*)\{", template)
         separator_text = "".join(between_vars)
         dot_count = separator_text.count(".")

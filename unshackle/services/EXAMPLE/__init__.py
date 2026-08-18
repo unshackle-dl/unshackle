@@ -18,7 +18,7 @@ from unshackle.core.credential import Credential
 from unshackle.core.manifests import DASH  # also: HLS, ISM - see get_tracks() alternates
 from unshackle.core.search_result import SearchResult
 from unshackle.core.service import Service
-from unshackle.core.titles import Album, Episode, Movie, Movies, Series, Song, Title_T, Titles_T
+from unshackle.core.titles import Episode, Movie, Movies, Series, Title_T, Titles_T
 from unshackle.core.tracks import Attachment, Chapter, Chapters, Subtitle, Tracks, Video
 from unshackle.core.utilities import is_close_match
 
@@ -28,7 +28,8 @@ class EXAMPLE(Service):
     Reference service for domain.com - a deliberately exhaustive showcase of
     EVERYTHING an unshackle service can touch. It is NOT meant to run against a
     real API; it exists so a new service author can see one canonical example of
-    every framework feature in one place.
+    every framework feature in one place. Music is the one exception: it has its
+    own reference service, MUSIC_EXAMPLE.
 
     Version: 2.0.0
     Author: sp4rk.y
@@ -53,7 +54,7 @@ class EXAMPLE(Service):
         __init__              TrackRequest read/override, CDM-aware codec gating
         authenticate          cookies AND credentials, JWT decode, token cache+refresh
         search                SearchResult generator
-        get_titles            Movies / Series / Album (music) + data passthrough
+        get_titles            Movies / Series + data passthrough
         get_tracks            DASH variant fan-out (default) + HLS/ISM alternates
         fetch_dash_manifest  range override, HDR10+ flip, DV-composite, Atmos,
                               descriptive audio, channel fixups, cover-art attachment,
@@ -228,26 +229,6 @@ class EXAMPLE(Service):
         # is the single source of truth the manifest parsers use to flag is_original_lang.
         # This drives `-l best/all` original-audio selection and the filename language token.
         original_lang = Language.find(metadata["languages"][0])
-
-        # MUSIC - Album of Song titles. Showcases the music branch of the title system.
-        if program_type == "album":
-            return Album(
-                [
-                    Song(
-                        id_=tr["id"],
-                        service=self.__class__,
-                        name=tr["title"],
-                        artist=metadata["artist"],
-                        album=metadata["title"],
-                        track=tr["trackNumber"],
-                        disc=tr.get("discNumber", 1),
-                        year=metadata["releaseYear"],
-                        language=original_lang,
-                        data=tr,
-                    )
-                    for tr in metadata["tracks"]
-                ]
-            )
 
         # MOVIE
         if self.movie or program_type == "movie":
@@ -497,7 +478,7 @@ class EXAMPLE(Service):
         self, *, challenge: bytes, title: Title_T, track: AnyTrack
     ) -> Optional[Union[bytes, str, dict]]:
         # DASH org.w3.clearkey: `challenge` is the W3C JSON license request; return the
-        # JWK Set response. Omit this method entirely when the manifest carries a Laurl —
+        # JWK Set response. Omit this method entirely when the manifest carries a Laurl:
         # the framework then POSTs the challenge there with no service code at all.
         license_url = self.config["endpoints"].get("clearkey_license")
         if not license_url:

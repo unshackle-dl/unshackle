@@ -141,10 +141,15 @@ release fields instead of the season and episode ones. `{season}`, `{episode}` a
 | `{album}` | Album name |
 | `{track_number}` `{disc}` | Zero padded. `{disc}` is empty on a single-disc release |
 | `{track_total}` `{disc_total}` | Zero padded totals, empty when the service did not give them |
-| `{isrc}` `{upc}` `{label}` `{genre}` `{release_type}` `{explicit}` | As the service reported them, empty when absent |
+| `{isrc}` `{upc}` `{label}` `{genre}` | As the service reported them, empty when absent |
+| `{release_type}` | `album`, `single`, `ep`, and so on. A service that reports nothing gives `album` |
+| `{explicit}` | The word `Explicit` when the track is flagged, otherwise empty |
 
 In a `file` hook `{title}` is the track name. See [Modes](#modes) for what an album hook
 puts in `{title}`.
+
+`{year}` is empty when the service gives the release no year. `{ext}` is the container the
+track arrived in, such as `.flac`, because a music download is not muxed.
 
 ### Tagging IDs { #tagging-ids }
 
@@ -191,9 +196,10 @@ subs = [p for p in sys.argv[i].removeprefix("--subs=").split("\n") if p]
     about whether the season is complete on disk. Downloading a single episode fires the
     hook for that season as soon as the episode lands.
 
-    A title that fails takes its group with it. If one episode of S01 fails, the S01 hook
-    does not fire at all, because the run never finished everything it queued for that
-    season.
+    A title that fails stops the whole run. unshackle dispatches the `failure` hook for
+    that title and then returns. It downloads no further title, and no `season` or `run`
+    hook fires after that point. This applies to every title type. If one episode of S01
+    fails, the S01 hook does not fire at all.
 
 The hook is keyed to the folder, not to the season, so one season landing in several
 folders (`-q 1080,720` with a quality-dependent folder template) fires it once per folder,
@@ -218,11 +224,17 @@ In a `file` hook `{title}` and `{title_raw}` are the track name. In an album hoo
 the album name, and the per-track variables `{track_number}`, `{disc}` and `{isrc}` are
 empty, in the same way that `{episode}` is empty in a season hook.
 
+An album hook obeys the same rule as a season hook. It fires when the last track **this run
+queued** for that album lands. This does not mean that the album is complete on disk. A
+one-track download fires the album hook as soon as that track lands. If a track fails, the
+run stops there, so the album hook never fires, in the same way as an episode and its
+season.
+
 ## Events { #events }
 
 `success` runs after the file has moved to its final path. `failure` runs when the download
-fails, with `{filepath}` empty and `{error}` set. A music `failure` hook describes the
-release rather than a track, because the whole album stops when one track fails.
+fails, with `{filepath}` empty and `{error}` set. Each track of an album is its own title.
+A music `failure` hook therefore describes the track that failed, not the release.
 
 !!! warning "`failure` only fires in `file` mode"
     A `failure` entry with `mode: season` or `mode: run` never runs. Leave `mode` at its

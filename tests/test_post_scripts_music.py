@@ -1,9 +1,10 @@
 """Music post-script hooks, which no live service was available to test against.
 
-Music returns from ``dl.result`` before the title loop, so its hooks are dispatched inside
-the music pipeline. These check the pieces that pipeline feeds them: that a Song builds a
-usable context, that an Album groups the way a season does, and that the album and run
-contexts blank the file-level variables.
+A Song runs through the same title loop as an Episode, so its hooks come from the same
+two functions: ``build_context`` for a file and ``season_context`` for the release folder.
+These check what those two feed a script: that a Song builds a usable context, that an
+album groups the way a season does, and that the album hook describes the album rather
+than whichever track landed last.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from unshackle.core.utils.post_scripts import build_context, dispatch, substitute, tokenize
+from unshackle.core.utils.post_scripts import build_context, dispatch, season_context, substitute, tokenize
 
 
 class FakeSong(SimpleNamespace):
@@ -33,26 +34,43 @@ class FakeSong(SimpleNamespace):
 
 def song(**kwargs):
     defaults = dict(
-        name="Blue Monday", artist="New Order", album="Power, Corruption & Lies", track=4, year=1983, id="s1"
+        name="Example Track",
+        artist="Example Artist",
+        album="Example Album, Live & Remastered",
+        track=4,
+        year=1983,
+        id="s1",
     )
     return FakeSong(**{**defaults, "id": "s1", **kwargs})
+
+
+class FakeEpisode(SimpleNamespace):
+    """An Episode as the hook sees it: a show title, a season, and a number."""
+
+    def build_template_context(self, media_info, show_service=True):
+        return {"title": self.title, "season": f"{self.season:02}", "audio": "EAC3", "video": "H.265"}
+
+
+def episode(**kwargs):
+    defaults = dict(title="Some Show", season=1, number=5, name="Pilot", year=2024, id="e1")
+    return FakeEpisode(**{**defaults, **kwargs})
 
 
 def test_song_context_has_music_fields_and_blank_episode_fields():
     context = build_context(
         song(),
         media_info=object(),
-        filepath=Path("/dl/New Order/04. Blue Monday.flac"),
+        filepath=Path("/dl/Example Artist/04. Example Track.flac"),
         service="EXAMPLE",
     )
-    assert context["title"] == "Blue Monday"
-    assert context["artist"] == "New Order"
-    assert context["album"] == "Power, Corruption & Lies"
+    assert context["title"] == "Example Track"
+    assert context["artist"] == "Example Artist"
+    assert context["album"] == "Example Album, Live & Remastered"
     assert context["track_number"] == "04"
     assert context["service"] == "EXAMPLE"
-    assert context["filename"] == "04. Blue Monday.flac"
+    assert context["filename"] == "04. Example Track.flac"
     assert context["ext"] == ".flac"
-    assert context["folder"] == str(Path("/dl/New Order"))
+    assert context["folder"] == str(Path("/dl/Example Artist"))
     assert context["season"] == ""
     assert context["episode"] == ""
 
@@ -60,24 +78,33 @@ def test_song_context_has_music_fields_and_blank_episode_fields():
 def test_song_context_survives_without_media_info():
     """The failure path and any pre-mux dispatch pass no MediaInfo."""
     context = build_context(song(), None, service="EXAMPLE", error="HTTPError: 403")
-    assert context["title"] == "Blue Monday"
+    assert context["title"] == "Example Track"
     assert context["error"] == "HTTPError: 403"
     assert context["filepath"] == ""
 
 
 def test_album_grouping_matches_the_season_grouping_rule():
     """post_script_group's music branch: albums group by (album artist, album)."""
-    from unshackle.commands.dl import dl  # noqa: F401 - import guard, the grouping is inlined in result()
+    from unshackle.commands.dl import post_script_group
+    from unshackle.core.titles.music import Song
 
-    def group(candidate):
-        artist = getattr(candidate, "album_artist", None) or getattr(candidate, "artist", "")
-        return ("album", artist, getattr(candidate, "album", ""))
+    def real_song(**kwargs):
+        defaults = dict(
+            id_="track-0001",
+            service=type("DummyService", (), {}),
+            name="Example Track",
+            artist="Example Artist",
+            album="Example Album, Live & Remastered",
+            track=4,
+        )
+        return Song(**{**defaults, **kwargs})
 
-    a = song(track=1)
-    b = song(track=2)
-    c = song(album="Technique")
-    assert group(a) == group(b)
-    assert group(a) != group(c)
+    a = real_song(track=1, id_="track-0002")
+    b = real_song(track=2, id_="track-0003")
+    c = real_song(album="Technique", id_="track-0004")
+    assert post_script_group(a) == post_script_group(b)
+    assert post_script_group(a) != post_script_group(c)
+    assert post_script_group(a)[0] == "album"
 
 
 @pytest.mark.parametrize("mode", ["season", "run"])
@@ -86,25 +113,24 @@ def test_album_and_run_contexts_blank_the_file_variables(mode):
     base = build_context(
         song(),
         media_info=object(),
-        filepath=Path("/dl/New Order/04. Blue Monday.flac"),
+        filepath=Path("/dl/Example Artist/04. Example Track.flac"),
         service="EXAMPLE",
     )
-    context = dict(base)
+    folder = Path("/dl/Example Artist")
     if mode == "season":
-        for key in ("filepath", "filename", "ext", "sidecars", "episode", "episode_name"):
-            context[key] = ""
+        context = season_context(base, folder)
     else:
         context = dict.fromkeys(base, "")
-    context["folder"] = "/dl/New Order"
+        context["folder"] = str(folder)
 
     assert context["filepath"] == ""
     assert context["sidecars"] == ""
-    assert context["folder"] == "/dl/New Order"
+    assert context["folder"] == str(folder)
     if mode == "run":
         assert context["title"] == ""
         assert set(context) == set(base)
     else:
-        assert context["album"] == "Power, Corruption & Lies"
+        assert context["album"] == "Example Album, Live & Remastered"
 
 
 def test_a_music_hook_command_builds_the_argv_a_script_would_get(monkeypatch, tmp_path):
@@ -126,7 +152,7 @@ def test_a_music_hook_command_builds_the_argv_a_script_would_get(monkeypatch, tm
     context = build_context(
         song(),
         media_info=object(),
-        filepath=Path("/dl/New Order/04. Blue Monday.flac"),
+        filepath=Path("/dl/Example Artist/04. Example Track.flac"),
         service="EXAMPLE",
     )
     dispatch("success", "file", context)
@@ -139,93 +165,100 @@ def test_a_music_hook_command_builds_the_argv_a_script_would_get(monkeypatch, tm
         time.sleep(0.05)
     assert marker.exists(), "the hook process never ran"
     argv = marker.read_text().splitlines()
-    assert "--album=Power, Corruption & Lies" in argv
-    assert "--artist=New Order" in argv
+    assert "--album=Example Album, Live & Remastered" in argv
+    assert "--artist=Example Artist" in argv
     assert "--track=04" in argv
-    assert f"--file={Path('/dl/New Order/04. Blue Monday.flac')}" in argv
+    assert f"--file={Path('/dl/Example Artist/04. Example Track.flac')}" in argv
 
 
-def test_album_hook_mapping_is_bound_before_any_early_branch():
-    """--skip-dl skips the final-move block; the album hook still runs after it.
+def test_season_context_blanks_the_file_variables_and_sets_the_folder():
+    """An album hook describes the release folder, so no track's file may leak into it."""
+    folder = Path("/dl/Example Artist - Example Album, Live & Remastered (1983)")
+    context = build_context(
+        song(),
+        media_info=object(),
+        filepath=folder / "04. Example Track.flac",
+        sidecars=[folder / "04. Example Track.lrc"],
+        service="EXAMPLE",
+    )
 
-    Guards a NameError: the mapping used to be created inside that block, so a music
-    download with --skip-dl reached the album hook with an unbound name.
-    """
-    import inspect
+    album = season_context(context, folder)
 
-    from unshackle.commands.dl import dl
-
-    source = inspect.getsource(dl.result)
-    body = source[source.index("def download_music_title") :]
-    bind = body.index("album_post_script: dict")
-    for use in ("album_post_script[final_path.parent]", "album_post_script.items()"):
-        assert bind < body.index(use), f"{use} can run before the mapping is bound"
-    line = body[:bind].rsplit("\n", 1)[-1]
-    assert len(line) == 16, f"bound at indent {len(line)}, expected the function body level"
+    for key in ("filepath", "filename", "ext", "sidecars", "episode", "episode_name"):
+        assert album[key] == "", f"{key} still describes a file"
+    assert album["folder"] == str(folder)
+    assert album["service"] == "EXAMPLE"
+    assert context["filepath"] != "", "the file context handed in must not be mutated"
 
 
-def test_album_hook_identifies_the_album_not_the_last_track():
-    """A Song's ``{title}`` is the song, so blanking only the video fields is not enough.
+def test_season_context_identifies_the_album_not_the_last_track():
+    """A Song's ``{title}`` is the song, so blanking only the file fields is not enough.
 
     Guards a regression where an album hook was handed whichever track landed last:
     ``{title}`` was a song name and ``{track_number}``/``{isrc}`` were that track's.
     """
-    from unshackle.commands.dl import dl
-
+    folder = Path("/dl/Example Artist - Example Album (1983)")
     context = build_context(
-        song(track=11, isrc="GBAAA8300001"),
+        song(track=11),
         media_info=object(),
-        filepath=Path("/dl/New Order - PCL (1983)/11. Blue Monday.flac"),
+        filepath=folder / "11. Example Track.flac",
         service="EXAMPLE",
     )
-    context.setdefault("isrc", "GBAAA8300001")
+    context["isrc"] = "ZZABC2400001"
+    context["disc"] = "02"
 
-    album = dict(context)
-    for key in ("filepath", "filename", "ext", "sidecars", "episode", "episode_name"):
-        album[key] = ""
-    for key in ("track_number", "disc", "isrc"):
-        if key in album:
-            album[key] = ""
-    album["title"] = album["title_raw"] = album.get("album", "")
+    album = season_context(context, folder)
 
-    assert album["title"] == "Power, Corruption & Lies"
-    assert album["title_raw"] == "Power, Corruption & Lies"
+    assert album["title"] == "Example Album, Live & Remastered"
+    assert album["title_raw"] == "Example Album, Live & Remastered"
     assert album["track_number"] == ""
+    assert album["disc"] == ""
     assert album["isrc"] == ""
-    assert album["artist"] == "New Order"  # album-level, kept
-
-    import inspect
-
-    body = inspect.getsource(dl.result)
-    body = body[body.index("for folder, context in album_post_script.items()") :][:900]
-    for key in ("track_number", "disc", "isrc"):
-        assert f'"{key}"' in body, f"the album hook no longer blanks {key}"
-    assert 'album_context["title"]' in body
+    assert album["artist"] == "Example Artist"  # album-level, kept
+    assert album["year"] == "1983"  # album-level, kept
 
 
-def test_a_music_download_failure_dispatches_a_failure_hook():
-    """Parity with the video worker, which dispatches failure/file when it raises."""
-    import inspect
+def test_season_context_leaves_a_non_music_context_untouched():
+    """The music branch is gated on ``{album}``; a season hook must not lose its own keys."""
+    folder = Path("/dl/Some Show/Season 1")
+    context = build_context(
+        episode(),
+        media_info=object(),
+        filepath=folder / "Some Show S01E05 Pilot.mkv",
+        service="EXAMPLE",
+    )
+    context["disc"] = "sentinel"  # only the music branch clears this
 
-    from unshackle.commands.dl import dl
+    season = season_context(context, folder)
 
-    body = inspect.getsource(dl.result)
-    body = body[body.index("def download_music_title") :]
-    assert body.count("music_failure(") == 3, "expected one definition and both failure exits"
-    assert body.index("def music_failure") < body.index("music_failure(e)")
-    assert "music_failure(error)" in body
+    assert season["title"] == "Some Show"
+    assert season["title_raw"] == "Some Show"
+    assert season["season"] == "1"
+    assert season["disc"] == "sentinel"
+    assert season["episode"] == ""
+    assert season["episode_name"] == ""
+    assert season["folder"] == str(folder)
 
-    release = SimpleNamespace(title="Power, Corruption & Lies", artist="New Order", year=1983)
-    context = build_context(release, service="EXAMPLE", error="HTTPError: 403")
-    assert context["title"] == "Power, Corruption & Lies"
+
+def test_a_failed_track_gets_a_track_scoped_failure_context():
+    """Failure is per-track, like every other title type, and does not describe the album.
+
+    The real dispatch passes no MediaInfo and no filepath, so the context is whatever the
+    Song itself carries, and it is never run through ``season_context``.
+    """
+    context = build_context(song(track=11), None, service="EXAMPLE", error="HTTPError: 403")
+
+    assert context["title"] == "Example Track"
+    assert context["title_raw"] == "Example Track"
     assert context["error"] == "HTTPError: 403"
     assert context["filepath"] == ""
+    assert context["season"] == ""
 
 
 def test_an_album_name_with_a_comma_stays_one_argument():
-    """'Power, Corruption & Lies' must not split, which is the whole tokenize-first point."""
-    argv = substitute(tokenize("upload.py --album={album}"), {"album": "Power, Corruption & Lies"})
-    assert argv == ["upload.py", "--album=Power, Corruption & Lies"]
+    """'Example Album, Live & Remastered' must not split, which is the whole tokenize-first point."""
+    argv = substitute(tokenize("upload.py --album={album}"), {"album": "Example Album, Live & Remastered"})
+    assert argv == ["upload.py", "--album=Example Album, Live & Remastered"]
 
 
 if __name__ == "__main__":

@@ -33,7 +33,8 @@ Track.download            →  fetch + merge segments (core-driven)
       │
 DRM license + decrypt     →  service license hooks → CDM → decrypt tool
       │
-Tracks.mux                →  mkvmerge → tagged .mkv
+Tracks.mux                →  mkvmerge → tagged .mkv (movie / episode)
+      │                      a Song skips the muxer and keeps its own container
 ```
 
 1. **`get_titles()`** returns a `Titles` collection: the movies, episodes, or songs
@@ -173,11 +174,45 @@ Each subclass adds its own required fields on top of `id_` and `service`:
 === "Song"
 
     ```python
-    Song(id_, service, name, artist, album, track, disc, year,
-         language=None, data=None)
+    Song(id_, service, name, artist, album, track, disc=1, year=None,
+         language=None, data=None, ...)
     ```
 
-    `name`, `artist`, `album`, `track`, `disc`, and `year` are all required and validated.
+    `name`, `artist`, `album`, and `track` are required and validated. `disc` defaults to
+    1, and `year` is optional. A single therefore needs no `disc`, and an undated release
+    needs no `year`.
+
+    A `Song` also takes optional metadata keywords that the tagger and the naming templates
+    read: `album_artist`, `release_type`, `total_tracks`, `total_discs`, `genre`,
+    `explicit`, `isrc`, `upc`, `copyright`, `label`, `lyrics`, and `artwork_url`. Read the
+    class for the current list.
+
+    The tagger also falls back to `Song.data` for fields the constructor did not get, such
+    as the composer or a full release date. It reads the top level of that dict and a
+    nested `metadata` sub-dict, with the nested keys winning, so either shape works.
+
+    From `get_tracks()`, a music service gives **one `Audio` track for each codec and
+    bitrate it offers for a `Song`**. The framework then selects one with its usual audio
+    options, `-a`/`--acodec` and `--abitrate`, and its usual audio sorting. A movie or an
+    episode uses the same options. `-q`/`--quality` sets the video height only and does not
+    apply to music. `Audio` has no `bit_depth` or `sample_rate` field. Therefore `bitrate`
+    separates a hi-res FLAC from a CD FLAC, and the audio sort already ranks it.
+
+    A `Song` is an ordinary `Title` on the one generic download path. unshackle has no
+    music-specific service API and no separate music download loop. The
+    `GROUP_AUDIO_DOWNLOADS` flag, `get_music_track_options` and `get_music_collection_label`
+    no longer exist, and a music service does not need them.
+
+    !!! warning "Restore the container in `on_track_downloaded`"
+        Every track downloads to a temp file named `Audio_<id>.mp4` whatever it holds, and
+        the final move keeps that suffix. A `Song` skips the muxer, so its download **is**
+        the delivered file, and the tagger picks its metadata format from the suffix.
+        Rename the track path to the true container in `on_track_downloaded`, or a FLAC
+        lands as an untaggable `.mp4`. The event fires twice, once before decryption and
+        once at the end, so wait until `track.drm` is clear before you rename.
+
+    The **MUSIC_EXAMPLE** reference service, at `unshackle/services/MUSIC_EXAMPLE/`, shows
+    the full music surface.
 
 ### Title remapping
 
@@ -237,8 +272,8 @@ closed-caption descriptors. The relevant enums:
   [Dolby Vision hybrid](#dolby-vision-and-hybrid)).
 
 !!! note "Bitrate units"
-    Both `Video` and `Audio` store `bitrate` in **bytes per second** (rounded up), even
-    though the string form displays kb/s.
+    Both `Video` and `Audio` store `bitrate` in **bits per second** (rounded up). The
+    string form displays kb/s, and `--vbitrate` and `--abitrate` match on kb/s.
 
 ### `Audio`
 

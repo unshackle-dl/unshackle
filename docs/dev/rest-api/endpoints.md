@@ -223,6 +223,13 @@ Service-specific CLI options may also be passed as additional keys.
 
 Each serialized title carries `type` (`"episode"`, `"movie"`, or `"other"`), `name`, `id`, `language`, `description`, `date`, and `cover_url`. Episodes and movies add `year`; episodes additionally add `series_title`, `season`, and `number`.
 
+!!! warning "A song serializes as `"other"`"
+    A music track has no `type` of its own. It is sent as `"other"`, and the response
+    carries none of its music fields: no artist, no album, no track or disc number, and no
+    `year`. `name` holds the track name. To read the disc and track numbers of a release,
+    run the CLI with `--list-titles`. Selecting music tracks over the API still works,
+    through the `wanted` parameter.
+
 These keys are sent only when the title carries them, so a title without them serializes exactly as before:
 
 | Key | Type | On | Meaning |
@@ -261,7 +268,7 @@ List the video, audio, and subtitle tracks for a title. For series, you can scop
 | --- | --- | --- | --- |
 | `service` | string | yes | Service tag. |
 | `title_id` | string | yes | Title identifier. |
-| `wanted` | string | no | Episode/season range (e.g. `"S01E01-S01E03"`). |
+| `wanted` | string / string[] | no | Episode/season range (e.g. `"S01E01-S01E03"`), or a music track selector (e.g. `"1-5"`, `"1,3,7"`, or `"2x3"` for disc 2 track 3). A list of selectors is accepted too. |
 | `season` | int/string | no | Season number (combined with `episode`). |
 | `episode` | int/string | no | Episode number (combined with `season`). |
 | `part` | int/string | no | Part index of a split episode (combined with `season` and `episode`). |
@@ -378,7 +385,7 @@ Create a download job. Requires `service` and `title_id`; every other field is a
 | `range` | string[] | `["SDR"]` | Dynamic range(s). |
 | `channels` | number | `null` | Audio channel count. |
 | `no_atmos` | boolean | `false` | Exclude Atmos tracks. |
-| `wanted` | string[] | `[]` | Episode/season selectors. Accepts the part form, `"S01E01.2"`, and the air-date form, `"2026-08-11"` or `"2026-08-01:2026-08-31"`. |
+| `wanted` | string / string[] | `[]` | Episode/season selectors, as a list or as one comma-separated string. Accepts the part form, `"S01E01.2"`, and the air-date form, `"2026-08-11"` or `"2026-08-01:2026-08-31"`. For a music release, a selector is a track number, `"1-5"` or `"1,3,7"`, or `"{disc}x{track}"` such as `"2x3"`. |
 | `latest_episode` | boolean | `false` | Only the newest episode. |
 | `lang` / `v_lang` / `a_lang` / `s_lang` | string[] | `["orig"]` / `[]` / `[]` / `["all"]` | Language filters. |
 | `require_subs` | string[] | `[]` | Required subtitle languages. |

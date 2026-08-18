@@ -4,6 +4,7 @@ from typing import Any, Iterable, Optional, Union
 
 from langcodes import Language
 from pymediainfo import MediaInfo
+from rich.console import RenderableType
 from rich.tree import Tree
 from sortedcontainers import SortedKeyList
 
@@ -90,7 +91,7 @@ class Movies(SortedKeyList, ABC):
         # TODO: Assumes there's only one movie
         return self[0].name + (f" ({self[0].year})" if self[0].year else "")
 
-    def tree(self, verbose: bool = False) -> Tree:
+    def tree(self, verbose: bool = False) -> RenderableType:
         num_movies = len(self)
         tree = Tree(f"{num_movies} Movie{['s', ''][num_movies == 1]}", guide_style="bright_black")
         if verbose:

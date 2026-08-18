@@ -232,6 +232,27 @@ unshackle dl -a EC3,AAC EXAMPLE 81234567
 unshackle dl -c 5.1 --noatmos EXAMPLE 0ABC123
 ```
 
+### Music quality
+
+A music service gives one `Audio` track for each codec and bitrate it offers for a song.
+The audio options above choose between them: `-a` picks the codec and `-ab` or `-ab-range`
+picks the bitrate. If you set neither, unshackle takes the best track.
+
+`-q` / `--quality` is a video height. It has no effect on a music download.
+
+```shell title="Take the lossless track"
+unshackle dl -a FLAC EXAMPLE 81234567
+```
+
+```shell title="Take the lossy track at 320 kb/s"
+unshackle dl -a AAC -ab 320 EXAMPLE 81234567
+```
+
+!!! tip "Two FLAC tracks in one release"
+    A service can offer both a CD FLAC and a hi-res FLAC. The two have the same codec, so
+    the bitrate is what separates them. Run `--list` to read the bitrates, then give `-ab`
+    the one you want.
+
 ## Languages
 
 ### Video and audio language
@@ -381,15 +402,16 @@ unshackle dl --sub-format srt EXAMPLE 81234567
     automatically. This behaviour is governed by the `subtitle.strip_sdh` config option
     (default on).
 
-## Selecting episodes
+## Selecting episodes and tracks
 
-For series, several flags control which episodes are downloaded. By default, **all**
-episodes are downloaded.
+For series, several flags control which episodes are downloaded. The same flags select the
+tracks of a music release. By default, **all** episodes and **all** tracks are downloaded.
 
 ### Wanted ranges
 
-`-w` / `--wanted` accepts flexible season/episode ranges, comma-separated. Prefix a token
-with `-` to exclude it.
+`-w` / `--wanted` accepts season and episode ranges, comma-separated. Prefix a token
+with `-` to exclude it. For a music release, the same option takes track numbers. Read
+[music tracks](#music-tracks) below.
 
 === "Whole seasons"
 
@@ -439,6 +461,49 @@ with `-` to exclude it.
     # August, but not the 15th
     unshackle dl -w 2026-08-01:2026-08-31,-2026-08-15 EXAMPLE 81234567
     ```
+
+### Music tracks
+
+`-w` selects the tracks of an album, EP, single, or playlist. Give a track by its number.
+A release with more than one disc uses the `{disc}x{track}` form. A number on its own is a
+track on disc 1, which is the number the track list shows for a single-disc release.
+
+=== "Tracks"
+
+    ```shell
+    # Track 3
+    unshackle dl -w 3 EXAMPLE 81234567
+
+    # Tracks 1 through 5
+    unshackle dl -w 1-5 EXAMPLE 81234567
+
+    # Tracks 1, 3 and 7
+    unshackle dl -w 1,3,7 EXAMPLE 81234567
+    ```
+
+=== "More than one disc"
+
+    ```shell
+    # Disc 2, track 3
+    unshackle dl -w 2x3 EXAMPLE 81234567
+
+    # Disc 2, tracks 1 through 4
+    unshackle dl -w 2x1-2x4 EXAMPLE 81234567
+
+    # Disc 1 track 3, through disc 2 track 2
+    unshackle dl -w 1x3-2x2 EXAMPLE 81234567
+    ```
+
+=== "Exclusions"
+
+    ```shell
+    # Tracks 1 through 8, but not track 4
+    unshackle dl -w 1-8,-4 EXAMPLE 81234567
+    ```
+
+!!! tip "Read the track list first"
+    `--list-titles` prints the release with its disc and track numbers, so you can see
+    which numbers to give `-w`.
 
 ### Daily and date-based content
 
@@ -570,8 +635,8 @@ unshackle dl -o ~/Videos/incoming EXAMPLE 81234567
 
 ### Muxing behaviour
 
-By default, tracks are muxed into a single Matroska (`.mkv`) file with `mkvmerge`. These
-flags change how the output is assembled:
+By default, the tracks of a movie or an episode are muxed into a single Matroska (`.mkv`)
+file with `mkvmerge`. These flags change how the output is assembled:
 
 | Flag | Behaviour | Default source |
 | --- | --- | --- |
@@ -579,12 +644,17 @@ flags change how the output is assembled:
 | `--split-audio` | Write a separate output file per audio codec instead of merging all audio. | config `muxing.merge_audio` (on) |
 | `--merge-video` | Mux video tracks that share a height, range, and codec into one file, so only language varies inside a file. | config `muxing.merge_video` (off) |
 
+!!! note "Music is never muxed"
+    A music track skips the muxer. unshackle keeps the container that the service
+    delivered, such as `.flac`, `.m4a`, or `.mp3`, and writes the metadata into that file.
+    Read [Music output files](output-and-naming.md#music-output-files).
+
 ### After the download
 
 `--postscript "<command>"` runs your own command once per output file, with unshackle's
 metadata substituted into `{variable}` placeholders. It is repeatable, and it replaces the
-`post_scripts` config for that run. Nothing runs under `--no-mux`, since no output is
-written.
+`post_scripts` config for that run. No `success` hook runs under `--no-mux`, because that
+run writes no muxed output. A `failure` hook still runs if the download itself fails.
 
 ```shell title="Hand each finished file to an uploader"
 unshackle dl --postscript "python /opt/upload.py {filepath} --service={service}" EXAMPLE 81234567
@@ -820,7 +890,7 @@ authoritative list.
 | `--forced-subs` | `-fs` | Include forced subtitles. |
 | `--forced-s-lang` | `-fsl` | Forced subtitle language(s); implies `-fs`. `-` excludes. |
 | `--sub-format` | | Output subtitle format. |
-| `--wanted` | `-w` | Episode/season range, or an air date. |
+| `--wanted` | `-w` | Episode/season range, an air date, or a music track (`1-5`, `2x3`). |
 | `--daily` | | Fill missing air dates from TVDB during `--enrich`. |
 | `--select-titles` | | Interactively pick episodes or films. |
 | `--latest-episode` | | Only the newest episode. |

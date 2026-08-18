@@ -1,9 +1,10 @@
 import re
 from abc import ABC
-from typing import Any, Iterable, Optional, Union
+from typing import Any, Collection, Iterable, Optional, Union
 
 from langcodes import Language
 from pymediainfo import MediaInfo
+from rich.console import RenderableType
 from sortedcontainers import SortedKeyList
 
 from unshackle.core.config import config
@@ -21,8 +22,8 @@ class Song(Title):
         artist: str,
         album: str,
         track: int,
-        disc: int,
-        year: int,
+        disc: int = 1,
+        year: Optional[int] = None,
         language: Optional[Union[str, Language]] = None,
         data: Optional[Any] = None,
         album_artist: Optional[str] = None,
@@ -60,14 +61,10 @@ class Song(Title):
         if not isinstance(track, int):
             raise TypeError(f"Expected track to be an int, not {track!r}")
 
-        if not disc:
-            raise ValueError("Song disc must be provided")
         if not isinstance(disc, int):
             raise TypeError(f"Expected disc to be an int, not {disc!r}")
 
-        if not year:
-            raise ValueError("Song year must be provided")
-        if not isinstance(year, int):
+        if year is not None and not isinstance(year, int):
             raise TypeError(f"Expected year to be an int, not {year!r}")
         if album_artist is not None and not isinstance(album_artist, str):
             raise TypeError(f"Expected album_artist to be a str, not {album_artist!r}")
@@ -111,7 +108,7 @@ class Song(Title):
             raise ValueError(f"Song track cannot be {track}")
         if disc <= 0:
             raise ValueError(f"Song disc cannot be {disc}")
-        if year <= 0:
+        if year is not None and year <= 0:
             raise ValueError(f"Song year cannot be {year}")
         if not release_type:
             raise ValueError("Song release_type must be provided")
@@ -141,8 +138,17 @@ class Song(Title):
 
     def __str__(self) -> str:
         return "{artist} - {album} ({year}) / {track:02}. {name}".format(
-            artist=self.artist, album=self.album, year=self.year, track=self.track, name=self.name
+            artist=self.artist, album=self.album, year=self.year or "?", track=self.track, name=self.name
         ).strip()
+
+    def matches_wanted(self, wanted: Collection[str]) -> bool:
+        """Whether a parsed ``-w`` key set selects this song.
+
+        A song shares the episode key space, its disc reading as the season and its track
+        as the episode, so ``-w 1-5`` takes tracks 1 to 5 and ``-w 2x3`` takes disc 2
+        track 3. A song has no parts and no air date, so it answers to one key only.
+        """
+        return f"{self.disc}x{self.track}" in wanted
 
     def build_template_context(self, media_info: MediaInfo, show_service: bool = True) -> dict:
         """Build template context dictionary from MediaInfo."""
@@ -262,10 +268,11 @@ class Music(SortedKeyList, ABC):
         year = self.year or first_song.year or "?"
         return f"{artist} - {title} ({year})"
 
-    def tree(self, verbose: bool = False) -> Any:
+    def tree(self, verbose: bool = False) -> RenderableType:
+        # verbose is the Titles_T contract; a release always renders its full tracklist
         from unshackle.core.music.renderer import MusicRenderer
 
-        return MusicRenderer().render(self, verbose=verbose)
+        return MusicRenderer().render(self)
 
 
 class Album(Music):

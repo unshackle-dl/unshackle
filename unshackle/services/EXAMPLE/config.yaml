@@ -1,5 +1,5 @@
 # Reference config for the EXAMPLE showcase service.
-# Access in code as self.config["endpoints"]["..."] — never hardcode URLs.
+# Access in code as self.config["endpoints"]["..."]; never hardcode URLs in code.
 
 endpoints:
   login: https://api.domain.com/v1/login

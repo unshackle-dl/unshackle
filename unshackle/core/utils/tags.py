@@ -5,11 +5,12 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from typing import Optional, Union
+from typing import Any, Optional, Union
 from xml.sax.saxutils import escape
 
 from unshackle.core import binaries
 from unshackle.core.config import config
+from unshackle.core.music.tagger import write_music_metadata
 from unshackle.core.providers import (
     ExternalIds,
     fuzzy_match,
@@ -18,6 +19,7 @@ from unshackle.core.providers import (
 )
 from unshackle.core.titles.episode import Episode
 from unshackle.core.titles.movie import Movie
+from unshackle.core.titles.music import Song
 from unshackle.core.titles.title import Title
 from unshackle.core.utils.subprocess import log_tool_run
 
@@ -87,8 +89,20 @@ def tag_file(
     tvdb_id: Optional[int] = None,
     anilist_id: Optional[Union[int, str]] = None,
     anime: bool = False,
+    session: Any = None,
 ) -> None:
     log.debug("Tagging file %s with title %r", path, title)
+
+    if isinstance(title, Song):
+        try:
+            music_result = write_music_metadata(path, title, session=session)
+        except Exception as e:  # the file already moved; a tagging fault must warn, not abort the run
+            log.warning("Music tagging failed for %s: %s", path.name, e)
+            return
+        if music_result.skipped and music_result.reason:
+            log.warning("Music metadata skipped for %s: %s", path.name, music_result.reason)
+        return
+
     custom_tags: dict[str, str] = {}
 
     if config.tag and config.tag_group_name:

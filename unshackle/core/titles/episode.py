@@ -6,6 +6,7 @@ from typing import Any, Collection, Iterable, Optional, Union
 
 from langcodes import Language
 from pymediainfo import MediaInfo
+from rich.console import RenderableType
 from rich.tree import Tree
 from sortedcontainers import SortedKeyList
 
@@ -272,7 +273,7 @@ class Series(SortedKeyList, ABC):
             return super().__str__()
         return self[0].title + (f" ({self[0].year})" if self[0].year else "")
 
-    def tree(self, verbose: bool = False) -> Tree:
+    def tree(self, verbose: bool = False) -> RenderableType:
         seasons = Counter(x.season for x in self)
         num_seasons = len(seasons)
         sum(seasons.values())

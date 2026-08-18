@@ -164,6 +164,11 @@ class SeasonRange(click.ParamType):
     MAX_DATE_SPAN = 1000
 
     DATE_TOKEN = re.compile(r"^(?P<left>\d{4}-\d{2}-\d{2})(:(?P<right>\d{4}-\d{2}-\d{2}))?$")
+    TOKEN = re.compile(
+        r"^(?:S(?P<season>\d+)(E(?P<episode>\d+)(\.(?P<part>\d+))?)?"
+        r"|((?P<disc>\d+)x)?(?P<track>\d+))$",
+        re.IGNORECASE,
+    )
 
     def parse_date_token(self, token: str, match: re.Match) -> list[str]:
         """Expand an ISO date token or ':'-separated date range into ISO day keys."""
@@ -179,6 +184,25 @@ class SeasonRange(click.ParamType):
             self.fail(f"Invalid range, a date range cannot span more than {self.MAX_DATE_SPAN} days: {token}")
         return [(left + timedelta(days=i)).isoformat() for i in range(span)]
 
+    def token_sides(self, match: re.Match) -> tuple[int, Optional[int], Optional[int]]:
+        """Read one side of a token as (season, episode, part), episode/part None when absent.
+
+        A music disc x track token shares this key space, disc reading as the season and
+        track as the episode. An omitted disc is disc 1, not every disc: a bare number is
+        the number the tracklist shows for a single-disc release, and widening it would
+        silently add tracks on a multi-disc release.
+        """
+        if match.group("season") is not None:
+            episode = match.group("episode")
+            part = match.group("part")
+            return (
+                int(match.group("season")),
+                int(episode) if episode is not None else None,
+                int(part) if part is not None else None,
+            )
+        disc = match.group("disc")
+        return int(disc) if disc is not None else 1, int(match.group("track")), None
+
     def parse_tokens(self, *tokens: str) -> list[str]:
         """
         Parse multiple tokens or ranged tokens as '{s}x{e}' strings.
@@ -190,6 +214,10 @@ class SeasonRange(click.ParamType):
 
         Dated content is addressed by ISO air date. A date range uses ':' only, because
         a date's own '-' separators are not a range separator.
+
+        A music release uses the same keys, its disc reading as the season and its track
+        as the episode. A track is addressed as '{d}x{t}', or by its number alone, which
+        is a track on disc 1.
 
         Supports exclusioning by putting a `-` before the token.
 
@@ -209,6 +237,10 @@ class SeasonRange(click.ParamType):
             ["2026-08-11"]
             >>> sr.parse_tokens("2026-08-01:2026-08-03", "-2026-08-02")
             ["2026-08-01", "2026-08-03"]
+            >>> sr.parse_tokens("3")
+            ["1x3"]
+            >>> sr.parse_tokens("1-3", "2x1")
+            ["1x1", "1x2", "1x3", "2x1"]
         """
         if len(tokens) == 0:
             return []
@@ -223,10 +255,7 @@ class SeasonRange(click.ParamType):
             if date_match:
                 (computed if not exclude else exclusions).extend(self.parse_date_token(token, date_match))
                 continue
-            parsed = [
-                re.match(r"^S(?P<season>\d+)(E(?P<episode>\d+)(\.(?P<part>\d+))?)?$", x, re.IGNORECASE)
-                for x in re.split(r"[:-]", token)
-            ]
+            parsed = [self.TOKEN.match(x) for x in re.split(r"[:-]", token)]
             if len(parsed) > 2:
                 self.fail(f"Invalid token, only a left and right range is acceptable: {token}")
             if len(parsed) == 1:
@@ -235,17 +264,10 @@ class SeasonRange(click.ParamType):
                 parsed.append(parsed[0])
             if any(x is None for x in parsed):
                 self.fail(f"Invalid token, syntax error occurred: {token}")
-            left, right = parsed[0], parsed[1]
-            from_season = int(left.group("season"))  # type: ignore[union-attr]
-            from_episode_raw = left.group("episode")  # type: ignore[union-attr]
-            from_episode = int(from_episode_raw) if from_episode_raw is not None else self.MIN_EPISODE
-            from_part_raw = left.group("part")  # type: ignore[union-attr]
-            from_part = int(from_part_raw) if from_part_raw is not None else None
-            to_season = int(right.group("season"))  # type: ignore[union-attr]
-            to_episode_raw = right.group("episode")  # type: ignore[union-attr]
-            to_episode = int(to_episode_raw) if to_episode_raw is not None else self.MAX_EPISODE
-            to_part_raw = right.group("part")  # type: ignore[union-attr]
-            to_part = int(to_part_raw) if to_part_raw is not None else None
+            from_season, from_episode_raw, from_part = self.token_sides(parsed[0])  # type: ignore[arg-type]
+            from_episode = from_episode_raw if from_episode_raw is not None else self.MIN_EPISODE
+            to_season, to_episode_raw, to_part = self.token_sides(parsed[1])  # type: ignore[arg-type]
+            to_episode = to_episode_raw if to_episode_raw is not None else self.MAX_EPISODE
             if from_season > to_season:
                 self.fail(f"Invalid range, left side season cannot be bigger than right side season: {token}")
             if from_season == to_season and from_episode > to_episode:

@@ -12,10 +12,11 @@ downloading, decryption, muxing, naming) is handled by the unshackle core.
     the CLI. Service code is deliberately kept separate from the core so it can
     live in its own private repository.
 
-Unshackle ships one reference service, **EXAMPLE**, at
-`unshackle/services/EXAMPLE/`. It is a deliberately exhaustive, non-runnable
-showcase of every framework feature in a single file. Read it alongside this
-page; most snippets below are drawn from it.
+unshackle ships two reference services. **EXAMPLE**, at
+`unshackle/services/EXAMPLE/`, is a non-runnable showcase of every framework
+feature in a single file. Read it alongside this page. Most snippets below come
+from it. **MUSIC_EXAMPLE**, at `unshackle/services/MUSIC_EXAMPLE/`, is the same
+kind of showcase for a music service. If your platform has songs, read that one too.
 
 ---
 
@@ -318,11 +319,20 @@ Common constructor fields:
 === "Song"
 
     ```python
-    Song(id_, service, name, artist, album, track, disc, year,
-         language=None, data=None)
+    Song(id_, service, name, artist, album, track, disc=1, year=None,
+         language=None, data=None, ...)
     ```
 
-    Return an `Album([...])` of songs.
+    Return an `Album([...])` of songs. `disc` defaults to 1 and `year` is optional.
+    Optional metadata keywords such as `album_artist`, `genre`, `isrc`, `label`,
+    `lyrics` and `artwork_url` feed the tagger and the naming templates. Read the
+    class for the current list.
+
+    From `get_tracks()`, give one `Audio` track for each codec and bitrate you offer
+    for the song. The framework then selects one with its usual audio options.
+    A `Song` skips the muxer, so restore the real container suffix on the track path
+    in `on_track_downloaded`. The **MUSIC_EXAMPLE** service shows the full music
+    surface.
 
 !!! note "The ID must be unique and stable"
     `id_` must be truthy and, if it has a length, at least 4 characters, to
@@ -696,5 +706,6 @@ unshackle dl MYSVC https://myservice.com/watch/abc123
 - [ ] URLs, user agents, and certificates live in `config.yaml`, read via `self.config[...]`.
 - [ ] Multi-file services import their own modules relatively (`from .helpers import x`), so they work when loaded from a repo.
 
-Read `unshackle/services/EXAMPLE/` end to end; it annotates every feature
-touched above in one place.
+Read `unshackle/services/EXAMPLE/` end to end. It annotates every feature
+touched above in one place. For a music service, read
+`unshackle/services/MUSIC_EXAMPLE/` too.

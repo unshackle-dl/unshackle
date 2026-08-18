@@ -563,7 +563,7 @@ async def list_tracks(request: web.Request) -> web.Response:
                 description: Title identifier
               wanted:
                 type: string
-                description: Specific episode/season (optional)
+                description: Specific episode/season, or music track ("1-5", "2x3" for disc 2 track 3) (optional)
               proxy:
                 type: string
                 description: Proxy configuration (optional)
@@ -657,7 +657,7 @@ async def download(request: web.Request) -> web.Response:
                 type: array
                 items:
                   type: string
-                description: Wanted episodes (e.g., ["S01E01", "S01E02"]) (default - all)
+                description: Wanted episodes (e.g., ["S01E01", "S01E02"]) or music tracks (e.g., ["1-5"], ["2x3"] for disc 2 track 3) (default - all)
               latest_episode:
                 type: boolean
                 description: Download only the single most recent episode (default - false)
