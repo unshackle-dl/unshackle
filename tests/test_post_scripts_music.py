@@ -52,7 +52,7 @@ def test_song_context_has_music_fields_and_blank_episode_fields():
     assert context["service"] == "EXAMPLE"
     assert context["filename"] == "04. Blue Monday.flac"
     assert context["ext"] == ".flac"
-    assert context["folder"] == "/dl/New Order"
+    assert context["folder"] == str(Path("/dl/New Order"))
     assert context["season"] == ""
     assert context["episode"] == ""
 
@@ -142,7 +142,7 @@ def test_a_music_hook_command_builds_the_argv_a_script_would_get(monkeypatch, tm
     assert "--album=Power, Corruption & Lies" in argv
     assert "--artist=New Order" in argv
     assert "--track=04" in argv
-    assert "--file=/dl/New Order/04. Blue Monday.flac" in argv
+    assert f"--file={Path('/dl/New Order/04. Blue Monday.flac')}" in argv
 
 
 def test_album_hook_mapping_is_bound_before_any_early_branch():
