@@ -1,0 +1,34 @@
+# Reference config for the MUSIC_EXAMPLE showcase service.
+# Access in code as self.config["endpoints"]["..."]; never hardcode URLs in code.
+
+endpoints:
+  login: https://api.musicdomain.com/v1/login
+  search: https://api.musicdomain.com/v1/search
+  track: https://api.musicdomain.com/v1/track/{track_id}.json
+  album: https://api.musicdomain.com/v1/album/{release_id}.json
+  playlist: https://api.musicdomain.com/v1/playlist/{release_id}.json
+  artist: https://api.musicdomain.com/v1/artist/{artist_id}.json
+  streams: https://api.musicdomain.com/v1/track/{track_id}/streams
+  lyrics: https://api.musicdomain.com/v1/track/{track_id}/lyrics
+
+# Per-device client profiles, selected via -d/--device (click.Choice in cli()).
+# `formats` is what get_tracks() asks the API for: a mobile app is usually
+# entitled to fewer formats than a desktop one, whatever the account tier says.
+client:
+  desktop:
+    user_agent: USER_AGENT
+    formats: [flac_hires, flac_cd, aac]
+  web:
+    user_agent: USER_AGENT
+    formats: [flac_cd, aac]
+  mobile:
+    user_agent: USER_AGENT
+    formats: [aac]
+
+# Audio.Codec name -> the container the API delivers that codec in. A song skips
+# the muxer, so on_track_downloaded restores these suffixes on the downloaded file
+# and the tagger then writes the matching metadata format.
+containers:
+  FLAC: .flac
+  ALAC: .m4a
+  AAC: .m4a
