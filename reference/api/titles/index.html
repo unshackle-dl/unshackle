@@ -2019,6 +2019,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.titles.Song.matches_wanted" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;matches_wanted
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.titles.Song.build_template_context" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2270,6 +2281,17 @@
   
     <nav class="md-nav" aria-label=" Song">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.titles.Song.matches_wanted" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;matches_wanted
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#unshackle.core.titles.Song.build_template_context" class="md-nav__link">
@@ -2749,8 +2771,8 @@ takes every part. A dated episode also answers to its ISO air date.
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">artist</span><span class="p">,</span>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">album</span><span class="p">,</span>
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">track</span><span class="p">,</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">disc</span><span class="p">,</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">year</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">disc</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">year</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">language</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">data</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">album_artist</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
@@ -2794,6 +2816,29 @@ takes every part. A dated episode also answers to its ISO air date.
 
 
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.titles.Song.matches_wanted" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">matches_wanted</span>
+
+
+<a href="#unshackle.core.titles.Song.matches_wanted" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">matches_wanted</span><span class="p">(</span><span class="n">wanted</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Whether a parsed <code>-w</code> key set selects this song.</p>
+<p>A song shares the episode key space, its disc reading as the season and its track
+as the episode, so <code>-w 1-5</code> takes tracks 1 to 5 and <code>-w 2x3</code> takes disc 2
+track 3. A song has no parts and no air date, so it answers to one key only.</p>
+
+
+    </div>
+
+</div>
 
 <div class="doc doc-object doc-function">
 

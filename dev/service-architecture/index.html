@@ -2618,7 +2618,8 @@ your service, in order:</p>
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>      │
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>DRM license + decrypt     →  service license hooks → CDM → decrypt tool
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>      │
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>Tracks.mux                →  mkvmerge → tagged .mkv
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>Tracks.mux                →  mkvmerge → tagged .mkv (movie / episode)
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>      │                      a Song skips the muxer and keeps its own container
 </span></code></pre></div>
 <ol>
 <li><strong><code>get_titles()</code></strong> returns a <code>Titles</code> collection: the movies, episodes, or songs
@@ -2823,10 +2824,40 @@ An <code>air_date</code> is normalized to a <code>date</code> so the <code>{date
 and a placeholder episode <code>name</code> like <code>"Episode 4"</code> is discarded automatically.</p>
 </div>
 <div class="tabbed-block">
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">Song</span><span class="p">(</span><span class="n">id_</span><span class="p">,</span> <span class="n">service</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">artist</span><span class="p">,</span> <span class="n">album</span><span class="p">,</span> <span class="n">track</span><span class="p">,</span> <span class="n">disc</span><span class="p">,</span> <span class="n">year</span><span class="p">,</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>     <span class="n">language</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">Song</span><span class="p">(</span><span class="n">id_</span><span class="p">,</span> <span class="n">service</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">artist</span><span class="p">,</span> <span class="n">album</span><span class="p">,</span> <span class="n">track</span><span class="p">,</span> <span class="n">disc</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">year</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>     <span class="n">language</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
 </span></code></pre></div>
-<p><code>name</code>, <code>artist</code>, <code>album</code>, <code>track</code>, <code>disc</code>, and <code>year</code> are all required and validated.</p>
+<p><code>name</code>, <code>artist</code>, <code>album</code>, and <code>track</code> are required and validated. <code>disc</code> defaults to
+1, and <code>year</code> is optional. A single therefore needs no <code>disc</code>, and an undated release
+needs no <code>year</code>.</p>
+<p>A <code>Song</code> also takes optional metadata keywords that the tagger and the naming templates
+read: <code>album_artist</code>, <code>release_type</code>, <code>total_tracks</code>, <code>total_discs</code>, <code>genre</code>,
+<code>explicit</code>, <code>isrc</code>, <code>upc</code>, <code>copyright</code>, <code>label</code>, <code>lyrics</code>, and <code>artwork_url</code>. Read the
+class for the current list.</p>
+<p>The tagger also falls back to <code>Song.data</code> for fields the constructor did not get, such
+as the composer or a full release date. It reads the top level of that dict and a
+nested <code>metadata</code> sub-dict, with the nested keys winning, so either shape works.</p>
+<p>From <code>get_tracks()</code>, a music service gives <strong>one <code>Audio</code> track for each codec and
+bitrate it offers for a <code>Song</code></strong>. The framework then selects one with its usual audio
+options, <code>-a</code>/<code>--acodec</code> and <code>--abitrate</code>, and its usual audio sorting. A movie or an
+episode uses the same options. <code>-q</code>/<code>--quality</code> sets the video height only and does not
+apply to music. <code>Audio</code> has no <code>bit_depth</code> or <code>sample_rate</code> field. Therefore <code>bitrate</code>
+separates a hi-res FLAC from a CD FLAC, and the audio sort already ranks it.</p>
+<p>A <code>Song</code> is an ordinary <code>Title</code> on the one generic download path. unshackle has no
+music-specific service API and no separate music download loop. The
+<code>GROUP_AUDIO_DOWNLOADS</code> flag, <code>get_music_track_options</code> and <code>get_music_collection_label</code>
+no longer exist, and a music service does not need them.</p>
+<div class="admonition warning">
+<p class="admonition-title">Restore the container in <code>on_track_downloaded</code></p>
+<p>Every track downloads to a temp file named <code>Audio_&lt;id&gt;.mp4</code> whatever it holds, and
+the final move keeps that suffix. A <code>Song</code> skips the muxer, so its download <strong>is</strong>
+the delivered file, and the tagger picks its metadata format from the suffix.
+Rename the track path to the true container in <code>on_track_downloaded</code>, or a FLAC
+lands as an untaggable <code>.mp4</code>. The event fires twice, once before decryption and
+once at the end, so wait until <code>track.drm</code> is clear before you rename.</p>
+</div>
+<p>The <strong>MUSIC_EXAMPLE</strong> reference service, at <code>unshackle/services/MUSIC_EXAMPLE/</code>, shows
+the full music surface.</p>
 </div>
 </div>
 </div>
@@ -2900,8 +2931,8 @@ closed-caption descriptors. The relevant enums:</p>
 </ul>
 <div class="admonition note">
 <p class="admonition-title">Bitrate units</p>
-<p>Both <code>Video</code> and <code>Audio</code> store <code>bitrate</code> in <strong>bytes per second</strong> (rounded up), even
-though the string form displays kb/s.</p>
+<p>Both <code>Video</code> and <code>Audio</code> store <code>bitrate</code> in <strong>bits per second</strong> (rounded up). The
+string form displays kb/s, and <code>--vbitrate</code> and <code>--abitrate</code> match on kb/s.</p>
 </div>
 <h3 id="audio"><code>Audio</code><a class="headerlink" href="#audio" title="Permanent link">&para;</a></h3>
 <p><code>Audio</code> adds <code>bitrate</code>, <code>channels</code>, <code>joc</code> (Joint Object Coding, the Atmos indicator),

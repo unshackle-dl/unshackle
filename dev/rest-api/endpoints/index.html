@@ -3230,6 +3230,14 @@
 </div>
 </div>
 <p>Each serialized title carries <code>type</code> (<code>"episode"</code>, <code>"movie"</code>, or <code>"other"</code>), <code>name</code>, <code>id</code>, <code>language</code>, <code>description</code>, <code>date</code>, and <code>cover_url</code>. Episodes and movies add <code>year</code>; episodes additionally add <code>series_title</code>, <code>season</code>, and <code>number</code>.</p>
+<div class="admonition warning">
+<p class="admonition-title">A song serializes as <code>"other"</code></p>
+<p>A music track has no <code>type</code> of its own. It is sent as <code>"other"</code>, and the response
+carries none of its music fields: no artist, no album, no track or disc number, and no
+<code>year</code>. <code>name</code> holds the track name. To read the disc and track numbers of a release,
+run the CLI with <code>--list-titles</code>. Selecting music tracks over the API still works,
+through the <code>wanted</code> parameter.</p>
+</div>
 <p>These keys are sent only when the title carries them, so a title without them serializes exactly as before:</p>
 <table>
 <thead>
@@ -3352,9 +3360,9 @@ is unaffected. See <a href="../../creating-a-service/#split-episodes">Split epis
 </tr>
 <tr>
 <td><code>wanted</code></td>
-<td>string</td>
+<td>string / string[]</td>
 <td>no</td>
-<td>Episode/season range (e.g. <code>"S01E01-S01E03"</code>).</td>
+<td>Episode/season range (e.g. <code>"S01E01-S01E03"</code>), or a music track selector (e.g. <code>"1-5"</code>, <code>"1,3,7"</code>, or <code>"2x3"</code> for disc 2 track 3). A list of selectors is accepted too.</td>
 </tr>
 <tr>
 <td><code>season</code></td>
@@ -3568,9 +3576,9 @@ is unaffected. See <a href="../../creating-a-service/#split-episodes">Split epis
 </tr>
 <tr>
 <td><code>wanted</code></td>
-<td>string[]</td>
+<td>string / string[]</td>
 <td><code>[]</code></td>
-<td>Episode/season selectors. Accepts the part form, <code>"S01E01.2"</code>, and the air-date form, <code>"2026-08-11"</code> or <code>"2026-08-01:2026-08-31"</code>.</td>
+<td>Episode/season selectors, as a list or as one comma-separated string. Accepts the part form, <code>"S01E01.2"</code>, and the air-date form, <code>"2026-08-11"</code> or <code>"2026-08-01:2026-08-31"</code>. For a music release, a selector is a track number, <code>"1-5"</code> or <code>"1,3,7"</code>, or <code>"{disc}x{track}"</code> such as <code>"2x3"</code>.</td>
 </tr>
 <tr>
 <td><code>latest_episode</code></td>

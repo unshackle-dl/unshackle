@@ -2477,13 +2477,23 @@ release fields instead of the season and episode ones. <code>{season}</code>, <c
 <td>Zero padded totals, empty when the service did not give them</td>
 </tr>
 <tr>
-<td><code>{isrc}</code> <code>{upc}</code> <code>{label}</code> <code>{genre}</code> <code>{release_type}</code> <code>{explicit}</code></td>
+<td><code>{isrc}</code> <code>{upc}</code> <code>{label}</code> <code>{genre}</code></td>
 <td>As the service reported them, empty when absent</td>
+</tr>
+<tr>
+<td><code>{release_type}</code></td>
+<td><code>album</code>, <code>single</code>, <code>ep</code>, and so on. A service that reports nothing gives <code>album</code></td>
+</tr>
+<tr>
+<td><code>{explicit}</code></td>
+<td>The word <code>Explicit</code> when the track is flagged, otherwise empty</td>
 </tr>
 </tbody>
 </table>
 <p>In a <code>file</code> hook <code>{title}</code> is the track name. See <a href="#modes">Modes</a> for what an album hook
 puts in <code>{title}</code>.</p>
+<p><code>{year}</code> is empty when the service gives the release no year. <code>{ext}</code> is the container the
+track arrived in, such as <code>.flac</code>, because a music download is not muxed.</p>
 <h3 id="tagging-ids">Tagging IDs<a class="headerlink" href="#tagging-ids" title="Permanent link">&para;</a></h3>
 <p><code>{tmdb}</code>, <code>{imdb}</code> and <code>{tvdb}</code> carry the IDs unshackle is tagging the file with, read at
 the moment the hook is dispatched rather than snapshotted at the start of the run. An
@@ -2543,9 +2553,10 @@ copy of the sidecar files, and each invocation lists the copies sitting beside i
 With <code>-w S01-S02</code> the S01 hook runs while S02 is still downloading. It says nothing
 about whether the season is complete on disk. Downloading a single episode fires the
 hook for that season as soon as the episode lands.</p>
-<p>A title that fails takes its group with it. If one episode of S01 fails, the S01 hook
-does not fire at all, because the run never finished everything it queued for that
-season.</p>
+<p>A title that fails stops the whole run. unshackle dispatches the <code>failure</code> hook for
+that title and then returns. It downloads no further title, and no <code>season</code> or <code>run</code>
+hook fires after that point. This applies to every title type. If one episode of S01
+fails, the S01 hook does not fire at all.</p>
 </div>
 <p>The hook is keyed to the folder, not to the season, so one season landing in several
 folders (<code>-q 1080,720</code> with a quality-dependent folder template) fires it once per folder,
@@ -2581,10 +2592,15 @@ once.</p>
 <p>In a <code>file</code> hook <code>{title}</code> and <code>{title_raw}</code> are the track name. In an album hook they are
 the album name, and the per-track variables <code>{track_number}</code>, <code>{disc}</code> and <code>{isrc}</code> are
 empty, in the same way that <code>{episode}</code> is empty in a season hook.</p>
+<p>An album hook obeys the same rule as a season hook. It fires when the last track <strong>this run
+queued</strong> for that album lands. This does not mean that the album is complete on disk. A
+one-track download fires the album hook as soon as that track lands. If a track fails, the
+run stops there, so the album hook never fires, in the same way as an episode and its
+season.</p>
 <h2 id="events">Events<a class="headerlink" href="#events" title="Permanent link">&para;</a></h2>
 <p><code>success</code> runs after the file has moved to its final path. <code>failure</code> runs when the download
-fails, with <code>{filepath}</code> empty and <code>{error}</code> set. A music <code>failure</code> hook describes the
-release rather than a track, because the whole album stops when one track fails.</p>
+fails, with <code>{filepath}</code> empty and <code>{error}</code> set. Each track of an album is its own title.
+A music <code>failure</code> hook therefore describes the track that failed, not the release.</p>
 <div class="admonition warning">
 <p class="admonition-title"><code>failure</code> only fires in <code>file</code> mode</p>
 <p>A <code>failure</code> entry with <code>mode: season</code> or <code>mode: run</code> never runs. Leave <code>mode</code> at its

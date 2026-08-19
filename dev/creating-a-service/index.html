@@ -2334,10 +2334,11 @@ downloading, decryption, muxing, naming) is handled by the unshackle core.</p>
 the CLI. Service code is deliberately kept separate from the core so it can
 live in its own private repository.</p>
 </div>
-<p>Unshackle ships one reference service, <strong>EXAMPLE</strong>, at
-<code>unshackle/services/EXAMPLE/</code>. It is a deliberately exhaustive, non-runnable
-showcase of every framework feature in a single file. Read it alongside this
-page; most snippets below are drawn from it.</p>
+<p>unshackle ships two reference services. <strong>EXAMPLE</strong>, at
+<code>unshackle/services/EXAMPLE/</code>, is a non-runnable showcase of every framework
+feature in a single file. Read it alongside this page. Most snippets below come
+from it. <strong>MUSIC_EXAMPLE</strong>, at <code>unshackle/services/MUSIC_EXAMPLE/</code>, is the same
+kind of showcase for a music service. If your platform has songs, read that one too.</p>
 <hr />
 <h2 id="how-a-service-is-discovered">How a service is discovered<a class="headerlink" href="#how-a-service-is-discovered" title="Permanent link">&para;</a></h2>
 <p>At startup unshackle scans every path in the <code>directories.services</code> config key
@@ -2687,10 +2688,18 @@ service splits one episode into several videos, see
 <a href="#split-episodes">Split episodes</a>.</p>
 </div>
 <div class="tabbed-block">
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">Song</span><span class="p">(</span><span class="n">id_</span><span class="p">,</span> <span class="n">service</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">artist</span><span class="p">,</span> <span class="n">album</span><span class="p">,</span> <span class="n">track</span><span class="p">,</span> <span class="n">disc</span><span class="p">,</span> <span class="n">year</span><span class="p">,</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>     <span class="n">language</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">Song</span><span class="p">(</span><span class="n">id_</span><span class="p">,</span> <span class="n">service</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">artist</span><span class="p">,</span> <span class="n">album</span><span class="p">,</span> <span class="n">track</span><span class="p">,</span> <span class="n">disc</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">year</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>     <span class="n">language</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
 </span></code></pre></div>
-<p>Return an <code>Album([...])</code> of songs.</p>
+<p>Return an <code>Album([...])</code> of songs. <code>disc</code> defaults to 1 and <code>year</code> is optional.
+Optional metadata keywords such as <code>album_artist</code>, <code>genre</code>, <code>isrc</code>, <code>label</code>,
+<code>lyrics</code> and <code>artwork_url</code> feed the tagger and the naming templates. Read the
+class for the current list.</p>
+<p>From <code>get_tracks()</code>, give one <code>Audio</code> track for each codec and bitrate you offer
+for the song. The framework then selects one with its usual audio options.
+A <code>Song</code> skips the muxer, so restore the real container suffix on the track path
+in <code>on_track_downloaded</code>. The <strong>MUSIC_EXAMPLE</strong> service shows the full music
+surface.</p>
 </div>
 </div>
 </div>
@@ -3061,8 +3070,9 @@ flagged, banned, or downgraded.</p>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> URLs, user agents, and certificates live in <code>config.yaml</code>, read via <code>self.config[...]</code>.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Multi-file services import their own modules relatively (<code>from .helpers import x</code>), so they work when loaded from a repo.</li>
 </ul>
-<p>Read <code>unshackle/services/EXAMPLE/</code> end to end; it annotates every feature
-touched above in one place.</p>
+<p>Read <code>unshackle/services/EXAMPLE/</code> end to end. It annotates every feature
+touched above in one place. For a music service, read
+<code>unshackle/services/MUSIC_EXAMPLE/</code> too.</p>
 
 
 

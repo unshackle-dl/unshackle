@@ -1005,6 +1005,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#music-output-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Music output files
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Music output files">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#music-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Music metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#muxing-options" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2304,6 +2332,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#music-output-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Music output files
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Music output files">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#music-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Music metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#muxing-options" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2432,14 +2488,14 @@
 <p>This page explains where unshackle writes finished downloads and how it names them. You control naming with <strong>output templates</strong> (the filename) and <strong>folder templates</strong> (the directory the file lands in), using a set of <code>{variable}</code> placeholders that unshackle fills in from the media it just downloaded. It also covers muxing options, release-group tagging, Unicode filenames, and how to relocate unshackle's working directories.</p>
 <p>If you have not configured <code>unshackle.yaml</code> yet, read <a href="../../getting-started/configuration-file/">Configuration File</a> first. Everything below lives in that file.</p>
 <h2 id="how-an-output-path-is-assembled">How an output path is assembled<a class="headerlink" href="#how-an-output-path-is-assembled" title="Permanent link">&para;</a></h2>
-<p>When a download finishes muxing, unshackle builds the final path from three pieces:</p>
+<p>When a download finishes, unshackle builds the final path from three pieces:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>&lt;output directory&gt; / &lt;folder template&gt; / &lt;filename template&gt;&lt;extension&gt;
 </span></code></pre></div>
 <ul>
 <li><strong>Output directory</strong>: <code>directories.downloads</code> from your config, or whatever you pass to <code>-o/--output</code> on the command line for a single run.</li>
 <li><strong>Folder template</strong>: an optional per-title subfolder. TV episodes and music tracks are <strong>always</strong> placed in a folder; movies only get one if you define a <code>movies</code> folder template, or a single-string <code>folder</code> template that applies to all title kinds (see <a href="#folder-templates">Folder templates</a>).</li>
 <li><strong>Filename template</strong>: the <code>output_template</code> for the title kind (movie, series, or song).</li>
-<li><strong>Extension</strong>: chosen by the muxer: <code>.mkv</code> for video, <code>.mka</code> for audio-only, <code>.mks</code> for subtitle-only.</li>
+<li><strong>Extension</strong>: chosen by the muxer for a movie or an episode: <code>.mkv</code> for video, <code>.mka</code> for audio-only, <code>.mks</code> for subtitle-only. A music track is not muxed. It keeps the container the service delivered, such as <code>.flac</code>, <code>.m4a</code>, or <code>.mp3</code>. Read <a href="#music-output-files">Music output files</a>.</li>
 </ul>
 <div class="admonition example">
 <p class="admonition-title">A typical episode path</p>
@@ -2823,21 +2879,50 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 <p><strong>Fallback behavior:</strong></p>
 <ul>
 <li>A per-kind folder template wins if present; otherwise the single <code>folder</code> string is used; otherwise unshackle falls back to a built-in default.</li>
-<li>Built-in defaults when no folder template is set: movies get no folder at all unless a <code>movies</code> folder template (or a single-string <code>folder</code> template) exists; series fall back to a folder <em>derived</em> from the <code>series</code> output template (stripping <code>{episode}</code>, <code>{episode_name}</code>, and collapsing <code>{season_episode}</code> down to <code>{season}</code>); music albums fall back to <code>{artist} - {album} ({year})</code>.</li>
+<li>Built-in defaults when no folder template is set. Movies get no folder at all unless a <code>movies</code> folder template (or a single-string <code>folder</code> template) exists. Series fall back to a folder <em>derived</em> from the <code>series</code> output template (stripping <code>{episode}</code>, <code>{episode_name}</code>, and collapsing <code>{season_episode}</code> down to <code>{season}</code>). Music albums fall back to <code>{artist} - {album} ({year})</code>. If the song has no year, the folder name is only <code>{artist} - {album}</code>.</li>
 </ul>
 <div class="admonition note">
 <p class="admonition-title">Movies are flat by default</p>
 <p>Episodes and songs are always foldered. Movies are written directly into the output directory <em>unless</em> you define a <code>movies</code> folder template (or a single-string <code>folder</code> template, which folders every kind). Set one if you want each movie in its own directory.</p>
 </div>
+<h2 id="music-output-files">Music output files<a class="headerlink" href="#music-output-files" title="Permanent link">&para;</a></h2>
+<p>A music track does not go through the muxer. unshackle moves the downloaded audio file to
+its final path. It keeps the container that the service delivered. A lossless download
+arrives as a <code>.flac</code> file. An AAC download arrives as a <code>.m4a</code> file. unshackle writes no
+<code>.mkv</code> file for music, and the <a href="#muxing-options">muxing options</a> below do not apply.</p>
+<p>The <code>songs</code> output template names the file. The <code>albums</code> folder template names the folder
+around it.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>/home/user/Downloads/
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>  └─ The Artist - The Album (2024)/
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>     ├─ 01. First Track.flac
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>     └─ 02. Second Track.flac
+</span></code></pre></div>
+<h3 id="music-metadata">Music metadata<a class="headerlink" href="#music-metadata" title="Permanent link">&para;</a></h3>
+<p>After the file moves, unshackle writes the metadata into the audio file. It uses Vorbis
+comments for FLAC and Ogg, ID3 frames for MP3, and MP4 atoms for M4A. The tags hold the
+track title, artist, album artist, track and disc numbers, date, genre, ISRC, UPC,
+copyright, and record label. When <code>tag</code> and <code>tag_group_name</code> are set, unshackle also writes the group
+name into a <code>GROUP</code> tag.</p>
+<p>Cover art is embedded when the service gives an artwork URL. unshackle downloads the image
+and puts it in the file.</p>
+<p>Lyrics are written when the service supplies them: a <code>LYRICS</code> Vorbis comment for FLAC, a
+<code>USLT</code> frame for MP3, and a <code>©lyr</code> atom for M4A. Ogg uses the same <code>LYRICS</code> field as
+FLAC. unshackle does not write synchronized lyrics (<code>SYLT</code>).</p>
+<p>A metadata fault does not stop the run. The file is already in place, so unshackle writes a
+warning and continues.</p>
+<div class="admonition warning">
+<p class="admonition-title"><code>--no-mux</code> leaves music files untagged</p>
+<p><a href="../cli-reference/#output-muxing-files"><code>--no-mux</code></a> moves each downloaded track file to the output path without the tagging step. A music file from such a run holds only the metadata that the service put in it.</p>
+</div>
 <h2 id="muxing-options">Muxing options<a class="headerlink" href="#muxing-options" title="Permanent link">&para;</a></h2>
-<p>Muxing (combining video, audio, subtitle, chapter and attachment tracks into a single Matroska file with <code>mkvmerge</code>) is configured under the <code>muxing</code> key.</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">muxing</span><span class="p">:</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="nt">set_title</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span><span class="nt">merge_video</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">  </span><span class="nt">merge_audio</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">  </span><span class="nt">default_language</span><span class="p">:</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">    </span><span class="nt">audio</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">    </span><span class="nt">subtitle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
+<p>Muxing (combining video, audio, subtitle, chapter and attachment tracks into a single Matroska file with <code>mkvmerge</code>) is configured under the <code>muxing</code> key. Only movies and episodes are muxed. Read <a href="#music-output-files">Music output files</a> for what a music download does instead.</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">muxing</span><span class="p">:</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">set_title</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span><span class="nt">merge_video</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span><span class="nt">merge_audio</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">  </span><span class="nt">default_language</span><span class="p">:</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">    </span><span class="nt">audio</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">    </span><span class="nt">subtitle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
 </span></code></pre></div>
 <table>
 <thead>
@@ -2897,9 +2982,9 @@ It can be swapped per release with <a href="../../reference/configuration/output
 match on the release-attribute variables only (<code>quality</code>, <code>resolution</code>, <code>hdr</code>, <code>source</code>, <code>lang_tag</code>,
 <code>title_type</code>, and so on), first match wins. The title's own fields, such as <code>title</code> and <code>season_episode</code>,
 cannot be matched. See the <a href="../../reference/configuration/output/#tag_rules">reference page</a> for the exact list.</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">"MYGROUP"</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="nt">tag_group_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="nt">tag_imdb_tmdb</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">"MYGROUP"</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="nt">tag_group_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="nt">tag_imdb_tmdb</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 <table>
 <thead>
@@ -2935,10 +3020,10 @@ cannot be matched. See the <a href="../../reference/configuration/output/#tag_ru
 entity prefix the <a href="https://www.matroska.org/technical/tagging.html">Matroska tagging spec</a>
 requires: <code>series/73871</code> for a show, <code>movies/113</code> for a film.</p>
 <p>You can override the tag per run without editing config:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--tag<span class="w"> </span>OTHERGROUP<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s2">"..."</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--tag<span class="w"> </span>OTHERGROUP<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s2">"..."</span>
 </span></code></pre></div>
 <p>The <code>--repack</code> flag adds the <code>REPACK</code> marker (surfaced through the <code>{repack}</code> variable) to the filename for that run:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--repack<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s2">"..."</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--repack<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s2">"..."</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Empty tags collapse cleanly</p>
@@ -2946,7 +3031,7 @@ requires: <code>series/73871</code> for a show, <code>movies/113</code> for a fi
 </div>
 <h2 id="unicode-filenames">Unicode filenames<a class="headerlink" href="#unicode-filenames" title="Permanent link">&para;</a></h2>
 <p>By default unshackle transliterates non-ASCII characters (Korean, Japanese, Chinese, accented Latin, etc.) into ASCII equivalents, which is safest for older tools, DDL, and P2P sharing. Set <code>unicode_filenames</code> to keep the native characters.</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">unicode_filenames</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nt">unicode_filenames</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 <table>
 <thead>
@@ -2969,12 +3054,12 @@ requires: <code>series/73871</code> for a show, <code>movies/113</code> for a fi
 <p>Regardless of this setting, a set of filesystem-unsafe and structural characters is always removed or replaced during sanitization (for example <code>/</code> and <code>;</code> become <code>&amp;</code>, and characters like <code>\ * ! ? , ' " &lt; &gt; | $ # ~</code> are stripped). This is why you should never put path-unsafe characters directly in a template. unshackle warns about templates containing <code>&lt; &gt; : " / \ | ? *</code> at startup (folder templates are checked per path segment, so <code>/</code> is allowed there as a directory separator).</p>
 <h2 id="directory-filename-configuration">Directory &amp; filename configuration<a class="headerlink" href="#directory-filename-configuration" title="Permanent link">&para;</a></h2>
 <p>The <code>directories</code> key relocates unshackle's working folders. Only the folders listed here can be moved; core package paths are protected and silently ignored if you try to override them.</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nt">directories</span><span class="p">:</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="nt">downloads</span><span class="p">:</span><span class="w"> </span><span class="s">"~/Media/unshackle"</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">  </span><span class="nt">temp</span><span class="p">:</span><span class="w"> </span><span class="s">"/mnt/fast/unshackle-temp"</span>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">  </span><span class="nt">cache</span><span class="p">:</span><span class="w"> </span><span class="s">"~/.cache/unshackle"</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">  </span><span class="nt">cookies</span><span class="p">:</span><span class="w"> </span><span class="s">"~/.config/unshackle/cookies"</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">  </span><span class="nt">logs</span><span class="p">:</span><span class="w"> </span><span class="s">"~/.config/unshackle/logs"</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nt">directories</span><span class="p">:</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="nt">downloads</span><span class="p">:</span><span class="w"> </span><span class="s">"~/Media/unshackle"</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">  </span><span class="nt">temp</span><span class="p">:</span><span class="w"> </span><span class="s">"/mnt/fast/unshackle-temp"</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">  </span><span class="nt">cache</span><span class="p">:</span><span class="w"> </span><span class="s">"~/.cache/unshackle"</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">  </span><span class="nt">cookies</span><span class="p">:</span><span class="w"> </span><span class="s">"~/.config/unshackle/cookies"</span>
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="w">  </span><span class="nt">logs</span><span class="p">:</span><span class="w"> </span><span class="s">"~/.config/unshackle/logs"</span>
 </span></code></pre></div>
 <table>
 <thead>
@@ -3021,10 +3106,10 @@ requires: <code>series/73871</code> for a show, <code>movies/113</code> for a fi
 <p>Paths support <code>~</code> expansion. The names <code>app_dirs</code>, <code>core_dir</code>, <code>namespace_dir</code>, <code>user_configs</code>, and <code>data</code> are protected and cannot be changed.</p>
 <h3 id="filename-patterns">Filename patterns<a class="headerlink" href="#filename-patterns" title="Permanent link">&para;</a></h3>
 <p>The <code>filenames</code> key overrides the naming patterns for a handful of internal files. These are <strong>not</strong> your media output names. They are logs, temp files, and per-service configs.</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nt">filenames</span><span class="p">:</span>
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="s">"unshackle_{name}_{time}.log"</span>
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">  </span><span class="nt">chapters</span><span class="p">:</span><span class="w"> </span><span class="s">"Chapters_{title}_{random}.txt"</span>
-</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">  </span><span class="nt">subtitle</span><span class="p">:</span><span class="w"> </span><span class="s">"Subtitle_{id}_{language}.srt"</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nt">filenames</span><span class="p">:</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="s">"unshackle_{name}_{time}.log"</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span><span class="nt">chapters</span><span class="p">:</span><span class="w"> </span><span class="s">"Chapters_{title}_{random}.txt"</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">  </span><span class="nt">subtitle</span><span class="p">:</span><span class="w"> </span><span class="s">"Subtitle_{id}_{language}.srt"</span>
 </span></code></pre></div>
 <table>
 <thead>
@@ -3069,7 +3154,7 @@ requires: <code>series/73871</code> for a show, <code>movies/113</code> for a fi
 </table>
 <h3 id="chapters-naming">Chapters naming<a class="headerlink" href="#chapters-naming" title="Permanent link">&para;</a></h3>
 <p>When a title has chapters, they are written to an OGM chapters file (<code>filenames.chapters</code>) and passed to the muxer. Unnamed chapters use the <code>chapter_fallback_name</code> template:</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nt">chapter_fallback_name</span><span class="p">:</span><span class="w"> </span><span class="s">"Chapter</span><span class="nv"> </span><span class="s">{i:02}"</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="nt">chapter_fallback_name</span><span class="p">:</span><span class="w"> </span><span class="s">"Chapter</span><span class="nv"> </span><span class="s">{i:02}"</span>
 </span></code></pre></div>
 <p>The fallback supports two placeholders: <code>{i}</code> (chapter number, starting at 1) and <code>{j}</code> (which increments only for unnamed chapters). Standard format directives like <code>{i:02}</code> are allowed.</p>
 <h2 id="removed-migrated-options">Removed &amp; migrated options<a class="headerlink" href="#removed-migrated-options" title="Permanent link">&para;</a></h2>
@@ -3083,61 +3168,61 @@ how the optional (<code>?</code>) variables appear and disappear.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="3:5"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><input id="__tabbed_3_3" name="__tabbed_3" type="radio" /><input id="__tabbed_3_4" name="__tabbed_3" type="radio" /><input id="__tabbed_3_5" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Movies</label><label for="__tabbed_3_2">TV series</label><label for="__tabbed_3_3">Multi-language</label><label for="__tabbed_3_4">Daily shows</label><label for="__tabbed_3_5">Music</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="nt">output_template</span><span class="p">:</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">  </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}.{year}.{edition?}.{quality}.{source}.WEB-DL.{audio_full}.{atmos?}.{video}.{hdr?}-{tag?}"</span>
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">  </span><span class="nt">folder</span><span class="p">:</span>
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">    </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}</span><span class="nv"> </span><span class="s">({year})"</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nt">output_template</span><span class="p">:</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="w">  </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}.{year}.{edition?}.{quality}.{source}.WEB-DL.{audio_full}.{atmos?}.{video}.{hdr?}-{tag?}"</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="w">  </span><span class="nt">folder</span><span class="p">:</span>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="w">    </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}</span><span class="nv"> </span><span class="s">({year})"</span>
 </span></code></pre></div>
 <p>A 4K Atmos HDR download fills every placeholder:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>The Movie (2024)/
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>  └─ The.Movie.2024.2160p.EXAMPLE.WEB-DL.DDP5.1.Atmos.H.265.HDR-TAG.mkv
+<div class="language-text highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>The Movie (2024)/
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>  └─ The.Movie.2024.2160p.EXAMPLE.WEB-DL.DDP5.1.Atmos.H.265.HDR-TAG.mkv
 </span></code></pre></div>
 <p>The same template on a plain 1080p SDR stereo download, where <code>{edition?}</code>, <code>{atmos?}</code>
 and <code>{hdr?}</code> collapse along with their dots:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>The Movie (2024)/
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>  └─ The.Movie.2024.1080p.EXAMPLE.WEB-DL.AAC2.0.H.264-TAG.mkv
+<div class="language-text highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>The Movie (2024)/
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>  └─ The.Movie.2024.1080p.EXAMPLE.WEB-DL.AAC2.0.H.264-TAG.mkv
 </span></code></pre></div>
 <p>A director's cut fills <code>{edition?}</code>:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>The Movie (2024)/
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>  └─ The.Movie.2024.Directors.Cut.2160p.EXAMPLE.WEB-DL.DDP5.1.Atmos.H.265.DV.HDR-TAG.mkv
+<div class="language-text highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>The Movie (2024)/
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>  └─ The.Movie.2024.Directors.Cut.2160p.EXAMPLE.WEB-DL.DDP5.1.Atmos.H.265.DV.HDR-TAG.mkv
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<p><div class="language-yaml highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="nt">output_template</span><span class="p">:</span>
-</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="w">  </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}.{season_episode}.{episode_name?}.{quality}.{source}.WEB-DL.{audio_full}.{video}-{tag}"</span>
-</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="w">  </span><span class="nt">folder</span><span class="p">:</span>
-</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="w">    </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}</span><span class="nv"> </span><span class="s">({year})/Season</span><span class="nv"> </span><span class="s">{season}"</span>
+<p><div class="language-yaml highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="nt">output_template</span><span class="p">:</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="w">  </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}.{season_episode}.{episode_name?}.{quality}.{source}.WEB-DL.{audio_full}.{video}-{tag}"</span>
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="w">  </span><span class="nt">folder</span><span class="p">:</span>
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="w">    </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}</span><span class="nv"> </span><span class="s">({year})/Season</span><span class="nv"> </span><span class="s">{season}"</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>The Show (2023)/Season S02/
-</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>  └─ The.Show.S02E04.The.Reckoning.2160p.EXAMPLE.WEB-DL.DDP5.1.H.265-TAG.mkv
+<div class="language-text highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>The Show (2023)/Season S02/
+</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>  └─ The.Show.S02E04.The.Reckoning.2160p.EXAMPLE.WEB-DL.DDP5.1.H.265-TAG.mkv
 </span></code></pre></div></p>
 <p>unshackle decides the separator style once for the whole folder template, and every
 segment then follows it. Spaces outnumber dots in <code>{title} ({year})/Season {season}</code>,
 so <code>Season {season}</code> keeps its space even though it holds only one variable.</p>
 <p>When an episode has no on-screen name, <code>{episode_name?}</code> disappears cleanly:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>The Show (2023)/Season S02/
-</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>  └─ The.Show.S02E05.2160p.EXAMPLE.WEB-DL.DDP5.1.H.265-TAG.mkv
+<div class="language-text highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>The Show (2023)/Season S02/
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>  └─ The.Show.S02E05.2160p.EXAMPLE.WEB-DL.DDP5.1.H.265-TAG.mkv
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
 <p>Place <code>{dual?}</code>, <code>{multi?}</code> and <code>{dubbed?}</code> next to each other. At most one of them is
 ever set (see <a href="../../reference/configuration/download/#dual_multi_mode"><code>dual_multi_mode</code></a>), and the
 empty ones collapse:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="nt">output_template</span><span class="p">:</span>
-</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="w">  </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}.{year}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{dubbed?}.{audio_full}.{video}-{tag}"</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="nt">output_template</span><span class="p">:</span>
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="w">  </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}.{year}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{dubbed?}.{audio_full}.{video}-{tag}"</span>
 </span></code></pre></div>
 <p>Original English audio plus a French dub (<code>-l en,fr</code>):</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>The.Movie.2024.1080p.EXAMPLE.WEB-DL.DUAL.DDP5.1.H.264-TAG.mkv
+<div class="language-text highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>The.Movie.2024.1080p.EXAMPLE.WEB-DL.DUAL.DDP5.1.H.264-TAG.mkv
 </span></code></pre></div>
 <p>Original plus several dubs (<code>-l en,fr,de,es</code>):</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>The.Movie.2024.1080p.EXAMPLE.WEB-DL.MULTi.DDP5.1.H.264-TAG.mkv
+<div class="language-text highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>The.Movie.2024.1080p.EXAMPLE.WEB-DL.MULTi.DDP5.1.H.264-TAG.mkv
 </span></code></pre></div>
 <p>Only a dub, original audio left out (<code>-l de</code> on an English-original title):</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>The.Movie.2024.1080p.EXAMPLE.WEB-DL.DUBBED.DDP5.1.H.264-TAG.mkv
+<div class="language-text highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>The.Movie.2024.1080p.EXAMPLE.WEB-DL.DUBBED.DDP5.1.H.264-TAG.mkv
 </span></code></pre></div>
 <p>Two dialects of one language (<code>en-US</code> + <code>en-GB</code>) count as a single language, so none of the
 three variables is set:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>The.Movie.2024.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
+<div class="language-text highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>The.Movie.2024.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
 </span></code></pre></div>
 <p>For finer control (e.g. a <code>SUBBED</code> tag driven by subtitle languages), use <code>{lang_tag?}</code>
 with <a href="../../reference/configuration/download/#language_tags"><code>language_tags</code> rules</a> instead.</p>
@@ -3145,12 +3230,12 @@ with <a href="../../reference/configuration/download/#language_tags"><code>langu
 <div class="tabbed-block">
 <p>Dated content needs no special template. When an episode carries an air date,
 <code>{season_episode}</code> becomes the date automatically and <code>{episode}</code> and <code>{year}</code> clear:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="nt">output_template</span><span class="p">:</span>
-</span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="w">  </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}.{season_episode}.{episode_name?}.{quality}.{source}.WEB-DL.{audio_full}.{video}-{tag}"</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="nt">output_template</span><span class="p">:</span>
+</span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="w">  </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}.{season_episode}.{episode_name?}.{quality}.{source}.WEB-DL.{audio_full}.{video}-{tag}"</span>
 </span></code></pre></div>
 <p>A normal episode and a dated one, same template:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>The.Daily.Show.S28E101.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
-</span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a>The.Daily.Show.2024.06.01.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
+<div class="language-text highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>The.Daily.Show.S28E101.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
+</span><span id="__span-34-2"><a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a>The.Daily.Show.2024.06.01.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
 </span></code></pre></div>
 <p>The date separator follows your template style: dots here, spaces if your <code>series</code>
 template uses spaces.</p>
@@ -3158,26 +3243,26 @@ template uses spaces.</p>
 <code>{year?}</code> in the folder template is skipped when it would just repeat that year.</p>
 </div>
 <div class="tabbed-block">
-<p><div class="language-yaml highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="nt">output_template</span><span class="p">:</span>
-</span><span id="__span-34-2"><a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="w">  </span><span class="nt">songs</span><span class="p">:</span><span class="w"> </span><span class="s">"{track_number}.</span><span class="nv"> </span><span class="s">{title}"</span>
-</span><span id="__span-34-3"><a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a><span class="w">  </span><span class="nt">folder</span><span class="p">:</span>
-</span><span id="__span-34-4"><a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a><span class="w">    </span><span class="nt">albums</span><span class="p">:</span><span class="w"> </span><span class="s">"{album_artist}</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">{album}</span><span class="nv"> </span><span class="s">({year})"</span>
+<p><div class="language-yaml highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="nt">output_template</span><span class="p">:</span>
+</span><span id="__span-35-2"><a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="w">  </span><span class="nt">songs</span><span class="p">:</span><span class="w"> </span><span class="s">"{track_number}.</span><span class="nv"> </span><span class="s">{title}"</span>
+</span><span id="__span-35-3"><a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a><span class="w">  </span><span class="nt">folder</span><span class="p">:</span>
+</span><span id="__span-35-4"><a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a><span class="w">    </span><span class="nt">albums</span><span class="p">:</span><span class="w"> </span><span class="s">"{album_artist}</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">{album}</span><span class="nv"> </span><span class="s">({year})"</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>The Artist - The Album (2024)/
-</span><span id="__span-35-2"><a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a>  └─ 01.Opening.Track.mka
+<div class="language-text highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>The Artist - The Album (2024)/
+</span><span id="__span-36-2"><a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a>  └─ 01.Opening.Track.mka
 </span></code></pre></div></p>
 <p>In <code>"{track_number}. {title}"</code> dots and spaces are tied, and ties go to dot style; add
 more spaces between variables (as below) if you want space-separated names.</p>
 <p>A multi-disc album with explicit tracks, using more of the music variables. <code>{disc}</code> is
 empty on disc 1, so <code>{disc?}</code> and its separator only appear from disc 2 onward:</p>
-<p><div class="language-yaml highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="nt">output_template</span><span class="p">:</span>
-</span><span id="__span-36-2"><a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a><span class="w">  </span><span class="nt">songs</span><span class="p">:</span><span class="w"> </span><span class="s">"{disc?}-{track_number}.</span><span class="nv"> </span><span class="s">{title}</span><span class="nv"> </span><span class="s">{explicit?}"</span>
-</span><span id="__span-36-3"><a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a><span class="w">  </span><span class="nt">folder</span><span class="p">:</span>
-</span><span id="__span-36-4"><a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a><span class="w">    </span><span class="nt">albums</span><span class="p">:</span><span class="w"> </span><span class="s">"{album_artist}</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">{album}</span><span class="nv"> </span><span class="s">({year})</span><span class="nv"> </span><span class="s">[{label?}]"</span>
+<p><div class="language-yaml highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="nt">output_template</span><span class="p">:</span>
+</span><span id="__span-37-2"><a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a><span class="w">  </span><span class="nt">songs</span><span class="p">:</span><span class="w"> </span><span class="s">"{disc?}-{track_number}.</span><span class="nv"> </span><span class="s">{title}</span><span class="nv"> </span><span class="s">{explicit?}"</span>
+</span><span id="__span-37-3"><a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a><span class="w">  </span><span class="nt">folder</span><span class="p">:</span>
+</span><span id="__span-37-4"><a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a><span class="w">    </span><span class="nt">albums</span><span class="p">:</span><span class="w"> </span><span class="s">"{album_artist}</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">{album}</span><span class="nv"> </span><span class="s">({year})</span><span class="nv"> </span><span class="s">[{label?}]"</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a>The Artist - The Album (2024) [The Label]/
-</span><span id="__span-37-2"><a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a>  ├─ 01. Opening Track.mka
-</span><span id="__span-37-3"><a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a>  └─ 02-03. Closing Track Explicit.mka
+<div class="language-text highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a>The Artist - The Album (2024) [The Label]/
+</span><span id="__span-38-2"><a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a>  ├─ 01. Opening Track.mka
+</span><span id="__span-38-3"><a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a>  └─ 02-03. Closing Track Explicit.mka
 </span></code></pre></div></p>
 </div>
 </div>
