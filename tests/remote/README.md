@@ -2,10 +2,10 @@
 
 Test suite for the unshackle remote-services subsystem:
 
-- `unshackle/core/remote_service.py` — `RemoteClient`, `RemoteService`, helpers
-- `unshackle/core/api/` — routes, handlers, session_store, input_bridge,
+- `unshackle/core/remote_service.py`: `RemoteClient`, `RemoteService`, helpers
+- `unshackle/core/api/`: routes, handlers, session_store, input_bridge,
   download_manager, errors, compression
-- `unshackle/commands/serve.py` — CLI surface
+- `unshackle/commands/serve.py`: CLI surface
 
 Two tiers:
 
@@ -38,7 +38,7 @@ The suite can either:
    `--server-url http://host:port`.
 
 Spawn mode is controlled by `--spawn-serve {auto, always, never}` (default
-`auto` — spawn only when `--server-url` is empty).
+`auto` spawns only when `--server-url` is empty).
 
 ### Auto-spawn (recommended)
 
@@ -78,7 +78,7 @@ services you have access to. Schema (see the example file for full docs):
 services:
   EXAMPLE:
     title_url: "..."           # required
-    series_url: "..."          # optional — overrides movie target when set
+    series_url: "..."          # optional, overrides movie target when set
     target_season: 1
     target_episode: 1
     search_query: "..."
@@ -114,9 +114,9 @@ uv run pytest tests/remote -v --live
 
 ## Markers
 
-- `unit` — fast, mocked (default)
-- `live` — needs `--live`
-- `slow` — hits real services; combine with `--live`
+- `unit`: fast, mocked (default)
+- `live`: needs `--live`
+- `slow`: hits real services; combine with `--live`
 
 Run only fast unit tests:
 
@@ -127,4 +127,4 @@ uv run pytest tests/remote -m "unit and not slow"
 ## Adding a new service to e2e
 
 1. Add a block under `services:` in your local `fixtures.yaml`.
-2. No new Python needed — every e2e test is parametrized over the YAML.
+2. No new Python needed; every e2e test is parametrized over the YAML.

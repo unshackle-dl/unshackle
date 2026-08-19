@@ -872,7 +872,6 @@ def describe(code: int) -> str | None:
 
 
 if __name__ == "__main__":
-    # ponytail: one check, signed and unsigned forms resolve to the same entry
     assert describe(0x8004C065) == describe(-2147172251)
     assert "DEVCERT_REVOKED" in describe(-2147172251)
     assert describe(-1021) is None  # non-DRM_E service code

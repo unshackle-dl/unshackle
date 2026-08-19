@@ -61,7 +61,7 @@ VIDEO_HEVC_SDR_CPD = (
 )
 # Real Dolby Vision (dvhe, DoViProfile "stn") CodecPrivateData from a Smooth
 # manifest: NALs arrive SPS,PPS,VPS (VPS last) and the VUI colour triple is
-# Unspecified (2,2,2) — DV is signalled by FourCC only, never by CICP.
+# Unspecified (2,2,2): DV is signalled by FourCC only, never by CICP.
 VIDEO_HEVC_DV_CPD = (
     "00000001420101022000000300B00000030000030096A001E020021C4D9457B91CAF016E0404042800001F480002EE0401F4E1"
     "15EE7E0001312D00002FAF0C80000000014401C1ACBE0EC90000000140010C01FFFF022000000300B00000030000030096"
@@ -295,7 +295,7 @@ def test_ec3_without_dolby_guid_builds_bare_entry():
 
 
 def test_aac_codec_private_data_synthesis_matches_real_manifest():
-    # 48 kHz stereo AAC-LC must produce 0x1190 — the exact ASC real manifests carry.
+    # 48 kHz stereo AAC-LC must produce 0x1190, the exact ASC real manifests carry.
     assert synthesize_aac_codec_private_data("AACL", 48000, 2).hex() == "1190"
 
 

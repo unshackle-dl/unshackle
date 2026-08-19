@@ -1,7 +1,7 @@
 """Unit tests for DownloadJob + DownloadQueueManager state machine.
 
 These tests focus on the queue manager's data layer (create/get/list/cancel/
-cleanup/serialize) — they do not exercise the actual subprocess download path.
+cleanup/serialize); they do not exercise the actual subprocess download path.
 """
 
 from __future__ import annotations

@@ -1177,7 +1177,7 @@ class DASH:
                 drm.append(PlayReady(pssh=pr_pssh, kid=kid, pssh_b64=pr_pssh_b64))
 
             elif urn == ClearKeyCENC.urn:
-                # W3C EME ClearKey (org.w3.clearkey) — match the scheme UUID alone,
+                # W3C EME ClearKey (org.w3.clearkey): match the scheme UUID alone,
                 # value="ClearKey1.0" is spec'd (DASH-IF CCP) but not required in the wild
                 kid_attr = protection.get("default_KID") or protection.get("{urn:mpeg:cenc:2013}default_KID")
                 kid = None

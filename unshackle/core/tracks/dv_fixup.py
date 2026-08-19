@@ -6,7 +6,7 @@ hvc1, with DV advertised only via SUPPLEMENTAL-CODECS. The fMP4 carries valid DV
 but the container does not signal DV, so muxing the MP4 directly produces an MKV that
 mediainfo and DV-capable TVs see as plain HDR10/HDR10+.
 
-The RPU is already valid — only the container's DV signaling is lost. Demuxing the
+The RPU is already valid; only the container's DV signaling is lost. Demuxing the
 elementary HEVC stream (ffmpeg -c:v copy) exposes the in-stream RPU to mkvmerge, which then
 signals DV in the muxed MKV. No dovi_tool extract/inject round-trip is needed.
 """

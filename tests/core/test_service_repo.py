@@ -246,7 +246,7 @@ def test_changed_services_up_to_date(monkeypatch):
 
 @pytest.mark.parametrize("order", [["a", "b"], ["b", "a"]])
 def test_collision_first_source_wins(tmp_path, order):
-    """Discovery dedupes by tag honoring list order — the FIRST source to define a tag wins,
+    """Discovery dedupes by tag honoring list order: the FIRST source to define a tag wins,
     whether it's a local dir or a repo clone; later duplicates are shadowed."""
     dirs = {}
     for name in ("a", "b"):

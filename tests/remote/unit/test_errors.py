@@ -47,7 +47,7 @@ def test_api_error_default_http_status_per_code() -> None:
         APIErrorCode.NETWORK_ERROR: 503,
         APIErrorCode.SERVICE_UNAVAILABLE: 503,
     }
-    # Lock that the cases above are the *complete* live set — a new/removed code trips this.
+    # Lock that the cases above are the *complete* live set; a new/removed code trips this.
     assert {c.name for c in cases} == {c.name for c in APIErrorCode}
     for code, expected in cases.items():
         assert APIError(code, "x").http_status == expected, code
@@ -142,7 +142,7 @@ def test_handle_api_exception_categorizes_generic() -> None:
     assert body["error_code"] == "NETWORK_ERROR"
 
 
-# Locks the FULL observable response — (http status, error_code, retryable) — that
+# Locks the FULL observable response (http status, error_code, retryable) that
 # a client sees for a generic (non-APIError) exception flowing through the
 # handle_api_exception funnel that every route's `except Exception` path calls.
 # This is the equivalence reference: after the categorize_exception collapse,

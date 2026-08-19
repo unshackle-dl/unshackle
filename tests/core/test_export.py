@@ -1,4 +1,4 @@
-"""Tests for ``dl.write_export`` — the ``--export`` JSON sidecar.
+"""Tests for ``dl.write_export``, the ``--export`` JSON sidecar.
 
 Regression: DRM-free tracks never pass through ``prepare_drm``, so ``write_export``
 must accept ``drm=None`` (and DRM systems without ``to_dict``/``content_keys`` such

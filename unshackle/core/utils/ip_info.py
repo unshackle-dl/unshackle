@@ -97,7 +97,7 @@ def lookup_session(source: Optional[requests.Session]) -> requests.Session:
     Build a plain, retry-free requests session for IP geolocation.
 
     Geolocation needs no TLS fingerprinting, so we skip the impersonated rnet
-    session and the base session's urllib3 retry loop — both retry 429 internally,
+    session and the base session's urllib3 retry loop. Both retry 429 internally,
     which hides the response and defeats fast provider handover. With a bare session
     a 429 comes straight back so we can move to the next provider immediately. Only
     the proxy is carried over so proxied lookups still report the proxy's exit IP.
@@ -139,7 +139,7 @@ def fetch_ipinfo(session: requests.Session) -> Optional[dict]:
 
 
 def fetch_ip_api_in(session: requests.Session) -> Optional[dict]:
-    """ip-api.in has no /me endpoint — resolve IP via ipify first, then look it up."""
+    """ip-api.in has no /me endpoint, so resolve IP via ipify first, then look it up."""
     ip_resp = session.get("https://api.ipify.org", timeout=REQUEST_TIMEOUT)
     if ip_resp.status_code == 429:
         raise RateLimited()
@@ -198,7 +198,7 @@ def get_ip_info(
             returned info reflects the proxy's exit IP. Auth headers for ipinfo
             are sent per-request; never mutated onto session.headers.
         cached: When True, read/write a 24h Cacher-backed entry. Use only for
-            local IP lookups — never with a proxied session.
+            local IP lookups, never with a proxied session.
     """
     cache = None
     if cached:

@@ -431,7 +431,7 @@ def validate_enrichments(
             tmdb_votes[provider_name] = ext.tmdb_id
 
     if len(set(tmdb_votes.values())) <= 1:
-        return enrichments  # all agree or only one voted — no conflict
+        return enrichments  # all agree or only one voted, no conflict
 
     value_counts = Counter(tmdb_votes.values())
     most_common_val, most_common_count = value_counts.most_common(1)[0]
@@ -439,7 +439,7 @@ def validate_enrichments(
     if most_common_count > 1:
         anchor_tmdb_id = most_common_val
     else:
-        # No majority — pick the most authoritative provider
+        # No majority, so pick the most authoritative provider
         best_provider = min(
             tmdb_votes.keys(),
             key=lambda name: authority.get(name, 99),

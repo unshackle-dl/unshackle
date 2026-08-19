@@ -1,4 +1,4 @@
-"""Tests for SubtitleCodecChoice — notably the ``original`` keep-source sentinel that
+"""Tests for SubtitleCodecChoice, notably the ``original`` keep-source sentinel that
 services set via the ``sub_format`` override (must not be rejected as an invalid codec)."""
 
 from __future__ import annotations

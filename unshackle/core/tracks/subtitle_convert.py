@@ -8,7 +8,7 @@ requested pair and orders them by rank; ``run_conversion`` tries each in turn (a
 fallback chain) until one succeeds.
 
 The public entry point stays ``Subtitle.convert`` / ``Subtitle.strip_hearing_impaired`` in
-subtitle.py — this module only holds the selection + conversion logic so subtitle.py keeps
+subtitle.py; this module only holds the selection + conversion logic so subtitle.py keeps
 the codec enum, ``parse``, sanitizers and cue helpers (the collaborators backends reuse).
 """
 
@@ -113,7 +113,7 @@ def subtitleedit_args(
 
 
 # Styled SubStation formats flattened to SRT lose positioning/colours/italics.
-# Never performed automatically — only when the user explicitly forces a target format.
+# Never performed automatically, only when the user explicitly forces a target format.
 LOSSY_DOWNCONVERTS: frozenset[tuple[Codec, Codec]] = frozenset(
     {
         (Codec.SubStationAlpha, Codec.SubRip),
@@ -188,7 +188,7 @@ class SubtitleEditBackend:
 
 
 class Pysubs2Backend:
-    """pysubs2 — pure Python, broad format support, best fidelity for SSA/ASS (native style model)."""
+    """pysubs2: pure Python, broad format support, best fidelity for SSA/ASS (native style model)."""
 
     name = "pysubs2"
     formats = frozenset(PYSUBS2_FORMATS)
@@ -209,7 +209,7 @@ class Pysubs2Backend:
 
 
 class SubbyBackend:
-    """subby — purpose-built for streaming subs. WebVTT/fVTT/SAMI -> SRT + CommonIssuesFixer cleanup."""
+    """subby: purpose-built for streaming subs. WebVTT/fVTT/SAMI -> SRT + CommonIssuesFixer cleanup."""
 
     name = "subby"
     reads = frozenset({Codec.WebVTT, Codec.fVTT, Codec.SAMI})
@@ -248,7 +248,7 @@ class SubbyBackend:
 
 
 class PycaptionBackend:
-    """pycaption — last resort. Note: flattens positioning/italics (devine #39), so ranked last."""
+    """pycaption: last resort. Flattens positioning/italics (devine #39), so ranked last."""
 
     name = "pycaption"
     reads = frozenset({Codec.SubRip, Codec.TimedTextMarkupLang, Codec.WebVTT, Codec.SAMI, Codec.fTTML, Codec.fVTT})

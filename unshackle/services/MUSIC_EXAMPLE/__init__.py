@@ -75,7 +75,7 @@ class MUSIC_EXAMPLE(Service):
     # GEOFENCE: regions required; the framework warns/blocks if proxy region mismatches.
     GEOFENCE = ("US", "UK")
     # TITLE_RE: named groups (?P<...>) parsed in get_titles(). Accepts URL or bare id.
-    # A music catalogue is addressed by several kinds of thing, not just one, so `kind`
+    # A music catalogue is addressed by several kinds of thing, so `kind`
     # is part of the identifier and decides which endpoint get_titles() asks.
     TITLE_RE = (
         r"^(?:https?://(?:www\.)?musicdomain\.com/)?(?P<kind>track|album|playlist|artist)/(?P<content_id>[^/?#]+)"

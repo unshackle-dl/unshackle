@@ -206,7 +206,7 @@ class TVDBProvider(MetadataProvider):
             return cached
 
         episodes: list[dict] = []
-        for page in range(20):  # ponytail: hard page cap, 500 eps/page covers any real series
+        for page in range(20):
             data = self.api_get(f"/series/{tvdb_id}/episodes/{order}", {"page": page})
             if data is None and page:
                 # a partial listing would renumber episodes wrongly

@@ -667,7 +667,7 @@ class Track:
     def base_kwargs_from_dict(data: dict[str, Any]) -> dict[str, Any]:
         """Build the shared Track constructor kwargs from a ``to_dict()`` payload.
 
-        DRM is not reconstructed here — ``to_dict`` does not serialise it, and the import
+        DRM is not reconstructed here: ``to_dict`` does not serialise it, and the import
         flow attaches the licensed DRM + content keys separately.
         """
         return {

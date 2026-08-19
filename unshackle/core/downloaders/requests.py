@@ -640,7 +640,7 @@ def download(
             RnetSession preserves TLS fingerprinting for services that need it.
         segmented: If downloads are segments or parts of one bigger file.
         part_offset: Byte offset to write at within a pre-allocated file. When set
-            (with `part_end`), enables part mode for parallel ranged downloads —
+            (with `part_end`), enables part mode for parallel ranged downloads:
             no truncate, no skip-if-exists, no control file; emits only `advance`
             events; retries resume mid-part via Range.
         part_end: Inclusive end byte of the part. Required when `part_offset` is set.

@@ -1162,7 +1162,7 @@ def get_debug_logger() -> Optional[DebugLogger]:
 def log_event(operation: str, *, level: str = "DEBUG", message: str = "", **kwargs: Any) -> None:
     """Emit a single structured debug-log entry. No-op when debug logging is disabled.
 
-    The canonical one-shot logging primitive — replaces the
+    The canonical one-shot logging primitive. Replaces the
     ``if dl := get_debug_logger(): dl.log(...)`` guard boilerplate. To add logging to a new
     feature, call ``log_event("my_feature_event", message="...", context={...})``.
     """

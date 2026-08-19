@@ -23,7 +23,7 @@ from unshackle.core.utilities import close_debug_logger, init_debug_logger
 @click.option("-v", "--version", is_flag=True, default=False, help="Print version information.")
 @click.option("-d", "--debug", is_flag=True, default=False, help="Enable DEBUG level logs and JSON debug logging.")
 def main(version: bool, debug: bool) -> None:
-    """unshackle—Modular Movie, TV, and Music Archival Software."""
+    """unshackle: Modular Movie, TV, and Music Archival Software."""
     debug_logging_enabled = debug or config.debug
 
     logging.basicConfig(
@@ -80,7 +80,7 @@ def main(version: bool, debug: bool) -> None:
             latest_version = UpdateChecker.check_for_updates_sync(__version__)
             if latest_version:
                 console.print(
-                    f"\n[yellow]⚠️  Update available![/yellow] "
+                    f"\n[yellow]Update available![/yellow] "
                     f"Current: {__version__} → Latest: [green]{latest_version}[/green]",
                     justify="center",
                 )

@@ -46,7 +46,7 @@ TRACK_IN_MOVIE = 0x2
 TRACK_IN_PREVIEW = 0x4
 SELF_CONTAINED = 0x1
 
-# Fixed creation/modification time — deterministic output (no wall clock).
+# Fixed creation/modification time for deterministic output (no wall clock).
 EPOCH = 0
 
 NAL_START_CODE = b"\x00\x00\x00\x01"
@@ -96,7 +96,7 @@ def split_nal_units(codec_private_data: bytes) -> list[bytes]:
 def remove_emulation_prevention(data: bytes) -> bytes:
     """Strip H.26x emulation-prevention bytes (the 0x03 in any 00 00 03 run).
 
-    The byte after a consumed escape is data — even another 0x03 — so the scan
+    The byte after a consumed escape is data, even another 0x03, so the scan
     must skip past it rather than re-examine (a naive trailing-window check
     over-strips consecutive escapes and shifts every later bit position).
     """
@@ -611,10 +611,10 @@ def build_dec3(codec_private_data: bytes) -> Optional[bytes]:
     """Build a dec3 (EC-3 specific) box from Smooth EC-3 CodecPrivateData.
 
     Smooth EC-3 CodecPrivateData ([MS-SSTR] AudioTag 65534) serializes a
-    WAVEFORMATEXTENSIBLE — sometimes the full structure, sometimes only its
-    extension (samples-per-block + channel mask + DD+ SubFormat GUID) — with
+    WAVEFORMATEXTENSIBLE, sometimes the full structure, sometimes only its
+    extension (samples-per-block + channel mask + DD+ SubFormat GUID), with
     the raw dec3 payload (ETSI TS 102 366 F.6) after the GUID. Returns None
-    when the GUID is absent — decoders still sync from EC-3 frames in mdat.
+    when the GUID is absent; decoders still sync from EC-3 frames in mdat.
     """
     guid_at = codec_private_data.find(DOLBY_DIGITAL_PLUS_GUID)
     if guid_at != -1 and len(codec_private_data) > guid_at + 16:

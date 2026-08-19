@@ -22,7 +22,7 @@ def create_session(http_session, server_url: str, service: str, title_id: str) -
     payload = {
         "service": service,
         "title_id": title_id,
-        # Quality knobs — send enum names the server's session_create parser accepts.
+        # Quality knobs: send enum names the server's session_create parser accepts.
         "range_": ["SDR", "HDR10", "DV"],
         "vcodec": ["AVC", "HEVC"],
         "best_available": True,
@@ -115,13 +115,13 @@ def test_track_quality_meets_expected(http_session, server_url: str, service_cas
         tracks = r.json()
         video = tracks.get("video") or []
         summary = summarize(video)
-        # Print summary even when test passes — discovery aid.
+        # Print summary even when the test passes, as a discovery aid.
         with capsys.disabled():
             print(f"\n[{service}] target={kind} '{target.get('name')}' -> {summary}")
 
         expected = conf.get("expected_quality") or {}
         if not expected:
-            pytest.skip(f"{service}: no expected_quality in fixtures.yaml — discovered={summary}")
+            pytest.skip(f"{service}: no expected_quality in fixtures.yaml; discovered={summary}")
 
         if "min_height" in expected:
             assert summary["max_height"] >= expected["min_height"], (

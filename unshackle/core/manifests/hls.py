@@ -355,7 +355,7 @@ class HLS:
 
         seg_uri = urljoin(variant_url, variant.segments[0].uri)
 
-        # Download only the first 8KB — SPS is always near the start of the first TS packet
+        # Download only the first 8KB: SPS is always near the start of the first TS packet
         res = session.get(seg_uri, headers={"Range": "bytes=0-8191"})
         data = res.content
 

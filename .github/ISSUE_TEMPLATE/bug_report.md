@@ -3,7 +3,7 @@ name: Bug report
 about: Create a report to help us improve
 title: ""
 labels: ""
-assignees: Sp5rky
+assignees: imSp4rky
 ---
 
 **Describe the bug**
@@ -57,7 +57,7 @@ Add any other context about the problem here.
 
 ---
 
-**⚠️ Important:**
+**Important:**
 
 - **DO NOT include service-specific implementation code** unless you have explicit rights to share it
 - **DO NOT share credentials, API keys, WVD files, or authentication tokens**

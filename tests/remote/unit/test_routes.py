@@ -190,5 +190,5 @@ async def test_auth_middleware_accepts_known_key(make_app, aiohttp_client) -> No
     app["config"]["users"]["good-key"] = {"devices": []}
     client = await aiohttp_client(app)
     resp = await client.get("/api/session/nonexistent", headers={"X-Secret-Key": "good-key"})
-    # Auth passed; handler then 404s the session — anything other than 401 is fine here.
+    # Auth passed; handler then 404s the session; anything other than 401 is fine here.
     assert resp.status != 401

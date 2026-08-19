@@ -8,39 +8,39 @@
 # unshackle (matches the service directory name, e.g. EXAMPLE). The keys
 # below are read by the e2e tests:
 #
-#   title_url            (required) — movie URL/slug/ID accepted by the service
-#   series_url           (optional) — series URL/slug/ID; when set, the
+#   title_url            (required): movie URL/slug/ID accepted by the service
+#   series_url           (optional): series URL/slug/ID; when set, the
 #                                    quality + license + download tests
 #                                    target target_season/target_episode
 #                                    instead of the movie
 #   target_season        (optional, default 1)
 #   target_episode       (optional, default 1)
-#   search_query         (optional) — string to send to /api/search
-#   requires_auth        (optional, default true) — informational
-#   server_cdm           (optional, default false) — informational
-#   drm                  (optional) — informational ("widevine" / "playready")
+#   search_query         (optional): string to send to /api/search
+#   requires_auth        (optional, default true): informational
+#   server_cdm           (optional, default false): informational
+#   drm                  (optional): informational ("widevine" / "playready")
 #
-#   expected_quality     (optional) — when present, the quality test
+#   expected_quality     (optional): when present, the quality test
 #                                    asserts these limits against the
 #                                    discovered video tracks
-#       min_height       (optional) — max video.height >= this
-#       min_codecs       (optional) — codec names that must be present
+#       min_height       (optional): max video.height >= this
+#       min_codecs       (optional): codec names that must be present
 #                                    (AVC, HEVC, VC1, VP8, VP9, AV1)
-#       min_ranges       (optional) — range names that must be present
+#       min_ranges       (optional): range names that must be present
 #                                    (SDR, HDR10, HDR10P, DV, HLG, HYBRID)
-#       min_track_count  (optional) — at least this many video tracks
+#       min_track_count  (optional): at least this many video tracks
 #
-#   runs_download_test   (optional, default false) — when true, the
+#   runs_download_test   (optional, default false): when true, the
 #                                                   download smoke test
 #                                                   runs for this service
-#   runs_license_test    (optional, default false) — when true, the
+#   runs_license_test    (optional, default false): when true, the
 #                                                   license test runs for
 #                                                   this service
-#   license_drm          (optional, default "widevine") — DRM type the
+#   license_drm          (optional, default "widevine"): DRM type the
 #                                                       license test
 #                                                       requests ("widevine"
 #                                                       or "playready")
-#   license_quality      (optional, default 1080) — pixel height of the
+#   license_quality      (optional, default 1080): pixel height of the
 #                                                  track the license test
 #                                                  targets
 

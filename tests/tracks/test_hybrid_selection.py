@@ -2,14 +2,14 @@
 
 Covers the selection primitives that back `-r ...,DV,HYBRID` downloads:
 
-- ``Tracks.select_hybrid`` — picks the HDR base layer per resolution and the
+- ``Tracks.select_hybrid``: picks the HDR base layer per resolution and the
   single lowest DV track used as a hybrid ingredient.
-- ``Tracks.merge_video_selections`` — de-duplicates the ingredient/deliverable
+- ``Tracks.merge_video_selections``: de-duplicates the ingredient/deliverable
   overlap so a DV track that is chosen as both is not muxed/downloaded twice.
-- ``Tracks.partition_hybrid_videos`` — splits the ladder into hybrid-ingredient
+- ``Tracks.partition_hybrid_videos``: splits the ladder into hybrid-ingredient
   candidates and the standalone-deliverable pool; HDR10/HDR10+/DV only enter
   the pool when their range was explicitly requested alongside HYBRID.
-- ``Tracks.flag_hybrid_ingredients`` — marks ingredient-only tracks with
+- ``Tracks.flag_hybrid_ingredients``: marks ingredient-only tracks with
   ``hybrid_base_only`` so the standalone mux loop skips them.
 
 The remaining ``dl`` glue (the Cartesian deliverable product and the mux loop)
@@ -169,7 +169,7 @@ def flagged(tracks: list[Video]) -> set[str]:
 
 def test_flag_hybrid_only_flags_base_and_ingredient_dv(ladder: list[Video]) -> None:
     """`-r HYBRID`: no deliverables, so the base and the ingredient DV are both
-    skipped by the standalone mux loop — only the hybrid output remains."""
+    skipped by the standalone mux loop; only the hybrid output remains."""
     hybrid_selected = list(filter(Tracks().select_hybrid(ladder, [1080]), ladder))
     Tracks.flag_hybrid_ingredients(hybrid_selected, [])
     assert flagged(ladder) == {"hdr10p-1080", "dv-360"}
@@ -177,7 +177,7 @@ def test_flag_hybrid_only_flags_base_and_ingredient_dv(ladder: list[Video]) -> N
 
 def test_flag_hybrid_plus_hdr10p_keeps_base_deliverable(ladder: list[Video]) -> None:
     """`-r HYBRID,HDR10P`: the base is also an explicit deliverable, only the
-    ingredient DV is skipped — hybrid + standalone HDR10+ are muxed."""
+    ingredient DV is skipped; hybrid + standalone HDR10+ are muxed."""
     hybrid_selected = list(filter(Tracks().select_hybrid(ladder, [1080]), ladder))
     base = next(t for t in ladder if t.id == "hdr10p-1080")
     Tracks.flag_hybrid_ingredients(hybrid_selected, [base])
@@ -186,7 +186,7 @@ def test_flag_hybrid_plus_hdr10p_keeps_base_deliverable(ladder: list[Video]) -> 
 
 def test_flag_hybrid_plus_hdr10p_and_dv_keeps_both_deliverables(ladder: list[Video]) -> None:
     """`-r HYBRID,HDR10P,DV`: best DV is a deliverable, lowest DV stays
-    ingredient-only — hybrid + HDR10+ + DV are muxed."""
+    ingredient-only; hybrid + HDR10+ + DV are muxed."""
     hybrid_selected = list(filter(Tracks().select_hybrid(ladder, [1080]), ladder))
     base = next(t for t in ladder if t.id == "hdr10p-1080")
     best_dv = next(t for t in ladder if t.id == "dv-1080")

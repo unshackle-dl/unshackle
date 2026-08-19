@@ -1,5 +1,5 @@
 site_name: unshackle
-site_description: Movie, TV, and Music archival software — user guide and REST API reference
+site_description: Movie, TV, and Music archival software. User guide and REST API reference
 site_url: https://docs.unshackle.dev/
 repo_url: https://github.com/unshackle-dl/unshackle
 repo_name: unshackle-dl/unshackle

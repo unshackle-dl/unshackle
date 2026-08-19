@@ -1,4 +1,4 @@
-"""Tests for ``apply_service_dl_overrides`` — precedence: CLI/env > service dl > global dl > defaults."""
+"""Tests for ``apply_service_dl_overrides``. Precedence: CLI/env > service dl > global dl > defaults."""
 
 from __future__ import annotations
 

@@ -24,7 +24,7 @@ class ProtonVPN(Proxy):
     Proton VPN HTTPS proxy provider.
 
     Authenticates via TV login (a self-sustaining session cached at <cache>/vpn/protonvpn.json, the
-    only refreshable kind) or an exported account.proton.me cookie session (AUTH-<UID>, access only —
+    only refreshable kind) or an exported account.proton.me cookie session (AUTH-<UID>, access only,
     re-export on expiry). Resolves a server by country/city, mints short-lived proxy credentials, and
     returns an authenticated HTTPS proxy URL (https://user:pass@server:4443).
 

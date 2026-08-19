@@ -7,7 +7,7 @@ For any fixture service with ``runs_download_test: true``, this test:
   4. Fetches the manifest URL with the resolved headers.
   5. Asserts the body is non-empty and looks like DASH/HLS.
 
-It does NOT decrypt or mux — that requires a full local CDM. It proves
+It does NOT decrypt or mux; that requires a full local CDM. It proves
 the end-to-end pipeline up to CDN reachability for the selected quality.
 """
 

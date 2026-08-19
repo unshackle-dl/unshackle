@@ -215,7 +215,7 @@ class ISM:
                 iv_size=iv_size,
             )
         except (NotImplementedError, ValueError, struct.error) as e:
-            # Unsupported codec, malformed CodecPrivateData or out-of-range field —
+            # Unsupported codec, malformed CodecPrivateData or out-of-range field:
             # fall back to raw concatenation rather than aborting the download.
             log_event(
                 "manifest_ism_init_unsupported",

@@ -755,11 +755,11 @@ class RnetSession:
         return self.request(method, url, **send_kwargs)
 
     def mount(self, prefix: str, adapter: Any) -> None:
-        """No-op — rnet handles TLS and connection pooling natively."""
+        """No-op; rnet handles TLS and connection pooling natively."""
         pass
 
     def close(self) -> None:
-        """No-op — rnet manages its own resources."""
+        """No-op; rnet manages its own resources."""
         pass
 
 

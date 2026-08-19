@@ -59,7 +59,7 @@ def measure_real_bitrate(
     Single-file tracks are measured exactly. Segmented tracks probe up to
     ``samples`` segments spread across the track and extrapolate; byte-range
     segments need no request. Returns bits/sec, or ``None`` if it cannot be
-    measured. Never raises — a probe failure must not abort a download.
+    measured. Never raises; a probe failure must not abort a download.
     """
     from unshackle.core.tracks.track import Track
 
@@ -74,7 +74,7 @@ def measure_real_bitrate(
             # Descriptor.URL: a single file. Some services parse a DASH
             # manifest then collapse each representation to its single BaseURL and
             # flip the descriptor to URL, leaving the manifest (and its duration) in
-            # track.data — recover the duration from there, else probe the file.
+            # track.data: recover the duration from there, else probe the file.
             segments = extract_url(track, session, log=log)
             if not segments:
                 log.debug(f"{track.id}: cannot measure real bitrate (no known duration)")
@@ -130,7 +130,7 @@ def apply_real_bitrates(
     declared-bitrate tracks per group are probed, in parallel. Each group is then
     extended downward: while the lowest probed bitrate in a group sits below the
     next unprobed track's declared bitrate (so that track could outrank a probed
-    one), the next track is probed too — until the probed set is safely above the
+    one), the next track is probed too, until the probed set is safely above the
     rest. Unprobed tracks keep their manifest-declared bitrate.
     """
     groups: defaultdict[Hashable, list["Track"]] = defaultdict(list)
@@ -182,7 +182,7 @@ def dedupe(segments: list[Segment]) -> list[Segment]:
     Collapse segments that address the same bytes so each object is measured once.
 
     Manifests sometimes wrap a single file in several segment entries sharing one
-    URL — with no byte range (a ``SegmentTemplate`` whose media pattern has no
+    URL, with no byte range (a ``SegmentTemplate`` whose media pattern has no
     ``$Number$``) or with the same range. Each resolves to the whole file, so
     counting them all would multiply the size by the segment count. Segments
     sharing the same ``(url, byte_range)`` are merged into one entry whose duration

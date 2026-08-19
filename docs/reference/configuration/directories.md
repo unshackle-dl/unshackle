@@ -16,24 +16,24 @@ directories:
 
 | Key | Type | Default | Overridable | Purpose |
 |-----|------|---------|:-----------:|---------|
-| `downloads` | path | `<repo>/downloads` | ✅ | Default output directory for finished files. |
-| `temp` | path | `<repo>/temp` | ✅ | Temporary working files during download/decrypt/mux. |
-| `cache` | path | `<data>/cache` | ✅ | Generic cache, title cache, and the update-check store. |
-| `cookies` | path | `<data>/cookies` | ✅ | Per-service cookie files (and VPN cookie files). |
-| `logs` | path | `<data>/logs` | ✅ | Log files. |
-| `exports` | path | `<data>/exports` | ✅ | Export JSON files. |
-| `wvds` | path | `<data>/WVDs` | ✅ | Widevine device files (`.wvd`). |
-| `prds` | path | `<data>/PRDs` | ✅ | PlayReady device files (`.prd`). |
-| `dcsl` | path | `<data>/DCSL` | ✅ | DCSL data. |
-| `commands` | path | `unshackle/commands` | ✅ | CLI command modules. |
-| `services` | list \| path | `[unshackle/services]` | ✅ | Service search paths and/or remote repo specs (see below). |
-| `vaults` | path | `unshackle/vaults` | ✅ | Vault backend modules. |
-| `fonts` | path | `unshackle/fonts` | ✅ | Bundled fonts. |
-| `user_configs` | path | `unshackle/` | ❌ protected | Where `unshackle.yaml` lives. |
-| `data` | path | `unshackle/` | ❌ protected | Base for the data subdirectories above. |
-| `core_dir` | path | `unshackle/core` | ❌ protected | Package core. |
-| `namespace_dir` | path | `unshackle/` | ❌ protected | Package root. |
-| `app_dirs` | - | `AppDirs("unshackle", False)` | ❌ protected | Internal AppDirs instance. |
+| `downloads` | path | `<repo>/downloads` | Yes | Default output directory for finished files. |
+| `temp` | path | `<repo>/temp` | Yes | Temporary working files during download/decrypt/mux. |
+| `cache` | path | `<data>/cache` | Yes | Generic cache, title cache, and the update-check store. |
+| `cookies` | path | `<data>/cookies` | Yes | Per-service cookie files (and VPN cookie files). |
+| `logs` | path | `<data>/logs` | Yes | Log files. |
+| `exports` | path | `<data>/exports` | Yes | Export JSON files. |
+| `wvds` | path | `<data>/WVDs` | Yes | Widevine device files (`.wvd`). |
+| `prds` | path | `<data>/PRDs` | Yes | PlayReady device files (`.prd`). |
+| `dcsl` | path | `<data>/DCSL` | Yes | DCSL data. |
+| `commands` | path | `unshackle/commands` | Yes | CLI command modules. |
+| `services` | list \| path | `[unshackle/services]` | Yes | Service search paths and/or remote repo specs (see below). |
+| `vaults` | path | `unshackle/vaults` | Yes | Vault backend modules. |
+| `fonts` | path | `unshackle/fonts` | Yes | Bundled fonts. |
+| `user_configs` | path | `unshackle/` | No protected | Where `unshackle.yaml` lives. |
+| `data` | path | `unshackle/` | No protected | Base for the data subdirectories above. |
+| `core_dir` | path | `unshackle/core` | No protected | Package core. |
+| `namespace_dir` | path | `unshackle/` | No protected | Package root. |
+| `app_dirs` | - | `AppDirs("unshackle", False)` | No protected | Internal AppDirs instance. |
 
 !!! note "The `services` directory is special"
     `services` may be a **list**, and each entry can be either a local directory or a

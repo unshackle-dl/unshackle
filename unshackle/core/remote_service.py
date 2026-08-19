@@ -736,7 +736,7 @@ class RemoteService:
     def create_drm_stub(drm_type: str, kid_hexes: list[str]) -> Any:
         """Create a DRM object stub matching the type the server actually used.
 
-        For server_cdm mode, this is only used for display — keys are already
+        For server_cdm mode, this is only used for display; keys are already
         resolved. We build a minimal DRM object that holds content_keys.
         """
         from uuid import UUID

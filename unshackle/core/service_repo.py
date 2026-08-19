@@ -95,12 +95,12 @@ def resolve_service_repo(spec: str, *, ttl: int = DEFAULT_TTL, force: bool = Fal
         force_sync(dest, stamp)
     elif is_stale(stamp, ttl):
         pull(dest, stamp)
-    return dest  # ponytail: git IS the cache layer — no bespoke fetch/integrity code
+    return dest
 
 
 def clone(url: str, branch: Optional[str], dest: Path, stamp: Path) -> Optional[Path]:
     if not binaries.Git:
-        log.error("git not found on PATH — cannot fetch service repo %s", url)
+        log.error("git not found on PATH; cannot fetch service repo %s", url)
         return None
     dest.parent.mkdir(parents=True, exist_ok=True)
     args = [str(binaries.Git), "clone", "--depth", "1"]
@@ -122,7 +122,7 @@ def pull(dest: Path, stamp: Path) -> None:
     if not binaries.Git:
         write_stamp(stamp)
         return
-    # never clobber local edits — refuse to refresh a dirty clone and let the caller exit cleanly
+    # never clobber local edits: refuse to refresh a dirty clone and let the caller exit cleanly
     if is_dirty(dest):
         raise DirtyServiceRepo(dest)
     try:

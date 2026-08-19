@@ -433,7 +433,7 @@ class Video(Track):
         if not vui:
             return None
 
-        # Skip the rewrite when the bitstream VUI already matches the target — avoids a full
+        # Skip the rewrite when the bitstream VUI already matches the target, which avoids a full
         # bitstream pass on services that already ship correct colour metadata
         expected = {
             Video.Range.HDR10: ("bt2020", "smpte2084", "bt2020nc"),
@@ -602,7 +602,7 @@ class Video(Track):
         does it actually call ccextractor.
 
         Even though there is a possibility of more than one c608 box, only one
-        can actually be extracted. Not only that but it's very possible this
+        can actually be extracted. It is also very possible this
         needs to be done before any decryption as the decryption may destroy
         some of the metadata.
 
