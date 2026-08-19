@@ -114,7 +114,7 @@ def load_full_cdm(service: str, profile: Optional[str], cdm_type: Optional[str] 
     inside ``__init__``, so the lightweight ``resolve_server_cdm`` stub is not enough
     for list_titles / list_tracks / search. Mirrors ``dl.get_cdm`` selection logic but
     skips the quality-tier shortcuts (no track context yet) and falls back to the stub
-    if no device is configured or loading fails.
+    if the configuration has no device, or if loading fails.
     """
     from unshackle.core.cdm import load_cdm
     from unshackle.core.config import config as app_config
@@ -168,10 +168,10 @@ def build_parent_ctx(
     service_config: dict,
     extra_params: Optional[Dict[str, Any]] = None,
 ) -> Any:
-    """Build a parent click Context for invoking a service.cli via ctx.invoke().
+    """Assemble a parent click Context for invoking a service.cli through ctx.invoke().
 
-    The service's CLI callback uses ``ctx.parent.params`` (proxy, range_, vcodec, etc.)
-    and ``ctx.obj`` (ContextData). Both flow through Click's parent chain.
+    The service's CLI callback uses ``ctx.parent.params`` (proxy, range_, vcodec, and the
+    other dl options) and ``ctx.obj`` (ContextData). Both flow through Click's parent chain.
     """
     import click
 
@@ -200,10 +200,10 @@ def instantiate_service(
 ) -> Any:
     """Instantiate a service by invoking its click cli through Click.
 
-    Click fills option defaults via ``param.get_default()`` and runs type coercion,
-    so we no longer have to inspect ``__init__`` or stitch defaults by hand. Extra
-    kwargs are pulled from ``data`` when the key matches a cli option name and is
-    not in the transport-key blocklist.
+    Click fills option defaults through ``param.get_default()`` and runs type coercion,
+    so we no longer have to inspect ``__init__`` or stitch defaults by hand. This function
+    pulls extra kwargs from the ``data`` entries whose names match a cli option name
+    and are not in the transport-key blocklist.
     """
     cli_params = getattr(getattr(service_module, "cli", None), "params", []) or []
     cli_param_names = {p.name for p in cli_params if hasattr(p, "name") and p.name}
@@ -217,9 +217,9 @@ def instantiate_service(
 
 
 def setup_list_service(data: Dict[str, Any], normalized_service: str, profile: Optional[str], title_id: str) -> Any:
-    """Build and authenticate a service instance for list_titles / list_tracks.
+    """Assemble and authenticate a service instance for list_titles / list_tracks.
 
-    Runs the shared preamble: load yaml → resolve proxy → load CDM → build ctx →
+    Runs the shared preamble: load yaml → get proxy → load CDM → assemble ctx →
     instantiate → authenticate. Raises APIError on proxy failure.
     """
     from unshackle.commands.dl import dl
@@ -257,7 +257,7 @@ def setup_list_service(data: Dict[str, Any], normalized_service: str, profile: O
 def get_allowed_services(request: Optional[web.Request] = None) -> Optional[List[str]]:
     """Get effective service allowlist considering global + per-key config.
 
-    Returns None if all services are allowed.
+    Returns None if no allowlist restricts the services.
     """
     global_allowed = config.serve.get("services")
     global_set: Optional[set[str]] = None
@@ -287,10 +287,10 @@ def get_allowed_services(request: Optional[web.Request] = None) -> Optional[List
 
 
 def server_cdm_allowed(request: Optional[web.Request] = None) -> bool:
-    """Whether the calling key may have the server run the CDM licensing.
+    """Whether the calling API key may have the server operate the CDM licensing.
 
-    Configured keys opt in with ``server_cdm: true``; keys absent from
-    ``serve.users`` (the admin secret) keep full access.
+    Configured API keys opt in with ``server_cdm: true``. An API key absent from
+    ``serve.users`` (the admin secret) keeps full access.
     """
     if not request:
         return True
@@ -312,7 +312,7 @@ CORS_HEADERS = {
 
 
 def request_secret_key(request: web.Request) -> Optional[str]:
-    """The caller's key: the X-Secret-Key header, or on the events route the secret_key
+    """The caller's API key: the X-Secret-Key header, or on the events route the secret_key
     query param (EventSource cannot send headers)."""
     key = request.headers.get("X-Secret-Key")
     if not key:
@@ -323,17 +323,17 @@ def request_secret_key(request: web.Request) -> Optional[str]:
 
 
 def caller_key(request: Optional[web.Request] = None) -> str:
-    """The authenticating key for a request, or 'anonymous' when unauthenticated."""
+    """The authenticating API key for a request, or 'anonymous' when unauthenticated."""
     if not request:
         return "anonymous"
     return request_secret_key(request) or "anonymous"
 
 
 def owns_job(job: Any, request: Optional[web.Request] = None) -> bool:
-    """Whether the calling key owns this job.
+    """Whether the calling API key owns this job.
 
-    Jobs created without an owner (no-key mode / legacy) stay shared; otherwise a job is
-    only visible to the key that created it (constant-time compare).
+    Jobs created without an owner (no-key mode / legacy) stay shared. Otherwise, only the
+    API key that created the job can see it (constant-time compare).
     """
     import hmac
 
@@ -344,7 +344,7 @@ def owns_job(job: Any, request: Optional[web.Request] = None) -> bool:
 
 
 def validate_service(service_tag: str, request: Optional[web.Request] = None) -> Optional[str]:
-    """Validate, normalize, and check allowlist for service tag."""
+    """Validate and normalise the service tag, and examine the allowlist."""
     if not isinstance(service_tag, str):
         return None
     try:
@@ -448,7 +448,7 @@ def extract_manifests(tracks) -> List[Dict[str, Any]]:
 
     Serializes DASH and ISM manifest XML as zlib-compressed base64 strings
     so the client can reconstruct track.data locally. HLS tracks download
-    directly from their URL so no manifest serialization is needed.
+    directly from their URL, so this function does not serialise their manifest.
     """
     import base64
     import zlib
@@ -494,7 +494,7 @@ def extract_manifests(tracks) -> List[Dict[str, Any]]:
 
 
 def serialize_drm(drm_list) -> Optional[List[Dict[str, Any]]]:
-    """Serialize DRM objects to JSON-serializable list."""
+    """Serialise DRM objects to JSON-serializable list."""
     if not drm_list:
         return None
 
@@ -596,8 +596,8 @@ def original_audio_ids(tracks: List[Audio], title: Title_T) -> set:
 def serialize_audio_track(track: Audio, include_url: bool = False, is_original: bool = False) -> Dict[str, Any]:
     """Convert audio track to JSON-serializable dict.
 
-    Resolve is_original with original_audio_ids so the flag always agrees with the
-    track 'orig' would actually download.
+    Get is_original from original_audio_ids so the flag always agrees with the
+    track 'orig' would download.
     """
     codec_name = enum_name(track.codec)
 
@@ -636,7 +636,7 @@ def serialize_subtitle_track(track: Subtitle, include_url: bool = False) -> Dict
 
 
 async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
-    """Handle search request."""
+    """Answer the request to find titles."""
     from unshackle.commands.dl import dl
 
     service_tag = data.get("service")
@@ -718,7 +718,7 @@ async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = 
 
 
 async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
-    """Handle list-titles request."""
+    """Answer the list-titles request."""
     require_fields(data, "service", "title_id")
     service_tag = data.get("service")
     title_id = data.get("title_id")
@@ -756,7 +756,7 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
 
 
 async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
-    """Handle list-tracks request."""
+    """Answer the list-tracks request."""
     require_fields(data, "service", "title_id")
     service_tag = data.get("service")
     title_id = data.get("title_id")
@@ -1062,13 +1062,13 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
 def enforce_download_gates(params: Dict[str, Any], request: Optional[web.Request] = None) -> None:
     """Enforce serve-config gates on per-job cdm overrides and client-supplied credentials.
 
-    A per-request `cdm` selects a server-side device, so it is gated here rather than honoured
-    blindly. `serve.cdm_overrides` opts in: a list permits only those device names, or `true`
+    A per-request `cdm` selects a server-side device, so this function gates it here rather than
+    honour it blindly. `serve.cdm_overrides` opts in: a list permits only those device names, or `true`
     permits any (for a single trusted client). Unset/false rejects every override.
     A per-request `credential` (or `credentials` map) authenticates the job with client-supplied
     secrets instead of the server-side credentials. Gate it behind `serve.allow_job_credentials`
-    (default off) so a default deployment stays locked to its own credentials; mirrors the CDM gate.
-    A download job licenses DRM in-process with the server's own CDM, so a key without
+    (default off) so a default deployment stays locked to its own credentials. This mirrors the
+    CDM gate. A download job licenses DRM in-process with the server's own CDM, so an API key without
     ``server_cdm`` cannot submit or retry jobs.
     """
     if not server_cdm_allowed(request):
@@ -1097,7 +1097,7 @@ def enforce_download_gates(params: Dict[str, Any], request: Optional[web.Request
 
 
 async def download_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
-    """Handle download request - create and queue a download job."""
+    """Answer the download request: make a download job and add it to the queue."""
     from unshackle.core.api.download_manager import get_download_manager
 
     require_fields(data, "service", "title_id")
@@ -1168,7 +1168,7 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
 
 
 async def list_download_jobs_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
-    """Handle list download jobs request with optional filtering and sorting."""
+    """Answer the request to show download jobs, with optional filtering and sorting."""
     from unshackle.core.api.download_manager import get_download_manager
 
     try:
@@ -1204,7 +1204,7 @@ async def list_download_jobs_handler(data: Dict[str, Any], request: Optional[web
         reverse = sort_order == "desc"
 
         def get_sort_key(job):
-            """Get the sorting key value, handling None values."""
+            """Get the value to sort on, and give a None value a default."""
             value = getattr(job, sort_by, None)
             if value is None:
                 if sort_by in ["created_time", "started_time", "completed_time"]:
@@ -1237,7 +1237,7 @@ async def list_download_jobs_handler(data: Dict[str, Any], request: Optional[web
 
 
 async def get_download_job_handler(job_id: str, request: Optional[web.Request] = None) -> web.Response:
-    """Handle get specific download job request."""
+    """Answer the request for one specific download job."""
     from unshackle.core.api.download_manager import get_download_manager
 
     try:
@@ -1331,7 +1331,7 @@ async def download_job_events_handler(job_id: str, request: web.Request) -> web.
 
 
 async def cancel_download_job_handler(job_id: str, request: Optional[web.Request] = None) -> web.Response:
-    """Handle cancel/remove download job request."""
+    """Answer the cancel/remove download job request."""
     from unshackle.core.api.download_manager import TERMINAL_STATUSES, get_download_manager
 
     try:
@@ -1374,7 +1374,7 @@ async def cancel_download_job_handler(job_id: str, request: Optional[web.Request
 
 
 async def clear_finished_download_jobs_handler(request: Optional[web.Request] = None) -> web.Response:
-    """Handle clear finished download jobs request."""
+    """Answer the clear finished download jobs request."""
     from unshackle.core.api.download_manager import get_download_manager
 
     try:
@@ -1395,7 +1395,7 @@ async def clear_finished_download_jobs_handler(request: Optional[web.Request] = 
 
 
 async def retry_download_job_handler(job_id: str, request: Optional[web.Request] = None) -> web.Response:
-    """Handle retry download job request - enqueue a new job with the original's parameters."""
+    """Answer the retry download job request: enqueue a new job with the original's parameters."""
     from unshackle.core.api.download_manager import TERMINAL_STATUSES, get_download_manager
 
     try:
@@ -1453,7 +1453,7 @@ async def retry_download_job_handler(job_id: str, request: Optional[web.Request]
 
 
 async def prioritize_download_job_handler(job_id: str, request: Optional[web.Request] = None) -> web.Response:
-    """Handle prioritize download job request - move a queued job to the front of the queue."""
+    """Answer the prioritise download job request: move a queued job to the front of the queue."""
     from unshackle.core.api.download_manager import JobStatus, get_download_manager
 
     try:
@@ -1494,7 +1494,7 @@ CONFIG_SECRET_KEY_RE = re.compile(r"secret|password|token|api_key|credential", r
 
 
 def redact_config(value: Any) -> Any:
-    """Recursively mask secret-looking keys and URL userinfo; stringify paths."""
+    """Recursively mask secret-looking config keys and URL userinfo. Stringify paths."""
     if isinstance(value, dict):
         return {
             str(k): (REDACTED if v and CONFIG_SECRET_KEY_RE.search(str(k)) else redact_config(v))
@@ -1510,7 +1510,7 @@ def redact_config(value: Any) -> Any:
 
 
 async def profiles_handler(request: Optional[web.Request] = None) -> web.Response:
-    """Handle list credential profiles request."""
+    """Answer the request for the credential profiles."""
     try:
         allowed = get_allowed_services(request)
         profiles: Dict[str, List[str]] = {}
@@ -1534,7 +1534,7 @@ async def profiles_handler(request: Optional[web.Request] = None) -> web.Respons
 
 
 async def server_config_handler(request: Optional[web.Request] = None) -> web.Response:
-    """Handle read-only effective server config request (secrets redacted)."""
+    """Answer the read-only effective server config request (secrets redacted)."""
     from unshackle.core.api.download_manager import get_download_manager
 
     try:
@@ -1574,7 +1574,7 @@ async def server_config_handler(request: Optional[web.Request] = None) -> web.Re
 
 
 async def download_history_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
-    """Handle persisted download history request."""
+    """Answer the persisted download history request."""
     from unshackle.core.api.download_manager import read_job_history
 
     try:
@@ -1641,7 +1641,7 @@ def require_no_active_downloads(operation: str) -> None:
 
 
 async def clear_cache_handler(request: Optional[web.Request] = None) -> web.Response:
-    """Handle clear cache directory request."""
+    """Answer the clear cache directory request."""
     from unshackle.commands.env import clear_directory
 
     try:
@@ -1658,7 +1658,7 @@ async def clear_cache_handler(request: Optional[web.Request] = None) -> web.Resp
 
 
 async def clear_temp_handler(request: Optional[web.Request] = None) -> web.Response:
-    """Handle clear temp directory request."""
+    """Answer the clear temp directory request."""
     from unshackle.commands.env import clear_directory
 
     try:
@@ -1675,7 +1675,7 @@ async def clear_temp_handler(request: Optional[web.Request] = None) -> web.Respo
 
 
 async def refresh_services_handler(request: Optional[web.Request] = None) -> web.Response:
-    """Handle refresh of service repos configured in directories.services."""
+    """Answer the request to refresh the service repos configured in directories.services."""
     from unshackle.core.service_repo import is_repo_spec, refresh_repo
 
     try:
@@ -1703,7 +1703,7 @@ VERSION_RE = re.compile(r"\d+\.\d+(?:\.\d+)*")
 
 
 def binary_version(path: Any) -> Optional[str]:
-    """Best-effort version probe of a binary; None when nothing parseable."""
+    """Best-effort version probe of a binary. Returns None when nothing is parseable."""
     import subprocess
 
     for flag in ("--version", "-version"):
@@ -1720,7 +1720,7 @@ def binary_version(path: Any) -> Optional[str]:
 
 
 async def env_check_handler(request: Optional[web.Request] = None) -> web.Response:
-    """Handle environment dependency check request."""
+    """Answer the environment dependency check request."""
     from unshackle.commands.env import get_dependencies
 
     def run_checks() -> List[Dict[str, Any]]:
@@ -1778,7 +1778,7 @@ def create_service_instance(
     proxy_providers: list,
     profile: Optional[str],
 ) -> Any:
-    """Create and authenticate a service instance.
+    """Make and authenticate a service instance.
 
     Supports client-sent credentials/cookies (for remote-dl) with fallback
     to server-local config (for backward compatibility).
@@ -1870,10 +1870,10 @@ def create_service_instance(
 
 
 async def session_create_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
-    """Handle session creation: authenticate + get titles + get tracks + get chapters.
+    """Answer the remote session creation: authenticate + get titles + get tracks + get chapters.
 
     This is the main entry point for remote-dl clients. It creates a persistent
-    session on the server with the authenticated service instance, fetches all
+    remote session on the server with the authenticated service instance, fetches all
     titles and tracks, and returns everything the client needs for track selection.
     """
     from unshackle.core.api.session_store import get_session_store
@@ -1983,11 +1983,11 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
 
 
 async def session_titles_handler(session_id: str, request: Optional[web.Request] = None) -> web.Response:
-    """Get titles for the authenticated session.
+    """Get titles for the authenticated remote session.
 
-    Called after session/create. This is separate from auth so that
-    interactive auth flows (OTP, captcha) can complete before titles
-    are fetched.
+    Called after `session/create`. This is separate from auth so that
+    interactive auth flows (OTP, captcha) can complete before the server
+    fetches titles.
     """
     session = await get_validated_session(session_id, request)
     require_authenticated(session)
@@ -2028,11 +2028,11 @@ async def session_titles_handler(session_id: str, request: Optional[web.Request]
 async def session_tracks_handler(
     data: Dict[str, Any], session_id: str, request: Optional[web.Request] = None
 ) -> web.Response:
-    """Get tracks and chapters for a specific title in the session.
+    """Get tracks and chapters for a specific title in the remote session.
 
-    Called per-title by the client after session/create returns titles.
+    Called per-title by the client after `session/create` returns titles.
     This keeps auth separate from track fetching, allowing interactive
-    auth flows (OTP, captcha) before any tracks are requested.
+    auth flows (OTP, captcha) before the client requests any tracks.
     """
     session = await get_validated_session(session_id, request)
     require_authenticated(session)
@@ -2155,7 +2155,7 @@ async def session_tracks_handler(
 async def session_segments_handler(
     data: Dict[str, Any], session_id: str, request: Optional[web.Request] = None
 ) -> web.Response:
-    """Resolve segment URLs for selected tracks.
+    """Get segment URLs for selected tracks.
 
     The client calls this after selecting which tracks to download.
     Returns segment URLs, init data, DRM info, and any headers/cookies
@@ -2237,15 +2237,15 @@ def cdm_type_stub(cdm_type: str) -> SimpleNamespace:
 
 
 def resolve_server_cdm(service: str, profile: Optional[str], cdm_type: Optional[str]) -> Optional[Any]:
-    """Resolve CDM for the server context.
+    """Get the CDM for the server context.
 
     Checks the server's own CDM config (``config.cdm[service]``) to
     determine the CDM type without loading the full CDM object. This
-    ensures that when ``server_cdm: true`` is used, the server's CDM
+    ensures that when you use ``server_cdm: true``, the server's CDM
     determines device selection (e.g. PlayReady vs Widevine).
 
-    Falls back to a lightweight stub from *cdm_type* only if no server
-    CDM is configured for the service.
+    Falls back to a lightweight stub from *cdm_type* only if the configuration
+    has no server CDM for the service.
     """
     from unshackle.core.config import config as app_config
 
@@ -2284,7 +2284,7 @@ def detect_cdm_type_for_service(service: str, app_config: Any) -> Optional[str]:
 
 
 def detect_cdm_type(cdm_name: str, app_config: Any) -> Optional[str]:
-    """Detect CDM type (playready/widevine) from config without loading it.
+    """Detect CDM type (PlayReady/widevine) from config without loading it.
 
     Checks remote_cdm entries and local file extensions to determine the type.
     """
@@ -2307,7 +2307,7 @@ def detect_cdm_type(cdm_name: str, app_config: Any) -> Optional[str]:
 
 
 def require_authenticated(session: Any) -> None:
-    """Raise if the session has not finished authenticating."""
+    """Raise if the remote session has not finished authenticating."""
     if session.auth_status == AuthStatus.FAILED:
         raise APIError(
             APIErrorCode.AUTH_FAILED,
@@ -2367,7 +2367,7 @@ async def session_prompt_post_handler(
 
 
 async def get_validated_session(session_id: str, request: Optional[web.Request]) -> Any:
-    """Fetch a session and verify the caller owns it.
+    """Fetch a remote session and make sure that the caller owns it.
 
     Ownership is bound to the authenticating X-Secret-Key rather than the source IP:
     behind a reverse proxy every caller shares the proxy's address, so the IP check
@@ -2401,9 +2401,9 @@ async def get_validated_session(session_id: str, request: Optional[web.Request])
 
 
 def resolve_handler_proxy(data: Dict[str, Any], normalized_service: str) -> tuple[Optional[str], list]:
-    """Resolve proxy and initialize providers from API request data.
+    """Get the proxy and initialise the proxy providers from API request data.
 
-    Handles explicit proxy param, provider:country format, and
+    Handles explicit proxy param, the `provider:country` format, and
     client_region-based auto-proxy when server region differs.
     """
     proxy_param = data.get("proxy")
@@ -2576,9 +2576,9 @@ def load_server_vaults(service_name: str) -> Any:
 
 
 def check_vaults(kids: list, service_name: str) -> Optional[Dict[str, str]]:
-    """Check server vaults for existing keys matching all KIDs.
+    """Examine the server vaults for existing content keys that match all KIDs.
 
-    Returns a KID:KEY dict if ALL KIDs are found, None otherwise.
+    Returns a `KID:KEY` dict if ALL KIDs are found, None otherwise.
     """
     from uuid import UUID
 
@@ -2628,7 +2628,7 @@ def handle_single_server_cdm(
     drm_type: str,
     request: Optional[web.Request],
 ) -> Dict[str, str]:
-    """Handle single-track server_cdm licensing using the DRM class get_content_keys() flow."""
+    """Do the single-track server_cdm licensing with the DRM class get_content_keys() flow."""
     import base64
 
     from unshackle.core.cdm import load_cdm
@@ -2739,13 +2739,13 @@ def handle_proxy_license(
 async def session_license_handler(
     data: Dict[str, Any], session_id: str, request: Optional[web.Request] = None
 ) -> web.Response:
-    """Handle DRM licensing in proxy or server_cdm mode.
+    """Do the DRM licensing in proxy or server_cdm mode.
 
     Proxy mode (default): forwards client CDM challenge to the service's
     license endpoint, returns raw license bytes for client-side parsing.
 
-    Server-CDM mode (mode="server_cdm"): server uses its own CDM to generate
-    the challenge, obtain the license, and extract KID:KEY pairs. Supports
+    Server-CDM mode (mode="server_cdm"): server uses its own CDM to make
+    the challenge, get the license, and extract `KID:KEY` pairs. Supports
     batch (track_ids list) and single-track requests.
     """
     import base64
@@ -2910,7 +2910,7 @@ async def session_license_handler(
 
 
 async def session_info_handler(session_id: str, request: Optional[web.Request] = None) -> web.Response:
-    """Check session validity and get session info."""
+    """Make sure that the remote session is valid, and get the remote session info."""
     session = await get_validated_session(session_id, request)
 
     from unshackle.core.api.session_store import get_session_store
@@ -2928,7 +2928,7 @@ async def session_info_handler(session_id: str, request: Optional[web.Request] =
 
 
 async def session_delete_handler(session_id: str, request: Optional[web.Request] = None) -> web.Response:
-    """Delete a session, return updated cache files, and clean up server-side data."""
+    """Delete a remote session, return updated cache files, and clean up server-side data."""
     import base64
     import zlib
 

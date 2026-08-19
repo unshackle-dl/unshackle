@@ -62,8 +62,8 @@ def serve(
 
     \b
     CDM ENDPOINTS:
-    - Widevine: /{device}/open, /{device}/close/{session_id}, etc.
-    - PlayReady: /playready/{device}/open, /playready/{device}/close/{session_id}, etc.
+    - Widevine: /{device}/open, /{device}/close/{session_id}, and others
+    - PlayReady: /playready/{device}/open, /playready/{device}/close/{session_id}, and others
 
     \b
     You may serve with Caddy at the same time with --caddy. You can use Caddy

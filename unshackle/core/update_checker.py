@@ -11,11 +11,11 @@ import requests
 
 class UpdateChecker:
     """
-    Check for available updates from the GitHub repository.
+    Examine the GitHub repository for available updates.
 
-    This class provides functionality to check for newer versions of the application
-    by querying the GitHub releases API. It includes rate limiting, caching, and
-    both synchronous and asynchronous interfaces.
+    This class examines the GitHub releases API for newer versions of the application.
+    It includes rate limiting, caching, and both synchronous and asynchronous
+    interfaces.
 
     Attributes:
         REPO_URL: GitHub API URL for latest release
@@ -56,7 +56,7 @@ class UpdateChecker:
     @staticmethod
     def parse_version(version_string: str) -> str:
         """
-        Parse and normalize version string by removing 'v' prefix.
+        Parse and normalise version string by removing 'v' prefix.
 
         Args:
             version_string: Raw version string from API
@@ -117,13 +117,13 @@ class UpdateChecker:
     @classmethod
     def should_check_for_updates(cls, check_interval: int = DEFAULT_CHECK_INTERVAL) -> bool:
         """
-        Check if enough time has passed since the last update check.
+        Examine whether enough time has passed since the last update check.
 
         Args:
             check_interval: Time in seconds between checks (default: 24 hours)
 
         Returns:
-            True if we should check for updates, False otherwise
+            True when it is time to do an update check, False otherwise
         """
         cache_data = cls.load_cache_data()
 
@@ -142,7 +142,7 @@ class UpdateChecker:
 
         Args:
             latest_version: The latest version found, if any
-            current_version: The current version being used
+            current_version: The current version in use
         """
         cache_file = cls.get_cache_file()
 
@@ -198,7 +198,7 @@ class UpdateChecker:
     @classmethod
     async def check_for_updates(cls, current_version: str) -> Optional[str]:
         """
-        Check if there's a newer version available on GitHub.
+        Examine GitHub for a newer version.
 
         Args:
             current_version: The current version string (e.g., "1.1.0")
@@ -223,7 +223,7 @@ class UpdateChecker:
     @classmethod
     def get_cached_update_info(cls, current_version: str) -> Optional[str]:
         """
-        Check if there's a cached update available for the current version.
+        Examine the cache for an update for the current version.
 
         Args:
             current_version: The current version string

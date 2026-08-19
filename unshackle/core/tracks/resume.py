@@ -1,12 +1,12 @@
 """Cross-run segment-resume sidecars.
 
-A track's completed segment files may be reused by a later run, but only once
-the manifest proves the segmentation is unchanged. The proof is a fingerprint
+A later download can reuse a track's completed segment files, but only after
+the manifest proves that the segmentation did not change. The proof is a fingerprint
 of the segmentation stored in a JSON sidecar next to the segment directory.
 
 The sidecar is deliberately a sibling of the segment directory, never a file
 inside it: the manifest parsers merge by globbing the directory with no
-extension filter, so any file left in there would be concatenated into the
+extension filter, so they would concatenate any file left in there into the
 final output.
 """
 
@@ -42,7 +42,7 @@ def fingerprint(
     """Stable digest of a track's segmentation.
 
     Hashes the manifest URL (sans query), the segment count, and each
-    segment's URL (sans query) with its byte-range string verbatim; byte
+    segment's URL (sans query) with its byte-range string verbatim. Byte
     ranges are the strongest identity signal available and never carry
     tokens. extra carries protocol-specific identity inputs (HLS: the
     media_sequence start and post-filter segment count).
@@ -75,7 +75,7 @@ def reusable(save_dir: Path, digest: str) -> bool:
 
 
 def write_sidecar(save_dir: Path, digest: str) -> None:
-    """Record digest so a later run can prove save_dir's segments are reusable."""
+    """Record digest so a later download can prove that save_dir's segments are reusable."""
     sidecar_path(save_dir).write_text(json.dumps({"version": _VERSION, "digest": digest}), encoding="utf-8")
 
 

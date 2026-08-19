@@ -1,8 +1,8 @@
 # Quick Start
 
 This page takes you from a fresh install to your first downloaded file. You will
-create the one piece of configuration unshackle insists on, supply the service
-module and CDM it needs to fetch and decrypt media, run a basic `unshackle dl`
+make the one piece of configuration unshackle insists on, supply the service
+module and CDM it needs to fetch and decrypt media, operate a basic `unshackle dl`
 command, and learn where the finished file lands.
 
 !!! note "Before you start"
@@ -16,11 +16,11 @@ command, and learn where the finished file lands.
     ([step 3](#3-write-a-service)). `EXAMPLE` in this guide stands in for the tag you
     give yours.
 
-## 1. Check your environment
+## 1. Examine your environment
 
 unshackle drives several external tools (FFmpeg, MKVToolNix, shaka-packager, and
-others) to decrypt, repack, and mux media. Confirm they are visible before you
-download anything:
+others) to decrypt, repack, and mux media. Make sure that they are visible before
+you download anything:
 
 ```shell
 unshackle env check
@@ -35,16 +35,18 @@ matter for the features that use them.
     The summary line at the bottom reports `installed/total` and lists anything
     required that is still missing, so you know exactly what to install next.
 
-## 2. Create a minimal config
+## 2. Make a minimal config
 
-unshackle reads a single YAML file named `unshackle.yaml`. To see where it looks
-for that file, and where it *would* accept one if you have not made it yet, run:
+unshackle reads a single configuration file named `unshackle.yaml`. To see where it
+looks for that file, and where it *would* accept one if you have not made it yet,
+use this command:
 
 ```shell
 unshackle env info
 ```
 
-If no config exists, this prints the candidate locations. In search order they are:
+If no config exists, this prints the candidate locations. In the order unshackle
+examines them, they are:
 
 1. `unshackle.yaml` inside the unshackle package folder.
 2. `unshackle.yaml` in that folder's parent.
@@ -52,10 +54,10 @@ If no config exists, this prints the candidate locations. In search order they a
    (`~/.config/unshackle/` on Linux, `%LOCALAPPDATA%\unshackle\` on Windows,
    `~/Library/Application Support/unshackle/` on macOS).
 
-The **first** file that exists wins. Create `unshackle.yaml` in one of those
+The **first** file that exists wins. Make `unshackle.yaml` in one of those
 locations.
 
-### The one key you must set
+### The one config key you must set
 
 unshackle refuses to start a download unless it knows how to name the output file.
 That means `output_template` is the one setting a first run genuinely requires.
@@ -67,14 +69,14 @@ output_template:
   series: "{title} {season_episode} {episode_name?} {quality} {source}"
 ```
 
-Each `{variable}` is filled in from the title and the tracks you downloaded. The
-full set of valid variables, including `resolution`, `video`, `audio`, `hdr`,
-`edition`, `tag`, and more, is documented in [Output and Naming](../guide/output-and-naming.md).
+unshackle fills in each `{variable}` from the title and the tracks you downloaded.
+[Output and Naming](../guide/output-and-naming.md) gives the full set of valid
+variables, including `resolution`, `video`, `audio`, `hdr`, `edition`, `tag`, and more.
 
 !!! note "Spaces or dots?"
     unshackle auto-detects your naming style from the template: if the separators
-    between variables are mostly spaces, it uses spaces; if they are mostly dots,
-    it produces scene-style `Title.S01E01.1080p` names. Write the template in the
+    between variables are mostly spaces, it uses spaces. If they are mostly dots,
+    it makes scene-style `Title.S01E01.1080p` names. Write the template in the
     style you want the filenames to look.
 
 !!! warning "Editing config from the CLI strips comments"
@@ -95,8 +97,8 @@ commands.
 
 ## 4. Add a CDM for DRM
 
-Most streaming content is encrypted. To fetch decryption keys, unshackle needs a
-**CDM**, a Widevine device (`.wvd`) or a PlayReady device (`.prd`). Register a
+Most streaming services encrypt their titles. To fetch content keys, unshackle
+needs a **CDM**, a Widevine device (`.wvd`) or a PlayReady device (`.prd`). Add a
 Widevine device you already have with:
 
 ```shell
@@ -104,8 +106,8 @@ unshackle wvd add /path/to/device.wvd
 ```
 
 This validates the file and moves it into your WVDs directory. Then point services
-at it in your config. The `cdm` map is keyed by service tag, with a `default` that
-covers everything else:
+at it in your config. The `cdm` map uses the service tag as its config key, with a
+`default` that covers everything else:
 
 ```yaml title="unshackle.yaml"
 cdm:
@@ -114,20 +116,20 @@ cdm:
 ```
 
 PlayReady works the same way with `.prd` files created and managed by the
-[`prd`](../guide/cli-reference.md#prd) command. If a title is DRM-free, no CDM is needed.
+[`prd`](../guide/cli-reference.md#prd) command. If a title is DRM-free, unshackle needs no CDM.
 
 !!! tip
-    Run `unshackle wvd parse my_device` to inspect a device's security level and
-    contents, and `unshackle env info` to confirm where WVDs and PRDs are stored.
+    Operate `unshackle wvd parse my_device` to inspect a device's security level
+    and contents, and `unshackle env info` to show where unshackle stores WVDs and PRDs.
 
-## 5. Provide authentication
+## 5. Supply authentication
 
 Services that require a login read either **cookies** or **credentials**.
 
 - **Cookies**: export the service's cookies to a Netscape-format text file and
   place it in your cookies directory. unshackle looks for, in order:
   `cookies/{SERVICE}.txt`, then `cookies/{SERVICE}/{profile}.txt`, then
-  `cookies/{SERVICE}/default.txt`. So a file at `cookies/EXAMPLE.txt` is picked up
+  `cookies/{SERVICE}/default.txt`. So unshackle finds a file at `cookies/EXAMPLE.txt`
   automatically for the `EXAMPLE` service.
 
 - **Credentials**: store a username and password per service in your config:
@@ -143,21 +145,21 @@ depends on the service module.
 
 ## 6. Find a title (optional)
 
-If you have a URL or ID already, skip this. Otherwise, search the service for a
-title and note the `id` it prints, since that is what you feed to `dl`:
+If you have a URL or ID already, skip this. Otherwise, find a title on the service
+and note the `id` it prints, because that is what you feed to `dl`:
 
 ```shell
 unshackle search EXAMPLE "My Show"
 ```
 
-You can also list what a service exposes for a given title without downloading:
+You can also show what a service gives for a given title without downloading:
 
 ```shell
 unshackle dl --list-titles EXAMPLE 81234567     # show seasons/episodes
 unshackle dl --list EXAMPLE 81234567            # show available tracks
 ```
 
-## 7. Run your first download
+## 7. Do your first download
 
 A download always has three parts:
 
@@ -175,8 +177,9 @@ A good first command asks for 1080p with English audio:
 unshackle dl -q 1080 -l en EXAMPLE 81234567
 ```
 
-unshackle will fetch the title, select the tracks matching your flags, acquire
-keys through your CDM (and any key vaults), then decrypt, mux, and tag the result.
+unshackle will fetch the title, select the tracks that match your flags, and get
+the content keys through your CDM (and any key vaults). It then decrypts, muxes, and
+tags the result.
 
 ### Handy first flags
 
@@ -208,16 +211,17 @@ codec, bitrate, channel-layout, and track-type selection.
 
 ## 8. Where the output lands
 
-By default, unshackle writes finished files to the `downloads` directory
-(`unshackle env info` shows its exact path; the built-in default is a `downloads`
-folder one level above the installed `unshackle` package). Override it per run with `-o`:
+By default, unshackle writes finished files to the `downloads` directory.
+`unshackle env info` shows its exact path. The built-in default is a `downloads`
+folder one level above the installed `unshackle` package. Override it for one
+command with `-o`:
 
 ```shell
 unshackle dl -q 1080 -o /mnt/media/incoming EXAMPLE 81234567
 ```
 
 - unshackle writes **movies** as a single `.mkv` file named from your `movies` template.
-- **TV episodes** are grouped into a per-show / per-season folder (from your
+- unshackle groups **TV episodes** into a per-show / per-season folder (from your
   `series` template) unless you pass `--no-folder`.
 - unshackle builds the filename from your `output_template` and adds IMDb/TMDB/TVDB IDs to
   the file's metadata tags when available.
@@ -233,12 +237,12 @@ directories:
 
 - **[Downloading](../guide/downloading.md)**. The full `dl` command: quality, codecs,
   languages, track selection, hybrid Dolby Vision, and output control.
-- **[Configuration](configuration-file.md)**. Every `unshackle.yaml` key, plus
+- **[Configuration](configuration-file.md)**. Every `unshackle.yaml` config key, plus
   directories, key vaults, proxies, and naming templates.
-- **[REST API](../dev/rest-api/index.md)**. Run the `serve` server to drive downloads over
-  HTTP.
+- **[REST API](../dev/rest-api/index.md)**. Operate the `serve` server to drive downloads
+  over HTTP.
 
 !!! tip "You are never far from help"
     `unshackle --help`, `unshackle dl --help`, and `unshackle <command> --help`
-    list every option. When in doubt, add `--list` to a `dl`
+    show every option. When in doubt, add `--list` to a `dl`
     command to preview what it would do before it downloads anything.

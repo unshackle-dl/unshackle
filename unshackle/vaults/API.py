@@ -237,7 +237,7 @@ class Exceptions:
         """Authentication Error Occurred, is your token valid? Do you have permission to make this call?"""
 
     class TooManyRequests(Exception):
-        """Rate Limited; Sent too many requests in a given amount of time."""
+        """Rate Limited. Sent too many requests in a given amount of time."""
 
     class PageInvalid(Exception):
         """Requested page does not exist."""

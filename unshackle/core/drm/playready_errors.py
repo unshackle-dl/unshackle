@@ -851,7 +851,7 @@ REVOCATION_CODES = frozenset(
 
 
 def is_revocation(code: int) -> bool:
-    """True if the HRESULT means a device or certificate was revoked (signed or unsigned)."""
+    """True if the HRESULT means a revoked device or a revoked certificate (signed or unsigned)."""
     return code is not None and (code & 0xFFFFFFFF) in REVOCATION_CODES
 
 

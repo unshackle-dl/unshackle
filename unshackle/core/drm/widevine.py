@@ -70,14 +70,14 @@ class Widevine:
         """
         Get PSSH and KID from within the Initiation Segment of the Track Data.
         It also tries to get PSSH and KID from other track data like M3U8 data
-        as well as through ffprobe.
+        as well as through FFprobe.
 
-        Create a Widevine DRM System object from a track's information.
-        This should only be used if a PSSH could not be provided directly.
+        Make a Widevine DRM System object from a track's information.
+        Use this method only when a PSSH cannot be given directly.
         It is *rare* to need to use this.
 
-        You may provide your own requests session to be able to use custom
-        headers and more.
+        You can give your own `requests.Session` to use custom headers
+        and more.
 
         Raises:
             PSSHNotFound: If the PSSH was not found within the data.
@@ -127,7 +127,7 @@ class Widevine:
         """
         Get PSSH and KID from within Initialization Segment Data.
 
-        This should only be used if a PSSH could not be provided directly.
+        Use this method only when a PSSH cannot be given directly.
         It is *rare* to need to use this.
 
         Raises:
@@ -184,7 +184,8 @@ class Widevine:
     def to_dict(self) -> dict[str, Any]:
         """Serialise this DRM instance for export/import (PSSH + KIDs).
 
-        Content keys are stored once at the export's track level, not duplicated here.
+        unshackle stores the content keys once at the export's track level, and does not
+        duplicate them here.
         """
         return {
             "system": "Widevine",
@@ -194,9 +195,9 @@ class Widevine:
 
     def get_content_keys(self, cdm: WidevineCdm, certificate: Callable, licence: Callable) -> None:
         """
-        Create a CDM Session and obtain Content Keys for this DRM Instance.
-        The certificate and license params are expected to be a function and will
-        be provided with the challenge and session ID.
+        Make a CDM Session and get Content Keys for this DRM Instance.
+        The certificate and license params are functions. unshackle gives them
+        the challenge and the session ID.
         """
         for kid in self.kids:
             if kid in self.content_keys:
@@ -263,9 +264,9 @@ class Widevine:
 
     def get_NF_content_keys(self, cdm: WidevineCdm, certificate: Callable, licence: Callable) -> None:
         """
-        Create a CDM Session and obtain Content Keys for this DRM Instance.
-        The certificate and license params are expected to be a function and will
-        be provided with the challenge and session ID.
+        Make a CDM Session and get Content Keys for this DRM Instance.
+        The certificate and license params are functions. unshackle gives them
+        the challenge and the session ID.
         """
         for kid in self.kids:
             if kid in self.content_keys:
@@ -307,7 +308,7 @@ class Widevine:
             path: Path to the encrypted file to decrypt
         Raises:
             EnvironmentError if the required decryption executable could not be found.
-            ValueError if the track has not yet been downloaded.
+            ValueError if unshackle has not yet downloaded the track.
             SubprocessError if the decryption process returned a non-zero exit code.
         """
         if not self.content_keys:
@@ -399,7 +400,7 @@ class Widevine:
         shutil.move(output_path, path)
 
     def decrypt_with_shaka_packager(self, path: Path) -> None:
-        """Decrypt using Shaka Packager (original method)"""
+        """Decrypt with shaka-packager (original method)"""
         if not binaries.ShakaPackager:
             raise EnvironmentError("Shaka Packager executable not found but is required.")
 

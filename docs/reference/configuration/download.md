@@ -4,13 +4,14 @@
 
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
 
-Persistent defaults for the `dl` command. The block is used as Click's `default_map`, so any
-`dl` flag can be given a default here. See [Downloading](../../guide/downloading.md) and the
+Persistent defaults for the `dl` command. unshackle uses the block as Click's `default_map`,
+so you can give any `dl` flag a default here. See [Downloading](../../guide/downloading.md) and the
 [CLI Reference](../../guide/cli-reference.md) for what each flag does.
 
-**Key naming.** A key is the flag's long name with dashes replaced by underscores
-(`--best-available` → `best_available`, `--sub-format` → `sub_format`). A few keys are named
-after the flag's internal destination rather than its visible name; set these exact keys:
+**Config key naming.** A config key is the flag's long name with dashes replaced by
+underscores (`--best-available` → `best_available`, `--sub-format` → `sub_format`). A few
+config keys use the flag's internal destination and not its visible name. Set these exact
+config keys:
 
 | Flag | Config key |
 |------|-----------|
@@ -27,7 +28,7 @@ after the flag's internal destination rather than its visible name; set these ex
 [`services.<TAG>.dl`](services.md) override → this global `dl:` block → the built-in
 default. In other words, config only fills in options you did not set on the command line.
 
-Common keys (a useful subset; every `dl` flag works):
+Common config keys. This is a useful subset, and every `dl` flag works:
 
 | Key | Type | Default | Sets |
 |-----|------|---------|------|
@@ -89,28 +90,28 @@ dl:
 
 !!! note "`serve` uses these same keys"
     The [`serve`](services.md#serve) block accepts most of the same `dl` option keys at its top level
-    to set server-wide download defaults for every request it handles. Keys the API does not know
-    are ignored there (`speed_limit`, for example; `serve` has its own `global_speed_limit`).
+    to set server-wide download defaults for every request it handles. The API ignores the
+    config keys it does not know there, `speed_limit` for example. `serve` has its own
+    `global_speed_limit`.
 
 ## `continue_downloads`
 
 - **Type:** `bool` &nbsp;·&nbsp; **Default:** `false`
 
-Keep a failed download's completed segment files so the next attempt resumes from where it
+Keep a failed download's completed segment files so the next download resumes from where it
 stopped instead of restarting from byte zero.
 
-Only whole, fully downloaded segments are reused; partially written segments are always
-discarded, and no partial-byte (`Range`) resume across runs takes place. Reuse also
-requires proof that the remote content is unchanged: the manifest URL, segment count, and
-byte ranges must all match the previous run, otherwise the download silently restarts
-clean.
+unshackle reuses only whole, fully downloaded segments. It always discards partially written
+segments, and no partial-byte (`Range`) resume across runs takes place. Reuse is possible only
+with proof that the segmentation did not change. The manifest URL, segment count, and byte
+ranges must all match the previous download, or the download silently restarts clean.
 
 !!! note "What can and cannot resume"
     - Segmented DASH, ISM, and HLS tracks resume.
     - Single-file (non-segmented) downloads and DASH tracks collapsed to a single ranged
-      download never produce segment files, so this option does not apply to them (the
+      download never make segment files, so this option does not apply to them (the
       downloader has its own in-flight partial-file handling for those).
-    - HLS resumes Widevine/PlayReady and unencrypted content only; AES-128 content always
+    - HLS resumes Widevine/PlayReady and unencrypted titles only. An AES-128 title always
       restarts. An HLS failure during the post-download merge step also restarts.
 
 For a one-off resume without changing config, pass `dl --continue-downloads` on the
@@ -124,8 +125,8 @@ continue_downloads: true
 
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
 
-Subtitle handling: SDH stripping, format conversion, and whether subtitles are muxed in or
-written as sidecar files. See [Subtitles](../../guide/subtitles.md) for the full guide.
+Subtitle handling: SDH stripping, format conversion, and whether unshackle muxes the subtitles
+in or writes them as sidecar files. See [Subtitles](../../guide/subtitles.md) for the full guide.
 
 | Sub-key | Type | Default | Description |
 |---------|------|---------|-------------|
@@ -168,7 +169,7 @@ subtitle:
     | Default | English, Arabic, Bulgarian, Spanish, French, Japanese |
     | With the list above | English, Spanish, French, Arabic, Bulgarian, Japanese |
 
-    Nothing is removed, unlike `-sl`, which drops every subtitle language it does not name.
+    unshackle removes nothing, unlike `-sl`, which drops every subtitle language it does not name.
 
     Use `orig` in the list for the title's original language. A base tag also covers its
     regional forms, so `en` sorts `en-US` and `en-GB`, but `zh` does **not** cover
@@ -245,8 +246,8 @@ muxing:
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
 
 Language-tag remapping and the rule engine behind the `{lang_tag}` filename variable. When a
-`rules` list is present, each rule is evaluated in order and the first match's `tag` is used.
-A rule may test:
+`rules` list is present, unshackle evaluates each rule in order and uses the first match's
+`tag`. A rule can examine:
 
 | Condition | Meaning |
 |-----------|---------|

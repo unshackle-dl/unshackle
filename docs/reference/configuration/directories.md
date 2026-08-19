@@ -1,10 +1,10 @@
 # Directories { #directories }
 
-The `directories` key is a **dict** mapping directory names to filesystem paths. Only the
-names listed below are honoured; a handful are **protected** and cannot be moved (attempts
-to override them are silently skipped). All defaults are computed relative to the installed
-package, and every user-settable path is passed through `Path(...).expanduser()`, so `~`
-works.
+The `directories` config key is a **dict** mapping directory names to filesystem paths.
+unshackle honours only the names listed below. A handful are **protected** and you cannot
+move them, and unshackle silently ignores an override of one. unshackle computes all
+defaults relative to the installed package, and passes every user-settable path through
+`Path(...).expanduser()`, so `~` works.
 
 ```yaml title="unshackle.yaml"
 directories:
@@ -38,9 +38,9 @@ directories:
 !!! note "The `services` directory is special"
     `services` may be a **list**, and each entry can be either a local directory or a
     **repository spec**: a git URL (`https://...`, `ssh://...`, `git@...`, or anything ending in
-    `.git`) or `owner/repo` shorthand. Repo specs are cloned and updated automatically; plain
-    paths are used as-is. **List order is priority**: the first source to define a service
-    tag wins.
+    `.git`) or `owner/repo` shorthand. unshackle clones and updates repo specs automatically,
+    and uses plain paths as they are. **List order is priority**: the first source to define a
+    service tag wins.
 
     ```yaml
     directories:
@@ -51,11 +51,11 @@ directories:
     ```
 
 !!! info "How git-backed service repos are handled"
-    unshackle's use of git is **read-only on the remote**: it only ever performs a shallow
-    `clone`, `fetch`, `pull`, and a local `reset`; **nothing is ever pushed**. Private repos
-    are authenticated through your existing git credential helper, and unshackle stores no
+    unshackle's use of git is **read-only on the remote**: it only ever does a shallow
+    `clone`, `fetch`, `pull`, and a local `reset`. **unshackle never pushes anything**. Your
+    existing git credential helper authenticates private repos, and unshackle stores no
     tokens of its own. Clones live under `<first-local-services-dir>/_repos/<host>__<owner>__<repo>/`
-    (or the bundled `unshackle/services`), and **nothing is written to the cache directory**. After
+    (or the bundled `unshackle/services`), and **unshackle writes nothing to the cache directory**. After
     the first clone unshackle re-pulls **at most once every 24 h**, so it does not touch the
     network on every run.
 
@@ -74,9 +74,9 @@ directories:
 
 ## Filenames { #filenames }
 
-The `filenames` key is a **dict** of templated file/name patterns. Each value is used
-verbatim (no path processing). Braced fields like `{time}` and `{service}` are filled in at
-runtime.
+The `filenames` config key is a **dict** of templated file/name patterns. unshackle uses
+each value verbatim (no path processing). It fills in braced fields like `{time}` and
+`{service}` at runtime.
 
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|

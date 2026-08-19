@@ -1,16 +1,16 @@
 # DRM & CDM Setup
 
-Most commercial streaming content is protected by a Digital Rights Management (DRM)
-system. To download and play it back, unshackle needs to obtain the **content keys**
+A Digital Rights Management (DRM) system protects most commercial streaming titles.
+To download a title and play it back, unshackle needs to get the **content keys**
 for the encrypted tracks and then decrypt them. This page explains the DRM systems
-unshackle supports, how to provide a device so it can talk to a license server, the
+unshackle supports, how to install a device so it can talk to a license server, the
 difference between local and remote CDMs, and how to choose a decryption backend.
 
 !!! note "Who this page is for"
     This is a practical configuration guide for end users of the unshackle CLI.
-    A few sections are marked **Developer**. They describe internal behaviour that is
-    useful when writing a service, but you do not need them to download protected
-    content.
+    A few sections have a **Developer** mark. They give internal behaviour that is
+    useful when you write a service, but you do not need them to download a protected
+    title.
 
 ## Key concepts
 
@@ -18,8 +18,8 @@ Before configuring anything, it helps to know the vocabulary. unshackle draws a 
 line between two things:
 
 - A **CDM** (Content Decryption Module) is the trusted "black box" that turns a
-  *license challenge* into *content keys*. It is backed by a **device**, a file
-  containing the cryptographic identity of a real client (a phone, a browser, etc.).
+  *license challenge* into *content keys*. A **device** backs it: a file that carries
+  the cryptographic identity of a real client, such as a phone or a browser.
 - A **DRM system** is the wrapper around a CDM that parses the protection metadata,
   drives the challenge → license → keys handshake, and finally invokes an external
   tool to physically decrypt the downloaded file.
@@ -42,7 +42,7 @@ then decrypts the file with those keys.
 ## Supported DRM systems
 
 unshackle implements five DRM systems. Only the first two need a device file and a
-license-server handshake; the rest are special cases.
+license-server handshake. The rest are special cases.
 
 | System | Device file | License flow | Decryption |
 |--------|-------------|--------------|------------|
@@ -54,10 +54,10 @@ license-server handshake; the rest are special cases.
 
 !!! warning "Two different ClearKeys"
     "ClearKey (HLS)" and "ClearKey (CENC)" are entirely different systems that happen
-    to share a name. The HLS variant is the AES-128 key referenced by an `EXT-X-KEY`
-    tag and is decrypted in-process. The CENC variant is the W3C EME
-    `org.w3.clearkey` scheme, delivers keys as a JWK Set, and is decrypted through
-    shaka-packager or mp4decrypt just like Widevine. Neither involves a device file.
+    to share a name. The HLS variant is the AES-128 content key that an `EXT-X-KEY`
+    tag references, and unshackle decrypts it in-process. The CENC variant is the W3C
+    EME `org.w3.clearkey` scheme. It delivers keys as a JWK Set, and shaka-packager or
+    mp4decrypt decrypts it like Widevine. Neither involves a device file.
 
 ### Widevine vs PlayReady
 
@@ -65,20 +65,20 @@ These are the two "real" DRMs, and in unshackle they behave almost identically: 
 same PSSH/KID handling, the same decryption backends, and the same key-caching flow.
 The differences that matter to you are:
 
-- **Device file**: Widevine uses a `.wvd`; PlayReady uses a `.prd`.
+- **Device file**: Widevine uses a `.wvd`. PlayReady uses a `.prd`.
 - **Availability**: some services offer only one system, some offer both. When a
   manifest carries both, unshackle picks the appropriate CDM for each track (see
   [Widevine and PlayReady on the same title](#widevine-and-playready-on-the-same-title)).
 
-To download a Widevine-protected title you need a `.wvd` device; for PlayReady you
+To download a Widevine-protected title you need a `.wvd` device. For PlayReady you
 need a `.prd` device. You can hold both, and unshackle automatically selects the
 appropriate one for each track.
 
 !!! info "Obtaining device files"
     A `.wvd` or `.prd` encodes the private keys of a real client device. unshackle
-    does **not** ship with one and cannot generate the underlying secret material for
+    does **not** ship with one and cannot make the underlying secret material for
     you. You must supply your own. The `wvd` and `prd` commands below manage and
-    provision device files once you have the raw key material.
+    provision device files once you have the raw cryptographic material.
 
 ## Providing a device with the `wvd` and `prd` commands
 
@@ -107,8 +107,8 @@ The `wvd` command group manages `.wvd` files.
     $ unshackle wvd add ./nexus_6p.wvd
     ```
 
-    The file is validated and moved into the WVDs directory. You can add several at
-    once by passing multiple paths.
+    unshackle validates the file and moves it into the WVDs directory. You can add
+    several at once by passing multiple paths.
 
 === "Inspect a device"
 
@@ -117,8 +117,8 @@ The `wvd` command group manages `.wvd` files.
     ```
 
     Prints the System ID, Security Level, Type, Flags, and whether a Private Key,
-    Client ID, and VMP are present. A bare name (no extension) is resolved inside the
-    WVDs directory; a path with an extension is used as-is.
+    Client ID, and VMP are present. unshackle finds a bare name (no extension) inside
+    the WVDs directory. It uses a path with an extension as-is.
 
 === "Create from raw material"
 
@@ -166,7 +166,7 @@ The `prd` command group creates and maintains `.prd` files.
     $ unshackle prd new ./device_folder/
     ```
 
-    A fresh leaf certificate is generated and the device is written to the PRDs
+    unshackle makes a fresh leaf certificate and writes the device to the PRDs
     directory (or to `-o/--output`). Use `-e/--encryption_key` and `-s/--signing_key`
     to supply your own ECC keys instead of generating them.
 
@@ -177,8 +177,8 @@ The `prd` command group creates and maintains `.prd` files.
     ```
 
     Regenerates the leaf certificate and encryption/signing keys of an existing
-    device in place. The device must support reprovisioning (a group key must be
-    present, i.e. a version 3 or higher device).
+    device in place. The device must be able to reprovision (a group key must be
+    present, that is, a version 3 or higher device).
 
 === "Test against Microsoft's demo server"
 
@@ -188,12 +188,12 @@ The `prd` command group creates and maintains `.prd` files.
 
     Runs a full challenge/license/keys cycle against Microsoft's public PlayReady
     test server and prints the returned keys, confirming the device works.
-    `-sl/--security-level` accepts `150`, `2000`, or `3000` (default `2000`);
+    `-sl/--security-level` accepts `150`, `2000`, or `3000` (default `2000`).
     `-c/--ckt` accepts `aesctr` or `aescbc`.
 
 ## Selecting which device to use: the `cdm` config
 
-Having a device on disk is not enough; you must tell unshackle which device to use
+A device on disk is not enough. You must tell unshackle which device to use
 for which service. That is the job of the `cdm` section, which maps a service tag to
 a device name (the file's name without extension). A `default` entry acts as the
 fallback:
@@ -221,8 +221,9 @@ profile.
 
 === "By quality"
 
-    Keys are matched against the video height. You can use exact heights or
-    comparisons (`>=1080`, `>720`, `<=576`, `<480`). More specific matches win.
+    unshackle compares each config key against the video height. You can use exact
+    heights or comparisons (`>=1080`, `>720`, `<=576`, `<480`). The most specific one
+    wins.
 
     ```yaml
     cdm:
@@ -246,7 +247,8 @@ profile.
 
 === "By profile"
 
-    Keys are matched against the active profile, with a `default` fallback.
+    unshackle compares each config key against the active profile, with a `default`
+    fallback.
 
     ```yaml
     cdm:
@@ -257,15 +259,15 @@ profile.
 
 ## Local vs remote CDMs
 
-A CDM can run in two places:
+A CDM can operate in two places:
 
 - A **local CDM** loads a `.wvd` or `.prd` device from your machine and performs the
   challenge/license/keys handshake locally. This is what the `cdm` mapping above
   resolves to by default.
 - A **remote CDM** delegates the CDM operations to an HTTP API. Your device (and its
-  secrets) live on the remote server; unshackle sends it PSSH/challenge data and
+  secrets) live on the remote CDM host. unshackle sends it PSSH/challenge data and
   receives keys back. This is useful for sharing a high-security-level device, using
-  a hosted key service, or keeping device secrets off your download machine.
+  a hosted content key service, or keeping device secrets off your download machine.
 
 The device name in your `cdm` mapping resolves to a remote CDM whenever it matches the
 `name` of an entry in the `remote_cdm` list. Otherwise it falls back to a local
@@ -273,13 +275,13 @@ The device name in your `cdm` mapping resolves to a remote CDM whenever it match
 
 ## Remote CDMs
 
-Remote CDMs are declared as a list under `remote_cdm`. Each entry has a `name` (which
+You declare remote CDMs as a list under `remote_cdm`. Each entry has a `name` (which
 you then reference from the `cdm` mapping) and a shape that depends on its `type`.
 There are four kinds.
 
 ### Widevine remote CDM (pywidevine serve)
 
-With no `type` field and a non-PlayReady device type, the entry is treated as a
+With no `type` field and a non-PlayReady device type, unshackle treats the entry as a
 standard pywidevine "serve" endpoint:
 
 ```yaml title="unshackle.yaml"
@@ -296,13 +298,14 @@ cdm:
   default: my_wv_remote
 ```
 
-`security_level` defaults to `3000` if omitted. Field names are read
-case-insensitively, so `Device Type`/`device_type`, `System ID`/`system_id`, etc. are
-all accepted.
+`security_level` defaults to `3000` if omitted. unshackle reads field names
+case-insensitively, so `Device Type`/`device_type`, `System ID`/`system_id`, and the
+other field names are all accepted.
 
 ### PlayReady remote CDM
 
-If the device type is `PLAYREADY`, the entry is routed to the pyplayready remote CDM:
+If the device type is `PLAYREADY`, unshackle routes the entry to the pyplayready
+remote CDM:
 
 ```yaml title="unshackle.yaml"
 remote_cdm:
@@ -337,11 +340,11 @@ remote_cdm:
 decrypt_labs_api_key: your-decrypt-labs-key
 ```
 
-The API key is sent as the `decrypt-labs-api-key` header. If you omit `secret` on the
-entry, unshackle falls back to the global `decrypt_labs_api_key` value; if neither is
-present it raises an error. The `host` defaults to
+unshackle sends the API key as the `decrypt-labs-api-key` header. If you do not write
+`secret` on the entry, unshackle falls back to the global `decrypt_labs_api_key` value.
+If neither is present it raises an error. The `host` defaults to
 `https://keyxtractor.decryptlabs.com`. PlayReady devices (`SL2`/`SL3`) default to
-security level `2000`/`3000` respectively; Widevine devices default to
+security level `2000`/`3000` respectively. Widevine devices default to
 `system_id: 26830`, `security_level: 3`.
 
 ### Custom API (`custom_api`)
@@ -373,25 +376,30 @@ remote_cdm:
 
 The `custom_api` type supports much more: request/response field remapping,
 transforms (base64/hex/JSON encoding, `kid:key` parsing), conditional parameters,
-success/error detection, and vault-backed caching. Its full schema is aimed at
-developers integrating a bespoke key server; see the developer note below.
+success/error detection, and vault-backed caching. Its full schema is for developers
+who integrate a bespoke CDM API. See the developer note below.
 
 !!! note "Developer: full `custom_api` schema"
-    A `custom_api` entry accepts these sub-objects: `device` (`name`, `type`,
-    `system_id`, `security_level`); `auth` (`type` of `header`/`bearer`/`basic` with
-    the matching credential fields, plus `custom_headers`); `endpoints`
-    (`get_request` and `decrypt_response`, each `{path, method, timeout}`);
-    per-endpoint `request_mapping` (`param_names`, `static_params`,
-    `conditional_params`, `transforms`, `nested_params`, `exclude_params`) and
-    `response_mapping` (`fields`, `transforms`, `response_types`,
-    `success_conditions`, `error_fields`, `key_fields`); `caching` (`enabled`,
-    `use_vaults`, `check_cached_first`); and `legacy`/`timeout`. PlayReady mode is
-    inferred when `device.type == PLAYREADY` or the device name is `SL2`/`SL3`.
+    A `custom_api` entry accepts these sub-objects:
+
+    - `device` (`name`, `type`, `system_id`, `security_level`)
+    - `auth` (`type` of `header`/`bearer`/`basic` with the matching credential fields,
+      plus `custom_headers`)
+    - `endpoints` (`get_request` and `decrypt_response`, each `{path, method, timeout}`)
+    - per-endpoint `request_mapping` (`param_names`, `static_params`,
+      `conditional_params`, `transforms`, `nested_params`, `exclude_params`) and
+      `response_mapping` (`fields`, `transforms`, `response_types`,
+      `success_conditions`, `error_fields`, `key_fields`)
+    - `caching` (`enabled`, `use_vaults`, `check_cached_first`)
+    - `legacy` and `timeout`
+
+    unshackle infers PlayReady mode when `device.type == PLAYREADY` or the device name
+    is `SL2`/`SL3`.
 
 ## Decryption backends
 
-Once the content keys are known, the encrypted file (for Widevine, PlayReady, and
-ClearKey-CENC) is decrypted by one of two external tools:
+Once unshackle knows the content keys, one of two external tools decrypts the
+encrypted file (for Widevine, PlayReady, and ClearKey-CENC):
 
 - **shaka-packager** is the default.
 - **mp4decrypt** is part of the Bento4 tools.
@@ -401,7 +409,7 @@ Both must be discoverable in unshackle's bundled `binaries/` directory or on you
 "executable not found but is required" error. See [dependencies](../getting-started/installation.md) for
 installation.
 
-You choose the backend with the `decryption` key. It can be a single value applied
+You choose the backend with the `decryption` config key. It can be a single value applied
 globally, or a per-service mapping:
 
 === "Global default"
@@ -419,31 +427,32 @@ globally, or a per-service mapping:
     ```
 
 !!! info "How the value is interpreted"
-    The default is `shaka`. Only the exact value `mp4decrypt` selects mp4decrypt;
-    **anything else** (including `shaka`) selects shaka-packager. Per-service lookups
+    The default is `shaka`. Only the exact value `mp4decrypt` selects mp4decrypt.
+    **Anything else** (including `shaka`) selects shaka-packager. Per-service lookups
     are case-insensitive, with the `default`/`DEFAULT` entry used as the fallback.
 
-The two backends produce equivalent output for standard CENC content. shaka-packager
-is generally preferred; switch a specific service to `mp4decrypt` if you hit a track
-that shaka-packager cannot handle.
+The two backends give equivalent output for a standard CENC title. In most
+conditions shaka-packager is the better backend. Switch a specific service to
+`mp4decrypt` if you find a track that shaka-packager cannot decrypt.
 
 !!! note "ClearKey (HLS) does not use these tools"
-    HLS AES-128 ClearKey content is decrypted in-process using AES-CBC and ignores the
-    `decryption` setting entirely. There is nothing to configure.
+    unshackle decrypts an HLS AES-128 ClearKey title in-process with AES-CBC, and
+    ignores the `decryption` setting entirely. You do not need to configure anything.
 
 ## ClearKey
 
 ### ClearKey over HLS (AES-128)
 
-When an HLS playlist references a key with an `EXT-X-KEY` tag, unshackle fetches the
-key directly (from the given URI or an inline `data:` URL) and decrypts each segment
-in-process with AES-CBC. There is no device, no CDM, and no license challenge, so
-there is nothing to set up. Such tracks are handled automatically during download.
+When an HLS playlist references a content key with an `EXT-X-KEY` tag, unshackle
+fetches the content key directly (from the given URI or an inline `data:` URL) and
+decrypts each segment in-process with AES-CBC. There is no device, no CDM, and no
+license challenge, so you do not set anything up. unshackle decrypts such tracks
+automatically during download.
 
 ### ClearKey over CENC (W3C EME `org.w3.clearkey`)
 
-The CENC ClearKey scheme is a proper license flow, but the "license server" simply
-returns the keys as a JWK Set rather than a DRM-wrapped blob. unshackle builds a W3C
+The CENC ClearKey scheme is a proper license flow, but the "license server"
+returns the keys as a JWK Set and not a DRM-wrapped blob. unshackle builds a W3C
 EME request of the form:
 
 ```json
@@ -451,14 +460,14 @@ EME request of the form:
 ```
 
 It sends this to the manifest's license URL (or to whatever a service's ClearKey
-license hook returns) and reads the JSON Web Key set back. No device file is needed.
-The decrypted content still goes through shaka-packager or mp4decrypt like any other
-CENC track, so the `decryption` setting applies.
+license hook returns) and reads the JSON Web Key set back. You do not need a device
+file. The decrypted file still goes through shaka-packager or mp4decrypt like any
+other CENC track, so the `decryption` setting applies.
 
 ## Widevine and PlayReady on the same title
 
 A single manifest can advertise both Widevine and PlayReady. unshackle picks the CDM
-per track: if a track needs a system that your loaded CDM does not provide, it
+per track: if a track needs a system that your loaded CDM cannot supply, it
 transparently switches to the appropriate device for that track using your `cdm`
 mapping. If it cannot find a matching device, it fails with a clear message such as:
 
@@ -467,7 +476,7 @@ Title needs a Widevine CDM but SOMESERVICE is configured with PlayReady.
 ```
 
 Use the `cdm` mapping's [DRM-based selection](#advanced-selection-by-quality-drm-or-profile)
-to configure a device for each system; unshackle selects the right one per track
+to configure a device for each system. unshackle selects the right one per track
 automatically.
 
 ## Keys, vaults, and caching
@@ -477,12 +486,12 @@ unshackle therefore resolves each key ID in this order before ever contacting a
 license server:
 
 1. Keys already known for the current DRM object.
-2. An in-process license-key cache (for the running session).
+2. An in-process cache of content keys, for the current `dl` run.
 3. Your configured [key vaults](vaults.md).
 4. Only if still missing, a live license request.
 
-After a successful license request, the recovered keys are written back to all
-configured vaults so future downloads can skip the license server. Two flags let you
+After a successful license request, unshackle writes the recovered keys back to all
+configured vaults, so future downloads can skip the license server. Two flags let you
 control this trade-off on the `dl` command:
 
 | Flag | Effect |
@@ -508,7 +517,7 @@ debug_requests: true
 ```
 
 !!! warning "Keys and paths in logs"
-    When key logging is enabled, content keys (KID:key pairs) are written to the logs.
+    When you enable key logging, unshackle writes content keys (KID:key pairs) to the logs.
     Treat those logs as sensitive. The unrelated `redact_paths` option (default
     `true`) masks local directory paths in log output.
 

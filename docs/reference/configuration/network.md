@@ -4,7 +4,7 @@
 
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
 
-TLS-fingerprinting and HTTP client settings for the rnet-based session.
+TLS-fingerprinting and HTTP client settings for the rnet-based HTTP session.
 
 | Sub-key | Type | Default | Description |
 |---------|------|---------|-------------|
@@ -43,7 +43,7 @@ network:
 
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
 
-Default HTTP headers merged into every session unshackle creates.
+Default HTTP headers merged into every HTTP session unshackle makes.
 
 ```yaml
 headers:
@@ -52,17 +52,17 @@ headers:
 
 !!! warning "Don't set `Accept-Encoding` (and similar) here"
     Compatibility headers such as `Accept-Encoding` are set by the rnet HTTP backend as part of
-    its browser-impersonation profile; overriding them breaks the impersonation fingerprint.
-    This block is for cross-service defaults only (for example `Accept-Language`,
-    `User-Agent`); per-service headers belong in that service's own config.
+    its browser-impersonation profile. If you override them, you break the impersonation
+    fingerprint. This block is for cross-service defaults only (for example `Accept-Language`,
+    `User-Agent`). Per-service headers belong in that service's own config.
 
 ## `proxy_providers`
 
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
 
-Proxy/VPN provider configuration. Each sub-key names a provider, and its block is passed
-straight to that provider's constructor. See [Proxies & VPN](../../guide/proxies-and-vpn.md) for
-the full provider guide. Recognised providers and their exit ports:
+Proxy/VPN provider configuration. Each sub-key names a proxy provider, and unshackle passes its
+block straight to that provider's constructor. See [Proxies & VPN](../../guide/proxies-and-vpn.md)
+for the full proxy provider guide. Recognised proxy providers and their exit ports:
 
 | Provider | Config key | Credentials | Proxy scheme/port |
 |----------|-----------|-------------|-------------------|

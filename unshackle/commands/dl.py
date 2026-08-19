@@ -103,7 +103,7 @@ from unshackle.core.vaults import Vaults
 
 class SkippedSubtitle(TypedDict):
     """A subtitle skipped under ``--skip-subtitle-errors``. Accumulated as ``dl.skipped_subtitles``,
-    one entry per track; ``id`` and ``title`` identify which subtitle of which title was unavailable."""
+    one entry per track. ``id`` and ``title`` identify which subtitle of which title was unavailable."""
 
     id: str
     language: str
@@ -136,7 +136,7 @@ def validate_metadata_ids(
     tvdb_id: Optional[int],
     anilist_id: Optional[Union[int, str]] = None,
 ) -> None:
-    """Reject ID flags that conflict, or that no configured provider could ever resolve.
+    """Reject ID flags that conflict, or that no configured metadata provider could ever find.
 
     --anilist stays outside the mutual exclusion: AniList knows no western IDs, so pairing
     it with one of the other three is how an anime title gets both.
@@ -176,9 +176,9 @@ def validate_metadata_ids(
 def group_videos_by_variant(videos: list[Video], *, merge: bool) -> list[list[Video]]:
     """Group video tracks for muxing.
 
-    When ``merge`` is True, tracks sharing ``(height, range, codec)`` are grouped into one
-    file so only language varies within a group; different resolutions, ranges and codecs
-    stay in separate groups (separate files). When False, each track is its own group
+    When ``merge`` is True, this function groups tracks that share ``(height, range, codec)``
+    into one file, so only language varies within a group. Different resolutions, ranges and
+    codecs stay in separate groups (separate files). When False, each track is its own group
     (one file per track, the default behaviour). Group order follows first-seen track order.
     """
     if not merge:
@@ -201,7 +201,7 @@ def title_wanted(candidate: Any, wanted: Collection[str]) -> bool:
 
 
 def post_script_group(candidate: Any) -> Any:
-    """Key a title by the folder its outputs share, for post-scripts in season mode."""
+    """Group a title by the folder its outputs share, for post-scripts in season mode."""
     if isinstance(candidate, Episode):
         return ("episode", candidate.title, candidate.season)
     if isinstance(candidate, Song):
@@ -211,8 +211,8 @@ def post_script_group(candidate: Any) -> Any:
 
 
 def apply_service_dl_overrides(ctx: click.Context, service_dl_config: dict[str, Any], log: logging.Logger) -> None:
-    """Apply ``services.<TAG>.dl`` config onto ``ctx.params``. Explicit CLI/env values win;
-    defaults and global ``dl:`` default_map values are replaced."""
+    """Apply ``services.<TAG>.dl`` config onto ``ctx.params``. Explicit CLI/env values win.
+    The config replaces defaults and global ``dl:`` default_map values."""
     params_by_name = {param.name: param for param in ctx.command.params if param.name}
     for name, value in normalize_dl_config(service_dl_config).items():
         param = params_by_name.get(name)
@@ -245,16 +245,16 @@ def download_tracks_in_passes(
     skip_subtitle_errors: bool,
     on_subtitle_skipped: Callable[[Subtitle], None],
 ) -> None:
-    """Download a title's tracks so a skippable subtitle failure can't corrupt the rest.
+    """Download a title's tracks so a skippable subtitle failure cannot corrupt the rest.
 
     A failed track sets the process-global ``DOWNLOAD_CANCELLED`` event, making other in-flight
     tracks early-return without raising. With ``skip_subtitle_errors`` set, video/audio download
-    concurrently first; the subtitles then run one at a time (a concurrent pass would let one
+    concurrently first. The subtitles then download one at a time (a concurrent pass would let one
     failure's cancel silently drop the others, unrecorded), with the event cleared before each.
-    Video/audio failures stay fatal. The event is cleared on entry (stale cancel from a prior
-    title) and in ``finally`` (never leave it set for later code).
+    Video/audio failures stay fatal. This function clears the event on entry (stale cancel from a
+    prior title) and in ``finally`` (never leave it set for later code).
 
-    ``run_one(track, index)`` downloads a single track; ``on_subtitle_skipped(track)`` records a
+    ``run_one(track, index)`` downloads a single track. ``on_subtitle_skipped(track)`` records a
     subtitle whose download raised (handled here).
     """
     DOWNLOAD_CANCELLED.clear()
@@ -379,7 +379,7 @@ class dl:
         Show package installation suggestions for missing fonts.
 
         Args:
-            missing_fonts: List of font names that couldn't be found
+            missing_fonts: List of font names that could not be found
         """
         if suggestions := suggest_font_packages(missing_fonts):
             self.log.info("Install font packages to improve subtitle rendering:")
@@ -395,7 +395,7 @@ class dl:
         target_codec: Optional[Subtitle.Codec] = None,
         source_path: Optional[Path] = None,
     ) -> Path:
-        """Generate sidecar path: {base}.{lang}[.forced][.sdh].{ext}"""
+        """Make the sidecar path: {base}.{lang}[.forced][.sdh].{ext}"""
         lang_suffix = str(subtitle.language) if subtitle.language else "und"
         forced_suffix = ".forced" if subtitle.forced else ""
         sdh_suffix = ".sdh" if (subtitle.sdh or subtitle.cc) else ""
@@ -418,7 +418,7 @@ class dl:
         """
         Output subtitles as sidecar files, converting if needed.
 
-        Conversion runs on a temp copy, so each subtitle's own file is left untouched and can still be muxed.
+        Conversion runs on a temp copy, so each subtitle's own file stays untouched and mkvmerge can still mux it.
         """
         created_paths: list[Path] = []
         config.directories.temp.mkdir(parents=True, exist_ok=True)
@@ -479,8 +479,8 @@ class dl:
     def post_script_ids(self) -> dict[str, Any]:
         """Tagging IDs as they stand right now.
 
-        Read per dispatch, never snapshotted: an Episode's TMDB ID is resolved by the
-        search inside the title loop, so a snapshot taken before it is always empty.
+        Read at each post-script call, never snapshotted: the search inside the title loop
+        finds an Episode's TMDB ID, so a snapshot taken before it is always empty.
         """
         return {"tmdb": self.tmdb_id, "imdb": self.imdb_id, "tvdb": self.tvdb_id}
 
@@ -1857,7 +1857,7 @@ class dl:
             """Pick the best audio per (language, codec) group from a sort_audio-ordered list.
 
             "Best" is the first track of each order-preserving candidate filter, so the
-            sort_audio ranking (descriptive-last, atmos, codec_priority, bitrate) decides the
+            sort_audio ranking (descriptive-last, Atmos, codec_priority, bitrate) decides the
             winner. With audio_description both the best standard and best descriptive track per
             group are kept. "best"/"all" tokens select every language present in sorted order.
             """
@@ -2191,7 +2191,7 @@ class dl:
             with console.status("Selecting tracks...", spinner="dots"):
 
                 def resolve_excludes(excludes: list[str], _title: Title_T = title) -> list[str]:
-                    """Resolve 'orig' against this title. An unresolvable 'orig' excludes nothing."""
+                    """Change 'orig' to this title's language. An 'orig' with no language excludes nothing."""
                     resolved: list[str] = []
                     for token in excludes:
                         value = str(_title.language) if token == "orig" else token
@@ -3533,7 +3533,7 @@ class dl:
         return self.service_anime if per_title is None else bool(per_title)
 
     def daily_hint(self, title: Optional[Title_T] = None) -> bool:
-        """Whether this title is daily/date-based content named by air date."""
+        """Whether this title is daily content named by air date."""
         per_title = getattr(title, "daily", None)
         return self.daily or (self.service_daily if per_title is None else bool(per_title))
 
@@ -3756,9 +3756,9 @@ class dl:
     def write_export(self, export: Path, title: Title_T, track: AnyTrack, drm: Any = None) -> None:
         """Write a shareable v2 export usable by ``unshackle import``.
 
-        Carries no session/cookies/dl-flags. Region (country code) is stored only when the
-        export used ``--proxy``, as an import geofence. Each track records only the licensed
-        DRM system; content keys live once under the track's ``keys``. ``drm`` may be None
+        Carries no HTTP session, cookies, or dl-flags. The export records the region (country
+        code) only when the export used ``--proxy``, as an import geofence. Each track records
+        only the licensed DRM system. Content keys live once under the track's ``keys``. ``drm`` may be None
         (DRM-free track) or a DRM system without ``to_dict``/``content_keys`` (e.g. ClearKey) -
         the track, manifest, chapter and attachment info is still exported.
         """
@@ -4483,8 +4483,8 @@ class dl:
         """
         Get Service Cookies for Profile.
 
-        If firefox_cookies is configured for the service, cookies come from Firefox first. If that extraction
-        raises or returns nothing, the profile's cookie file is used instead and the failure is not logged.
+        If the config has firefox_cookies for the service, cookies come from Firefox first. If that extraction
+        raises or returns nothing, unshackle uses the profile's cookie file instead and does not log the failure.
         """
         ff_settings = getattr(config, "firefox_cookies", {}).get(service)
         if ff_settings:
@@ -4551,8 +4551,8 @@ class dl:
     ) -> Optional[object]:
         """
         Get CDM for a specified service (either Local or Remote CDM).
-        Now supports quality-based selection when quality is provided.
-        Raises a ValueError if there's a problem getting a CDM.
+        Now supports quality-based selection when the caller gives a quality.
+        Raises a ValueError if there is a problem getting a CDM.
         """
         # A per-request override (set by the REST API per job) takes precedence over the
         # global config, so a job can select a specific CDM device without mutating shared state.

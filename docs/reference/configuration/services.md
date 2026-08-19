@@ -7,19 +7,19 @@
 Per-service configuration, keyed by the canonical service tag (for example `EXAMPLE1`, `EXAMPLE2`,
 `EXAMPLE3`). unshackle reads several well-known sub-keys out of each service's block:
 
-- **`proxy_map`**: remaps the region query you passed to `-p/--proxy` for this service. A key is
-  that query, or `"provider:query"` when the flag also named a provider; the value is the query
-  asked of the proxy provider instead. It has no effect when `-p` was given a full proxy URL.
+- **`proxy_map`**: remaps the region query you passed to `-p/--proxy` for this service.
+  A config key is that query, or `"provider:query"` when the flag also named a proxy provider. The value is
+  the query asked of the proxy provider instead. It has no effect when you give `-p` a full proxy URL.
 - **`title_map`**: an exact-match rename map applied to fetched titles (source name →
   desired name), so a service that names a title differently from your library still matches.
 - **`dl`**: per-service download defaults, using the same keys as the global
   [`dl`](download.md#dl) block.
 
-Individual services may read any additional keys they define. The merged result (the service's
-own `config.yaml` with this block layered on top) is handed to the service as `self.config`.
+Individual services may read any additional keys they define. unshackle hands the merged result
+(the service's own `config.yaml` with this block layered on top) to the service as `self.config`.
 
 User- or device-specific values (API keys, account IDs, device attributes) belong in this block
-rather than in the service's own `config.yaml`, which holds shared defaults; see
+rather than in the service's own `config.yaml`, which holds shared defaults. See
 [creating a service](../../dev/creating-a-service.md).
 
 ```yaml
@@ -38,10 +38,10 @@ services:
 
 Per-service login credentials. Each value is a `username:password[:extra]` string, the same
 data as a `[username, password]` (or `[username, password, extra]`) list, or a dict of profile
-name to either of those. With the dict form, `-p/--profile` selects the entry, and the
-`default` key is used when no profile was given or the named profile is missing. These are
-parsed into `Credential` objects; the credential's SHA-1 is also used as an account hash for
-cache keys.
+name to either of those. With the dict form, `-p/--profile` selects the entry, and unshackle
+uses the `default` config key when you give no profile, or when the named profile is missing.
+unshackle parses these into `Credential` objects. It also uses the credential's SHA-1 as an
+account hash for cache keys.
 
 ```yaml
 credentials:
@@ -52,22 +52,22 @@ credentials:
 ```
 
 !!! tip "Cookies vs credentials"
-    Cookies are stored as files under [`directories.cookies`](directories.md), not in this key.
+    unshackle stores cookies as files under [`directories.cookies`](directories.md), not in this config key.
     A service's `authenticate()` accepts cookies, credentials, or both.
 
 ## `firefox_cookies`
 
 - **Type:** `dict` keyed by service tag &nbsp;·&nbsp; **Default:** `{}`
 
-Settings for extracting cookies directly from a local Firefox profile. A service block is
-expected to provide `hosts` (a list of cookie hostnames; entries shorter than 3 characters
-are ignored to prevent dumping the whole cookie store) and an optional `local_storage`
-boolean to also pull matching entries from `webappsstore.sqlite`, which only services that
-keep auth tokens in localStorage rather than in HTTP cookies need. Extraction is read-only.
+Settings for extracting cookies directly from a local Firefox profile. A service block must give
+`hosts`, a list of cookie hostnames. unshackle ignores an entry shorter than 3 characters, to
+prevent dumping the whole cookie store. With an optional `local_storage` boolean, unshackle also
+pulls matching entries from `webappsstore.sqlite`, which only services that keep auth tokens
+in localStorage rather than in HTTP cookies need. Extraction is read-only.
 
 !!! note "Firefox does not need to be closed"
     The extractor copies **both** `cookies.sqlite` **and** its WAL file into a `0700` temp
-    directory, so writes Firefox has not yet flushed to the main DB are included. Extraction
+    directory, so the copy holds the writes Firefox has not yet flushed to the main DB. Extraction
     fails only if Firefox holds an exclusive write lock at the instant of the copy. The live
     profile is not modified.
 
@@ -81,21 +81,21 @@ keep auth tokens in localStorage rather than in HTTP cookies need. Extraction is
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
 
 Definitions of remote unshackle service servers, used by the `--remote` mode. Each entry is
-named by you (pick it with `--server`, or omit that flag when only one is configured) and gives
+named by you (pick it with `--server`, or do not write that flag when you configure only one) and gives
 the server's `url` (required), an optional `api_key`, an optional `auth_headers` list, an
 optional `server_cdm` boolean, and an optional `services` sub-dict of per-service local
 overrides such as `title_map`.
 
 `auth_headers` lists extra header names to send the API key in, tried before the defaults
 `X-Secret-Key` and `X-Api-Key`, which are always appended as fallbacks. unshackle sends the
-first name; if the server answers `401`, it retries the same request with the next name, and
-keeps the one that works for the rest of the session. Names you list keep your spelling and are
-not repeated in the fallbacks, so `auth_headers: ["Authorization", "x-secret-key"]` is tried as
-`Authorization`, `x-secret-key`, `X-Api-Key`.
+first name. If the server answers `401`, it retries the same request with the next name, and
+keeps the one that works for the rest of the HTTP session. Names you give keep your spelling and
+are not repeated in the fallbacks, so unshackle tries
+`auth_headers: ["Authorization", "x-secret-key"]` as `Authorization`, `x-secret-key`, `X-Api-Key`.
 
 In `--remote` mode unshackle turns the server's service list into synthetic CLI
-commands that run against it, falling back to the tags in that `services` sub-dict when the
-list cannot be fetched. Each synthetic command carries the server-side service's options and
+commands that operate against it, falling back to the tags in that `services` sub-dict when
+unshackle cannot fetch the list. Each synthetic command carries the server-side service's options and
 documentation, so `unshackle dl --remote <TAG> -h` shows the same help text as it does on the
 server. See [remote sessions](../../dev/rest-api/remote-sessions.md) for the
 full setup.
@@ -105,7 +105,7 @@ full setup.
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
 
 Configuration for the `serve` command (the built-in REST API server). The full server guide
-is the [REST API](../../dev/rest-api/index.md) section; these are the config keys.
+is the [REST API](../../dev/rest-api/index.md) section. These are the config keys.
 
 | Sub-key | Type | Default | Description |
 |---------|------|---------|-------------|
@@ -123,15 +123,16 @@ is the [REST API](../../dev/rest-api/index.md) section; these are the config key
 | `devices` | list | *(auto)* | Widevine devices offered; auto-filled from `directories.wvds`. |
 | `playready_devices` | list | *(auto)* | PlayReady devices; auto-filled from `directories.prds`. |
 
-Each entry under `users` is keyed by that user's API key and may set its own `services`,
+Each entry under `users` uses that user's API key as its name, and can set its own `services`,
 `devices`, and `playready_devices` allowlists, narrowing the global ones, plus an optional
-`username` used as the log label for that key (defaults to a truncated form of the key). A
-user with no `playready_devices` key gets no PlayReady access at all, not the global list.
+`username` used as the log label for that API key (defaults to a truncated form of the API key).
+A user with no `playready_devices` config key gets no PlayReady access at all, not the global
+list.
 
-`server_cdm` decides whether the server runs the CDM licensing for that key. It is `false`
+`server_cdm` decides whether the server runs the CDM licensing for that API key. It is `false`
 unless the entry sets it, so a remote client configured with `server_cdm: true` is told to
 license with its own local CDM instead, and a client that asks anyway gets a `FORBIDDEN`
-error. Because a download job always licenses with the server's CDM, a key without
+error. Because a download job always licenses with the server's CDM, an API key without
 `server_cdm` also cannot submit or retry `/api/download` jobs. Keys that have no `users`
 entry, such as `api_secret`, keep server CDM access.
 

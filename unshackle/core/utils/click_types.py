@@ -187,8 +187,8 @@ class SeasonRange(click.ParamType):
     def token_sides(self, match: re.Match) -> tuple[int, Optional[int], Optional[int]]:
         """Read one side of a token as (season, episode, part), episode/part None when absent.
 
-        A music disc x track token shares this key space, disc reading as the season and
-        track as the episode. An omitted disc is disc 1, not every disc: a bare number is
+        A music disc x track token shares this (season, episode, part) space, disc reading
+        as the season and track as the episode. An omitted disc is disc 1, not every disc: a bare number is
         the number the tracklist shows for a single-disc release, and widening it would
         silently add tracks on a multi-disc release.
         """
@@ -207,16 +207,17 @@ class SeasonRange(click.ParamType):
         """
         Parse multiple tokens or ranged tokens as '{s}x{e}' strings.
 
-        An episode split into separately playable parts is addressed as '{s}x{e}.{p}'.
-        A part range must stay inside one episode, since how many parts an episode has
-        is not knowable here. A part-qualified exclusion cannot be removed from the
-        computed keys (they are base keys), so it becomes a '!' key resolved at match time.
+        You address an episode split into separately playable parts as '{s}x{e}.{p}'.
+        A part range must stay inside one episode, because how many parts an episode has
+        is not knowable here. unshackle cannot remove a part-qualified exclusion from the
+        computed keys, because those are base keys. The exclusion becomes a '!' entry that
+        unshackle applies later, when it matches an episode to the wanted keys.
 
-        Dated content is addressed by ISO air date. A date range uses ':' only, because
+        You address an episode by its ISO air date. A date range uses ':' only, because
         a date's own '-' separators are not a range separator.
 
         A music release uses the same keys, its disc reading as the season and its track
-        as the episode. A track is addressed as '{d}x{t}', or by its number alone, which
+        as the episode. You address a track as '{d}x{t}', or by its number alone, which
         is a track on disc 1.
 
         Supports exclusioning by putting a `-` before the token.
@@ -393,10 +394,10 @@ class AudioCodecList(click.ParamType):
 
 class MultipleChoice(click.Choice):
     """
-    The multiple choice type allows multiple values to be checked against
-    a fixed set of supported values.
+    The multiple choice type takes several values. Each value must be in a fixed
+    set of permitted values.
 
-    It internally uses and is based off of click.Choice.
+    It internally uses and extends click.Choice.
     """
 
     name = "multiple_choice"
@@ -428,8 +429,8 @@ class MultipleChoice(click.Choice):
 
         Parameters:
             ctx: Invocation context for this command.
-            param: The parameter that is requesting completion.
-            incomplete: Value being completed. May be empty.
+            param: The parameter that requests completion.
+            incomplete: The value to complete. Can be empty.
         """
         incomplete = incomplete.rsplit(",")[-1]
         return super(self).shell_complete(ctx, param, incomplete)

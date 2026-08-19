@@ -1,7 +1,7 @@
 """
 MonaLisa DRM System.
 
-A WASM-based DRM system that uses local key extraction and two-stage
+A WASM-based DRM system that uses local content key extraction and two-stage
 segment decryption (ML-Worker binary + AES-ECB).
 """
 
@@ -26,20 +26,20 @@ class MonaLisa:
     MonaLisa DRM System.
 
     Unlike Widevine/PlayReady, MonaLisa does not use a challenge/response flow
-    with a license server. Instead, the PSSH value (ticket) is provided directly
-    by the service API, and keys are extracted locally via a WASM module.
+    with a license server. Instead, the service API gives the PSSH value (ticket)
+    directly, and a WASM module extracts the content keys locally.
 
-    Decryption is performed in two stages:
+    Decryption has two stages:
     1. ML-Worker binary: Removes MonaLisa encryption layer (bbts -> ents)
-    2. AES-ECB decryption: Final decryption with service-provided key
+    2. AES-ECB decryption: Final decryption with the service-supplied content key
     """
 
     class Exceptions:
         class TicketNotFound(Exception):
-            """Raised when no PSSH/ticket data is provided."""
+            """Raised when the caller gives no PSSH/ticket data."""
 
         class KeyExtractionFailed(Exception):
-            """Raised when key extraction from the ticket fails."""
+            """Raised when content key extraction from the ticket fails."""
 
         class WorkerNotFound(Exception):
             """Raised when the ML-Worker binary is not found."""
@@ -55,17 +55,17 @@ class MonaLisa:
         **kwargs: Any,
     ):
         """
-        Initialize MonaLisa DRM.
+        Initialise MonaLisa DRM.
 
         Args:
             ticket: PSSH value from service API (base64 string or raw bytes).
-            aes_key: AES-ECB key for second-stage decryption (hex string or bytes).
+            aes_key: AES-ECB content key for second-stage decryption (hex string or bytes).
             device_path: Path to the CDM device file (.mld).
             **kwargs: Additional metadata stored in self.data.
 
         Raises:
             TicketNotFound: If ticket/PSSH is empty.
-            KeyExtractionFailed: If key extraction fails.
+            KeyExtractionFailed: If content key extraction fails.
         """
         if not ticket:
             raise MonaLisa.Exceptions.TicketNotFound("No PSSH/ticket data provided.")
@@ -112,11 +112,11 @@ class MonaLisa:
         device_path: Path,
     ) -> MonaLisa:
         """
-        Create a MonaLisa DRM instance from a PSSH/ticket.
+        Make a MonaLisa DRM instance from a PSSH/ticket.
 
         Args:
             ticket: PSSH value from service API.
-            aes_key: AES-ECB key for second-stage decryption.
+            aes_key: AES-ECB content key for second-stage decryption.
             device_path: Path to the CDM device file (.mld).
 
         Returns:
@@ -190,7 +190,7 @@ class MonaLisa:
         Get content keys in the same format as Widevine/PlayReady.
 
         Returns:
-            Dictionary mapping KID to key hex string.
+            Dictionary mapping KID to the content key hex string.
         """
         if self._kid and self._key:
             return {self._kid: self._key}
@@ -284,9 +284,9 @@ class MonaLisa:
 
     def decrypt(self, _path: Path) -> None:
         """
-        MonaLisa uses per-segment decryption during download via the
-        on_segment_downloaded callback. By the time this method is called,
-        the content has already been decrypted and muxed into a container.
+        MonaLisa uses per-segment decryption during download, through the
+        on_segment_downloaded callback. When the caller calls this method,
+        unshackle has already decrypted the media and muxed it into a container.
 
         Args:
             _path: Path to the file (ignored).

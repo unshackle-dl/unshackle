@@ -1,6 +1,6 @@
 # A complete annotated example
 
-The following config sets a handful of common keys. Every key not shown keeps its default.
+The following config sets a handful of common config keys. Every config key not shown keeps its default.
 
 ```yaml title="unshackle.yaml"
 directories:

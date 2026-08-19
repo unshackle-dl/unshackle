@@ -20,7 +20,7 @@ SENSITIVE_QUERY_PARAM_RE = re.compile(r"(?i)\b(password|passwd|pwd|token|api_key
 def redact_text(text: Optional[str], secrets: Iterable[str] = ()) -> Optional[str]:
     """
     Mask URL userinfo, secret-bearing query parameters, and any known secret
-    strings inside a free-text value before it is logged or serialized.
+    strings inside a free-text value before unshackle logs or serializes it.
     """
     if not isinstance(text, str) or not text:
         return text
@@ -33,7 +33,7 @@ def redact_text(text: Optional[str], secrets: Iterable[str] = ()) -> Optional[st
 
 
 def safe_display_url(url: str) -> str:
-    """Rebuild a URL from its scheme/host/port/path only, so userinfo can never be logged."""
+    """Rebuild a URL from its scheme/host/port/path only, so unshackle can never log the userinfo."""
     parts = urlsplit(url)
     netloc = parts.hostname or ""
     if parts.port:
@@ -42,7 +42,7 @@ def safe_display_url(url: str) -> str:
 
 
 def path_bases() -> list[tuple[str, str]]:
-    """Local base directories to strip from logged paths, longest-first.
+    """Local base directories to remove from logged paths, longest-first.
 
     Anchors everything left of the unshackle install/root (and the venv / home dir) so an
     absolute path like ``/home/me/Projects/unshackle-live/temp`` logs as ``<unshackle>/temp``,
@@ -90,7 +90,7 @@ def path_redaction_enabled() -> bool:
 def redact_path(text: Optional[str]) -> Optional[str]:
     """Replace local base-directory prefixes (install root, venv, home) in ``text`` with tokens.
 
-    Idempotent and cheap; only touches strings that actually contain a known base dir, so URLs
+    Idempotent and cheap. It touches only the strings that contain a known base dir, so URLs
     and relative paths pass through unchanged. Disabled by ``config.redact_paths: false``.
     """
     if not isinstance(text, str) or not text or not path_redaction_enabled():
@@ -121,7 +121,7 @@ def collapse_url(match: "re.Match[str]") -> str:
 def redact_url(text: Optional[str]) -> Optional[str]:
     """Collapse every http(s) URL in ``text`` to ``redacted[.ext]``.
 
-    Hides content/CDN/manifest/segment/api locations (host + path + query) from shareable debug
+    Hides media/CDN/manifest/segment/api locations (host + path + query) from shareable debug
     logs while keeping the file extension so the manifest/segment type stays visible
     (e.g. ``redacted.mpd``). Non-URL strings pass through unchanged.
     """

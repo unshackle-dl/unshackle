@@ -80,18 +80,18 @@ class Audio(Track):
         **kwargs: Any,
     ):
         """
-        Create a new Audio track object.
+        Make a new Audio track object.
 
         Parameters:
             codec: An Audio.Codec enum representing the audio codec.
-                If not specified, MediaInfo will be used to retrieve the codec
-                once the track has been downloaded.
+                If not specified, unshackle uses MediaInfo to get the codec
+                after it downloads the track.
             bitrate: A number or float representing the average bandwidth in bits/s.
-                Float values are rounded up to the nearest integer.
+                unshackle rounds float values up to the nearest integer.
             channels: A number, float, or string representing the number of audio channels.
                 Strings may represent numbers or floats. Expanded layouts like 7.1.1 is
                 not supported. All numbers and strings will be cast to float.
-            joc: The number of Joint-Object-Coding Channels/Objects in the audio stream.
+            joc: The number of Joint-Object-Coding Channels/Objects in the audio track.
             descriptive: Mark this audio as being descriptive audio for the blind.
 
         Note: If codec, bitrate, channels, or joc is not specified some checks may be
@@ -153,7 +153,7 @@ class Audio(Track):
 
     @property
     def atmos(self) -> bool:
-        """Return True if the audio track contains Dolby Atmos."""
+        """Return True if the audio track contains Atmos."""
         if self.joc:
             return True
         if isinstance(self.extra, dict):
@@ -188,12 +188,12 @@ class Audio(Track):
     @staticmethod
     def parse_channels(channels: Union[str, int, float]) -> float:
         """
-        Converts a Channel string to a float representing audio channel count and layout.
+        Converts a Channel string to a float representing the audio channel layout.
         E.g. "3" -> "3.0", "2.1" -> "2.1", ".1" -> "0.1".
 
         This does not validate channel strings as genuine channel counts or valid layouts.
         It does not convert the value to assume a sub speaker channel layout, e.g. 5.1->6.0.
-        It also does not support expanded surround sound channel layout strings like 7.1.2.
+        It also cannot read expanded surround sound channel layout strings like 7.1.2.
         """
         if isinstance(channels, str):
             # TODO: Support all possible DASH channel configurations (https://datatracker.ietf.org/doc/html/rfc8216)

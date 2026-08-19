@@ -54,7 +54,7 @@ class APIError(Exception):
         error_code: Standardized error code from APIErrorCode enum
         message: User-friendly error message
         details: Additional structured error information
-        retryable: Whether the operation can be retried
+        retryable: Whether the caller can do the operation again
         http_status: HTTP status code to return (default based on error_code)
     """
 
@@ -108,12 +108,12 @@ def build_error_response(
     extra_debug_info: dict[str, Any] | None = None,
 ) -> web.Response:
     """
-    Build a structured JSON error response.
+    Assemble a structured JSON error response.
 
     Args:
         error: APIError or generic Exception to convert to response
         debug_mode: Whether to include technical debug information
-        extra_debug_info: Additional debug info (stderr, stdout, etc.)
+        extra_debug_info: Additional debug info such as stderr and stdout
 
     Returns:
         aiohttp JSON response with structured error data
@@ -172,7 +172,7 @@ def categorize_exception(
 
     Args:
         exc: The exception to categorize
-        context: Optional context (service name, operation type, etc.)
+        context: Optional context such as the service tag and the operation type
 
     Returns:
         APIError with appropriate error code and details
@@ -277,10 +277,10 @@ def handle_api_exception(
     extra_debug_info: dict[str, Any] | None = None,
 ) -> web.Response:
     """
-    Convenience function to categorize an exception and build an error response.
+    Convenience function to categorize an exception and assemble an error response.
 
     Args:
-        exc: The exception to handle
+        exc: The exception to categorize
         context: Optional context information
         debug_mode: Whether to include debug information
         extra_debug_info: Additional debug info

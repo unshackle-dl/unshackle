@@ -15,7 +15,7 @@ class TitleCacher:
     Handles caching of Title objects to reduce redundant API calls.
 
     This wrapper provides:
-    - Region-aware caching to handle geo-restricted content
+    - Region-aware caching for geo-restricted titles
     - Automatic fallback to cached data when API calls fail
     - Cache lifetime extension during failures
     - Cache hit/miss statistics for debugging
@@ -32,7 +32,7 @@ class TitleCacher:
         self, title_id: str, region: Optional[str] = None, account_hash: Optional[str] = None
     ) -> str:
         """
-        Generate a unique cache key for title data.
+        Make a unique cache key for title data.
 
         Args:
             title_id: The title identifier
@@ -68,7 +68,7 @@ class TitleCacher:
         reset_cache: bool = False,
     ) -> Optional[Titles_T]:
         """
-        Get titles from cache or fetch from API with fallback support.
+        Get titles from the cache, or fetch them from the API with a fallback.
 
         Args:
             title_id: The title identifier
@@ -171,7 +171,7 @@ class TitleCacher:
         region: Optional[str] = None,
         account_hash: Optional[str] = None,
     ) -> Optional[dict]:
-        """Get cached metadata for any provider."""
+        """Get the cached data of any metadata provider."""
         if not config.title_cache_enabled or self.no_cache:
             return None
 
@@ -223,7 +223,7 @@ class TitleCacher:
         account_hash: Optional[str] = None,
         ttl_days: int = 7,
     ) -> None:
-        """Cache metadata from any provider."""
+        """Cache the data of any metadata provider."""
         if not config.title_cache_enabled or self.no_cache:
             return
 
@@ -297,7 +297,7 @@ def get_region_from_proxy(proxy_url: Optional[str]) -> Optional[str]:
 
 def get_account_hash(credential) -> Optional[str]:
     """
-    Generate a hash for account identification.
+    Make a hash for account identification.
 
     Args:
         credential: Credential object

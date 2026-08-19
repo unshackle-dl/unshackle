@@ -1,10 +1,10 @@
 # Output & Naming
 
-This page explains where unshackle writes finished downloads and how it names them. You control naming with **output templates** (the filename) and **folder templates** (the directory the file lands in), using a set of `{variable}` placeholders that unshackle fills in from the media it just downloaded. It also covers muxing options, release-group tagging, Unicode filenames, and how to relocate unshackle's working directories.
+This page tells you where unshackle writes finished downloads and how it names them. You control naming with **output templates** (the filename) and **folder templates** (the directory the file lands in). Both take `{variable}` placeholders that unshackle fills in from the downloaded media. This page also covers muxing options, release-group tagging, Unicode filenames, and how to relocate unshackle's working directories.
 
 If you have not configured `unshackle.yaml` yet, read [Configuration File](../getting-started/configuration-file.md) first. Everything below lives in that file.
 
-## How an output path is assembled
+## How unshackle assembles an output path
 
 When a download finishes, unshackle builds the final path from three pieces:
 
@@ -13,9 +13,9 @@ When a download finishes, unshackle builds the final path from three pieces:
 ```
 
 - **Output directory**: `directories.downloads` from your config, or whatever you pass to `-o/--output` on the command line for a single run.
-- **Folder template**: an optional per-title subfolder. TV episodes and music tracks are **always** placed in a folder; movies only get one if you define a `movies` folder template, or a single-string `folder` template that applies to all title kinds (see [Folder templates](#folder-templates)).
+- **Folder template**: an optional per-title subfolder. unshackle **always** puts TV episodes and songs in a folder. Movies only get one if you define a `movies` folder template, or a single-string `folder` template that applies to all title kinds (see [Folder templates](#folder-templates)).
 - **Filename template**: the `output_template` for the title kind (movie, series, or song).
-- **Extension**: chosen by the muxer for a movie or an episode: `.mkv` for video, `.mka` for audio-only, `.mks` for subtitle-only. A music track is not muxed. It keeps the container the service delivered, such as `.flac`, `.m4a`, or `.mp3`. Read [Music output files](#music-output-files).
+- **Extension**: chosen by the muxer for a movie or an episode: `.mkv` for video, `.mka` for audio-only, `.mks` for subtitle-only. unshackle does not mux a song. A song keeps the container the service delivered, such as `.flac`, `.m4a`, or `.mp3`. Read [Music output files](#music-output-files).
 
 !!! example "A typical episode path"
     ```text
@@ -35,7 +35,7 @@ Two command-line flags change this layout for a single run:
 
 ## Output templates
 
-Filename templates live under the `output_template` key, keyed by title kind. Each value is a format string built from `{variable}` placeholders.
+Filename templates live under the `output_template` config key, keyed by title kind. Each value is a format string built from `{variable}` placeholders.
 
 ```yaml title="unshackle.yaml"
 output_template:
@@ -58,20 +58,20 @@ The recognized kinds are:
 
 ### Required vs. optional variables
 
-- `{variable}`: **required**. If it is missing from the download's context, formatting raises an error. (Note that most variables are always present in context but resolve to an *empty string* when not applicable, so being "present but empty" is different from "missing".)
-- `{variable?}`: **optional**. A trailing `?` marks the variable conditional. When it resolves to empty, unshackle removes the placeholder *and* one adjacent separator (`.`, `-`, or space), so the surrounding text collapses cleanly.
+- `{variable}`: **required**. If it is missing from the download's context, formatting raises an error. Note that most variables are always present in context. A variable that does not apply becomes an *empty string*, so "present but empty" is different from "missing".
+- `{variable?}`: **optional**. A trailing `?` marks the variable conditional. When it is empty, unshackle removes the placeholder *and* one adjacent separator (`.`, `-`, or space), so the surrounding text collapses cleanly.
 
-!!! tip "Use `?` for anything that isn't always there"
-    Episode names, editions, tags, HDR labels and audio extras aren't present on every title. Mark them optional so you never get doubled dots or dangling separators:
+!!! tip "Use `?` for anything that is not always there"
+    Episode names, editions, tags, HDR labels and audio extras are not present on every title. Mark them optional so you never get doubled dots or dangling separators:
 
     ```yaml
     series: "{title}.{season_episode}.{episode_name?}.{quality}.{hdr?}.{source}-{tag?}"
     ```
-    For an episode with no on-screen name, `{episode_name?}` and its adjacent dot simply disappear.
+    For an episode with no on-screen name, `{episode_name?}` and its adjacent dot disappear.
 
 ### Separator style (dots vs. spaces)
 
-unshackle looks at the characters you place *between* variables to decide the filename's separator style. If spaces outnumber dots in your template, it sanitizes with spaces; otherwise it uses dots (the scene-style default). This is also applied to the auto-generated date separators for daily/dated content, and to every segment of a nested folder template.
+unshackle looks at the characters you place *between* variables to decide the filename's separator style. If spaces outnumber dots in your template, it sanitises with spaces. If not, it uses dots (the scene-style default). unshackle also applies this style to the auto-generated date separators of daily content, and to every segment of a nested folder template.
 
 === "Scene style (dots)"
 
@@ -95,7 +95,7 @@ unshackle looks at the characters you place *between* variables to decide the fi
 
 ## Template variables
 
-Every variable below is valid in both output and folder templates. Values are derived from the downloaded media (via MediaInfo), from the title metadata, or from your config. Variables that don't apply to a given title resolve to an empty string.
+Every variable below is valid in both output and folder templates. unshackle takes the values from the downloaded media (through MediaInfo), from the title metadata, or from your config. A variable that does not apply to a title becomes an empty string.
 
 ### Common / video
 
@@ -116,7 +116,7 @@ Every variable below is valid in both output and folder templates. Values are de
 | `lang_tag` | Result of your `language_tags` rules, if configured | `MULTi` |
 
 !!! note "How `language_tags` rules match"
-    Rules are tried in order, but language comparison is **fuzzy**: a rule condition of `en` matches `en-US`, `en-GB`, and any other `en-*` variant. Within a single rule, **all** conditions must match (AND logic) for it to apply. The first rule that fully matches wins; if none match, `{lang_tag?}` is removed from the filename cleanly.
+    unshackle tries the rules in order, but language comparison is **fuzzy**: a rule condition of `en` matches `en-US`, `en-GB`, and any other `en-*` form. Within a single rule, **all** conditions must match (AND logic) for it to apply. The first rule that fully matches wins. If none match, unshackle removes `{lang_tag?}` from the filename cleanly.
 
 ### Episode-specific
 
@@ -131,17 +131,17 @@ Every variable below is valid in both output and folder templates. Values are de
 | `date` | ISO air date for daily/dated content | `2024-06-01` |
 
 !!! note "Daily & sports content"
-    When an episode has an air date, unshackle switches to date-based naming automatically: `season` and `season_episode` become the formatted air date, `episode` and `year` are cleared, and `{date}` holds the ISO date. The date's internal separator (dots or spaces) follows your `series` template style.
+    When an episode has an air date, unshackle switches to date-based naming automatically. `season` and `season_episode` become the formatted air date, unshackle clears `episode` and `year`, and `{date}` holds the ISO date. The date's internal separator (dots or spaces) follows your `series` template style.
 
 ### Split episodes {#split-episodes}
 
-A few services split one episode into several separately playable videos. Where a service reports that, the part index is folded into `{episode}` and `{season_episode}`, so the stock `series` template names it with no change to your config.
+A few services split one episode into several separately playable videos. Where a service reports that, unshackle folds the part index into `{episode}` and `{season_episode}`, so the stock `series` template names it with no change to your config.
 
 ```text
 Show.Name.S01E01.Part.2.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
 ```
 
-The part token sits immediately after the episode token, before the quality tags, and the group tag stays last. Its separator follows your template's own style, the same way dated content does, so a spaced template gives `S01E01 Part 2` instead.
+The part token sits immediately after the episode token, before the quality tags, and the group tag stays last. Its separator follows your template's own style, the same way daily content does, so a spaced template gives `S01E01 Part 2` instead.
 
 The part is left out of the folder name, so every part of an episode lands in the same season folder:
 
@@ -152,10 +152,10 @@ The.Show.S01.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG/
   └─ The.Show.S01E02.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
 ```
 
-The same holds for a folder template of your own: `{season}` never picks up the part, and `{season_episode}` drops it inside a folder template. An episode with no part is named like any other episode.
+The same holds for a folder template of your own: `{season}` never picks up the part, and `{season_episode}` drops it inside a folder template. unshackle names an episode with no part like any other episode.
 
 !!! note "What media servers do with the part token"
-    The form above follows scene practice for genuinely split episodes. Kodi stacks the parts back into one playable episode automatically. Jellyfin lists two versions of S01E01, still correct and playable, because its stacking pattern expects the part marker at the end of the name. Plex's scanner is closed-source, so its handling of text after the part token is unverified.
+    The form above follows scene practice for genuinely split episodes. Kodi stacks the parts back into one playable episode automatically. Jellyfin lists two versions of S01E01, still correct and playable, because its stacking pattern expects the part marker at the end of the name. Plex uses a closed-source scanner, so what it does with text after the part token is not known.
 
 For custom templates there is also a standalone [`{part}`](../reference/configuration/output.md#output_template) variable. You rarely want it, see the caveat on that page.
 
@@ -186,11 +186,11 @@ For custom templates there is also a standalone [`{part}`](../reference/configur
 | `isrc` / `upc` / `label` | ISRC, UPC and record label |
 
 !!! warning "Unknown variables are ignored, not errors"
-    If you use a variable that isn't in the list above, unshackle emits a warning at startup but continues. Double-check spelling. A typo'd `{quailty}` will simply be left in the filename literally or dropped, not filled in.
+    If you use a variable that is not in the list above, unshackle gives a warning at startup but continues. Double-check spelling. A typo'd `{quailty}` stays in the filename literally, or unshackle drops it. unshackle does not fill it in.
 
 ## Folder templates
 
-Folder templates are nested under a special `folder` key inside `output_template`. This key is handled separately from the filename kinds. You can give it a single string (used for all title kinds) or a per-kind map.
+Folder templates sit under a special `folder` config key inside `output_template`. unshackle reads this config key separately from the filename kinds. You can give it a single string (for all title kinds) or a per-kind map.
 
 === "Single folder template"
 
@@ -213,19 +213,19 @@ Folder templates are nested under a special `folder` key inside `output_template
         albums: "{artist} - {album} ({year})"
     ```
 
-The per-kind folder keys are `movies`, `series`, `songs`, and `albums`. Any other key produces a startup warning. Path separators (`/` or `\`) are allowed in folder templates. Each segment is formatted independently, so you can build nested directory structures like `Show/Season 01`. unshackle reads the separator style from the whole template, so every segment is spaced alike.
+The per-kind folder config keys are `movies`, `series`, `songs`, and `albums`. Any other config key gives a startup warning. Folder templates permit path separators (`/` or `\`). unshackle formats each segment independently, so you can assemble nested directory structures like `Show/Season 01`. unshackle reads the separator style from the whole template, so it spaces every segment alike.
 
-**Fallback behavior:**
+**Fallback behaviour:**
 
-- A per-kind folder template wins if present; otherwise the single `folder` string is used; otherwise unshackle falls back to a built-in default.
+- A per-kind folder template wins if present. If there is none, unshackle uses the single `folder` string. If there is no `folder` string either, unshackle falls back to a built-in default.
 - Built-in defaults when no folder template is set. Movies get no folder at all unless a `movies` folder template (or a single-string `folder` template) exists. Series fall back to a folder *derived* from the `series` output template (stripping `{episode}`, `{episode_name}`, and collapsing `{season_episode}` down to `{season}`). Music albums fall back to `{artist} - {album} ({year})`. If the song has no year, the folder name is only `{artist} - {album}`.
 
 !!! note "Movies are flat by default"
-    Episodes and songs are always foldered. Movies are written directly into the output directory *unless* you define a `movies` folder template (or a single-string `folder` template, which folders every kind). Set one if you want each movie in its own directory.
+    Episodes and songs are always foldered. unshackle writes movies directly into the output directory *unless* you define a `movies` folder template (or a single-string `folder` template, which folders every kind). Set one if you want each movie in its own directory.
 
 ## Music output files
 
-A music track does not go through the muxer. unshackle moves the downloaded audio file to
+A song does not go through the muxer. unshackle moves the downloaded audio file to
 its final path. It keeps the container that the service delivered. A lossless download
 arrives as a `.flac` file. An AAC download arrives as a `.m4a` file. unshackle writes no
 `.mkv` file for music, and the [muxing options](#muxing-options) below do not apply.
@@ -248,10 +248,10 @@ track title, artist, album artist, track and disc numbers, date, genre, ISRC, UP
 copyright, and record label. When `tag` and `tag_group_name` are set, unshackle also writes the group
 name into a `GROUP` tag.
 
-Cover art is embedded when the service gives an artwork URL. unshackle downloads the image
+unshackle embeds cover art when the service gives an artwork URL. It downloads the image
 and puts it in the file.
 
-Lyrics are written when the service supplies them: a `LYRICS` Vorbis comment for FLAC, a
+unshackle writes lyrics when the service supplies them: a `LYRICS` Vorbis comment for FLAC, a
 `USLT` frame for MP3, and a `©lyr` atom for M4A. Ogg uses the same `LYRICS` field as
 FLAC. unshackle does not write synchronized lyrics (`SYLT`).
 
@@ -263,7 +263,7 @@ warning and continues.
 
 ## Muxing options
 
-Muxing (combining video, audio, subtitle, chapter and attachment tracks into a single Matroska file with `mkvmerge`) is configured under the `muxing` key. Only movies and episodes are muxed. Read [Music output files](#music-output-files) for what a music download does instead.
+You configure muxing (the combination of video, audio, subtitle, chapter and attachment tracks into a single Matroska file with `mkvmerge`) under the `muxing` config key. unshackle muxes only movies and episodes. Read [Music output files](#music-output-files) for what a music download does instead.
 
 ```yaml title="unshackle.yaml"
 muxing:
@@ -282,29 +282,29 @@ muxing:
 | `merge_audio` | bool | `true` | Merge audio tracks of the same kind so multiple languages sit in one file. |
 | `default_language` | map | *(unset)* | Preferred language per track type (`video` / `audio` / `subtitle`). A track in the preferred language is flagged as the default track. |
 
-When no preferred language is matched, unshackle applies sensible defaults: the video default falls back to the title language / original-language track / first track; the audio default is the original-language track; and the subtitle default is a forced track matching the first audio's language.
+When no track has the preferred language, unshackle applies sensible defaults. The video default falls back to the title language, then the original-language track, then the first track. The audio default is the original-language track. The subtitle default is a forced track in the first audio's language.
 
 !!! note "`default_language` only sets the default-track flag"
-    `default_language` controls **which track carries the MKV `--default-track` flag**. Nothing else. It does not change track *selection* (that stays with `-l`/`--alang` and friends), and it does not touch which track is marked as original: `--original-flag` still tags the *true* original-audio track. That is the point: you can make your player default to, say, Polish audio on an English-original title without altering the original marker. When the configured language isn't present in the manifest, each track type falls back to its normal default rule described above.
+    `default_language` controls **which track carries the MKV `--default-track` flag**. Nothing else. It does not change track *selection* (that stays with `-l`/`--alang` and friends). It also does not touch which track carries the original flag: `--original-flag` still tags the *true* original-audio track. That is the point: you can make your player default to, say, Polish audio on an English-original title without altering the original marker. When the configured language is not present in the manifest, each track type falls back to its normal default rule described above.
 
 !!! warning "`merge_video` collapses only the language dimension"
-    `merge_video` groups video tracks by `(resolution, range, codec)` and merges them so that only **language** differs within a single file, with no re-encode and no concatenation. Different resolutions, ranges (SDR / HDR10 / HDR10+ / DV / HYBRID), and codecs (H.264 / H.265) **always** land in separate files. So `-r HYBRID,DV,HDR10,SDR --merge-video` produces one file *per range* (never a single fused file), whereas English + French video of identical resolution, range, and codec yields one file containing both video tracks. `merge_audio` works the same way for audio languages.
+    `merge_video` groups video tracks by `(resolution, range, codec)` and merges them so that only **language** differs within a single file, with no re-encode and no concatenation. Different resolutions, ranges (SDR / HDR10 / HDR10+ / DV / HYBRID), and codecs (H.264 / H.265) **always** land in separate files. So `-r HYBRID,DV,HDR10,SDR --merge-video` gives one file *per range*, never a single fused file. English and French video of identical resolution, range, and codec gives one file that holds both video tracks. `merge_audio` works the same way for audio languages.
 
 A few muxing behaviors are automatic and not configurable:
 
 - `--no-date` is always passed for privacy (no timestamps embedded).
-- Descriptive audio gets the visually-impaired flag; SDH subtitles get the hearing-impaired flag; forced subtitles get the forced flag.
-- Chapters are written from the title's chapter list (see [Chapters](#chapters-naming) below).
+- Descriptive audio gets the visually-impaired flag. SDH subtitles get the hearing-impaired flag. Forced subtitles get the forced flag.
+- unshackle writes the chapters from the title's chapter list (see [Chapters](#chapters-naming) below).
 
 The `--no-mux` flag skips muxing entirely and writes the individual track files, each with a track-type suffix, into the same output/folder structure.
 
 ## Tags & group naming
 
-The release-group tag is the `-TAG` portion at the end of scene-style names, produced by the `{tag}` variable.
-It can be swapped per release with [`tag_rules`](../reference/configuration/output.md#tag_rules): ordered rules that
-match on the release-attribute variables only (`quality`, `resolution`, `hdr`, `source`, `lang_tag`,
-`title_type`, and so on), first match wins. The title's own fields, such as `title` and `season_episode`,
-cannot be matched. See the [reference page](../reference/configuration/output.md#tag_rules) for the exact list.
+The release-group tag is the `-TAG` portion at the end of scene-style names, which the `{tag}` variable gives.
+You can swap it per release with [`tag_rules`](../reference/configuration/output.md#tag_rules): ordered rules whose
+conditions read the release-attribute variables only (`quality`, `resolution`, `hdr`, `source`, `lang_tag`,
+`title_type`, and so on), and the first rule that matches wins. `tag_rules` cannot read the title's own fields,
+such as `title` and `season_episode`. See the [reference page](../reference/configuration/output.md#tag_rules) for the exact list.
 
 ```yaml title="unshackle.yaml"
 tag: "MYGROUP"
@@ -318,7 +318,7 @@ tag_imdb_tmdb: true
 | `tag_group_name` | bool | `true` | Write the group name (`config.tag`) into the MKV `Group` metadata tag. |
 | `tag_imdb_tmdb` | bool | `true` | Look up and embed IMDb / TMDB / TVDB external-ID tags in the MKV metadata (uses `tmdb_api_key` / `tvdb_api_key` / `simkl_client_id` when available). |
 
-The IDs are written as the Matroska `IMDB`, `TMDB`, and `TVDB2` tags. `TVDB2` values carry the
+unshackle writes the IDs as the Matroska `IMDB`, `TMDB`, and `TVDB2` tags. `TVDB2` values carry the
 entity prefix the [Matroska tagging spec](https://www.matroska.org/technical/tagging.html)
 requires: `series/73871` for a show, `movies/113` for a film.
 
@@ -339,7 +339,7 @@ unshackle dl --repack EXAMPLE "..."
 
 ## Unicode filenames
 
-By default unshackle transliterates non-ASCII characters (Korean, Japanese, Chinese, accented Latin, etc.) into ASCII equivalents, which is safest for older tools, DDL, and P2P sharing. Set `unicode_filenames` to keep the native characters.
+By default unshackle transliterates non-ASCII characters into ASCII equivalents. Korean, Japanese, Chinese, and accented Latin are examples. This is safest for older tools, DDL, and P2P sharing. Set `unicode_filenames` to keep the native characters.
 
 ```yaml title="unshackle.yaml"
 unicode_filenames: true
@@ -350,11 +350,13 @@ unicode_filenames: true
 | `false` (default) | `기생충` → transliterated ASCII; accents stripped. |
 | `true` | Native characters preserved in filenames and folders. |
 
-Regardless of this setting, a set of filesystem-unsafe and structural characters is always removed or replaced during sanitization (for example `/` and `;` become ` & `, and characters like `\ * ! ? , ' " < > | $ # ~` are stripped). This is why you should never put path-unsafe characters directly in a template. unshackle warns about templates containing `< > : " / \ | ? *` at startup (folder templates are checked per path segment, so `/` is allowed there as a directory separator).
+Regardless of this setting, unshackle always removes or replaces a set of filesystem-unsafe and structural characters during sanitisation. For example, `/` and `;` become ` & `, and unshackle removes characters like `\ * ! ? , ' " < > | $ # ~`. This is why you must never put path-unsafe characters directly in a template.
+
+unshackle warns at startup about a template that contains `< > : " / \ | ? *`. It examines a folder template per path segment, so you can use `/` there as a directory separator.
 
 ## Directory & filename configuration
 
-The `directories` key relocates unshackle's working folders. Only the folders listed here can be moved; core package paths are protected and silently ignored if you try to override them.
+The `directories` config key relocates unshackle's working folders. You can move only the folders in the table below. unshackle protects the core package paths and silently ignores them if you try to override them.
 
 ```yaml title="unshackle.yaml"
 directories:
@@ -376,11 +378,11 @@ directories:
 | `services`, `vaults`, `fonts`, `commands` | Search paths for services, key-vault backends, bundled fonts, and CLI commands. |
 | `wvds`, `prds`, `dcsl` | Widevine devices, PlayReady devices, and DCSL data. |
 
-Paths support `~` expansion. The names `app_dirs`, `core_dir`, `namespace_dir`, `user_configs`, and `data` are protected and cannot be changed.
+Paths can hold a `~` for expansion. unshackle protects the names `app_dirs`, `core_dir`, `namespace_dir`, `user_configs`, and `data`, so you cannot change them.
 
 ### Filename patterns
 
-The `filenames` key overrides the naming patterns for a handful of internal files. These are **not** your media output names. They are logs, temp files, and per-service configs.
+The `filenames` config key overrides the naming patterns for a handful of internal files. These are **not** your media output names. They are logs, temp files, and per-service configs.
 
 ```yaml title="unshackle.yaml"
 filenames:
@@ -400,13 +402,13 @@ filenames:
 
 ### Chapters naming {#chapters-naming}
 
-When a title has chapters, they are written to an OGM chapters file (`filenames.chapters`) and passed to the muxer. Unnamed chapters use the `chapter_fallback_name` template:
+When a title has chapters, unshackle writes them to an OGM chapters file (`filenames.chapters`) and passes it to the muxer. Unnamed chapters use the `chapter_fallback_name` template:
 
 ```yaml title="unshackle.yaml"
 chapter_fallback_name: "Chapter {i:02}"
 ```
 
-The fallback supports two placeholders: `{i}` (chapter number, starting at 1) and `{j}` (which increments only for unnamed chapters). Standard format directives like `{i:02}` are allowed.
+The fallback can hold two placeholders: `{i}` (chapter number, starting at 1) and `{j}` (which increments only for unnamed chapters). It permits standard format directives like `{i:02}`.
 
 ## Removed & migrated options
 
@@ -509,12 +511,12 @@ how the optional (`?`) variables appear and disappear.
     The.Movie.2024.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
     ```
 
-    For finer control (e.g. a `SUBBED` tag driven by subtitle languages), use `{lang_tag?}`
+    For finer control (for example a `SUBBED` tag driven by subtitle languages), use `{lang_tag?}`
     with [`language_tags` rules](../reference/configuration/download.md#language_tags) instead.
 
 === "Daily shows"
 
-    Dated content needs no special template. When an episode carries an air date,
+    Daily content needs no special template. When an episode carries an air date,
     `{season_episode}` becomes the date automatically and `{episode}` and `{year}` clear:
 
     ```yaml
@@ -532,8 +534,8 @@ how the optional (`?`) variables appear and disappear.
     The date separator follows your template style: dots here, spaces if your `series`
     template uses spaces.
 
-    In folder names, `{season}` becomes the air year (`Season 2024` style grouping), and a
-    `{year?}` in the folder template is skipped when it would just repeat that year.
+    In folder names, `{season}` becomes the air year (`Season 2024` style grouping), and
+    unshackle skips a `{year?}` in the folder template when it would only repeat that year.
 
 === "Music"
 
@@ -548,8 +550,8 @@ how the optional (`?`) variables appear and disappear.
       └─ 01.Opening.Track.mka
     ```
 
-    In `"{track_number}. {title}"` dots and spaces are tied, and ties go to dot style; add
-    more spaces between variables (as below) if you want space-separated names.
+    In `"{track_number}. {title}"` the number of dots and spaces is equal, and a tie goes to
+    dot style. Add more spaces between variables (as below) if you want space-separated names.
 
     A multi-disc album with explicit tracks, using more of the music variables. `{disc}` is
     empty on disc 1, so `{disc?}` and its separator only appear from disc 2 onward:

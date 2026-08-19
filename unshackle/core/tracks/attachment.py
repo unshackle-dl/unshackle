@@ -28,11 +28,11 @@ class Attachment:
         session: Optional[AnySession] = None,
     ):
         """
-        Create a new Attachment.
+        Make a new Attachment.
 
         If providing a path, the file must already exist.
         If providing a URL, download() fetches the file during the download phase.
-        Either path or url must be provided.
+        You must give either path or url.
 
         If name is not provided it will use the file name (without extension).
         If mime_type is not provided, it will try to guess it.
@@ -43,7 +43,7 @@ class Attachment:
             name: Name of the attachment.
             mime_type: MIME type of the attachment.
             description: Description of the attachment.
-            session: Optional requests session to use for downloading.
+            session: Optional requests HTTP session to download the file with.
         """
         if path is None and url is None:
             raise ValueError("Either path or url must be provided.")
@@ -164,14 +164,14 @@ class Attachment:
         session: Optional[AnySession] = None,
     ) -> "Attachment":
         """
-        Create an attachment from a URL.
+        Make an attachment from a URL.
 
         Args:
             url: URL to download the attachment from.
             name: Name of the attachment.
             mime_type: MIME type of the attachment.
             description: Description of the attachment.
-            session: Optional requests session to use for downloading.
+            session: Optional requests HTTP session to download the file with.
 
         Returns:
             Attachment: A new attachment instance.

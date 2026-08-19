@@ -31,7 +31,7 @@ class ExternalIds:
 
 @dataclass
 class MetadataResult:
-    """Unified metadata result from any provider."""
+    """Unified metadata result from any metadata provider."""
 
     title: Optional[str] = None
     year: Optional[int] = None
@@ -71,11 +71,11 @@ class MetadataProvider(metaclass=ABCMeta):
 
     @abstractmethod
     def is_available(self) -> bool:
-        """Return True if this provider has the credentials/keys it needs."""
+        """Return True if this metadata provider has the credentials/keys it needs."""
 
     @abstractmethod
     def search(self, title: str, year: Optional[int], kind: str) -> Optional[MetadataResult]:
-        """Search for a title and return metadata, or None on failure/no match."""
+        """Find a title and return its metadata, or None on failure or when nothing matches."""
 
     @abstractmethod
     def get_by_id(self, provider_id: Union[int, str], kind: str) -> Optional[MetadataResult]:
@@ -95,6 +95,6 @@ def strip_year(s: str) -> str:
 
 
 def fuzzy_match(a: str, b: str, threshold: float = 0.8) -> bool:
-    """Return True if ``a`` and ``b`` are a close match."""
+    """Return True if ``a`` and ``b`` match closely."""
     ratio = SequenceMatcher(None, clean(a), clean(b)).ratio()
     return ratio >= threshold

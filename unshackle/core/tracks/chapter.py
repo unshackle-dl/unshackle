@@ -10,7 +10,7 @@ TIMESTAMP_FORMAT = re.compile(r"^(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d
 class Chapter:
     def __init__(self, timestamp: Union[str, int, float], name: Optional[str] = None):
         """
-        Create a new Chapter with a Timestamp and optional name.
+        Make a new Chapter with a Timestamp and optional name.
 
         The timestamp may be in the following formats:
         - "HH:MM:SS" string, e.g., `25:05:23`.
@@ -18,8 +18,8 @@ class Chapter:
         - a timecode integer in milliseconds, e.g., `90323120` is `25:05:23.120`.
         - a timecode float in seconds, e.g., `90323.12` is `25:05:23.120`.
 
-        If you have a timecode integer in seconds, just multiply it by 1000.
-        If you have a timecode float in milliseconds (no decimal value), just convert
+        If you have a timecode integer in seconds, multiply it by 1000.
+        If you have a timecode float in milliseconds (no decimal value), convert
         it to an integer.
         """
         if timestamp is None:
@@ -70,7 +70,7 @@ class Chapter:
 
     @property
     def named(self) -> bool:
-        """Check if Chapter is named."""
+        """True if the Chapter has a name."""
         return bool(self.name)
 
 

@@ -1,7 +1,7 @@
 # Config API
 
 Auto-generated reference for the [`Config`][unshackle.core.config.Config] object that models the
-`unshackle` configuration file. For a human-friendly walkthrough of every key, see the
+`unshackle` configuration file. For a human-friendly walkthrough of every config key, see the
 [Configuration Reference](../configuration/index.md).
 
 ::: unshackle.core.config

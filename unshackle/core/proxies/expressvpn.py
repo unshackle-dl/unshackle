@@ -24,11 +24,11 @@ class ExpressVPN(Proxy):
     ExpressVPN HTTPS proxy provider.
 
     Mirrors the ExpressVPN Android TV app: an OAuth 2.0 device authorization grant obtains
-    API tokens (interactive on first run, silent via cached refresh token afterwards), a
+    API tokens (interactive on first run, silent through a cached refresh token afterwards), a
     subscription receipt (SRT) resolves proxy-capable locations, and get_proxy() returns an
     authenticated HTTPS proxy URL (https://cat:<token>@server:443).
 
-    Query format (after the provider prefix, e.g. "expressvpn:ca"):
+    Query format (after the proxy provider prefix, for example "expressvpn:ca"):
         ca              random location in the country (smart connection)
         us-ny           city
         us-ny-2 / usny2 pinned server by position
@@ -56,13 +56,14 @@ class ExpressVPN(Proxy):
         enable: bool = False,
     ):
         """
-        Proxy Service using ExpressVPN app proxy credentials.
+        Proxy provider that uses ExpressVPN app proxy credentials.
 
-        region_map maps a country code to an optional city/server preset (e.g. "us": "ny-02")
-        applied when the CLI query names only the country; empty values mean smart connection.
-        server_map maps aliases to location slugs or concrete .expressprovider.com hosts.
-        Tokens are optional: without them, cached tokens are used, else account_json is read.
-        Set enable: true to run the one-time interactive device login when no session exists.
+        region_map maps a country code to an optional city/server preset (for example "us":
+        "ny-02") applied when the CLI query names only the country. Empty values mean a smart
+        connection. server_map maps aliases to location slugs or concrete
+        .expressprovider.com hosts. Tokens are optional: without them, unshackle uses the
+        cached tokens, or else it reads account_json. Set enable: true to do the one-time
+        interactive device login when no login session exists.
         """
         if region_map is not None and not isinstance(region_map, dict):
             raise TypeError(f"Expected region_map to be a dict mapping aliases to locations, not '{region_map!r}'.")
@@ -109,7 +110,7 @@ class ExpressVPN(Proxy):
         return "ExpressVPN HTTPS Proxy"
 
     def has_silent_session(self) -> bool:
-        """Whether tokens can be obtained without the interactive device login."""
+        """Whether unshackle can get tokens without the interactive device login."""
         return bool(
             self.tokens
             or self.access_token
@@ -194,7 +195,7 @@ class ExpressVPN(Proxy):
         return self.match_city(pool, city_query)
 
     def match_city(self, locations: list[dict], city_query: str) -> Optional[dict]:
-        """Match a city query by abbreviation ("ny"), exact slug, slug prefix, then substring."""
+        """Find the city that matches the query by abbreviation ("ny"), exact slug, slug prefix, then substring."""
         city_query = city_query.strip().lower()
         abbrev, exact, prefix, substring = [], [], [], []
         for loc in locations:
@@ -337,7 +338,7 @@ class ExpressVPN(Proxy):
         return response.json()
 
     def device_login(self) -> Optional[dict]:
-        """One-time interactive bootstrap via the OAuth 2.0 device authorization grant (RFC 8628)."""
+        """One-time interactive bootstrap through the OAuth 2.0 device authorization grant (RFC 8628)."""
         response = self.request(
             "POST",
             f"{self.AUTH_BASE}/device/code",
@@ -515,7 +516,7 @@ def jwt_expired(token: Optional[str]) -> bool:
 
 
 def write_private(path: Path, content: str) -> None:
-    """Write content to path created with owner-only (0600) permissions."""
+    """Write text to path. The new file has owner-only (0600) permissions."""
     if hasattr(os, "fchmod"):
         fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         try:

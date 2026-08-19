@@ -25,7 +25,7 @@ class MockCertificateChain:
 
 
 class Key:
-    """Key object compatible with pywidevine."""
+    """`Key` object compatible with pywidevine."""
 
     def __init__(self, kid: str, key: str, type_: str = "CONTENT"):
         if isinstance(kid, str):
@@ -52,7 +52,7 @@ class DecryptLabsRemoteCDMExceptions:
         """Raised when session ID is invalid."""
 
     class TooManySessions(Exception):
-        """Raised when session limit is reached."""
+        """Raised when the CDM sessions reach the limit."""
 
     class InvalidInitData(Exception):
         """Raised when PSSH/init data is invalid."""
@@ -64,7 +64,7 @@ class DecryptLabsRemoteCDMExceptions:
         """Raised when license message is invalid."""
 
     class InvalidContext(Exception):
-        """Raised when session has no context data."""
+        """Raised when the CDM session has no context data."""
 
     class SignatureMismatch(Exception):
         """Raised when signature verification fails."""
@@ -78,15 +78,15 @@ class DecryptLabsRemoteCDM:
     Decrypt Labs' KeyXtractor API service, enhanced with smart caching logic
     that minimizes unnecessary license requests.
 
-    Key Features:
+    Main Features:
     - Compatible with both Widevine and PlayReady DRM schemes
     - Intelligent caching that compares required vs. available keys
     - Optimized caching for L1/L2 devices (leverages API auto-optimization)
-    - Automatic key combination for mixed cache/license scenarios
-    - Seamless fallback to license requests when keys are missing
+    - Automatic content key combination for mixed cache/license scenarios
+    - Fallback to license requests when keys are missing
 
     Intelligent Caching System:
-    1. DRM classes (PlayReady/Widevine) provide required KIDs via set_required_kids()
+    1. DRM classes (PlayReady/Widevine) give the required KIDs through set_required_kids()
     2. get_license_challenge() first checks for cached keys
     3. For L1/L2 devices, always attempts cached keys first (API optimized)
     4. If cached keys satisfy requirements, returns empty challenge (no license needed)
@@ -109,14 +109,14 @@ class DecryptLabsRemoteCDM:
         **kwargs,
     ):
         """
-        Initialize Decrypt Labs Remote CDM for Widevine and PlayReady schemes.
+        Initialise Decrypt Labs Remote CDM for Widevine and PlayReady schemes.
 
         Args:
             secret: Decrypt Labs API key (matches config format)
             host: Decrypt Labs API host URL (matches config format)
-            device_name: DRM scheme (ChromeCDM, L1, L2 for Widevine; SL2, SL3 for PlayReady)
-            service_name: Service name for key caching and vault operations
-            vaults: Vaults instance for local key caching
+            device_name: DRM system device name. Widevine takes ChromeCDM, L1 or L2, and PlayReady takes SL2 or SL3
+            service_name: Service tag for content key caching and vault operations
+            vaults: Vaults instance for local content key caching
             device_type: Device type (CHROME, ANDROID, PLAYREADY) - for compatibility
             system_id: System ID - for compatibility
             security_level: Security level - for compatibility
@@ -169,7 +169,7 @@ class DecryptLabsRemoteCDM:
 
     @property
     def is_playready(self) -> bool:
-        """Check if this CDM is in PlayReady mode."""
+        """Return True if this CDM is in PlayReady mode."""
         return self._is_playready
 
     @property
@@ -186,7 +186,7 @@ class DecryptLabsRemoteCDM:
         Set the required Key IDs for intelligent caching decisions.
 
         This method enables the CDM to make smart decisions about when to request
-        additional keys via license challenges. When cached keys are available,
+        additional keys through license challenges. When cached keys are available,
         the CDM will compare them against the required KIDs to determine if a
         license request is still needed for missing keys.
 
@@ -194,8 +194,8 @@ class DecryptLabsRemoteCDM:
             kids: List of required Key IDs as UUIDs or hex strings
 
         Note:
-            Should be called by DRM classes (PlayReady/Widevine) before making
-            license challenge requests to enable optimal caching behavior.
+            Call this method from the DRM classes (PlayReady/Widevine) before a
+            license challenge request, to enable optimal caching behaviour.
         """
         self._required_kids = []
         for kid in kids:
@@ -205,7 +205,7 @@ class DecryptLabsRemoteCDM:
                 self._required_kids.append(str(kid).replace("-", "").lower())
 
     def generate_session_id(self) -> bytes:
-        """Generate a unique session ID."""
+        """Make a unique session ID."""
         return secrets.token_bytes(16)
 
     def get_init_data_from_pssh(self, pssh: Any) -> str:
@@ -263,7 +263,7 @@ class DecryptLabsRemoteCDM:
 
     def close(self, session_id: bytes) -> None:
         """
-        Close a CDM session and perform comprehensive cleanup.
+        Close a CDM session and do comprehensive cleanup.
 
         Args:
             session_id: Session identifier
@@ -280,7 +280,7 @@ class DecryptLabsRemoteCDM:
 
     def get_service_certificate(self, session_id: bytes) -> Optional[bytes]:
         """
-        Get the service certificate for a session.
+        Get the service certificate for a CDM session.
 
         Args:
             session_id: Session identifier
@@ -298,7 +298,7 @@ class DecryptLabsRemoteCDM:
 
     def set_service_certificate(self, session_id: bytes, certificate: Optional[Union[bytes, str]]) -> str:
         """
-        Set the service certificate for a session.
+        Set the service certificate for a CDM session.
 
         Args:
             session_id: Session identifier
@@ -330,7 +330,7 @@ class DecryptLabsRemoteCDM:
 
     def has_cached_keys(self, session_id: bytes) -> bool:
         """
-        Check if cached keys are available for the session.
+        Return True if cached keys are available for the CDM session.
 
         Args:
             session_id: Session identifier
@@ -352,7 +352,7 @@ class DecryptLabsRemoteCDM:
         self, session_id: bytes, pssh_or_wrm: Any, license_type: str = "STREAMING", privacy_mode: bool = True
     ) -> bytes:
         """
-        Generate a license challenge using Decrypt Labs API with intelligent caching.
+        Make a license challenge with the Decrypt Labs API and intelligent caching.
 
         This method implements smart caching logic that:
         1. First checks local vaults for required keys
@@ -364,7 +364,7 @@ class DecryptLabsRemoteCDM:
         The intelligent caching works as follows:
         - Local vaults: Always checked first if available
         - For L1/L2 devices: Always prioritizes cached keys (API automatically optimizes)
-        - For other devices: Uses cache retry logic based on session state
+        - For other devices: Uses cache retry logic based on CDM session state
         - With required KIDs set: Only requests license for missing keys
         - Without required KIDs: Returns any available cached keys
         - For PlayReady: Combines vault, cached, and license keys seamlessly
@@ -383,7 +383,7 @@ class DecryptLabsRemoteCDM:
             requests.RequestException: If API request fails
 
         Note:
-            Call set_required_kids() before this method for optimal caching behavior.
+            Call set_required_kids() before this method for optimal caching behaviour.
             L1/L2 devices automatically use cached keys when available per API design.
             Local vault keys are always checked first when vaults are available.
         """
@@ -546,17 +546,17 @@ class DecryptLabsRemoteCDM:
 
     def parse_license(self, session_id: bytes, license_message: Union[bytes, str]) -> None:
         """
-        Parse license response using Decrypt Labs API with intelligent key combination.
+        Parse license response with the Decrypt Labs API and intelligent content key combination.
 
-        For PlayReady content with partial cached keys, this method intelligently
+        For PlayReady titles with partial cached keys, this method intelligently
         combines the cached keys with newly obtained license keys, avoiding
         duplicates while ensuring all required keys are available.
 
-        The key combination process:
+        The content key combination process:
         1. Extracts keys from the license response
         2. If cached keys exist (PlayReady), combines them with license keys
         3. Removes duplicate keys by comparing normalized KIDs
-        4. Updates the session with the complete key set
+        4. Updates the CDM session with the complete content key set
 
         Args:
             session_id: Session identifier
@@ -679,14 +679,14 @@ class DecryptLabsRemoteCDM:
 
     def get_keys(self, session_id: bytes, type_: Optional[str] = None) -> List[Key]:
         """
-        Get keys from the session.
+        Get keys from the CDM session.
 
         Args:
             session_id: Session identifier
-            type_: Optional key type filter (CONTENT, SIGNING, etc.)
+            type_: Optional type filter (CONTENT, SIGNING, and the other types)
 
         Returns:
-            List of Key objects
+            List of `Key` objects
 
         Raises:
             InvalidSession: If session ID is invalid
@@ -706,10 +706,10 @@ class DecryptLabsRemoteCDM:
         """Parse cached keys from API response.
 
         Args:
-            cached_keys_data: List of cached key objects from API
+            cached_keys_data: List of cached content key objects from API
 
         Returns:
-            List of key dictionaries
+            List of content key dictionaries
         """
         keys = []
 

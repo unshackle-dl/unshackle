@@ -37,7 +37,7 @@ def cleanup_all_gluetun_containers():
 
 
 def register_cleanup():
-    """Register cleanup handlers (only once)."""
+    """Add the cleanup handlers to atexit, one time only."""
     global cleanup_registered
     with cleanup_lock:
         if not cleanup_registered:
@@ -49,7 +49,7 @@ def register_cleanup():
 
 class Gluetun(Proxy):
     """
-    Dynamic Gluetun VPN-to-HTTP Proxy Provider with multi-provider support.
+    Dynamic Gluetun VPN-to-HTTP proxy provider that can use more than one VPN provider.
 
     Automatically manages Docker containers running Gluetun for WireGuard/OpenVPN VPN connections.
     Supports multiple VPN providers in a single configuration using query format: provider:region
@@ -170,7 +170,7 @@ class Gluetun(Proxy):
         **kwargs,
     ):
         """
-        Initialize Gluetun proxy provider with multi-provider support.
+        Initialise the Gluetun proxy provider that can use more than one VPN provider.
 
         Args:
             providers: Dict of VPN provider configurations
@@ -187,7 +187,7 @@ class Gluetun(Proxy):
             container_prefix: Docker container name prefix (default: "unshackle-gluetun")
             auth_user: Optional HTTP proxy authentication username
             auth_password: Optional HTTP proxy authentication password
-            verify_ip: Automatically verify IP and region after connection (default: True)
+            verify_ip: Automatically make sure that the IP and region are correct after connection (default: True)
         """
         if not binaries.Docker:
             raise RuntimeError(
@@ -497,7 +497,7 @@ class Gluetun(Proxy):
             return port
 
     def is_port_in_use(self, port: int) -> bool:
-        """Check if a port is in use on the system or by any Docker container."""
+        """Return True if the port is in use on the system or by any Docker container."""
         import socket
 
         try:
@@ -523,7 +523,7 @@ class Gluetun(Proxy):
 
     def build_server_hostname(self, provider_name: str, country_code: str, server_num: str) -> str:
         """
-        Build a server hostname for specific server selection.
+        Assemble a server hostname for specific server selection.
 
         Args:
             provider_name: VPN provider name (e.g., "nordvpn")
@@ -550,9 +550,9 @@ class Gluetun(Proxy):
 
     def ensure_image_available(self, image: str = "qmcgaw/gluetun:latest") -> bool:
         """
-        Ensure the Gluetun Docker image is available locally.
+        Make sure that the Gluetun Docker image is available locally.
 
-        If the image is not present, it will be pulled. This prevents
+        If the image is not present, unshackle runs `docker pull` to get it. This prevents
         the container creation from timing out during the first run.
 
         Args:
@@ -609,11 +609,11 @@ class Gluetun(Proxy):
         hostname: Optional[str] = None,
     ):
         """
-        Create and start a Gluetun Docker container.
+        Make and start a Gluetun Docker container.
 
-        Credentials go into a temporary env-file with restricted permissions and are passed with --env-file,
-        never as "-e KEY=VALUE" arguments, so they stay out of process listings. The file is overwritten and
-        deleted once "docker run" returns.
+        Credentials go into a temporary env-file with restricted permissions. unshackle gives that file
+        to Docker with --env-file, never as "-e KEY=VALUE" arguments, so the credentials stay out of
+        process listings. unshackle overwrites and deletes the file once "docker run" returns.
         """
         start_time = time.time()
 
@@ -831,7 +831,7 @@ class Gluetun(Proxy):
                     pass
 
     def is_container_running(self, container_name: str) -> bool:
-        """Check if a Docker container is running."""
+        """Return True if the Docker container operates."""
         try:
             result = subprocess.run(
                 [
@@ -858,13 +858,13 @@ class Gluetun(Proxy):
 
     def get_existing_container_info(self, container_name: str) -> Optional[dict]:
         """
-        Check if a container exists in Docker and get its info.
+        Find whether a container exists in Docker, and get its info.
 
-        This handles multiple Unshackle sessions - if another session already
-        created the container, we'll reuse it instead of trying to create a duplicate.
+        This lets several copies of unshackle share one container - if another copy
+        already made the container, unshackle uses it again instead of a duplicate.
 
         Args:
-            container_name: Name of the container to check
+            container_name: Name of the container to examine
 
         Returns:
             Dict with container info if exists and running, None otherwise
@@ -1082,11 +1082,11 @@ class Gluetun(Proxy):
 
     def verify_container(self, query_key: str, max_retries: int = 3):
         """
-        Verify container's VPN IP and region using ipinfo.io lookup.
+        Make sure that the container's VPN IP and region are correct with an ipinfo.io lookup.
 
-        Uses the shared get_ip_info function with a session configured to use
+        Uses the shared get_ip_info function with an HTTP session configured to use
         the Gluetun proxy. Retries with exponential backoff if the network
-        isn't ready immediately after the VPN connects.
+        is not ready immediately after the VPN connects.
 
         Args:
             query_key: The container query key (provider:region)
@@ -1234,13 +1234,13 @@ class Gluetun(Proxy):
         Remove a stopped container with the given name if it exists.
 
         This prevents "container name already in use" errors when a previous
-        container wasn't properly cleaned up.
+        container was not properly cleaned up.
 
         Args:
-            container_name: Name of the container to check and remove
+            container_name: Name of the container to examine and remove
 
         Returns:
-            True if a container was removed, False otherwise
+            True if unshackle removed a container, False otherwise
         """
         try:
             # Check if container exists (running or stopped)
@@ -1312,7 +1312,7 @@ class Gluetun(Proxy):
                 pass
 
     def build_proxy_uri(self, port: int) -> str:
-        """Build HTTP proxy URI."""
+        """Assemble the HTTP proxy URI."""
         if self.auth_user and self.auth_password:
             return f"http://{self.auth_user}:{self.auth_password}@localhost:{port}"
         return f"http://localhost:{port}"

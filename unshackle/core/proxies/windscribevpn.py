@@ -11,13 +11,13 @@ from unshackle.core.proxies.proxy import Proxy
 class WindscribeVPN(Proxy):
     def __init__(self, username: str, password: str, server_map: Optional[dict[str, str]] = None):
         """
-        Proxy Service using WindscribeVPN Service Credentials.
+        Proxy provider that uses WindscribeVPN Service Credentials.
 
-        A username and password must be provided. These are Service Credentials, not your Login Credentials.
+        You must give a username and password. These are Service Credentials, not your Login Credentials.
         The Service Credentials can be found here: https://windscribe.com/getconfig/openvpn
 
         server_map pins a query to a hostname. Its keys are either a country code ("ca") or a country
-        code with a city ("ca:toronto"), and a pinned hostname is used before any server lookup.
+        code with a city ("ca:toronto"), and unshackle uses a pinned hostname before any server lookup.
         """
         if not username:
             raise ValueError("No Username was provided to the WindscribeVPN Proxy Service.")
@@ -130,7 +130,7 @@ class WindscribeVPN(Proxy):
             A random hostname from matching servers, or None if the country has no servers.
 
         Raises:
-            ValueError: If a city was given and no server in that country matches it.
+            ValueError: If you give a city and no server in that country matches it.
         """
         hostnames = []
 

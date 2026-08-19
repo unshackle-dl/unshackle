@@ -14,7 +14,7 @@ log = logging.getLogger("services")
 
 
 class DirtyServiceRepo(Exception):
-    """A clone has uncommitted or unpushed local changes; refresh is refused to protect them."""
+    """A clone has uncommitted or unpushed local changes. unshackle refuses to refresh it, to protect them."""
 
     def __init__(self, path: Path):
         self.path = path
@@ -45,7 +45,7 @@ def is_repo_spec(value: object) -> bool:
 
 
 def parse_spec(spec: str) -> tuple[str, Optional[str], str]:
-    """Return (clone_url, branch, dest_name). `@branch` is honored for http/shorthand, not ssh."""
+    """Return (clone_url, branch, dest_name). This function honours `@branch` for http/shorthand, not for ssh."""
     is_ssh = spec.startswith(("git@", "ssh://"))
     branch: Optional[str] = None
     url = spec
@@ -58,7 +58,7 @@ def parse_spec(spec: str) -> tuple[str, Optional[str], str]:
 
 def slug(url: str) -> str:
     """Filesystem-safe clone dir name from a repo URL, host included so same owner/repo on
-    different hosts don't collide, e.g. github.com__owner__repo."""
+    different hosts do not collide, e.g. github.com__owner__repo."""
     cleaned = re.sub(r"^[a-z]+://", "", url).split("@")[-1].replace(":", "/")
     cleaned = re.sub(r"\.git$", "", cleaned)
     return "__".join(p for p in cleaned.split("/") if p)
@@ -78,7 +78,7 @@ def repos_base() -> Path:
 
 
 def resolve_service_repo(spec: str, *, ttl: int = DEFAULT_TTL, force: bool = False) -> Optional[Path]:
-    """Resolve a repo spec to its local clone dir.
+    """Find the local clone dir of a repo spec.
 
     First use clones it. ``force=True`` (manual ``refresh-services``) hard-resets the clone to
     upstream, discarding local changes. Otherwise a TTL-stale clone is fast-forwarded, but a dirty
@@ -136,7 +136,8 @@ def refresh_repo(spec: str) -> tuple[Optional[Path], list[str]]:
     """Force-sync a repo to upstream and return (clone dir, git-style per-service change lines).
 
     Used by the manual ``refresh-services`` command. Change lines look like ``+ TAG (added)`` /
-    ``~ TAG (modified)`` / ``- TAG (removed)`` plus a shortstat; empty list means already up to date.
+    ``~ TAG (modified)`` / ``- TAG (removed)`` plus a shortstat. An empty list means the clone is
+    already up to date.
     """
     url, branch, dest_name = parse_spec(spec)
     dest = repos_base() / dest_name
@@ -208,9 +209,9 @@ def force_sync(dest: Path, stamp: Path) -> None:
 def is_dirty(dest: Path) -> bool:
     """True if the clone has uncommitted edits to tracked files or local commits not on its upstream.
 
-    Untracked files are intentionally ignored: a `git pull --ff-only` only touches tracked files, so
-    untracked content (including `__pycache__` that importing the services creates) is never at risk
-    and must not falsely flag the clone as dirty.
+    This function intentionally ignores untracked files: a `git pull --ff-only` only touches tracked
+    files, so untracked files (including `__pycache__` that importing the services creates) are never
+    at risk and must not falsely flag the clone as dirty.
     """
     git = str(binaries.Git)
     # modifications to tracked files only (--untracked-files=no skips __pycache__ etc.)

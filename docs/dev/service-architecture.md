@@ -3,22 +3,22 @@
 This page is the conceptual map of the internal object model that a **service author**
 works against. It ties together the moving parts: the `Service` base class, the
 `Title` hierarchy a service returns, the `Track` model those titles carry, the
-manifest parsers that produce tracks, the DRM hooks that license and decrypt them,
-and the request/session objects wired up for you at construction time.
+manifest parsers that make tracks, the DRM hooks that license and decrypt them,
+and the request and HTTP session objects wired up for you at construction time.
 
 !!! info "Who this page is for"
-    This is a **developer reference**. If you only want to *run* downloads, you never
-    touch these classes directly; see [Downloading](../guide/downloading.md) and the
-    [CLI reference](../guide/cli-reference.md) instead. If you are writing or reading a
+    This is a **developer reference**. If you only want to *download* titles, you never
+    touch these classes directly. See [Downloading](../guide/downloading.md) and the
+    [CLI reference](../guide/cli-reference.md) instead. If you write or read a
     service plugin, this page explains what each object is and how the pieces connect.
-    For a guided, step-by-step build, see [Creating a Service](creating-a-service.md);
-    for exact signatures, see the auto-generated [Service API](../reference/api/service.md),
+    For a guided, step-by-step walkthrough, see [Creating a Service](creating-a-service.md).
+    For exact signatures, see the auto-generated [Service API](../reference/api/service.md),
     [Titles API](../reference/api/titles.md), and [Tracks API](../reference/api/tracks.md).
 
 ## The shape of a download
 
 A service is a translator between one streaming platform and unshackle's generic
-pipeline. It never downloads or decrypts anything itself; it just answers questions.
+pipeline. It never downloads or decrypts anything itself. It only answers questions.
 The `dl` command drives the whole flow and only ever calls three required methods on
 your service, in order:
 
@@ -44,15 +44,15 @@ Tracks.mux                →  mkvmerge → tagged .mkv (movie / episode)
    the `Video`/`Audio`/`Subtitle` objects.
 3. **`get_chapters(title)`** returns any chapter markers.
 
-Everything after that (track selection, licensing, decryption, repacking, subtitle
-conversion, and muxing) is handled by the core using the objects your service
-returned. Your job is to produce accurate `Title` and `Track` objects; the framework
+The core does everything after that (track selection, licensing, decryption,
+repacking, subtitle conversion, and muxing) with the objects your service
+returned. Your job is to give accurate `Title` and `Track` objects. The framework
 does the rest.
 
 ## The `Service` base class
 
 Every service subclasses `unshackle.core.service.Service`, an abstract base class.
-Two kinds of members matter: **class variables** that describe the service, and
+Two kinds of members matter: **class variables** that give the details of the service, and
 **methods** that the pipeline calls.
 
 ### Class variables
@@ -70,23 +70,23 @@ Declared at the top of your service class, these are static descriptors:
 
 ### Required methods
 
-These are abstract; a service will not load unless it implements all three:
+These are abstract. A service will not load unless it defines all three:
 
-- `get_titles() -> Titles_T`: resolve the requested ID into a title collection.
-- `get_tracks(title) -> Tracks`: build the track set for one title.
+- `get_titles() -> Titles_T`: find the title collection for the requested ID.
+- `get_tracks(title) -> Tracks`: assemble the track set for one title.
 - `get_chapters(title) -> Chapters`: return chapter markers (may be empty).
 
 ### Optional methods and hooks
 
 - **`authenticate(cookies=None, credential=None)`**: the base implementation loads a
   `CookieJar` into `self.session.cookies` and stores `self.credential`. Override it to
-  perform a real login handshake.
-- **`search()`**: raises `NotImplementedError` by default; implement it to support the
-  `search` command.
+  do a real login handshake.
+- **`search()`**: raises `NotImplementedError` by default. Write it so that the
+  `search` command can operate.
 - **DRM license hooks**: `get_widevine_service_certificate`, `get_widevine_license`,
   `get_playready_license` (delegates to Widevine by default), and
   `get_clearkey_license` (returns `None` by default). See [DRM hooks](#drm-hooks) below.
-- **`request_input(prompt)`**: prompts the user; routed through the serve-mode input
+- **`request_input(prompt)`**: prompts the user. It goes through the serve-mode input
   bridge or the rich console.
 - **Event callbacks**: `on_segment_downloaded`, `on_track_downloaded`,
   `on_track_decrypted`, `on_track_repacked`, `on_track_multiplex` let a service react to
@@ -95,12 +95,12 @@ These are abstract; a service will not load unless it implements all three:
   resolved server-side *ahead of* the normal per-track license flow. Unlike everything else
   here it is **not declared on the `Service` base class at all**: `dl.py` probes for it with
   `hasattr` and calls it (once, after track selection) only if your service defines it. Use
-  it when keys must be fetched or injected in bulk before download, separate from the
-  per-track license callbacks below.
+  it when your service must fetch or inject keys in bulk before download, separate from
+  the per-track license callbacks below.
 
 ### What `__init__` wires up for you
 
-You rarely override `__init__`; the base constructor takes the Click context and sets
+You rarely override `__init__`. The base constructor takes the Click context and sets
 up the objects your methods rely on:
 
 | Attribute | What it is |
@@ -116,7 +116,7 @@ up the objects your methods rely on:
 
 The constructor also resolves proxies: it reads `--proxy` / `--proxy-query` /
 `--proxy-provider`, consults the per-service `proxy_map`, and, if `GEOFENCE` is set and
-no explicit proxy was given, does a live IP check and auto-fetches a proxy to
+you did not give an explicit proxy, does a live IP check and auto-fetches a proxy to
 `GEOFENCE[0]` when it detects a geoblock. See [Proxies and VPN](../guide/proxies-and-vpn.md).
 
 !!! note "`TrackRequest`"
@@ -157,7 +157,8 @@ Each subclass adds its own required fields on top of `id_` and `service`:
     Movie(id_, service, name, year=None, language=None, data=None, description=None)
     ```
 
-    `name` is required; `year` is optional but must be a positive integer if given.
+    You must give `name`. `year` is optional, but it must be a positive integer if you
+    give it.
 
 === "Episode"
 
@@ -167,9 +168,10 @@ Each subclass adds its own required fields on top of `id_` and `service`:
             description=None, air_date=None)
     ```
 
-    `title` is the **show** name; `season` and `number` are required (0 is allowed).
-    An `air_date` is normalized to a `date` so the `{date}` naming token stays clean,
-    and a placeholder episode `name` like `"Episode 4"` is discarded automatically.
+    `title` is the **show** name. You must give `season` and `number`, and `0` is a
+    valid value. unshackle converts an `air_date` to a `date` so the `{date}` naming
+    token stays clean, and it discards a placeholder episode `name` like `"Episode 4"`
+    automatically.
 
 === "Song"
 
@@ -178,7 +180,7 @@ Each subclass adds its own required fields on top of `id_` and `service`:
          language=None, data=None, ...)
     ```
 
-    `name`, `artist`, `album`, and `track` are required and validated. `disc` defaults to
+    You must give `name`, `artist`, `album`, and `track`, and unshackle validates them. `disc` defaults to
     1, and `year` is optional. A single therefore needs no `disc`, and an undated release
     needs no `year`.
 
@@ -216,17 +218,17 @@ Each subclass adds its own required fields on top of `id_` and `service`:
 
 ### Title remapping
 
-After titles are fetched (and after any cache), the framework applies
-`remap_titles(titles, title_map)` using the per-service `title_map` config. This does an
-**exact-string** rename (`Episode`s are matched on their show `title`, `Movie`s and
-`Song`s on their `name`), so a platform's odd naming can be normalized to what your
-library expects. Titles are also cache-wrapped via `get_titles_cached()`, which is region-
-and account-aware; see the [TitleCacher](#request-and-session-objects) notes.
+After the service fetches the titles (and after any cache), the framework applies
+`remap_titles(titles, title_map)` with the per-service `title_map` config. This does an
+**exact-string** rename (it compares `Episode`s on their show `title`, and `Movie`s and
+`Song`s on their `name`), so you can change a platform's odd naming to what your
+library expects. `get_titles_cached()` also cache-wraps the titles, and it is region-
+and account-aware. See the [TitleCacher](#request-and-session-objects) notes.
 
-The ordering here is deliberate on both sides. `title_map` is applied **after** the title
-cache so that editing the map takes effect immediately, without forcing a cache reset, and
-**before** metadata enrichment (`--enrich`) so that an explicit enrich override still wins
-over a mapped name.
+The ordering here is deliberate on both sides. The framework applies `title_map` **after**
+the title cache so that editing the map takes effect immediately, without forcing a cache
+reset, and **before** metadata enrichment (`--enrich`) so that an explicit enrich override
+still wins over a mapped name.
 
 ## Tracks and the `Track` model
 
@@ -239,14 +241,14 @@ attachments), and the canonical display/mux order is Video → Audio → Subtitl
 !!! warning "Track IDs must be deterministic"
     `Tracks.add` refuses duplicate IDs. Track IDs are CRC32-derived from the track's
     identity (URL, codec, language, bitrate) and **must be stable across requests**, never
-    random. The manifest parsers already do this correctly; if you build tracks by hand,
+    random. The manifest parsers already do this correctly. If you assemble tracks by hand,
     keep IDs deterministic or `add` will raise.
 
 ### The base `Track`
 
 `Track` is the base for `Video`, `Audio`, and `Subtitle`. (`Chapter`, `Chapters`, and
-`Attachment` are standalone classes, **not** `Track` subclasses.) Every track knows how
-it is delivered, via `Track.Descriptor`:
+`Attachment` are standalone classes, **not** `Track` subclasses.) Every track records its
+delivery method in `Track.Descriptor`, which tells unshackle how to download it:
 
 | Descriptor | Delivery |
 |---|---|
@@ -255,10 +257,10 @@ it is delivered, via `Track.Descriptor`:
 | `DASH` | Dynamic Adaptive Streaming over HTTP. |
 | `ISM` | Smooth Streaming. |
 
-Key attributes include `url` (a string or list of strings), `language` (a
+The main attributes include `url` (a string or list of strings), `language` (a
 `langcodes.Language`), `drm` (an optional iterable of DRM objects), `needs_repack`, and
-descriptor-specific state stashed in `track.data["hls"]` / `track.data["dash"]`. When
-`name` is omitted, a human-readable name is derived from the language automatically.
+descriptor-specific state stashed in `track.data["hls"]` / `track.data["dash"]`. If you
+do not give a `name`, unshackle derives a human-readable name from the language.
 
 ### `Video`
 
@@ -268,12 +270,12 @@ closed-caption descriptors. The relevant enums:
 - **`Video.Codec`**: `AVC` (H.264), `HEVC` (H.265), `VC1`, `VP8`, `VP9`, `AV1`.
 - **`Video.Range`**: `SDR`, `HLG`, `HDR10`, `HDR10P` (HDR10+), `DV` (Dolby Vision), and
   `HYBRID`. `HYBRID` is special: it tells the pipeline to select both an HDR10(+) base and
-  a DV track and merge the DV RPU onto the HDR10 stream with `dovi_tool` (see
+  a DV track and merge the DV RPU onto the HDR10 track with `dovi_tool` (see
   [Dolby Vision hybrid](#dolby-vision-and-hybrid)).
 
 !!! note "Bitrate units"
     Both `Video` and `Audio` store `bitrate` in **bits per second** (rounded up). The
-    string form displays kb/s, and `--vbitrate` and `--abitrate` match on kb/s.
+    string form displays kb/s, and `--vbitrate` and `--abitrate` compare in kb/s.
 
 ### `Audio`
 
@@ -295,11 +297,11 @@ all documented for users in [Subtitles](../guide/subtitles.md).
 
 ### Chapters and attachments
 
-- **`Chapter(timestamp, name=None)`**: a single marker; the timestamp accepts
+- **`Chapter(timestamp, name=None)`**: a single marker. The timestamp accepts
   `HH:MM:SS[.mmm]`, integer milliseconds, or float seconds.
 - **`Chapters`**: a sorted collection that auto-inserts a `00:00:00.000` chapter and
   reads/writes OGM Simple format.
-- **`Attachment`**: a font or image attached to the mux (e.g. fonts an ASS subtitle
+- **`Attachment`**: a font or image attached to the mux (for example, fonts an ASS subtitle
   references), built from a local `path` or a `url`.
 
 ### Selection, sorting, and muxing
@@ -310,12 +312,12 @@ all documented for users in [Subtitles](../guide/subtitles.md).
 object multiplexes everything: **`Tracks.mux(title, ...)`** builds and runs an
 `mkvmerge` command, applying language, default-track, forced, and hearing-impaired flags,
 attaching chapters and fonts, and writing a `.muxed.mkv` (or `.mka` / `.mks` for
-audio- or subtitle-only sets). As a service author you never call `mux` yourself; you
-just return correct tracks.
+audio- or subtitle-only sets). As a service author you never call `mux` yourself. You
+only return correct tracks.
 
 ## Manifest parsers
 
-Most services do not build tracks by hand; they hand a manifest to one of three parsers
+Most services do not assemble tracks by hand. They give a manifest to one of three parsers
 in `unshackle.core.manifests`. Each parser has the same three-part contract:
 
 | Format | Class | Notes |
@@ -328,40 +330,40 @@ in `unshackle.core.manifests`. Each parser has the same three-part contract:
 
 1. **Construct**: `DASH.from_url(url, session=...)` or `DASH.from_text(text, url)`
    (and likewise for `HLS` / `ISM`). A `url` is always required, even for `from_text`,
-   because relative segment paths are resolved against it.
+   because the parser needs it to make relative segment paths absolute.
 2. **`to_tracks(...)`**: parses the manifest into a `Tracks` container of `Video`,
    `Audio`, and `Subtitle` objects, each carrying descriptor-specific state.
 3. **`download_track(...)`**: a staticmethod the core calls to fetch, decrypt, and merge
-   segments. You do not call it; you just return the tracks it will operate on.
+   segments. You do not call it. You only return the tracks it will operate on.
 
 A typical `get_tracks` therefore looks like fetching the manifest text with
 `self.session` and returning `DASH.from_text(mpd, url).to_tracks(language=title.language)`.
 
 !!! tip "Pass the original language"
-    DASH and HLS `to_tracks` raise `ValueError` if a track's language cannot be derived
-    and no valid fallback was supplied. Always pass the title's original recorded
-    language. For HLS this fallback is used directly for the primary track, since HLS
-    variants carry no language.
+    DASH and HLS `to_tracks` raise `ValueError` if they cannot derive a track's language
+    and you gave no valid fallback. Always pass the title's original recorded
+    language. For HLS, `to_tracks` uses this fallback directly for the primary track,
+    because HLS variants carry no language.
 
 ### Segment-filtering hooks
 
 - **HLS**: set `track.OnSegmentFilter(segment)` to drop unwanted segments (ads/bumpers).
-  A dropped segment is invisible to the whole download: its `EXT-X-KEY` and its
-  `EXT-X-DISCONTINUITY` are ignored, so a clear ad break inside encrypted content does
+  A dropped segment is invisible to the whole download: unshackle ignores its `EXT-X-KEY`
+  and its `EXT-X-DISCONTINUITY`, so a clear ad break inside an encrypted track does
   not disturb decryption.
 - **DASH**: pass a `period_filter` callable to `to_tracks` to drop whole periods.
-  Caching-breadth periods some services emit and non-`content` segment types are dropped automatically.
+  unshackle automatically drops the caching-breadth periods that some services send, and the non-`content` segment types.
 
 ### Format gotchas worth knowing
 
 - **DASH** enumerates tracks from only the *first* content period, but downloads segments
-  from *all* content periods matching the representation. `SegmentTemplate`,
-  `SegmentList`, and `SegmentBase` addressing and `$Number%0Nd$` padding are handled.
+  from *all* content periods matching the representation. The parser reads `SegmentTemplate`,
+  `SegmentList`, and `SegmentBase` addressing, and `$Number%0Nd$` padding.
 - **HLS** re-fetches the media playlist at download time, recovers `SUPPLEMENTAL-CODECS`
   from raw text (python-m3u8 drops it) to detect Dolby Vision composite streams, and uses
-  the media-sequence-number IV for AES-128 keys that omit an explicit IV.
-- **ISM** has no segment list and no init segments: segment URLs are synthesized from the
-  `<c>` fragment timeline, and a `moov`/`ftyp` init box is rebuilt from `CodecPrivateData`
+  the media-sequence-number IV for AES-128 keys that have no explicit IV.
+- **ISM** has no list of segments and no init segments: the parser synthesizes segment URLs
+  from the `<c>` fragment timeline, and rebuilds a `moov`/`ftyp` init box from `CodecPrivateData`
   (supported for AVC, HEVC, DV-over-HEVC, AAC, EC-3, and TTML).
 
 ## DRM hooks
@@ -384,8 +386,8 @@ service to talk to the platform's license server. unshackle recognizes five DRM 
 
 ### The service-side hooks
 
-The framework supplies the CDM and the decryption tool; your service provides the network
-calls that the CDM's challenge must be sent through. Override the hooks that your platform
+The framework supplies the CDM and the decryption backend. Your service gives the network
+calls that must carry the CDM's challenge. Override the hooks that your platform
 needs:
 
 | Hook | Return | Purpose |
@@ -395,29 +397,30 @@ needs:
 | `get_playready_license(title, track, challenge)` | license | Same for PlayReady; defaults to delegating to Widevine. |
 | `get_clearkey_license(title, track, challenge)` | dict / str / bytes / `None` | For `ClearKeyCENC`; return `None` to let the framework POST to the manifest `Laurl`. |
 
-You do not open CDM sessions or run shaka-packager yourself. The `Widevine`/`PlayReady`
-classes drive the CDM handshake and invoke the decryption tool. Your hook is just the
+You do not open CDM sessions or operate shaka-packager yourself. The `Widevine`/`PlayReady`
+classes drive the CDM handshake and call the decryption backend. Your hook is only the
 "send this challenge, give me back the license" step.
 
-### How a CDM is chosen and keys are found
+### How unshackle chooses a CDM and finds keys
 
 CDM selection is config-driven: the `cdm` map resolves a service tag (and optionally the
 track quality or DRM type) to a device name, which `load_cdm` instantiates as a local
 `.wvd`/`.prd` or a remote CDM. Before ever requesting a license, the framework tries an
-in-process key cache and the configured **key vaults**; only unresolved KIDs trigger an
-actual license request, and newly licensed keys are written back to every vault. This is
-why the same key is rarely re-licensed twice. Users configure all of this in
-[DRM and CDM](../guide/drm-and-cdm.md) and [Key vaults](../guide/vaults.md); the API
-surface is documented in the [DRM API reference](../reference/api/drm.md).
+in-process cache of content keys and the configured **key vaults**. Only unresolved KIDs
+trigger an actual license request, and the framework writes newly licensed keys back to
+every vault. This is why the same content key is rarely re-licensed twice. Users configure
+all of this in [DRM and CDM](../guide/drm-and-cdm.md) and
+[Key vaults](../guide/vaults.md). The [DRM API reference](../reference/api/drm.md) gives
+the API surface.
 
 ### Dolby Vision and hybrid
 
-Two DV mechanisms sit on top of the track model. **DV fixup** re-exposes DV signaling on
+Two DV mechanisms sit on top of the track model. **DV fixup** re-exposes DV signalling on
 HLS streams that carry a valid DV RPU but advertise plain HEVC (`dv_compatible_bitstream`).
 **Hybrid** processing (`Video.Range.HYBRID`) selects an HDR10(+) base and a DV donor,
-extracts the RPU with `dovi_tool`, and injects it onto the base layer, producing a single
-stream with both HDR10 and DV metadata. Both are automatic once the right tracks are
-selected; a service only needs to expose accurate ranges.
+extracts the RPU with `dovi_tool`, and injects it onto the base layer, to make a single
+track that carries both HDR10 metadata and the DV RPU. Both are automatic once the
+pipeline selects the right tracks. A service only needs to give accurate ranges.
 
 ## Request and session objects
 
@@ -425,23 +428,23 @@ Everything a service does over the network flows through objects the base constr
 prepared, all derived from the Click context (`ctx`) that `dl` passes in.
 
 - **`self.config`**: your service's slice of `unshackle.yaml`, i.e.
-  `config.services[<ServiceName>]`. This is a plain dict; use it for per-service settings
+  `config.services[<ServiceName>]`. This is a plain dict. Use it for per-service settings
   like base URLs, an API key, or a `title_map`. See
   [Configuration](../getting-started/configuration-file.md).
 - **`self.session`**: a `requests.Session` with `config.headers` applied, a retry policy
   (`total=5`, backoff, retry on 429/5xx), and any resolved proxy already mounted. Pass this
-  session into the manifest parsers and DRM calls so headers, cookies, and proxies flow
-  everywhere. (unshackle also ships an rnet-based TLS-fingerprinting session used by the
-  newer `session()` factory and configured via the `network` config key.)
+  HTTP session into the manifest parsers and DRM calls so headers, cookies, and proxies flow
+  everywhere. (unshackle also ships an rnet-based TLS-fingerprinting HTTP session that the
+  newer `session()` factory uses and that the `network` config key configures.)
 - **`self.credential`**: the active `Credential` (`username:password[:extra]`), populated
-  by `authenticate`. Its `sha1` is used as the account hash for cache keys.
+  by `authenticate`. unshackle uses its `sha1` as the account hash for cache keys.
 - **`self.cache`**: a generic `Cacher`: JSON key/value storage under the service's cache
   dir, with CRC32 integrity checks, versioning, and optional expiry (auto-derived from a
   JWT `exp` claim when present). Good for auth tokens and API responses.
 - **`self.title_cache`**: a `TitleCacher` that wraps `get_titles` results, keyed by title
   ID, region, and account hash. It serves fresh data within `title_cache_time`, falls back
-  to stale data within `title_cache_max_retention` when an API call fails, and is bypassed
-  by `--no-cache`.
+  to stale data within `title_cache_max_retention` when an API call fails, and `--no-cache`
+  bypasses it.
 - **`self.track_request`**: the `TrackRequest` describing what the user asked for
   (codecs, ranges, best-available), for use inside `get_tracks`.
 
@@ -480,7 +483,7 @@ prepared, all derived from the Click context (`ctx`) that `dl` passes in.
             return self.session.post("https://lic.example.com/wv", data=challenge).content
     ```
 
-    The directory name (`EXMP`) must exactly match the class name; that stem is the
+    The directory name (`EXMP`) must match the class name exactly. That stem is the
     service tag. Put your service in one of the `directories.services` paths.
 
 ## Where to go next

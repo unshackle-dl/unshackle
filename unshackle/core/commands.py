@@ -35,9 +35,9 @@ def load_command(path: Path) -> object:
 def load_commands(paths: list[Path]) -> tuple[dict[str, object], list[str]]:
     """Load every command, returning the good ones plus a list of load errors.
 
-    Importing this module must never raise (it runs at CLI startup, before Rich
-    is installed, so a raise here prints an ugly pre-setup traceback). Instead we
-    collect failures and surface them once, cleanly, when the CLI is used.
+    Importing this module must never raise (it runs at CLI startup, before unshackle
+    installs Rich, so a raise here prints an ugly pre-setup traceback). Instead we
+    collect failures and surface them once, cleanly, when the user operates the CLI.
     """
     modules: dict[str, object] = {}
     errors: list[str] = []

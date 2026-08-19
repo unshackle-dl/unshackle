@@ -1,12 +1,12 @@
 # Post-download scripts { #post-scripts }
 
-Run your own script when a download finishes, with unshackle's metadata passed in as
+Operate your own script when a download finishes, with unshackle's metadata passed in as
 `{variable}` placeholders. Use it to hand a finished file to an uploader, send a
 notification, or start a library scan.
 
 ## `post_scripts`
 
-- **Type:** `list[dict]` &nbsp;·&nbsp; **Default:** `[]` (no scripts run)
+- **Type:** `list[dict]` &nbsp;·&nbsp; **Default:** `[]` (unshackle operates no scripts)
 
 ```yaml title="unshackle.yaml"
 post_scripts:
@@ -17,7 +17,7 @@ post_scripts:
 ```
 
 Every entry that matches the event and mode runs, so one download can feed an uploader and
-a notifier without a wrapper script. An entry may also be written as a plain string, which
+a notifier without a wrapper script. You can also write an entry as a plain string, which
 is the same as `{command: "...", event: success, mode: file}`.
 
 | Key | Default | Meaning |
@@ -26,15 +26,15 @@ is the same as `{command: "...", event: success, mode: file}`.
 | `event` | `success` | `success` when a file was written, `failure` when the download failed |
 | `mode` | `file` | `file`, `season`, or `run`. See [Modes](#modes) |
 
-An entry whose `event` or `mode` is not one of the listed values is skipped and logs a
-warning naming the bad value, once per command. An entry whose `command` cannot be split
-into arguments, such as one with an unbalanced quote, is skipped with a warning too. Neither
-stops the download or the other entries.
+unshackle skips an entry whose `event` or `mode` is not one of the listed values, and logs a
+warning that names the bad value, once per command. unshackle also skips an entry whose
+`command` it cannot split into arguments, such as one with an unbalanced quote, and logs a
+warning. Neither stops the download or the other entries.
 
 ## How the command runs
 
-The command is split into arguments **first**, and variables are substituted into those
-arguments afterwards. The process runs without a shell.
+unshackle splits the command into arguments **first**, and then substitutes the variables
+into those arguments. The process runs without a shell.
 
 This is what keeps a title like `Bob"; rm -rf ~` harmless: a value can never turn into an
 extra argument or a shell operator, and you never have to think about quoting. It also
@@ -45,12 +45,12 @@ means a path containing spaces always arrives as a single argument on every OS.
     first stops a value becoming a *new* argument, but a value on its own can still be a
     whole argument. A bare `{title}` whose value is `--upload-file=/etc/passwd` would arrive
     as an option to your script, not as text. Write `--title={title}`, not a bare `{title}`,
-    so a service can never forge a flag. unshackle refuses to run a command when a
+    so a service can never forge a flag. unshackle refuses to operate a command when a
     substituted value would become an option-like token (one that starts with `-`), and logs
     a warning instead.
 
 !!! warning "No shell features, and name your interpreter"
-    Pipes, `&&`, `>` redirection, `~` and globs do not work, because no shell is involved.
+    Pipes, `&&`, `>` redirection, `~` and globs do not work, because unshackle uses no shell.
     If you want them, make the shell explicit: `bash -c "..."`.
 
     For the same reason there is no interpreter lookup. Write `python /opt/upload.py`
@@ -58,7 +58,7 @@ means a path containing spaces always arrives as a single argument on every OS.
     Python or the one in its own virtual environment.
 
     On Windows, when a **fixed** part of an argument contains a space, quote the whole
-    argument (`"--out=C:\My Dir\{filename}"`), not just the value. Substituted values
+    argument (`"--out=C:\My Dir\{filename}"`), not only the value. Substituted values
     never need quoting on any OS.
 
     On Windows, do not target a `.bat` or `.cmd` file directly. Windows runs batch files
@@ -79,7 +79,7 @@ already started.
 ## Variables
 
 Metadata comes from the same naming context that produced the file's name, built per output
-file. So `{quality}` and `{hdr}` always describe the file being passed. Downloading
+file. So `{quality}` and `{hdr}` always give the values for the file unshackle passes in. Downloading
 `-q 1080,2160 -r HDR10,SDR` produces four files, each with its own invocation and its own
 values.
 
@@ -104,11 +104,11 @@ Every variable from your `output_template` is available here as well, including
 
 !!! warning "Empty variables become an empty string"
     `--tmdb={tmdb}` with no ID resolved hands your script `--tmdb=`, so treat an empty
-    string as absent. Write your script to handle every variable being empty.
+    string as absent. Write your script to accept an empty value for every variable.
 
     Empty is common, and not only when data is missing:
 
-    - Nothing was resolved. `{tmdb}` is empty when no metadata provider found the title,
+    - No metadata provider found an ID. `{tmdb}` is empty when no metadata provider found the title,
       the matching API key is missing, or the title is a movie you gave no ID for.
     - The title has no such field. Movies have no `{season}` or `{episode}`, and music has
       neither.
@@ -153,10 +153,9 @@ track arrived in, such as `.flac`, because a music download is not muxed.
 
 ### Tagging IDs { #tagging-ids }
 
-`{tmdb}`, `{imdb}` and `{tvdb}` carry the IDs unshackle is tagging the file with, read at
-the moment the hook is dispatched rather than snapshotted at the start of the run. An
-episode's TMDB ID is resolved by the title search inside the download loop, so a hook fires
-with it already filled in.
+`{tmdb}`, `{imdb}` and `{tvdb}` carry the IDs unshackle tags the file with. unshackle reads
+them at the moment it sends the hook, and not at the start of the run. The title search inside
+the download loop finds an episode's TMDB ID, so a hook fires with it already filled in.
 
 They hold an ID you passed with `--tmdb`, `--imdb` or `--tvdb`, plus a TMDB ID the episode
 search resolved. No such search runs for a movie, so a movie hook gets them empty unless you
@@ -165,14 +164,14 @@ passed one.
 ### Sidecar files
 
 `{sidecars}` holds the sidecar subtitle files written beside the output, which are the only
-extra files a download leaves next to it. Attachments such as fonts are muxed into the
-container and temporary artwork is deleted, so neither appears. Expect `{sidecars}` to be
+extra files a download leaves next to it. unshackle muxes attachments such as fonts into the
+container and deletes temporary artwork, so neither appears. Expect `{sidecars}` to be
 empty unless [`subtitle.output_mode`](download.md#subtitle) is `sidecar` or `both`, which is
 not the default. A music download writes no sidecars at all.
 
 Paths are absolute and separated by a newline, because a newline is the only character that
 cannot appear in a filename on any supported OS. The whole list arrives as a single
-argument, so no quoting is needed in your template.
+argument, so your template needs no quoting.
 
 When one download writes several outputs (`-q 1080,720`), each output's folder gets its own
 copy of the sidecar files, and each invocation lists the copies sitting beside its own
@@ -201,7 +200,7 @@ subs = [p for p in sys.argv[i].removeprefix("--subs=").split("\n") if p]
     hook fires after that point. This applies to every title type. If one episode of S01
     fails, the S01 hook does not fire at all.
 
-The hook is keyed to the folder, not to the season, so one season landing in several
+unshackle attaches the hook to the folder, not to the season, so one season landing in several
 folders (`-q 1080,720` with a quality-dependent folder template) fires it once per folder,
 each with its own `{folder}`. A movie is a group of its own: a `season` hook fires for a
 movie's folder as soon as the movie finishes.
@@ -269,32 +268,33 @@ entries, which have no `--postscript` equivalent.
 ## The REST API
 
 The API never accepts a post-script command. `postscript`, `post_script` and `post_scripts`
-in a `POST /api/download` body are rejected with `400 INVALID_PARAMETERS`, because a command
-arriving from an HTTP caller would be remote code execution.
+in a `POST /api/download` body get `400 INVALID_PARAMETERS`. A command that arrives from an
+HTTP caller would be remote code execution.
 
-Scripts defined in `unshackle.yaml` do run for API jobs, music jobs included. Only the
+unshackle does operate the scripts defined in `unshackle.yaml` for API jobs, music jobs
+included. Only the
 command itself may not cross the network.
 
 ## Logging
 
-The command that was run is logged twice: at `DEBUG` level on the console, and as a
+unshackle logs the command it operated twice: at `DEBUG` level on the console, and as a
 `post_script_dispatch` entry in the
 [structured JSON debug log](../../guide/troubleshooting.md#the-structured-json-debug-log)
-when that log is enabled.
+when that log is on.
 
-Both are masked the same way, honouring [`redact_paths`](misc.md), which is on by default.
+unshackle masks both the same way, and honours [`redact_paths`](misc.md), which is on by default.
 Debug logs get shared in issue reports, and a hook command line is mostly paths. URL
 credentials and `token=` / `api_key=` query parameters are also masked.
 
 !!! warning "Do not hardcode secrets in the command"
-    An arbitrary secret in the command line, such as `-H "Authorization: Bearer <key>"`,
-    cannot be recognised and is logged verbatim. Read the secret from a file or an
+    unshackle cannot recognise an arbitrary secret in the command line, such as
+    `-H "Authorization: Bearer <key>"`, and logs it verbatim. Read the secret from a file or an
     environment variable inside your script rather than putting it in the `command`.
 
 ## Limitations
 
-- No `success` hooks run under `--no-mux` or `--skip-dl`, because neither writes a muxed
+- No `success` hook operates under `--no-mux` or `--skip-dl`, because neither writes a muxed
   output. A `failure` hook still runs under `--no-mux` if the download itself fails.
-- `failure` hooks only run in `file` mode.
+- `failure` hooks only operate in `file` mode.
 - There is no webhook sender. Call `curl` from a script instead.
 - Script output is not captured. Redirect it inside your own script if you want a log.

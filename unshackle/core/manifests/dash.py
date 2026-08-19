@@ -101,8 +101,8 @@ class DASH:
         Convert an MPEG-DASH document to Video, Audio and Subtitle Track objects.
 
         Parameters:
-            language: The Title's Original Recorded Language. It will also be used as a fallback
-                track language value if the manifest does not list language information.
+            language: The Title's Original Recorded Language. unshackle also uses it as a
+                fallback track language value when the manifest gives no language information.
             period_filter: Filter out period's within the manifest.
 
         Only the first main-content period becomes tracks. Later periods do not add tracks of their
@@ -636,7 +636,7 @@ class DASH:
     ) -> bool:
         """
         Whether every segment is a byte range of one parent resource whose [0, init_len)
-        prefix is the init segment, so the whole resource can be downloaded in one pass.
+        prefix is the init segment, so unshackle can download the whole resource in one pass.
 
         Returns False for subtitle tracks, an unknown init length, mixed URLs, malformed
         ranges, and anything but one gapless run in document order starting at the init
@@ -671,7 +671,7 @@ class DASH:
 
     @staticmethod
     def is_content_period(period: Element, filtered_period_ids: list[str]) -> bool:
-        """Check if a period is a valid content period (not an ad, not filtered, not trick mode)."""
+        """Whether a period is a valid content period (not an ad, not filtered, not trick mode)."""
         period_id = period.get("id")
         if period_id and period_id in filtered_period_ids:
             return False
@@ -686,11 +686,11 @@ class DASH:
     @staticmethod
     def merge_segment_templates(adaptation_set: Element, representation: Element) -> Optional[Element]:
         """
-        Build the effective SegmentTemplate for a Representation by cascading the
+        Assemble the effective SegmentTemplate for a Representation by cascading the
         AdaptationSet > Representation levels (ISO/IEC 23009-1 5.3.9.1).
 
-        The Representation-level node, when present, is the base; attributes and the
-        SegmentTimeline child it does not declare are inherited from the AdaptationSet-level
+        The Representation-level node, when present, is the base. It takes the attributes
+        and the SegmentTimeline child that it does not declare from the AdaptationSet-level
         node. Returns None if no SegmentTemplate exists at either level.
         """
         levels = [node.find("SegmentTemplate") for node in (adaptation_set, representation)]
@@ -946,8 +946,8 @@ class DASH:
         """
         Get Language (if any) from the AdaptationSet or Representation.
 
-        A fallback language may be provided if no language information could be
-        retrieved.
+        The caller can give a fallback language for when the manifest holds no
+        language information.
         """
         options = []
 
@@ -1012,7 +1012,7 @@ class DASH:
 
     @staticmethod
     def is_trick_mode(adaptation_set: Element) -> bool:
-        """Check if contents of Adaptation Set is a Trick-Mode stream."""
+        """Whether the Adaptation Set carries Trick-Mode tracks."""
         essential_props = adaptation_set.findall("EssentialProperty")
         supplemental_props = adaptation_set.findall("SupplementalProperty")
 
@@ -1038,7 +1038,7 @@ class DASH:
 
         Representation ids are only unique within an AdaptationSet, so the set matching
         `adaptation_set`'s identity wins over an earlier sibling that reuses the same id
-        for different content (e.g. audio description vs dialog).
+        for a different track (for example, audio description vs dialog).
         """
         as_key = DASH.adaptation_set_key(adaptation_set)
 
@@ -1071,7 +1071,7 @@ class DASH:
 
     @staticmethod
     def is_descriptive(adaptation_set: Element) -> bool:
-        """Check if contents of Adaptation Set is Descriptive."""
+        """Whether the Adaptation Set is Descriptive."""
         return any(
             (x.get("schemeIdUri"), x.get("value"))
             in (("urn:mpeg:dash:role:2011", "descriptive"), ("urn:tva:metadata:cs:AudioPurposeCS:2007", "1"))
@@ -1080,7 +1080,7 @@ class DASH:
 
     @staticmethod
     def is_forced(adaptation_set: Element) -> bool:
-        """Check if contents of Adaptation Set is a Forced Subtitle."""
+        """Whether the Adaptation Set is a Forced Subtitle."""
         return any(
             x.get("schemeIdUri") == "urn:mpeg:dash:role:2011"
             and x.get("value") in ("forced-subtitle", "forced_subtitle")
@@ -1089,7 +1089,7 @@ class DASH:
 
     @staticmethod
     def is_sdh(adaptation_set: Element) -> bool:
-        """Check if contents of Adaptation Set is for the Hearing Impaired."""
+        """Whether the Adaptation Set is SDH."""
         return any(
             (x.get("schemeIdUri"), x.get("value")) == ("urn:tva:metadata:cs:AudioPurposeCS:2007", "2")
             for x in adaptation_set.findall("Accessibility")
@@ -1097,7 +1097,7 @@ class DASH:
 
     @staticmethod
     def is_closed_caption(adaptation_set: Element) -> bool:
-        """Check if contents of Adaptation Set is a Closed Caption Subtitle."""
+        """Whether the Adaptation Set is a Closed Caption Subtitle."""
         return any(
             (x.get("schemeIdUri"), x.get("value")) == ("urn:mpeg:dash:role:2011", "caption")
             for x in adaptation_set.findall("Role")

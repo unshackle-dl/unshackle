@@ -28,7 +28,7 @@ COUNTRY_TO_LANGUAGE: dict[str, str] = {"JP": "ja", "KR": "ko", "CN": "zh", "TW":
 def parse_anilist_ref(value: Union[int, str]) -> Optional[tuple[str, int]]:
     """Split an AniList reference into its namespace and number.
 
-    A bare number is an AniList ID; ``mal:12345`` is a MyAnimeList ID, which AniList
+    A bare number is an AniList ID. ``mal:12345`` is a MyAnimeList ID, which AniList
     resolves natively. Returns None for anything else.
     """
     text = str(value).strip().lower()

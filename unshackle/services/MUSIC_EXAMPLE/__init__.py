@@ -29,8 +29,8 @@ from unshackle.core.tracks import Audio, Chapters, Tracks
 class MUSIC_EXAMPLE(Service):
     """
     Reference music service for musicdomain.com - the music counterpart of the
-    EXAMPLE service. Like EXAMPLE it is NOT meant to run against a real API; it
-    exists so a new music-service author can see the whole music surface in one
+    EXAMPLE service. Like EXAMPLE it is NOT meant to operate against a real API.
+    It exists so a new music-service author can see the whole music surface in one
     place.
 
     Version: 1.0.0
@@ -49,7 +49,7 @@ class MUSIC_EXAMPLE(Service):
           artists separately:
             https://musicdomain.com/album/20914   ->   album/20914
         - -d / --device selects a client profile block from config.yaml. A mobile
-          profile is usually entitled to fewer formats than a desktop one.
+          profile usually gets fewer formats than a desktop one.
         - --lyrics costs one extra request per track, so it is opt-in. The tagger
           writes what it returns into the track's lyrics tag.
         - -w / --wanted narrows a release to some of its tracks: `-w 1-5` takes tracks
@@ -61,7 +61,7 @@ class MUSIC_EXAMPLE(Service):
         music_from_album      build_music_from_songs, the idiomatic collection builder
         build_song            the full Song field set, and what `data` feeds
         get_tracks            ONE Audio track per codec+bitrate the source offers
-        get_chapters          empty; a song has no chapters
+        get_chapters          empty, because a song has no chapters
         on_track_downloaded   restore the real container suffix before tagging
 
     There is no music-specific Service API. A `Song` is an ordinary `Title` on the
@@ -258,9 +258,9 @@ class MUSIC_EXAMPLE(Service):
     def music_from_album(self, release_id: str) -> Music:
         """An ALBUM, EP or SINGLE. All three come back from one endpoint here.
 
-        `build_music_from_songs` is the idiomatic way to build a release. It reads the
+        `build_music_from_songs` is the idiomatic way to assemble a release. It reads the
         year, the track and disc totals, the artwork and the total duration back off
-        the Songs, so each of those facts is stated once, in build_song, instead of
+        the Songs, so build_song states each of those facts once instead of
         twice. Construct `Music` directly only when the header must say something the
         songs do not imply, as the discography branch above does.
         """
@@ -289,8 +289,8 @@ class MUSIC_EXAMPLE(Service):
         return response.json()
 
     def build_song(self, release: dict, track: dict) -> Song:
-        """One Song per track. `name`, `artist`, `album` and `track` are required;
-        everything else is optional and simply left out when the API cannot say.
+        """One Song per track. `name`, `artist`, `album` and `track` are necessary.
+        Everything else is optional, and the service leaves it out when the API cannot say.
 
         Music APIs are inconsistent about the shape of every one of these fields, which
         is why `unshackle.core.music` ships normalizers. Use them instead of writing
@@ -389,9 +389,9 @@ class MUSIC_EXAMPLE(Service):
         24-bit FLAC from a 16-bit FLAC, and it is what sort_audio ranks them by.
 
         MIGRATING FROM THE OLD MODEL: a music service used to return exactly one Audio
-        track and run its own quality fallback inside an overridden Audio.download().
+        track and do its own quality fallback inside an overridden Audio.download().
         Do not. Nothing downstream can see past a single track, so the user cannot ask
-        for the CD master, cannot list what exists, and cannot tell what they got.
+        for the CD master, cannot see what exists, and cannot tell what they got.
         """
         reason = (title.data or {}).get("unavailable_reason")
         if reason:

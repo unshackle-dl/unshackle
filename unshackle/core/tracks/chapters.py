@@ -88,7 +88,7 @@ class Chapters(SortedKeyList, ABC):
         - {j}: A number starting at 1 that increments any time a Chapter has no name.
                E.g., `"Chapter {j}"`: "Chapter 1", "Intro", "Chapter 2".
 
-        These are formatted with f-strings, directives are supported.
+        unshackle formats these with f-strings, so format directives work.
         For example, `"Chapter {i:02}"` will result in `"Chapter 01"`.
         """
         chapters = []

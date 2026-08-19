@@ -82,7 +82,7 @@ def get_dependencies() -> list[dict]:
 
 
 def clear_directory(path: Path) -> tuple[int, int]:
-    """Delete a directory's contents, returning (files_removed, freed_bytes); recreates the dir.
+    """Delete a directory's contents, returning (files_removed, freed_bytes). Recreates the dir.
 
     Skips task directories that belong to a running download.
     """

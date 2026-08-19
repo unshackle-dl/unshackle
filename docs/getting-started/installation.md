@@ -24,18 +24,18 @@ version it needs, and the external command-line tools it expects to find on your
 | [dovi_tool](https://github.com/quietvoid/dovi_tool) | ≥ 2.1 | Dolby Vision handling |
 | [SubtitleEdit](https://github.com/SubtitleEdit/subtitleedit/releases) | ≥ 5.0 | Subtitle conversion (optional) |
 
-The sections below explain each of these and how to confirm your setup is
-complete.
+The sections below tell you about each of these, and how to make sure that your
+setup is complete.
 
-## Python version support
+## Python versions
 
 unshackle requires **Python 3.11 or newer, up to and including 3.14**
 (`requires-python = ">=3.11,<3.15"`). Anything older than 3.11 or 3.15 and
-later is unsupported and the installer will refuse to build the environment.
+later is unsupported, and the installer refuses to assemble the environment.
 
 You do not usually need to install a matching Python interpreter by hand, since
-`uv` can download and manage one for you. If you are working inside an existing
-virtual environment, make sure it is on a supported version.
+`uv` can download and manage one for you. If you work inside an existing
+virtual environment, make sure that it is on a supported version.
 
 ## Installing with uv
 
@@ -54,14 +54,14 @@ unshackle --help
 ```
 
 !!! tip "Upgrading and removing"
-    Because it is installed from a git URL, re-run the same
-    `uv tool install` command (uv will update in place) to pull a newer build,
+    Because you installed it from a git URL, re-run the same
+    `uv tool install` command (uv will update in place) to get a newer version,
     and use `uv tool uninstall unshackle` to remove it.
 
 ### Running from a clone
 
 If you would rather work from a checkout of the repository (for example to try
-an in-development branch or to keep local service code alongside unshackle), use
+an in-development branch or to keep your own local services alongside unshackle), use
 `uv run` inside the clone. This keeps the project's virtual environment active
 for the duration of the command, so you do not have to activate it yourself.
 
@@ -71,8 +71,8 @@ cd unshackle
 uv run unshackle --help
 ```
 
-Every command shown elsewhere in these docs works the same way from a clone,
-just prefix it with `uv run`:
+Every command shown elsewhere in these docs works the same way from a clone.
+Prefix it with `uv run`:
 
 ```shell
 uv run unshackle env check
@@ -81,7 +81,7 @@ uv run unshackle env check
 !!! note "Developer note"
     Contributors will also want the development and test dependency groups. The
     project defines `dev` (linters, type checkers) and `test` (pytest and
-    friends) groups in `pyproject.toml`; install them with
+    friends) groups in `pyproject.toml`. Install them with
     `uv sync --group dev --group test` inside the clone. End users can ignore
     these entirely.
 
@@ -109,12 +109,12 @@ These must be present for core downloading, decryption, and muxing to work:
     unshackle decrypts with shaka-packager unless you explicitly configure a
     different decryptor. If it is missing, protected downloads will fail at the
     decryption step. See the [configuration reference](../reference/configuration/drm.md#decryption) for the
-    `decryption` key if you want to switch to `mp4decrypt`.
+    `decryption` config key if you want to switch to `mp4decrypt`.
 
 ### Recommended and optional tools
 
 These extend unshackle's capabilities. Install the ones relevant to what you
-download. For example, `dovi_tool` only matters if you handle Dolby Vision.
+download. For example, `dovi_tool` only matters if you download Dolby Vision video.
 
 | Tool | Binary looked up | Why it is needed |
 | --- | --- | --- |
@@ -138,10 +138,10 @@ download. For example, `dovi_tool` only matters if you handle Dolby Vision.
 
 ## Verifying your installation
 
-After installing, confirm the command runs and that unshackle can see the tools
-it depends on.
+After installation, make sure that the command works and that unshackle can see
+the tools it depends on.
 
-### Confirm the command is available
+### Make sure the command is available
 
 ```shell
 unshackle --help
@@ -150,9 +150,9 @@ unshackle --help
 This prints the list of available commands (`dl`, `env`, `kv`,
 `serve`, `wvd`, `prd`, `search`, `util`, `cfg`, `import`). If your shell reports
 that `unshackle` is not found, the `uv tool` bin directory is probably not on
-your `PATH`. Run `uv tool update-shell` and open a new terminal.
+your `PATH`. Operate `uv tool update-shell` and open a new terminal.
 
-### Check external dependencies
+### Examine the external dependencies
 
 The `env check` subcommand inspects your environment and reports which tools it
 found:
@@ -187,10 +187,10 @@ unshackle env info
 ```
 
 If no configuration file exists yet, this command lists the locations unshackle
-searches for one, so you know where to create it. See the
+searches for one, so you know where to make it. See the
 [configuration guide](configuration-file.md) for the details of that file.
 
 ## Next steps
 
 - Set up your [configuration](configuration-file.md) file (`unshackle.yaml`).
-- Start [downloading](../guide/downloading.md) content once your tools check out.
+- Start [downloading](../guide/downloading.md) titles when `env check` finds every required tool.

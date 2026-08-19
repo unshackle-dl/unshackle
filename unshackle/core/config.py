@@ -13,12 +13,12 @@ from unshackle.core.utils.collections import ci_get
 
 
 def resolve_decryption(decryption_map: dict, default: str, service: str) -> str:
-    """Pick the decryption tool for a service (case-insensitive), falling back to default."""
+    """Pick the decryption backend for a service (case-insensitive), falling back to default."""
     return ci_get(decryption_map, service, default)
 
 
 def resolve_cdm_name(cdm: dict, service: str, override: Any = None) -> Any:
-    """Resolve a service's top-level CDM entry (case-insensitive), with default fallback."""
+    """Find a service's top-level CDM entry (case-insensitive), with default fallback."""
     return override or ci_get(cdm, service) or ci_get(cdm, "default")
 
 
@@ -248,7 +248,7 @@ class Config:
                 warnings.warn(f"Template '{template_type}' is empty")
 
     def get_folder_template(self, kind: str) -> str:
-        """Resolve the folder template for the given title kind.
+        """Find the folder template for the given title kind.
 
         kind: one of "movies", "series", "songs", "albums".
         Falls back to the legacy single-string folder template, then "".

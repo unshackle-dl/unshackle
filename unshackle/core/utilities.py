@@ -119,14 +119,14 @@ def import_module_by_path(path: Path) -> ModuleType:
 
 def sanitize_filename(filename: str, spacer: str = ".") -> str:
     """
-    Sanitize a string to be filename safe.
+    Sanitise a string to be filename safe.
 
     The spacer is safer to be a '.' for older DDL and p2p sharing spaces.
-    This includes web-served content via direct links and such.
+    This includes files served on the web through direct links and such.
 
-    Set `unicode_filenames: true` in config to preserve native language
-    characters (Korean, Japanese, Chinese, etc.) instead of transliterating
-    them to ASCII equivalents.
+    Set `unicode_filenames: true` in config to preserve the characters of the
+    original language (for example Korean, Japanese, or Chinese) instead of
+    transliterating them to ASCII equivalents.
     """
     if not config.unicode_filenames:
         filename = unidecode(filename)
@@ -145,7 +145,7 @@ def sanitize_filename(filename: str, spacer: str = ".") -> str:
 
 
 def is_close_match(language: Union[str, Language], languages: Sequence[Union[str, Language, None]]) -> bool:
-    """Check if a language is a close match to any of the provided languages."""
+    """Examine whether a language closely matches any of the given languages."""
     languages = [x for x in languages if x]
     if not languages:
         return False
@@ -153,7 +153,7 @@ def is_close_match(language: Union[str, Language], languages: Sequence[Union[str
 
 
 def is_exact_match(language: Union[str, Language], languages: Sequence[Union[str, Language, None]]) -> bool:
-    """Check if a language is an exact match to any of the provided languages."""
+    """Examine whether a language exactly matches any of the given languages."""
     languages = [x for x in languages if x]
     if not languages:
         return False
@@ -164,8 +164,8 @@ def partition_exclusions(tokens: Optional[Sequence[str]]) -> tuple[list[str], li
     """
     Split selection tokens into wanted values and values excluded with a leading '-'.
 
-    Both sides keep the order they were written in and drop later repeats. A bare '-'
-    carries no value and is skipped.
+    Both sides keep the order the user wrote them in and drop later repeats. A bare '-'
+    carries no value, so this function ignores it.
 
     Example:
         >>> partition_exclusions(["all", "-es"])
@@ -209,7 +209,7 @@ def keep_forced_subtitle(
     forced_s_lang: Sequence[str],
     exact: bool = False,
 ) -> bool:
-    """The -fsl filter: non-forced tracks always pass, forced tracks only if they match forced_s_lang."""
+    """The -fsl filter: non-forced tracks always pass, forced tracks only when they match forced_s_lang."""
     if not forced:
         return True
     if not forced_s_lang:
@@ -222,7 +222,7 @@ def embedded_audio_langs(videos: Sequence[Any], keep_videos: bool) -> list[str]:
     """
     Return the audio languages carried inside video tracks rather than beside them.
 
-    A muxed stream keeps its audio in the video track, which a service declares by setting
+    A muxed video keeps its audio in the video track, which a service declares by setting
     ``data["audio_language"]``. That audio is only available while the video is kept, so
     dropping the video (``--audio-only``, ``--no-video``) drops the language with it.
     """
@@ -237,7 +237,7 @@ def find_missing_langs(
     *,
     exact: bool = False,
 ) -> list[str]:
-    """Return requested language tokens with no match in available languages."""
+    """Return the requested language tokens that match no available language."""
     match_func = is_exact_match if exact else is_close_match
     skip = {"all", "best", "orig"}
     return [tok for tok in requested if tok not in skip and not match_func(tok, available)]
@@ -259,7 +259,8 @@ def matching_languages(
     In exact mode CLDR tag distance is not sufficient on its own: it rates a base language and
     its "paradigm" regional variant as the same language (distance 0 for en/en-US, pt/pt-BR), so
     it cannot separate en-US from en. Follow RFC 4647 Lookup: prefer the string-equal tag, and
-    fall back to the distance match only when no such tag is present (e.g. zh matches cmn).
+    fall back to the distance rating only when no such tag is present (for example, zh matches
+    cmn).
     """
     tags = {str(x) for x in available if x}
     try:
@@ -277,8 +278,8 @@ def resolve_sort_langs(tokens: Sequence[str], original: Optional[Union[str, Lang
     """
     Prepare language tokens for a Tracks.sort_* by_language argument.
 
-    "orig" becomes the title language, or is dropped when the title has none. "all" and
-    "best" pass through, because the sort methods resolve them against the tracks. The
+    "orig" becomes the title language. This function drops it when the title has none.
+    "all" and "best" pass through, because the sort methods find them among the tracks. The
     result keeps the first position of each language and drops later repeats.
     """
     resolved: list[str] = []
@@ -317,7 +318,7 @@ def get_boxes(data: bytes, box_type: bytes, as_bytes: bool = False) -> Box:  # t
         - For each box found, the function updates the search offset to skip past
           the current box to avoid finding the same box multiple times
         - The function handles validation errors for certain box types (e.g., tenc)
-        - The size field is located 4 bytes before the box type identifier
+        - The size field sits 4 bytes before the box type identifier
     """
     # using slicing to get to the wanted box is done because parsing the entire box and recursively
     # scanning through each box and its children often wouldn't scan far enough to reach the wanted box.
@@ -366,8 +367,8 @@ def ap_case(text: str, keep_spaces: bool = False, stop_words: tuple[str] = None)
 
     Parameters:
         text: The text string to title case with AP/APA style.
-        keep_spaces: To keep the original whitespace, or to just use a normal space.
-            This would only be needed if you have special whitespace between words.
+        keep_spaces: To keep the original whitespace, or to use a normal space.
+            You need this only if you have special whitespace between words.
         stop_words: Override the default stop words with your own ones.
     """
     if not text:
@@ -500,9 +501,10 @@ def time_elapsed_since(start: float) -> str:
 
 def try_ensure_utf8(data: bytes) -> bytes:
     """
-    Try to ensure that the given data is encoded in UTF-8.
+    Try to make sure that the given data is in UTF-8.
 
-    Gzip or zlib compressed input is decompressed first, detected by magic bytes.
+    This function first decompresses gzip or zlib compressed input, which it detects
+    by magic bytes.
     Callers hand in bytes read from files and from responses they fetched
     themselves, so there is no Content-Encoding header left to consult.
 
@@ -510,7 +512,7 @@ def try_ensure_utf8(data: bytes) -> bytes:
         data: Input data that may or may not yet be UTF-8 or another encoding.
 
     Returns the input data encoded in UTF-8 if successful. If unable to detect the
-    encoding of the input data, then the original data is returned as-received.
+    encoding of the input data, then this function returns the original data as-received.
     """
     if data[:2] == b"\x1f\x8b":
         try:
@@ -546,8 +548,8 @@ def get_free_port() -> int:
     """
     Get an available port to use between a-b (inclusive).
 
-    The port is freed as soon as this has returned, therefore, it
-    is possible for the port to be taken before you try to use it.
+    This function frees the port as soon as it returns. Thus something else
+    can take the port before you use it.
     """
     with contextlib.closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
         s.bind(("", 0))
@@ -642,7 +644,7 @@ def scan_font_directory(font_dir: Path, fonts: dict[str, Path], log: logging.Log
 
     Args:
         font_dir: Directory to scan
-        fonts: Dictionary to populate with found fonts
+        fonts: Dictionary to fill with found fonts
         log: Logger instance for error reporting
     """
     font_files = list(font_dir.rglob("*.ttf")) + list(font_dir.rglob("*.otf"))
@@ -721,7 +723,7 @@ FONT_ALIASES = {
 
 def find_case_insensitive(font_name: str, fonts: dict[str, Path]) -> Optional[Path]:
     """
-    Find font by case-insensitive name match.
+    Find a font by a case-insensitive name.
 
     Args:
         font_name: Font family name to find
@@ -739,20 +741,20 @@ def find_case_insensitive(font_name: str, fonts: dict[str, Path]) -> Optional[Pa
 
 def find_font_with_fallbacks(font_name: str, system_fonts: dict[str, Path]) -> Optional[Path]:
     """
-    Find a font by name with intelligent fallback matching.
+    Find a font by name, with intelligent fallbacks.
 
     Tries multiple strategies in order:
-    1. Exact match (case-sensitive)
-    2. Case-insensitive match
+    1. Exact name (case-sensitive)
+    2. Exact name (case-insensitive)
     3. Alias lookup (Windows → Linux font equivalents)
-    4. Partial/prefix match
+    4. Partial or prefix name
 
     Args:
         font_name: The requested font family name (e.g., "Arial", "Times New Roman")
         system_fonts: Dictionary of available fonts (family name → path)
 
     Returns:
-        Path to the matched font file, or None if no match found
+        Path to the matched font file, or None when no font matches
     """
     if not system_fonts:
         return None
@@ -804,10 +806,10 @@ def suggest_font_packages(missing_fonts: list[str]) -> dict[str, list[str]]:
     Suggest system packages to install for missing fonts.
 
     Args:
-        missing_fonts: List of font family names that couldn't be found
+        missing_fonts: List of font family names that could not be found
 
     Returns:
-        Dictionary mapping package names to lists of fonts they would provide
+        Dictionary mapping package names to lists of fonts they would give
     """
     suggestions = {}
 
@@ -859,17 +861,17 @@ class DebugLogger:
     Structured JSON debug logger for unshackle.
 
     Outputs JSON Lines format where each line is a complete JSON object.
-    This makes it easy to parse, filter, and analyze logs programmatically.
+    This makes it easy to parse, filter, and analyse logs programmatically.
     """
 
     def __init__(self, log_path: Optional[Path] = None, enabled: bool = False, log_keys: bool = False):
         """
-        Initialize the debug logger.
+        Initialise the debug logger.
 
         Args:
-            log_path: Path to the log file. If None, logging is disabled.
-            enabled: Whether debug logging is enabled.
-            log_keys: Whether to log decryption keys (for debugging key issues).
+            log_path: Path to the log file. None turns logging off.
+            enabled: True to turn debug logging on.
+            log_keys: True to log the content keys (to debug content key issues).
         """
         self.enabled = enabled and log_path is not None
         self.log_path = log_path
@@ -883,7 +885,7 @@ class DebugLogger:
             self.log_session_start()
 
     def log_session_start(self):
-        """Log the start of a new session with environment information."""
+        """Log the ``session_start`` entry, with environment information."""
         import platform
 
         from unshackle.core import __code_hash__, __version__
@@ -921,7 +923,7 @@ class DebugLogger:
 
         Args:
             level: Log level (DEBUG, INFO, WARNING, ERROR)
-            operation: Name of the operation being performed
+            operation: Name of the operation
             message: Human-readable message
             context: Additional context information
             service: Service tag
@@ -979,7 +981,7 @@ class DebugLogger:
 
     def sanitize_data(self, data: Any) -> Any:
         """
-        Sanitize data for JSON serialization.
+        Sanitise data for JSON serialization.
         Handles complex objects and removes sensitive information.
         """
         if data is None:
@@ -1042,7 +1044,7 @@ class DebugLogger:
             **kwargs: Additional context
 
         Returns:
-            Operation ID that can be used to log the end of the operation
+            Operation ID you can use to log the end of the operation
         """
         op_id = str(uuid4())[:8]
         self.log(
@@ -1082,9 +1084,9 @@ class DebugLogger:
         Log a service API call.
 
         Args:
-            method: HTTP method (GET, POST, etc.)
+            method: HTTP method (for example GET or POST)
             url: Request URL
-            **kwargs: Additional request details (headers, body, etc.)
+            **kwargs: Additional request details (for example headers or body)
         """
         message = kwargs.pop("message", "")
         level = kwargs.pop("level", "DEBUG")
@@ -1094,10 +1096,10 @@ class DebugLogger:
 
     def log_drm_operation(self, drm_type: str, operation: str, **kwargs):
         """
-        Log a DRM operation (PSSH extraction, license request, key retrieval).
+        Log a DRM operation (PSSH extraction, license request, content key retrieval).
 
         Args:
-            drm_type: DRM type (Widevine, PlayReady, etc.)
+            drm_type: DRM type (for example Widevine or PlayReady)
             operation: DRM operation name
             **kwargs: Additional context. Pass ``message=``/``level=`` to override the defaults.
         """
@@ -1111,7 +1113,7 @@ class DebugLogger:
 
         Args:
             vault_name: Name of the vault
-            operation: Vault operation (get_key, add_key, etc.)
+            operation: Vault operation (for example get_key or add_key)
             **kwargs: Additional context. Pass ``message=``/``level=`` to override the defaults.
         """
         message = kwargs.pop("message", None) or f"Vault {vault_name}: {operation}"
@@ -1160,7 +1162,7 @@ def get_debug_logger() -> Optional[DebugLogger]:
 
 
 def log_event(operation: str, *, level: str = "DEBUG", message: str = "", **kwargs: Any) -> None:
-    """Emit a single structured debug-log entry. No-op when debug logging is disabled.
+    """Send a single structured debug-log entry. No-op when debug logging is off.
 
     The canonical one-shot logging primitive. Replaces the
     ``if dl := get_debug_logger(): dl.log(...)`` guard boilerplate. To add logging to a new
@@ -1176,7 +1178,7 @@ def timed_operation(operation: str, *, level: str = "DEBUG", message: str = "", 
     """Time a block and log ``operation`` once it finishes, with ``duration_ms``.
 
     Logs at ``level`` with ``success=True`` on normal exit, or at ERROR with the exception and
-    ``success=False`` if the block raises (then re-raises). No-op when debug logging is disabled,
+    ``success=False`` if the block raises (then re-raises). No-op when debug logging is off,
     so it is always safe to wrap a block in it.
 
     Example::
@@ -1214,12 +1216,12 @@ def timed_operation(operation: str, *, level: str = "DEBUG", message: str = "", 
 
 def init_debug_logger(log_path: Optional[Path] = None, enabled: bool = False, log_keys: bool = False):
     """
-    Initialize the global debug logger.
+    Initialise the global debug logger.
 
     Args:
         log_path: Path to the log file
-        enabled: Whether debug logging is enabled
-        log_keys: Whether to log decryption keys (for debugging key issues)
+        enabled: True to turn debug logging on
+        log_keys: True to log the content keys (to debug content key issues)
     """
     global debug_logger
     if debug_logger:

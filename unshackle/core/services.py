@@ -69,10 +69,10 @@ def load_service(path: Path) -> object:
 def load_services(paths: list[Path]) -> tuple[dict[str, object], list[str]]:
     """Load every Service, returning the good ones plus a list of load errors.
 
-    Importing this module must never raise: it is imported by several commands,
-    and a failed import is not cached by Python, so raising here would re-run and
-    re-report for every command. Instead we collect failures and let the caller
-    surface them once, cleanly, at the point services are actually used.
+    Importing this module must never raise: several commands import it, and Python
+    does not cache a failed import, so raising here would re-run and re-report for
+    every command. Instead we collect failures and let the caller surface them once,
+    cleanly, when it uses the services.
     """
     modules: dict[str, object] = {}
     errors: list[str] = []
@@ -95,11 +95,12 @@ SUMMARY_LOGGED = False
 def check_load_errors() -> None:
     """Log a one-line load summary (once) and raise a single clean error on failures.
 
-    Called when services are actually needed (listing/resolving) so the message
-    is rendered once by Click, without a traceback and without cascading through
-    every command that imports this module. Duplicate services (a tag also served by an
-    earlier, higher-priority source, which is ignored) are summarised here; the full
-    list - naming the path used and the duplicate ignored - is debug-only.
+    unshackle calls this when it needs the services (listing/resolving), so Click
+    renders the message once, without a traceback and without cascading through every
+    command that imports this module. This function summarises the duplicate services
+    (a tag that an earlier, higher-priority source also gives, and which unshackle
+    ignores). The full list - naming the path used and the duplicate ignored - is
+    debug-only.
     """
     if DIRTY_REPOS:
         joined = "\n".join(f"  - {p}" for p in DIRTY_REPOS)
@@ -127,7 +128,7 @@ class Services(click.Group):
     remote_services_cache: list[dict] | None = None
 
     def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
-        """Preprocess --slow to support optional range value before Click parses args."""
+        """Preprocess --slow so it can take an optional range value before Click parses args."""
         processed = []
         i = 0
         while i < len(args):
@@ -230,7 +231,7 @@ class Services(click.Group):
 
     @staticmethod
     def make_remote_command(tag: str, ctx: click.Context) -> click.Command:
-        """Create a Click command for a remote service with server-provided options."""
+        """Make a Click command for a remote service with server-provided options."""
         svc_info = Services.fetch_remote_service_info(tag, ctx)
         short_help = svc_info.get("url") if svc_info else None
         help_text = svc_info.get("help") if svc_info else None
@@ -268,9 +269,9 @@ class Services(click.Group):
 
     @staticmethod
     def make_import_command(tag: str, ctx: click.Context) -> click.Command:
-        """Create a synthetic command that yields an ImportService from an export JSON.
+        """Make a synthetic command that yields an ImportService from an export JSON.
 
-        Mirrors how remote services are wired so dl.py's result() runs unchanged.
+        Mirrors how unshackle wires remote services, so dl.py's result() runs unchanged.
         """
 
         @click.command(name=tag, short_help="Reconstruct a download from an export JSON.")
@@ -317,7 +318,7 @@ class Services(click.Group):
         """
         Get the Service Tag (the name of the service's directory, not one of its aliases) by an Alias.
         Input value can be of any case-sensitivity.
-        Original input value is returned if it did not match a service tag.
+        This method returns the original input value if it does not match a service tag.
         """
         original_value = value
         value = value.lower()
@@ -340,7 +341,7 @@ class Services(click.Group):
 
     @staticmethod
     def get_vault_tag(name: str) -> str:
-        """Resolve the key-vault namespace tag for a service.
+        """Find the key-vault namespace tag for a service.
 
         Returns the service's VAULT_TAG override when set, otherwise its own tag.
         Falls back to the resolved tag for non-local services (remote/import).

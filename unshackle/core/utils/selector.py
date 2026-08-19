@@ -31,16 +31,16 @@ class Selector:
         collapse_on_start: bool = False,
     ):
         """
-        Initialize the Selector.
+        Initialise the Selector.
 
         Args:
             options: List of strings to select from.
             cursor_style: Rich style for the highlighted cursor item.
             text_style: Rich style for normal items.
             page_size: Number of items to show per page.
-            minimal_count: Minimum number of items that must be selected.
+            minimal_count: Minimum number of items you must select.
             dependencies: Dictionary mapping parent index to list of child indices.
-            collapse_on_start: If True, child items are hidden initially.
+            collapse_on_start: If True, the Selector hides child items initially.
         """
         self.options = options
         self.cursor_style = cursor_style
@@ -219,7 +219,7 @@ class Selector:
     def toggle_expand_all(self):
         """
         Toggles expansion state of ALL headers.
-        If all are expanded -> Collapse all.
+        If every header shows its children -> Collapse all.
         Otherwise -> Expand all.
         """
         if not self.dependencies:
@@ -242,7 +242,7 @@ class Selector:
     def get_input_windows(self):
         """
         Captures and parses keyboard input on Windows systems using msvcrt.
-        Returns command strings like 'UP', 'DOWN', 'ENTER', etc.
+        Returns command strings such as 'UP', 'DOWN', or 'ENTER'.
         """
         key = msvcrt.getch()
         # Ctrl+C (0x03) or ESC (0x1b)
@@ -293,7 +293,7 @@ class Selector:
     def get_input_unix(self):
         """
         Captures and parses keyboard input on Unix/Linux systems using click.getchar().
-        Returns command strings like 'UP', 'DOWN', 'ENTER', etc.
+        Returns command strings such as 'UP', 'DOWN', or 'ENTER'.
         """
         char = click.getchar()
         # Ctrl+C
@@ -406,9 +406,9 @@ def select_multiple(
         options: List of options to display.
         minimal_count: Minimum number of selections required.
         page_size: Number of items per page.
-        return_indices: If True, returns indices; otherwise returns the option strings.
-        cursor_style: Style color for the cursor.
-        collapse_on_start: If True, child items are hidden initially.
+        return_indices: If True, returns indices. If False, returns the option strings.
+        cursor_style: Style colour for the cursor.
+        collapse_on_start: If True, the Selector hides child items initially.
     """
     selector = Selector(
         options=options,

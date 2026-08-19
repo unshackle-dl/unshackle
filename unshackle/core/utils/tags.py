@@ -67,7 +67,7 @@ def apply_tags(path: Path, tags: dict[str, str]) -> None:
 
 
 def build_tags_from_ids(ids: ExternalIds, kind: str) -> dict[str, str]:
-    """Build standard MKV tags from external IDs."""
+    """Assemble standard MKV tags from external IDs."""
     tags: dict[str, str] = {}
     if ids.imdb_id:
         tags["IMDB"] = ids.imdb_id

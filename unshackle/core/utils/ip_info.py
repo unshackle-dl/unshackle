@@ -23,7 +23,7 @@ log = logging.getLogger("ip_info")
 
 
 class RateLimited(Exception):
-    """Raised by a provider fetcher when the upstream returns 429."""
+    """Raised by a geolocation API fetcher when the upstream returns 429."""
 
 
 def normalize(
@@ -37,7 +37,7 @@ def normalize(
     as_name: str = "",
     continent_code: str = "",
 ) -> Optional[dict]:
-    """Build the canonical IP-info dict, or None if no country code is present."""
+    """Assemble the canonical IP-info dict, or None if no country code is present."""
     code = country_code.strip()
     if not code:
         return None
@@ -94,13 +94,14 @@ def parse_ip_api_in(data: dict) -> Optional[dict]:
 
 def lookup_session(source: Optional[requests.Session]) -> requests.Session:
     """
-    Build a plain, retry-free requests session for IP geolocation.
+    Assemble a plain, retry-free `requests` HTTP session for IP geolocation.
 
-    Geolocation needs no TLS fingerprinting, so we skip the impersonated rnet
-    session and the base session's urllib3 retry loop. Both retry 429 internally,
-    which hides the response and defeats fast provider handover. With a bare session
-    a 429 comes straight back so we can move to the next provider immediately. Only
-    the proxy is carried over so proxied lookups still report the proxy's exit IP.
+    Geolocation needs no TLS fingerprinting, so we skip the impersonated rnet HTTP
+    session, and the urllib3 retry loop of the base HTTP session. Both retry 429
+    internally, which hides the response and defeats fast handover to the next
+    geolocation API. With a bare HTTP session a 429 comes straight back, so we can
+    move to the next API immediately. This function carries over the proxy only, so
+    proxied lookups still report the proxy's exit IP.
     """
     sess = requests.Session()
     proxies = getattr(source, "proxies", None)
@@ -139,7 +140,7 @@ def fetch_ipinfo(session: requests.Session) -> Optional[dict]:
 
 
 def fetch_ip_api_in(session: requests.Session) -> Optional[dict]:
-    """ip-api.in has no /me endpoint, so resolve IP via ipify first, then look it up."""
+    """ip-api.in has no /me endpoint, so get the IP from ipify first, then look it up."""
     ip_resp = session.get("https://api.ipify.org", timeout=REQUEST_TIMEOUT)
     if ip_resp.status_code == 429:
         raise RateLimited()
@@ -185,20 +186,21 @@ def get_ip_info(
     cached: bool = False,
 ) -> Optional[dict]:
     """
-    Look up IP/geolocation info via ipinfo.io (Lite when `ipinfo_api_key` configured)
+    Look up IP/geolocation info through ipinfo.io (Lite when `ipinfo_api_key` configured)
     with fallback to ip-api.in.
 
     Live lookups return a dict with `ip`, `country` (lowercase ISO2), `country_code`
     (uppercase ISO2), `region`, `city`, `org`, `asn`, `as_name`, `continent_code` and
     `_provider`. Cached lookups return only `country`/`country_code` (see GEO_CACHE_KEYS).
-    Returns None if every provider fails.
+    Returns None if every geolocation API fails.
 
     Args:
-        session: Optional requests session. If a proxied session is passed, the
-            returned info reflects the proxy's exit IP. Auth headers for ipinfo
-            are sent per-request; never mutated onto session.headers.
+        session: Optional `requests` HTTP session. If you pass a proxied session,
+            the returned info reflects the proxy's exit IP. unshackle sends the
+            ipinfo auth headers per-request, and never mutates them onto
+            session.headers.
         cached: When True, read/write a 24h Cacher-backed entry. Use only for
-            local IP lookups, never with a proxied session.
+            local IP lookups, never with a proxied HTTP session.
     """
     cache = None
     if cached:

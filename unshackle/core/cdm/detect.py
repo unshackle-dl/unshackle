@@ -5,7 +5,7 @@ from typing import Any
 
 def is_remote_cdm(cdm: Any) -> bool:
     """
-    Return True if the CDM instance is backed by a remote/service CDM.
+    Return True if a remote CDM or a service CDM backs the CDM instance.
 
     This is useful for service logic that needs to know whether the CDM runs
     locally (in-process) vs over HTTP/RPC (remote).
@@ -102,11 +102,11 @@ def cdm_location(cdm: Any) -> str:
 
 def is_playready_cdm(cdm: Any) -> bool:
     """
-    Return True if the given CDM should be treated as PlayReady.
+    Return True if unshackle treats the given CDM as PlayReady.
 
     This intentionally supports both:
     - Local PlayReady CDMs (pyplayready.cdm.Cdm)
-    - Remote/wrapper CDMs (e.g. DecryptLabsRemoteCDM) that expose `is_playready`
+    - Remote/wrapper CDMs (for example DecryptLabsRemoteCDM) that have `is_playready`
     """
 
     if cdm is None:
@@ -162,10 +162,10 @@ def is_remote_widevine_cdm(cdm: Any) -> bool:
 
 def is_widevine_cdm(cdm: Any) -> bool:
     """
-    Return True if the given CDM should be treated as Widevine.
+    Return True if unshackle treats the given CDM as Widevine.
 
-    Note: for remote/wrapper CDMs that expose `is_playready`, Widevine is treated
-    as the logical opposite.
+    Note: for remote/wrapper CDMs that have `is_playready`, unshackle treats
+    Widevine as the logical opposite.
     """
 
     if cdm is None:

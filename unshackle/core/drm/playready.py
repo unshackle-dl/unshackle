@@ -253,7 +253,8 @@ class PlayReady:
     def to_dict(self) -> dict[str, Any]:
         """Serialise this DRM instance for export/import (PSSH + KIDs).
 
-        Content keys are stored once at the export's track level, not duplicated here.
+        unshackle stores the content keys once at the export's track level, and does not
+        duplicate them here.
         """
         return {
             "system": "PlayReady",
@@ -372,7 +373,7 @@ class PlayReady:
         """Return the decoded error string if a revocation HRESULT is present, else None.
 
         Reads the code from the raw SOAP body (<StatusCode>0x8004C065</StatusCode>)
-        or from an exception message that carries it, so any service is covered.
+        or from an exception message that carries it, so this method covers any service.
         """
         from unshackle.core.drm.playready_errors import describe, is_revocation
 
@@ -391,7 +392,7 @@ class PlayReady:
             path: Path to the encrypted file to decrypt
         Raises:
             EnvironmentError if the required decryption executable could not be found.
-            ValueError if the track has not yet been downloaded.
+            ValueError if unshackle has not yet downloaded the track.
             SubprocessError if the decryption process returned a non-zero exit code.
         """
         if not self.content_keys:
@@ -483,7 +484,7 @@ class PlayReady:
         shutil.move(output_path, path)
 
     def decrypt_with_shaka_packager(self, path: Path) -> None:
-        """Decrypt using Shaka Packager (original method)"""
+        """Decrypt with shaka-packager (original method)"""
         if not binaries.ShakaPackager:
             raise EnvironmentError("Shaka Packager executable not found but is required.")
 

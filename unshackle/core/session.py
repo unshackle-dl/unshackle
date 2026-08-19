@@ -1,4 +1,4 @@
-"""Session utilities for creating HTTP sessions with TLS fingerprinting via rnet (Rust/BoringSSL)."""
+"""Session utilities for creating HTTP sessions with TLS fingerprinting through rnet (Rust/BoringSSL)."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ DEFAULT_IMPERSONATE = rnet.Impersonate.Chrome131
 
 
 def resolve_impersonate(browser: str) -> rnet.Impersonate:
-    """Resolve a browser string to an rnet.Impersonate preset.
+    """Change a browser string to an rnet.Impersonate preset.
 
     Accepts exact rnet preset names (e.g. "Chrome131", "OkHttp4_12", "Edge101").
     See https://github.com/0x676e67/rnet for the full list of available presets.
@@ -200,7 +200,7 @@ class RnetResponse:
             )
 
     def iter_content(self, chunk_size: Optional[int] = None) -> Iterator[bytes]:
-        """Re-chunk rnet's variable-size stream into fixed-size pieces."""
+        """Re-chunk rnet's variable-size data into fixed-size pieces."""
         self._streamed = True
         if chunk_size is None or chunk_size <= 0:
             yield from self._resp.stream()
@@ -216,7 +216,7 @@ class RnetResponse:
             yield bytes(buf)
 
     def stream(self) -> Iterator[bytes]:
-        """Direct pass-through of rnet's native stream iterator."""
+        """Direct pass-through of rnet's native ``stream()`` iterator."""
         self._streamed = True
         yield from self._resp.stream()
 
@@ -228,7 +228,7 @@ class RnetResponse:
 
 
 class RnetSessionHeaders(CaseInsensitiveDict):
-    """Dict-like headers that persist to the rnet client via update()."""
+    """Dict-like headers that write to the rnet client through update()."""
 
     def __init__(self, client: Any) -> None:
         self._client = client
@@ -283,7 +283,7 @@ class RnetCookieAdapter(MutableMapping):
                 pass
 
     def flush_to_client(self) -> None:
-        """Push all buffered cookies to the rnet client once it is created."""
+        """Push all buffered cookies to the rnet client after unshackle makes it."""
         if self._client is None:
             return
         for domain, cookies in self._cookies.items():
@@ -298,7 +298,7 @@ class RnetCookieAdapter(MutableMapping):
     def jar(self) -> CookieJar:
         """Return a CookieJar with original Cookie objects (requests compat).
 
-        Used by ``save_cookies`` in dl.py to persist cookies back to disk.
+        ``save_cookies`` in dl.py uses this to write cookies back to disk.
         """
         jar = CookieJar()
         for cookie in self._original_cookies:
@@ -371,8 +371,8 @@ class RnetCookieAdapter(MutableMapping):
     def get_dict(self, domain: Optional[str] = None, path: Optional[str] = None) -> dict[str, str]:
         """Return cookies as a plain dict (requests RequestsCookieJar compat).
 
-        If *domain* is given, only cookies for that domain are returned.
-        *path* is accepted for API compatibility but ignored (flat storage).
+        With a *domain*, this method returns only the cookies for that domain.
+        It accepts *path* for API compatibility but ignores it (flat storage).
         """
         if domain is not None:
             return dict(self._cookies.get(domain, {}))
@@ -382,8 +382,8 @@ class RnetCookieAdapter(MutableMapping):
         """Return cookies grouped by domain, domain-less ones under ``""``.
 
         rnet scopes each cookie to the host of the URL it was set on, so a copy made with
-        ``get_dict`` can only ever be replayed against one host. Cookies that arrived as a
-        plain dict are recorded flat only, and are reported under the empty domain to match
+        ``get_dict`` can only ever replay against one host. This class records cookies that
+        arrived as a plain dict flat only, and reports them under the empty domain, to match
         the localhost fallback in :meth:`flush_to_client`.
         """
         grouped = {domain: dict(cookies) for domain, cookies in self._cookies.items() if cookies}
@@ -431,7 +431,7 @@ class RnetProxyDict(dict):
     """Dict-like proxy config that syncs to the rnet client.
 
     Accepts ``{"all": url}``, ``{"https": url}``, or ``{"http": url}``
-    and applies via rnet's native ``proxies`` parameter (``List[rnet.Proxy]``).
+    and applies through rnet's native ``proxies`` parameter (``List[rnet.Proxy]``).
     Supports both lazy (pre-client) and live (post-client) proxy updates.
     """
 
@@ -466,11 +466,11 @@ class RnetSession:
 
     Drop-in replacement for CurlSession with requests-compatible API.
     Supports browser impersonation (Chrome, Firefox, Edge, Safari, OkHttp),
-    retry with exponential backoff, cookie persistence, and proxy support.
+    retry with exponential backoff, cookie persistence, and proxies.
 
-    The client is created lazily on the first request so that headers,
-    cookies, and proxies can be configured freely before any connection
-    is established.
+    unshackle makes the client lazily on the first request, so you can
+    configure headers, cookies, and proxies freely before it opens any
+    connection.
     """
 
     def __init__(
@@ -544,10 +544,11 @@ class RnetSession:
 
     @property
     def impersonate_name(self) -> Optional[str]:
-        """Preset name (e.g. 'Chrome131') for rebuilding this session in another process.
+        """Preset name (e.g. 'Chrome131') for rebuilding this HTTP session in another process.
 
-        rnet enums stringify as 'Impersonate.Chrome131'; return the trailing name, or None
-        when no preset was set (then the session is not cheaply rebuildable across processes).
+        rnet enums stringify as 'Impersonate.Chrome131'. Return the trailing name, or None
+        when no preset was set (then the HTTP session is not cheaply rebuildable across
+        processes).
         """
         preset = self._client_kwargs.get("impersonate")
         if preset is None:
@@ -556,7 +557,7 @@ class RnetSession:
         return name or None
 
     def ensure_client(self) -> rnet.BlockingClient:
-        """Lazily create the rnet client on first use, flushing any buffered state."""
+        """Lazily make the rnet client on first use, flushing any buffered state."""
         if self._client is None:
             self._client = rnet.BlockingClient(**self._client_kwargs)
             self.headers._client = self._client
@@ -569,8 +570,8 @@ class RnetSession:
         """Encode params into the URL (rnet ignores the params kwarg).
 
         Accepts the same shapes as requests: a mapping, a sequence of pairs, or a
-        pre-built query string/bytes. A string is appended verbatim (already encoded);
-        urlencode() would raise TypeError on it.
+        pre-built query string/bytes. This method appends a string verbatim (already
+        encoded). urlencode() would raise TypeError on it.
         """
         if not params:
             return url
@@ -617,10 +618,10 @@ class RnetSession:
     def request(self, method: str, url: str, **kwargs: Any) -> RnetResponse:
         """Send a request, retrying on the status forcelist and on the caught exception types.
 
-        Only methods in allowed_methods are retried; any other method gets a single attempt.
-        A max_retries kwarg overrides the session retry budget for this call alone, where 0 means
-        one attempt with no retries. Once the budget is spent, MaxRetriesError is raised with the
-        last failure as its cause.
+        This method retries only the methods in allowed_methods. Any other method gets one try.
+        A max_retries kwarg overrides the HTTP session retry budget for this call alone, where 0
+        means one try with no retries. Once the budget is spent, this method raises
+        MaxRetriesError with the last failure as its cause.
         """
         client = self.ensure_client()
         method_upper = method.upper() if isinstance(method, str) else str(method).upper()
@@ -755,11 +756,11 @@ class RnetSession:
         return self.request(method, url, **send_kwargs)
 
     def mount(self, prefix: str, adapter: Any) -> None:
-        """No-op; rnet handles TLS and connection pooling natively."""
+        """No-op. rnet does TLS and connection pooling natively."""
         pass
 
     def close(self) -> None:
-        """No-op; rnet manages its own resources."""
+        """No-op. rnet manages its own resources."""
         pass
 
 
@@ -768,7 +769,7 @@ def session(
     **kwargs: Any,
 ) -> RnetSession:
     """
-    Create an rnet session with TLS fingerprinting (browser/app impersonation).
+    Make an rnet HTTP session with TLS fingerprinting (browser/app impersonation).
 
     Args:
         browser: Exact rnet.Impersonate preset name. Examples:
@@ -779,7 +780,7 @@ def session(
         **kwargs: Additional arguments passed to RnetSession constructor.
 
     Returns:
-        RnetSession configured with browser impersonation and retry behavior.
+        RnetSession configured with browser impersonation and retry behaviour.
 
     Examples:
         session()                               # Default browser from config

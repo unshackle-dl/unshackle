@@ -13,7 +13,7 @@ log = logging.getLogger("proxies")
 
 
 def initialize_proxy_providers() -> List[Any]:
-    """Initialize and return available proxy providers from config."""
+    """Initialise and return available proxy providers from config."""
     proxy_providers: list = []
     try:
         from unshackle.core import binaries
@@ -56,7 +56,7 @@ def initialize_proxy_providers() -> List[Any]:
 
 
 def resolve_proxy(proxy: str, proxy_providers: List[Any]) -> Optional[str]:
-    """Resolve a proxy parameter to an actual proxy URI.
+    """Change a proxy parameter to a real proxy URI.
 
     Accepts:
       - Direct URI: "https://...", "socks5://..."

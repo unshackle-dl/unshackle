@@ -1,17 +1,17 @@
 # Configuration Reference
 
-Every key you can set in `unshackle.yaml`, with its name, type, default value, and behaviour,
+Every config key you can set in `unshackle.yaml`, with its name, type, default value, and behaviour,
 split into one page per area. A worked config is on the [annotated example](example.md) page.
 
 Where the file lives, how unshackle discovers it, and how to edit it:
 [The Configuration File](../../getting-started/configuration-file.md).
 
 !!! info "How defaults work"
-    Every key is optional except [`output_template`](output.md), which `dl` requires.
-    Without it, `dl` aborts with an error. If you omit any other key, unshackle uses
-    the built-in default listed here. There is **no schema validation**: unknown keys are
-    silently ignored (they never become settings), and the file is parsed with
-    `yaml.safe_load`. An empty or missing file means every other key falls back to its
+    Every config key is optional except [`output_template`](output.md), which `dl` requires.
+    Without it, `dl` aborts with an error. If you do not write any other config key, unshackle
+    uses the built-in default listed here. There is **no schema validation**: unshackle
+    silently ignores unknown config keys (they never become settings), and reads the file with
+    `yaml.safe_load`. An empty or missing file means every other config key falls back to its
     default.
 
 !!! warning "Two keys behave specially on load"

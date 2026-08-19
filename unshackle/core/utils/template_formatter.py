@@ -28,7 +28,7 @@ class TemplateFormatter:
     """
 
     def __init__(self, template: str, spacer: str | None = None):
-        """Initialize the template formatter.
+        """Initialise the template formatter.
 
         Args:
             template: Template string with variables in {variable} format

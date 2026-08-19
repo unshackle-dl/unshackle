@@ -200,7 +200,7 @@ class Hybrid:
         )
 
     def level_5(self, input_video):
-        """Generate Level 5 active area metadata via crop detection on the HDR10 stream.
+        """Make Level 5 active area metadata through crop detection on the HDR10 track.
 
         This resolves mismatches where DV has no black bars but HDR10 does (or vice versa)
         by telling the display the correct active area.
@@ -377,7 +377,7 @@ class Hybrid:
 
         MaxCLL must not exceed the mastering-display peak (some HDR10+ sources ship
         MaxCLL 10000 on a 1000-nit master), and MaxFALL must not exceed
-        MaxCLL. A value of 0 means "unknown" and is preserved as-is.
+        MaxCLL. A value of 0 means "unknown", and this method keeps it as-is.
         """
         if max_mdl and max_cll and max_cll > max_mdl:
             max_cll = max_mdl
@@ -525,7 +525,7 @@ class Hybrid:
         )
 
     def extract_hdr10plus(self, video):
-        """Extract HDR10+ metadata from the video stream"""
+        """Extract HDR10+ metadata from the video track"""
         if os.path.isfile(config.directories.temp / self.hdr10plus_file):
             return
 
@@ -573,7 +573,7 @@ class Hybrid:
         )
 
     def probe_hdr_metadata(self):
-        """Extract mastering display and content light level metadata from the HDR10 stream via ffprobe.
+        """Extract mastering display and Content Light Level metadata from the HDR10 track with FFprobe.
 
         Returns (max_mdl, min_mdl, max_cll, max_fall) in dovi_tool level6 units:
         - max_mdl: nits (integer)

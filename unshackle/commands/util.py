@@ -69,7 +69,7 @@ def refresh_services() -> None:
 def crop(path: Path, aspect: str, letter: bool, offset: int, preview: bool) -> None:
     """
     Losslessly crop H.264 and H.265 video files at the bit-stream level.
-    You may provide a path to a file, or a folder of mkv and/or mp4 files.
+    You may give a path to a file, or a folder of mkv and/or mp4 files.
 
     Note: If you notice that the values you put in are not quite working, try
     tune -o/--offset. This may be necessary on videos with sub-sampled chroma.
@@ -77,8 +77,8 @@ def crop(path: Path, aspect: str, letter: bool, offset: int, preview: bool) -> N
     Do note that you may not get an ideal lossless cropping result on some
     cases, again due to sub-sampled chroma.
 
-    It's recommended that you try -o about 10 or so pixels and lower it until
-    you get as close in as possible. Do make sure it's not over-cropping either
+    Try -o about 10 or so pixels and lower it until you get as close in as
+    possible. Do make sure it is not over-cropping either
     as it may go from being 2px away from a perfect crop, to 20px over-cropping
     again due to sub-sampled chroma.
     """
@@ -179,10 +179,10 @@ def crop(path: Path, aspect: str, letter: bool, offset: int, preview: bool) -> N
 def range_(path: Path, full: bool, preview: bool) -> None:
     """
     Losslessly set the Video Range flag to full or limited at the bit-stream level.
-    You may provide a path to a file, or a folder of mkv and/or mp4 files.
+    You may give a path to a file, or a folder of mkv and/or mp4 files.
 
     If you ever notice blacks not being quite black, and whites not being quite white,
-    then you're video may have the range set to the wrong value. Flip its range to the
+    then your video may have the range set to the wrong value. Flip its range to the
     opposite value and see if that fixes it.
     """
     if not binaries.FFMPEG:
@@ -264,12 +264,12 @@ def range_(path: Path, full: bool, preview: bool) -> None:
 )
 def test(path: Path, map_: str) -> None:
     """
-    Decode an entire video and check for any corruptions or errors using FFmpeg.
-    You may provide a path to a file, or a folder of mkv and/or mp4 files.
+    Decode an entire video and examine it for any corruptions or errors using FFmpeg.
+    You may give a path to a file, or a folder of mkv and/or mp4 files.
 
-    Tests all streams within the file by default. Subtitles cannot be tested.
-    You may choose specific streams using the -m/--map parameter. E.g.,
-    '0:v:0' to test the first video stream, or '0:a' to test all audio streams.
+    Does a test of all tracks in the file by default. You cannot test subtitle
+    tracks. You may choose specific tracks with the -m/--map parameter.
+    For example, '0:v:0' for the first video track, or '0:a' for all audio tracks.
     """
     if not binaries.FFMPEG:
         raise click.ClickException('FFmpeg executable "ffmpeg" not found but is required.')

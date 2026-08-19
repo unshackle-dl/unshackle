@@ -29,10 +29,10 @@ def b64url_decode(data: str) -> bytes:
 
 
 class ClearKeyCENC:
-    """W3C EME ClearKey (org.w3.clearkey) DRM System over MPEG-CENC content.
+    """W3C EME ClearKey (org.w3.clearkey) DRM System over MPEG-CENC tracks.
 
-    Distinct from the HLS AES-128 `ClearKey` class: keys here are delivered by a
-    license server as a JWK Set keyed by KID, and content is standard CENC
+    Distinct from the HLS AES-128 `ClearKey` class: a license server gives the keys
+    here as a JWK Set keyed by KID, and the media is standard CENC
     (decrypted with shaka-packager/mp4decrypt KID:KEY pairs, same as Widevine).
     """
 
@@ -70,7 +70,8 @@ class ClearKeyCENC:
     def to_dict(self) -> dict[str, Any]:
         """Serialise this DRM instance for export/import (KIDs + license URL).
 
-        Content keys are stored once at the export's track level, not duplicated here.
+        unshackle stores the content keys once at the export's track level, and does not
+        duplicate them here.
         """
         data: dict[str, Any] = {
             "system": "ClearKeyCENC",
@@ -81,19 +82,19 @@ class ClearKeyCENC:
         return data
 
     def get_license_challenge(self) -> bytes:
-        """Build the W3C EME ClearKey JSON license request for the unkeyed KIDs."""
+        """Assemble the W3C EME ClearKey JSON license request for the unkeyed KIDs."""
         kids = [kid for kid in self.kids if kid not in self.content_keys] or self.kids
         request = {"kids": [b64url_encode_nopad(kid.bytes) for kid in kids], "type": "temporary"}
         return json.dumps(request).encode("utf8")
 
     def get_content_keys(self, *, licence: Callable, session: Optional[Session] = None) -> None:
         """
-        Obtain Content Keys for this DRM Instance from a ClearKey license server.
+        Get Content Keys for this DRM Instance from a ClearKey license server.
 
-        The licence param is expected to be a function and will be provided with the
-        W3C JSON license request as `challenge`. It may return the JWK Set license as
-        a dict, JSON str, or bytes. If it returns None and the manifest provided a
-        Laurl, the challenge is POSTed there directly instead.
+        The licence param is a function. unshackle gives it the W3C JSON license
+        request as `challenge`. It may return the JWK Set license as a dict, JSON str,
+        or bytes. If it returns None and the manifest gave a Laurl, unshackle POSTs the
+        challenge there directly instead.
         """
         if all(kid in self.content_keys for kid in self.kids):
             return
@@ -183,7 +184,7 @@ class ClearKeyCENC:
             path: Path to the encrypted file to decrypt
         Raises:
             EnvironmentError if the required decryption executable could not be found.
-            ValueError if the track has not yet been downloaded.
+            ValueError if unshackle has not yet downloaded the track.
             SubprocessError if the decryption process returned a non-zero exit code.
         """
         if not self.content_keys:
@@ -264,7 +265,7 @@ class ClearKeyCENC:
         shutil.move(output_path, path)
 
     def decrypt_with_shaka_packager(self, path: Path) -> None:
-        """Decrypt using Shaka Packager"""
+        """Decrypt with shaka-packager"""
         if not binaries.ShakaPackager:
             raise EnvironmentError("Shaka Packager executable not found but is required.")
 

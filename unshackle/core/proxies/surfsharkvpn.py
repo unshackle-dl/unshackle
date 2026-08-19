@@ -11,9 +11,9 @@ from unshackle.core.proxies.proxy import Proxy
 class SurfsharkVPN(Proxy):
     def __init__(self, username: str, password: str, server_map: Optional[dict[str, int]] = None):
         """
-        Proxy Service using SurfsharkVPN Service Credentials.
+        Proxy provider that uses SurfsharkVPN Service Credentials.
 
-        A username and password must be provided. These are Service Credentials, not your Login Credentials.
+        You must give a username and password. These are Service Credentials, not your Login Credentials.
         The Service Credentials can be found here: https://my.surfshark.com/vpn/manual-setup/main/openvpn
         """
         if not username:
@@ -94,7 +94,7 @@ class SurfsharkVPN(Proxy):
         return f"https://{self.username}:{self.password}@{hostname}:443"
 
     def get_country(self, by_id: Optional[int] = None, by_code: Optional[str] = None) -> Optional[dict]:
-        """Search for a Country and it's metadata."""
+        """Find a Country and its metadata."""
         if all(x is None for x in (by_id, by_code)):
             raise ValueError("At least one search query must be made.")
 

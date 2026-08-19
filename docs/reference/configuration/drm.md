@@ -31,13 +31,13 @@ cdm:
     default: chromecdm_l3
 ```
 
-Quality keys support `1080`, `>=1080`, `>720`, `<=576`, `<480` style comparisons; DRM keys
-are `widevine` / `playready`. Quality keys are matched first, but only when a video height is
-known; if the value is still a dict after that, `widevine`/`playready` are used when present,
-otherwise the credential profile name, then `default`.
+Quality keys can hold `1080`, `>=1080`, `>720`, `<=576`, `<480` style comparisons. DRM keys
+are `widevine` / `playready`. unshackle matches the quality keys first, but only when a video
+height is known. If the value is still a dict after that, unshackle uses
+`widevine`/`playready` when present, or else the credential profile name, then `default`.
 
-The resolved name is looked up in [`remote_cdm`](#remote_cdm) by `name` first. If no entry
-matches, it is loaded as a local device file, in this order: `<name>.prd` in
+unshackle finds the resolved name in [`remote_cdm`](#remote_cdm) by `name` first. If no entry
+matches, unshackle loads it as a local device file, in this order: `<name>.prd` in
 `directories.prds`, `<name>.prd` in `directories.wvds`, then `<name>.wvd` in
 `directories.wvds`.
 
@@ -45,7 +45,7 @@ matches, it is loaded as a local device file, in this order: `<name>.prd` in
 
 - **Type:** `list[dict]` &nbsp;·&nbsp; **Default:** `[]`
 
-A list of remote CDM server definitions. Each entry is matched by its `name` (referenced from
+A list of remote CDM definitions. unshackle matches each entry by its `name` (referenced from
 [`cdm`](#cdm)), and its `type` selects the backend:
 
 | `type` | Backend | Key fields |
@@ -89,7 +89,7 @@ styles: `Device Type`/`device_type`, `System ID`/`system_id`, `Security Level`/`
 | `system_id` | `26830` (Widevine), `0` (PlayReady) | |
 | `security_level` | Widevine `3`; PlayReady `2000` for `SL2`, else `3000` | |
 
-PlayReady mode is used when `device_type` is `PLAYREADY` or `device_name` starts with `SL`.
+unshackle uses PlayReady mode when `device_type` is `PLAYREADY` or `device_name` starts with `SL`.
 
 ### `custom_api` fields { #remote-cdm-custom-api }
 
@@ -105,8 +105,8 @@ PlayReady mode is used when `device_type` is `PLAYREADY` or `device_name` starts
 | `legacy` | dict | Legacy mode options. |
 | `timeout` | int | Default `30`. Request timeout in seconds. |
 
-Transforms cover base64/hex/JSON encoding and `kid:key` parsing. PlayReady mode is used when
-`device.type` is `PLAYREADY` or the device name is `SL2`/`SL3`.
+Transforms cover base64/hex/JSON encoding and `kid:key` parsing. unshackle uses PlayReady mode
+when `device.type` is `PLAYREADY` or the device name is `SL2`/`SL3`.
 
 ```yaml
 remote_cdm:
@@ -135,12 +135,12 @@ remote_cdm:
 
 - **Type:** `str` or `dict` &nbsp;·&nbsp; **Default:** `"shaka"`
 
-Selects the tool used to physically decrypt CENC content. The value is compared
-case-insensitively; `"mp4decrypt"` selects Bento4's mp4decrypt, and **anything else**
-(including `"shaka"`) selects shaka-packager. When the value is a dict, the service key is
-matched case-insensitively and the `default` entry is the fallback.
+Selects the tool that physically decrypts CENC-encrypted tracks. unshackle compares the value
+case-insensitively. `"mp4decrypt"` selects Bento4's mp4decrypt, and **anything else**
+(including `"shaka"`) selects shaka-packager. When the value is a dict, unshackle compares the
+service tag case-insensitively and uses the `default` entry as the fallback.
 
-HLS AES-128 ClearKey is decrypted in-process and ignores this setting.
+unshackle decrypts HLS AES-128 ClearKey in-process and ignores this setting.
 
 === "Global"
 

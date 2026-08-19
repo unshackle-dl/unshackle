@@ -1,8 +1,8 @@
 """
-Named CLI color themes.
+Named CLI colour themes.
 
 Each palette maps the same role keys to colors: `text`/`text2` for body copy, `pink` for the
-brand accent, the six ANSI hues, and the gray ramp used for rules and dim details. The active
+brand accent, the six ANSI hues, and the grey ramp used for rules and dim details. The active
 palette drives both the rich Console theme (banner, logs, progress) and the click help screens,
 so a single `theme` config value restyles the whole CLI.
 """
@@ -182,7 +182,8 @@ ALIASES = {
 def resolve_palette(name: object) -> dict[str, str] | None:
     """Look up a palette by theme name or alias, case-insensitively.
 
-    Takes any YAML scalar since config values are unvalidated; non-strings never match.
+    Takes any YAML scalar, because unshackle does not validate config values. A non-string
+    never matches a palette name.
     Returns a copy: console.py extends the active palette in place, and that must
     not pollute the master definitions.
     """
@@ -192,7 +193,7 @@ def resolve_palette(name: object) -> dict[str, str] | None:
 
 
 def build_help_config(palette: dict[str, str]) -> RichHelpConfiguration:
-    """Build the rich-click help styling for a palette."""
+    """Assemble the rich-click help styling for a palette."""
     return RichHelpConfiguration(
         style_option=palette["text"],
         style_switch=palette["green"],

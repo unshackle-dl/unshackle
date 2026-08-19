@@ -35,7 +35,7 @@ def extract_rpu(
     status: Optional[str] = "Extracting DV RPU...",
     label: str = "dovi_tool extract-rpu",
 ) -> bytes:
-    """Extract DV RPU NALs from a raw HEVC stream. `mode=None` skips the -m flag (untouched)."""
+    """Extract DV RPU NALs from a raw HEVC bitstream. `mode=None` skips the -m flag (untouched)."""
     tool = require_dovi_tool()
     args: list = [tool]
     if mode is not None:
@@ -52,7 +52,7 @@ def inject_rpu(
     status: Optional[str] = "Re-injecting DV RPU...",
     label: str = "dovi_tool inject-rpu",
 ) -> bytes:
-    """Inject a DV RPU back into a raw HEVC stream, producing DV-signaled output."""
+    """Inject a DV RPU back into a raw HEVC bitstream, producing DV-signaled output."""
     tool = require_dovi_tool()
     return run_step(
         [tool, "inject-rpu", "-i", source, "--rpu-in", rpu, "-o", output],
@@ -106,7 +106,7 @@ def generate_from_hdr10plus(
     status: Optional[str] = "Generating DV RPU from HDR10+ metadata...",
     label: str = "dovi_tool generate",
 ) -> bytes:
-    """Build a DV RPU from extracted HDR10+ metadata + an extra JSON descriptor."""
+    """Assemble a DV RPU from extracted HDR10+ metadata + an extra JSON descriptor."""
     tool = require_dovi_tool()
     return run_step(
         [tool, "generate", "-j", extra_json, "--hdr10plus-json", hdr10plus_json, "-o", output],
@@ -117,7 +117,7 @@ def generate_from_hdr10plus(
 
 
 def extract_rpu_with_fallback(source: Path, output: Path, *, label: str = "dovi_tool extract-rpu") -> bytes:
-    """Try `-m 3` first; on MAX_PQ_LUMINANCE error, retry untouched (no -m). Returns stderr.
+    """Try `-m 3` first. On a MAX_PQ_LUMINANCE error, retry untouched (no -m). Returns stderr.
 
     Used when the caller wants automatic normalization but cannot abort if the source
     rejects mode-3 conversion.

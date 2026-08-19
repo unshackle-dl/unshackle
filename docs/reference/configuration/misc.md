@@ -5,7 +5,7 @@ Smaller configuration areas: external metadata API keys, caching and update chec
 ## External API keys { #external-api-keys }
 
 All are unset by default and enable optional metadata/geolocation features. For which fields
-each metadata provider can actually answer with, see
+each metadata provider can answer with, see
 [What each metadata provider supplies](../../guide/downloading.md#what-each-metadata-provider-supplies).
 
 | Key | Type | Default | Description |
@@ -23,7 +23,7 @@ each metadata provider can actually answer with, see
 | `ipinfo_api_key` | str | `""` | ipinfo.io API key for IP/region lookups. |
 
 !!! note "How `metadata_providers` is applied"
-    A lookup goes to each provider in turn and stops at the first good match, so the order
+    A lookup goes to each metadata provider in turn and stops at the first good match, so the order
     decides which source wins. `metadata_providers` sets that order:
 
     ```yaml
@@ -37,8 +37,8 @@ each metadata provider can actually answer with, see
     metadata_providers: [imdb, omdb, simkl, tmdb, tvdb, anilist]
     ```
 
-    Whatever the order, unshackle skips a provider that has no API key. `imdb` and
-    `anilist` need no key, so they are always available. Available names are `imdb`, `omdb`,
+    Whatever the order, unshackle skips a metadata provider that has no API key. `imdb` and
+    `anilist` need no API key, so they are always available. Available names are `imdb`, `omdb`,
     `simkl`, `tmdb`, `tvdb`, and `anilist`. The old name `imdbapi` still works and is read as
     `imdb`.
 
@@ -63,7 +63,7 @@ each metadata provider can actually answer with, see
 
 !!! note "What `disable_metadata` turns off"
     With `disable_metadata: true`, unshackle never contacts a metadata provider on its own.
-    The title search is dead, and that includes the keyless `imdb` provider. Titles, years and
+    The title search is dead, and that includes the keyless `imdb` metadata provider. Titles, years and
     languages then come only from the service.
 
     ```yaml
@@ -72,18 +72,18 @@ each metadata provider can actually answer with, see
 
     An ID you give with `--tmdb`, `--imdb`, `--tvdb`, or `--anilist` is your permission to use
     that ID. That lookup still works. unshackle looks the ID up directly, cross references the other
-    IDs from it, and `--enrich` still reads that source. Only the lookups you did not ask for
-    are stopped.
+    IDs from it, and `--enrich` still reads that source. unshackle stops only the lookups you
+    did not ask for.
 
 !!! note "The `imdb` provider needs no key"
-    It replaces the earlier `imdbapi` provider, which read a third-party mirror
+    It replaces the earlier `imdbapi` metadata provider, which read a third-party mirror
     (api.tiffara.com) and needed the `imdb_api_enabled` switch. That option is gone: delete it
     from your config, where it is now ignored.
 
 !!! tip "A different order per title kind"
     Give a map instead of one list when the best source differs by kind. TVDB is strongest on
     series, TMDB on films. There are two kinds, `tv` and `movie`, and this example sets both
-    of them and names every provider, so nothing is left to the default:
+    of them and names every metadata provider, so nothing is left to the default:
 
     ```yaml
     metadata_providers:
@@ -91,9 +91,9 @@ each metadata provider can actually answer with, see
       movie: [tmdb, imdb, omdb, simkl, tvdb]
     ```
 
-    Each list is independent: it both orders and filters that kind on its own, so a provider
-    you leave out of `tv` is still used for `movie`. Here TVDB is tried first for a series and
-    last for a film.
+    Each list is independent: it both orders and filters that kind on its own, so unshackle
+    still uses for `movie` a metadata provider you leave out of `tv`. Here unshackle tries TVDB
+    first for a series and last for a film.
 
     You do not need to give both keys, or a full list in each. A kind you leave out uses the
     default order:
@@ -104,11 +104,11 @@ each metadata provider can actually answer with, see
     ```
 
     `tv` covers every episode and `movie` covers every film. unshackle only looks up
-    metadata for those two kinds, so any other key, such as `anime` or `music`, is ignored.
+    metadata for those two kinds, so unshackle ignores any other config key, such as `anime` or `music`.
 
 !!! note "`ipinfo_api_key` never touches your service sessions"
-    The token is only ever sent to `api.ipinfo.io` as a per-request `Authorization` header; it
-    is **never** attached to your service session, so it cannot leak to a streaming provider.
+    unshackle sends the token only to `api.ipinfo.io`, as a per-request `Authorization` header.
+    It **never** goes on your service HTTP session, so it cannot leak to a streaming service.
     Lookups degrade gracefully through a fallback chain: the authenticated Lite endpoint (higher
     rate limits, and ASN/continent data, but no city or region) → anonymous ipinfo →
     `ip-api.in` as a last resort.
@@ -160,19 +160,19 @@ calls.
 | `set_terminal_bg` | bool | `false` | Append the theme's background colour to output styling. |
 
 !!! note "Effect of `set_terminal_bg`"
-    When on, the theme's background colour is appended to the foreground styles, which makes
+    When on, unshackle appends the theme's background colour to the foreground styles, which makes
     the full colour palette render correctly on terminals whose *default* background differs
     from unshackle's theme. When off, such terminals can render the ASCII-art banner and
     coloured output incorrectly.
 
 !!! danger "Key exposure"
-    With `debug_keys` on, decryption content keys are written to the structured debug log at
+    With `debug_keys` on, unshackle writes the content keys to the structured debug log at
     INFO level during the DRM handshake. Treat `debug`, `debug_keys`, and the `unshackle_debug_*.jsonl` files as
     sensitive, and keep `redact_paths` enabled when sharing logs.
 
     `debug_keys` affects **only** content-encryption keys (the `content_key`/`key` fields).
     Passwords, tokens, cookies, and session tokens are **always** redacted regardless of this
-    setting, and KIDs, key counts, and other metadata are always logged either way.
+    setting, and KIDs, content key counts, and other metadata are always logged either way.
 
 ---
 

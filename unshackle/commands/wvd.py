@@ -72,7 +72,7 @@ def delete(names: list[str]) -> None:
 @click.argument("path", type=Path)
 def parse(path: Path) -> None:
     """
-    Parse a .WVD Widevine Device file to check information.
+    Parse a .WVD device file to examine its information.
     Relative paths are relative to the WVDs directory.
     """
     try:
@@ -115,7 +115,7 @@ def parse(path: Path) -> None:
 @click.argument("out_dir", type=Path, nargs=1)
 def dump(wvd_paths: list[Path], out_dir: Path) -> None:
     """
-    Extract data from a .WVD Widevine Device file to a folder structure.
+    Extract data from a .WVD device file to a folder structure.
 
     If the path is relative, with no file extension, it will dump the WVD in the WVDs
     directory.
@@ -209,7 +209,7 @@ def new(
     output: Optional[Path],
 ) -> None:
     """
-    Create a new .WVD Widevine provision file.
+    Make a new .WVD Widevine provision file.
 
     name: The origin device name of the provided data. e.g. `Nexus 6P`. You do not need to
         specify the security level, that will be done automatically.
@@ -217,7 +217,7 @@ def new(
     client_id: A binary blob file which follows the Widevine ClientIdentification protobuf
         schema.
     file_hashes: A binary blob file with follows the Widevine FileHashes protobuf schema.
-        Also known as VMP as it's used for VMP (Verified Media Path) assurance.
+        Also known as VMP, because VMP (Verified Media Path) assurance uses it.
     """
     try:
         # TODO: Remove need for name, create name based on Client IDs ClientInfo values

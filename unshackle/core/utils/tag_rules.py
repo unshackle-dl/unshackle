@@ -26,7 +26,8 @@ NUMBER = re.compile(r"\d+(?:\.\d+)?")
 def evaluate_tag_rules(rules: Any, context: dict[str, Any]) -> Optional[str]:
     """Evaluate tag rules against a filename template context.
 
-    Rules are evaluated in order; the first matching rule's tag is returned.
+    unshackle evaluates the rules in order. It returns the tag of the first rule
+    that matches.
     Conditions are AND-ed, compared case-insensitively, and a list matches if
     any entry matches. A value may lead with a comparison operator, e.g.
     ">=2160" or "!=DV".
@@ -37,7 +38,7 @@ def evaluate_tag_rules(rules: Any, context: dict[str, Any]) -> Optional[str]:
         context: The already-built filename template context.
 
     Returns:
-        The tag string from the first matching rule, or ``None`` if none match.
+        The tag string from the first rule that matches, or ``None`` if none match.
     """
     if not isinstance(rules, list):
         log.warning("tag_rules must be a list of rules, ignoring: %r", rules)
@@ -76,19 +77,19 @@ def evaluate_tag_rules(rules: Any, context: dict[str, Any]) -> Optional[str]:
 
 
 def has_bool(expected: Any) -> bool:
-    """Check for a YAML boolean, which is an unquoted word the user meant as text."""
+    """Examine the expected value for a YAML boolean, which is an unquoted word the user meant as text."""
     values = expected if isinstance(expected, list) else [expected]
     return any(isinstance(x, bool) for x in values)
 
 
 def matches(expected: Any, actual: Any) -> bool:
-    """Check one condition, where a list matches on any entry."""
+    """Examine one condition, where a list matches if any one entry matches."""
     values = expected if isinstance(expected, list) else [expected]
     return any(matches_one(x, actual) for x in values)
 
 
 def matches_one(expected: Any, actual: Any) -> bool:
-    """Check a single value, which may carry a leading comparison operator."""
+    """Examine a single value, which can carry a leading comparison operator."""
     text = "" if expected is None else str(expected)
     for op in sorted(OPS, key=len, reverse=True):
         if text.startswith(op):

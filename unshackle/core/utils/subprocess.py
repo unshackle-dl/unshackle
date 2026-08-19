@@ -17,10 +17,10 @@ def log_tool_run(
     duration_ms: Optional[float] = None,
     **context: object,
 ) -> None:
-    """Emit a structured ``tool_run`` debug-log entry for an external tool invocation.
+    """Send a structured ``tool_run`` debug-log entry for an external tool invocation.
 
-    Central helper so every binary call (ffmpeg, mkvpropedit, dovi_tool, etc.) logs the
-    same shape. No-op when debug logging is disabled.
+    Central helper so every binary call (FFmpeg, mkvpropedit, dovi_tool, and the other
+    tools) logs the same shape. No-op when debug logging is off.
     """
     dl = get_debug_logger()
     if not dl:
@@ -41,7 +41,7 @@ def log_tool_run(
 
 
 def ffprobe(uri: Union[bytes, Path]) -> dict:
-    """Use ffprobe on the provided data to get stream information."""
+    """Use FFprobe on the provided data to get its track information (``-show_streams``)."""
     if not binaries.FFProbe:
         raise EnvironmentError('FFProbe executable "ffprobe" not found but is required.')
 
@@ -88,10 +88,10 @@ def run_step(
     output: Optional[Path] = None,
     label: str = "subprocess step",
 ) -> bytes:
-    """Run a CLI step that writes to `output` (when provided). Returns stderr bytes.
+    """Operate a CLI step that writes to `output` (when provided). Returns stderr bytes.
 
     Raises RuntimeError with the stderr tail when the process exits non-zero, or when
-    `output` is given and does not exist / is empty after the run.
+    you give `output` and it does not exist or is empty after the step.
     """
     if output is not None:
         output.unlink(missing_ok=True)

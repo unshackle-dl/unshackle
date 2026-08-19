@@ -24,8 +24,8 @@ class ImportCommand:
         """
         Reconstruct an exported download without re-contacting the service.
 
-        Re-fetches the manifest, injects the stored keys, then downloads/decrypts/muxes as a
-        normal `dl` run. Any `dl` options after the file are forwarded verbatim:
+        Re-fetches the manifest, injects the stored keys, then downloads/decrypts/muxes exactly
+        as the `dl` command does. unshackle forwards any `dl` options after the file verbatim:
 
             unshackle import export.json -r HDR10 --proxy US
         """

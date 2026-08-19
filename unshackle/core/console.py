@@ -138,7 +138,7 @@ class ComfyConsole(Console):
     """A comfy high level console interface.
 
     Args:
-        color_system (str, optional): The color system supported by your terminal,
+        color_system (str, optional): The colour system supported by your terminal,
             either ``"standard"``, ``"256"`` or ``"truecolor"``. Leave as ``"auto"`` to autodetect.
         force_terminal (Optional[bool], optional): Enable/disable terminal control codes, or None to auto-detect
             terminal. Defaults to None.
@@ -154,7 +154,7 @@ class ComfyConsole(Console):
         width (int, optional): The width of the terminal. Leave as default to auto-detect width.
         height (int, optional): The height of the terminal. Leave as default to auto-detect height.
         style (StyleType, optional): Style to apply to all output, or None for no style. Defaults to None.
-        no_color (Optional[bool], optional): Enabled no color mode, or None to auto-detect. Defaults to None.
+        no_color (Optional[bool], optional): Enabled no colour mode, or None to auto-detect. Defaults to None.
         tab_size (int, optional): Number of spaces used to replace a tab character. Defaults to 8.
         record (bool, optional): Boolean to enable recording of terminal output,
             required to call :meth:`export_html`, :meth:`export_svg`, and :meth:`export_text`. Defaults to False.
@@ -168,7 +168,7 @@ class ComfyConsole(Console):
             strftime or callable that formats the time. Defaults to "[%X] ".
         highlighter (HighlighterType, optional): Default highlighter.
         legacy_windows (bool, optional): Enable legacy Windows mode, or ``None`` to auto-detect. Defaults to ``None``.
-        safe_box (bool, optional): Restrict box options that don't render on legacy Windows.
+        safe_box (bool, optional): Restrict box options that do not render on legacy Windows.
         get_datetime (Callable[[], datetime], optional): Callable that gets the current time as a datetime.datetime
             object (used by Console.log), or None for datetime.now.
         get_time (Callable[[], time], optional): Callable that gets the current time in seconds, default uses
@@ -260,10 +260,10 @@ class ComfyConsole(Console):
             speed (float, optional): Speed factor for spinner animation. Defaults to 1.0.
             refresh_per_second (float, optional): Number of refreshes per second. Defaults to 12.5.
             pad (Union[int, Tuple[int]]): Padding for top, right, bottom, and left borders.
-                May be specified with 1, 2, or 4 integers (CSS style).
+                Give 1, 2, or 4 integers (CSS style).
 
         Returns:
-            Status: A Status object that may be used as a context manager.
+            Status: A Status object you can use as a context manager.
         """
         status_renderable = super().status(
             status=status,
@@ -436,7 +436,7 @@ def listing_panel(renderable: RenderableType, title: str) -> Panel:
 
 
 def listing_table(title: Optional[str] = None, **kwargs: Any) -> Table:
-    """Build a table in the style of the rich-click help tables, so listings and help screens match."""
+    """Assemble a table in the style of the rich-click help tables, so listings and help screens match."""
     kwargs.setdefault("box", box.HORIZONTALS)
     kwargs.setdefault("show_edge", False)  # no top or bottom rule, so the title runs straight into the header
     kwargs.setdefault("border_style", "dark_gray")

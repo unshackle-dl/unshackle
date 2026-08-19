@@ -11,7 +11,7 @@ from unshackle.core.providers._base import ExternalIds, MetadataProvider, Metada
 
 
 def primary_language(data: dict) -> Optional[str]:
-    """Search results spell the key primary_language, the extended record originalLanguage."""
+    """Search results spell the field primary_language, the extended record originalLanguage."""
     return data.get("primary_language") or data.get("originalLanguage") or None
 
 
@@ -34,7 +34,7 @@ def parse_int(value: Optional[str]) -> Optional[int]:
 
 
 def ids_from_remote(remote_ids: Optional[list], tvdb_id: Optional[int]) -> ExternalIds:
-    """Build ExternalIds from a TVDB remote_ids/remoteIds list."""
+    """Assemble ExternalIds from a TVDB remote_ids/remoteIds list."""
     ext = ExternalIds(tvdb_id=tvdb_id)
     for entry in remote_ids or []:
         source = (entry.get("sourceName") or "").lower()
@@ -49,7 +49,7 @@ def ids_from_remote(remote_ids: Optional[list], tvdb_id: Optional[int]) -> Exter
 def pick_match(
     results: list[dict], search_title: str, year: Optional[int]
 ) -> tuple[Optional[dict], Optional[str], float]:
-    """Best title match among results, ignoring any whose year is more than a year out."""
+    """The result whose title matches best, ignoring any whose year is more than a year out."""
     best: Optional[dict] = None
     best_title: Optional[str] = None
     best_ratio = 0.0
@@ -274,7 +274,7 @@ class TVDBProvider(MetadataProvider):
         return mapping
 
     def find_by_imdb_id(self, imdb_id: str, kind: str) -> Optional[ExternalIds]:
-        """Resolve a TVDB ID from an IMDb ID via /search/remoteid."""
+        """Get a TVDB ID from an IMDb ID through /search/remoteid."""
         results = self.api_get(f"/search/remoteid/{imdb_id}")
         if not results:
             self.log.debug("No TVDB results for IMDB ID %s", imdb_id)

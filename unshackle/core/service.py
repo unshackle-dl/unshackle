@@ -48,13 +48,13 @@ DEFAULT_TIMEOUT = (CONNECT_TIMEOUT, READ_TIMEOUT)
 class TimeoutSession(requests.Session):
     """requests.Session applying DEFAULT_TIMEOUT when the caller passes none.
 
-    requests has no native default timeout; without one a stalled connect or
-    read hangs forever. RnetSession bounds every request via its client's
+    requests has no native default timeout. Without one, a stalled connect or
+    read hangs forever. RnetSession bounds every request through its client's
     connect_timeout/read_timeout, so this mirrors that on the requests path.
-    A per-request non-None ``timeout=`` wins; an explicit ``timeout=None`` is
-    still replaced with the default by :class:`TimeoutHTTPAdapter` on the
-    mounted adapters, so there is no unbounded read, matching RnetSession where
-    the client-level timeouts always apply. Pass a large timeout instead.
+    A per-request non-None ``timeout=`` wins. :class:`TimeoutHTTPAdapter` on the
+    mounted adapters still replaces an explicit ``timeout=None`` with the default,
+    so there is no unbounded read, as with RnetSession where the client-level
+    timeouts always apply. Pass a large timeout instead.
     """
 
     def request(self, *args: Any, **kwargs: Any) -> requests.Response:
@@ -66,8 +66,8 @@ class TimeoutHTTPAdapter(HTTPAdapter):
     """HTTPAdapter applying DEFAULT_TIMEOUT when the caller passes none.
 
     Backstops :class:`TimeoutSession` for the ``session.send(prepared)`` path,
-    which bypasses ``Session.request``; RnetSession bounds those too via its
-    client, so this keeps parity. A per-request non-None ``timeout=`` wins;
+    which bypasses ``Session.request``. RnetSession bounds those too through its
+    client, so this keeps parity. A per-request non-None ``timeout=`` wins.
     ``None`` (unset, or explicitly passed) gets the default, because the adapter
     cannot distinguish the two, and rnet has no unbounded mode either.
     """
@@ -100,7 +100,7 @@ class TrackRequest:
 
 def sanitize_proxy_for_log(uri: Optional[str]) -> Optional[str]:
     """
-    Sanitize a proxy URI for logs by redacting any embedded userinfo (username/password).
+    Sanitise a proxy URI for logs by redacting any embedded userinfo (username/password).
 
     Examples:
       - http://user:pass@host:8080 -> http://REDACTED@host:8080
@@ -140,10 +140,10 @@ def sanitize_proxy_for_log(uri: Optional[str]) -> Optional[str]:
 class Service(metaclass=ABCMeta):
     """The Service Base Class.
 
-    A Service must implement the abstract methods; the rest are optional overrides that fall back to the base
-    implementation when a Service does not define them. The main flow runs the session and authentication
-    methods first, then titles, then tracks and chapters. The license callbacks run later still, during track
-    download.
+    A Service must define the abstract methods. The rest are optional overrides that fall back to the base
+    implementation when a Service does not define them. The main flow operates the HTTP session and
+    authentication methods first, then titles, then tracks and chapters. The license callbacks operate later
+    still, during track download.
     """
 
     ALIASES: tuple[str, ...] = ()  # list of aliases for the service; alternatives to the service tag.
@@ -299,11 +299,11 @@ class Service(metaclass=ABCMeta):
 
         The fetch_fn signature should be: (title, codec, range_) -> Tracks
 
-        For HYBRID range, fetch_fn is called with HDR10 and DV separately and
-        the DV video tracks are merged into the HDR10 result.
+        For HYBRID range, this helper calls fetch_fn with HDR10 and DV separately,
+        then merges the DV video tracks into the HDR10 result.
 
         Args:
-            title: The title being processed.
+            title: The title to process.
             fetch_fn: A callable that fetches tracks for a specific codec/range.
         """
         all_tracks = Tracks()
@@ -365,9 +365,9 @@ class Service(metaclass=ABCMeta):
     @staticmethod
     def get_session() -> requests.Session:
         """
-        Creates a Python-requests Session, adds common headers
+        Creates a Python-requests HTTP session, adds common headers
         from config, cookies, retry handler, and a proxy if available.
-        :returns: Prepared Python-requests Session
+        :returns: Prepared Python-requests HTTP session
         """
         session = TimeoutSession()
         session.headers.update(config.headers)
@@ -401,14 +401,14 @@ class Service(metaclass=ABCMeta):
         Authenticate the Service with Cookies and/or Credentials (Email/Username and Password).
 
         This is effectively a login() function. Any API calls or object initializations
-        needing to be made, should be made here. This will be run before any of the
-        following abstract functions.
+        needing to be made, should be made here. unshackle operates this method before
+        any of the following abstract functions.
 
         You should avoid storing or using the Credential outside this function.
         Make any calls you need for any Cookies, Tokens, or such, then use those.
 
-        The Cookie jar should also not be stored outside this function. However, you may load
-        the Cookie jar into the service session.
+        Do not store the cookies outside this function either. However, you can load
+        the cookies into the service HTTP session.
         """
         if cookies is not None:
             if not isinstance(cookies, CookieJar):
@@ -421,7 +421,7 @@ class Service(metaclass=ABCMeta):
     def request_input(self, prompt: str) -> str:
         """Request interactive input from the user.
 
-        When running locally (CLI), prompts via the shared rich console so the
+        When running locally (CLI), prompts through the shared rich console so the
         prompt renders correctly alongside Live progress / log handlers.
         When running in serve mode with an :class:`InputBridge` attached,
         delegates to the bridge which relays the prompt to the remote client.
@@ -432,12 +432,12 @@ class Service(metaclass=ABCMeta):
 
     def search(self) -> Generator[SearchResult, None, None]:
         """
-        Search by query for titles from the Service.
+        Find titles from the Service by query.
 
-        The query must be taken as a CLI argument by the Service class.
-        Ideally just re-use the title ID argument (i.e. self.title).
+        The Service class must take the query as a CLI argument.
+        Ideally re-use the title ID argument (that is, self.title).
 
-        Search results will be displayed in the order yielded.
+        unshackle displays the search results in the order yielded.
         """
         raise NotImplementedError(f"Search functionality has not been implemented by {self.__class__.__name__}")
 
@@ -449,10 +449,10 @@ class Service(metaclass=ABCMeta):
 
         :param challenge: The service challenge, providing this to a License endpoint should return the
             privacy certificate that the service uses.
-        :param title: The current `Title` from get_titles that is being executed. This is provided in
-            case it has data needed to be used, e.g. for a HTTP request.
+        :param title: The current `Title` from get_titles that unshackle processes now. unshackle
+            gives this in case it holds data you need, for example for an HTTP request.
         :param track: The current `Track` needing decryption. Provided for same reason as `title`.
-        :return: The Service Privacy Certificate as Bytes or a Base64 string. Don't Base64 Encode or
+        :return: The Service Privacy Certificate as Bytes or a Base64 string. Do not Base64 Encode or
             Decode the data, return as is to reduce unnecessary computations.
         """
 
@@ -460,18 +460,18 @@ class Service(metaclass=ABCMeta):
         """
         Get a Widevine License message by sending a License Request (challenge).
 
-        This License message contains the encrypted Content Decryption Keys and will be
+        This License message contains the encrypted content keys and will be
         read by the Cdm and decrypted.
 
         This is a very important request to get correct. A bad, unexpected, or missing
-        value in the request can cause your key to be detected and promptly banned,
-        revoked, disabled, or downgraded.
+        value in the request can cause the service to detect your CDM device. The device
+        can then be banned, revoked, disabled, or downgraded.
 
         :param challenge: The license challenge from the Widevine CDM.
-        :param title: The current `Title` from get_titles that is being executed. This is provided in
-            case it has data needed to be used, e.g. for a HTTP request.
+        :param title: The current `Title` from get_titles that unshackle processes now. unshackle
+            gives this in case it holds data you need, for example for an HTTP request.
         :param track: The current `Track` needing decryption. Provided for same reason as `title`.
-        :return: The License response as Bytes or a Base64 string. Don't Base64 Encode or
+        :return: The License response as Bytes or a Base64 string. Do not Base64 Encode or
             Decode the data, return as is to reduce unnecessary computations.
         """
 
@@ -481,18 +481,18 @@ class Service(metaclass=ABCMeta):
         """
         Get a PlayReady License message by sending a License Request (challenge).
 
-        This License message contains the encrypted Content Decryption Keys and will be
+        This License message contains the encrypted content keys and will be
         read by the CDM and decrypted.
 
         This is a very important request to get correct. A bad, unexpected, or missing
-        value in the request can cause your key to be detected and promptly banned,
-        revoked, disabled, or downgraded.
+        value in the request can cause the service to detect your CDM device. The device
+        can then be banned, revoked, disabled, or downgraded.
 
         :param challenge: The license challenge from the PlayReady CDM.
-        :param title: The current `Title` from get_titles that is being executed. This is provided in
-            case it has data needed to be used, e.g. for a HTTP request.
+        :param title: The current `Title` from get_titles that unshackle processes now. unshackle
+            gives this in case it holds data you need, for example for an HTTP request.
         :param track: The current `Track` needing decryption. Provided for same reason as `title`.
-        :return: The License response as Bytes or a Base64 string. Don't Base64 Encode or
+        :return: The License response as Bytes or a Base64 string. Do not Base64 Encode or
             Decode the data, return as is to reduce unnecessary computations.
         """
         # Delegates license handling to the Widevine license method by default if a service-specific PlayReady implementation is not provided.
@@ -504,13 +504,13 @@ class Service(metaclass=ABCMeta):
         """
         Get a W3C ClearKey License (JWK Set) by sending a License Request (challenge).
 
-        Used for DASH `org.w3.clearkey` content. No CDM is involved: the challenge is
+        Used for DASH `org.w3.clearkey` tracks. unshackle uses no CDM here: the challenge is
         the W3C EME JSON license request, e.g. ``{"kids": ["<base64url>"], "type": "temporary"}``,
         and the license is a JWK Set, e.g. ``{"keys": [{"kty": "oct", "k": "...", "kid": "..."}]}``.
 
         :param challenge: The JSON license request bytes to POST to the license server.
-        :param title: The current `Title` from get_titles that is being executed. This is provided in
-            case it has data needed to be used, e.g. for a HTTP request.
+        :param title: The current `Title` from get_titles that unshackle processes now. unshackle
+            gives this in case it holds data you need, for example for an HTTP request.
         :param track: The current `Track` needing decryption. Provided for same reason as `title`.
         :return: The JWK Set license as a dict, JSON str, or raw bytes. Return None (the default)
             to let the framework POST the challenge to the manifest-provided Laurl, if any.
@@ -527,11 +527,11 @@ class Service(metaclass=ABCMeta):
         Return a Movies, Series, or Album objects containing Movie, Episode, or Song title objects respectively.
         The returned data must be for the given title ID, or a spawn of the title ID.
 
-        At least one object is expected to be returned, or it will presume an invalid Title ID was
-        provided.
+        You must return at least one object. If you do not, unshackle presumes an invalid
+        Title ID.
 
         You can use the `data` dictionary class instance attribute of each Title to store data you may need later on.
-        This can be useful to store information on each title that will be required like any sub-asset IDs, or such.
+        This can be useful to store information on each title that you need later, like any sub-asset IDs, or such.
         """
 
     def get_titles_cached(self, title_id: str = None) -> Titles_T:
@@ -596,26 +596,26 @@ class Service(metaclass=ABCMeta):
         Return a Tracks object, which itself can contain Video, Audio, Subtitle or even Chapters.
         Tracks.videos, Tracks.audio, Tracks.subtitles, and Track.chapters should be a List of Track objects.
 
-        Each Track in the Tracks should represent a Video/Audio Stream/Representation/Adaptation or
-        a Subtitle file.
+        Each Track in the Tracks should represent a Video/Audio track, Representation, or
+        Adaptation, or a Subtitle file.
 
-        While one Track should only hold information for one stream/downloadable, try to get as many
-        unique Track objects per stream type so Stream selection by the root code can give you more
-        options in terms of Resolution, Bitrate, Codecs, Language, e.t.c.
+        While one Track should only hold information for one downloadable track, try to get as many
+        unique Track objects per track type so track selection by the root code can give you more
+        options in terms of Resolution, Bitrate, Codecs, Language, and such.
 
         No decision making or filtering of which Tracks get returned should happen here. It can be
         considered an error to filter for e.g. resolution, codec, and such. All filtering based on
         arguments will be done by the root code automatically when needed.
 
-        Make sure you correctly mark which Tracks are encrypted or not, and by which DRM System
-        via its `drm` property.
+        Make sure you correctly mark which Tracks have encryption, and which DRM System they
+        use, with the `drm` property.
 
-        If you are able to obtain the Track's KID (Key ID) as a 32 char (16 bit) HEX string, provide
-        it to the Track's `kid` variable as it will speed up the decryption process later on. It may
-        or may not be needed, that depends on the service. Generally if you can provide it, without
-        downloading any of the Track's stream data, then do.
+        If you can get the Track's KID (Key ID) as a 32 char (16 bit) HEX string, give it to the
+        Track's `kid` variable, as it will speed up the decryption process later on. The service
+        decides whether it is necessary. Generally if you can give it, without downloading any of
+        the Track's media data, then do.
 
-        :param title: The current `Title` from get_titles that is being executed.
+        :param title: The current `Title` from get_titles that unshackle processes now.
         :return: Tracks object containing Video, Audio, Subtitles, and Chapters, if available.
         """
 
@@ -625,12 +625,12 @@ class Service(metaclass=ABCMeta):
         Get Chapters for the Title.
 
         Parameters:
-            title: The current Title from `get_titles` that is being processed.
+            title: The current Title from `get_titles` that unshackle processes now.
 
         You must return a Chapters object containing 0 or more Chapter objects.
 
         You do not need to set a Chapter number or sort/order the chapters in any way as
-        the Chapters class automatically handles all of that for you. If there's no
+        the Chapters class automatically handles all of that for you. If there is no
         descriptive name for a Chapter then do not set a name at all.
 
         You must not set Chapter names to "Chapter {n}" or such. If you (or the user)
@@ -646,7 +646,7 @@ class Service(metaclass=ABCMeta):
 
         Parameters:
             track: The Track object that had a Segment downloaded.
-            segment: The Path to the Segment that was downloaded.
+            segment: The Path to the downloaded Segment.
         """
 
     def on_track_downloaded(self, track: AnyTrack) -> None:
@@ -654,7 +654,7 @@ class Service(metaclass=ABCMeta):
         Called when a Track has finished downloading.
 
         Parameters:
-            track: The Track object that was downloaded.
+            track: The downloaded Track object.
         """
 
     def on_track_decrypted(self, track: AnyTrack, drm: DRM_T, segment: Optional[m3u8.Segment] = None) -> None:
@@ -662,9 +662,9 @@ class Service(metaclass=ABCMeta):
         Called when a Track has finished decrypting.
 
         Parameters:
-            track: The Track object that was decrypted.
+            track: The decrypted Track object.
             drm: The DRM object it decrypted with.
-            segment: The HLS segment information that was decrypted.
+            segment: The decrypted HLS segment information.
         """
 
     def on_track_repacked(self, track: AnyTrack) -> None:
@@ -672,19 +672,19 @@ class Service(metaclass=ABCMeta):
         Called when a Track has finished repacking.
 
         Parameters:
-            track: The Track object that was repacked.
+            track: The repacked Track object.
         """
 
     def on_track_multiplex(self, track: AnyTrack) -> None:
         """
-        Called when a Track is about to be Multiplexed into a Container.
+        Called immediately before unshackle multiplexes a Track into a Container.
 
-        Note: Right now only MKV containers are multiplexed but in the future
-        this may also be called when multiplexing to other containers like
-        MP4 via ffmpeg/mp4box.
+        Note: Right now unshackle multiplexes only MKV containers. In the future
+        unshackle can also call this when it multiplexes to other containers like
+        MP4 with FFmpeg/mp4box.
 
         Parameters:
-            track: The Track object that was repacked.
+            track: The repacked Track object.
         """
 
 

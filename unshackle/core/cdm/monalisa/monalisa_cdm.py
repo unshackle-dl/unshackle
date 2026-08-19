@@ -1,8 +1,8 @@
 """
 MonaLisa CDM - WASM-based Content Decryption Module wrapper.
 
-This module provides key extraction from MonaLisa-protected content using
-a WebAssembly module that runs locally via wasmtime.
+This module extracts content keys from MonaLisa-protected titles. It uses a
+WebAssembly module that runs locally with wasmtime.
 """
 
 import base64
@@ -25,12 +25,12 @@ logger = logging.getLogger(__name__)
 
 class MonaLisaCDM:
     """
-    MonaLisa CDM wrapper for WASM-based key extraction.
+    MonaLisa CDM wrapper for WASM-based content key extraction.
 
     This CDM differs from Widevine/PlayReady in that it does not use a
-    challenge/response flow with a license server. Instead, the license
-    (ticket) is provided directly by the service API, and keys are extracted
-    locally via the WASM module.
+    challenge/response flow with a license server. Instead, the service API
+    gives the license (ticket) directly, and the WASM module extracts the
+    content keys locally.
     """
 
     DYNAMIC_BASE = 6065008
@@ -50,7 +50,7 @@ class MonaLisaCDM:
 
     def __init__(self, device_path: Path):
         """
-        Initialize the MonaLisa CDM.
+        Initialise the MonaLisa CDM.
 
         Args:
             device_path: Path to the device file (.mld).
@@ -108,7 +108,7 @@ class MonaLisaCDM:
             Session ID (always 1 for MonaLisa).
 
         Raises:
-            RuntimeError: If session initialization fails.
+            RuntimeError: If CDM session initialization fails.
         """
         try:
             self.store = wasmtime.Store(self.engine)
@@ -179,7 +179,7 @@ class MonaLisaCDM:
             Dictionary with keys: kid (hex), key (hex), type ("CONTENT").
 
         Raises:
-            RuntimeError: If session not open or license validation fails.
+            RuntimeError: If the CDM session is not open, or license validation fails.
             ValueError: If license_data is empty.
         """
         if not self.instance or not self.memory or self.ctx is None:
@@ -233,7 +233,7 @@ class MonaLisaCDM:
         return {"kid": kid_bytes.hex(), "key": key_bytes.hex(), "type": "CONTENT"}
 
     def extract_license_key_bytes(self) -> bytes:
-        """Extract the 16-byte decryption key from WASM memory."""
+        """Extract the 16-byte content key from WASM memory."""
         data_ptr = self.memory.data_ptr(self.store)
         data_len = self.memory.data_len(self.store)
 
@@ -318,7 +318,7 @@ class MonaLisaCDM:
             mem_ptr[buffer + len(encoded)] = 0
 
     def build_imports(self):
-        """Build the WASM import stubs required by the MonaLisa module."""
+        """Assemble the WASM import stubs the MonaLisa module needs."""
 
         def sys_fcntl64(a, b, c):
             return 0

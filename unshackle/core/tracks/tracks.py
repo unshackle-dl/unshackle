@@ -132,7 +132,7 @@ class Tracks:
                             **kwargs: Any,
                         ) -> None:
                             """
-                            Ensure terminal status states render as a fully completed bar.
+                            Make sure that terminal status states render as a fully completed bar.
 
                             Some downloaders can report completed slightly below total
                             before emitting the final "Downloaded" state.
@@ -190,7 +190,7 @@ class Tracks:
         return tree, progress_callables
 
     def exists(self, by_id: Optional[str] = None, by_url: Optional[Union[str, list[str]]] = None) -> bool:
-        """Check if a track already exists by various methods."""
+        """Examine whether a track already exists, by various methods."""
         if by_id:
             return any(x.id == by_id for x in self)
         if by_url:
@@ -204,7 +204,7 @@ class Tracks:
         ],
         warn_only: bool = False,
     ) -> None:
-        """Add a provided track to its appropriate array and ensuring it's not a duplicate."""
+        """Add a provided track to its appropriate array and ensuring it is not a duplicate."""
         if isinstance(tracks, Tracks):
             if tracks.manifest_url and not self.manifest_url:
                 self.manifest_url = tracks.manifest_url
@@ -296,7 +296,7 @@ class Tracks:
     ) -> None:
         """
         Sort subtitle tracks by various track attributes to a common P2P standard.
-        You may optionally provide a sequence of languages to prioritize to the top.
+        You may optionally give a sequence of languages to prioritise to the top.
 
         Section Order:
           - by_language groups prioritized to top, and ascending alphabetically
@@ -310,9 +310,9 @@ class Tracks:
           (Least to most captions expected in the subtitle)
 
         type_priority overrides the Type Order with an explicit ranking of "forced",
-        "normal", and "sdh" (cc counts as sdh); unlisted types fall to the end.
+        "normal", and "sdh" (cc counts as sdh). Unlisted types fall to the end.
 
-        group_by sets the major key. "type" (default) keeps every forced track together,
+        group_by sets the major sort order. "type" (default) keeps every forced track together,
         then every normal, then every SDH, each block ascending by language. "language"
         groups by language instead, so Finnish sits next to Finnish SDH, with the Type
         Order applied inside each language.
@@ -377,8 +377,9 @@ class Tracks:
     def merge_video_selections(*groups: list[Video]) -> list[Video]:
         """Concatenate video selections, dropping duplicates (by track id, order-preserving).
 
-        A DV track can be chosen as both the hybrid ingredient (lowest) and an explicit
-        deliverable; without dedup the same track would be muxed/downloaded twice.
+        A caller can choose a DV track as both the hybrid ingredient (lowest) and an
+        explicit deliverable. Without dedup, unshackle would mux and download the same
+        track twice.
         """
         merged: list[Video] = []
         for group in groups:
@@ -393,9 +394,10 @@ class Tracks:
     ) -> tuple[list[Video], list[Video]]:
         """Split videos into hybrid-ingredient candidates and the standalone-deliverable pool.
 
-        HDR10/HDR10+/DV tracks are hybrid ingredients; they only enter the standalone
-        pool when their range was explicitly requested alongside HYBRID, so e.g.
-        `-r HYBRID` muxes only the hybrid while `-r HYBRID,HDR10P` also delivers HDR10+.
+        HDR10/HDR10+/DV tracks are hybrid ingredients. They only enter the standalone
+        pool when the user explicitly requested their range alongside HYBRID, so for
+        example `-r HYBRID` muxes only the hybrid while `-r HYBRID,HDR10P` also delivers
+        HDR10+.
         """
         ingredient_ranges = (Video.Range.HDR10, Video.Range.HDR10P, Video.Range.DV)
         hybrid_candidates = [v for v in videos if v.range in ingredient_ranges]
@@ -406,8 +408,8 @@ class Tracks:
     def flag_hybrid_ingredients(hybrid_selected: list[Video], non_hybrid_selected: list[Video]) -> None:
         """Mark tracks selected only as hybrid ingredients so the standalone mux loop skips them.
 
-        A track that was also picked as an explicit deliverable (same track in both
-        selections) stays unflagged and is muxed standalone alongside the hybrid.
+        A track that the caller also selected as an explicit deliverable (same track in both
+        selections) stays unflagged, and the standalone mux loop muxes it alongside the hybrid.
         """
         for video in hybrid_selected:
             if video not in non_hybrid_selected:
@@ -492,21 +494,21 @@ class Tracks:
         Multiplex all the Tracks into a Matroska Container file.
 
         A failed mux does not raise. mkvmerge's exit code and error lines come back alongside the
-        output path, and the caller must check them.
+        output path, and the caller must examine them.
 
         Parameters:
             title: Set the Matroska Container file title. Usually displayed in players
                 instead of the filename if set.
             delete: Delete all track files after multiplexing.
-            progress: Update a rich progress bar via `completed=...`. This must be the
-                progress object's update() func, pre-set with task id via functools.partial.
-            audio_expected: Whether audio is expected in the output. Used to determine
-                if embedded audio metadata should be added.
+            progress: Update a rich progress bar with `completed=...`. This must be the
+                progress object's update() func, pre-set with task id by functools.partial.
+            audio_expected: Whether the output must have audio. unshackle uses this to
+                decide if it adds embedded audio metadata.
             title_language: The title's intended language. Used to select the best video track
                 for audio metadata when multiple video tracks exist.
             skip_subtitles: Skip muxing subtitle tracks into the container.
-            output_path: Explicit destination for the muxed container. When None (default) the
-                path is derived from the first track, so callers muxing several track groups that
+            output_path: Explicit destination for the muxed container. When None (default)
+                unshackle derives the path from the first track, so callers muxing several track groups that
                 share a video list must pass distinct paths to avoid clobbering each other.
         """
         if self.videos and not self.audio and audio_expected:

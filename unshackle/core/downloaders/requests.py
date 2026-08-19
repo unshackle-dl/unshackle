@@ -121,7 +121,7 @@ def parse_speed_limit(value: Union[str, int, float, None]) -> Optional[float]:
 
     Accepts plain numbers (exact bytes/sec) or a decimal suffix with optional
     /s, case-insensitive: "500k", "5M", "10MB/s", "1.5G", 5000000. Suffixes
-    match the displayed speeds (5M = 5.0 MB/s); values are bytes, not bits.
+    match the displayed speeds (5M = 5.0 MB/s). Values are bytes, not bits.
     "", 0, "off", "none" and "unlimited" mean no limit.
     """
     if value is None:
@@ -159,7 +159,7 @@ def set_speed_limit(bytes_per_sec: Optional[float], lock: bool = False) -> None:
 
 
 def adaptive_chunk_size(content_length: int) -> int:
-    """Pick chunk size based on content length. Benchmarked sweet spot: 512KB-4MB."""
+    """Pick the read chunk size from ``content_length``. Benchmarked sweet spot: 512KB-4MB."""
     if content_length <= 0:
         return DEFAULT_CHUNK
     return min(MAX_CHUNK, max(MIN_CHUNK, content_length // 4))
@@ -176,10 +176,11 @@ class AdaptiveWorkerController:
     """CDN-aware segment concurrency governor.
 
     Pure and synchronous (no threads or sockets), so the policy is unit-testable.
-    ``update`` is evaluated once per ``tick``, starting once half a tick of throughput
-    samples exists. The target starts at ``start`` (the cap by default) and follows AIMD
-    from there: an error burst halves it and takes a one-tick cooldown, a probe upward
-    that plateaus is reverted, and otherwise it climbs by ``ADAPTIVE_STEP``. Target is
+    ``update`` evaluates the policy once per ``tick``. It starts as soon as half a tick
+    of throughput samples exists. The target starts at ``start`` (the cap by default) and
+    follows AIMD from there: an error burst halves it and takes a one-tick cooldown, the
+    controller reverts a probe upward that plateaus, and otherwise it climbs by
+    ``ADAPTIVE_STEP``. Target is
     always clamped to ``[ADAPTIVE_MIN, cap]``.
     """
 
@@ -231,12 +232,12 @@ class AdaptiveWorkerController:
         return self._first_sample is not None and (now - self._first_sample) >= self.tick / 2
 
     def update(self, now: float, inflight_plus_remaining: Optional[int] = None) -> int:
-        """Evaluate the policy at most once per tick; return the current target.
+        """Evaluate the policy at most once per tick. Return the current target.
 
         ``inflight_plus_remaining`` (when given) is the count of segments still in flight or
         not yet started. If it is below the target there is not enough work to saturate the
-        target, so the low measured speed reflects starvation rather than a plateau, and the
-        probe/revert step is skipped this tick. Error-burst decreases still apply. Default ``None`` keeps the
+        target, so the low measured speed reflects starvation rather than a plateau, and
+        there is no probe/revert step this tick. Error-burst decreases still apply. Default ``None`` keeps the
         original behaviour for existing callers.
         """
         if self._last_tick is None:
@@ -300,10 +301,10 @@ class AdaptiveWorkerController:
 def retry_sleep(exc: Exception, attempts: int) -> float:
     """Seconds to wait before retry number ``attempts``.
 
-    download() owns segment retries (session-level retries are suppressed), so backoff
+    download() owns segment retries (the HTTP session itself does not retry), so backoff
     lives here: honor the server's Retry-After when the failure carries a response,
     else exponential growth from RETRY_WAIT with jitter so concurrently rate-limited
-    segments don't retry in lockstep. Capped at session.MAX_BACKOFF either way.
+    segments do not retry in lockstep. Capped at ``session.MAX_BACKOFF`` either way.
     """
     from unshackle.core.session import MAX_BACKOFF
 
@@ -335,12 +336,12 @@ def retry_sleep(exc: Exception, attempts: int) -> float:
 
 
 def is_requests_session(session: Any) -> bool:
-    """Check if the session is a standard requests.Session (supports resp.raw)."""
+    """Whether the HTTP session is a standard requests.Session (it has ``resp.raw``)."""
     return isinstance(session, Session)
 
 
 def is_rnet_session(session: Any) -> bool:
-    """Check if the session is an RnetSession (uses resp.stream())."""
+    """Whether the HTTP session is an RnetSession (it uses ``resp.stream()``)."""
     from unshackle.core.session import RnetSession
 
     return isinstance(session, RnetSession)
@@ -348,7 +349,7 @@ def is_rnet_session(session: Any) -> bool:
 
 def is_content_encoded(value: Optional[str]) -> bool:
     """
-    Check a Content-Encoding value for any coding other than absent or `identity`.
+    Whether a Content-Encoding value names any coding other than absent or `identity`.
 
     Reading .raw skips urllib3's decoding, so an encoded body has to go through
     iter_content or the compressed bytes land on disk as the payload. Codings
@@ -390,7 +391,7 @@ def has_range_header(item: dict[str, Any]) -> bool:
     """True when a URL item's per-request headers already carry a Range.
 
     Such an item is itself a byte-range slice of a larger resource (DASH SegmentBase,
-    HLS EXT-X-BYTERANGE); probing or part-mode would clobber that Range and fetch the
+    HLS EXT-X-BYTERANGE). Probing or part-mode would clobber that Range and fetch the
     wrong bytes, so ranged-parallel strategies must skip these items entirely.
     """
     return any(k.lower() == "range" for k in (item.get("headers") or {}))
@@ -401,7 +402,7 @@ def range_covers_full_body(headers: MutableMapping[str, Any], content_length: in
 
     A server may ignore Range and answer 200 with the whole resource (RFC 9110
     permits this). That body is only the right bytes when the slice starts at byte 0
-    and spans exactly the full body; anything else (open-ended, multi-range, nonzero
+    and spans exactly the full body. Anything else (open-ended, multi-range, nonzero
     start, span mismatch) stays fail-closed.
     """
     value = str(next((v for k, v in headers.items() if k.lower() == "range"), ""))
@@ -413,7 +414,7 @@ def range_covers_full_body(headers: MutableMapping[str, Any], content_length: in
 
 
 def parse_content_range(value: Any) -> Optional[tuple[int, int, Optional[int]]]:
-    """Parse a 206's ``Content-Range`` into ``(start, end, total)``; None when absent or unparseable.
+    """Parse a 206's ``Content-Range`` into ``(start, end, total)``. Gives None when absent or unparseable.
 
     ``total`` is None for an unknown complete length (``*``). None fails closed: a caller
     must not place bytes at an offset it cannot prove the server agreed to.
@@ -428,7 +429,7 @@ def parse_content_range(value: Any) -> Optional[tuple[int, int, Optional[int]]]:
 
 def request_range(headers: MutableMapping[str, Any]) -> Optional[tuple[int, Optional[int]]]:
     """
-    The request's ``Range`` as ``(start, end)``; None when absent or not ``bytes=start-...``.
+    The request's ``Range`` as ``(start, end)``. Gives None when absent or not ``bytes=start-...``.
 
     ``end`` is None for an open-ended ``bytes=start-``, which the caller cannot hold a
     response to.
@@ -443,11 +444,12 @@ def request_range(headers: MutableMapping[str, Any]) -> Optional[tuple[int, Opti
 def force_unblock_stream(stream: Any) -> None:
     """Best-effort: shut the stream's socket so a thread parked in a blocking read returns now.
 
-    A superseded hedge loser can sit in a full-chunk ``raw.read`` on a slow connection; the
-    batch's wait-gated shutdown (which guarantees handles are released before the merge sweep)
-    would otherwise drain that whole slow read. ``socket.shutdown`` makes the read return at once
-    so the loser unwinds and closes its ``.!dev`` handle immediately. Requests/urllib3 only (rnet
-    exposes no reachable socket); any failure is swallowed and the caller falls back to waiting.
+    A superseded hedge loser can sit in a full-chunk ``raw.read`` on a slow connection. The
+    batch's wait-gated shutdown (which guarantees that every thread has closed its file before
+    the merge sweep) would otherwise drain that whole slow read. ``socket.shutdown`` makes the
+    read return at once so the loser unwinds and closes its ``.!dev`` handle immediately.
+    Requests/urllib3 only (rnet exposes no reachable socket). This function ignores any failure,
+    and the caller falls back to waiting.
     """
     try:
         stream.raw._fp.fp.raw._sock.shutdown(socket.SHUT_RDWR)
@@ -483,10 +485,10 @@ def plan_tail_parts(size: int, spare: int) -> list[tuple[int, int]]:
 def tail_boost_engages(remaining: int, pending: int, target: int) -> bool:
     """True when idle workers outnumber the remaining whole segments.
 
-    That is the tail condition where running one worker per remaining segment would leave
-    workers idle, so splitting those segments into range parts keeps throughput up. Gating on
-    idle capacity (not a fixed segment count) is what lets the boost fire despite ``remaining``
-    draining in strides of the worker target. Pure, so the gate is unit-testable.
+    That is the tail condition where one download worker for each remaining segment would
+    leave workers idle, so a split of those segments into range parts keeps throughput up.
+    Gating on idle capacity (not a fixed segment count) is what lets the boost fire despite
+    ``remaining`` draining in strides of the download worker target. Pure, so the gate is unit-testable.
     """
     spare = target - pending
     return remaining > 0 and spare >= 2 and remaining <= spare
@@ -621,14 +623,14 @@ def download(
     Download a file with optimized I/O.
 
     Supports both requests.Session and RnetSession for TLS fingerprinting.
-    RnetSession streams natively; requests.Session reads the raw socket, except
-    on a content-encoded body, which has to go through iter_content to be decoded.
+    RnetSession streams natively. requests.Session reads the raw socket, except
+    on a content-encoded body: only iter_content decodes such a body.
 
-    Yields the following download status updates while chunks are downloading:
+    Yields these download status updates while the chunks download:
 
     - {total: 123} (there are 123 chunks to download)
     - {total: None} (there are an unknown number of chunks to download)
-    - {advance: 1} (one chunk was downloaded)
+    - {advance: 1} (the downloader finished one chunk)
     - {downloaded: "10.1 MB/s"} (currently downloading at a rate of 10.1 MB/s)
     - {file_downloaded: Path(...), written: 1024} (download finished, has the save path and size)
 
@@ -641,24 +643,26 @@ def download(
         segmented: If downloads are segments or parts of one bigger file.
         part_offset: Byte offset to write at within a pre-allocated file. When set
             (with `part_end`), enables part mode for parallel ranged downloads:
-            no truncate, no skip-if-exists, no control file; emits only `advance`
-            events; retries resume mid-part via Range.
+            no truncate, no skip-if-exists, no control file. Part mode emits only
+            `advance` events, and a retry resumes mid-part with a Range header.
         part_end: Inclusive end byte of the part. Required when `part_offset` is set.
-        claimed: Optional predicate checked before every attempt; when it returns True
-            the download stops silently (another worker already delivered this file).
-        racing: Optional predicate selecting read granularity per iteration. Requires
-            `claimed`. read1 (per-network-arrival reads) is used only on iterations where
-            it returns True (this segment is being hedge-raced, so a superseded loser must
-            notice `claimed()` mid-stream); otherwise a blocking full-chunk read is used,
-            avoiding the per-record read tax on non-racing segments.
+        claimed: Optional predicate checked before every try. When it returns True,
+            the download stops silently (another download worker already delivered
+            this file).
+        racing: Optional predicate that selects the read granularity for each iteration.
+            Requires `claimed`. The download uses read1 (per-network-arrival reads) only
+            on the iterations where the predicate returns True, because the batch then
+            hedge-races this segment and a superseded loser must notice `claimed()`
+            mid-read. On every other iteration the download does a blocking full-chunk
+            read, which avoids the per-record read tax on a segment with no race.
         abort: Optional local cancel signal. When set, the download stops like a cancel
             (keeps its partial, returns silently, does not raise). Used by ranged-parallel
             downloads to abort sibling parts without touching the process-global cancel.
         on_retry: Optional callback invoked with the raised exception before each retry
             wait (not on cancel or final exhaustion). Used to feed CDN error signals to
-            the adaptive worker controller. Callback errors are swallowed.
-        register: Optional callback ``(stream, active)`` invoked with active=True while a
-            response is being read and active=False when that read ends. Lets the batch reach
+            the ``AdaptiveWorkerController``. The downloader ignores callback errors.
+        register: Optional callback ``(stream, active)`` invoked with active=True while the
+            downloader reads a response, and with active=False when that read ends. Lets the batch reach
             a superseded loser's socket to unblock its in-flight read at teardown (see
             force_unblock_stream) instead of waiting the slow read out.
         kwargs: Any extra keyword arguments to pass to the session.get() call. Use this
@@ -986,11 +990,11 @@ def download(
 
 
 def build_session_spec(session: Optional[Any]) -> Optional[dict[str, Any]]:
-    """Picklable spec to rebuild ``session`` in a child process; None if not cheaply rebuildable.
+    """Picklable spec to rebuild ``session`` in a child process. Gives None when it is not cheaply rebuildable.
 
-    Live sessions (sockets, TLS state, threads) can't cross a process boundary, so each child
-    reconstructs its own from cheap state. RnetSession needs a resolvable impersonate preset;
-    without one it is not cheaply rebuildable and the caller falls back to a single process.
+    Live sessions (sockets, TLS state, threads) cannot cross a process boundary, so each child
+    reconstructs its own from cheap state. RnetSession needs a resolvable impersonate preset.
+    Without one it is not cheaply rebuildable, and the caller falls back to a single process.
     """
     if session is None:
         return {"kind": "none"}
@@ -1016,11 +1020,11 @@ def build_session_spec(session: Optional[Any]) -> Optional[dict[str, Any]]:
 
 
 def rebuild_session(spec: dict[str, Any], max_workers: int) -> Optional[Any]:
-    """Reconstruct a session inside a child process from a spec built by ``build_session_spec``.
+    """Reconstruct an HTTP session inside a child process from a spec built by ``build_session_spec``.
 
-    ``max_workers`` sizes the connection pool to what this child actually runs; the rebuilt
-    session belongs to one child alone, so mounting an adapter here is safe where remounting a
-    caller-provided session in ``requests()`` is not.
+    ``max_workers`` sizes the connection pool to what this child runs. The rebuilt HTTP session
+    belongs to one child alone, so mounting an adapter here is safe where remounting a
+    caller-provided HTTP session in ``requests()`` is not.
     """
     kind = spec["kind"]
     if kind == "requests":
@@ -1056,9 +1060,9 @@ def rebuild_session(spec: dict[str, Any], max_workers: int) -> Optional[Any]:
 def mp_worker(queue: Any, kwargs: dict[str, Any]) -> None:
     """Child entry point (top-level so ``spawn`` can pickle it).
 
-    Rebuilds the session, iterates ``requests()`` for its url chunk, and relays every event over
-    the shared queue. Errors travel as a ``__mp_error__`` sentinel; a ``__mp_done__`` sentinel is
-    always sent last so the parent knows this child is finished.
+    Rebuilds the HTTP session, iterates ``requests()`` for its url slice, and relays every event
+    over the shared queue. Errors travel as a ``__mp_error__`` sentinel. This child always sends a
+    ``__mp_done__`` sentinel last, so the parent knows that this child is complete.
     """
     try:
         # spawn re-imports this module, dropping any timing constants the bench patched in
@@ -1094,13 +1098,13 @@ def download_multiprocess(
     processes: int,
     debug_logger: Any,
 ) -> Generator[dict[str, Any], None, None]:
-    """Fan segments across spawned children, each running ``requests()`` on a strided chunk.
+    """Fan segments across spawned children, each running ``requests()`` on a strided slice.
 
     Child ``k`` takes segments ``k, k+processes, k+2*processes, ...``: slow segments tend to
     cluster by position (a cold edge, a throttled range region), and striding spreads such a
     cluster across all children instead of trapping it in one child whose few workers would
-    bound the tail. Children keep their original global indices via ``index_offset`` and
-    ``index_stride`` so file names are unchanged. The parent owns aggregate progress: it emits
+    bound the tail. Children keep their original global indices with ``index_offset`` and
+    ``index_stride``, so the file names do not change. The parent owns aggregate progress: it emits
     ``total`` once and computes one speed string from written bytes, dropping the children's
     own ``total`` and speed events.
     """
@@ -1248,19 +1252,19 @@ def requests(
     """
     Download files with optimized I/O and adaptive chunk sizing.
 
-    Supports both requests.Session and RnetSession. When a RnetSession is
-    provided (e.g. from a service's get_session()), TLS fingerprinting is preserved
-    on all segment downloads.
+    Supports both requests.Session and RnetSession. When you give a RnetSession
+    (for example, from a service's get_session()), every segment download keeps the
+    TLS fingerprint.
 
-    A file already at its computed save path counts as finished from an earlier run. It is reported as
-    downloaded at its on-disk size without any request, so calling this again resumes a batch from the
-    segments the earlier run completed.
+    A file already at its computed save path counts as finished from an earlier run. This function
+    reports it as downloaded at its on-disk size without any request, so a second call resumes a
+    batch from the segments the earlier run completed.
 
-    Yields the following download status updates while chunks are downloading:
+    Yields these download status updates while the chunks download:
 
     - {total: 123} (there are 123 chunks to download)
     - {total: None} (there are an unknown number of chunks to download)
-    - {advance: 1} (one chunk was downloaded)
+    - {advance: 1} (the downloader finished one chunk)
     - {downloaded: "10.1 MB/s"} (currently downloading at a rate of 10.1 MB/s)
     - {file_downloaded: Path(...), written: 1024} (download finished, has the save path and size)
 
@@ -1276,22 +1280,23 @@ def requests(
         filename: The filename or filename template to use for each file. The variables
             you can use are `i` for the URL index and `ext` for the URL extension.
         headers: A mapping of HTTP Header Key/Values to use for all downloads.
-        cookies: A mapping of Cookie Key/Values or a Cookie Jar to use for all downloads.
+        cookies: A mapping of Cookie Key/Values or a `CookieJar` to use for all downloads.
         proxy: An optional proxy URI to route connections through for all downloads.
         max_workers: The maximum amount of threads to use for downloads. Defaults to
             min(16, cpu_count + 4).
-        session: An optional requests.Session or RnetSession to use. If provided,
-            it will be used directly (preserving TLS fingerprinting). If None, a new
-            requests.Session with HTTPAdapter connection pooling will be created.
+        session: An optional requests.Session or RnetSession to use. When you give one,
+            this function uses it directly, which keeps the TLS fingerprint. With None,
+            this function makes a new requests.Session with HTTPAdapter connection pooling.
         adaptive: Opt-in CDN-aware dynamic segment concurrency for segmented (multi-URL)
-            downloads. When True the per-track worker count starts moderate and ramps up
-            or backs off based on measured throughput and CDN errors, capped at
-            max_workers. When False (default) all segments are submitted upfront using a
-            fixed worker count, matching the non-adaptive behaviour exactly.
+            downloads. When True the per-track download worker count starts moderate and
+            ramps up or backs off based on measured throughput and CDN errors, capped at
+            max_workers. When False (default) this function submits all segments upfront
+            with a fixed download worker count, which matches the non-adaptive
+            behaviour exactly.
         processes: Split a large segment batch across this many spawned child processes to
             beat the single-interpreter throughput cap (GIL in the ssl read path). Engaged
-            only when > 1 and there are at least MP_MIN_SEGMENTS urls; otherwise the behaviour
-            is byte-identical to a single process. Each child runs its own worker pool.
+            only when > 1 and there are at least MP_MIN_SEGMENTS urls. If not, the behaviour
+            is byte-identical to a single process. Each child runs its own download worker pool.
             Ignored while a download speed limit is set: spawned children cannot share the
             process-global rate budget, so the batch stays in a single process.
         index_offset: Added to each url's enumerate index (after ``index_stride`` scaling)
@@ -1299,7 +1304,7 @@ def requests(
             its urls' original global indices/names. Internal: set by the multiprocess
             path, leave at 0 otherwise.
         index_stride: Multiplies each url's enumerate index before ``index_offset`` is
-            added, mapping a strided chunk (``urls[k::stride]``) back to global indices.
+            added, mapping a strided slice (``urls[k::stride]``) back to global indices.
             Internal: set by the multiprocess path, leave at 1 otherwise.
     """
     if not urls:

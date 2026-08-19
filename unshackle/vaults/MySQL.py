@@ -13,8 +13,8 @@ class MySQL(Vault):
 
     def __init__(self, name: str, host: str, database: str, username: str, no_push: bool = False, **kwargs):
         """
-        All extra arguments provided via **kwargs will be sent to pymysql.connect.
-        This can be used to provide more specific connection information.
+        All extra arguments given through **kwargs will be sent to pymysql.connect.
+        Use this to give more specific connection information.
         """
         super().__init__(name, no_push)
         self.slug = f"{host}:{database}:{username}"
@@ -193,7 +193,7 @@ class MySQL(Vault):
         return names[0] if names else None
 
     def has_table(self, name: str) -> bool:
-        """Check if the Vault has a Table with the specified name."""
+        """Return True if the Vault has a Table with the specified name."""
         conn = self.conn_factory.get()
         cursor = conn.cursor()
 
@@ -207,7 +207,7 @@ class MySQL(Vault):
             cursor.close()
 
     def create_table(self, name: str):
-        """Create a Table with the specified name if not yet created."""
+        """Make a Table with the specified name if it does not exist yet."""
         if self.has_table(name):
             return
 
@@ -234,7 +234,7 @@ class MySQL(Vault):
             cursor.close()
 
     def get_permissions(self) -> list:
-        """Get and parse Grants to a more easily usable list tuple array."""
+        """Get and parse Grants to a more usable list tuple array."""
         conn = self.conn_factory.get()
         cursor = conn.cursor()
 
@@ -256,7 +256,7 @@ class MySQL(Vault):
             cursor.close()
 
     def has_permission(self, operation: str, database: Optional[str] = None, table: Optional[str] = None) -> bool:
-        """Check if the current connection has a specific permission."""
+        """Return True if the current connection has a specific permission."""
         grants = [x for x in self.permissions if x[0] == ["*"] or operation.upper() in x[0]]
         if grants and database:
             grants = [x for x in grants if x[1][0] in (database, "*")]

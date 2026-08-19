@@ -10,7 +10,7 @@ from unshackle.core.proxies.proxy import Proxy
 class Hola(Proxy):
     def __init__(self):
         """
-        Proxy Service using Hola's direct connections via the hola-proxy project.
+        Proxy provider that uses Hola's direct connections through the hola-proxy project.
         https://github.com/Snawoot/hola-proxy
         """
         self.binary = binaries.HolaProxy

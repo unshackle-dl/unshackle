@@ -25,7 +25,7 @@ class MockCertificateChain:
 
 
 class Key:
-    """Key object compatible with pywidevine."""
+    """`Key` object compatible with pywidevine."""
 
     def __init__(self, kid: str, key: str, type_: str = "CONTENT"):
         if isinstance(kid, str):
@@ -52,7 +52,7 @@ class CustomRemoteCDMExceptions:
         """Raised when session ID is invalid."""
 
     class TooManySessions(Exception):
-        """Raised when session limit is reached."""
+        """Raised when the CDM sessions reach the limit."""
 
     class InvalidInitData(Exception):
         """Raised when PSSH/init data is invalid."""
@@ -64,7 +64,7 @@ class CustomRemoteCDMExceptions:
         """Raised when license message is invalid."""
 
     class InvalidContext(Exception):
-        """Raised when session has no context data."""
+        """Raised when the CDM session has no context data."""
 
     class SignatureMismatch(Exception):
         """Raised when signature verification fails."""
@@ -75,19 +75,19 @@ class CustomRemoteCDM:
     Highly Configurable Custom Remote CDM implementation.
 
     This class provides a maximally flexible CDM interface that can adapt to
-    ANY CDM API format through YAML configuration alone. It's designed to support
-    both current and future CDM providers without requiring code changes.
+    ANY CDM API format through YAML configuration alone. It can hold both current
+    and future CDM providers without code changes.
 
-    Key Features:
-    - Fully configuration-driven behavior (all logic controlled via YAML)
+    Main Features:
+    - Fully configuration-driven behaviour (all logic controlled through YAML)
     - Pluggable authentication strategies (header, body, bearer, basic, custom)
     - Flexible endpoint configuration (custom paths, methods, timeouts)
     - Advanced parameter mapping (rename, add static, conditional, nested)
-    - Powerful response parsing (deep field access, type detection, transforms)
-    - Transform engine (base64, hex, JSON, custom key formats)
+    - Response parsing (deep field access, type detection, transforms)
+    - Transform engine (base64, hex, JSON, custom content key formats)
     - Condition evaluation (response type detection, success validation)
     - Compatible with both Widevine and PlayReady DRM schemes
-    - Vault integration for intelligent key caching
+    - Vault integration for intelligent content key caching
 
     Configuration Philosophy:
     - 90% of new CDM providers: YAML config only
@@ -95,12 +95,12 @@ class CustomRemoteCDM:
     - 1% of cases: Add new auth strategy (minimal code)
     - 0% need to modify core request/response logic
 
-    The class is designed to handle diverse API patterns including:
+    The class adapts to these diverse API patterns:
     - Different authentication mechanisms (headers vs body vs tokens)
     - Custom endpoint paths and HTTP methods
     - Parameter name variations (scheme vs device, init_data vs pssh)
     - Nested JSON structures in requests/responses
-    - Various key formats (JSON objects, colon-separated strings, etc.)
+    - Various content key formats (JSON objects, colon-separated strings, and other forms)
     - Different response success indicators and error messages
     - Conditional parameters based on device type or other factors
     """
@@ -123,18 +123,18 @@ class CustomRemoteCDM:
         **kwargs,
     ):
         """
-        Initialize Custom Remote CDM with highly configurable options.
+        Initialise Custom Remote CDM with highly configurable options.
 
         Args:
             host: Base URL for the CDM API
-            service_name: Service name for key caching and vault operations
-            vaults: Vaults instance for local key caching
+            service_name: Service tag for content key caching and vault operations
+            vaults: Vaults instance for local content key caching
             device: Device configuration (name, type, system_id, security_level)
             auth: Authentication configuration (type, credentials, headers)
             endpoints: Endpoint configuration (paths, methods, timeouts)
             request_mapping: Request transformation rules (param names, static params, transforms)
             response_mapping: Response parsing rules (field locations, type detection, success conditions)
-            caching: Caching configuration (enabled, use_vaults, etc.)
+            caching: Caching configuration (enabled, use_vaults, and the other caching keys)
             legacy: Legacy mode configuration
             timeout: Default request timeout in seconds
             **kwargs: Additional configuration options for future extensibility
@@ -229,7 +229,7 @@ class CustomRemoteCDM:
 
     @property
     def is_playready(self) -> bool:
-        """Check if this CDM is in PlayReady mode."""
+        """Return True if this CDM is in PlayReady mode."""
         return self._is_playready
 
     @property
@@ -246,7 +246,7 @@ class CustomRemoteCDM:
         Set the required Key IDs for intelligent caching decisions.
 
         This method enables the CDM to make smart decisions about when to request
-        additional keys via license challenges. When cached keys are available,
+        additional keys through license challenges. When cached keys are available,
         the CDM will compare them against the required KIDs to determine if a
         license request is still needed for missing keys.
 
@@ -254,8 +254,8 @@ class CustomRemoteCDM:
             kids: List of required Key IDs as UUIDs or hex strings
 
         Note:
-            Should be called by DRM classes (PlayReady/Widevine) before making
-            license challenge requests to enable optimal caching behavior.
+            Call this method from the DRM classes (PlayReady/Widevine) before a
+            license challenge request, to enable optimal caching behaviour.
         """
         self._required_kids = []
         for kid in kids:
@@ -265,7 +265,7 @@ class CustomRemoteCDM:
                 self._required_kids.append(str(kid).replace("-", "").lower())
 
     def generate_session_id(self) -> bytes:
-        """Generate a unique session ID."""
+        """Make a unique session ID."""
         return secrets.token_bytes(16)
 
     def get_init_data_from_pssh(self, pssh: Any) -> str:
@@ -407,11 +407,11 @@ class CustomRemoteCDM:
 
         Args:
             condition: Condition string (e.g., "message == 'success'")
-            context: Context dictionary with values to check
+            context: Context dictionary with the values to examine
 
         Returns:
             True if condition is met, False otherwise. A condition that matches none of the supported
-            forms is treated as unmet and returns False.
+            forms counts as unmet, so the method returns False.
 
         Supported conditions:
             - "field == value": Equality check
@@ -454,12 +454,12 @@ class CustomRemoteCDM:
         self, endpoint_name: str, base_params: Dict[str, Any], session: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Build request parameters with mapping and transformations.
+        Assemble request parameters with mapping and transformations.
 
         Args:
             endpoint_name: Name of the endpoint (e.g., "get_request", "decrypt_response")
             base_params: Base parameters to transform
-            session: Optional session data for context
+            session: Optional CDM session data for context
 
         Returns:
             Transformed parameters dictionary
@@ -469,7 +469,7 @@ class CustomRemoteCDM:
         2. Static parameters (add fixed values)
         3. Conditional parameters (add based on conditions)
         4. Parameter transforms (apply data transformations)
-        5. Nested parameter structure (create nested objects)
+        5. Nested parameter structure (make nested objects)
         6. Parameter exclusions (remove unwanted params)
         """
         mapping_config = self.request_mapping.get(endpoint_name, {})
@@ -530,14 +530,14 @@ class CustomRemoteCDM:
         Apply authentication to the HTTP session based on auth configuration.
 
         Args:
-            session: requests.Session to apply authentication to
+            session: `requests.Session` to apply authentication to
 
         Supported auth types:
             - header: Add authentication header (e.g., x-api-key, Authorization)
-            - body: Authentication will be added to request body (handled in request building)
+            - body: the request body carries the authentication (not applied here)
             - bearer: Add Bearer token to Authorization header
             - basic: Add HTTP Basic authentication
-            - query: Authentication will be added to query string (handled in request)
+            - query: the query string carries the authentication (not applied here)
         """
         auth_type = self.auth_config.get("type", "header")
 
@@ -617,14 +617,14 @@ class CustomRemoteCDM:
 
     def parse_keys_from_response(self, endpoint_name: str, response_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
-        Parse keys from response data using key field mapping.
+        Parse content keys from response data with the key field mapping.
 
         Args:
             endpoint_name: Name of the endpoint
             response_data: Parsed response data
 
         Returns:
-            List of key dictionaries with standardized format
+            List of content key dictionaries with standardized format
         """
         mapping_config = self.response_mapping.get(endpoint_name, {})
         key_fields = mapping_config.get("key_fields", {"kid": "kid", "key": "key", "type": "type"})
@@ -668,7 +668,7 @@ class CustomRemoteCDM:
 
     def close(self, session_id: bytes) -> None:
         """
-        Close a CDM session and perform comprehensive cleanup.
+        Close a CDM session and do comprehensive cleanup.
 
         Args:
             session_id: Session identifier
@@ -685,7 +685,7 @@ class CustomRemoteCDM:
 
     def get_service_certificate(self, session_id: bytes) -> Optional[bytes]:
         """
-        Get the service certificate for a session.
+        Get the service certificate for a CDM session.
 
         Args:
             session_id: Session identifier
@@ -703,7 +703,7 @@ class CustomRemoteCDM:
 
     def set_service_certificate(self, session_id: bytes, certificate: Optional[Union[bytes, str]]) -> str:
         """
-        Set the service certificate for a session.
+        Set the service certificate for a CDM session.
 
         Args:
             session_id: Session identifier
@@ -735,7 +735,7 @@ class CustomRemoteCDM:
 
     def has_cached_keys(self, session_id: bytes) -> bool:
         """
-        Check if cached keys are available for the session.
+        Return True if cached keys are available for the CDM session.
 
         Args:
             session_id: Session identifier
@@ -757,7 +757,7 @@ class CustomRemoteCDM:
         self, session_id: bytes, pssh_or_wrm: Any, license_type: str = "STREAMING", privacy_mode: bool = True
     ) -> bytes:
         """
-        Generate a license challenge using the custom CDM API.
+        Make a license challenge with the custom CDM API.
 
         This method implements intelligent caching logic that checks vaults first,
         then attempts to retrieve cached keys from the API, and only makes a
@@ -895,10 +895,10 @@ class CustomRemoteCDM:
         """
         Parse license response using the custom CDM API.
 
-        Vault keys and cached keys are collected first, then any license key whose key ID is not
-        already present is appended. Key IDs are matched with dashes stripped and case ignored, so
-        an existing key wins over a license key for the same ID. If the session already holds final
-        keys and has no cached keys left to combine, the call is a no-op.
+        The method collects vault keys and cached keys first, then appends any license key whose
+        key ID is not already present. It matches key IDs with dashes stripped and case ignored, so
+        an existing content key wins over a license key for the same ID. If the CDM session already
+        holds final keys and has no cached keys left to combine, the call is a no-op.
 
         Args:
             session_id: Session identifier
@@ -1007,14 +1007,14 @@ class CustomRemoteCDM:
 
     def get_keys(self, session_id: bytes, type_: Optional[str] = None) -> List[Key]:
         """
-        Get keys from the session.
+        Get keys from the CDM session.
 
         Args:
             session_id: Session identifier
-            type_: Optional key type filter (CONTENT, SIGNING, etc.)
+            type_: Optional type filter (CONTENT, SIGNING, and the other types)
 
         Returns:
-            List of Key objects
+            List of `Key` objects
 
         Raises:
             InvalidSession: If session ID is invalid

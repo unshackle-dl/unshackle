@@ -28,7 +28,7 @@ SENSITIVE_PARAM_KEYS = ("credential", "credentials", "password", "token", "api_k
 
 
 def redact_parameters(parameters: Dict[str, Any]) -> Dict[str, Any]:
-    """Return a copy of job parameters with secrets masked, safe to serialize."""
+    """Return a copy of job parameters with secrets masked, safe to serialise."""
     if not isinstance(parameters, dict):
         return parameters
     redacted = dict(parameters)
@@ -64,7 +64,7 @@ def secret_values(parameters: Dict[str, Any]) -> List[str]:
 
 def _redact_text(text: Optional[str], parameters: Dict[str, Any]) -> Optional[str]:
     """Mask proxy userinfo and any known parameter secrets that leaked into a free-text field
-    (error message / details / traceback / worker stderr) before it is returned via the API."""
+    (error message / details / traceback / job worker stderr) before the API returns the field."""
     return redact_text(text, secret_values(parameters))
 
 
@@ -175,7 +175,7 @@ def history_path() -> Path:
 
 
 def history_limit() -> int:
-    """Max history entries to retain (serve.history_limit, default 100; <= 0 means unlimited)."""
+    """Max history entries to retain (serve.history_limit, default 100). A value of 0 or less means no limit."""
     from unshackle.core.config import config
 
     try:
@@ -227,7 +227,10 @@ def record_job_history(job: DownloadJob) -> None:
 
 
 def read_job_history(limit: int = 100, service: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Read persisted job history, newest first; corrupt lines are skipped, missing file = empty."""
+    """Read persisted job history, newest first.
+
+    This function ignores corrupt lines. A missing file gives no entries.
+    """
     path = history_path()
     if not path.exists():
         return []
@@ -255,10 +258,10 @@ def read_job_history(limit: int = 100, service: Optional[str] = None) -> List[Di
 
 
 def delete_job_history(job_id: str, allowed: Optional[set] = None) -> bool:
-    """Remove a history entry by job_id (rewriting the file). Returns True if one was deleted.
+    """Remove a history entry by job_id (rewriting the file). Returns True if it removed one.
 
-    When `allowed` is given, an entry outside the caller's service allowlist is treated as
-    absent (returns False) so it can't be deleted by a restricted key.
+    When you give `allowed`, this function treats an entry outside the caller's service
+    allowlist as absent (returns False), so a restricted API key cannot delete the entry.
     """
     path = history_path()
     if not path.exists():
@@ -302,7 +305,7 @@ def to_enum(values: List[str], enum_cls: type[Enum]) -> List[Enum]:
 
 
 def normalize_sub_format(sub_format_raw: str) -> Any:
-    """Normalize an API sub_format string to what dl.py expects.
+    """Normalise an API sub_format string to what dl.py expects.
 
     "original" is a sentinel meaning "keep source format" (dl.py skips conversion), so it must
     pass through unchanged to match the CLI (SubtitleCodecChoice returns the same string). Any
@@ -323,10 +326,10 @@ def perform_download(
     params: Dict[str, Any],
     progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
 ) -> List[str]:
-    """Execute the synchronous download logic for a job.
+    """Do the synchronous download work for a job.
 
-    `params` holds the API's string form of the `dl` options and is normalized in place before
-    dl.result() sees it: vcodec and range names become enums, `slow` accepts "MIN-MAX", a two-item
+    `params` holds the API's string form of the `dl` options. This function normalizes `params` in
+    place before dl.result() sees it: vcodec and range names become enums, `slow` accepts "MIN-MAX", a two-item
     list, or True (which means 60-120), and `wanted` accepts forms such as "S01E01", "S01-S03",
     "s1e1", or "1x1" as well as the internal "SxE" form. Music takes track numbers in the same
     field, such as "1-5" or "2x3" for disc 2 track 3.
@@ -655,7 +658,7 @@ class DownloadQueueManager:
         )
 
     def create_job(self, service: str, title_id: str, owner_key: Optional[str] = None, **parameters) -> DownloadJob:
-        """Create a new download job and add it to the queue."""
+        """Make a new download job and add it to the queue."""
         job_id = str(uuid.uuid4())
         job = DownloadJob(
             job_id=job_id,
@@ -678,11 +681,11 @@ class DownloadQueueManager:
         return self._jobs.get(job_id)
 
     def list_jobs(self) -> List[DownloadJob]:
-        """List all jobs."""
+        """Get all jobs."""
         return list(self._jobs.values())
 
     def subscribe(self, job_id: str) -> asyncio.Queue:
-        """Register a listener for a job's events, returning the queue it receives them on."""
+        """Add a listener for a job's events, and return the queue it receives them on."""
         queue: asyncio.Queue = asyncio.Queue(maxsize=100)
         self._subscribers.setdefault(job_id, []).append(queue)
         return queue
@@ -707,7 +710,7 @@ class DownloadQueueManager:
             self.put(queue, payload)
 
     def publish_terminal(self, job: DownloadJob) -> None:
-        """Publish a job's final state, then close every listener's stream."""
+        """Publish a job's final state, then close every listener's event stream."""
         self.publish(job, job.status.value)
         for queue in self._subscribers.pop(job.job_id, []):
             self.put(queue, None)
@@ -724,7 +727,7 @@ class DownloadQueueManager:
                 queue.put_nowait(item)
 
     def cancel_job(self, job_id: str) -> bool:
-        """Cancel a job if it's queued or downloading."""
+        """Cancel a job that has the queued or the downloading status."""
         job = self._jobs.get(job_id)
         if not job:
             return False
@@ -810,7 +813,7 @@ class DownloadQueueManager:
         return len(jobs_to_remove)
 
     async def start_workers(self):
-        """Start worker tasks to process the download queue."""
+        """Start job worker tasks to process the download queue."""
         if self._workers_started:
             return
 
@@ -870,7 +873,7 @@ class DownloadQueueManager:
             await asyncio.gather(*self._active_downloads.values(), return_exceptions=True)
 
     async def download_worker(self, worker_name: str):
-        """Worker task that processes jobs from the queue."""
+        """Job worker task that processes jobs from the queue."""
         log.debug(f"Download worker {worker_name} started")
 
         while not self._shutdown_event.is_set():
@@ -920,7 +923,7 @@ class DownloadQueueManager:
                 log.error(f"Worker {worker_name} error: {e}")
 
     async def execute_download(self, job: DownloadJob):
-        """Execute the actual download for a job."""
+        """Do the actual download for a job."""
         log.info(f"Executing download for job {job.job_id}")
 
         try:
@@ -949,7 +952,7 @@ class DownloadQueueManager:
             raise
 
     async def run_download_async(self, job: DownloadJob) -> List[str]:
-        """Invoke a worker subprocess to execute the download."""
+        """Invoke a job worker subprocess to do the download."""
 
         payload = {
             "job_id": job.job_id,
@@ -1110,7 +1113,7 @@ class DownloadQueueManager:
                     pass
 
     async def cleanup_worker(self):
-        """Worker that periodically cleans up old jobs."""
+        """Job worker that periodically cleans up old jobs."""
         while not self._shutdown_event.is_set():
             try:
                 await asyncio.sleep(3600)

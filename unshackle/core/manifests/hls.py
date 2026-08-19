@@ -750,7 +750,7 @@ class HLS:
                 Parameters:
                     to: The output file with all merged data.
                     via: List of files to merge, in sequence.
-                    delete: Delete the file once it's been merged.
+                    delete: Delete each source file after this function merges it.
                     include_map_data: Whether to include the init map data.
                 """
                 prepend = include_map_data and map_data and map_data[1]
@@ -774,10 +774,10 @@ class HLS:
                 """
                 Decrypt all segments that uses the currently set DRM.
 
-                All segments that will be decrypted with this DRM will be merged together
-                in sequence, prefixed with the init data (if any), and then deleted. Once
-                merged they will be decrypted. The merged and decrypted file names state
-                the range of segments that were used.
+                This function merges every segment of this DRM together in sequence, adds
+                the init data (if any) at the start, and then deletes the segment files. It
+                then decrypts the merged file. The merged and decrypted file names state the
+                range of segments the file holds.
 
                 Parameters:
                     include_this_segment: Whether to include the current segment in the
@@ -842,8 +842,8 @@ class HLS:
                 """
                 Merge all segments of the discontinuity.
 
-                All segment files for this discontinuity must already be downloaded and
-                already decrypted (if it needs to be decrypted).
+                The caller must download every segment file of this discontinuity first.
+                The caller must also decrypt them, when they need decryption.
 
                 Parameters:
                     include_this_segment: Whether to include the current segment in the
@@ -1131,7 +1131,7 @@ class HLS:
     def parse_session_data_keys(
         manifest: M3U8, session: Optional[Union[Session, RnetSession]] = None
     ) -> list[m3u8.model.Key]:
-        """Parse `com.apple.hls.keys` session data and return Key objects."""
+        """Parse the `com.apple.hls.keys` `EXT-X-SESSION-DATA` entry into `Key` objects."""
         keys: list[m3u8.model.Key] = []
 
         for data in getattr(manifest, "session_data", []) or []:
@@ -1189,8 +1189,8 @@ class HLS:
         """
         Filter EXT-X-KEY entries to only include those matching the CDM type.
 
-        This ensures we select the correct DRM system (Widevine vs PlayReady)
-        based on what CDM is configured, avoiding license request failures.
+        This makes sure that we select the correct DRM system (Widevine or PlayReady)
+        for the CDM in the configuration, so the challenge does not fail.
         """
         playready_urn = f"urn:uuid:{PR_PSSH.SYSTEM_ID}"
         playready_keyformats = {playready_urn, "com.microsoft.playready"}
@@ -1234,15 +1234,15 @@ class HLS:
     @staticmethod
     def get_supported_key(keys: list[Union[m3u8.model.SessionKey, m3u8.model.Key]]) -> Optional[m3u8.Key]:
         """
-        Get a support Key System from a list of Key systems.
+        Get the first DRM system unshackle can use from the given `EXT-X-KEY` entries.
 
-        Note that the key systems are chosen in an opinionated order.
+        Note that unshackle chooses the DRM systems in an opinionated order.
 
-        Returns None if one of the key systems is method=NONE, which means all segments
-        from hence forth should be treated as plain text until another key system is
-        encountered, unless it's also method=NONE.
+        Returns None if one of the DRM systems is method=NONE. Then every segment from
+        that point on is plain text, until another DRM system that is not method=NONE
+        comes in the playlist.
 
-        Raises NotImplementedError if none of the key systems are supported.
+        Raises NotImplementedError when unshackle can use none of the DRM systems.
         """
         if any(key.method == "NONE" for key in keys):
             return None
@@ -1278,11 +1278,11 @@ class HLS:
         Convert HLS EXT-X-KEY data to an initialized DRM object.
 
         Parameters:
-            key: m3u8 key system (EXT-X-KEY) object.
-            session: Optional session used to request AES-128 URIs.
+            key: The m3u8 `EXT-X-KEY` object.
+            session: Optional HTTP session used to request AES-128 URIs.
                 Useful to set headers, proxies, cookies, and so forth.
 
-        Raises a NotImplementedError if the key system is not supported.
+        Raises a NotImplementedError when unshackle cannot use the DRM system.
         """
         if not isinstance(session, (Session, RnetSession, type(None))):
             raise TypeError(f"Expected session to be a {Session} or {RnetSession}, not {type(session)}")
@@ -1323,10 +1323,10 @@ class HLS:
         Convert HLS EXT-X-KEY data to initialized DRM objects.
 
         Parameters:
-            keys: m3u8 key system (EXT-X-KEY) objects.
+            keys: The m3u8 `EXT-X-KEY` objects.
             proxy: Optional proxy string used for requesting AES-128 URIs.
 
-        Raises a NotImplementedError if none of the key systems are supported.
+        Raises a NotImplementedError when unshackle can use none of the DRM systems.
         """
         unsupported_keys: list[m3u8.Key] = []
         drm_objects: list[DRM_T] = []

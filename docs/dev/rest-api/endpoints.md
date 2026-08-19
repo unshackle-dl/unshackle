@@ -1,25 +1,25 @@
 # REST API Endpoints
 
-This is the full endpoint reference for the unshackle REST API. It covers every route: its method and path, the request body it accepts, the response shape it returns, and the status codes it can produce. Routes are grouped into general, download jobs, server management, and remote-dl sessions.
+This is the full endpoint reference for the unshackle REST API. It covers every route: its method and path, the request body it accepts, the response shape it returns, and the status codes it can give. This page groups the routes into general, download jobs, server management, and remote-dl sessions.
 
-Start the server with [`unshackle serve`](../../guide/cli-reference.md). By default it binds to `127.0.0.1:8786`, and every route lives under the `/api/` prefix. Authentication, server modes, and the `X-Secret-Key` header are covered in detail on the [Authentication](authentication.md) page. Read that first if you have not already. For an end-to-end walkthrough, see the [Quickstart](quickstart.md).
+Start the server with [`unshackle serve`](../../guide/cli-reference.md). By default it binds to `127.0.0.1:8786`, and every route lives under the `/api/` prefix. The [Authentication](authentication.md) page gives authentication, server modes, and the `X-Secret-Key` header in detail. Read that first if you have not already. For an end-to-end walkthrough, see the [Quickstart](quickstart.md).
 
 !!! note "Base URL"
-    All examples below assume a base URL of `http://127.0.0.1:8786`. Replace the host and port to match your own `unshackle serve -h <host> -p <port>` invocation.
+    All examples below assume a base URL of `http://127.0.0.1:8786`. Replace the host and port so that they match your own `unshackle serve -h <host> -p <port>` invocation.
 
 !!! tip "Interactive docs"
-    A live Swagger UI is mounted at **`/api/docs/`** whenever the server is not running in `--remote-only` mode. Its title is "Unshackle REST API" and its version tracks the installed package version. In API-only mode with a key configured, the Swagger UI itself sits behind `X-Secret-Key`; only `/api/health` is exempt.
+    The server mounts a live Swagger UI at **`/api/docs/`** whenever it does not operate in `--remote-only` mode. Its title is "Unshackle REST API" and its version tracks the installed package version. In API-only mode with an API key configured, the Swagger UI itself sits behind `X-Secret-Key`. Only `/api/health` is exempt.
 
 ## Conventions
 
-- **Authentication.** Every request except `GET /api/health` requires the `X-Secret-Key` header when a key is configured. Starting the server with `--no-key` disables the check entirely. See [Authentication](authentication.md).
-- **Content type.** Request bodies are JSON (`Content-Type: application/json`); all success responses are JSON unless a `204 No Content` is documented.
-- **CORS.** Every response carries permissive CORS headers, and `OPTIONS` preflight requests are answered automatically.
+- **Authentication.** Every request except `GET /api/health` requires the `X-Secret-Key` header when you configure an API key. `--no-key` disables the check entirely. See [Authentication](authentication.md).
+- **Content type.** Request bodies are JSON (`Content-Type: application/json`). All success responses are JSON unless this page documents a `204 No Content`.
+- **CORS.** Every response carries permissive CORS headers, and the server answers `OPTIONS` preflight requests automatically.
 - **Compression.** JSON responses of 256 bytes or more are gzip-compressed when the client sends `Accept-Encoding: gzip`.
-- **Service allowlist.** Service-facing endpoints are filtered by the effective allowlist for your API key (the intersection of the global `serve.services` list and your per-key list). Services you are not allowed to use are treated as unknown.
+- **Service allowlist.** The effective allowlist for your API key filters the service-facing endpoints (the intersection of the global `serve.services` list and your per-key list). The server treats services you cannot use as unknown.
 
 !!! warning "Error responses have two shapes"
-    Structured application errors (raised inside a handler) return `{"status": "error", "error_code": "...", "message": "...", "timestamp": "..."}`. The authentication middleware, however, returns a **different** shape: `{"status": 401, "message": "..."}` with an integer `status` and no `error_code`. Clients must handle both. The full error model is documented in the [Error responses](#error-responses) section at the bottom of this page.
+    Structured application errors (raised inside a handler) return `{"status": "error", "error_code": "...", "message": "...", "timestamp": "..."}`. The authentication middleware, however, returns a **different** shape: `{"status": 401, "message": "..."}` with an integer `status` and no `error_code`. Clients must accept both shapes. The [Error responses](#error-responses) section at the bottom of this page gives the full error model.
 
 ---
 
@@ -52,7 +52,7 @@ Health check. **This is the only route exempt from authentication**: you can cal
     }
     ```
 
-`code_hash` fingerprints the framework source the server is running, so it identifies the code itself rather than the release. It is the same value for a git checkout and for an installed package built from that checkout, and it changes if anything under `unshackle/core`, `unshackle/commands`, `unshackle/utils`, or `unshackle/vaults` is edited. Service modules are not included. The value is `null` only when the source files cannot be read.
+`code_hash` fingerprints the framework source the server operates, so it names the code itself rather than the release. It is the same value for a git checkout and for an installed package built from that checkout. It changes when you edit anything under `unshackle/core`, `unshackle/commands`, `unshackle/utils`, or `unshackle/vaults`. Service modules are not included. unshackle sets the value to `null` only when it cannot read the source files.
 
 If the update check fails (for example, no network), `update_available` and `latest_version` are `null` while `current_version` still reports the installed version.
 
@@ -62,7 +62,7 @@ If the update check fails (for example, no network), `update_available` and `lat
 
 ### `GET /api/services`
 
-List the streaming services available on this server, filtered by your allowlist. Each entry describes the service's tag, matching rules, capability flags, and its CLI parameters (useful for building a UI that accepts service-specific options).
+Show the streaming services available on this server, filtered by your allowlist. Each entry gives the service's tag, matching rules, capability flags, and its CLI parameters (useful when you make a UI that accepts service-specific options).
 
 === "Request"
 
@@ -127,7 +127,7 @@ Field notes:
 
 ### `POST /api/search`
 
-Search a service for titles by query string. The service must implement `search()` (see `has_search` above).
+Find titles in a service by query string. The service must have a `search()` method (see `has_search` above).
 
 **Request body**
 
@@ -175,7 +175,7 @@ Search a service for titles by query string. The service must implement `search(
 
 ### `POST /api/list-titles`
 
-Resolve a title ID into its list of titles (episodes, movie, etc.) without downloading anything.
+Get the list of titles behind a title ID, for example episodes or a movie, without downloading anything.
 
 **Request body**
 
@@ -188,7 +188,7 @@ Resolve a title ID into its list of titles (episodes, movie, etc.) without downl
 | `no_proxy` | boolean | no | Force-disable proxy. |
 | `cdm_type` | string | no | Preferred CDM type. |
 
-Service-specific CLI options may also be passed as additional keys.
+You can also pass service-specific CLI options as additional keys.
 
 === "Request"
 
@@ -221,13 +221,13 @@ Service-specific CLI options may also be passed as additional keys.
     }
     ```
 
-Each serialized title carries `type` (`"episode"`, `"movie"`, or `"other"`), `name`, `id`, `language`, `description`, `date`, and `cover_url`. Episodes and movies add `year`; episodes additionally add `series_title`, `season`, and `number`.
+Each serialized title carries `type` (`"episode"`, `"movie"`, or `"other"`), `name`, `id`, `language`, `description`, `date`, and `cover_url`. Episodes and movies add `year`. Episodes also add `series_title`, `season`, and `number`.
 
 !!! warning "A song serializes as `"other"`"
-    A music track has no `type` of its own. It is sent as `"other"`, and the response
+    A song has no `type` of its own. The server sends it as `"other"`, and the response
     carries none of its music fields: no artist, no album, no track or disc number, and no
-    `year`. `name` holds the track name. To read the disc and track numbers of a release,
-    run the CLI with `--list-titles`. Selecting music tracks over the API still works,
+    `year`. `name` holds the song name. To read the disc and track numbers of a release,
+    operate the CLI with `--list-titles`. You can still select songs over the API,
     through the `wanted` parameter.
 
 These keys are sent only when the title carries them, so a title without them serializes exactly as before:
@@ -243,8 +243,8 @@ These keys are sent only when the title carries them, so a title without them se
 !!! info "`part` on a split episode"
     A service that splits one episode into several separately playable videos reports each
     one as its own episode. Those titles share a `season` and `number` and add a `part`
-    integer counting from 1. No other title carries the key, so a client that ignores it
-    is unaffected. See [Split episodes](../creating-a-service.md#split-episodes).
+    integer counting from 1. No other title carries the `part` field, so a client can
+    ignore it safely. See [Split episodes](../creating-a-service.md#split-episodes).
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
@@ -257,10 +257,10 @@ These keys are sent only when the title carries them, so a title without them se
 
 ### `POST /api/list-tracks`
 
-List the video, audio, and subtitle tracks for a title. For series, you can scope to specific episodes.
+Show the video, audio, and subtitle tracks for a title. For series, you can scope to specific episodes.
 
 !!! tip "Spotting the original-language audio"
-    Each audio track carries `is_original`, which marks the track the default `lang` of `orig` selects. Unshackle resolves it with the same language matcher the downloader uses, so it stays correct for regional variants a client cannot separate from tag text alone (`pt` marks `pt-BR` rather than `pt-PT`). Services need not report a title's language, so every track can legitimately come back `false`.
+    Each audio track carries `is_original`, which marks the track the default `lang` of `orig` selects. unshackle finds it with the same language matcher the downloader uses. Thus it stays correct for regional variants a client cannot separate from tag text alone (`pt` marks `pt-BR` rather than `pt-PT`). Services need not report a title's language, so every track can legitimately come back `false`.
 
 **Request body**
 
@@ -274,7 +274,7 @@ List the video, audio, and subtitle tracks for a title. For series, you can scop
 | `part` | int/string | no | Part index of a split episode (combined with `season` and `episode`). |
 | `profile`, `proxy`, `no_proxy`, `cdm_type` | - | no | As on `list-titles`. |
 
-When both `season` and `episode` are given, they are combined into a `"{season}x{episode}"` selector. Adding `part` narrows that to `"{season}x{episode}.{part}"`, one part of a [split episode](../creating-a-service.md#split-episodes); without it you get every part of the episode. `part` is read only when `season` and `episode` are both given, and `wanted` takes precedence over all three. To scope a part by range, put it in `wanted` instead (`"S01E01.2"`).
+When you give both `season` and `episode`, the server combines them into a `"{season}x{episode}"` selector. `part` narrows that to `"{season}x{episode}.{part}"`, one part of a [split episode](../creating-a-service.md#split-episodes). Without `part` you get every part of the episode. The server reads `part` only when you give both `season` and `episode`, and `wanted` takes precedence over all three. To scope a part by range, put it in `wanted` instead (`"S01E01.2"`).
 
 === "Single title / movie: Response `200`"
 
@@ -321,7 +321,7 @@ When both `season` and `episode` are given, they are combined into a `"{season}x
     }
     ```
 
-Tracks are sorted by bitrate, descending. Episodes that fail to resolve are collected into `unavailable_episodes` rather than failing the whole request. Track objects here do **not** include a download `url`; segment URLs are only exposed through the remote-dl session endpoints.
+The server sorts tracks by bitrate, descending. Episodes the server cannot get go into `unavailable_episodes`, rather than failing the whole request. Track objects here do **not** include a download `url`. Only the remote session endpoints give segment URLs.
 
 The `drm` array on a track is a list of `{type, pssh?, kids?, content_keys?, license_url?}` objects.
 
@@ -337,14 +337,14 @@ The `drm` array on a track is a list of `{type, pssh?, kids?, content_keys?, lic
 
 ## Download jobs
 
-Downloads are asynchronous. `POST /api/download` enqueues a job and returns immediately with a `job_id`; the server runs each job in a background worker subprocess. You then poll the job endpoints for progress and results.
+Downloads are asynchronous. `POST /api/download` enqueues a job and returns immediately with a `job_id`. The server runs each job in a background job worker subprocess. You then poll the job endpoints for progress and results.
 
 !!! info "Job states"
-    A job moves through `queued` → `downloading` → one of the terminal states `completed`, `failed`, or `cancelled`. Only queued jobs can be prioritized; only terminal jobs can be retried or removed.
+    A job moves through `queued` → `downloading` → one of the terminal states `completed`, `failed`, or `cancelled`. You can prioritise only queued jobs. You can retry or remove only terminal jobs.
 
 ### `POST /api/download`
 
-Create a download job. Requires `service` and `title_id`; every other field is an optional download parameter with a server-side default. On success this returns **`202 Accepted`**, not `200`.
+Make a download job. It requires `service` and `title_id`. Every other field is an optional download parameter with a server-side default. On success this returns **`202 Accepted`**, not `200`.
 
 === "Request"
 
@@ -418,22 +418,22 @@ Create a download job. Requires `service` and `title_id`; every other field is a
 | `output_dir` | string | `null` | Override output directory. |
 | `no_cache` / `reset_cache` | boolean | `false` | Title cache controls. |
 
-**Validation.** Invalid values return `400 INVALID_PARAMETERS`. Notably: `vcodec` must be one of H264/H265/H.264/H.265/AVC/HEVC/VC1/VC-1/VP8/VP9/AV1; `acodec` one of AAC/AC3/EC3/EAC3/DD/DD+/AC4/OPUS/FLAC/ALAC/VORBIS/OGG/DTS; `range` one of SDR/HDR10/HDR10P/DV/HLG/HYBRID (`HDR10+` is accepted); bitrate/worker/download counts must be positive integers; at most one of the `*_only` flags may be set; `no_subs` cannot be combined with `subs_only`, `no_audio` with `audio_only`, or `s_lang` with `require_subs`.
+**Validation.** Invalid values return `400 INVALID_PARAMETERS`. `vcodec` must be one of H264/H265/H.264/H.265/AVC/HEVC/VC1/VC-1/VP8/VP9/AV1. `acodec` must be one of AAC/AC3/EC3/EAC3/DD/DD+/AC4/OPUS/FLAC/ALAC/VORBIS/OGG/DTS. `range` must be one of SDR/HDR10/HDR10P/DV/HLG/HYBRID, and `HDR10+` is also valid. The bitrate, download worker, and download counts must be positive integers. You may set at most one of the `*_only` flags. You cannot combine `no_subs` with `subs_only`, `no_audio` with `audio_only`, or `s_lang` with `require_subs`.
 
 !!! danger "Rejected parameters"
     `postscript`, `post_script` and `post_scripts` are never accepted. A body containing any
-    of them is rejected with `400 INVALID_PARAMETERS`, because a command string arriving from
-    an HTTP caller would be remote code execution. Post-download hooks are configured only in
-    `unshackle.yaml`, where they still run for API jobs. See
+    of them gets `400 INVALID_PARAMETERS`, because a command string that arrives from
+    an HTTP caller would be remote code execution. You configure post-download hooks only in
+    `unshackle.yaml`, where they still operate for API jobs. See
     [Post-download scripts](../../reference/configuration/post-scripts.md).
 
 !!! warning "Gated parameters (developer)"
-    A few keys are accepted but only permitted when the server config opts in, otherwise the request is rejected with `403 FORBIDDEN`:
+    The server accepts a few keys, but permits them only when the server config opts in. Otherwise the server rejects the request with `403 FORBIDDEN`:
 
     - `cdm` (per-request CDM device name): allowed only if `serve.cdm_overrides` is `true` or a list containing that device name.
     - `credential` (`"user:pass"`) and `credentials` (a map): allowed only if `serve.allow_job_credentials` is truthy (off by default).
 
-    Server-side, effective parameters are merged as defaults → `serve:` config overrides → service-specific defaults → your request body.
+    On the server, unshackle merges the effective parameters in this order: defaults → `serve:` config overrides → service-specific defaults → your request body.
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
@@ -445,7 +445,7 @@ Create a download job. Requires `service` and `title_id`; every other field is a
 
 ### `GET /api/download/jobs`
 
-List download jobs, with optional filtering and sorting.
+Show download jobs, with optional filtering and sorting.
 
 **Query parameters**
 
@@ -533,10 +533,10 @@ The `data` field of every event is the same job object that `GET /api/download/j
 
 The server sends a `: keep-alive` comment each 15 seconds while the job is quiet, to keep proxies from closing an idle connection. Ignore these lines.
 
-If the job is already in a terminal state, the server sends the `snapshot` event, then the terminal event, and closes the stream immediately.
+If the job is already in a terminal state, the server sends the `snapshot` event, then the terminal event, and closes the event stream immediately.
 
 !!! tip "Authentication from a browser"
-    `EventSource` cannot set headers. For this endpoint only, the server also accepts the key in the `secret_key` query parameter. This works in both server modes, the default integrated server and `--api-only`:
+    `EventSource` cannot set headers. For this endpoint only, the server also accepts the API key in the `secret_key` query parameter. This works in both server modes, the default integrated server and `--api-only`:
 
     ```javascript
     const events = new EventSource(
@@ -546,7 +546,7 @@ If the job is already in a terminal state, the server sends the `snapshot` event
     events.addEventListener("completed", () => events.close());
     ```
 
-    The header always wins. Send the key in the query parameter *or* in the header, not both: if an `X-Secret-Key` header is present, the server checks that header and ignores the query parameter. See [Authentication](authentication.md#how-clients-present-credentials).
+    The header always wins. Send the API key in the query parameter *or* in the header, not both. If an `X-Secret-Key` header is present, the server examines that header and ignores the query parameter. See [Authentication](authentication.md#how-clients-present-credentials).
 
 === "Request"
 
@@ -583,7 +583,7 @@ Cancel or remove a job. The behaviour depends on the job's current state:
 - **Queued or downloading job**: cancelled, returning `200` `{"status": "success", "message": "Job cancelled"}`.
 
 !!! warning
-    A `204` response has no body. Do not attempt to parse JSON from it.
+    A `204` response has no body. Do not try to parse JSON from it.
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
@@ -607,7 +607,7 @@ Remove every terminal (completed/failed/cancelled) job from the manager. No requ
 Enqueue a **new** job that reuses a terminal job's service, title, and parameters. The service allowlist and parameter gates are re-checked. Returns `202` with the new job's ID.
 
 !!! warning "Retry reuses the original, unredacted parameters"
-    Retry replays the finished job's stored parameters exactly as they were submitted, including any secrets such as `credential`/`credentials`, not the redacted `parameters` view that `GET /api/download/jobs` and `GET /api/history` expose. This is deliberate: it lets a retried job reproduce a credentialed download that the redacted job record alone never could. It also means anyone who can retry a job can re-run it with its original credentials, even though those credentials are masked everywhere else in the API.
+    A retry replays the finished job's stored parameters exactly as the original client submitted them, including any secrets such as `credential`/`credentials`. It does not use the redacted `parameters` view that `GET /api/download/jobs` and `GET /api/history` give. This is deliberate: it lets a retried job reproduce a credentialed download that the redacted job record alone never could. The API masks those credentials everywhere else. But anyone who can retry a job can operate it again with the original credentials.
 
 === "Response `202`"
 
@@ -651,7 +651,7 @@ Endpoints for profiles, effective configuration, download history, environment c
 
 ### `GET /api/profiles`
 
-List the named credential profiles configured per service (usable as the `profile` parameter elsewhere). Only services whose credentials are a mapping of profile name to credential are listed; services with a single unnamed credential are omitted. Filtered by your allowlist.
+Show the named credential profiles configured per service (usable as the `profile` parameter elsewhere). The response holds only services whose credentials are a mapping of profile name to credential. It leaves out services with a single unnamed credential. Your allowlist filters the response.
 
 === "Response `200`"
 
@@ -666,7 +666,7 @@ List the named credential profiles configured per service (usable as the `profil
 
 ### `GET /api/config`
 
-Return a read-only, redacted view of the effective server configuration, suitable for a settings page in a UI. Secrets are never emitted: keys matching `secret`, `password`, `token`, `api_key`, or `credential`, and any userinfo in proxy URLs, are masked.
+Return a read-only, redacted view of the effective server configuration, suitable for a settings page in a UI. The server never sends secrets: it masks every config key whose name contains `secret`, `password`, `token`, `api_key`, or `credential`, and any userinfo in proxy URLs.
 
 === "Response `200`"
 
@@ -695,7 +695,7 @@ Return a read-only, redacted view of the effective server configuration, suitabl
 
 ### `GET /api/history`
 
-Read the persisted history of jobs that reached a terminal state, newest first. History is stored in `api_history.jsonl` in the cache directory; corrupt lines are skipped and a missing file yields an empty list.
+Read the persisted history of jobs that reached a terminal state, newest first. unshackle stores the history in `api_history.jsonl` in the cache directory. It skips corrupt lines, and a missing file yields an empty list.
 
 **Query parameters**
 
@@ -742,12 +742,12 @@ Remove a single persisted history entry. Returns **`204 No Content`** (empty bod
 
 ### `POST /api/maintenance/clear-cache` and `POST /api/maintenance/clear-temp`
 
-Delete and recreate the cache or temp directory. Neither takes a request body. Both are blocked with `409 CONFLICT` if any job is currently `downloading` (the `details` include the offending `active_jobs`).
+Delete and recreate the cache or temp directory. Neither takes a request body. The server blocks both with `409 CONFLICT` if any job is currently `downloading` (the `details` include the offending `active_jobs`).
 
-The `409` guard is about active file I/O, not an arbitrary lock: an in-flight job may still be *reading* cached title data under the cache directory, and active download workers are *writing* segment files under temp. Removing either directory mid-download would corrupt those running jobs, so the endpoints refuse until nothing is downloading.
+The `409` guard is about active file I/O, not an arbitrary lock. An in-flight job may still be *reading* cached title data under the cache directory, and active download workers are *writing* segment files under temp. The removal of either directory mid-download would corrupt those jobs, so the endpoints refuse while a download is in progress.
 
 !!! warning "clear-cache also wipes download history"
-    The persistent history read by [`GET /api/history`](#get-apihistory) lives in `api_history.jsonl` **inside the cache directory**. Because clear-cache deletes and recreates that whole directory, calling it also erases your entire download history, not just cached title data. If you want to keep history, do not clear the cache; remove individual entries with [`DELETE /api/history/{job_id}`](#delete-apihistoryjob_id) instead.
+    The persistent history read by [`GET /api/history`](#get-apihistory) lives in `api_history.jsonl` **inside the cache directory**. Because clear-cache deletes and recreates that whole directory, calling it also erases your entire download history, not only cached title data. If you want to keep history, do not clear the cache. Remove individual entries with [`DELETE /api/history/{job_id}`](#delete-apihistoryjob_id) instead.
 
 === "Response `200`"
 
@@ -762,7 +762,7 @@ The `409` guard is about active file I/O, not an arbitrary lock: an in-flight jo
 
 ### `POST /api/maintenance/refresh-services`
 
-git-pull every service repository configured under `directories.services`. `refreshed` is `true` when all repos updated successfully (or none are configured).
+git-pull every service repository configured under `directories.services`. `refreshed` becomes `true` when all repos updated successfully, or when you configure no repository.
 
 === "Response `200`"
 
@@ -795,11 +795,11 @@ Report the install status of the external binaries unshackle depends on (the sam
 ## Remote-dl sessions
 
 !!! note "Developer feature"
-    The `/api/session/*` endpoints power unshackle's **remote download** mode, where a thin local client authenticates once against a remote server, then fetches titles, tracks, and segments and proxies DRM licensing back through it. These endpoints are exposed in `--remote-only` mode, and they are what the built-in `RemoteService` client drives. Most end users never call them directly.
+    The `/api/session/*` endpoints power unshackle's **remote download** mode. A thin local client authenticates once against a remote server, then fetches titles, tracks, and segments, and proxies DRM licensing back through it. The server mounts these endpoints in `--remote-only` mode, and they are what the built-in `RemoteService` client drives. Most end users never call them directly.
 
-Sessions are held in memory. They expire after `serve.session_ttl` (default 300s), except while awaiting interactive authentication input, which uses a 600s window. A session is bound to the IP that created it, so a request from a different IP is rejected with `403 FORBIDDEN`.
+The server holds remote sessions in memory. They expire after `serve.session_ttl` (default 300s), except while awaiting interactive authentication input, which uses a 600s window. A remote session binds to the IP that made it, so the server rejects a request from a different IP with `403 FORBIDDEN`.
 
-### Session lifecycle overview
+### Remote session lifecycle overview
 
 ```text
 POST /api/session/create        → returns session_id, status "authenticating"
@@ -813,7 +813,7 @@ DELETE /api/session/{id}        → tear down, harvest updated cache
 
 ### `POST /api/session/create`
 
-Create a session for a service and title. Authentication runs asynchronously in the background. This call returns immediately with `status: "authenticating"`, and you then poll the prompt endpoint. The body accepts `service` and `title_id` (both required) plus a broad set of optional keys (`additionalProperties` is allowed): `credentials` (`{username, password, extra?}`), `cookies` (base64 of zlib-compressed Netscape cookie file), `proxy`, `no_proxy`, `profile`, `cache` (map of forwarded cache files), `client_region`, `cdm_type`, `range_`, `vcodec`, `quality`, `best_available`, and any service CLI options.
+Make a remote session for a service and title. Authentication runs asynchronously in the background. This call returns immediately with `status: "authenticating"`, and you then poll the prompt endpoint. The body accepts `service` and `title_id` (both required). It also accepts a broad set of optional keys, because the body allows `additionalProperties`. These are `credentials` (`{username, password, extra?}`), `cookies` (base64 of zlib-compressed Netscape cookie file), `proxy`, `no_proxy`, `profile`, `cache` (map of forwarded cache files), `client_region`, `cdm_type`, `range_`, `vcodec`, `quality`, `best_available`, and any service CLI options.
 
 === "Response `200`"
 
@@ -883,7 +883,7 @@ Submit a response to a pending prompt. Body: `{ "response": "..." }` (required).
 
 ### `GET /api/session/{session_id}/titles`
 
-Fetch the titles for an authenticated session.
+Fetch the titles for an authenticated remote session.
 
 === "Response `200`"
 
@@ -894,11 +894,11 @@ Fetch the titles for an authenticated session.
     }
     ```
 
-Requires an authenticated session; `404 SESSION_NOT_FOUND` otherwise.
+Requires an authenticated remote session. Otherwise it returns `404 SESSION_NOT_FOUND`.
 
 ### `POST /api/session/{session_id}/tracks`
 
-Get tracks and chapters for a specific title within the session. Body: `{ "title_id": "..." }` (required). Unlike `list-tracks`, track objects here **include** download URLs, along with session headers/cookies and manifest data the client needs to download directly.
+Get tracks and chapters for a specific title within the remote session. Body: `{ "title_id": "..." }` (required). Unlike `list-tracks`, track objects here **include** download URLs, along with session headers/cookies and manifest data the client needs to download directly.
 
 === "Response `200`"
 
@@ -925,7 +925,7 @@ Get tracks and chapters for a specific title within the session. Body: `{ "title
 
 ### `POST /api/session/{session_id}/segments`
 
-Resolve the download URL, DRM info, headers, cookies, and raw track data for selected tracks. Body: `{ "track_ids": ["v-1", "a-1"] }` (required).
+Get the download URL, DRM info, headers, cookies, and raw track data for the selected tracks. Body: `{ "track_ids": ["v-1", "a-1"] }` (required).
 
 === "Response `200`"
 
@@ -945,7 +945,7 @@ Resolve the download URL, DRM info, headers, cookies, and raw track data for sel
 
 ### `POST /api/session/{session_id}/license`
 
-Acquire DRM keys. Two modes are supported via the `mode` field.
+Get the content keys for the DRM. The `mode` field selects one of two modes.
 
 **Proxy mode** (`mode: "proxy"`, the default) forwards the client's CDM `challenge` to the service's license endpoint and returns the raw license bytes:
 
@@ -994,7 +994,7 @@ Acquire DRM keys. Two modes are supported via the `mode` field.
 
 ### `GET /api/session/{session_id}`
 
-Return session metadata and validity.
+Return remote session metadata and validity.
 
 === "Response `200`"
 
@@ -1009,11 +1009,11 @@ Return session metadata and validity.
     }
     ```
 
-`404 SESSION_NOT_FOUND` if the session does not exist or has expired.
+`404 SESSION_NOT_FOUND` if the remote session does not exist or has expired.
 
 ### `DELETE /api/session/{session_id}`
 
-Tear down a session. Its input bridge is cancelled, any updated cache files are harvested, and the session plus its cache directory are deleted.
+Tear down a remote session. The server cancels its input bridge, harvests any updated cache files, and deletes the remote session and its cache directory.
 
 === "Response `200`"
 
@@ -1024,13 +1024,13 @@ Tear down a session. Its input bridge is cancelled, any updated cache files are 
     }
     ```
 
-The `cache` field is present only if the session produced cache files. `404 SESSION_NOT_FOUND` if the session does not exist.
+The `cache` field is present only if the remote session produced cache files. `404 SESSION_NOT_FOUND` if the remote session does not exist.
 
 ---
 
 ## Error responses
 
-Every structured error raised inside a handler is serialized to the same JSON envelope:
+The server serialises every structured error raised inside a handler to the same JSON envelope:
 
 ```json
 {
@@ -1046,7 +1046,7 @@ Every structured error raised inside a handler is serialized to the same JSON en
 
 - `details` appears only when non-empty.
 - `retryable` appears only when the error is retryable (e.g. network errors, rate limiting).
-- `debug_info` appears only when the server was started with `--debug-api`.
+- `debug_info` appears only when you start the server with `--debug-api`.
 
 !!! warning "Authentication errors differ"
     Errors raised by the API-key middleware use a distinct shape (`{"status": 401, "message": "Secret Key is Empty."}` or `{"status": 401, "message": "Secret Key is Invalid."}`) with an integer `status` and no `error_code`, `timestamp`, or `details`. A malformed JSON body on any POST, by contrast, returns the standard envelope with `error_code: "INVALID_INPUT"`.

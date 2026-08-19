@@ -28,11 +28,11 @@ DEFAULT_ORDER: tuple[str, ...] = ("imdb", "omdb", "simkl", "tmdb", "tvdb", "anil
 
 
 def provider_order(kind: Optional[str] = None, anime: bool = False) -> list[type[MetadataProvider]]:
-    """Provider classes in the order configured by `metadata_providers`.
+    """Metadata provider classes in the order configured by `metadata_providers`.
 
     `metadata_providers` is either a flat list applying to both kinds, or a mapping of
     kind ("tv"/"movie") to its own list. A kind the mapping omits uses `DEFAULT_ORDER`.
-    An `anime` title puts anilist first; the rest of the order stays behind it to
+    An `anime` title puts AniList first. The rest of the order stays behind it to
     fall back on.
     """
     from unshackle.core.config import config
@@ -50,12 +50,12 @@ def provider_order(kind: Optional[str] = None, anime: bool = False) -> list[type
 
 
 def get_available_providers() -> list[MetadataProvider]:
-    """Return instantiated providers that have valid credentials."""
+    """Return instantiated metadata providers that have valid credentials."""
     return [cls() for cls in provider_order() if cls().is_available()]
 
 
 def get_provider(name: str) -> Optional[MetadataProvider]:
-    """Get a specific provider by name."""
+    """Get one specific metadata provider by name."""
     cls = REGISTRY.get(name)
     if not cls:
         return None
@@ -73,7 +73,7 @@ def search_metadata(
     cache_account_hash: Optional[str] = None,
     anime: bool = False,
 ) -> Optional[MetadataResult]:
-    """Search all available providers for metadata. Returns best match."""
+    """Find metadata in every available metadata provider. Returns the best result."""
     from unshackle.core.config import config
 
     # the one gate for `disable_metadata`: every automatic lookup reaches a provider through
@@ -295,12 +295,12 @@ def resolve_by_ids(
     cache_account_hash: Optional[str] = None,
     anime: bool = False,
 ) -> Optional[MetadataResult]:
-    """Resolve metadata from user-supplied external IDs, falling back to search only without them.
+    """Get metadata from user-supplied external IDs, and find the title by name only without them.
 
-    A supplied ID is authoritative. It is looked up directly through the providers that
-    consume its namespace, in `metadata_providers` order for `kind`, and it always survives
-    into `external_ids` whatever a provider answers. A fuzzy title search only runs when no
-    ID was supplied at all.
+    A supplied ID is authoritative. unshackle looks it up directly through the metadata
+    providers that consume its namespace, in `metadata_providers` order for `kind`, and it
+    always survives into `external_ids` whatever a metadata provider answers. Without any
+    supplied ID, unshackle finds the title by a fuzzy name comparison.
     """
     supplied: dict[str, Union[int, str]] = {}
     if tmdb_id is not None:
@@ -366,17 +366,17 @@ ENRICHMENT_AUTHORITY: tuple[str, ...] = ("tmdb", "simkl", "tvdb")
 
 
 def enrichment_providers(kind: Optional[str] = None) -> list[str]:
-    """Names of configured providers that can resolve an IMDB ID, most trusted first."""
+    """Names of the configured metadata providers that can find a title by IMDB ID, most trusted first."""
     configured = {cls.NAME for cls in provider_order(kind) if hasattr(cls, "find_by_imdb_id")}
     return [name for name in ENRICHMENT_AUTHORITY if name in configured]
 
 
 def enrich_ids(result: MetadataResult) -> None:
-    """Enrich a MetadataResult by cross-referencing IMDB ID with available providers.
+    """Enrich a MetadataResult by cross-referencing IMDB ID with the available metadata providers.
 
-    Queries all available providers, cross-validates tmdb_id as anchor.
-    If a provider returns a different tmdb_id than the authoritative source,
-    ALL of that provider's data is dropped (likely resolved to wrong title).
+    Queries all available metadata providers, cross-validates tmdb_id as anchor.
+    If a metadata provider returns a different tmdb_id than the authoritative source,
+    unshackle drops ALL of that metadata provider's data (it likely found the wrong title).
     """
     ids = result.external_ids
     if not ids.imdb_id:
@@ -417,11 +417,11 @@ def validate_enrichments(
     enrichments: list[tuple[str, ExternalIds]],
     authority: dict[str, int],
 ) -> list[tuple[str, ExternalIds]]:
-    """Drop providers whose tmdb_id conflicts with the authoritative value.
+    """Drop the metadata providers whose tmdb_id conflicts with the authoritative value.
 
-    If providers disagree on tmdb_id, the more authoritative source wins
-    and ALL data from disagreeing providers is discarded (different tmdb_id
-    means the provider likely resolved to a different title entirely).
+    If metadata providers disagree on tmdb_id, the more authoritative source wins.
+    unshackle discards ALL data from a metadata provider that disagrees, because a
+    different tmdb_id means that metadata provider likely found a different title.
     """
     from collections import Counter
 
@@ -479,7 +479,7 @@ def external_ids_to_dict(ext: ExternalIds) -> dict:
 
 
 def cached_to_result(cached: dict, provider_name: str, kind: str) -> Optional[MetadataResult]:
-    """Convert a cached provider dict back to a MetadataResult."""
+    """Convert a cached metadata provider dict back to a MetadataResult."""
     if provider_name == "tmdb":
         detail = cached.get("detail", {})
         ext_raw = cached.get("external_ids", {})

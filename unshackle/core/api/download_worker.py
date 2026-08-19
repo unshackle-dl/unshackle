@@ -1,4 +1,4 @@
-"""Standalone worker process entry point for executing download jobs."""
+"""Standalone job worker process entry point for executing download jobs."""
 
 from __future__ import annotations
 

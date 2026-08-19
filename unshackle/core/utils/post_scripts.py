@@ -1,7 +1,7 @@
-"""Run user-defined scripts after a download completes.
+"""Operate user-defined scripts after a download completes.
 
-A command is tokenized once, then variables are substituted into the resulting argv
-tokens and the process is spawned with ``shell=False``. Substituting after tokenizing
+unshackle tokenizes a command one time, then substitutes the variables into the
+resulting argv tokens, then spawns the process with ``shell=False``. Substituting after tokenizing
 is what makes a title like ``Bob"; rm -rf ~`` harmless: a value can never become a new
 token or a shell operator. The cost is that the command has no shell features and no
 interpreter lookup, so users name the interpreter themselves (``python upload.py``).
@@ -37,7 +37,7 @@ _warned_entries: set[str] = set()
 
 
 def tokenize(command: str) -> list[str]:
-    """Split a command string into argv tokens, before any variable is substituted."""
+    """Split a command string into argv tokens, before unshackle substitutes any variable."""
     if os.name == "nt":
 
         def unquote(token: str) -> str:
@@ -51,7 +51,7 @@ def tokenize(command: str) -> list[str]:
 
 
 def substitute(tokens: Sequence[str], context: dict[str, str]) -> list[str]:
-    """Replace every ``{variable}`` inside each token; unknown or empty ones become ''."""
+    """Replace every ``{variable}`` inside each token. Unknown or empty ones become ''."""
     unknown: set[str] = set()
 
     def replace(match: re.Match[str]) -> str:
@@ -92,13 +92,13 @@ def build_context(
     ids: Optional[dict[str, Any]] = None,
     error: str = "",
 ) -> dict[str, str]:
-    """Build the variable set for one output file.
+    """Assemble the variable set for one output file.
 
     Metadata comes from the same naming context that produced the file's name, so
-    ``{quality}`` and ``{hdr}`` always describe *this* file. That is what lets
-    ``-q 1080,2160 -r HDR10,SDR`` label its four outputs correctly. Season and episode
-    are handed over as plain numbers rather than the filename's ``S01E05`` form: the
-    spacer and padding belong to the filename template, not to the data.
+    ``{quality}`` and ``{hdr}`` always give the values of *this* file. That is what lets
+    ``-q 1080,2160 -r HDR10,SDR`` label its four outputs correctly. unshackle gives the
+    season and the episode as plain numbers rather than in the filename's ``S01E05``
+    form: the spacer and padding belong to the filename template, not to the data.
     """
     context: dict[str, str] = {}
 
@@ -152,7 +152,7 @@ def season_context(context: dict[str, str], folder: Path) -> dict[str, str]:
 
 
 def _entries(event: str, mode: str, overrides: Sequence[str] = ()) -> Iterator[str]:
-    """Commands configured for this event and mode; --postscript replaces the config list."""
+    """Commands configured for this event and mode. --postscript replaces the config list."""
     if overrides:
         if event == "success" and mode == "file":
             yield from overrides

@@ -3,12 +3,12 @@ Subtitle conversion backend registry.
 
 Routing is data-driven: each backend declares which (source -> target) codec pairs it can
 read/write, whether it is available in the current environment, and a preference rank.
-``resolve_backends`` filters the registry to the available backends that support the
-requested pair and orders them by rank; ``run_conversion`` tries each in turn (a real
+``resolve_backends`` filters the registry to the available backends that can convert the
+requested pair and orders them by rank. ``run_conversion`` tries each in turn (a real
 fallback chain) until one succeeds.
 
 The public entry point stays ``Subtitle.convert`` / ``Subtitle.strip_hearing_impaired`` in
-subtitle.py; this module only holds the selection + conversion logic so subtitle.py keeps
+subtitle.py. This module only holds the selection + conversion logic so subtitle.py keeps
 the codec enum, ``parse``, sanitizers and cue helpers (the collaborators backends reuse).
 """
 
@@ -65,7 +65,7 @@ PYSUBS2_FORMATS: dict[Codec, str] = {
 
 
 def is_seconv(binary: object) -> bool:
-    """True for the SubtitleEdit 5+ CLI (seconv); 4.x binaries need legacy /convert syntax."""
+    """True for the SubtitleEdit 5+ CLI (seconv). 4.x binaries need legacy /convert syntax."""
     name = str(binary).replace("\\", "/").rsplit("/", 1)[-1]
     return name.lower().rsplit(".", 1)[0] == "seconv"
 
@@ -81,12 +81,12 @@ def subtitleedit_args(
     reverse_rtl: bool = False,
 ) -> list[str]:
     """
-    Build a SubtitleEdit batch-convert command in 5.x (seconv ``--flags``) or 4.x
+    Assemble a SubtitleEdit batch-convert command in 5.x (seconv ``--flags``) or 4.x
     (``/convert /flags``) syntax, per ``is_seconv``.
 
-    Both name the output ``<input-stem>.<format-ext>``; ``output_folder`` steers placement
+    Both name the output ``<input-stem>.<format-ext>``. ``output_folder`` steers placement
     (a bare ``--output-filename`` resolves against the cwd, not the input dir). Overwrite is
-    always set so re-runs and in-place transforms (SDH/RTL) don't fail on an existing file.
+    always set so re-runs and in-place transforms (SDH/RTL) do not fail on an existing file.
     """
     if not is_seconv(binary):
         args = [str(binary), "/convert", str(src), fmt, "/encoding:utf8", "/overwrite"]
@@ -280,7 +280,7 @@ REGISTRY: list[SubtitleBackend] = [
 
 
 def resolve_backends(source: Codec, target: Codec, *, pin: Optional[str] = None) -> list[SubtitleBackend]:
-    """Available backends that support source->target, ordered by rank. A pin is tried first."""
+    """Available backends that can convert source->target, ordered by rank. A pinned backend goes first."""
     available = [b for b in REGISTRY if b.is_available() and b.can_convert(source, target)]
     if pin:
         pinned = [b for b in available if b.name == pin]
@@ -306,8 +306,8 @@ def run_conversion(sub: Subtitle, target: Codec, *, pin: Optional[str] = None, f
     Convert ``sub`` to ``target`` using the best available backend, falling back through the
     capability chain on failure.
 
-    ``forced`` is True only for explicit user requests (``--sub-format``); lossy downconverts
-    (styled SubStation -> SRT) are skipped unless forced.
+    ``forced`` is True only for explicit user requests (``--sub-format``). unshackle skips
+    lossy downconverts (styled SubStation -> SRT) unless ``forced`` is True.
     """
     if sub.path is None or not sub.path.exists():
         raise ValueError("You must download the subtitle track first.")

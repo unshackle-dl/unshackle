@@ -52,4 +52,4 @@ Optional:
 
 ## License
 
-[GPL-3.0](LICENSE). Do not use unshackle for content you lack the rights to. Keep the core free and open; keep service code private. Be kind.
+[GPL-3.0](LICENSE). Do not use unshackle for content you do not have the rights to. Keep the core free and open. Keep service code private. Be kind.

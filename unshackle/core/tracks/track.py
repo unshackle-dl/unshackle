@@ -62,8 +62,9 @@ def direct_session(session: Union[Session, "RnetSession"]) -> Session:
 def read_top_level_box(path: Path, box_type: bytes) -> Optional[bytes]:
     """Read a single top-level box from an MP4 file.
 
-    Only box headers are walked, so the wanted box is the only payload read into memory. Returns None if the
-    file has no such top-level box, or if a box header is truncated or declares an impossible size.
+    This function walks only the box headers, so the wanted box is the only payload it reads into memory.
+    Returns None if the file has no such top-level box, or if a box header is truncated or declares an
+    impossible size.
     """
     file_size = path.stat().st_size
     with path.open("rb") as f:
@@ -93,10 +94,10 @@ def read_top_level_box(path: Path, box_type: bytes) -> Optional[bytes]:
 def has_encrypted_sample_entry(path: Path) -> bool:
     """True if the MP4's moov still carries an encrypted sample entry (encv/enca).
 
-    A faithful decrypt rewrites encv/enca back to the real codec 4CC via frma, so a
+    A faithful decrypt rewrites encv/enca back to the real codec 4CC through frma, so a
     survivor means the decrypt tool skipped/failed the track. This is a 4CC scan
-    scoped to the moov box (where sample entries live), not a structural parse;
-    scoping avoids chance byte collisions in mdat. Any read error -> False.
+    scoped to the moov box (where sample entries live), not a structural parse.
+    The scoping avoids chance byte collisions in mdat. Any read error -> False.
     """
     try:
         moov = read_top_level_box(path, b"moov")
@@ -152,19 +153,19 @@ def assert_fragments_decrypted(path: Path) -> None:
     skips, so a survivor marks a silent skip. One cause is a tfhd.sample_description_index
     dangling past the stsd entry count, which mp4decrypt reports as success (exit 0, no
     stderr) while leaving the payload as ciphertext. Unlike has_encrypted_sample_entry
-    (moov-scoped) this is fragment-scoped; the moov comes out clean in that failure.
+    (moov-scoped) this is fragment-scoped. The moov comes out clean in that failure.
 
-    Only a standard senc counts as evidence. Some DASH content ships a PIFF uuid beside it,
-    and a decrypter detaches just the atom it consumed, so that uuid outlives a good
-    decrypt; counting it would condemn a healthy file.
+    Only a standard senc counts as evidence. Some DASH titles ship a PIFF uuid beside it,
+    and a decrypter detaches only the atom it consumed, so that uuid outlives a good
+    decrypt. Counting it would condemn a healthy file.
 
     The guarantee runs in one direction: a survivor proves a skip, while a clean pass is
     only as good as the decrypter's own behaviour. shaka-packager (the default
     `decryption` backend) remuxes into a single fragment and drops senc whether or not it
-    decrypted, so this cannot fire on shaka output. The walk is unbuffered and reads only
-    box headers; it seeks over mdat and never reads it. A malformed box size aborts the
+    decrypted, so this cannot fire on shaka output. The walk does not use a buffer and reads
+    only box headers. It seeks over mdat and never reads it. A malformed box size aborts the
     walk with a warning and returns normally, so a file this function cannot parse is
-    never escalated into a raise. The logged warning is the only signal of that; a caller
+    never escalated into a raise. The logged warning is the only signal of that. A caller
     sees the same silent return it gets from a verified clean file.
     """
     surviving = 0
@@ -239,7 +240,7 @@ class DownloadContext:
     cdm: Optional[object] = None
 
     def ensure_session(self) -> Union[Session, "RnetSession"]:
-        """Return the session, or a new ``Session`` if none was set."""
+        """Return the HTTP session, or a new ``Session`` if none was set."""
         session = self.session
         if not session:
             session = Session()
@@ -369,7 +370,7 @@ class Track:
         """
         Arbitrary track data dictionary.
 
-        A defaultdict is used with a dict as the factory for easier
+        This uses a defaultdict with a dict as the factory for easier
         nested saving and safer exists-checks.
 
         Reserved keys:
@@ -387,8 +388,8 @@ class Track:
           - segment_durations: list[int] - A list of each segment's duration.
 
         You should not add, change, or remove any data within reserved keys.
-        You may use their data but do note that the values of them may change
-        or be removed at any point.
+        You may use their data, but note that these values can change or be removed
+        at any point.
         """
         return self._data
 
@@ -414,8 +415,8 @@ class Track:
     ):
         """Download and optionally Decrypt this Track.
 
-        A URL-descriptor Video or Audio track with no `drm` set has its DRM probed from the init data of the
-        stream and stored on the track, so a service need not declare `drm` itself.
+        For a URL-descriptor Video or Audio track with no `drm` set, unshackle probes the DRM from the
+        track's init data and stores it on the track, so a service need not declare `drm` itself.
         """
         from unshackle.core.manifests import DASH, HLS, ISM
 
@@ -647,7 +648,7 @@ class Track:
     def to_dict(self) -> dict[str, Any]:
         """Serialise the track for export/import (identity/URL/descriptor/language).
 
-        DRM is not serialised here; the export writer attaches the licensed DRM + keys.
+        DRM is not serialised here. The export writer attaches the licensed DRM + keys.
         Subclasses add their own codec/quality fields.
         """
         data: dict[str, Any] = {
@@ -665,7 +666,7 @@ class Track:
 
     @staticmethod
     def base_kwargs_from_dict(data: dict[str, Any]) -> dict[str, Any]:
-        """Build the shared Track constructor kwargs from a ``to_dict()`` payload.
+        """Assemble the shared Track constructor kwargs from a ``to_dict()`` payload.
 
         DRM is not reconstructed here: ``to_dict`` does not serialise it, and the import
         flow attaches the licensed DRM + content keys separately.
@@ -719,20 +720,20 @@ class Track:
         """
         Probe the DRM encryption Key ID (KID) for this specific track.
 
-        It currently supports finding the Key ID by probing the track's stream
-        with ffprobe for `enc_key_id` data, as well as for mp4 `tenc` (Track
-        Encryption) boxes.
+        It can find the Key ID by probing the track with FFprobe for
+        `enc_key_id` data, as well as for mp4 `tenc` (Track Encryption)
+        boxes.
 
         It explicitly ignores PSSH information like the `PSSH` box, as the box
         is likely to contain multiple Key IDs that may or may not be for this
         specific track.
 
         To retrieve the initialization segment, this method calls :meth:`get_init_segment`
-        with the positional and keyword arguments. The return value of `get_init_segment`
-        is then used to determine the Key ID.
+        with the positional and keyword arguments. This method then uses the return value
+        of `get_init_segment` to find the Key ID.
 
         Returns:
-            The Key ID as a UUID object, or None if the Key ID could not be determined.
+            The Key ID as a UUID object, or None if unshackle cannot find the Key ID.
         """
         if not init_data:
             init_data = self.get_init_segment(*args, **kwargs)
@@ -758,13 +759,13 @@ class Track:
 
     def load_drm_if_needed(self, service=None) -> bool:
         """
-        Load DRM information for this track if it was deferred during parsing.
+        Load DRM information for this track if the parser deferred it.
 
         Args:
             service (Service | None): Service instance that can fetch track-specific DRM info
 
         Returns:
-            True if DRM was loaded or already present, False if failed
+            True if the DRM loaded or is already present, False if the load failed
         """
         if not getattr(self, "needs_drm_loading", False):
             return bool(self.drm)
@@ -840,13 +841,13 @@ class Track:
         session: Optional[Session] = None,
     ) -> bytes:
         """
-        Get the Track's Initial Segment Data Stream.
+        Get the Track's initial segment data.
 
-        HLS and DASH tracks must explicitly provide a URL to the init segment or file.
-        Providing the byte-range for the init segment is recommended where possible.
+        HLS and DASH tracks must explicitly give a URL to the init segment or file.
+        Give the byte-range for the init segment where possible.
 
-        If `byte_range` is not set, it will make a HEAD request and check the size of
-        the file. If the size could not be determined, it will download up to the first
+        If `byte_range` is not set, it will make a HEAD request and examine the size of
+        the file. If it cannot find the size, it will download up to the first
         20KB only, which should contain the entirety of the init segment. You may
         override this by changing the `maximum_size`.
 
@@ -854,12 +855,12 @@ class Track:
         seems to work well across the board.
 
         Parameters:
-            maximum_size: Size to assume as the content length if byte-range is not
-                used, the content size could not be determined, or the content size
-                is larger than it. A value of 20000 (20KB) or higher is recommended.
+            maximum_size: Size to assume as the response body length if byte-range is
+                not used, if unshackle cannot find the body size, or if the body size
+                is larger than it. Use a value of 20000 (20KB) or higher.
             url: Explicit init map or file URL to probe from.
             byte_range: Range of bytes to download from the explicit or implicit URL.
-            session: Session context, e.g., authorization and headers.
+            session: HTTP session context, for example authorization and headers.
         """
         if not isinstance(maximum_size, int):
             raise TypeError(f"Expected maximum_size to be an {int}, not {type(maximum_size)}")
@@ -919,12 +920,12 @@ class Track:
     def repackage(self, bsf_v: Optional[str] = None) -> bool:
         """Remux the track with ffmpeg ``-c copy``.
 
-        When ``bsf_v`` is given it is folded into the same pass as ``-bsf:v`` (used to
-        normalize video VUI colour metadata without a second full-file remux). Repackaging
-        is mandatory; the bitstream filter is best-effort. If the combined run fails (and it
-        isn't the AAC-retry case) it is retried once without ``bsf_v`` so the remux still
-        succeeds. Returns True if the requested ``bsf_v`` was applied (always False when
-        ``bsf_v`` is None, since nothing was requested).
+        A given ``bsf_v`` goes into the same pass as ``-bsf:v``, which normalises video VUI
+        colour metadata without a second full-file remux. Repackaging is mandatory. The
+        bitstream filter is best-effort: if the combined pass fails, and it is not the
+        AAC-retry case, unshackle tries it again once without ``bsf_v`` so the remux still
+        succeeds. Returns True if unshackle applied the requested ``bsf_v`` (always False
+        when ``bsf_v`` is None, because the caller requested nothing).
         """
         if not self.path or not self.path.exists():
             raise ValueError("Cannot repackage a Track that has not been downloaded.")

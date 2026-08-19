@@ -21,10 +21,10 @@ class Proxy:
     @abstractmethod
     def get_proxy(self, query: str) -> Optional[str]:
         """
-        Get a Proxy URI from the Proxy Service.
+        Get a proxy URI from the proxy provider.
 
-        Only return None if the query was accepted, but no proxy could be returned.
-        Otherwise, please use exceptions to denote any errors with the call or query.
+        Return None only when this method accepts the query but can give no proxy.
+        Otherwise, use exceptions to denote any errors with the call or query.
 
         The returned Proxy URI must be a string supported by Python-Requests:
         '{scheme}://[{user}:{pass}@]{host}:{port}'

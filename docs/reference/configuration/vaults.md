@@ -6,9 +6,9 @@ The full guide is at [Vaults](../../guide/vaults.md). Two keys configure them.
 
 - **Type:** `list[dict]` &nbsp;·&nbsp; **Default:** `[]`
 
-An ordered list of key-vault backends. unshackle queries them in order and reuses content
-keys instead of re-licensing. Each entry needs a `type` (the backend module name) and a
-`name`, plus backend-specific keys.
+An ordered list of key-vault backends. unshackle queries them in order and reuses the
+content keys instead of licensing them again. Each entry needs a `type` (the backend module
+name) and a `name`, plus backend-specific keys.
 
 | `type` | Purpose | Required keys | Notes |
 |--------|---------|--------------|-------|
@@ -32,12 +32,12 @@ key_vaults:
 ```
 
 !!! note "Per-entry options"
-    - `no_push: true` makes a vault read-only (keys are fetched but never written to it).
+    - `no_push: true` makes a vault read-only (unshackle fetches content keys from it but never writes to it).
     - A vault of `type: API` whose `name` contains `decrypt_labs` auto-fills its `token` from
       [`decrypt_labs_api_key`](misc.md#external-api-keys) when not set inline. Vault `type` values are
       case-sensitive module names.
-    - An all-zero content key (32 zeros) is treated as "no key" everywhere and is never
-      stored.
+    - unshackle treats an all-zero content key (32 zeros) as "no key" everywhere and never
+      stores it.
 
 ## `vault_timeout`
 

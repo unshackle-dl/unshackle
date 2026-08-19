@@ -17,7 +17,7 @@ class InsertResult(Enum):
 
 class HTTP(Vault):
     """
-    Key Vault using HTTP API with support for multiple API modes.
+    Key Vault using HTTP API that can operate in several API modes.
 
     Supported modes:
     - query: Uses GET requests with query parameters
@@ -37,7 +37,7 @@ class HTTP(Vault):
         timeout: float = 10.0,
     ):
         """
-        Initialize HTTP Vault.
+        Initialise HTTP Vault.
 
         Args:
             name: Vault name
@@ -346,7 +346,7 @@ class HTTP(Vault):
 
     def set_title(self, title: str):
         """
-        Set a title to be used for the next key insertions.
+        Set a title for the next content key insertions.
         This is optional and will be sent with add_key requests if available.
         """
         self.current_title = title
@@ -355,7 +355,7 @@ class HTTP(Vault):
         self, service: str, kid: Union[UUID, str], key: str, title: Optional[str] = None
     ) -> InsertResult:
         """
-        Insert a key and return detailed result information.
+        Insert a content key and return detailed result information.
         This method provides more granular feedback than the standard add_key method.
         Available in both API modes.
         """

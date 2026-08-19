@@ -102,7 +102,7 @@ def copy(
 ) -> None:
     """
     Copy data from multiple Key Vaults into a single Key Vault.
-    Rows with matching KIDs are skipped unless there's no KEY set.
+    The copy skips rows with matching KIDs, unless the row has no content key.
     Existing data is not deleted or altered.
 
     The `to_vault_name` argument is the key vault you wish to copy data to.
@@ -183,9 +183,9 @@ def sync(
     local_only: bool = False,
 ) -> None:
     """
-    Ensure multiple Key Vaults copies of all keys as each other.
-    It's essentially just a bi-way copy between each vault.
-    To see the precise details of what it's doing between each
+    Make sure that every Key Vault has copies of all the content keys of the others.
+    It is essentially a bi-way copy between each vault.
+    To see the precise details of what it does between each
     provided vault, see the documentation for the `copy` command.
     """
     if not len(vaults) > 1:
@@ -216,9 +216,9 @@ def add(file: Path, service: str, vaults: list[str]) -> None:
     """
     Add new Content Keys to Key Vault(s) by service.
 
-    File should contain one key per line in the format KID:KEY (HEX:HEX).
+    File should contain one content key per line in the format KID:KEY (HEX:HEX).
     Each line should have nothing else within it except for the KID:KEY.
-    Encoding is presumed to be UTF8.
+    unshackle reads the file as UTF8.
     """
     if not file.exists():
         raise click.ClickException(f"File provided ({file}) does not exist.")
@@ -257,7 +257,7 @@ def add(file: Path, service: str, vaults: list[str]) -> None:
 
 
 def search_vault(vault: Vault, kid: str, services: list[str], log: logging.Logger) -> Optional[tuple[str, str]]:
-    """Return the (service, key) of the first service table in a vault holding the KID."""
+    """Return the service and content key from the first service table in a vault holding the KID."""
 
     def probe(svc: str) -> Optional[tuple[str, str]]:
         try:
@@ -294,13 +294,13 @@ def search_vault(vault: Vault, kid: str, services: list[str], log: logging.Logge
 )
 def search(kid: str, service: Optional[str], vault_name: Optional[str]) -> None:
     """
-    Search configured Key Vault(s) for a KID and report any matching KEY.
+    Examine configured Key Vault(s) for a KID and report the content key it finds.
 
-    KID must be 32 hex characters (no dashes). If --service is omitted, every
-    service table in each vault is scanned; vaults that cannot list their
-    tables are probed with every locally installed service tag instead, so
-    passing --service is much faster. If --vault is omitted, every vault in
-    the config is searched.
+    KID must be 32 hex characters (no dashes). If you do not give --service,
+    unshackle scans every service table in each vault. For a vault that cannot
+    show its tables, unshackle probes every locally installed service tag
+    instead, so --service is much faster. If you do not give --vault, unshackle
+    examines every vault in the config.
     """
     log = logging.getLogger("kv")
 
@@ -355,7 +355,7 @@ def search(kid: str, service: Optional[str], vault_name: Optional[str]) -> None:
 @kv.command()
 @click.argument("vaults", nargs=-1, type=click.UNPROCESSED)
 def prepare(vaults: list[str]) -> None:
-    """Create Service Tables on Vaults if not yet created."""
+    """Make Service Tables on Vaults if they do not exist yet."""
     log = logging.getLogger("kv")
 
     vaults_ = load_vaults(vaults)

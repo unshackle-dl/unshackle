@@ -1,6 +1,6 @@
 # Remote Service Sessions
 
-A **remote service session** lets one machine do the hard, service-specific work
+A **remote session** lets one machine do the hard, service-specific work
 (authenticating to a streaming service, listing titles, resolving tracks and
 manifests, and, optionally, DRM licensing) while another machine runs the actual
 download, decryption, and muxing locally.
@@ -9,14 +9,14 @@ This is the mechanism behind unshackle's client/server "remote download" workflo
 A thin local client (`RemoteService`) talks to an unshackle `serve` instance over
 HTTP. The server keeps an authenticated service instance alive between requests so
 the client can authenticate once and then make many follow-up calls against the
-same session.
+same remote session.
 
 !!! note "Why you'd use this"
-    - The server has service accounts, cookies, or a CDM you don't want to copy to
+    - The server has service accounts, cookies, or a CDM you do not want to copy to
       every machine.
-    - You want to run downloads on a fast/local machine but keep credentials and
-      licensing centralized.
-    - A service is region-locked to where the server lives, and the client isn't.
+    - You want to do downloads on a fast/local machine but keep credentials and
+      licensing centralised.
+    - A service is region-locked to where the server lives, and the client is not.
 
 ---
 
@@ -43,7 +43,7 @@ selection (downloading segments, decrypting, and muxing) runs locally.
     The `RemoteService` adapter lives inside the ordinary `dl` command and replaces
     the old standalone `remote_dl` command. If you have prior scripts or docs that
     invoke `remote_dl`, use `dl` with a configured remote server instead. The
-    functionality now rides on `dl` via `RemoteService`.
+    functionality now rides on `dl` through `RemoteService`.
 
 For the auth-facing endpoints, header format, and error shapes referenced below,
 see [Authentication](authentication.md) and the endpoint reference in
@@ -79,18 +79,18 @@ remote_services:
 
 !!! warning "Port default"
     The `unshackle serve` default port is **`8786`** (not `8080`). Use the port
-    your server actually binds. Some older example snippets show `8080`, which is
+    your server binds. Some older example snippets show `8080`, which is
     not the default.
 
 ### Selecting a server
 
-If exactly one server is configured, unshackle uses it implicitly:
+If you configure exactly one server, unshackle uses it implicitly:
 
 ```bash
 unshackle dl EXAMPLE 0ABCDEF
 ```
 
-If **more than one** server is configured, you must pick one with `--server`:
+If you configure **more than one** server, you must pick one with `--server`:
 
 ```bash
 unshackle dl --server my_server EXAMPLE 0ABCDEF
@@ -104,17 +104,17 @@ you to add the block shown above.
 ## What happens during a download
 
 From your point of view the command looks like an ordinary download. Under the
-hood the client walks a session through its lifecycle.
+hood the client walks a remote session through its lifecycle.
 
 === "1. Create + authenticate"
 
     The client calls `POST /api/session/create`, forwarding whatever it can so the
-    server doesn't have to prompt:
+    server does not have to prompt:
 
     - Local **credentials** for the service/profile (`{username, password, extra?}`)
     - Local **cookies**, compressed and base64-encoded
-    - A resolved **proxy**, or, if you didn't set one, your detected
-      **client region** so the server can auto-proxy to match
+    - A resolved **proxy**, or, if you did not set one, your detected
+      **client region** so the server can auto-proxy to match it
     - Track-selection hints (`range_`, `vcodec`, `quality`, `best_available`) so
       the server fetches the right manifests
     - Your local per-service **cache files** (e.g. refreshed tokens)
@@ -125,7 +125,7 @@ hood the client walks a session through its lifecycle.
 === "2. Interactive prompts (if needed)"
 
     Some services need a one-time code, PIN, or device confirmation. When the
-    server's auth flow asks for input, the session enters `pending_input`. The
+    server's auth flow asks for input, the remote session enters `pending_input`. The
     client polls, displays the prompt to you locally, collects your answer, and
     sends it back. The server's auth thread resumes with your response.
 
@@ -136,29 +136,29 @@ hood the client walks a session through its lifecycle.
 === "3. Titles + tracks"
 
     Once authenticated, the client fetches the title list, then the tracks for the
-    chosen title. The tracks come back with playback URLs, and DASH/ISM manifests
-    are shipped as compressed XML so the client can re-parse them locally for
+    chosen title. The tracks come back with playback URLs, and the server ships
+    DASH/ISM manifests as compressed XML so the client can re-parse them locally for
     downloading. Any `session_headers` / `session_cookies` the server used are
     merged into the client's local HTTP session.
 
 === "4. Licensing"
 
-    For DRM content the client either **proxies** its CDM challenge through the
-    server, or, if `server_cdm: true`, asks the server to run the full CDM flow
+    For a DRM-protected title the client either **proxies** its CDM challenge through
+    the server, or, if `server_cdm: true`, asks the server to do the full CDM flow
     and return the content keys directly. See
     [Server-side vs. proxied CDM](#server-side-vs-proxied-cdm) below.
 
 === "5. Download + close"
 
     The client downloads, decrypts, and muxes locally. On completion it deletes
-    the session. If the server has updated cache files (e.g. a refreshed token),
-    they're returned on delete and saved locally so the **next** session can skip
-    interactive auth.
+    the remote session. If the server has updated cache files (for example a refreshed
+    token), the delete returns them and the client saves them locally, so the **next**
+    remote session can skip interactive auth.
 
 !!! tip "Renaming remote titles locally"
-    You can rename titles for a remote service you don't have installed locally by
+    You can rename titles for a remote service you do not have installed locally by
     adding a `title_map` under that service in your client `remote_services.<name>.services`
-    config. The server sends raw titles; your local map wins.
+    config. The server sends raw titles. Your local map wins.
 
     This is deliberate: the server does **no** `title_map` remapping of its own and
     sends titles exactly as the service returns them. All remapping happens on the
@@ -178,26 +178,26 @@ There are two ways DRM keys get resolved, chosen by the client's `server_cdm` fl
     to `POST /api/session/{id}/license`, the server forwards it to the service, and
     the raw license bytes come back for your local CDM to parse.
 
-    - Keeps your CDM local; the server just relays the license request.
+    - Keeps your CDM local. The server only relays the license request.
     - Used when `server_cdm` is `false` (the default).
 
 === "Server-side CDM (server_cdm: true)"
 
     The **server's CDM** does everything. The client sends track IDs (or a PSSH),
     the server checks its key vaults, loads the device configured for your API key,
-    runs the CDM flow, and returns `KID:KEY` pairs directly. No CDM is needed on the
-    client.
+    runs the CDM flow, and returns `KID:KEY` pairs directly. The client needs no
+    CDM.
 
     - Enable with `server_cdm: true` in the server entry.
-    - The server tells the client which DRM type it actually used
+    - The server tells the client which DRM type it used
       (`widevine` or `playready`).
 
 ---
 
-## Session lifecycle and expiry
+## Remote session lifecycle and expiry
 
-Sessions live in an **in-memory store on the server** and expire on a timer. You
-generally never touch this directly, but it explains behavior you might observe.
+Remote sessions live in an **in-memory store on the server** and expire on a timer. You
+generally never touch this directly, but it explains behaviour you might observe.
 
 | Behavior | Value | Notes |
 |---|---|---|
@@ -207,9 +207,10 @@ generally never touch this directly, but it explains behavior you might observe.
 | Cleanup sweep | every 60s | Expired sessions are removed and their input prompts cancelled |
 
 !!! note "Auth is never rushed"
-    A session that is still `authenticating` or waiting on `pending_input` is **not**
-    subject to the short 300s TTL; it gets the full 600s auth window. This gives you
-    time to enter an interactive code without the session vanishing mid-prompt.
+    A remote session that is still `authenticating` or waiting on `pending_input` is
+    **not** subject to the short 300s TTL. It gets the full 600s auth window. This gives
+    you time to enter an interactive code without the remote session vanishing
+    mid-prompt.
 
 The TTL and max-session limits are read from server config:
 
@@ -223,17 +224,18 @@ serve:
 
 ## Security properties worth knowing
 
-- **API key required.** Every session request carries `X-Secret-Key`; requests
-  without a valid key are rejected (health check aside). See
+- **API key required.** Every remote session request carries `X-Secret-Key`. The
+  server rejects requests without a valid API key (health check aside). See
   [Authentication](authentication.md).
-- **IP binding.** A session records the creator's IP at create time. If a later
-  request for the same session comes from a different IP, the server returns
-  `403 FORBIDDEN`. Sessions are not portable between hosts.
-- **Namespaced, isolated cache.** Each session gets its own cache directory,
-  namespaced by a hash of the API key and the session ID, so sessions can't read
-  each other's cached tokens. The directory is deleted when the session ends.
-- **Secrets are scrubbed from logs.** Session IDs, service tags, and other user
-  values are sanitized before logging.
+- **IP binding.** A remote session records the creator's IP when the server makes it.
+  If a later request for the same remote session comes from a different IP, the server
+  returns `403 FORBIDDEN`. Remote sessions are not portable between hosts.
+- **Namespaced, isolated cache.** Each remote session gets its own cache directory,
+  namespaced by a hash of the API key and the remote session ID, so remote sessions
+  cannot read each other's cached tokens. The server deletes the directory when the
+  remote session ends.
+- **The server redacts secrets in logs.** It redacts remote session IDs, service tags,
+  and other user values before it writes them to the log.
 
 ---
 
@@ -243,18 +245,18 @@ serve:
     The material below documents the server-side implementation and the HTTP
     contract. End users configuring a client can stop at the sections above.
 
-### Session endpoints
+### Remote session endpoints
 
-All routes are exposed even in `--remote-only` server mode. Paths use the
-`session_id` returned by create.
+The server mounts all these routes, even in `--remote-only` mode. Paths use the
+`session_id` that `create` returns.
 
 !!! note "Why `--remote-only` exists"
-    `--remote-only` narrows the server to just the health, services, search, and
-    session subset (and emits CORS headers) precisely so it is safe to sit behind
+    `--remote-only` narrows the server to only the health, services, search, and
+    remote session subset (and emits CORS headers), precisely so it is safe to sit behind
     Cloudflare or serve cross-origin browser clients. That trimmed surface, rather
     than the full `--api-only` mode, is what makes a CORS/Cloudflare-fronted
     deployment practical: reach for it when the server is public-facing or accessed
-    from a browser origin, not when you simply want the local HTTP API.
+    from a browser origin, not when you want only the local HTTP API.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -284,8 +286,8 @@ The response returns **before** authentication finishes:
 ```
 
 Authentication runs on a background thread (`asyncio.to_thread(authenticate, ...)`).
-The session starts in `AUTHENTICATING`; the client must poll the prompt endpoint
-until it reaches `authenticated` (or `failed`).
+The remote session starts in `AUTHENTICATING`. The client must poll the prompt
+endpoint until it reaches `authenticated` (or `failed`).
 
 ### Interactive auth: the `InputBridge`
 
@@ -296,7 +298,7 @@ layer.
 - `AuthStatus` values: `authenticating`, `pending_input`, `authenticated`, `failed`.
 - `InputBridge.request_input(prompt, timeout=600)` blocks the sync auth thread on a
   `threading.Event` until `submit_response()` or `cancel()` fires.
-- A timeout raises `TimeoutError` and marks the session `FAILED`.
+- A timeout raises `TimeoutError` and marks the remote session `FAILED`.
 - `AUTH_INPUT_TIMEOUT = 600.0` seconds. This is also the TTL granted to
   `AUTHENTICATING` / `PENDING_INPUT` sessions in the store.
 
@@ -309,30 +311,30 @@ layer.
 { "status": "failed", "error": "...message..." }
 ```
 
-A missing session returns `404 SESSION_NOT_FOUND`; an IP mismatch returns
+A missing remote session returns `404 SESSION_NOT_FOUND`. An IP mismatch returns
 `403 FORBIDDEN`. `POST /api/session/{id}/prompt` takes `{ "response": "..." }` and
-returns `{ "status": "accepted" }`; posting with no pending prompt is an
+returns `{ "status": "accepted" }`. A post with no pending prompt is an
 `INVALID_INPUT` error.
 
 ### `SessionStore` internals
 
-Source: `unshackle/core/api/session_store.py`. A singleton obtained via
+Source: `unshackle/core/api/session_store.py`. A singleton you get from
 `get_session_store()`.
 
 - **Config-driven limits.** `serve.session_ttl` (default `300`) and
   `serve.max_sessions` (default `100`) are read as properties, so config changes
   take effect without recreating the store.
-- **`create()`** evicts the least-recently-accessed session when at capacity,
-  then stores a new `SessionEntry` (defaulting `auth_status` to `AUTHENTICATED`;
-  the create handler overrides it to `AUTHENTICATING`).
-- **`get()`** refreshes `last_accessed` via `touch()`. It returns `None` (and
-  deletes the entry) if an authenticated session has been idle longer than the TTL.
-  Sessions in `AUTHENTICATING` / `PENDING_INPUT` are exempt from TTL expiry.
-- **`cleanup_expired()`** runs every 60s: authenticated sessions expire at `ttl`,
-  in-flight-auth sessions expire at `AUTH_INPUT_TIMEOUT`. Removing a session
-  cancels its `InputBridge` and deletes its cache directory (pruning empty parent
-  dirs up to, but not including, the cache root).
-- **`cancel_all_bridges()`** is called on server shutdown to unblock any waiting
+- **`create()`** evicts the least-recently-accessed remote session when at capacity,
+  then stores a new `SessionEntry`. It defaults `auth_status` to `AUTHENTICATED`, and
+  the `create` handler overrides it to `AUTHENTICATING`.
+- **`get()`** refreshes `last_accessed` through `touch()`. It returns `None` (and
+  deletes the entry) if an authenticated remote session has been idle longer than the
+  TTL. Remote sessions in `AUTHENTICATING` / `PENDING_INPUT` are exempt from TTL expiry.
+- **`cleanup_expired()`** runs every 60s: authenticated remote sessions expire at
+  `ttl`, in-flight-auth remote sessions expire at `AUTH_INPUT_TIMEOUT`. The removal of
+  a remote session cancels its `InputBridge` and deletes its cache directory (pruning
+  empty parent dirs up to, but not including, the cache root).
+- The server calls **`cancel_all_bridges()`** on shutdown, to unblock any waiting
   auth threads.
 
 `SessionEntry` fields:
@@ -352,22 +354,22 @@ Source: `unshackle/core/api/session_store.py`. A singleton obtained via
 
 ### Per-session cache namespacing
 
-The create handler builds a `Cacher` namespaced as:
+The `create` handler builds a `Cacher` namespaced as:
 
 ```text
 _sessions/<pbkdf2_hmac(sha256, X-Secret-Key, "unshackle-session-ns", 100000)[:12]>/<session_id>/<service>
 ```
 
-Forwarded `cache` files are written into that directory before authentication.
+The handler writes forwarded `cache` files into that directory before authentication.
 On `DELETE`, the handler harvests updated cache files (compressing each with zlib
 and base64-encoding, **excluding** `titles_*` files) and returns them under a
-`cache` key so the client can persist refreshed tokens:
+`cache` field, so the client can keep refreshed tokens:
 
 ```json
 { "status": "ok", "cache": { "tokens": "...base64(zlib(bytes))..." } }
 ```
 
-### Session info response
+### Remote session info response
 
 `GET /api/session/{id}`:
 
@@ -384,12 +386,12 @@ and base64-encoding, **excluding** `titles_*` files) and returns them under a
 
 !!! warning "`expires_in` is the configured TTL, not time remaining"
     The `expires_in` value reports the store's configured `session_ttl`, not the
-    seconds left before this specific session expires.
+    seconds left before this specific remote session expires.
 
 ### Reference client: `RemoteService`
 
 Source: `unshackle/core/remote_service.py`. This is the canonical consumer of the
-session API and a good template for any client.
+remote session API and a good template for any client.
 
 - **`RemoteClient.request`** sets `X-Secret-Key` and `User-Agent: unshackle/<version>`,
   uses a 120s timeout for `POST` and 30s for `GET`/`DELETE`, and treats any
@@ -398,10 +400,10 @@ session API and a good template for any client.
 - **Retries.** The download-side HTTP session mounts an adapter with
   `Retry(total=5, backoff_factor=0.2, status_forcelist=[429, 500, 502, 503, 504])`.
 - **Flow.** `authenticate()` → `create` (+ poll `prompt` every 2s up to a 600s
-  deadline, answering `pending_input` prompts; with stdin closed the client logs an
+  deadline, answering `pending_input` prompts. With stdin closed the client logs an
   error and raises `SystemExit(1)` instead of posting an empty answer) → `get_titles()` → `get_tracks()`
   (merging returned `session_headers`/`session_cookies`, re-parsing `manifests`) →
-  license via proxy or `server_cdm` → `close()` (`DELETE`, saving any returned
+  get the licence in proxy mode or `server_cdm` mode → `close()` (`DELETE`, saving any returned
   `cache`).
 - **Server resolution.** `resolve_server()` reads `config.remote_services.<name>`
   into `{url, api_key, services, server_cdm}`, injecting the `server_cdm` flag into
@@ -412,20 +414,20 @@ session API and a good template for any client.
 ## Troubleshooting
 
 !!! example "\"Could not connect to remote server ... Is it running?\""
-    The client couldn't reach the URL. Confirm `unshackle serve` is running on the
-    server, the `url`/port in `remote_services` are correct (default port `8786`),
+    The client could not reach the URL. Make sure that `unshackle serve` operates on
+    the server, the `url`/port in `remote_services` are correct (default port `8786`),
     and any firewall or reverse proxy allows the connection.
 
 !!! example "`403 FORBIDDEN` mid-download"
-    The request came from a different IP than the one that created the session.
-    Sessions are IP-bound. Don't move between networks (or NAT egress IPs) during a
+    The request came from a different IP than the one that made the remote session.
+    Remote sessions are IP-bound. Do not move between networks (or NAT egress IPs) during a
     remote download.
 
 !!! example "Auth times out or the prompt never resolves"
-    Interactive auth allows up to 600s. If you miss that window the session is
-    marked `failed` and cleaned up; just re-run the download. If the server never
-    prompts you, check that credentials/cookies forwarded from the client are valid
-    for the service.
+    Interactive auth allows up to 600s. If you miss that window, the server marks the
+    remote session `failed` and cleans it up. Operate the download again. If the server
+    never prompts you, make sure that the credentials and cookies the client forwarded
+    are valid for the service.
 
 !!! example "\"Multiple remote services configured. Use --server ...\""
     You have more than one entry under `remote_services`. Pass `--server <name>`

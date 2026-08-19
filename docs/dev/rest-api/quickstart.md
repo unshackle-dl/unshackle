@@ -1,11 +1,11 @@
 # REST API Quick Start
 
-Unshackle ships with a built-in REST API that exposes the same download engine you drive from the command line. It is served by the `unshackle serve` command and lets you queue downloads, poll their progress, browse services, and manage history over HTTP instead of the terminal.
+Unshackle ships with a built-in REST API that exposes the same download engine you drive from the command line. The `unshackle serve` command serves it and lets you queue downloads, poll their progress, browse services, and manage history over HTTP instead of the terminal.
 
-The full loop runs end to end: start the server, authenticate, submit a download job, and poll it to completion, using real `curl` commands built directly from the API routes.
+The full loop runs end to end: start the server, authenticate, submit a download job, and poll it to completion. The `curl` commands here come directly from the API routes.
 
 !!! note "Who this page is for"
-    This is a **developer** guide. It assumes you are comfortable with HTTP, JSON, and a tool like `curl`. If you just want to download something, the [command line](../../index.md) is simpler. The REST API is meant for building tools, UIs, and automation on top of unshackle.
+    This is a **developer** guide. It assumes you are comfortable with HTTP, JSON, and a tool like `curl`. If you only want to download something, the [command line](../../index.md) is simpler. The REST API is meant for building tools, UIs, and automation on top of unshackle.
 
 ---
 
@@ -30,7 +30,7 @@ You need a working unshackle install with services and CDM devices already confi
 
 ## Step 1: Configure an API secret
 
-Every request (except the health check) is authenticated with a secret key sent in the `X-Secret-Key` header. The server reads this key from the `serve` section of your `unshackle.yaml` config.
+The server authenticates every request (except the health check) with an API key that you send in the `X-Secret-Key` header. The server reads this API key from the `serve` section of your `unshackle.yaml` config.
 
 At minimum you must set `api_secret`:
 
@@ -39,7 +39,7 @@ serve:
   api_secret: "choose-a-long-random-secret"
 ```
 
-If you want the API to be able to license and download DRM-protected content, you also need to grant CDM devices to the key. Configure that under `serve.users`, keyed by the secret:
+If you want the API to license and download DRM-protected titles, you must also grant CDM devices to the API key. Configure that under `serve.users`, keyed by the secret:
 
 ```yaml title="unshackle.yaml"
 serve:
@@ -55,7 +55,7 @@ serve:
     If `api_secret` is not set and you do **not** pass `--no-key`, `unshackle serve` refuses to start and raises an error. Treat the secret like a password. Anyone who has it can queue downloads on your machine.
 
 !!! tip "Disabling auth for local testing"
-    Passing `--no-key` to `serve` turns authentication off entirely: every request is allowed and the `X-Secret-Key` header is ignored. This is convenient for a throwaway local test, but never expose a `--no-key` server to a network you do not fully trust.
+    `--no-key` turns authentication off entirely: the server allows every request and ignores the `X-Secret-Key` header. This is convenient for a throwaway local test, but never put a `--no-key` server on a network you do not fully trust.
 
 ---
 
@@ -67,7 +67,7 @@ Start the REST API with the `serve` command:
 unshackle serve --api-only
 ```
 
-By default the server binds to `127.0.0.1:8786`. The `--api-only` flag serves just the REST API and omits the Widevine/PlayReady CDM HTTP endpoints; drop it if you also want to expose those.
+By default the server binds to `127.0.0.1:8786`. The `--api-only` flag serves only the REST API and omits the Widevine/PlayReady CDM HTTP endpoints. Drop it when you also want those endpoints.
 
 Common options:
 
@@ -90,9 +90,9 @@ Swagger UI available at http://127.0.0.1:8786/api/docs/
 ```
 
 !!! note "Swagger UI is also behind auth"
-    In `--api-only` mode (without `--no-key`), the Swagger UI at `/api/docs/` requires the `X-Secret-Key` header just like every other route. Only `/api/health` is exempt from authentication.
+    In `--api-only` mode (without `--no-key`), the Swagger UI at `/api/docs/` requires the `X-Secret-Key` header, the same as every other route. Only `/api/health` is exempt from authentication.
 
-For the rest of this page we will assume the server is reachable at `http://127.0.0.1:8786` and store the secret in a shell variable:
+For the rest of this page we will assume the server is reachable at `http://127.0.0.1:8786` and store the secret in an environment variable:
 
 ```shell
 export SECRET="choose-a-long-random-secret"
@@ -101,9 +101,9 @@ export BASE="http://127.0.0.1:8786"
 
 ---
 
-## Step 3: Confirm the server is alive
+## Step 3: Make sure that the server is alive
 
-The health endpoint is the one route that never requires a key. Use it to confirm the server is running and to read its version:
+The health endpoint is the one route that never requires an API key. Use it to make sure that the server operates, and to read its version:
 
 ```shell
 curl "$BASE/api/health"
@@ -127,7 +127,7 @@ The `update_check` block is best effort. If unshackle cannot reach the update so
 
 ## Step 4: Authenticate a real request
 
-Every other endpoint needs the `X-Secret-Key` header. A quick way to prove your key works is to list the services the server can see:
+Every other endpoint needs the `X-Secret-Key` header. A quick way to prove your API key works is to show the services the server can see:
 
 ```shell
 curl "$BASE/api/services" \
@@ -154,14 +154,14 @@ curl "$BASE/api/services" \
 }
 ```
 
-If the key is missing or wrong, you get a `401` with a plain body:
+If the API key is missing or wrong, you get a `401` with a plain body:
 
 ```json title="401 Unauthorized"
 { "status": 401, "message": "Secret Key is Invalid." }
 ```
 
 !!! warning "Two error shapes exist"
-    The authentication middleware returns the short `{"status": 401, "message": "..."}` shape shown above. Every **other** error the API produces uses the richer structured shape (`error_code`, `timestamp`, `details`, ...) described in [Error handling](#error-handling). A robust client should handle both.
+    The authentication middleware returns the short `{"status": 401, "message": "..."}` shape shown above. Every **other** error the API produces uses the richer structured shape (`error_code`, `timestamp`, `details`, ...) described in [Error handling](#error-handling). Parse both shapes in your client.
 
 The `tag` value for the service you want is the identifier you pass as `service` in the calls below.
 
@@ -241,7 +241,7 @@ The request body accepts the full download parameter set. A few of the most usef
 Validation is strict: invalid codecs, subtitle formats, dynamic-range names, non-positive counts, or mutually exclusive flags (for example both `video_only` and `audio_only`) come back as `400` with error code `INVALID_PARAMETERS`. See the full reference on the [download reference page](endpoints.md) for every accepted field.
 
 !!! note "Gated fields"
-    Passing a per-request CDM (`cdm`) or inline credentials (`credential` / `credentials`) is refused with `403 FORBIDDEN` unless the server operator has explicitly opted in via `serve.cdm_overrides` and `serve.allow_job_credentials`. Both are off by default.
+    The server refuses a per-request CDM (`cdm`) or inline credentials (`credential` / `credentials`) with `403 FORBIDDEN`, unless the server operator has explicitly opted in with `serve.cdm_overrides` and `serve.allow_job_credentials`. Both are off by default.
 
 ---
 
@@ -260,7 +260,7 @@ curl "$BASE/api/download/jobs/$JOB" \
   -H "X-Secret-Key: $SECRET"
 ```
 
-While the download is running you will see `status: "downloading"` and a `progress` value climbing from `0` toward `100`:
+While the download runs you will see `status: "downloading"` and a `progress` value climbing from `0` toward `100`:
 
 ```json title="200 OK (in progress)"
 {
@@ -313,14 +313,14 @@ done
     A few seconds between polls is plenty. The server updates a job's progress roughly twice a second internally, and each poll reads the current snapshot.
 
 !!! tip "Or let the server push the updates"
-    `GET /api/download/jobs/{job_id}/events` streams the same job record as Server-Sent Events, and closes the stream when the job ends. It removes the polling loop above. See [Endpoints](endpoints.md#get-apidownloadjobsjob_idevents).
+    `GET /api/download/jobs/{job_id}/events` streams the same job record as Server-Sent Events, and closes the event stream when the job ends. It removes the polling loop above. See [Endpoints](endpoints.md#get-apidownloadjobsjob_idevents).
 
     ```bash
     curl -N "$BASE/api/download/jobs/$JOB/events" \
       -H "X-Secret-Key: $SECRET"
     ```
 
-If a job ends in `failed`, the full record includes `error_message`, `error_code`, and (when the server was started with `--debug-api`) `error_traceback` and `worker_stderr` to help you diagnose it. Sensitive values in these fields are scrubbed before they are returned.
+If a job ends in `failed`, the full record includes `error_message`, `error_code`, and (when you start the server with `--debug-api`) `error_traceback` and `worker_stderr` to help you find the cause. The server scrubs sensitive values in these fields before it returns them.
 
 ---
 
@@ -333,11 +333,11 @@ curl -X DELETE "$BASE/api/download/jobs/$JOB" \
   -H "X-Secret-Key: $SECRET"
 ```
 
-- If the job is **terminal** (completed/failed/cancelled) it is removed from the manager and you get **`204 No Content`** with an empty body.
-- If the job is still **queued or downloading** it is cancelled instead, and you get `200` with `{"status": "success", "message": "Job cancelled"}`.
+- If the job is **terminal** (completed/failed/cancelled), the manager removes it. You get **`204 No Content`** with an empty body.
+- If the job is still **queued or downloading**, the manager cancels it instead. You get `200` with `{"status": "success", "message": "Job cancelled"}`.
 
 !!! warning "Do not parse JSON on 204"
-    A `204` response has no body. This applies to terminal-job removal here and to deleting history entries; check the status code before attempting to decode JSON.
+    A `204` response has no body. This applies to terminal-job removal here and to deleting history entries. Examine the status code before you decode JSON.
 
 To clear every finished job at once instead of one at a time:
 
@@ -365,7 +365,7 @@ A handful of endpoints round out job control. All require the `X-Secret-Key` hea
 | `POST` | `/api/download/jobs/{job_id}/priority` | Move a queued job to the front of the queue |
 | `POST` | `/api/download/jobs/clear-finished` | Remove all terminal jobs |
 
-Listing supports query parameters for filtering by `status` or `service`, sorting via `sort_by` (`created_time`, `started_time`, `completed_time`, `progress`, `status`, `service`) and `sort_order` (`asc` / `desc`), and requesting full per-job detail with `full=true`:
+Listing supports query parameters for filtering by `status` or `service`, sorting with `sort_by` (`created_time`, `started_time`, `completed_time`, `progress`, `status`, `service`) and `sort_order` (`asc` / `desc`), and requesting full per-job detail with `full=true`:
 
 ```shell
 curl "$BASE/api/download/jobs?status=downloading&sort_by=progress&sort_order=desc" \
@@ -390,7 +390,7 @@ curl "$BASE/api/download/jobs?status=downloading&sort_by=progress&sort_order=des
 }
 ```
 
-Retrying reuses the original job's service, title, and parameters to enqueue a brand new job (returning `202` with a fresh `job_id`); it only works on terminal jobs and returns `409 CONFLICT` otherwise. Prioritizing only works on jobs still in the `queued` state.
+A retry reuses the original job's service, title, and parameters to enqueue a brand new job, and returns `202` with a fresh `job_id`. A retry works only on terminal jobs, and returns `409 CONFLICT` otherwise. A priority change works only on jobs still in the `queued` state.
 
 ---
 
@@ -398,10 +398,10 @@ Retrying reuses the original job's service, title, and parameters to enqueue a b
 
 The download loop above is the core of the API, but the same server exposes more:
 
-- **Discovery**: `POST /api/search` finds titles by query, and `POST /api/list-titles` / `POST /api/list-tracks` inspect what a title offers before you commit to downloading it. See [list titles and tracks](endpoints.md).
+- **Discovery**: `POST /api/search` finds titles by query, and `POST /api/list-titles` / `POST /api/list-tracks` inspect what a title offers before you commit to downloading it. See [titles and tracks](endpoints.md).
 - **History**: `GET /api/history` reads a persisted log of jobs that reached a terminal state (newest first), and `DELETE /api/history/{job_id}` removes a single entry. See [history](endpoints.md).
-- **Introspection**: `GET /api/profiles` lists configured credential profiles per service, `GET /api/config` returns a redacted view of the effective server config, and `GET /api/env/check` reports which external binaries are installed.
-- **Maintenance**: `POST /api/maintenance/clear-cache`, `.../clear-temp`, and `.../refresh-services` perform housekeeping (the cache/temp clears are blocked with `409` while a download is active).
+- **Introspection**: `GET /api/profiles` lists configured credential profiles per service, `GET /api/config` returns a redacted view of the effective server config, and `GET /api/env/check` reports which external binaries the machine has.
+- **Maintenance**: `POST /api/maintenance/clear-cache`, `.../clear-temp`, and `.../refresh-services` do housekeeping (the server blocks the cache and temp clears with `409` while a download is active).
 - **Remote sessions**: the `/api/session/*` endpoints drive the thin-client "remote download" flow, where the server authenticates and licenses on behalf of a local client. See [remote sessions](remote-sessions.md).
 
 The interactive **Swagger UI at `/api/docs/`** documents every route and lets you try them in the browser (send your `X-Secret-Key` there too).
@@ -422,7 +422,7 @@ Apart from the auth middleware's short form, every error the API returns uses a 
 }
 ```
 
-`details` appears only when there is something to add, `retryable: true` appears only for transient failures, and a `debug_info` block (exception type and traceback) is included only when the server runs with `--debug-api`.
+`details` appears only when the server has more to add. `retryable: true` appears only for transient failures. The server includes a `debug_info` block (exception type and traceback) only when it runs with `--debug-api`.
 
 The `error_code` maps to an HTTP status. The ones you will meet most often:
 

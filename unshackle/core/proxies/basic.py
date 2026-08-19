@@ -10,7 +10,7 @@ from unshackle.core.proxies.proxy import Proxy
 
 class Basic(Proxy):
     def __init__(self, **countries: dict[str, Union[str, list[str]]]):
-        """Basic Proxy Service using Proxies specified in the config."""
+        """Basic proxy provider that uses the proxies given in the configuration file."""
         self.countries = {k.lower(): v for k, v in countries.items()}
 
     def __repr__(self) -> str:

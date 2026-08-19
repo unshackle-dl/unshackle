@@ -2,7 +2,7 @@
 
 Instantiates a CDM object (local or remote) given a resolved device name.
 Name resolution (quality-based, profile-based, DRM-type) is the caller's
-responsibility; this module only handles the instantiation step.
+responsibility. This module does the instantiation step only.
 """
 
 from __future__ import annotations

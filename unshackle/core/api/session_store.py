@@ -1,8 +1,9 @@
-"""Server-side session store for remote-dl client-server architecture.
+"""Server-side remote session store for the remote-dl client-server architecture.
 
 Maintains authenticated service instances between API calls so that
-a client can authenticate once and then make multiple requests (list tracks,
-resolve segments, proxy license) using the same session.
+a client can authenticate once and then make several requests (get the tracks,
+get the segment URLs, get the licence in proxy mode) with the same
+remote session.
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ log = logging.getLogger("api.session")
 
 @dataclass
 class SessionEntry:
-    """A single authenticated session with a service."""
+    """A single authenticated remote session with a service."""
 
     session_id: str
     service_tag: str
@@ -49,7 +50,7 @@ class SessionEntry:
 
 
 class SessionStore:
-    """Thread-safe session store with TTL-based expiration."""
+    """Thread-safe remote session store with TTL-based expiration."""
 
     def __init__(self) -> None:
         self._sessions: Dict[str, SessionEntry] = {}
@@ -58,7 +59,7 @@ class SessionStore:
 
     @property
     def ttl(self) -> int:
-        """Session TTL in seconds from config."""
+        """Remote session TTL in seconds from config."""
         return config.serve.get("session_ttl", 300)
 
     @property
@@ -72,7 +73,7 @@ class SessionStore:
         service_instance: Any,
         session_id: Optional[str] = None,
     ) -> SessionEntry:
-        """Create a new session with an authenticated service instance."""
+        """Make a new remote session with an authenticated service instance."""
         async with self._lock:
             if len(self._sessions) >= self.max_sessions:
                 oldest_id = min(self._sessions, key=lambda k: self._sessions[k].last_accessed)
@@ -90,7 +91,7 @@ class SessionStore:
             return entry
 
     async def get(self, session_id: str) -> Optional[SessionEntry]:
-        """Get a session by ID, returns None if not found or expired."""
+        """Get a remote session by ID, returns None if not found or expired."""
         async with self._lock:
             entry = self._sessions.get(session_id)
             if entry is None:
@@ -107,7 +108,7 @@ class SessionStore:
             return entry
 
     async def delete(self, session_id: str) -> bool:
-        """Delete a session. Returns True if it existed."""
+        """Delete a remote session. Returns True if it existed."""
         async with self._lock:
             entry = self._sessions.pop(session_id, None)
             if entry:
@@ -173,7 +174,7 @@ class SessionStore:
 
     @staticmethod
     def cleanup_cache_dir(cache_tag: Optional[str]) -> None:
-        """Remove session cache directory and empty parents."""
+        """Remove the remote session cache directory and empty parents."""
         if not cache_tag:
             return
         import shutil
@@ -203,7 +204,7 @@ session_store: Optional[SessionStore] = None
 
 
 def get_session_store() -> SessionStore:
-    """Get or create the global session store singleton."""
+    """Get or make the global remote session store singleton."""
     global session_store
     if session_store is None:
         session_store = SessionStore()

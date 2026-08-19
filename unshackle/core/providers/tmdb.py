@@ -128,8 +128,8 @@ class TMDBProvider(MetadataProvider):
     def find_by_imdb_id(self, imdb_id: str, kind: str) -> Optional[ExternalIds]:
         """Look up TMDB/TVDB IDs from an IMDB ID using TMDB's /find endpoint.
 
-        When the requested kind has no results, the other kind is tried, so the returned
-        tmdb_kind can differ from the kind asked for. Returns None if the request fails or
+        When the requested kind has no results, unshackle tries the other kind, so the
+        returned tmdb_kind can differ from the kind asked for. Returns None if the request fails or
         nothing matches.
         """
         self.log.debug("Looking up IMDB ID %s on TMDB", imdb_id)

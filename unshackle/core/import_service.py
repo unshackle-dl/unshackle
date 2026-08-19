@@ -48,9 +48,9 @@ def resolve_import_manifest_data(
     language: Any,
     title: Title_T,
 ) -> None:
-    """Populate ``track.data`` for DASH/ISM tracks rebuilt from export dicts.
+    """Fill ``track.data`` for DASH/ISM tracks rebuilt from export dicts.
 
-    Exports may omit ``manifest_url`` (e.g. when the service never set
+    Exports can be without ``manifest_url`` (for example, when the service never set
     ``title.tracks.manifest_url``) or carry one MPD per adaptation set. ``Track.from_dict``
     does not serialise manifest XML, so each exported track's ``url`` is re-fetched and
     matched to a locally parsed representation before download.
@@ -98,9 +98,10 @@ def resolve_import_manifest_data(
 class ImportService:
     """Reconstructs a download from an export JSON.
 
-    Auth and licensing are skipped; tracks are rebuilt from the export and keys injected
-    directly. ``_server_cdm``/``_server_cdm_type`` keep their underscores: dl.py reads them
-    via getattr as the server-CDM contract that skips client licensing.
+    ImportService does not authenticate and does not license. It rebuilds the tracks from
+    the export and injects the keys directly. ``_server_cdm``/``_server_cdm_type`` keep their
+    underscores: dl.py reads them through getattr as the server-CDM contract that skips
+    client licensing.
     """
 
     ALIASES: tuple[str, ...] = ()
@@ -142,10 +143,11 @@ class ImportService:
 
     @staticmethod
     def build_session(ctx: click.Context, region: Optional[str] = None) -> requests.Session:
-        """Session for re-fetching the manifest.
+        """HTTP session for re-fetching the manifest.
 
-        Honours the importer's ``--proxy``; otherwise falls back to the export region as a
-        geofence. An explicit proxy that fails to resolve raises; a region fallback warns.
+        Honours the importer's ``--proxy``. Without one, it falls back to the export region
+        as a geofence. An explicit proxy that unshackle cannot find raises an error. A region
+        fallback gives a warning.
         """
         session = requests.Session()
         session.headers.update(config.headers)
@@ -201,11 +203,11 @@ class ImportService:
         """Reconstruct the title's tracks from the export.
 
         DASH/ISM: re-fetch and re-parse ``manifest_url`` for the full ladder on that MPD (the importer
-        picks quality with normal dl flags; keys are injected by KID later), then merge in exported
+        picks quality with normal dl flags, and injects the keys by KID later), then merge in exported
         DASH/ISM tracks from other MPDs (e.g. a separate HEVC manifest) and direct-URL side-loads.
         A service side-loads its own subtitles when the manifest's are the worse copy, so any
-        direct-URL subtitle in the export means the whole re-parsed subtitle set is dropped in
-        favour of the exported one.
+        direct-URL subtitle in the export means unshackle drops the whole re-parsed subtitle
+        set in favour of the exported one.
         HLS/URL: rebuild from the stored per-track dicts, since the variant is re-fetched from
         track.url at download time and a master playlist can hand out a new token on every fetch.
         """
@@ -340,9 +342,10 @@ class ImportService:
     def resolve_server_keys(self, title: Title_T) -> None:
         """Inject exported keys into the selected encrypted tracks by KID (no network).
 
-        Called by dl.py after selection. Only encrypted video/audio are touched; encrypted
-        DASH tracks (no DRM at parse time) get a stub holding the keys, which
-        DASH.download_track preserves. decrypt() applies the key whose KID matches the media.
+        dl.py calls this method after selection. It touches only encrypted video and audio
+        tracks. Encrypted DASH tracks (no DRM at parse time) get a stub holding the keys,
+        which DASH.download_track preserves. decrypt() applies the content key whose KID
+        matches the media.
         """
         pool = self.key_pool()
         if not pool:
@@ -364,8 +367,9 @@ class ImportService:
     def track_is_encrypted(track: Any) -> bool:
         """True if the track carries DRM or its manifest declares protection.
 
-        ISM is checked as well as DASH because ISM.download_track reads only ``track.drm``. A rung
-        that misses key injection here downloads encrypted and muxes without error. DASH re-derives
+        This method examines ISM as well as DASH, because ISM.download_track reads only
+        ``track.drm``. A rung that misses content key injection here downloads encrypted and
+        muxes without error. DASH re-derives
         its DRM from the manifest elements, so it survives the same omission.
         """
         if track.drm:

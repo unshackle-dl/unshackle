@@ -110,7 +110,7 @@ class ISM:
     def get_video_range_and_fps(fourcc: str, codec_private_data: str) -> tuple[Video.Range, Optional[float]]:
         """Derive colour range and fps from the SPS VUI in CodecPrivateData,
         since Smooth manifests carry neither as attributes. Range soft-fails to
-        SDR; fps is None for non-HEVC codecs and VUIs without timing info."""
+        SDR. fps is None for non-HEVC codecs and VUIs without timing info."""
         fourcc = (fourcc or "").upper()
         try:
             cpd = bytes.fromhex(codec_private_data or "")

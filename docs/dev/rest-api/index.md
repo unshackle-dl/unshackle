@@ -1,7 +1,7 @@
 # REST API Overview
 
 unshackle ships with a built-in HTTP server. Alongside the command-line tool, you
-can run `unshackle serve` and drive the same download engine over a REST API:
+can operate `unshackle serve` and drive the same download engine over a REST API:
 searching services, listing titles and tracks, queueing downloads, watching live
 progress, and browsing history, all as JSON over HTTP.
 
@@ -9,7 +9,7 @@ This page explains what the API is for, how to start the server, where it listen
 and how the endpoints are organised. Later pages cover each area in depth.
 
 !!! info "Who this section is for"
-    The REST API is aimed at people building automation, dashboards, or remote
+    The REST API is for people who make automation, dashboards, or remote
     clients on top of unshackle. If you only download the occasional title, the
     [command-line tool](../../guide/cli-reference.md) does everything the API does
     and is simpler to use. Reach for the API when you want a long-running service, a
@@ -20,20 +20,20 @@ and how the endpoints are organised. Later pages cover each area in depth.
 The server exposes the same capabilities as the `dl` command, but as discrete HTTP
 calls you can script against:
 
-- **Discovery**: list the services available on the server, run a service's search,
+- **Discovery**: show the services available on the server, use a service's search,
   and enumerate the titles and tracks behind a title ID.
 - **Downloading**: submit a download as a background *job*, then follow its status and
   live progress (by polling, or by subscribing to its Server-Sent Events stream),
   cancel it, retry it, or bump it to the front of the queue.
 - **History and housekeeping**: read the log of finished jobs, inspect the server's
-  effective (redacted) configuration, check external tool versions, and clear caches
+  effective (redacted) configuration, examine external tool versions, and clear caches
   or temp files.
 - **Remote-download sessions**: a thin local client can authenticate against a
   service *on the server*, then pull titles, tracks, and segment info back, and proxy
   DRM licensing. This is how one machine with the credentials and CDMs can serve
   downloads to another. See [Remote Sessions](remote-sessions.md).
 
-Because every download runs as a queued job in a separate worker process, the API is
+Because every download runs as a queued job in a separate job worker process, the API is
 well suited to running unattended: submit work, come back later, and read the result.
 
 ## Running the server
@@ -77,27 +77,27 @@ unshackle serve --api-only --host 0.0.0.0 --port 8786
 
 !!! danger "Binding to a public interface"
     `--no-key` disables authentication completely. Anyone who can reach the port can
-    search, download, and read your configuration. Only combine it with a host like
+    find titles, download them, and read your configuration. Only combine it with a host like
     `127.0.0.1`, or keep the default key-based auth when binding to `0.0.0.0`. Put a
     TLS-terminating reverse proxy (Caddy, nginx) in front for anything internet-facing.
 
 ### Server modes
 
-The set of routes that is actually mounted depends on how you start the server:
+The routes the server mounts depend on how you start the server:
 
 === "Default (CDM + REST)"
 
-    Both the pywidevine/pyplayready CDM endpoints and the full REST API are mounted.
-    This is the mode used when you run `unshackle serve` with no mode flags.
+    The server mounts both the pywidevine/pyplayready CDM endpoints and the full REST API.
+    This is the mode you get when you operate `unshackle serve` with no mode flags.
 
 === "`--api-only`"
 
-    Only the REST API is mounted; the CDM HTTP endpoints are omitted. Authentication
-    uses the single configured API key (or none, with `--no-key`).
+    The server mounts only the REST API. It does not mount the CDM HTTP endpoints.
+    Authentication uses the single configured API key (or none, with `--no-key`).
 
 === "`--remote-only`"
 
-    Only the remote-session subset of routes is exposed (health, services, search,
+    The server mounts only the remote-session subset of routes (health, services, search,
     and everything under `/api/session/*`). This mode implies `--api-only`, and the
     interactive Swagger UI is **not** mounted.
 
@@ -115,12 +115,12 @@ health check is `GET http://127.0.0.1:8786/api/health`.
 
 !!! tip "Interactive API docs"
     Unless you started the server with `--remote-only`, an interactive Swagger UI is
-    available at [`/api/docs/`](http://127.0.0.1:8786/api/docs/). It is generated from
-    the same route table the server actually serves, so it stays in sync with the
-    running build. Note that in `--api-only` mode the docs page is itself behind the
-    API key; only `/api/health` is exempt from authentication.
+    available at [`/api/docs/`](http://127.0.0.1:8786/api/docs/). The server generates
+    it from the same route table it serves, so it always matches the version you
+    operate. Note that in `--api-only` mode the docs page is itself behind the
+    API key. Only `/api/health` is exempt from authentication.
 
-A quick smoke test that needs no key:
+A quick smoke test that needs no API key:
 
 ```shell title="Confirm the server is up"
 curl http://127.0.0.1:8786/api/health
@@ -141,7 +141,7 @@ curl http://127.0.0.1:8786/api/health
 ## Endpoint map
 
 Every REST path uses JSON request and response bodies and lives under `/api`. The
-table below is a map of the surface; the [Endpoints](endpoints.md) page documents each
+table below is a map of the surface. The [Endpoints](endpoints.md) page gives each
 request and response in full.
 
 ### Discovery
@@ -216,15 +216,15 @@ curl -X POST http://127.0.0.1:8786/api/search \
   -d '{"service": "EXAMPLE", "query": "example"}'
 ```
 
-A missing or unknown key returns `401`. The full model, including per-key service
-allowlists, is covered in [Authentication](authentication.md).
+A missing or unknown API key returns `401`. [Authentication](authentication.md) gives
+the full model, including per-key service allowlists.
 
 ## Where to go next
 
 <div class="grid cards" markdown>
 
-- **[Quick Start](quickstart.md)**: start the server, set a key, and run your first
-  end-to-end download over the API.
+- **[Quick Start](quickstart.md)**: start the server, set an API key, and operate your
+  first end-to-end download over the API.
 - **[Authentication](authentication.md)**: the `X-Secret-Key` header, `--no-key`,
   per-key service allowlists, and CORS.
 - **[Endpoints](endpoints.md)**: every request body, query parameter, and response

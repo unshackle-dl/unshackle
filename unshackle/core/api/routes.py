@@ -138,9 +138,9 @@ async def health(request: web.Request) -> web.Response:
 @api_handler
 async def services(request: web.Request) -> web.Response:
     """
-    List available services.
+    Show the available services.
     ---
-    summary: List services
+    summary: Show services
     description: Get all available streaming services with their details
     responses:
       '200':
@@ -203,7 +203,7 @@ async def services(request: web.Request) -> web.Response:
                   format: date-time
                 debug_info:
                   type: object
-                  description: Only present when --debug-api flag is enabled
+                  description: Only present when you use the --debug-api flag
     """
     try:
         service_tags = Services.get_tags()
@@ -332,10 +332,10 @@ async def services(request: web.Request) -> web.Response:
 @api_handler
 async def search(request: web.Request) -> web.Response:
     """
-    Search for titles from a service.
+    Find titles from a service.
     ---
-    summary: Search for titles
-    description: Search for titles by query string from a service
+    summary: Find titles
+    description: Find titles by query string from a service
     requestBody:
       required: true
       content:
@@ -418,9 +418,9 @@ async def search(request: web.Request) -> web.Response:
 @api_handler
 async def list_titles(request: web.Request) -> web.Response:
     """
-    List titles for a service and title ID.
+    Show titles for a service and title ID.
     ---
-    summary: List titles
+    summary: Show titles
     description: Get available titles for a service and title ID
     requestBody:
       required: true
@@ -541,9 +541,9 @@ async def list_titles(request: web.Request) -> web.Response:
 @api_handler
 async def list_tracks(request: web.Request) -> web.Response:
     """
-    List tracks for a title, separated by type.
+    Show tracks for a title, separated by type.
     ---
-    summary: List tracks
+    summary: Show tracks
     description: Get available video, audio, and subtitle tracks for a title
     requestBody:
       required: true
@@ -563,7 +563,7 @@ async def list_tracks(request: web.Request) -> web.Response:
                 description: Title identifier
               wanted:
                 type: string
-                description: Specific episode/season, or music track ("1-5", "2x3" for disc 2 track 3) (optional)
+                description: Specific episode/season, or song ("1-5", "2x3" for disc 2 track 3) (optional)
               proxy:
                 type: string
                 description: Proxy configuration (optional)
@@ -591,13 +591,13 @@ async def list_tracks(request: web.Request) -> web.Response:
 @api_handler
 async def download(request: web.Request) -> web.Response:
     """
-    Download content based on provided parameters.
+    Download a title based on the provided parameters.
     ---
-    summary: Download content
+    summary: Download a title
     description: >-
-      Download video content based on specified parameters.
-      'postscript', 'post_script' and 'post_scripts' are never accepted and return 400;
-      post-download hooks are configured only in unshackle.yaml.
+      Download a video title based on the specified parameters.
+      'postscript', 'post_script' and 'post_scripts' are never accepted and return 400.
+      You configure post-download hooks only in unshackle.yaml.
     requestBody:
       required: true
       content:
@@ -646,13 +646,13 @@ async def download(request: web.Request) -> web.Response:
                 type: array
                 items:
                   type: string
-                description: Video color range (SDR, HDR10, HDR10+, HLG, DV, HYBRID) (default - ["SDR"])
+                description: Video colour range (SDR, HDR10, HDR10+, HLG, DV, HYBRID) (default - ["SDR"])
               channels:
                 type: number
                 description: Audio channels (e.g., 2.0, 5.1, 7.1) (default - None)
               no_atmos:
                 type: boolean
-                description: Exclude Dolby Atmos audio tracks (default - false)
+                description: Exclude Atmos audio tracks (default - false)
               wanted:
                 type: array
                 items:
@@ -699,7 +699,7 @@ async def download(request: web.Request) -> web.Response:
                 description: Use exact language matching (no variants) (default - false)
               sub_format:
                 type: string
-                description: Output subtitle format (SRT, VTT, etc.) (default - None)
+                description: Output subtitle format such as SRT or VTT (default - None)
               video_only:
                 type: boolean
                 description: Only download video tracks (default - false)
@@ -734,7 +734,7 @@ async def download(request: web.Request) -> web.Response:
                 description: Add randomized delay between downloads. `true` for default 60-120s, or `"MIN-MAX"` string (e.g., `"20-40"`). Min must be >= 20 (default - null)
               split_audio:
                 type: boolean
-                description: Create separate output files per audio codec instead of merging all audio (default - null)
+                description: Make separate output files per audio codec instead of merging all audio (default - null)
               skip_dl:
                 type: boolean
                 description: Skip downloading, only retrieve decryption keys (default - false)
@@ -743,7 +743,7 @@ async def download(request: web.Request) -> web.Response:
                 description: Export manifest, track URLs, keys, and subtitles to JSON in the exports directory (default - false)
               cdm_only:
                 type: boolean
-                description: Only use CDM for key retrieval (true) or only vaults (false) (default - None)
+                description: Only use CDM for content key retrieval (true) or only vaults (false) (default - None)
               proxy:
                 type: string
                 description: Proxy URI or country code (default - None)
@@ -755,7 +755,7 @@ async def download(request: web.Request) -> web.Response:
                 description: Bypass proxy for all downloads. Manifest, license, and auth still use proxy (default - false)
               tag:
                 type: string
-                description: Set the group tag to be used (default - None)
+                description: Set the group tag (default - None)
               tmdb_id:
                 type: integer
                 description: Use this TMDB ID for tagging instead of a title search. Set enrich to also take its title, year and original language. Mutually exclusive with imdb_id and tvdb_id. Needs tmdb_api_key (default - None)
@@ -769,7 +769,7 @@ async def download(request: web.Request) -> web.Response:
                 description: Overwrite show title, year and original language with the external source's. Requires one of tmdb_id, imdb_id, tvdb_id or anilist_id (default - false)
               daily:
                 type: boolean
-                description: Treat the title as daily/date-based content and fill missing air dates from TVDB. Needs enrich (default - false)
+                description: Treat the title as daily content and fill missing air dates from TVDB. Needs enrich (default - false)
               no_folder:
                 type: boolean
                 description: Disable folder creation for TV shows (default - false)
@@ -787,7 +787,7 @@ async def download(request: web.Request) -> web.Response:
                 description: Scale per-track segment workers to measured CDN throughput, up to the workers cap (default - false)
               download_processes:
                 type: integer
-                description: Split a track's segments across this many processes; only engages for large batches (default - 1)
+                description: Split a track's segments across this many processes. Only engages for large batches (default - 1)
               continue_downloads:
                 type: boolean
                 description: Keep completed segment files across runs and resume a previously failed download (default - false)
@@ -857,9 +857,9 @@ async def download(request: web.Request) -> web.Response:
 @api_handler
 async def download_jobs(request: web.Request) -> web.Response:
     """
-    List all download jobs with optional filtering and sorting.
+    Show all download jobs with optional filtering and sorting.
     ---
-    summary: List download jobs
+    summary: Show download jobs
     description: Get list of all download jobs with their status, with optional filtering by status/service and sorting
     parameters:
       - name: status
@@ -976,8 +976,8 @@ async def download_job_events(request: web.Request) -> web.StreamResponse:
       `progress` and `status` events, and closes after the terminal `completed`, `failed`
       or `cancelled` event. Every event carries the same full job object that
       GET /api/download/jobs/{job_id} returns. A browser EventSource can authenticate with
-      the `secret_key` query parameter instead of the X-Secret-Key header; when both are
-      sent the header is used.
+      the `secret_key` query parameter instead of the X-Secret-Key header. When the client
+      sends both, the server uses the header.
     parameters:
       - name: job_id
         in: path
@@ -1024,7 +1024,7 @@ async def cancel_download_job(request: web.Request) -> web.Response:
       '204':
         description: Terminal job removed from the manager
       '400':
-        description: Job cannot be cancelled
+        description: The server cannot cancel the job
       '404':
         description: Job not found
       '500':
@@ -1099,9 +1099,9 @@ async def retry_download_job(request: web.Request) -> web.Response:
 @api_handler
 async def prioritize_download_job(request: web.Request) -> web.Response:
     """
-    Prioritize download job.
+    Prioritise download job.
     ---
-    summary: Prioritize download job
+    summary: Prioritise download job
     description: Move a queued job to the front of the download queue
     parameters:
       - name: job_id
@@ -1136,14 +1136,15 @@ async def prioritize_download_job(request: web.Request) -> web.Response:
 @api_handler
 async def profiles(request: web.Request) -> web.Response:
     """
-    List configured credential profiles per service.
+    Show the configured credential profiles per service.
     ---
-    summary: List credential profiles
+    summary: Show credential profiles
     description: >
       Enumerate named credential profiles configured per service (usable as the `profile`
-      parameter). Only services whose credentials are a mapping of profile-name to credential
-      are listed (including a `default` key if present); a service configured with a single
-      plain (unnamed) credential is omitted entirely. Filtered by the caller's service allowlist.
+      parameter). This endpoint shows only the services whose credentials are a mapping of
+      profile-name to credential, and it includes a `default` entry if present. It ignores a
+      service configured with a single plain (unnamed) credential. Filtered by the caller's
+      service allowlist.
     responses:
       '200':
         description: Profiles per service
@@ -1172,8 +1173,8 @@ async def server_config(request: web.Request) -> web.Response:
     summary: Get server config
     description: >
       Read-only, redacted view of the effective server configuration for display in a UI
-      settings page. Secrets (api_secret, users, credentials, tokens) are never included;
-      secret-looking keys inside `dl` are masked.
+      settings page. This view never includes secrets (api_secret, users, credentials,
+      tokens), and unshackle masks secret-looking config keys inside `dl`.
     responses:
       '200':
         description: Redacted server configuration
@@ -1235,7 +1236,7 @@ async def download_history(request: web.Request) -> web.Response:
     summary: Get download history
     description: >
       Read the persisted job history (jobs that reached a terminal state), newest first.
-      Corrupt lines in the history file are skipped; a missing file yields an empty list.
+      This endpoint ignores corrupt lines in the history file. A missing file gives no entries.
     parameters:
       - name: limit
         in: query
@@ -1381,8 +1382,8 @@ async def maintenance_refresh_services(request: web.Request) -> web.Response:
     summary: Refresh service repos
     description: >
       Force-sync (git pull) every service repo configured in directories.services.
-      `refreshed` is true when all repos synced (or none are configured); per-repo
-      results are listed under `repos`.
+      `refreshed` is true when all repos synced, or when you configured no repos. The
+      `repos` field holds the per-repo results.
     responses:
       '200':
         description: Refresh results
@@ -1415,7 +1416,7 @@ async def maintenance_refresh_services(request: web.Request) -> web.Response:
 @api_handler
 async def env_check(request: web.Request) -> web.Response:
     """
-    Check environment dependencies.
+    Examine the environment dependencies.
     ---
     summary: Environment check
     description: Report install status of the binaries `env check` inspects, with best-effort versions.
@@ -1450,9 +1451,9 @@ async def env_check(request: web.Request) -> web.Response:
 @api_handler
 async def session_create(request: web.Request) -> web.Response:
     """
-    Create a remote-dl session.
+    Make a remote session.
     ---
-    summary: Create session
+    summary: Make remote session
     description: Authenticate with a service, get titles, tracks, and chapters in one call
     requestBody:
       required: true
@@ -1485,7 +1486,7 @@ async def session_create(request: web.Request) -> web.Response:
                 additionalProperties: true
     responses:
       '200':
-        description: Session created with titles, tracks, and chapters
+        description: Remote session created with titles, tracks, and chapters
       '400':
         description: Invalid request
       '401':
@@ -1510,10 +1511,10 @@ async def session_create(request: web.Request) -> web.Response:
 @api_handler
 async def session_titles(request: web.Request) -> web.Response:
     """
-    Get titles for an authenticated session.
+    Get titles for an authenticated remote session.
     ---
     summary: Get titles
-    description: Fetch titles from the authenticated service session
+    description: Fetch titles from the authenticated remote session
     parameters:
       - name: session_id
         in: path
@@ -1524,7 +1525,7 @@ async def session_titles(request: web.Request) -> web.Response:
       '200':
         description: List of titles
       '404':
-        description: Session not found
+        description: Remote session not found
     """
     session_id = request.match_info["session_id"]
     try:
@@ -1542,7 +1543,7 @@ async def session_tracks(request: web.Request) -> web.Response:
     Get tracks and chapters for a specific title.
     ---
     summary: Get tracks
-    description: Fetch tracks and chapters for a title in the session
+    description: Fetch tracks and chapters for a title in the remote session
     parameters:
       - name: session_id
         in: path
@@ -1565,7 +1566,7 @@ async def session_tracks(request: web.Request) -> web.Response:
       '200':
         description: Tracks and chapters for the title
       '404':
-        description: Session or title not found
+        description: Remote session or title not found
     """
     session_id = request.match_info["session_id"]
     try:
@@ -1587,9 +1588,9 @@ async def session_tracks(request: web.Request) -> web.Response:
 @api_handler
 async def session_segments(request: web.Request) -> web.Response:
     """
-    Resolve segment URLs for selected tracks.
+    Get segment URLs for selected tracks.
     ---
-    summary: Resolve segments
+    summary: Get segments
     description: Get download URLs, DRM info, and headers for selected tracks
     parameters:
       - name: session_id
@@ -1610,12 +1611,12 @@ async def session_segments(request: web.Request) -> web.Response:
                 type: array
                 items:
                   type: string
-                description: List of track IDs to resolve
+                description: List of track IDs to get segment URLs for
     responses:
       '200':
         description: Segment URLs and DRM info for each track
       '404':
-        description: Session or track not found
+        description: Remote session or track not found
     """
     session_id = request.match_info["session_id"]
     try:
@@ -1671,7 +1672,7 @@ async def session_license(request: web.Request) -> web.Response:
       '200':
         description: License response
       '404':
-        description: Session or track not found
+        description: Remote session or track not found
     """
     session_id = request.match_info["session_id"]
     try:
@@ -1693,10 +1694,10 @@ async def session_license(request: web.Request) -> web.Response:
 @api_handler
 async def session_info(request: web.Request) -> web.Response:
     """
-    Get session info.
+    Get remote session info.
     ---
-    summary: Session info
-    description: Check session validity and get metadata
+    summary: Remote session info
+    description: Make sure that the remote session is valid, and get metadata
     parameters:
       - name: session_id
         in: path
@@ -1705,9 +1706,9 @@ async def session_info(request: web.Request) -> web.Response:
           type: string
     responses:
       '200':
-        description: Session info
+        description: Remote session info
       '404':
-        description: Session not found
+        description: Remote session not found
     """
     session_id = request.match_info["session_id"]
     return await session_info_handler(session_id, request)
@@ -1716,10 +1717,10 @@ async def session_info(request: web.Request) -> web.Response:
 @api_handler
 async def session_delete(request: web.Request) -> web.Response:
     """
-    Delete a session.
+    Delete a remote session.
     ---
-    summary: Delete session
-    description: Clean up a remote-dl session
+    summary: Delete remote session
+    description: Clean up a remote session
     parameters:
       - name: session_id
         in: path
@@ -1728,9 +1729,9 @@ async def session_delete(request: web.Request) -> web.Response:
           type: string
     responses:
       '200':
-        description: Session deleted
+        description: Remote session deleted
       '404':
-        description: Session not found
+        description: Remote session not found
     """
     session_id = request.match_info["session_id"]
     return await session_delete_handler(session_id, request)
@@ -1742,7 +1743,7 @@ async def session_prompt_get(request: web.Request) -> web.Response:
     Poll for pending interactive prompts during authentication.
     ---
     summary: Get auth prompt
-    description: Poll for pending interactive prompts (OTP, device code, PIN) during session authentication
+    description: Poll for pending interactive prompts (OTP, device code, PIN) during remote session authentication
     parameters:
       - name: session_id
         in: path
@@ -1765,9 +1766,9 @@ async def session_prompt_get(request: web.Request) -> web.Response:
                   description: Prompt to display to the user (only when status is pending_input)
                 error:
                   type: string
-                  description: Error message (only when status is failed)
+                  description: Error message (only for the failed status)
       '404':
-        description: Session not found
+        description: Remote session not found
     """
     session_id = request.match_info["session_id"]
     try:
@@ -1818,7 +1819,7 @@ async def session_prompt_submit(request: web.Request) -> web.Response:
       '400':
         description: No prompt pending or invalid request
       '404':
-        description: Session not found
+        description: Remote session not found
     """
     session_id = request.match_info["session_id"]
     try:
@@ -1875,7 +1876,7 @@ ROUTES: list[tuple[str, str, Handler, bool]] = [
 
 
 def setup_routes(app: web.Application, remote_only: bool = False) -> None:
-    """Setup API routes. When remote_only=True, only expose remote session endpoints."""
+    """Setup API routes. When remote_only=True, only the remote session endpoints operate."""
     add: dict[str, Callable[..., Any]] = {
         "GET": app.router.add_get,
         "POST": app.router.add_post,

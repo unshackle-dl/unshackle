@@ -26,8 +26,8 @@ from unshackle.core.utilities import is_close_match
 class EXAMPLE(Service):
     """
     Reference service for domain.com - a deliberately exhaustive showcase of
-    EVERYTHING an unshackle service can touch. It is NOT meant to run against a
-    real API; it exists so a new service author can see one canonical example of
+    EVERYTHING an unshackle service can touch. It is NOT meant to operate against
+    a real API. It exists so a new service author can see one canonical example of
     every framework feature in one place. Music is the one exception: it has its
     own reference service, MUSIC_EXAMPLE.
 
@@ -58,9 +58,9 @@ class EXAMPLE(Service):
         get_tracks            DASH variant fan-out (default) + HLS/ISM alternates
         fetch_dash_manifest  range override, HDR10+ flip, DV-composite, Atmos,
                               descriptive audio, channel fixups, cover-art attachment,
-                              VUI normalize, bitrate-window awareness
+                              VUI normalise, bitrate-window awareness
         get_chapters          Chapters() with named + unnamed markers
-        get_widevine_*        service cert + license (per-segment PSSH via `track`)
+        get_widevine_*        service certificate + license (per-segment PSSH through `track`)
         get_playready_license PlayReady challenge POST
         get_clearkey_license  DASH org.w3.clearkey JWK Set POST (Laurl fallback)
     """

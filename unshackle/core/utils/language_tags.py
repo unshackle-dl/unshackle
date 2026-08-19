@@ -19,8 +19,8 @@ def evaluate_language_tag(
 ) -> str:
     """Evaluate language tag rules against selected tracks.
 
-    Rules are evaluated in order; the first matching rule's tag is returned.
-    Returns empty string if no rules match.
+    This function evaluates the rules in order. It returns the tag of the first rule
+    that matches, or an empty string if no rule matches.
 
     Args:
         rules: List of rule dicts from config, each with conditions and a ``tag``.
@@ -28,7 +28,7 @@ def evaluate_language_tag(
         subtitle_languages: Languages of the selected subtitle tracks.
 
     Returns:
-        The tag string from the first matching rule, or ``""`` if none match.
+        The tag string from the first rule that matches, or ``""`` if none match.
     """
     for rule in rules:
         tag = rule.get("tag")
@@ -48,7 +48,7 @@ def rule_matches(
     audio_languages: Sequence[Language],
     subtitle_languages: Sequence[Language],
 ) -> bool:
-    """Check if all conditions in a rule are satisfied."""
+    """Return True when every condition in the rule matches the tracks."""
     has_condition = False
 
     audio_lang = rule.get("audio")

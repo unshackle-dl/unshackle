@@ -112,55 +112,56 @@ class Subtitle(Track):
         **kwargs: Any,
     ):
         """
-        Create a new Subtitle track object.
+        Make a new Subtitle track object.
 
         Parameters:
             codec: A Subtitle.Codec enum representing the subtitle format.
-                If not specified, MediaInfo will be used to retrieve the format
-                once the track has been downloaded.
+                If not specified, unshackle uses MediaInfo to get the format
+                after it downloads the track.
             cc: Closed Caption.
-                - Intended as if you couldn't hear the audio at all.
-                - Can have Sound as well as Dialogue, but doesn't have to.
-                - Original source would be from an EIA-CC encoded stream. Typically all
+                - Intended as if you could not hear the audio at all.
+                - Can have Sound as well as Dialogue, but does not have to.
+                - Original source would be from EIA-CC encoded video. Typically all
                   upper-case characters.
                 Indicators of it being CC without knowing original source:
                   - Extracted with CCExtractor, or
-                  - >>> (or similar) being used at the start of some or all lines, or
+                  - >>> (or similar) at the start of some or all lines, or
                   - All text is uppercase or at least the majority, or
-                  - Subtitles are Scrolling-text style (one line appears, oldest line
-                    then disappears).
-                Just because you downloaded it as a SRT or VTT or such, doesn't mean it
-                 isn't from an EIA-CC stream. And I wouldn't take the streaming services
+                  - Subtitles use the scrolling-text style (one line appears, oldest
+                    line then disappears).
+                The fact that you downloaded it as a SRT or VTT or such does not mean it
+                 is not from an EIA-CC stream. And I would not take the streaming services
                  (CC) as gospel either as they tend to get it wrong too.
             sdh: Deaf or Hard-of-Hearing. Also known as HOH in the UK (EU?).
-                 - Intended as if you couldn't hear the audio at all.
-                 - MUST have Sound as well as Dialogue to be considered SDH.
-                 - It has no "syntax" or "format" but is not transmitted using archaic
-                   forms like EIA-CC streams, would be intended for transmission via
-                   SubRip (SRT), WebVTT (VTT), TTML, etc.
-                 If you can see important audio/sound transcriptions and not just dialogue
-                  and it doesn't have the indicators of CC, then it's most likely SDH.
-                 If it doesn't have important audio/sounds transcriptions it might just be
-                  regular subtitling (you wouldn't mark as CC or SDH). This would be the
+                 - Intended as if you could not hear the audio at all.
+                 - MUST have Sound as well as Dialogue to count as SDH.
+                 - It has no "syntax" or "format", but it is not transmitted in
+                   archaic forms like EIA-CC streams. It is intended for transmission
+                   through SubRip (SRT), WebVTT (VTT), TTML, and the other modern
+                   subtitle formats.
+                 If you can see important audio/sound transcriptions and not only dialogue
+                  and it does not have the indicators of CC, then it is most likely SDH.
+                 If it does not have important audio/sounds transcriptions it might only be
+                  regular subtitling (you would not mark as CC or SDH). This would be the
                   case for most translation subtitles. Like Anime for example.
-            forced: Typically used if there's important information at some point in time
-                     like watching Dubbed content and an important Sign or Letter is shown
+            forced: Typically used if there is important information at some point in time
+                     like watching a Dubbed title and an important Sign or Letter is shown
                      or someone talking in a different language.
-                    Forced tracks are recommended by the Matroska Spec to be played if
+                    The Matroska Spec recommends that the player plays Forced tracks if
                      the player's current playback audio language matches a subtitle
                      marked as "forced".
-                    However, that doesn't mean every player works like this but there is
+                    However, that does not mean every player works like this but there is
                      no other way to reliably work with Forced subtitles where multiple
-                     forced subtitles may be in the output file. Just know what to expect
+                     forced subtitles may be in the output file. Know what to expect
                      with "forced" subtitles.
 
-        Note: If codec is not specified some checks may be skipped or assume a value.
-        Specifying as much information as possible is highly recommended.
+        Note: If codec is not specified, unshackle can skip some checks or assume a value.
+        Give as much information as possible.
 
         Information on Subtitle Types:
             https://bit.ly/2Oe4fLC (3PlayMedia Blog on SUB vs CC vs SDH).
-            However, I wouldn't pay much attention to the claims about SDH needing to
-            be in the original source language. It's logically not true.
+            However, I would not pay much attention to the claims about SDH needing to
+            be in the original language. It is logically not true.
 
             CC == Closed Captions. Source: Basically every site.
             SDH = Subtitles for the Deaf or Hard-of-Hearing. Source: Basically every site.
@@ -331,23 +332,23 @@ class Subtitle(Track):
         Fix invalid timestamps in WebVTT files, particularly negative timestamps.
 
         Parameters:
-            text: The WebVTT content as string
+            text: The WebVTT text as string
 
         Returns:
-            Sanitized WebVTT content
+            Sanitized WebVTT text
         """
         return re.sub(r"(-\d+:\d+:\d+\.\d+)", "00:00:00.000", text)
 
     @staticmethod
     def has_webvtt_cue_identifiers(text: str) -> bool:
         """
-        Check if WebVTT content has cue identifiers that need removal.
+        Examine WebVTT text for cue identifiers that need removal.
 
         Parameters:
-            text: The WebVTT content as string
+            text: The WebVTT text as string
 
         Returns:
-            True if cue identifiers are detected, False otherwise
+            True if the text has cue identifiers, False otherwise
         """
         lines = text.split("\n")
 
@@ -366,16 +367,16 @@ class Subtitle(Track):
         """
         Remove WebVTT cue identifiers that can confuse subtitle parsers.
 
-        Some services use cue identifiers like "Q0", "Q1", etc.
+        Some services use cue identifiers such as "Q0" and "Q1"
         that appear on their own line before the timing line. These can be
-        incorrectly parsed as part of the previous cue's text content by
+        incorrectly parsed as part of the previous cue's text by
         some parsers (like pysubs2).
 
         Parameters:
-            text: The WebVTT content as string
+            text: The WebVTT text as string
 
         Returns:
-            Sanitized WebVTT content with cue identifiers removed
+            Sanitized WebVTT text with cue identifiers removed
         """
         if not Subtitle.has_webvtt_cue_identifiers(text):
             return text
@@ -424,16 +425,16 @@ class Subtitle(Track):
     @staticmethod
     def has_overlapping_webvtt_cues(text: str) -> bool:
         """
-        Check if WebVTT content has overlapping cues that need merging.
+        Examine WebVTT text for overlapping cues that need merging.
 
         Detects cues with start times within 50ms of each other and the same end time,
         which indicates multi-line subtitles split into separate cues.
 
         Parameters:
-            text: The WebVTT content as string
+            text: The WebVTT text as string
 
         Returns:
-            True if overlapping cues are detected, False otherwise
+            True if the text has overlapping cues, False otherwise
         """
         timings = []
         for line in text.split("\n"):
@@ -461,10 +462,10 @@ class Subtitle(Track):
         line: position (lower percentage = higher on screen = first line).
 
         Parameters:
-            text: The WebVTT content as string
+            text: The WebVTT text as string
 
         Returns:
-            WebVTT content with overlapping cues merged
+            WebVTT text with overlapping cues merged
         """
         if not Subtitle.has_overlapping_webvtt_cues(text):
             return text
@@ -568,17 +569,18 @@ class Subtitle(Track):
     @staticmethod
     def sanitize_webvtt(text: str) -> str:
         """
-        More thorough sanitization of WebVTT files to handle multiple potential issues.
+        More thorough sanitization of WebVTT files that corrects multiple potential issues.
 
-        This is lossy, so use it only as a fallback once normal parsing has failed. Everything before the
-        WEBVTT header line is discarded and the header itself is reduced to a bare "WEBVTT" line. Negative
-        timestamps become 00:00:00.000 and timestamps missing the hours field are padded to HH:MM:SS.mmm.
+        This is lossy, so use it only as a fallback once normal parsing has failed. This method discards
+        everything before the WEBVTT header line and reduces the header itself to a bare "WEBVTT" line.
+        Negative timestamps become 00:00:00.000, and it pads timestamps that have no hours field to
+        HH:MM:SS.mmm.
 
         Parameters:
-            text: The WebVTT content as string
+            text: The WebVTT text as string
 
         Returns:
-            Sanitized WebVTT content
+            Sanitized WebVTT text
         """
         # Make sure we have a proper WEBVTT header
         if not text.strip().startswith("WEBVTT"):
@@ -619,15 +621,15 @@ class Subtitle(Track):
         """
         Convert this Subtitle to another format.
 
-        Backend selection is data-driven (see ``tracks/subtitle_convert.py``): the best
-        available backend that supports source->target is used, falling back through the
-        capability chain on failure. The backend can be pinned via the ``conversion_method``
-        config key (``auto`` | ``subby`` | ``pysubs2`` | ``subtitleedit`` | ``pycaption``),
-        or nudged per-service via ``preferred_conversion_method``; an explicit config value
-        always wins.
+        Backend selection is data-driven (see ``tracks/subtitle_convert.py``): unshackle
+        uses the best available backend that can convert source->target, and falls back
+        through the capability chain on failure. The ``conversion_method`` config key
+        (``auto`` | ``subby`` | ``pysubs2`` | ``subtitleedit`` | ``pycaption``) pins the
+        backend, and ``preferred_conversion_method`` nudges it per-service. An explicit
+        config value always wins.
 
-        ``forced`` marks an explicit user request (``--sub-format``). Lossy downconverts of
-        styled formats (SSA/ASS -> SRT) are skipped unless ``forced`` is True.
+        ``forced`` marks an explicit user request (``--sub-format``). unshackle skips lossy
+        downconverts of styled formats (SSA/ASS -> SRT) unless ``forced`` is True.
         """
         from unshackle.core.tracks.subtitle_convert import run_conversion
 
@@ -650,8 +652,8 @@ class Subtitle(Track):
           (column located from the section's ``Format:`` line, not assumed by index), and
         - inline ``\\fn`` font overrides inside ``Dialogue`` override blocks.
 
-        Leading ``@`` (vertical-writing prefix) is stripped and names are de-duplicated
-        case-insensitively, preferring a mixed-case spelling over an all-lowercase one.
+        This method removes a leading ``@`` (vertical-writing prefix), de-duplicates the
+        names case-insensitively, and prefers a mixed-case spelling over an all-lowercase one.
         """
         names: set[str] = set()
         name_index = 1  # ASS default Style order: Name, Fontname, ...
@@ -746,10 +748,10 @@ class Subtitle(Track):
         Remove or fix corrupted WebVTT lines, particularly those with invalid timestamps.
 
         Parameters:
-            text: The WebVTT content as string
+            text: The WebVTT text as string
 
         Returns:
-            Sanitized WebVTT content with corrupted lines removed
+            Sanitized WebVTT text with corrupted lines removed
         """
         lines = text.splitlines()
         sanitized_lines = []
@@ -785,7 +787,7 @@ class Subtitle(Track):
 
         Segmented VTT when merged may have the WEBVTT headers part of the next caption
         as they were not separated far enough from the previous caption and ended up
-        being considered as caption text rather than the header for the next segment.
+        as caption text rather than the header for the next segment.
         """
         if isinstance(data, bytes):
             data = try_ensure_utf8(data).decode("utf8")
@@ -845,10 +847,10 @@ class Subtitle(Track):
     def merge_segmented_wvtt(data: bytes, period_start: float = 0.0) -> tuple[CaptionList, Optional[str]]:
         """
         Convert Segmented DASH WebVTT cues into a pycaption Caption List.
-        Also returns an ISO 639-2 alpha-3 language code if available.
+        Also returns an ISO 639-2 alpha-3 language tag if available.
 
         Code ported originally by xhlove to Python from shaka-player.
-        Has since been improved upon by rlaphoenix using pymp4 and
+        rlaphoenix has since improved it with pymp4 and
         pycaption functions.
         """
         captions = CaptionList()
@@ -975,9 +977,9 @@ class Subtitle(Track):
 
     def strip_hearing_impaired(self) -> None:
         """
-        Strip captions for hearing impaired (SDH).
+        Remove the SDH captions.
 
-        The SDH stripping method is determined by the 'sdh_method' setting in config:
+        The 'sdh_method' setting in config gives the SDH stripping method:
         - 'auto' (default): Tries subby first, then SubtitleEdit, then filter-subs
         - 'subby': Uses subby's SDHStripper
         - 'subtitleedit': Uses SubtitleEdit when available
@@ -1086,7 +1088,7 @@ class Subtitle(Track):
     def reverse_rtl(self) -> None:
         """
         Reverse RTL (Right to Left) Start/End on Captions.
-        This can be used to fix the positioning of sentence-ending characters.
+        Use this to fix the positioning of sentence-ending characters.
         """
         if not self.path or not self.path.exists():
             raise ValueError("You must download the subtitle track first.")

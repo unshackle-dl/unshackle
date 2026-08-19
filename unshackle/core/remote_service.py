@@ -41,7 +41,7 @@ DEFAULT_AUTH_HEADERS = ["X-Secret-Key", "X-Api-Key"]
 
 
 def redact_secrets(text: str, data: Optional[Dict[str, Any]] = None) -> str:
-    """Mask URL userinfo and any request-payload secrets before the text is logged."""
+    """Mask URL userinfo and any request-payload secrets before unshackle writes the text to the log."""
     secrets = [v for k in SENSITIVE_DATA_KEYS if isinstance(v := (data or {}).get(k), str) and v]
     return redact_text(text, secrets) or ""
 
@@ -68,7 +68,7 @@ class RemoteClient:
         return self._session
 
     def next_auth_header(self) -> bool:
-        """Move the api key onto the next candidate header. False once they are exhausted."""
+        """Move the api key onto the next candidate header. False when no candidate header remains."""
         if not self.api_key or self._auth_header_index + 1 >= len(self.auth_headers):
             return False
         session = self.session
@@ -220,12 +220,12 @@ def build_tracks(data: Dict[str, Any]) -> Tracks:
 
 
 def resolve_manifest_data(tracks: Tracks, manifests: list) -> None:
-    """Re-parse serialized manifests and populate track.data for downloading.
+    """Re-parse serialized manifests and fill track.data for downloading.
 
     The server serializes DASH and ISM manifest XML as zlib-compressed base64.
     We decode and decompress locally, re-parse with the appropriate manifest
     parser, then match each remote track to the locally-parsed track by ID
-    to copy track.data. HLS is skipped as it re-fetches from track.url.
+    to copy track.data. We skip HLS, because it re-fetches from track.url.
     """
     import base64 as b64
 
@@ -283,7 +283,7 @@ def resolve_manifest_data(tracks: Tracks, manifests: list) -> None:
 
 
 def match_track(remote_track: Track, local_tracks: list) -> Optional[Track]:
-    """Match a remote track to a locally-parsed track by ID or attributes."""
+    """Find the locally-parsed track that matches a remote track by ID or by attributes."""
     remote_id = str(remote_track.id)
     for lt in local_tracks:
         if str(lt.id) == remote_id:
@@ -361,7 +361,7 @@ def resolve_auth_headers(svc: dict, server_name: str) -> list[str]:
 
 
 def resolve_server(server_name: Optional[str]) -> tuple[str, str, dict]:
-    """Resolve server URL, API key, and per-service config from remote_services.
+    """Find the server URL, the API key, and the per-service config in remote_services.
 
     The per-service config carries the ``_auth_headers`` candidate list for RemoteClient.
     """
@@ -647,8 +647,8 @@ class RemoteService:
     def get_titles_cached(self, title_id: str = None) -> Titles_T:
         """Apply the client's local title_map to titles fetched from the remote server.
 
-        Lets users rename titles for remote services they don't have installed locally.
-        The server sends raw titles; the client's own ``services.<TAG>.title_map`` wins.
+        Lets users rename titles for remote services they do not have installed locally.
+        The server sends raw titles. The client's own ``services.<TAG>.title_map`` wins.
         """
         title_map = (config.services.get(self.service_tag) or {}).get("title_map") or {}
         return remap_titles(self.get_titles(), title_map)
@@ -679,10 +679,10 @@ class RemoteService:
         return tracks
 
     def resolve_server_keys(self, title: Title_T) -> None:
-        """Resolve DRM keys via server CDM for all tracks on a title.
+        """Get the DRM content keys through the server CDM for all tracks on a title.
 
         Called by dl.py between track selection and download. The server
-        decides which CDM device to use and tells the client via
+        decides which CDM device to use and tells the client through
         server_cdm_type. We send track IDs and the server does the full
         CDM flow, returning KID:KEY pairs.
         """
@@ -734,10 +734,11 @@ class RemoteService:
 
     @staticmethod
     def create_drm_stub(drm_type: str, kid_hexes: list[str]) -> Any:
-        """Create a DRM object stub matching the type the server actually used.
+        """Make a DRM object stub that matches the type the server used.
 
-        For server_cdm mode, this is only used for display; keys are already
-        resolved. We build a minimal DRM object that holds content_keys.
+        For server_cdm mode, unshackle uses this stub for display only, because it
+        already has the content keys. We assemble a minimal DRM object that holds
+        content_keys.
         """
         from uuid import UUID
 

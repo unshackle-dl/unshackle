@@ -1,14 +1,14 @@
 """
 DV exposure for HLS composite HEVC streams.
 
-Some services deliver DV Profile 8.1 in a stream whose primary CODECS is plain
-hvc1, with DV advertised only via SUPPLEMENTAL-CODECS. The fMP4 carries valid DV RPU NALs
+Some services deliver DV Profile 8.1 in a track whose primary CODECS is plain
+hvc1, with DV advertised only in SUPPLEMENTAL-CODECS. The fMP4 carries valid DV RPU NALs
 but the container does not signal DV, so muxing the MP4 directly produces an MKV that
-mediainfo and DV-capable TVs see as plain HDR10/HDR10+.
+MediaInfo and DV-capable TVs see as plain HDR10/HDR10+.
 
-The RPU is already valid; only the container's DV signaling is lost. Demuxing the
-elementary HEVC stream (ffmpeg -c:v copy) exposes the in-stream RPU to mkvmerge, which then
-signals DV in the muxed MKV. No dovi_tool extract/inject round-trip is needed.
+The RPU is already valid. Only the container's DV signalling is lost. A demux to an
+elementary HEVC file (ffmpeg -c:v copy) exposes the RPU inside it to mkvmerge, which then
+signals DV in the muxed MKV. unshackle does not need a dovi_tool extract/inject round-trip.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 
 class DVFixup:
-    """Demux a DV-composite HEVC track to its elementary stream so mkvmerge exposes DV."""
+    """Demux a DV-composite HEVC track to an elementary HEVC file so mkvmerge exposes DV."""
 
     def __init__(self, video: "Video") -> None:
         self.log = logging.getLogger("dv-fixup")
@@ -84,7 +84,7 @@ class DVFixup:
 
 
 def apply_dv_fixup(video: "Video") -> None:
-    """Run DV fixup on `video` if flagged as DV-composite. Updates `video.path` in place
+    """Do the DV fixup on `video` if flagged as DV-composite. Updates `video.path` in place
     and deletes the original source file so the standard mux cleanup handles the new path."""
     if not getattr(video, "dv_compatible_bitstream", False):
         return

@@ -111,9 +111,9 @@ class Vaults:
 
     def add_keys(self, kid_keys: dict[Union[UUID, str], str]) -> int:
         """
-        Add multiple KID:KEYs to all Vaults. Duplicate Content Keys are skipped.
-        PermissionErrors when the user cannot create Tables are absorbed and ignored.
-        Vaults with no_push=True are skipped.
+        Add multiple KID:KEYs to all Vaults. The Vaults skip duplicate Content Keys.
+        This method absorbs and ignores the PermissionError a Vault raises when it cannot make Tables.
+        This method also skips Vaults with no_push=True.
         """
         success = 0
         for vault in self.vaults:

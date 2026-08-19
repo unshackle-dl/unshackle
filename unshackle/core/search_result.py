@@ -11,16 +11,16 @@ class SearchResult:
         url: Optional[str] = None,
     ):
         """
-        A Search Result for any support Title Type.
+        A search result for any title type a service can give.
 
         Parameters:
             id_: The search result's Title ID.
-            title: The primary display text, e.g., the Title's Name.
-            description: The secondary display text, e.g., the Title's Description or
+            title: The primary display text, for example the Title's Name.
+            description: The secondary display text, for example the Title's Description or
                 further title information.
-            label: The tertiary display text. This will typically be used to display
-                an informative label or tag to the result. E.g., "unavailable", the
-                title's price tag, region, etc.
+            label: The tertiary display text. The `search` command shows it after the
+                title as an informative label or tag, for example "unavailable", the
+                title's price tag, or the region.
             url: A hyperlink to the search result or title's page.
         """
         if not isinstance(id_, (str, int)):

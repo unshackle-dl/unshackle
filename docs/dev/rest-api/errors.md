@@ -1,20 +1,20 @@
 # Error Responses
 
 Every endpoint of the unshackle REST API reports failures in a single, predictable
-shape. Whether a request was rejected because a field was missing, a service refused
-to authenticate, or the download worker crashed, the server answers with a JSON body
+shape. The cause can be a missing field, a service that refuses to authenticate, or a
+download worker that crashed. In each case the server answers with a JSON body
 that carries a machine-readable **error code**, a human-readable **message**, and a
 matching **HTTP status**. This page documents that format and catalogues every error
-code the server can emit.
+code the server can send.
 
-If you are building a client against the API, read this page alongside the endpoint
-reference. Each endpoint lists the specific codes it raises, and the meanings of
-those codes are defined here.
+If you write a client against the API, read this page alongside the endpoint
+reference. Each endpoint lists the specific codes it raises, and this page gives the
+meanings of those codes.
 
 !!! note "Where this comes from"
-    The error format is defined in `unshackle/core/api/errors.py`, and the wrapper
+    `unshackle/core/api/errors.py` defines the error format, and the wrapper
     that turns raised errors into responses lives in `unshackle/core/api/routes.py`.
-    Nothing on this page is invented; it reflects the actual server behaviour.
+    Nothing on this page is invented. It reflects the actual server behaviour.
 
 ## The standard error shape
 
@@ -59,7 +59,7 @@ included when it is non-empty, so a client must treat a missing `details` as "no
 extra information". Some concrete examples you may encounter:
 
 - A validation failure may include the offending field or the list of valid values.
-- A "title not found" error on a remote-dl session includes `available_titles`.
+- A "title not found" error on a remote session includes `available_titles`.
 - A maintenance conflict includes `active_jobs`, the jobs blocking the operation.
 - Categorised exceptions add a `reason` tag, such as `"network_connectivity"` or
   `"geofence_restriction"`.
@@ -68,8 +68,8 @@ extra information". Some concrete examples you may encounter:
 
 The `retryable` field appears **only when it is `true`**. It is set for conditions
 the server believes are transient: network errors, rate limiting, and temporary
-service unavailability. When you see it, backing off and retrying is reasonable; when
-it is absent, assume the request will keep failing until you change something.
+service unavailability. When you see it, you can back off and try the request again.
+When it is absent, assume the request will keep failing until you change something.
 
 !!! example "A retryable network error"
     ```json
@@ -125,7 +125,7 @@ but the defaults hold for the overwhelming majority of responses.
     If a code is ever emitted without a mapped status, the server falls back to
     `500`. In practice every code above has an explicit mapping.
 
-## How errors are produced
+## How the server produces errors
 
 Understanding where an error comes from helps interpret it.
 
@@ -171,8 +171,8 @@ the server returns `INVALID_INPUT` (400) with the parse error in
 
 ## The authentication error exception
 
-There is one place where the response does **not** follow the standard shape: the API
-key authentication middleware. When you send a request to a protected endpoint
+There is one place where the response does **not** follow the standard shape: the
+API key authentication middleware. When you send a request to a protected endpoint
 without a valid `X-Secret-Key` header, the middleware short-circuits with a legacy
 body that uses an integer `status` and no `error_code` or `timestamp`.
 
@@ -189,7 +189,7 @@ body that uses an integer `status` and no `error_code` or `timestamp`.
     ```
 
 !!! warning "Handle both shapes"
-    A robust client must expect two error formats: the standard structured error
+    A client must expect two error formats: the standard structured error
     (string `status` of `"error"`, with `error_code`), and this authentication error
     (integer `status`, no `error_code`). The `GET /api/health` endpoint is exempt
     from authentication, so it never returns the key-error shape.
@@ -201,13 +201,13 @@ Not every failure or completion has a JSON body. Some endpoints answer with
 deleting a history entry.
 
 !!! warning "Do not parse `204` bodies"
-    A `204` response has no body. Clients must check the status code before attempting
-    to decode JSON, or the decode will fail on an empty string.
+    A `204` response has no body. Clients must examine the status code before they
+    decode JSON, or the decode will fail on an empty string.
 
 ## Debug information
 
-By default, error responses never include tracebacks or internal diagnostics. If the
-server was started with the `--debug-api` flag, every structured error gains a
+By default, error responses never include tracebacks or internal diagnostics. If you
+start the server with the `--debug-api` flag, every structured error gains a
 `debug_info` object:
 
 ```json title="Error with --debug-api enabled"
@@ -225,7 +225,7 @@ server was started with the `--debug-api` flag, every structured error gains a
 
 The `debug_info` object always carries `exception_type` and, for exception-derived
 errors, a formatted `traceback`. Some endpoints add extra diagnostics such as
-captured worker stderr.
+captured job worker stderr.
 
 !!! warning "Developer use only"
     `--debug-api` exposes internal tracebacks in responses. Enable it only for local
@@ -235,16 +235,16 @@ captured worker stderr.
 
 For anyone writing a consumer of the API, a durable strategy is:
 
-1. **Read the HTTP status first.** It tells you the broad class of outcome and lets
-   you handle the `204`/no-body and authentication-error cases before touching the
+1. **Read the HTTP status first.** It tells you the broad class of outcome, and it
+   lets you find the `204`/no-body and authentication-error cases before you read the
    body.
 2. **Branch on `error_code`.** For structured errors, this is the stable identifier
-   to switch on. Do not match on `message`.
-3. **Respect `retryable`.** When it is `true`, back off and retry; the reference
-   client retries `429`, `500`, `502`, `503`, and `504` with exponential backoff. When
-   absent, fix the request rather than repeating it.
-4. **Fall back gracefully.** Unrecognised codes should be surfaced using the
-   `message` plus the HTTP status.
+   to switch on. Do not use `message` as the identifier.
+3. **Respect `retryable`.** When it is `true`, back off and try the request again. The
+   reference client retries `429`, `500`, `502`, `503`, and `504` with exponential
+   backoff. When absent, fix the request rather than repeating it.
+4. **Fall back gracefully.** For an unrecognised code, show the `message` and the
+   HTTP status.
 
 !!! note "Reference consumer"
     unshackle's own remote-download client treats any status of `400` or above as

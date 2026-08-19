@@ -23,7 +23,7 @@ output_template:
     series: "{title} ({year})"
 ```
 
-**The nested `folder` sub-key** controls output subfolders and is popped out of
+**The nested `folder` sub-key** controls output subfolders, and unshackle pops it out of
 `output_template`:
 
 - A **dict** sets per-kind folder templates (kinds: `movies`, `series`, `songs`, `albums`).
@@ -53,7 +53,7 @@ folder-kind keys.
 
 !!! tip "`{absolute}` counts episodes across seasons"
     `absolute` holds the absolute episode number, zero-padded to 3 digits (`007`), and is
-    empty on titles that have none. It is added to the name and never replaces `{season}`
+    empty on titles that have none. You add it to the name yourself, and it never replaces `{season}`
     or `{episode}`. Any series with a TVDB absolute order can use it, anime most often.
     Services can supply it, and
     [`--enrich`](../../guide/downloading.md#metadata-and-tagging) fills it in from TVDB.
@@ -74,8 +74,8 @@ folder-kind keys.
 - **Type:** `list` &nbsp;·&nbsp; **Default:** `[]`
 
 Conditionally replaces [`tag`](#tagging-naming-keys) for a given download. Each rule pairs a `when`
-dict of conditions with the `tag` to use when they hold. Rules are evaluated in order and the
-first match wins; if no rule matches, the global `tag` is kept.
+dict of conditions with the `tag` to use when they hold. unshackle evaluates the rules in
+order and the first match wins. If no rule matches, the global `tag` stays.
 
 ```yaml title="unshackle.yaml"
 tag_rules:
@@ -88,30 +88,31 @@ tag_rules:
 Rule semantics:
 
 - Every condition in `when` must hold (they are AND-ed).
-- A value may be a scalar or a list; a list matches if **any** entry matches.
+- A value can be a scalar or a list. A list matches if **any** entry matches.
 - Comparison is case-insensitive string equality.
-- The keys of `when` are the filename template variables that describe the release itself:
+- The keys of `when` are the filename template variables for the release itself:
   `title_type`, `quality`, `resolution`, `source`, `video`, `hdr`, `hfr`, `audio`,
   `audio_channels`, `audio_full`, `atmos`, `dual`, `multi`, `dubbed`, `edition`, `repack`,
-  and `lang_tag`. Only these are available. The title's own fields (`title`, `year`, `season`,
-  `episode`, and so on) are added after the rules run and cannot be matched.
-- An unknown key in `when` is a mistake: unshackle logs a warning that names the key and skips
-  that rule. A rule without conditions or without a `tag` is also warned about and skipped.
+  and `lang_tag`. Only these are available. unshackle adds the title's own fields (`title`,
+  `year`, `season`, `episode`, and so on) after it evaluates the rules, so a condition cannot
+  use them.
+- An unknown key in `when` is a mistake: unshackle logs a warning that names the key
+  and skips that rule. A rule without conditions or without a `tag` is also warned about and skipped.
 
-Put the more specific rules first, because the first match ends the search.
+Put the more specific rules first, because unshackle stops at the first match.
 
 !!! warning "Match `hdr` on the exact value"
     Matching is exact, and `hdr` is a composite label for Dolby Vision titles: a DV title with
     an HDR10 base layer gives `DV.HDR`, and with an HDR10+ base layer `DV.HDR10P`. Plain `DV`
-    does **not** match those. List every variant you want, as the example above does. Note
+    does **not** match those. Name every variant you want, as the example above does. Note
     also that HDR10 gives `HDR`, not `HDR10`. The full set of values is `HDR`, `HDR10P`, `DV`,
     `DV.HDR`, `DV.HDR10P`, and `HLG`, as listed in the
     [variable table](../../guide/output-and-naming.md#template-variables).
 
 ### Operators
 
-A condition value may start with a comparison operator, which is applied to the rest of the
-value:
+A condition value can start with a comparison operator, which unshackle applies to the rest of
+the value:
 
 ```yaml title="unshackle.yaml"
 tag_rules:

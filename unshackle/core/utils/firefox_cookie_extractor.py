@@ -85,7 +85,7 @@ def get_local_storage_data(profile_path: Path, hosts: List[str], tmp_dir_path: P
 def get_firefox_cookies(service_settings: dict) -> Optional[CookieJar]:
     """
     Extracts cookies and optionally localStorage from Firefox based on provided host patterns.
-    Implements security hardening and data consistency (WAL support) as per PR review.
+    Implements security hardening and data consistency (it can copy the WAL log) as per PR review.
     """
     raw_hosts = service_settings.get("hosts", [])
     # Filter empty or dangerously short hosts to prevent full store dumps (Finding #3)

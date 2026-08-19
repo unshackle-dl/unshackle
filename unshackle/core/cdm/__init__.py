@@ -4,7 +4,7 @@ CDM helpers and implementations.
 Keep this module import-light: downstream code frequently imports helpers from
 `unshackle.core.cdm.detect`, which requires importing this package first.
 Some CDM implementations pull in optional/heavy dependencies, so we lazily
-import them via `__getattr__` (PEP 562).
+import them through `__getattr__` (PEP 562).
 """
 
 from __future__ import annotations

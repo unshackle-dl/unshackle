@@ -67,7 +67,7 @@ class IMDBProvider(MetadataProvider):
         return True
 
     def graphql(self, operation: str, query: str) -> Optional[dict]:
-        """Run a persisted query, registering it with one POST the first time it is seen."""
+        """Send a persisted query, and add it to the gateway with one POST if the gateway does not know its hash."""
         extensions = {"persistedQuery": {"version": 1, "sha256Hash": hashlib.sha256(query.encode()).hexdigest()}}
         # IMDb's GraphQL gateway decodes "+" literally, so these JSON params must carry no spaces
         params = {

@@ -166,7 +166,7 @@ class SQLite(Vault):
             cursor.close()
 
     def has_table(self, name: str) -> bool:
-        """Check if the Vault has a Table with the specified name."""
+        """Return True if the Vault has a Table with the specified name."""
         conn = self.conn_factory.get()
         cursor = conn.cursor()
 
@@ -177,7 +177,7 @@ class SQLite(Vault):
             cursor.close()
 
     def create_table(self, name: str):
-        """Create a Table with the specified name if not yet created."""
+        """Make a Table with the specified name if it does not exist yet."""
         if self.has_table(name):
             return
 
