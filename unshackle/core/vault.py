@@ -43,7 +43,12 @@ class Vault(metaclass=ABCMeta):
 
     @abstractmethod
     def get_services(self) -> Iterator[str]:
-        """Get a list of Service Tags from Vault."""
+        """
+        Get a list of Service Tags from Vault.
+
+        Tags come back exactly as the Vault stores them, so passing one to
+        get_key/get_keys/add_key/add_keys reaches the namespace it came from.
+        """
 
 
 __all__ = ("Vault",)

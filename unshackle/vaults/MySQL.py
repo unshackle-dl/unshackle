@@ -5,7 +5,6 @@ from uuid import UUID
 import pymysql
 from pymysql.cursors import DictCursor
 
-from unshackle.core.services import Services
 from unshackle.core.vault import Vault
 
 
@@ -31,35 +30,8 @@ class MySQL(Vault):
         if isinstance(kid, UUID):
             kid = kid.hex
 
-        service_variants = [service]
-        if service != service.lower():
-            service_variants.append(service.lower())
-        if service != service.upper():
-            service_variants.append(service.upper())
-
-        conn = self.conn_factory.get()
-        cursor = conn.cursor()
-
-        try:
-            for service_name in service_variants:
-                if not self.has_table(service_name):
-                    continue
-
-                cursor.execute(
-                    # TODO: SQL injection risk
-                    f"SELECT `id`, `key_` FROM `{service_name}` WHERE `kid`=%s AND `key_`!=%s",
-                    (kid, "0" * 32),
-                )
-                cek = cursor.fetchone()
-                if cek:
-                    return cek["key_"]
-
-            return None
-        finally:
-            cursor.close()
-
-    def get_keys(self, service: str) -> Iterator[tuple[str, str]]:
-        if not self.has_table(service):
+        table = self.resolve_table(service)
+        if not table:
             return None
 
         conn = self.conn_factory.get()
@@ -68,7 +40,26 @@ class MySQL(Vault):
         try:
             cursor.execute(
                 # TODO: SQL injection risk
-                f"SELECT `kid`, `key_` FROM `{service}` WHERE `key_`!=%s",
+                f"SELECT `id`, `key_` FROM `{table}` WHERE `kid`=%s AND `key_`!=%s",
+                (kid, "0" * 32),
+            )
+            cek = cursor.fetchone()
+            return cek["key_"] if cek else None
+        finally:
+            cursor.close()
+
+    def get_keys(self, service: str) -> Iterator[tuple[str, str]]:
+        table = self.resolve_table(service)
+        if not table:
+            return None
+
+        conn = self.conn_factory.get()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute(
+                # TODO: SQL injection risk
+                f"SELECT `kid`, `key_` FROM `{table}` WHERE `key_`!=%s",
                 ("0" * 32,),
             )
             for row in cursor.fetchall():
@@ -79,6 +70,8 @@ class MySQL(Vault):
     def add_key(self, service: str, kid: Union[UUID, str], key: str) -> bool:
         if not key or key.count("0") == len(key):
             raise ValueError("You cannot add a NULL Content Key to a Vault.")
+
+        service = self.resolve_table(service) or service
 
         if not self.has_permission("INSERT", table=service):
             raise PermissionError(f"MySQL vault {self.slug} has no INSERT permission.")
@@ -118,6 +111,8 @@ class MySQL(Vault):
         for kid, key in kid_keys.items():
             if not key or key.count("0") == len(key):
                 raise ValueError("You cannot add a NULL Content Key to a Vault.")
+
+        service = self.resolve_table(service) or service
 
         if not self.has_permission("INSERT", table=service):
             raise PermissionError(f"MySQL vault {self.slug} has no INSERT permission.")
@@ -169,9 +164,33 @@ class MySQL(Vault):
             cursor.execute("SHOW TABLES")
             for table in cursor.fetchall():
                 # each entry has a key named `Tables_in_<db name>`
-                yield Services.get_tag(list(table.values())[0])
+                yield list(table.values())[0]
         finally:
             cursor.close()
+
+    def resolve_table(self, name: str) -> Optional[str]:
+        """
+        Get the actual Table name matching `name` case-insensitively, if it exists.
+
+        The UPPER() comparison is explicit so the result does not depend on the server's
+        `lower_case_table_names` setting. Where both spellings exist, exact case wins.
+        """
+        conn = self.conn_factory.get()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute(
+                "SELECT TABLE_NAME FROM information_schema.TABLES"
+                " WHERE TABLE_SCHEMA=%s AND UPPER(TABLE_NAME)=UPPER(%s)",
+                (conn.db, name),
+            )
+            names = [list(row.values())[0] for row in cursor.fetchall()]
+        finally:
+            cursor.close()
+
+        if name in names:
+            return name
+        return names[0] if names else None
 
     def has_table(self, name: str) -> bool:
         """Check if the Vault has a Table with the specified name."""

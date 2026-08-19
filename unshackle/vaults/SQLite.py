@@ -5,7 +5,6 @@ from sqlite3 import Connection
 from typing import Iterator, Optional, Union
 from uuid import UUID
 
-from unshackle.core.services import Services
 from unshackle.core.vault import Vault
 
 
@@ -22,40 +21,30 @@ class SQLite(Vault):
         if isinstance(kid, UUID):
             kid = kid.hex
 
+        table = self.resolve_table(service)
+        if not table:
+            return None
+
         conn = self.conn_factory.get()
         cursor = conn.cursor()
 
-        service_variants = [service]
-        if service != service.lower():
-            service_variants.append(service.lower())
-        if service != service.upper():
-            service_variants.append(service.upper())
-
         try:
-            for service_name in service_variants:
-                if not self.has_table(service_name):
-                    continue
-
-                cursor.execute(
-                    f"SELECT `id`, `key_` FROM `{service_name}` WHERE `kid`=? AND `key_`!=?", (kid, "0" * 32)
-                )
-                cek = cursor.fetchone()
-                if cek:
-                    return cek[1]
-
-            return None
+            cursor.execute(f"SELECT `id`, `key_` FROM `{table}` WHERE `kid`=? AND `key_`!=?", (kid, "0" * 32))
+            cek = cursor.fetchone()
+            return cek[1] if cek else None
         finally:
             cursor.close()
 
     def get_keys(self, service: str) -> Iterator[tuple[str, str]]:
-        if not self.has_table(service):
+        table = self.resolve_table(service)
+        if not table:
             return None
 
         conn = self.conn_factory.get()
         cursor = conn.cursor()
 
         try:
-            cursor.execute(f"SELECT `kid`, `key_` FROM `{service}` WHERE `key_`!=?", ("0" * 32,))
+            cursor.execute(f"SELECT `kid`, `key_` FROM `{table}` WHERE `key_`!=?", ("0" * 32,))
             for kid, key_ in cursor.fetchall():
                 yield kid, key_
         finally:
@@ -65,6 +54,7 @@ class SQLite(Vault):
         if not key or key.count("0") == len(key):
             raise ValueError("You cannot add a NULL Content Key to a Vault.")
 
+        service = self.resolve_table(service) or service
         if not self.has_table(service):
             self.create_table(service)
 
@@ -98,6 +88,7 @@ class SQLite(Vault):
             if not key or key.count("0") == len(key):
                 raise ValueError("You cannot add a NULL Content Key to a Vault.")
 
+        service = self.resolve_table(service) or service
         if not self.has_table(service):
             self.create_table(service)
 
@@ -158,7 +149,19 @@ class SQLite(Vault):
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
             for (name,) in cursor.fetchall():
                 if name != "sqlite_sequence":
-                    yield Services.get_tag(name)
+                    yield name
+        finally:
+            cursor.close()
+
+    def resolve_table(self, name: str) -> Optional[str]:
+        """Get the actual Table name matching `name` case-insensitively, if it exists."""
+        conn = self.conn_factory.get()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=? COLLATE NOCASE", (name,))
+            row = cursor.fetchone()
+            return row[0] if row else None
         finally:
             cursor.close()
 

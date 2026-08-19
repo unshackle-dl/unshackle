@@ -48,7 +48,12 @@ def process_service_keys(from_vault: Vault, service: str, log: logging.Logger) -
 
 def copy_service_data(to_vault: Vault, from_vault: Vault, service: str, log: logging.Logger) -> int:
     """Copy data for a single service between vaults."""
-    content_keys = process_service_keys(from_vault, service, log)
+    try:
+        content_keys = process_service_keys(from_vault, service, log)
+    except Exception as e:
+        log.warning(f"{service}: Could not read from {from_vault} ({e}), skipped")
+        return 0
+
     total_count = len(content_keys)
 
     if total_count == 0:
@@ -124,7 +129,7 @@ def copy(
         raise click.UsageError("--service and --local-only are mutually exclusive.")
 
     if service:
-        service = Services.get_tag(service)
+        service = Services.get_vault_tag(service)
         log.info(f"Filtering by service: {service}")
 
     installed: Optional[set[str]] = None
@@ -134,11 +139,18 @@ def copy(
 
     total_added = 0
     for from_vault in from_vaults:
-        services_to_copy = [service] if service else list(from_vault.get_services())
+        if service:
+            services_to_copy = [service]
+        else:
+            try:
+                services_to_copy = list(from_vault.get_services())
+            except Exception as e:
+                log.warning(f"{from_vault.name}: cannot list services ({e}), skipped")
+                continue
 
         if installed is not None:
             before = len(services_to_copy)
-            services_to_copy = [s for s in services_to_copy if s and s.upper() in installed]
+            services_to_copy = [s for s in services_to_copy if s and Services.get_tag(s).upper() in installed]
             skipped = before - len(services_to_copy)
             if skipped:
                 log.info(f"{from_vault.name}: skipping {skipped} service(s) not installed locally")
@@ -218,7 +230,7 @@ def add(file: Path, service: str, vaults: list[str]) -> None:
         raise click.ClickException("You must provide at least one Vault.")
 
     log = logging.getLogger("kv")
-    service = Services.get_tag(service)
+    service = Services.get_vault_tag(service)
 
     vaults_ = load_vaults(list(vaults))
 
@@ -305,7 +317,7 @@ def search(kid: str, service: Optional[str], vault_name: Optional[str]) -> None:
 
     vaults_ = load_vaults(vault_names)
 
-    service_tag = Services.get_tag(service) if service else None
+    service_tag = Services.get_vault_tag(service) if service else None
 
     hits: list[tuple[str, str, str]] = []
     for vault in vaults_:
@@ -349,13 +361,14 @@ def prepare(vaults: list[str]) -> None:
     vaults_ = load_vaults(vaults)
 
     for vault in vaults_:
-        if hasattr(vault, "has_table") and hasattr(vault, "create_table"):
-            for service_tag in Services.get_tags():
-                if vault.has_table(service_tag):
-                    log.info(f"{vault} already has a {service_tag} Table")
+        if hasattr(vault, "resolve_table") and hasattr(vault, "create_table"):
+            for service_tag in dict.fromkeys(Services.get_vault_tag(tag) for tag in Services.get_tags()):
+                existing = vault.resolve_table(service_tag)
+                if existing:
+                    log.info(f"{vault} already has a {existing} Table")
                 else:
                     try:
-                        vault.create_table(service_tag, commit=True)
+                        vault.create_table(service_tag)
                         log.info(f"{vault}: Created {service_tag} Table")
                     except PermissionError:
                         log.error(f"{vault} user has no create table permission, skipping...")
