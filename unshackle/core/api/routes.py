@@ -254,7 +254,7 @@ async def services(request: web.Request) -> web.Response:
                     cli_params = []
                     for param in service_module.cli.params:
                         param_info: dict = {"name": getattr(param, "name", None)}
-                        if isinstance(param, click.Argument):
+                        if param.param_type_name == "argument":
                             param_info["kind"] = "argument"
                             param_info["required"] = param.required
                         else:

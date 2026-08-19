@@ -180,7 +180,7 @@ def sync(
         raise click.ClickException("You must provide more than one Vault to sync.")
 
     ctx.invoke(
-        copy,
+        copy.callback,
         to_vault_name=vaults[0],
         from_vault_names=vaults[1:],
         service=service,
@@ -188,7 +188,7 @@ def sync(
     )
     for i in range(1, len(vaults)):
         ctx.invoke(
-            copy,
+            copy.callback,
             to_vault_name=vaults[i],
             from_vault_names=[vaults[i - 1]],
             service=service,
