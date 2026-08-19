@@ -1,5 +1,6 @@
 import logging
 import math
+import shutil
 from datetime import datetime
 from types import ModuleType
 from typing import IO, Any, Callable, Iterable, List, Literal, Mapping, Optional, TextIO, Union
@@ -434,6 +435,30 @@ def listing_panel(renderable: RenderableType, title: str) -> Panel:
     return Panel(renderable, title=title, box=box.SQUARE, border_style="bright_black")
 
 
+def listing_table(title: Optional[str] = None, **kwargs: Any) -> Table:
+    """Build a table in the style of the rich-click help tables, so listings and help screens match."""
+    kwargs.setdefault("box", box.HORIZONTALS)
+    kwargs.setdefault("show_edge", False)  # no top or bottom rule, so the title runs straight into the header
+    kwargs.setdefault("border_style", "dark_gray")
+    kwargs.setdefault("header_style", "text")
+    kwargs.setdefault("pad_edge", False)
+    return Table(title=title, title_style="rule.text", title_justify="left", **kwargs)
+
+
+def print_wide(renderable: RenderableType, pad: PaddingDimensions = (1, 3)) -> None:
+    """Print a listing at the terminal width, indented like the rich-click help panels.
+
+    The shared console holds 80 columns to keep logs and progress compact. Long values such as paths
+    and URLs fold badly at that width, so this widens the console for one print and restores it after.
+    """
+    fixed_width = console.width
+    console.width = max(fixed_width, shutil.get_terminal_size().columns)
+    try:
+        console.print(Padding(renderable, pad))
+    finally:
+        console.width = fixed_width
+
+
 def prompt_user(prompt: str) -> str:
     """Ask the user for input on the shared console, themed and indented like the rest of the output."""
     indent = " " * 5
@@ -450,5 +475,7 @@ __all__ = (
     "SyncLive",
     "console",
     "listing_panel",
+    "listing_table",
+    "print_wide",
     "prompt_user",
 )

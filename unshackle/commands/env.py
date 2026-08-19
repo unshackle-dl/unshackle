@@ -7,12 +7,11 @@ from typing import Optional
 
 import click
 from rich.padding import Padding
-from rich.table import Table
 from rich.tree import Tree
 
 from unshackle.core import binaries
 from unshackle.core.config import POSSIBLE_CONFIG_PATHS, config, config_path
-from unshackle.core.console import console
+from unshackle.core.console import console, listing_table, print_wide
 from unshackle.core.constants import context_settings
 from unshackle.core.services import Services
 from unshackle.core.temp import TASK_PREFIX, is_stale
@@ -132,14 +131,12 @@ def check() -> None:
     total_required = 0
     missing_required = []
 
-    table = Table(
-        title="Environment Dependencies", title_style="bold", show_header=True, header_style="bold", expand=False
-    )
-    table.add_column("Category", style="bold cyan", width=10)
-    table.add_column("Tool", width=16)
+    table = listing_table("Environment Dependencies", expand=True, show_lines=True)
+    table.add_column("Category", style="cyan", width=10)
+    table.add_column("Tool", style="text", width=16)
     table.add_column("Status", justify="center", width=10)
     table.add_column("Req", justify="center", width=4)
-    table.add_column("Purpose", style="bright_black", width=20)
+    table.add_column("Purpose", style="text2", overflow="fold")
 
     last_cat = None
     for dep in all_deps:
@@ -164,16 +161,16 @@ def check() -> None:
 
         table.add_row(category, dep["name"], status, req, dep["desc"])
 
-    console.print(Padding(table, (1, 2)))
+    print_wide(table)
 
-    summary_parts = [f"[bold]Total:[/bold] {total_installed}/{len(all_deps)}"]
+    summary_parts = [f"[text]Total:[/text] [repr.number]{total_installed}[/]/[repr.number]{len(all_deps)}[/]"]
 
     if all_required_installed:
         summary_parts.append("[green]All required tools installed ✓[/green]")
     else:
         summary_parts.append(f"[red]Missing required: {', '.join(missing_required)}[/red]")
 
-    console.print(Padding("  ".join(summary_parts), (1, 2)))
+    console.print(Padding("  ".join(summary_parts), (0, 3, 1, 3)))
 
 
 @env.command()
@@ -276,8 +273,8 @@ def theme() -> None:
             pulse.append("━", style=lut[int(fade * 31)])
 
         block = Group(header, swatch, Text(), docstring, *options, tracks, *logs, Text(), progress, pulse)
-        console.print(Padding(block, (1, 2, 1, 2)))
-        console.print(Rule(style=guide, characters="─"))
+        print_wide(block, (1, 2, 1, 2))
+        print_wide(Rule(style=guide, characters="─"), (0, 0))
     console.print()
 
 
@@ -289,14 +286,16 @@ def info() -> None:
     if config_path:
         log.info(f"Config loaded from {config_path}")
     else:
-        tree = Tree("No config file found, you can use any of the following locations:")
+        tree = Tree(
+            "[text]No config file found, you can use any of the following locations:[/]", guide_style="bright_black"
+        )
         for i, path in enumerate(POSSIBLE_CONFIG_PATHS, start=1):
             tree.add(f"[repr.number]{i}.[/] [text2]{path.resolve()}[/]")
         console.print(Padding(tree, (0, 5)))
 
-    table = Table(title="Directories", title_style="bold", expand=True)
-    table.add_column("Name", no_wrap=True)
-    table.add_column("Path", no_wrap=False, overflow="fold")
+    table = listing_table("Directories", expand=True, show_lines=True)
+    table.add_column("Name", style="cyan", no_wrap=True)
+    table.add_column("Path", style="text2", no_wrap=False, overflow="fold")
 
     path_vars = {
         x: Path(os.getenv(x))
@@ -320,7 +319,7 @@ def info() -> None:
                     break
             table.add_row(name.title(), str(path))
 
-    console.print(Padding(table, (1, 5)))
+    print_wide(table)
 
 
 @env.group(name="clear", short_help="Clear an environment directory.", context_settings=context_settings)

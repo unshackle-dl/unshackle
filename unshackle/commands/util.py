@@ -1,3 +1,4 @@
+import logging
 import re
 import subprocess
 from pathlib import Path
@@ -26,25 +27,27 @@ def refresh_services() -> None:
     from unshackle.core.service_repo import is_repo_spec, refresh_repo
     from unshackle.core.utils.redact import redact_path
 
+    log = logging.getLogger("util")
+
     entries = config.directories.services
     if not isinstance(entries, list):
         entries = [entries]
     specs = [e for e in entries if isinstance(e, str) and is_repo_spec(e)]
     if not specs:
-        click.echo("No service repos configured in directories.services.")
+        log.info("No service repos configured in directories.services.")
         return
     # manual refresh force-overwrites local changes (hard reset to upstream), then reports the diff
     for spec in specs:
         dest, changes = refresh_repo(spec)
         if not dest:
-            click.echo(f"Failed to update {spec} (see log).")
+            log.error(f"Failed to update {spec} (see log).")
             continue
         if changes:
-            click.echo(f"Updated {spec} → {redact_path(str(dest))}")
+            log.info(f"Updated {spec} → {redact_path(str(dest))}")
             for line in changes:
-                click.echo(f"    {line}")
+                log.info(f"    {line}")
         else:
-            click.echo(f"No changes {spec}")
+            log.info(f"No changes {spec}")
 
 
 @util.command()
