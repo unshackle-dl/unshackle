@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Movie, TV, and Music archival software — user guide and REST API reference">
+        <meta name="description" content="Movie, TV, and Music archival software. User guide and REST API reference">
       
       
       
@@ -2001,126 +2001,126 @@ works.</p>
 <td><code>downloads</code></td>
 <td>path</td>
 <td><code>&lt;repo&gt;/downloads</code></td>
-<td style="text-align: center;">✅</td>
+<td style="text-align: center;">Yes</td>
 <td>Default output directory for finished files.</td>
 </tr>
 <tr>
 <td><code>temp</code></td>
 <td>path</td>
 <td><code>&lt;repo&gt;/temp</code></td>
-<td style="text-align: center;">✅</td>
+<td style="text-align: center;">Yes</td>
 <td>Temporary working files during download/decrypt/mux.</td>
 </tr>
 <tr>
 <td><code>cache</code></td>
 <td>path</td>
 <td><code>&lt;data&gt;/cache</code></td>
-<td style="text-align: center;">✅</td>
+<td style="text-align: center;">Yes</td>
 <td>Generic cache, title cache, and the update-check store.</td>
 </tr>
 <tr>
 <td><code>cookies</code></td>
 <td>path</td>
 <td><code>&lt;data&gt;/cookies</code></td>
-<td style="text-align: center;">✅</td>
+<td style="text-align: center;">Yes</td>
 <td>Per-service cookie files (and VPN cookie files).</td>
 </tr>
 <tr>
 <td><code>logs</code></td>
 <td>path</td>
 <td><code>&lt;data&gt;/logs</code></td>
-<td style="text-align: center;">✅</td>
+<td style="text-align: center;">Yes</td>
 <td>Log files.</td>
 </tr>
 <tr>
 <td><code>exports</code></td>
 <td>path</td>
 <td><code>&lt;data&gt;/exports</code></td>
-<td style="text-align: center;">✅</td>
+<td style="text-align: center;">Yes</td>
 <td>Export JSON files.</td>
 </tr>
 <tr>
 <td><code>wvds</code></td>
 <td>path</td>
 <td><code>&lt;data&gt;/WVDs</code></td>
-<td style="text-align: center;">✅</td>
+<td style="text-align: center;">Yes</td>
 <td>Widevine device files (<code>.wvd</code>).</td>
 </tr>
 <tr>
 <td><code>prds</code></td>
 <td>path</td>
 <td><code>&lt;data&gt;/PRDs</code></td>
-<td style="text-align: center;">✅</td>
+<td style="text-align: center;">Yes</td>
 <td>PlayReady device files (<code>.prd</code>).</td>
 </tr>
 <tr>
 <td><code>dcsl</code></td>
 <td>path</td>
 <td><code>&lt;data&gt;/DCSL</code></td>
-<td style="text-align: center;">✅</td>
+<td style="text-align: center;">Yes</td>
 <td>DCSL data.</td>
 </tr>
 <tr>
 <td><code>commands</code></td>
 <td>path</td>
 <td><code>unshackle/commands</code></td>
-<td style="text-align: center;">✅</td>
+<td style="text-align: center;">Yes</td>
 <td>CLI command modules.</td>
 </tr>
 <tr>
 <td><code>services</code></td>
 <td>list | path</td>
 <td><code>[unshackle/services]</code></td>
-<td style="text-align: center;">✅</td>
+<td style="text-align: center;">Yes</td>
 <td>Service search paths and/or remote repo specs (see below).</td>
 </tr>
 <tr>
 <td><code>vaults</code></td>
 <td>path</td>
 <td><code>unshackle/vaults</code></td>
-<td style="text-align: center;">✅</td>
+<td style="text-align: center;">Yes</td>
 <td>Vault backend modules.</td>
 </tr>
 <tr>
 <td><code>fonts</code></td>
 <td>path</td>
 <td><code>unshackle/fonts</code></td>
-<td style="text-align: center;">✅</td>
+<td style="text-align: center;">Yes</td>
 <td>Bundled fonts.</td>
 </tr>
 <tr>
 <td><code>user_configs</code></td>
 <td>path</td>
 <td><code>unshackle/</code></td>
-<td style="text-align: center;">❌ protected</td>
+<td style="text-align: center;">No protected</td>
 <td>Where <code>unshackle.yaml</code> lives.</td>
 </tr>
 <tr>
 <td><code>data</code></td>
 <td>path</td>
 <td><code>unshackle/</code></td>
-<td style="text-align: center;">❌ protected</td>
+<td style="text-align: center;">No protected</td>
 <td>Base for the data subdirectories above.</td>
 </tr>
 <tr>
 <td><code>core_dir</code></td>
 <td>path</td>
 <td><code>unshackle/core</code></td>
-<td style="text-align: center;">❌ protected</td>
+<td style="text-align: center;">No protected</td>
 <td>Package core.</td>
 </tr>
 <tr>
 <td><code>namespace_dir</code></td>
 <td>path</td>
 <td><code>unshackle/</code></td>
-<td style="text-align: center;">❌ protected</td>
+<td style="text-align: center;">No protected</td>
 <td>Package root.</td>
 </tr>
 <tr>
 <td><code>app_dirs</code></td>
 <td>-</td>
 <td><code>AppDirs("unshackle", False)</code></td>
-<td style="text-align: center;">❌ protected</td>
+<td style="text-align: center;">No protected</td>
 <td>Internal AppDirs instance.</td>
 </tr>
 </tbody>

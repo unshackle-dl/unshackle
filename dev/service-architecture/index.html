@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Movie, TV, and Music archival software — user guide and REST API reference">
+        <meta name="description" content="Movie, TV, and Music archival software. User guide and REST API reference">
       
       
       
@@ -3016,7 +3016,10 @@ variants carry no language.</p>
 </div>
 <h3 id="segment-filtering-hooks">Segment-filtering hooks<a class="headerlink" href="#segment-filtering-hooks" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>HLS</strong>: set <code>track.OnSegmentFilter(segment)</code> to drop unwanted segments (ads/bumpers).</li>
+<li><strong>HLS</strong>: set <code>track.OnSegmentFilter(segment)</code> to drop unwanted segments (ads/bumpers).
+  A dropped segment is invisible to the whole download: its <code>EXT-X-KEY</code> and its
+  <code>EXT-X-DISCONTINUITY</code> are ignored, so a clear ad break inside encrypted content does
+  not disturb decryption.</li>
 <li><strong>DASH</strong>: pass a <code>period_filter</code> callable to <code>to_tracks</code> to drop whole periods.
   Caching-breadth periods some services emit and non-<code>content</code> segment types are dropped automatically.</li>
 </ul>
