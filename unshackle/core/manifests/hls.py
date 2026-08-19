@@ -789,13 +789,16 @@ class HLS:
                 """
                 drm = encryption_data[1]
                 first_segment_i = next(
-                    int(file.stem) for file in sorted(segment_save_dir.iterdir()) if file.stem.isdigit()
+                    (int(file.stem) for file in sorted(segment_save_dir.iterdir()) if file.stem.isdigit()), None
                 )
                 last_segment_i = max(0, i - int(not include_this_segment))
+                if first_segment_i is None or first_segment_i > last_segment_i:
+                    return None
                 range_len = (last_segment_i - first_segment_i) + 1
 
                 segment_range = f"{str(first_segment_i).zfill(name_len)}-{str(last_segment_i).zfill(name_len)}"
-                merged_path = segment_save_dir / f"{segment_range}{get_extension(master.segments[last_segment_i].uri)}"
+                ext = get_extension(wanted_segments[last_segment_i].uri) or ""
+                merged_path = segment_save_dir / f"{segment_range}{ext}"
                 decrypted_path = segment_save_dir / f"{merged_path.stem}_decrypted{merged_path.suffix}"
 
                 files = [
@@ -864,7 +867,7 @@ class HLS:
 
             if segment not in unwanted_segments:
                 if isinstance(track, Subtitle):
-                    segment_file_ext = get_extension(segment.uri)
+                    segment_file_ext = get_extension(segment.uri) or ""
                     segment_file_path = segment_save_dir / f"{str(i).zfill(name_len)}{segment_file_ext}"
                     segment_data = try_ensure_utf8(segment_file_path.read_bytes())
                     if track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML):
@@ -909,7 +912,7 @@ class HLS:
                     map_data = (segment.init_section, init_content)
 
             segment_keys = getattr(segment, "keys", None)
-            if segment_keys:
+            if segment_keys and segment not in unwanted_segments:
                 if cdm:
                     cdm_segment_keys = HLS.filter_keys_for_cdm(segment_keys, cdm)
                     key = (

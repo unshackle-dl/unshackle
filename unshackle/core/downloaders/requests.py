@@ -1391,7 +1391,7 @@ def requests(
             output_dir
             / filename.format(
                 i=i * index_stride + index_offset,
-                ext=get_extension(url["url"] if isinstance(url, dict) else url) if needs_ext else "",
+                ext=(get_extension(url["url"] if isinstance(url, dict) else url) or "") if needs_ext else "",
             )
         ]
     ]

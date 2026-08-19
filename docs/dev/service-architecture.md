@@ -346,6 +346,9 @@ A typical `get_tracks` therefore looks like fetching the manifest text with
 ### Segment-filtering hooks
 
 - **HLS**: set `track.OnSegmentFilter(segment)` to drop unwanted segments (ads/bumpers).
+  A dropped segment is invisible to the whole download: its `EXT-X-KEY` and its
+  `EXT-X-DISCONTINUITY` are ignored, so a clear ad break inside encrypted content does
+  not disturb decryption.
 - **DASH**: pass a `period_filter` callable to `to_tracks` to drop whole periods.
   Caching-breadth periods some services emit and non-`content` segment types are dropped automatically.
 
