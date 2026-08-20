@@ -1692,10 +1692,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#how-a-cdm-is-chosen-and-keys-are-found" class="md-nav__link">
+  <a href="#how-unshackle-chooses-a-cdm-and-finds-keys" class="md-nav__link">
     <span class="md-ellipsis">
       
-        How a CDM is chosen and keys are found
+        How unshackle chooses a CDM and finds keys
       
     </span>
   </a>
@@ -1719,10 +1719,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#request-and-session-objects" class="md-nav__link">
+  <a href="#request-and-http-session-objects" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Request and session objects
+        Request and HTTP session objects
       
     </span>
   </a>
@@ -2519,10 +2519,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#how-a-cdm-is-chosen-and-keys-are-found" class="md-nav__link">
+  <a href="#how-unshackle-chooses-a-cdm-and-finds-keys" class="md-nav__link">
     <span class="md-ellipsis">
       
-        How a CDM is chosen and keys are found
+        How unshackle chooses a CDM and finds keys
       
     </span>
   </a>
@@ -2546,10 +2546,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#request-and-session-objects" class="md-nav__link">
+  <a href="#request-and-http-session-objects" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Request and session objects
+        Request and HTTP session objects
       
     </span>
   </a>
@@ -2591,21 +2591,21 @@
 <p>This page is the conceptual map of the internal object model that a <strong>service author</strong>
 works against. It ties together the moving parts: the <code>Service</code> base class, the
 <code>Title</code> hierarchy a service returns, the <code>Track</code> model those titles carry, the
-manifest parsers that produce tracks, the DRM hooks that license and decrypt them,
-and the request/session objects wired up for you at construction time.</p>
+manifest parsers that make tracks, the DRM hooks that license and decrypt them,
+and the request and HTTP session objects wired up for you at construction time.</p>
 <div class="admonition info">
 <p class="admonition-title">Who this page is for</p>
-<p>This is a <strong>developer reference</strong>. If you only want to <em>run</em> downloads, you never
-touch these classes directly; see <a href="../../guide/downloading/">Downloading</a> and the
-<a href="../../guide/cli-reference/">CLI reference</a> instead. If you are writing or reading a
+<p>This is a <strong>developer reference</strong>. If you only want to <em>download</em> titles, you never
+touch these classes directly. See <a href="../../guide/downloading/">Downloading</a> and the
+<a href="../../guide/cli-reference/">CLI reference</a> instead. If you write or read a
 service plugin, this page explains what each object is and how the pieces connect.
-For a guided, step-by-step build, see <a href="../creating-a-service/">Creating a Service</a>;
-for exact signatures, see the auto-generated <a href="../../reference/api/service/">Service API</a>,
+For a guided, step-by-step walkthrough, see <a href="../creating-a-service/">Creating a Service</a>.
+For exact signatures, see the auto-generated <a href="../../reference/api/service/">Service API</a>,
 <a href="../../reference/api/titles/">Titles API</a>, and <a href="../../reference/api/tracks/">Tracks API</a>.</p>
 </div>
 <h2 id="the-shape-of-a-download">The shape of a download<a class="headerlink" href="#the-shape-of-a-download" title="Permanent link">&para;</a></h2>
 <p>A service is a translator between one streaming platform and unshackle's generic
-pipeline. It never downloads or decrypts anything itself; it just answers questions.
+pipeline. It never downloads or decrypts anything itself. It only answers questions.
 The <code>dl</code> command drives the whole flow and only ever calls three required methods on
 your service, in order:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Service.get_titles        →  which movies / episodes / songs exist
@@ -2629,13 +2629,13 @@ your service, in order:</p>
    the <code>Video</code>/<code>Audio</code>/<code>Subtitle</code> objects.</li>
 <li><strong><code>get_chapters(title)</code></strong> returns any chapter markers.</li>
 </ol>
-<p>Everything after that (track selection, licensing, decryption, repacking, subtitle
-conversion, and muxing) is handled by the core using the objects your service
-returned. Your job is to produce accurate <code>Title</code> and <code>Track</code> objects; the framework
+<p>The core does everything after that (track selection, licensing, decryption,
+repacking, subtitle conversion, and muxing) with the objects your service
+returned. Your job is to give accurate <code>Title</code> and <code>Track</code> objects. The framework
 does the rest.</p>
 <h2 id="the-service-base-class">The <code>Service</code> base class<a class="headerlink" href="#the-service-base-class" title="Permanent link">&para;</a></h2>
 <p>Every service subclasses <code>unshackle.core.service.Service</code>, an abstract base class.
-Two kinds of members matter: <strong>class variables</strong> that describe the service, and
+Two kinds of members matter: <strong>class variables</strong> that give the details of the service, and
 <strong>methods</strong> that the pipeline calls.</p>
 <h3 id="class-variables">Class variables<a class="headerlink" href="#class-variables" title="Permanent link">&para;</a></h3>
 <p>Declared at the top of your service class, these are static descriptors:</p>
@@ -2671,33 +2671,33 @@ Two kinds of members matter: <strong>class variables</strong> that describe the 
 <tr>
 <td><code>ANIME</code></td>
 <td><code>bool</code></td>
-<td>The catalog is anime, so metadata lookups prefer AniList. A title's own <code>anime</code> flag overrides it.</td>
+<td>The catalogue is anime, so metadata lookups prefer AniList. A title's own <code>anime</code> flag overrides it.</td>
 </tr>
 <tr>
 <td><code>DAILY</code></td>
 <td><code>bool</code></td>
-<td>The catalog is daily/date-based, so episodes are named by air date. A title's own <code>daily</code> flag overrides it.</td>
+<td>The catalogue is daily/date-based, so episodes are named by air date. A title's own <code>daily</code> flag overrides it.</td>
 </tr>
 </tbody>
 </table>
 <h3 id="required-methods">Required methods<a class="headerlink" href="#required-methods" title="Permanent link">&para;</a></h3>
-<p>These are abstract; a service will not load unless it implements all three:</p>
+<p>These are abstract. A service will not load unless it defines all three:</p>
 <ul>
-<li><code>get_titles() -&gt; Titles_T</code>: resolve the requested ID into a title collection.</li>
-<li><code>get_tracks(title) -&gt; Tracks</code>: build the track set for one title.</li>
+<li><code>get_titles() -&gt; Titles_T</code>: find the title collection for the requested ID.</li>
+<li><code>get_tracks(title) -&gt; Tracks</code>: assemble the track set for one title.</li>
 <li><code>get_chapters(title) -&gt; Chapters</code>: return chapter markers (may be empty).</li>
 </ul>
 <h3 id="optional-methods-and-hooks">Optional methods and hooks<a class="headerlink" href="#optional-methods-and-hooks" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>authenticate(cookies=None, credential=None)</code></strong>: the base implementation loads a
   <code>CookieJar</code> into <code>self.session.cookies</code> and stores <code>self.credential</code>. Override it to
-  perform a real login handshake.</li>
-<li><strong><code>search()</code></strong>: raises <code>NotImplementedError</code> by default; implement it to support the
-  <code>search</code> command.</li>
+  do a real login handshake.</li>
+<li><strong><code>search()</code></strong>: raises <code>NotImplementedError</code> by default. Write it so that the
+  <code>search</code> command can operate.</li>
 <li><strong>DRM license hooks</strong>: <code>get_widevine_service_certificate</code>, <code>get_widevine_license</code>,
   <code>get_playready_license</code> (delegates to Widevine by default), and
   <code>get_clearkey_license</code> (returns <code>None</code> by default). See <a href="#drm-hooks">DRM hooks</a> below.</li>
-<li><strong><code>request_input(prompt)</code></strong>: prompts the user; routed through the serve-mode input
+<li><strong><code>request_input(prompt)</code></strong>: prompts the user. It goes through the serve-mode input
   bridge or the rich console.</li>
 <li><strong>Event callbacks</strong>: <code>on_segment_downloaded</code>, <code>on_track_downloaded</code>,
   <code>on_track_decrypted</code>, <code>on_track_repacked</code>, <code>on_track_multiplex</code> let a service react to
@@ -2706,11 +2706,11 @@ Two kinds of members matter: <strong>class variables</strong> that describe the 
   resolved server-side <em>ahead of</em> the normal per-track license flow. Unlike everything else
   here it is <strong>not declared on the <code>Service</code> base class at all</strong>: <code>dl.py</code> probes for it with
   <code>hasattr</code> and calls it (once, after track selection) only if your service defines it. Use
-  it when keys must be fetched or injected in bulk before download, separate from the
-  per-track license callbacks below.</li>
+  it when your service must fetch or inject keys in bulk before download, separate from
+  the per-track license callbacks below.</li>
 </ul>
 <h3 id="what-__init__-wires-up-for-you">What <code>__init__</code> wires up for you<a class="headerlink" href="#what-__init__-wires-up-for-you" title="Permanent link">&para;</a></h3>
-<p>You rarely override <code>__init__</code>; the base constructor takes the Click context and sets
+<p>You rarely override <code>__init__</code>. The base constructor takes the Click context and sets
 up the objects your methods rely on:</p>
 <table>
 <thead>
@@ -2722,7 +2722,7 @@ up the objects your methods rely on:</p>
 <tbody>
 <tr>
 <td><code>self.config</code></td>
-<td>The per-service config slice (see <a href="#request-and-session-objects">Request and session objects</a>).</td>
+<td>The per-service config slice (see <a href="#request-and-http-session-objects">Request and HTTP session objects</a>).</td>
 </tr>
 <tr>
 <td><code>self.log</code></td>
@@ -2754,10 +2754,11 @@ up the objects your methods rely on:</p>
 </tr>
 </tbody>
 </table>
-<p>The constructor also resolves proxies: it reads <code>--proxy</code> / <code>--proxy-query</code> /
-<code>--proxy-provider</code>, consults the per-service <code>proxy_map</code>, and, if <code>GEOFENCE</code> is set and
-no explicit proxy was given, does a live IP check and auto-fetches a proxy to
-<code>GEOFENCE[0]</code> when it detects a geoblock. See <a href="../../guide/proxies-and-vpn/">Proxies and VPN</a>.</p>
+<p>The constructor also resolves proxies: it reads <code>--proxy</code> and the <code>proxy_query</code> and
+<code>proxy_provider</code> context params that <code>dl</code> derives from it, consults the per-service
+<code>proxy_map</code>, and, if <code>GEOFENCE</code> is set and you did not give an explicit proxy, does a live
+IP check and auto-fetches a proxy to <code>GEOFENCE[0]</code> when it detects a geoblock.
+See <a href="../../guide/proxies-and-vpn/">Proxies and VPN</a>.</p>
 <div class="admonition note">
 <p class="admonition-title"><code>TrackRequest</code></p>
 <p><code>self.track_request</code> is a small dataclass built from the CLI: <code>codecs</code>
@@ -2812,22 +2813,24 @@ unique identifier from the platform.</p>
 <div class="tabbed-block">
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">Movie</span><span class="p">(</span><span class="n">id_</span><span class="p">,</span> <span class="n">service</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">year</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">language</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </span></code></pre></div>
-<p><code>name</code> is required; <code>year</code> is optional but must be a positive integer if given.</p>
+<p>You must give <code>name</code>. <code>year</code> is optional, but it must be a positive integer if you
+give it.</p>
 </div>
 <div class="tabbed-block">
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">Episode</span><span class="p">(</span><span class="n">id_</span><span class="p">,</span> <span class="n">service</span><span class="p">,</span> <span class="n">title</span><span class="p">,</span> <span class="n">season</span><span class="p">,</span> <span class="n">number</span><span class="p">,</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>        <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">year</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">language</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>        <span class="n">description</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">air_date</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </span></code></pre></div>
-<p><code>title</code> is the <strong>show</strong> name; <code>season</code> and <code>number</code> are required (0 is allowed).
-An <code>air_date</code> is normalized to a <code>date</code> so the <code>{date}</code> naming token stays clean,
-and a placeholder episode <code>name</code> like <code>"Episode 4"</code> is discarded automatically.</p>
+<p><code>title</code> is the <strong>show</strong> name. You must give <code>season</code> and <code>number</code>, and <code>0</code> is a
+valid value. unshackle converts an <code>air_date</code> to a <code>date</code> so the <code>{date}</code> naming
+token stays clean, and it discards a placeholder episode <code>name</code> like <code>"Episode 4"</code>
+automatically.</p>
 </div>
 <div class="tabbed-block">
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">Song</span><span class="p">(</span><span class="n">id_</span><span class="p">,</span> <span class="n">service</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">artist</span><span class="p">,</span> <span class="n">album</span><span class="p">,</span> <span class="n">track</span><span class="p">,</span> <span class="n">disc</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">year</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>     <span class="n">language</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
 </span></code></pre></div>
-<p><code>name</code>, <code>artist</code>, <code>album</code>, and <code>track</code> are required and validated. <code>disc</code> defaults to
+<p>You must give <code>name</code>, <code>artist</code>, <code>album</code>, and <code>track</code>, and unshackle validates them. <code>disc</code> defaults to
 1, and <code>year</code> is optional. A single therefore needs no <code>disc</code>, and an undated release
 needs no <code>year</code>.</p>
 <p>A <code>Song</code> also takes optional metadata keywords that the tagger and the naming templates
@@ -2862,16 +2865,16 @@ the full music surface.</p>
 </div>
 </div>
 <h3 id="title-remapping">Title remapping<a class="headerlink" href="#title-remapping" title="Permanent link">&para;</a></h3>
-<p>After titles are fetched (and after any cache), the framework applies
-<code>remap_titles(titles, title_map)</code> using the per-service <code>title_map</code> config. This does an
-<strong>exact-string</strong> rename (<code>Episode</code>s are matched on their show <code>title</code>, <code>Movie</code>s and
-<code>Song</code>s on their <code>name</code>), so a platform's odd naming can be normalized to what your
-library expects. Titles are also cache-wrapped via <code>get_titles_cached()</code>, which is region-
-and account-aware; see the <a href="#request-and-session-objects">TitleCacher</a> notes.</p>
-<p>The ordering here is deliberate on both sides. <code>title_map</code> is applied <strong>after</strong> the title
-cache so that editing the map takes effect immediately, without forcing a cache reset, and
-<strong>before</strong> metadata enrichment (<code>--enrich</code>) so that an explicit enrich override still wins
-over a mapped name.</p>
+<p>After the service fetches the titles (and after any cache), the framework applies
+<code>remap_titles(titles, title_map)</code> with the per-service <code>title_map</code> config. This does an
+<strong>exact-string</strong> rename (it compares <code>Episode</code>s on their show <code>title</code>, and <code>Movie</code>s and
+<code>Song</code>s on their <code>name</code>), so you can change a platform's odd naming to what your
+library expects. <code>get_titles_cached()</code> also cache-wraps the titles, and it is region-
+and account-aware. See the <a href="#request-and-http-session-objects">TitleCacher</a> notes.</p>
+<p>The ordering here is deliberate on both sides. The framework applies <code>title_map</code> <strong>after</strong>
+the title cache so that editing the map takes effect immediately, without forcing a cache
+reset, and <strong>before</strong> metadata enrichment (<code>--enrich</code>) so that an explicit enrich override
+still wins over a mapped name.</p>
 <h2 id="tracks-and-the-track-model">Tracks and the <code>Track</code> model<a class="headerlink" href="#tracks-and-the-track-model" title="Permanent link">&para;</a></h2>
 <p>A <code>Tracks</code> object is the container <code>get_tracks</code> returns. It has typed buckets
 (<code>videos</code>, <code>audio</code>, <code>subtitles</code>, <code>chapters</code>, and <code>attachments</code>) plus a <code>manifest_url</code>.
@@ -2882,13 +2885,13 @@ attachments), and the canonical display/mux order is Video → Audio → Subtitl
 <p class="admonition-title">Track IDs must be deterministic</p>
 <p><code>Tracks.add</code> refuses duplicate IDs. Track IDs are CRC32-derived from the track's
 identity (URL, codec, language, bitrate) and <strong>must be stable across requests</strong>, never
-random. The manifest parsers already do this correctly; if you build tracks by hand,
+random. The manifest parsers already do this correctly. If you assemble tracks by hand,
 keep IDs deterministic or <code>add</code> will raise.</p>
 </div>
 <h3 id="the-base-track">The base <code>Track</code><a class="headerlink" href="#the-base-track" title="Permanent link">&para;</a></h3>
 <p><code>Track</code> is the base for <code>Video</code>, <code>Audio</code>, and <code>Subtitle</code>. (<code>Chapter</code>, <code>Chapters</code>, and
-<code>Attachment</code> are standalone classes, <strong>not</strong> <code>Track</code> subclasses.) Every track knows how
-it is delivered, via <code>Track.Descriptor</code>:</p>
+<code>Attachment</code> are standalone classes, <strong>not</strong> <code>Track</code> subclasses.) Every track records its
+delivery method in <code>Track.Descriptor</code>, which tells unshackle how to download it:</p>
 <table>
 <thead>
 <tr>
@@ -2915,10 +2918,10 @@ it is delivered, via <code>Track.Descriptor</code>:</p>
 </tr>
 </tbody>
 </table>
-<p>Key attributes include <code>url</code> (a string or list of strings), <code>language</code> (a
+<p>The main attributes include <code>url</code> (a string or list of strings), <code>language</code> (a
 <code>langcodes.Language</code>), <code>drm</code> (an optional iterable of DRM objects), <code>needs_repack</code>, and
-descriptor-specific state stashed in <code>track.data["hls"]</code> / <code>track.data["dash"]</code>. When
-<code>name</code> is omitted, a human-readable name is derived from the language automatically.</p>
+descriptor-specific state stashed in <code>track.data["hls"]</code> / <code>track.data["dash"]</code>. If you
+do not give a <code>name</code>, unshackle derives a human-readable name from the language.</p>
 <h3 id="video"><code>Video</code><a class="headerlink" href="#video" title="Permanent link">&para;</a></h3>
 <p><code>Video</code> adds <code>codec</code>, <code>range</code>, <code>bitrate</code>, <code>width</code>, <code>height</code>, <code>fps</code>, <code>scan_type</code>, and
 closed-caption descriptors. The relevant enums:</p>
@@ -2926,13 +2929,13 @@ closed-caption descriptors. The relevant enums:</p>
 <li><strong><code>Video.Codec</code></strong>: <code>AVC</code> (H.264), <code>HEVC</code> (H.265), <code>VC1</code>, <code>VP8</code>, <code>VP9</code>, <code>AV1</code>.</li>
 <li><strong><code>Video.Range</code></strong>: <code>SDR</code>, <code>HLG</code>, <code>HDR10</code>, <code>HDR10P</code> (HDR10+), <code>DV</code> (Dolby Vision), and
   <code>HYBRID</code>. <code>HYBRID</code> is special: it tells the pipeline to select both an HDR10(+) base and
-  a DV track and merge the DV RPU onto the HDR10 stream with <code>dovi_tool</code> (see
+  a DV track and merge the DV RPU onto the HDR10 track with <code>dovi_tool</code> (see
   <a href="#dolby-vision-and-hybrid">Dolby Vision hybrid</a>).</li>
 </ul>
 <div class="admonition note">
 <p class="admonition-title">Bitrate units</p>
 <p>Both <code>Video</code> and <code>Audio</code> store <code>bitrate</code> in <strong>bits per second</strong> (rounded up). The
-string form displays kb/s, and <code>--vbitrate</code> and <code>--abitrate</code> match on kb/s.</p>
+string form displays kb/s, and <code>--vbitrate</code> and <code>--abitrate</code> compare in kb/s.</p>
 </div>
 <h3 id="audio"><code>Audio</code><a class="headerlink" href="#audio" title="Permanent link">&para;</a></h3>
 <p><code>Audio</code> adds <code>bitrate</code>, <code>channels</code>, <code>joc</code> (Joint Object Coding, the Atmos indicator),
@@ -2950,11 +2953,11 @@ and <code>sdh</code>, and <code>forced</code> cannot combine with either. <code>
 all documented for users in <a href="../../guide/subtitles/">Subtitles</a>.</p>
 <h3 id="chapters-and-attachments">Chapters and attachments<a class="headerlink" href="#chapters-and-attachments" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong><code>Chapter(timestamp, name=None)</code></strong>: a single marker; the timestamp accepts
+<li><strong><code>Chapter(timestamp, name=None)</code></strong>: a single marker. The timestamp accepts
   <code>HH:MM:SS[.mmm]</code>, integer milliseconds, or float seconds.</li>
 <li><strong><code>Chapters</code></strong>: a sorted collection that auto-inserts a <code>00:00:00.000</code> chapter and
   reads/writes OGM Simple format.</li>
-<li><strong><code>Attachment</code></strong>: a font or image attached to the mux (e.g. fonts an ASS subtitle
+<li><strong><code>Attachment</code></strong>: a font or image attached to the mux (for example, fonts an ASS subtitle
   references), built from a local <code>path</code> or a <code>url</code>.</li>
 </ul>
 <h3 id="selection-sorting-and-muxing">Selection, sorting, and muxing<a class="headerlink" href="#selection-sorting-and-muxing" title="Permanent link">&para;</a></h3>
@@ -2964,10 +2967,10 @@ all documented for users in <a href="../../guide/subtitles/">Subtitles</a>.</p>
 object multiplexes everything: <strong><code>Tracks.mux(title, ...)</code></strong> builds and runs an
 <code>mkvmerge</code> command, applying language, default-track, forced, and hearing-impaired flags,
 attaching chapters and fonts, and writing a <code>.muxed.mkv</code> (or <code>.mka</code> / <code>.mks</code> for
-audio- or subtitle-only sets). As a service author you never call <code>mux</code> yourself; you
-just return correct tracks.</p>
+audio- or subtitle-only sets). As a service author you never call <code>mux</code> yourself. You
+only return correct tracks.</p>
 <h2 id="manifest-parsers">Manifest parsers<a class="headerlink" href="#manifest-parsers" title="Permanent link">&para;</a></h2>
-<p>Most services do not build tracks by hand; they hand a manifest to one of three parsers
+<p>Most services do not assemble tracks by hand. They give a manifest to one of three parsers
 in <code>unshackle.core.manifests</code>. Each parser has the same three-part contract:</p>
 <table>
 <thead>
@@ -2999,40 +3002,40 @@ in <code>unshackle.core.manifests</code>. Each parser has the same three-part co
 <ol>
 <li><strong>Construct</strong>: <code>DASH.from_url(url, session=...)</code> or <code>DASH.from_text(text, url)</code>
    (and likewise for <code>HLS</code> / <code>ISM</code>). A <code>url</code> is always required, even for <code>from_text</code>,
-   because relative segment paths are resolved against it.</li>
+   because the parser needs it to make relative segment paths absolute.</li>
 <li><strong><code>to_tracks(...)</code></strong>: parses the manifest into a <code>Tracks</code> container of <code>Video</code>,
    <code>Audio</code>, and <code>Subtitle</code> objects, each carrying descriptor-specific state.</li>
 <li><strong><code>download_track(...)</code></strong>: a staticmethod the core calls to fetch, decrypt, and merge
-   segments. You do not call it; you just return the tracks it will operate on.</li>
+   segments. You do not call it. You only return the tracks it will operate on.</li>
 </ol>
 <p>A typical <code>get_tracks</code> therefore looks like fetching the manifest text with
 <code>self.session</code> and returning <code>DASH.from_text(mpd, url).to_tracks(language=title.language)</code>.</p>
 <div class="admonition tip">
 <p class="admonition-title">Pass the original language</p>
-<p>DASH and HLS <code>to_tracks</code> raise <code>ValueError</code> if a track's language cannot be derived
-and no valid fallback was supplied. Always pass the title's original recorded
-language. For HLS this fallback is used directly for the primary track, since HLS
-variants carry no language.</p>
+<p>DASH and HLS <code>to_tracks</code> raise <code>ValueError</code> if they cannot derive a track's language
+and you gave no valid fallback. Always pass the title's original recorded
+language. For HLS, <code>to_tracks</code> uses this fallback directly for the primary track,
+because HLS variants carry no language.</p>
 </div>
 <h3 id="segment-filtering-hooks">Segment-filtering hooks<a class="headerlink" href="#segment-filtering-hooks" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>HLS</strong>: set <code>track.OnSegmentFilter(segment)</code> to drop unwanted segments (ads/bumpers).
-  A dropped segment is invisible to the whole download: its <code>EXT-X-KEY</code> and its
-  <code>EXT-X-DISCONTINUITY</code> are ignored, so a clear ad break inside encrypted content does
+  A dropped segment is invisible to the whole download: unshackle ignores its <code>EXT-X-KEY</code>
+  and its <code>EXT-X-DISCONTINUITY</code>, so a clear ad break inside an encrypted track does
   not disturb decryption.</li>
 <li><strong>DASH</strong>: pass a <code>period_filter</code> callable to <code>to_tracks</code> to drop whole periods.
-  Caching-breadth periods some services emit and non-<code>content</code> segment types are dropped automatically.</li>
+  unshackle automatically drops the caching-breadth periods that some services send, and the non-<code>content</code> segment types.</li>
 </ul>
 <h3 id="format-gotchas-worth-knowing">Format gotchas worth knowing<a class="headerlink" href="#format-gotchas-worth-knowing" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>DASH</strong> enumerates tracks from only the <em>first</em> content period, but downloads segments
-  from <em>all</em> content periods matching the representation. <code>SegmentTemplate</code>,
-  <code>SegmentList</code>, and <code>SegmentBase</code> addressing and <code>$Number%0Nd$</code> padding are handled.</li>
+  from <em>all</em> content periods matching the representation. The parser reads <code>SegmentTemplate</code>,
+  <code>SegmentList</code>, and <code>SegmentBase</code> addressing, and <code>$Number%0Nd$</code> padding.</li>
 <li><strong>HLS</strong> re-fetches the media playlist at download time, recovers <code>SUPPLEMENTAL-CODECS</code>
   from raw text (python-m3u8 drops it) to detect Dolby Vision composite streams, and uses
-  the media-sequence-number IV for AES-128 keys that omit an explicit IV.</li>
-<li><strong>ISM</strong> has no segment list and no init segments: segment URLs are synthesized from the
-  <code>&lt;c&gt;</code> fragment timeline, and a <code>moov</code>/<code>ftyp</code> init box is rebuilt from <code>CodecPrivateData</code>
+  the media-sequence-number IV for AES-128 keys that have no explicit IV.</li>
+<li><strong>ISM</strong> has no list of segments and no init segments: the parser synthesizes segment URLs
+  from the <code>&lt;c&gt;</code> fragment timeline, and rebuilds a <code>moov</code>/<code>ftyp</code> init box from <code>CodecPrivateData</code>
   (supported for AVC, HEVC, DV-over-HEVC, AAC, EC-3, and TTML).</li>
 </ul>
 <h2 id="drm-hooks">DRM hooks<a class="headerlink" href="#drm-hooks" title="Permanent link">&para;</a></h2>
@@ -3065,7 +3068,7 @@ service to talk to the platform's license server. unshackle recognizes five DRM 
 <tr>
 <td><code>ClearKey</code></td>
 <td>HLS AES-128</td>
-<td>key fetched directly from a URI; no CDM, no challenge</td>
+<td>content key fetched directly from a URI; no CDM, no challenge</td>
 </tr>
 <tr>
 <td><code>MonaLisa</code></td>
@@ -3081,8 +3084,8 @@ AES-128, decrypted in-process. <code>ClearKeyCENC</code> is the W3C EME JWK flow
 decrypted with shaka-packager or mp4decrypt like Widevine.</p>
 </div>
 <h3 id="the-service-side-hooks">The service-side hooks<a class="headerlink" href="#the-service-side-hooks" title="Permanent link">&para;</a></h3>
-<p>The framework supplies the CDM and the decryption tool; your service provides the network
-calls that the CDM's challenge must be sent through. Override the hooks that your platform
+<p>The framework supplies the CDM and the decryption backend. Your service gives the network
+calls that must carry the CDM's challenge. Override the hooks that your platform
 needs:</p>
 <table>
 <thead>
@@ -3115,47 +3118,48 @@ needs:</p>
 </tr>
 </tbody>
 </table>
-<p>You do not open CDM sessions or run shaka-packager yourself. The <code>Widevine</code>/<code>PlayReady</code>
-classes drive the CDM handshake and invoke the decryption tool. Your hook is just the
+<p>You do not open CDM sessions or operate shaka-packager yourself. The <code>Widevine</code>/<code>PlayReady</code>
+classes drive the CDM handshake and call the decryption backend. Your hook is only the
 "send this challenge, give me back the license" step.</p>
-<h3 id="how-a-cdm-is-chosen-and-keys-are-found">How a CDM is chosen and keys are found<a class="headerlink" href="#how-a-cdm-is-chosen-and-keys-are-found" title="Permanent link">&para;</a></h3>
+<h3 id="how-unshackle-chooses-a-cdm-and-finds-keys">How unshackle chooses a CDM and finds keys<a class="headerlink" href="#how-unshackle-chooses-a-cdm-and-finds-keys" title="Permanent link">&para;</a></h3>
 <p>CDM selection is config-driven: the <code>cdm</code> map resolves a service tag (and optionally the
 track quality or DRM type) to a device name, which <code>load_cdm</code> instantiates as a local
 <code>.wvd</code>/<code>.prd</code> or a remote CDM. Before ever requesting a license, the framework tries an
-in-process key cache and the configured <strong>key vaults</strong>; only unresolved KIDs trigger an
-actual license request, and newly licensed keys are written back to every vault. This is
-why the same key is rarely re-licensed twice. Users configure all of this in
-<a href="../../guide/drm-and-cdm/">DRM and CDM</a> and <a href="../../guide/vaults/">Key vaults</a>; the API
-surface is documented in the <a href="../../reference/api/drm/">DRM API reference</a>.</p>
+in-process cache of content keys and the configured <strong>key vaults</strong>. Only unresolved KIDs
+trigger an actual license request, and the framework writes newly licensed keys back to
+every vault. This is why the same content key is rarely re-licensed twice. Users configure
+all of this in <a href="../../guide/drm-and-cdm/">DRM and CDM</a> and
+<a href="../../guide/vaults/">Key vaults</a>. The <a href="../../reference/api/drm/">DRM API reference</a> gives
+the API surface.</p>
 <h3 id="dolby-vision-and-hybrid">Dolby Vision and hybrid<a class="headerlink" href="#dolby-vision-and-hybrid" title="Permanent link">&para;</a></h3>
-<p>Two DV mechanisms sit on top of the track model. <strong>DV fixup</strong> re-exposes DV signaling on
+<p>Two DV mechanisms sit on top of the track model. <strong>DV fixup</strong> re-exposes DV signalling on
 HLS streams that carry a valid DV RPU but advertise plain HEVC (<code>dv_compatible_bitstream</code>).
 <strong>Hybrid</strong> processing (<code>Video.Range.HYBRID</code>) selects an HDR10(+) base and a DV donor,
-extracts the RPU with <code>dovi_tool</code>, and injects it onto the base layer, producing a single
-stream with both HDR10 and DV metadata. Both are automatic once the right tracks are
-selected; a service only needs to expose accurate ranges.</p>
-<h2 id="request-and-session-objects">Request and session objects<a class="headerlink" href="#request-and-session-objects" title="Permanent link">&para;</a></h2>
+extracts the RPU with <code>dovi_tool</code>, and injects it onto the base layer, to make a single
+track that carries both HDR10 metadata and the DV RPU. Both are automatic once the
+pipeline selects the right tracks. A service only needs to give accurate ranges.</p>
+<h2 id="request-and-http-session-objects">Request and HTTP session objects<a class="headerlink" href="#request-and-http-session-objects" title="Permanent link">&para;</a></h2>
 <p>Everything a service does over the network flows through objects the base constructor
 prepared, all derived from the Click context (<code>ctx</code>) that <code>dl</code> passes in.</p>
 <ul>
 <li><strong><code>self.config</code></strong>: your service's slice of <code>unshackle.yaml</code>, i.e.
-  <code>config.services[&lt;ServiceName&gt;]</code>. This is a plain dict; use it for per-service settings
+  <code>config.services[&lt;ServiceName&gt;]</code>. This is a plain dict. Use it for per-service settings
   like base URLs, an API key, or a <code>title_map</code>. See
   <a href="../../getting-started/configuration-file/">Configuration</a>.</li>
 <li><strong><code>self.session</code></strong>: a <code>requests.Session</code> with <code>config.headers</code> applied, a retry policy
   (<code>total=5</code>, backoff, retry on 429/5xx), and any resolved proxy already mounted. Pass this
-  session into the manifest parsers and DRM calls so headers, cookies, and proxies flow
-  everywhere. (unshackle also ships an rnet-based TLS-fingerprinting session used by the
-  newer <code>session()</code> factory and configured via the <code>network</code> config key.)</li>
+  HTTP session into the manifest parsers and DRM calls so headers, cookies, and proxies flow
+  everywhere. (unshackle also ships an rnet-based TLS-fingerprinting HTTP session that the
+  newer <code>session()</code> factory uses and that the <code>network</code> config key configures.)</li>
 <li><strong><code>self.credential</code></strong>: the active <code>Credential</code> (<code>username:password[:extra]</code>), populated
-  by <code>authenticate</code>. Its <code>sha1</code> is used as the account hash for cache keys.</li>
+  by <code>authenticate</code>. unshackle uses its <code>sha1</code> as the account hash for cache keys.</li>
 <li><strong><code>self.cache</code></strong>: a generic <code>Cacher</code>: JSON key/value storage under the service's cache
   dir, with CRC32 integrity checks, versioning, and optional expiry (auto-derived from a
   JWT <code>exp</code> claim when present). Good for auth tokens and API responses.</li>
 <li><strong><code>self.title_cache</code></strong>: a <code>TitleCacher</code> that wraps <code>get_titles</code> results, keyed by title
   ID, region, and account hash. It serves fresh data within <code>title_cache_time</code>, falls back
-  to stale data within <code>title_cache_max_retention</code> when an API call fails, and is bypassed
-  by <code>--no-cache</code>.</li>
+  to stale data within <code>title_cache_max_retention</code> when an API call fails, and <code>--no-cache</code>
+  bypasses it.</li>
 <li><strong><code>self.track_request</code></strong>: the <code>TrackRequest</code> describing what the user asked for
   (codecs, ranges, best-available), for use inside <code>get_tracks</code>.</li>
 </ul>
@@ -3193,7 +3197,7 @@ prepared, all derived from the Click context (<code>ctx</code>) that <code>dl</c
 </span><span id="__span-4-30"><a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_widevine_license</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">challenge</span><span class="p">,</span> <span class="n">title</span><span class="p">,</span> <span class="n">track</span><span class="p">):</span>
 </span><span id="__span-4-31"><a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"https://lic.example.com/wv"</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">challenge</span><span class="p">)</span><span class="o">.</span><span class="n">content</span>
 </span></code></pre></div>
-<p>The directory name (<code>EXMP</code>) must exactly match the class name; that stem is the
+<p>The directory name (<code>EXMP</code>) must match the class name exactly. That stem is the
 service tag. Put your service in one of the <code>directories.services</code> paths.</p>
 </div>
 <h2 id="where-to-go-next">Where to go next<a class="headerlink" href="#where-to-go-next" title="Permanent link">&para;</a></h2>

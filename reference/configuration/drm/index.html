@@ -2099,19 +2099,19 @@ profile:</p>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span><span class="nt">playready</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sl3000</span>
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
 </span></code></pre></div>
-<p>Quality keys support <code>1080</code>, <code>&gt;=1080</code>, <code>&gt;720</code>, <code>&lt;=576</code>, <code>&lt;480</code> style comparisons; DRM keys
-are <code>widevine</code> / <code>playready</code>. Quality keys are matched first, but only when a video height is
-known; if the value is still a dict after that, <code>widevine</code>/<code>playready</code> are used when present,
-otherwise the credential profile name, then <code>default</code>.</p>
-<p>The resolved name is looked up in <a href="#remote_cdm"><code>remote_cdm</code></a> by <code>name</code> first. If no entry
-matches, it is loaded as a local device file, in this order: <code>&lt;name&gt;.prd</code> in
+<p>Quality keys can hold <code>1080</code>, <code>&gt;=1080</code>, <code>&gt;720</code>, <code>&lt;=576</code>, <code>&lt;480</code> style comparisons. DRM keys
+are <code>widevine</code> / <code>playready</code>. unshackle matches the quality keys first, but only when a video
+height is known. If the value is still a dict after that, unshackle uses
+<code>widevine</code>/<code>playready</code> when present, or else the credential profile name, then <code>default</code>.</p>
+<p>unshackle finds the resolved name in <a href="#remote_cdm"><code>remote_cdm</code></a> by <code>name</code> first. If no entry
+matches, unshackle loads it as a local device file, in this order: <code>&lt;name&gt;.prd</code> in
 <code>directories.prds</code>, <code>&lt;name&gt;.prd</code> in <code>directories.wvds</code>, then <code>&lt;name&gt;.wvd</code> in
 <code>directories.wvds</code>.</p>
 <h2 id="remote_cdm"><code>remote_cdm</code><a class="headerlink" href="#remote_cdm" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Type:</strong> <code>list[dict]</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>[]</code></li>
 </ul>
-<p>A list of remote CDM server definitions. Each entry is matched by its <code>name</code> (referenced from
+<p>A list of remote CDM definitions. unshackle matches each entry by its <code>name</code> (referenced from
 <a href="#cdm"><code>cdm</code></a>), and its <code>type</code> selects the backend:</p>
 <table>
 <thead>
@@ -2203,7 +2203,7 @@ configuration error.</p>
 </tr>
 </tbody>
 </table>
-<p>PlayReady mode is used when <code>device_type</code> is <code>PLAYREADY</code> or <code>device_name</code> starts with <code>SL</code>.</p>
+<p>unshackle uses PlayReady mode when <code>device_type</code> is <code>PLAYREADY</code> or <code>device_name</code> starts with <code>SL</code>.</p>
 <h3 id="remote-cdm-custom-api"><code>custom_api</code> fields<a class="headerlink" href="#remote-cdm-custom-api" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -2261,8 +2261,8 @@ configuration error.</p>
 </tr>
 </tbody>
 </table>
-<p>Transforms cover base64/hex/JSON encoding and <code>kid:key</code> parsing. PlayReady mode is used when
-<code>device.type</code> is <code>PLAYREADY</code> or the device name is <code>SL2</code>/<code>SL3</code>.</p>
+<p>Transforms cover base64/hex/JSON encoding and <code>kid:key</code> parsing. unshackle uses PlayReady mode
+when <code>device.type</code> is <code>PLAYREADY</code> or the device name is <code>SL2</code>/<code>SL3</code>.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">remote_cdm</span><span class="p">:</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_custom</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">custom_api</span>
@@ -2288,11 +2288,11 @@ configuration error.</p>
 <ul>
 <li><strong>Type:</strong> <code>str</code> or <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>"shaka"</code></li>
 </ul>
-<p>Selects the tool used to physically decrypt CENC content. The value is compared
-case-insensitively; <code>"mp4decrypt"</code> selects Bento4's mp4decrypt, and <strong>anything else</strong>
-(including <code>"shaka"</code>) selects shaka-packager. When the value is a dict, the service key is
-matched case-insensitively and the <code>default</code> entry is the fallback.</p>
-<p>HLS AES-128 ClearKey is decrypted in-process and ignores this setting.</p>
+<p>Selects the tool that physically decrypts CENC-encrypted tracks. unshackle compares the value
+case-insensitively. <code>"mp4decrypt"</code> selects Bento4's mp4decrypt, and <strong>anything else</strong>
+(including <code>"shaka"</code>) selects shaka-packager. When the value is a dict, unshackle compares the
+service tag case-insensitively and uses the <code>default</code> entry as the fallback.</p>
+<p>unshackle decrypts HLS AES-128 ClearKey in-process and ignores this setting.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Global</label><label for="__tabbed_1_2">Per-service</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">

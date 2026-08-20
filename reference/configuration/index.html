@@ -1917,17 +1917,17 @@
 
 
 <h1 id="configuration-reference">Configuration Reference<a class="headerlink" href="#configuration-reference" title="Permanent link">&para;</a></h1>
-<p>Every key you can set in <code>unshackle.yaml</code>, with its name, type, default value, and behaviour,
+<p>Every config key you can set in <code>unshackle.yaml</code>, with its name, type, default value, and behaviour,
 split into one page per area. A worked config is on the <a href="example/">annotated example</a> page.</p>
 <p>Where the file lives, how unshackle discovers it, and how to edit it:
 <a href="../../getting-started/configuration-file/">The Configuration File</a>.</p>
 <div class="admonition info">
 <p class="admonition-title">How defaults work</p>
-<p>Every key is optional except <a href="output/"><code>output_template</code></a>, which <code>dl</code> requires.
-Without it, <code>dl</code> aborts with an error. If you omit any other key, unshackle uses
-the built-in default listed here. There is <strong>no schema validation</strong>: unknown keys are
-silently ignored (they never become settings), and the file is parsed with
-<code>yaml.safe_load</code>. An empty or missing file means every other key falls back to its
+<p>Every config key is optional except <a href="output/"><code>output_template</code></a>, which <code>dl</code> requires.
+Without it, <code>dl</code> aborts with an error. If you do not write any other config key, unshackle
+uses the built-in default listed here. There is <strong>no schema validation</strong>: unshackle
+silently ignores unknown config keys (they never become settings), and reads the file with
+<code>yaml.safe_load</code>. An empty or missing file means every other config key falls back to its
 default.</p>
 </div>
 <div class="admonition warning">

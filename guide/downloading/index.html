@@ -793,15 +793,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#video-codec-and-color-range" class="md-nav__link">
+  <a href="#video-codec-and-colour-range" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Video codec and color range
+        Video codec and colour range
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Video codec and color range">
+    <nav class="md-nav" aria-label="Video codec and colour range">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -816,10 +816,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#color-range" class="md-nav__link">
+  <a href="#colour-range" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Color range
+        Colour range
       
     </span>
   </a>
@@ -2532,15 +2532,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#video-codec-and-color-range" class="md-nav__link">
+  <a href="#video-codec-and-colour-range" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Video codec and color range
+        Video codec and colour range
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Video codec and color range">
+    <nav class="md-nav" aria-label="Video codec and colour range">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2555,10 +2555,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#color-range" class="md-nav__link">
+  <a href="#colour-range" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Color range
+        Colour range
       
     </span>
   </a>
@@ -3038,20 +3038,20 @@ the download flow itself.</p>
 <p class="admonition-title">Where the full flag list lives</p>
 <p>This page covers the flags you will use most and explains how they interact. It is
 not an exhaustive enumeration. For the complete, always-current list of every option
-and its exact wording, run <code>unshackle dl --help</code>. Every flag shown here can also be
+and its exact wording, use <code>unshackle dl --help</code>. Every flag shown here can also be
 given a default in your configuration file. See
 <a href="../../getting-started/configuration-file/">Configuration file</a>.</p>
 </div>
 <h2 id="command-shape">Command shape<a class="headerlink" href="#command-shape" title="Permanent link">&para;</a></h2>
-<p>A download is always three layers: the root CLI, the <code>dl</code> command (which is where all
-the flags below are parsed), and a <strong>service tag</strong> subcommand that carries the title
-argument.</p>
+<p>A download is always three layers: the root CLI, the <code>dl</code> command (which is where
+unshackle parses all the flags below), and a <strong>service tag</strong> subcommand that carries the
+title argument.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span><span class="o">[</span>OPTIONS<span class="o">]</span><span class="w"> </span>SERVICE<span class="w"> </span><span class="o">[</span>SERVICE<span class="w"> </span>ARGUMENTS<span class="o">]</span>
 </span></code></pre></div>
 <ul>
 <li><code>unshackle</code>: the root command.</li>
-<li><code>dl</code>: the download command. <strong>All of the options on this page are parsed here</strong>, so
-  they go <em>before</em> the service tag.</li>
+<li><code>dl</code>: the download command. <strong>unshackle parses all of the options on this page here</strong>,
+  so they go <em>before</em> the service tag.</li>
 <li><code>SERVICE</code>: a service tag such as <code>EXAMPLE1</code>, <code>EXAMPLE2</code>, <code>EXAMPLE3</code>. Service tags are
   case-insensitive and honour each service's aliases (for example <code>example+</code> resolves to
   its real tag).</li>
@@ -3064,14 +3064,14 @@ argument.</p>
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">See what a service accepts</p>
-<p>Because the positional argument is defined by each service, run
-<code>unshackle dl SERVICE --help</code> (e.g. <code>unshackle dl EXAMPLE --help</code>) to see that service's
-own argument and any service-specific options.</p>
+<p>Because each service defines its own positional argument, use
+<code>unshackle dl SERVICE --help</code> (for example <code>unshackle dl EXAMPLE --help</code>) to see that
+service's own argument and any service-specific options.</p>
 </div>
 <h2 id="the-download-flow">The download flow<a class="headerlink" href="#the-download-flow" title="Permanent link">&para;</a></h2>
-<p>When you run a download, <code>dl</code> moves through the pipeline below. Understanding the order
-helps explain why, for example, <code>--list</code> stops early and why keys are fetched even with
-<code>--skip-dl</code>.</p>
+<p>When you start a download, <code>dl</code> moves through the pipeline below. The order tells you
+why, for example, <code>--list</code> stops early, and why unshackle fetches the content keys even
+with <code>--skip-dl</code>.</p>
 <ol>
 <li><strong>Setup</strong>: load the DRM CDM, key vaults, proxy providers, cookies, and credentials.</li>
 <li><strong>Authenticate</strong>: sign in to the service with your profile's cookies/credentials.</li>
@@ -3082,7 +3082,7 @@ helps explain why, for example, <code>--list</code> stops early and why keys are
 <li><strong>Select tracks</strong>: narrow each type down using your quality, codec, range, language,
    and bitrate flags.</li>
 <li><strong>Download</strong>: pull segments for the selected tracks (concurrently per <code>--downloads</code>).</li>
-<li><strong>License &amp; decrypt</strong>: acquire content keys (vault → CDM), decrypt each track.</li>
+<li><strong>License &amp; decrypt</strong>: get the content keys (vault → CDM), decrypt each track.</li>
 <li><strong>Post-process</strong>: extract closed captions, convert subtitles, repack, mux with
    <code>mkvmerge</code>, and move the finished file to your downloads directory.</li>
 </ol>
@@ -3099,8 +3099,8 @@ list. Without it, unshackle picks the <strong>best available</strong> resolution
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">16:9 canvas matching</p>
-<p>Resolution matching is by track <strong>height</strong> first. If no track has an exact matching
-height, unshackle falls back to a 16:9-canvas match, so <code>-q 1080</code> will also match an
+<p>Resolution matching is by track <strong>height</strong> first. If no track height matches exactly,
+unshackle falls back to a 16:9-canvas match, so <code>-q 1080</code> also selects an
 anamorphic <code>1920×804</code> track (computed as <code>int(width × 9 / 16)</code>).</p>
 </div>
 <h3 id="best-available-and-worst">Best-available and worst<a class="headerlink" href="#best-available-and-worst" title="Permanent link">&para;</a></h3>
@@ -3115,7 +3115,7 @@ anamorphic <code>1920×804</code> track (computed as <code>int(width × 9 / 16)<
 <tbody>
 <tr>
 <td><code>--best-available</code></td>
-<td>If the requested resolution(s) aren't present, continue with the best that <em>is</em> available instead of failing. Also softens missing video/audio/subtitle languages and hybrid fallbacks.</td>
+<td>If the requested resolution(s) are not present, continue with the best that <em>is</em> available instead of failing. Also softens missing video/audio/subtitle languages and hybrid fallbacks.</td>
 </tr>
 <tr>
 <td><code>--worst</code></td>
@@ -3125,9 +3125,9 @@ anamorphic <code>1920×804</code> track (computed as <code>int(width × 9 / 16)<
 </table>
 <div class="language-shell highlight"><span class="filename">Never fail on a missing resolution</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">2160</span><span class="w"> </span>--best-available<span class="w"> </span>EXAMPLE<span class="w"> </span>0ABC123
 </span></code></pre></div>
-<h2 id="video-codec-and-color-range">Video codec and color range<a class="headerlink" href="#video-codec-and-color-range" title="Permanent link">&para;</a></h2>
+<h2 id="video-codec-and-colour-range">Video codec and colour range<a class="headerlink" href="#video-codec-and-colour-range" title="Permanent link">&para;</a></h2>
 <h3 id="codec">Codec<a class="headerlink" href="#codec" title="Permanent link">&para;</a></h3>
-<p><code>-v</code> / <code>--vcodec</code> selects one or more video codecs; the default is any codec. It accepts
+<p><code>-v</code> / <code>--vcodec</code> selects one or more video codecs. The default is any codec. It accepts
 either enum <strong>names</strong> or their <strong>values</strong>, comma-separated.</p>
 <table>
 <thead>
@@ -3167,8 +3167,8 @@ either enum <strong>names</strong> or their <strong>values</strong>, comma-separ
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-v<span class="w"> </span>H.265<span class="w">  </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-v<span class="w"> </span>hevc,avc<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
-<h3 id="color-range">Color range<a class="headerlink" href="#color-range" title="Permanent link">&para;</a></h3>
-<p><code>-r</code> / <code>--range</code> selects one or more color ranges; the default is <code>SDR</code>.</p>
+<h3 id="colour-range">Colour range<a class="headerlink" href="#colour-range" title="Permanent link">&para;</a></h3>
+<p><code>-r</code> / <code>--range</code> selects one or more colour ranges. The default is <code>SDR</code>.</p>
 <table>
 <thead>
 <tr>
@@ -3207,13 +3207,13 @@ either enum <strong>names</strong> or their <strong>values</strong>, comma-separ
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">HYBRID requires dovi_tool</p>
-<p><code>-r HYBRID</code> produces a single hybrid stream by injecting the Dolby Vision RPU
-metadata onto an HDR10/HDR10+ base layer using <strong>dovi_tool</strong>.
+<p><code>-r HYBRID</code> makes a single hybrid track by injecting the Dolby Vision RPU
+metadata onto an HDR10/HDR10+ base layer with <strong>dovi_tool</strong>.
 It requires the <code>dovi_tool</code> binary, resolved from unshackle's <code>binaries/</code> folder or
 your <code>PATH</code>. The normal case is a DV track plus an HDR10 or HDR10+ base. With HDR10+
 and no DV, unshackle converts the HDR10+ metadata to DV instead, which also needs
 <code>hdr10plus_tool</code>. With no DV and no HDR10+, the title fails.
-When HDR10+ is present it is preferred over HDR10 as the base layer.</p>
+When HDR10+ is present, unshackle prefers it over HDR10 as the base layer.</p>
 <p>To keep an HDR10+ deliverable <em>alongside</em> the hybrid, request both ranges:
 <code>-r HYBRID,HDR10P</code>. <code>-r HYBRID</code> on its own muxes only the merged hybrid.</p>
 </div>
@@ -3248,12 +3248,12 @@ resolution/codec/range/language combination. You can constrain this.</p>
 </table>
 <div class="admonition warning">
 <p class="admonition-title">Exact vs range are mutually exclusive</p>
-<p><code>--vbitrate</code> cannot be combined with <code>--vbitrate-range</code>, and likewise for the audio
+<p>You cannot combine <code>--vbitrate</code> with <code>--vbitrate-range</code>, and likewise for the audio
 pair. Pick one form.</p>
 </div>
 <h3 id="real-bitrate-probing">Real bitrate probing<a class="headerlink" href="#real-bitrate-probing" title="Permanent link">&para;</a></h3>
 <p>Manifest-declared bitrates are sometimes rounded or wrong. Services often advertise a
-<strong>peak</strong> or <strong>nominal</strong> bandwidth that is far from the stream's real average. This matters
+<strong>peak</strong> or <strong>nominal</strong> bandwidth that is far from the track's real average. This matters
 because a track's bitrate drives the track listing, the sort order, <em>and</em> the
 <code>--vbitrate</code>/<code>--vbitrate-range</code> selection above. A bogus declared value therefore makes
 unshackle pick the wrong track. These flags probe the actual media size to compute a true
@@ -3265,7 +3265,7 @@ bitrate for the top renditions, overriding the manifest value:</p>
 </ul>
 <div class="admonition note">
 <p class="admonition-title">Reading the probed numbers</p>
-<p>A single-file track (DASH <code>SegmentBase</code>/<code>BaseURL</code>) is measured <strong>exactly</strong>. A
+<p>unshackle measures a single-file track (DASH <code>SegmentBase</code>/<code>BaseURL</code>) <strong>exactly</strong>. A
 multi-segment track (most HLS) is a <strong>sampled estimate</strong>, normally within a few percent
 of the true value. For MPEG-TS HLS the probed figure also reads a few percent <em>above</em>
 the demuxed elementary stream, because the segment bytes include container overhead.
@@ -3273,17 +3273,17 @@ That is the real <em>delivered</em> size, not an over-report or a bug.</p>
 </div>
 <div class="admonition tip">
 <p class="admonition-title">Why not every rendition is probed</p>
-<p>Probing does not touch every rendition. Only the five highest declared-bitrate
-renditions of each quality tier are probed in parallel (video grouped by codec and
-range, audio by codec, channels, language, and descriptive flag), and unshackle
-extends a group downward while a lower unprobed rendition could still outrank a
-probed one. This keeps probing fast even when a service exposes dozens of renditions.
-Tracks whose duration can't be determined fall back to <code>ffprobe</code>, and a probe failure
-is non-fatal: the manifest value is simply left in place.</p>
+<p>Probing does not touch every rendition. unshackle probes only the five highest
+declared-bitrate renditions of each quality tier, in parallel (video grouped by codec
+and range, audio by codec, channels, language, and descriptive flag). It extends a
+group downward while a lower unprobed rendition could still outrank a probed one.
+This keeps probing fast even when a service exposes dozens of renditions. A track
+whose duration unshackle cannot find falls back to <code>ffprobe</code>. A probe failure is
+non-fatal: the manifest value stays in place.</p>
 </div>
 <h2 id="audio-codec-channels-and-atmos">Audio codec, channels, and Atmos<a class="headerlink" href="#audio-codec-channels-and-atmos" title="Permanent link">&para;</a></h2>
 <h3 id="codec_1">Codec<a class="headerlink" href="#codec_1" title="Permanent link">&para;</a></h3>
-<p><code>-a</code> / <code>--acodec</code> selects one or more audio codecs (comma-separated); the default is any.</p>
+<p><code>-a</code> / <code>--acodec</code> selects one or more audio codecs (comma-separated). The default is any.</p>
 <table>
 <thead>
 <tr>
@@ -3340,15 +3340,15 @@ is non-fatal: the manifest value is simply left in place.</p>
 </tr>
 </tbody>
 </table>
-<p>Names, values, and a few aliases are accepted: <code>eac3</code> and <code>ddp</code> both resolve to <code>EC3</code>,
-and <code>vorbis</code> resolves to <code>OGG</code>.</p>
+<p>unshackle accepts names, values, and a few aliases: <code>eac3</code> and <code>ddp</code> both give <code>EC3</code>,
+and <code>vorbis</code> gives <code>OGG</code>.</p>
 <div class="language-shell highlight"><span class="filename">Prefer Dolby Digital Plus, fall back to AAC</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-a<span class="w"> </span>EC3,AAC<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <h3 id="channels-and-atmos">Channels and Atmos<a class="headerlink" href="#channels-and-atmos" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>-c</code> / <code>--channels</code>: desired channel layout, e.g. <code>5.1</code> or <code>2.0</code>. Matching is by
+<li><code>-c</code> / <code>--channels</code>: desired channel layout, for example <code>5.1</code> or <code>2.0</code>. Matching is by
   ceiling, so <code>5.1</code> implicitly matches a <code>6.0</code>-reported layout.</li>
-<li><code>-naa</code> / <code>--noatmos</code>: exclude Dolby Atmos audio tracks from selection.</li>
+<li><code>-naa</code> / <code>--noatmos</code>: exclude Atmos audio tracks from selection.</li>
 </ul>
 <div class="language-shell highlight"><span class="filename">5.1 audio, no Atmos</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-c<span class="w"> </span><span class="m">5</span>.1<span class="w"> </span>--noatmos<span class="w"> </span>EXAMPLE<span class="w"> </span>0ABC123
 </span></code></pre></div>
@@ -3364,7 +3364,7 @@ picks the bitrate. If you set neither, unshackle takes the best track.</p>
 <div class="admonition tip">
 <p class="admonition-title">Two FLAC tracks in one release</p>
 <p>A service can offer both a CD FLAC and a hi-res FLAC. The two have the same codec, so
-the bitrate is what separates them. Run <code>--list</code> to read the bitrates, then give <code>-ab</code>
+the bitrate is what separates them. Use <code>--list</code> to read the bitrates, then give <code>-ab</code>
 the one you want.</p>
 </div>
 <h2 id="languages">Languages<a class="headerlink" href="#languages" title="Permanent link">&para;</a></h2>
@@ -3373,8 +3373,8 @@ the one you want.</p>
 <code>orig</code>, the title's original language.</p>
 <div class="language-shell highlight"><span class="filename">Original language plus English</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-l<span class="w"> </span>orig,en<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
-<p>The special token <code>orig</code> is resolved to the title's actual original language everywhere
-it is used. You can override each stream type independently:</p>
+<p>unshackle changes the special token <code>orig</code> to the title's own original language
+everywhere you use it. You can override each track type independently:</p>
 <ul>
 <li><code>-vl</code> / <code>--v-lang</code>: language for <strong>video only</strong> (overrides <code>-l</code> for video). Useful
   when the burned-in video language differs from the audio you want.</li>
@@ -3387,8 +3387,8 @@ it is used. You can override each stream type independently:</p>
 <code>-vl</code>, <code>-al</code>, <code>-sl</code>, and <code>-fsl</code>, in the same way as it works on <code>-w</code> / <code>--wanted</code>.</p>
 <div class="language-shell highlight"><span class="filename">Every subtitle language except Spanish</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-sl<span class="w"> </span>all,-es<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
-<p>The exclusions are subtracted from the languages the flag would otherwise select, and the
-order of the values does not matter. If you give only exclusions, the flag keeps its own
+<p>unshackle subtracts the exclusions from the languages the flag would otherwise select,
+and the order of the values does not matter. If you give only exclusions, the flag keeps its own
 default: <code>-sl -es</code> is the same as <code>-sl all,-es</code>, and <code>-l -es</code> is the same as <code>-l orig,-es</code>.</p>
 <div class="language-shell highlight"><span class="filename">Only exclusions</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># every subtitle language except Spanish and French</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-sl<span class="w"> </span>-es,-fr<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
@@ -3397,7 +3397,7 @@ default: <code>-sl -es</code> is the same as <code>-sl all,-es</code>, and <code
 </span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-l<span class="w"> </span>-es<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p><code>-vl</code> and <code>-al</code> have no default of their own: they cascade to <code>-l</code>. An override that names
-a language replaces <code>-l</code> for that stream type, exclusions included. An override that gives
+a language replaces <code>-l</code> for that track type, exclusions included. An override that gives
 only exclusions adds them to the ones from <code>-l</code>.</p>
 <div class="language-shell highlight"><span class="filename">Cascade</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># video keeps the Japanese track; only the audio drops Spanish</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-l<span class="w"> </span>en,-es<span class="w"> </span>-vl<span class="w"> </span>ja<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
@@ -3405,13 +3405,13 @@ only exclusions adds them to the ones from <code>-l</code>.</p>
 <div class="admonition note">
 <p class="admonition-title">Rules for exclusion tokens</p>
 <ul>
-<li><code>orig</code> is resolved per title, so <code>-sl -orig</code> drops the subtitles in the title's
-  original language.</li>
+<li><code>orig</code> becomes the title's own original language, so <code>-sl -orig</code> drops the
+  subtitles in that language.</li>
 <li><code>--exact-lang</code> applies to exclusions with the same matching rules as selection:
   <code>-es</code> removes exactly the tracks that <code>es</code> would select. Without it, <code>-es</code> also
   removes <code>es-419</code> and <code>es-ES</code>.</li>
 <li>Tracks with no language tag are never excluded.</li>
-<li><code>-all</code> is rejected. Name the languages you do not want instead.</li>
+<li>unshackle rejects <code>-all</code>. Name the languages you do not want instead.</li>
 <li>The comma form is the documented style. <code>-sl -es</code> also works, but a shell can read
   a lone <code>-es</code> as another option.</li>
 </ul>
@@ -3426,14 +3426,14 @@ but decide which ones come first, set a priority list in your configuration file
 </span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">  </span><span class="nt">language_priority</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">es</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">fr</span><span class="p p-Indicator">]</span>
 </span></code></pre></div>
 <p>Subtitles then start with English, Spanish, and French. The languages you leave out follow
-alphabetically, after the title's original language. Nothing is removed. Audio works the
-same way, but the languages you leave out keep their bitrate and codec order instead of an
+alphabetically, after the title's original language. unshackle removes nothing. Audio
+works the same way, but the languages you leave out keep their bitrate and codec order instead of an
 alphabetical one.</p>
 <p>See <a href="../../reference/configuration/download/#subtitle"><code>subtitle.language_priority</code></a> for the details.</p>
 <h3 id="exact-vs-fuzzy-matching">Exact vs fuzzy matching<a class="headerlink" href="#exact-vs-fuzzy-matching" title="Permanent link">&para;</a></h3>
-<p>By default language matching is fuzzy: <code>-l en</code> also accepts <code>en-US</code>, <code>en-GB</code>, etc. (up
-to a small distance). Pass <code>--exact-lang</code> to require an exact match: with it, <code>-l es-419</code>
-matches only <code>es-419</code>, not <code>es-ES</code>.</p>
+<p>By default language matching is fuzzy: <code>-l en</code> also accepts <code>en-US</code>, <code>en-GB</code>, and the
+other regional forms (up to a small distance). Pass <code>--exact-lang</code> when only an exact
+match is acceptable: with it, <code>-l es-419</code> selects only <code>es-419</code>, not <code>es-ES</code>.</p>
 <div class="admonition tip">
 <p class="admonition-title">The <code>all</code> and <code>best</code> tokens</p>
 <p>For audio, the tokens <code>all</code> and <code>best</code> bypass the usual one-track-per-language pick
@@ -3442,17 +3442,17 @@ keeps every subtitle language.</p>
 </div>
 <h2 id="subtitles">Subtitles<a class="headerlink" href="#subtitles" title="Permanent link">&para;</a></h2>
 <h3 id="selecting-subtitle-languages">Selecting subtitle languages<a class="headerlink" href="#selecting-subtitle-languages" title="Permanent link">&para;</a></h3>
-<p><code>-sl</code> / <code>--s-lang</code> sets the wanted subtitle language(s). The default is <code>all</code>, meaning
-every available subtitle language is downloaded.</p>
+<p><code>-sl</code> / <code>--s-lang</code> sets the wanted subtitle language(s). The default is <code>all</code>, so
+unshackle downloads every available subtitle language.</p>
 <div class="language-shell highlight"><span class="filename">Only English and Spanish subtitles</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-sl<span class="w"> </span>en,es<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p>To keep the default and drop one language, use the <code>-</code> prefix described in
 <a href="#excluding-languages">Excluding languages</a>. <code>-sl all,-es</code> keeps every subtitle language
 except Spanish, forced Spanish subtitles included.</p>
 <h3 id="requiring-subtitles">Requiring subtitles<a class="headerlink" href="#requiring-subtitles" title="Permanent link">&para;</a></h3>
-<p><code>--require-subs</code> takes a list of languages that <strong>must</strong> exist. If they all exist, <em>all</em>
-subtitles are downloaded; if any is missing, the title fails. This is useful for gating a
-download on the presence of a specific subtitle track.</p>
+<p><code>--require-subs</code> takes a list of languages that <strong>must</strong> exist. If they all exist,
+unshackle downloads <em>all</em> subtitles. If any is missing, the title fails. This is useful
+when you want a download only if a specific subtitle track is present.</p>
 <div class="admonition warning">
 <p class="admonition-title">Cannot combine with <code>--s-lang</code></p>
 <p><code>--require-subs</code> and <code>--s-lang</code> are mutually exclusive. Use one or the other.</p>
@@ -3460,14 +3460,14 @@ download on the presence of a specific subtitle track.</p>
 <h3 id="forced-subtitles-and-output-format">Forced subtitles and output format<a class="headerlink" href="#forced-subtitles-and-output-format" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>-fs</code> / <code>--forced-subs</code>: include forced subtitle tracks (signs/foreign dialogue).
-  Without this flag, forced subs are dropped from selection.</li>
+  Without this flag, unshackle drops forced subtitle tracks from the selection.</li>
 <li><code>-fsl</code> / <code>--forced-s-lang</code>: keep forced subtitles only in these languages (implies
   <code>-fs</code>). Works independently of <code>--s-lang</code>, so <code>-sl all -fsl en</code> grabs every full
   subtitle but only the English forced track. It accepts exclusions too: <code>-fsl all,-es</code>
   keeps every forced subtitle except the Spanish one, and <code>-fsl -es</code> means the same.</li>
 <li><code>--sub-format</code>: set the output subtitle format, converting only when necessary.
   Accepts codec names/values and common aliases (<code>srt</code>, <code>vtt</code>, <code>ass</code>, <code>ssa</code>, <code>ttml</code>,
-  etc.), or the literal <code>original</code> to keep the source format.</li>
+  and the other codec aliases), or the literal <code>original</code> to keep the source format.</li>
 </ul>
 <table>
 <thead>
@@ -3507,14 +3507,15 @@ download on the presence of a specific subtitle track.</p>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">SDH stripping happens by default</p>
-<p>When a subtitle track is marked SDH (for the deaf/hard-of-hearing) and there is no
-plain same-language subtitle, unshackle produces a stripped, non-SDH variant
-automatically. This behaviour is governed by the <code>subtitle.strip_sdh</code> config option
+<p>When a subtitle track carries the SDH flag (for the deaf/hard-of-hearing) and there
+is no plain same-language subtitle, unshackle makes a stripped, non-SDH track
+automatically. The <code>subtitle.strip_sdh</code> config option controls this behaviour
 (default on).</p>
 </div>
 <h2 id="selecting-episodes-and-tracks">Selecting episodes and tracks<a class="headerlink" href="#selecting-episodes-and-tracks" title="Permanent link">&para;</a></h2>
-<p>For series, several flags control which episodes are downloaded. The same flags select the
-tracks of a music release. By default, <strong>all</strong> episodes and <strong>all</strong> tracks are downloaded.</p>
+<p>For series, several flags control which episodes unshackle downloads. The same flags
+select the tracks of a music release. By default, unshackle downloads <strong>all</strong> episodes and
+<strong>all</strong> tracks.</p>
 <h3 id="wanted-ranges">Wanted ranges<a class="headerlink" href="#wanted-ranges" title="Permanent link">&para;</a></h3>
 <p><code>-w</code> / <code>--wanted</code> accepts season and episode ranges, comma-separated. Prefix a token
 with <code>-</code> to exclude it. For a music release, the same option takes track numbers. Read
@@ -3604,21 +3605,22 @@ which numbers to give <code>-w</code>.</p>
 </div>
 <h3 id="daily-and-date-based-content">Daily and date-based content<a class="headerlink" href="#daily-and-date-based-content" title="Permanent link">&para;</a></h3>
 <p>Talk shows, news and sports have no official episode numbering, so unshackle names them
-by air date. An episode that carries an air date is written as <code>Show.YYYY.MM.DD</code> instead of
-<code>SxxExx</code>, the <code>{date}</code> token holds the ISO date, and the season folder becomes the year.</p>
-<p>A service that only carries this kind of content sets <code>DAILY = True</code> on its class, and a
+by air date. unshackle writes an episode that carries an air date as <code>Show.YYYY.MM.DD</code>
+instead of <code>SxxExx</code>, the <code>{date}</code> token holds the ISO date, and the season folder becomes
+the year.</p>
+<p>A service that only carries this kind of title sets <code>DAILY = True</code> on its class, and a
 service can set <code>air_date</code> on each episode itself. Add <code>--daily</code> to mark any other title
 as date-based:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--daily<span class="w"> </span>--tvdb<span class="w"> </span><span class="m">73871</span><span class="w"> </span>--enrich<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p>With <code>--enrich</code> and a TVDB ID, <code>--daily</code> fills in the air date of every episode that has
-none. An air date the service already set is kept. Dates before 1970 and dates in the
-future are skipped, because TVDB carries placeholder schedule dates for episodes that
+none. An air date the service already set is kept. unshackle skips dates before 1970 and
+dates in the future, because TVDB carries placeholder schedule dates for episodes that
 have not aired. Without <code>--enrich</code> unshackle has no source to fill from, and says so.</p>
-<p>A dated episode answers to its air date in <code>-w</code>, as well as to its <code>SxxExx</code> key. A date
+<p>A dated episode answers to its air date in <code>-w</code>, as well as to its <code>SxxExx</code> token. A date
 token is a plain ISO date (<code>2026-08-11</code>). A date range uses a colon (<code>2026-08-01:2026-08-31</code>),
 because the dashes in a date are part of the date. A range cannot span more than 1000 days.
-Date tokens and <code>SxxExx</code> tokens can be mixed in one <code>-w</code>.</p>
+You can mix date tokens and <code>SxxExx</code> tokens in one <code>-w</code>.</p>
 <h3 id="split-episodes">Split episodes<a class="headerlink" href="#split-episodes" title="Permanent link">&para;</a></h3>
 <p>A few services split one episode into several separately playable videos. Where a service
 reports that, add <code>.N</code> after the episode to pick one part.</p>
@@ -3652,15 +3654,15 @@ reports that, add <code>.N</code> after the episode to pick one part.</p>
 when you want a part on its own.</p>
 <div class="admonition warning">
 <p class="admonition-title">A part range stays inside one episode</p>
-<p><code>S01E01.1-S01E01.3</code> is valid. <code>S01E01.1-S01E02.3</code> is rejected, because the parser
-cannot know how many parts episode 1 has and so cannot work out where the range ends.
-To span episodes, list the parts you want as separate tokens:
+<p><code>S01E01.1-S01E01.3</code> is valid. unshackle rejects <code>S01E01.1-S01E02.3</code>, because the
+parser cannot know how many parts episode 1 has and so cannot work out where the range
+ends. To span episodes, write the parts you want as separate tokens:
 <code>-w S01E01.2,S01E02.1</code>.</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title">A part of an unsplit episode selects nothing</p>
 <p><code>-w S01E02.2</code> on an episode that was never split is deliberately empty: it tells you
-the episode has no parts, rather than quietly handing you the whole episode. Run
+the episode has no parts, rather than quietly handing you the whole episode. Use
 <code>--list-titles</code> to see which episodes carry parts.</p>
 </div>
 <h3 id="other-selection-flags">Other selection flags<a class="headerlink" href="#other-selection-flags" title="Permanent link">&para;</a></h3>
@@ -3708,7 +3710,7 @@ or negatively (everything but these).</p>
 <p>Additional track-type flags:</p>
 <ul>
 <li><code>-ad</code> / <code>--audio-description</code>: include descriptive (audio-description) tracks, which
-  are dropped by default.</li>
+  unshackle drops by default.</li>
 <li><code>--skip-subtitle-errors</code>: if a subtitle fails to download, skip it and continue rather
   than aborting the whole title. Video and audio failures remain fatal.</li>
 </ul>
@@ -3719,7 +3721,7 @@ or negatively (everything but these).</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>You can combine an <code>*-only</code> flag with <code>no-*</code> flags to fine-tune: <code>*-only</code> chooses the
-starting set of categories, then <code>no-*</code> subtracts from it. Attachments (e.g. fonts)
+starting set of categories, then <code>no-*</code> subtracts from it. Attachments (for example fonts)
 are always kept.</p>
 </div>
 <h2 id="listing-and-dry-runs">Listing and dry runs<a class="headerlink" href="#listing-and-dry-runs" title="Permanent link">&para;</a></h2>
@@ -3751,16 +3753,16 @@ are always kept.</p>
 <h2 id="output-and-muxing">Output and muxing<a class="headerlink" href="#output-and-muxing" title="Permanent link">&para;</a></h2>
 <h3 id="output-location-and-folders">Output location and folders<a class="headerlink" href="#output-location-and-folders" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>-o</code> / <code>--output</code>: override the output directory for this run (otherwise the
-  configured downloads directory is used).</li>
-<li><code>--no-folder</code>: do not create a per-show folder for TV downloads.</li>
+<li><code>-o</code> / <code>--output</code>: override the output directory for this run (otherwise unshackle
+  uses the configured downloads directory).</li>
+<li><code>--no-folder</code>: do not make a per-show folder for TV downloads.</li>
 <li><code>--no-source</code>: remove the service source tag from the filename and path.</li>
 </ul>
 <div class="language-shell highlight"><span class="filename">Send this download somewhere specific</span><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-o<span class="w"> </span>~/Videos/incoming<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <h3 id="muxing-behaviour">Muxing behaviour<a class="headerlink" href="#muxing-behaviour" title="Permanent link">&para;</a></h3>
-<p>By default, the tracks of a movie or an episode are muxed into a single Matroska (<code>.mkv</code>)
-file with <code>mkvmerge</code>. These flags change how the output is assembled:</p>
+<p>By default, <code>mkvmerge</code> muxes the tracks of a movie or an episode into a single Matroska
+(<code>.mkv</code>) file. These flags change how unshackle assembles the output:</p>
 <table>
 <thead>
 <tr>
@@ -3789,18 +3791,18 @@ file with <code>mkvmerge</code>. These flags change how the output is assembled:
 </table>
 <div class="admonition note">
 <p class="admonition-title">Music is never muxed</p>
-<p>A music track skips the muxer. unshackle keeps the container that the service
+<p>A song skips the muxer. unshackle keeps the container that the service
 delivered, such as <code>.flac</code>, <code>.m4a</code>, or <code>.mp3</code>, and writes the metadata into that file.
 Read <a href="../output-and-naming/#music-output-files">Music output files</a>.</p>
 </div>
 <h3 id="after-the-download">After the download<a class="headerlink" href="#after-the-download" title="Permanent link">&para;</a></h3>
 <p><code>--postscript "&lt;command&gt;"</code> runs your own command once per output file, with unshackle's
 metadata substituted into <code>{variable}</code> placeholders. It is repeatable, and it replaces the
-<code>post_scripts</code> config for that run. No <code>success</code> hook runs under <code>--no-mux</code>, because that
-run writes no muxed output. A <code>failure</code> hook still runs if the download itself fails.</p>
+<code>post_scripts</code> config for that run. No <code>success</code> hook operates under <code>--no-mux</code>, because
+that run writes no muxed output. A <code>failure</code> hook still operates if the download fails.</p>
 <div class="language-shell highlight"><span class="filename">Hand each finished file to an uploader</span><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--postscript<span class="w"> </span><span class="s2">"python /opt/upload.py {filepath} --service={service}"</span><span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
-<p>For hooks that persist across runs, for the <code>season</code> and <code>run</code> modes, for <code>failure</code> hooks
+<p>For hooks that continue across runs, for the <code>season</code> and <code>run</code> modes, for <code>failure</code> hooks
 and for the full variable list, see
 <a href="../../reference/configuration/post-scripts/">Post-download scripts</a>.</p>
 <h3 id="naming-tags">Naming tags<a class="headerlink" href="#naming-tags" title="Permanent link">&para;</a></h3>
@@ -3821,8 +3823,8 @@ configured proxy providers), or a <code>provider:region</code> form.</p>
 <ul>
 <li><code>--no-proxy</code>: force-disable all proxy use for this run.</li>
 <li><code>--no-proxy-download</code>: bypass the proxy for <strong>all downloads</strong>. The manifest,
-  license, and authentication requests still go through the proxy. This is useful when the
-  proxy is only needed to satisfy geo-checks, not to move the bulk of the data.</li>
+  license, and authentication requests still go through the proxy. This is useful when you
+  need the proxy only to satisfy geo-checks, not to move the bulk of the data.</li>
 </ul>
 <h2 id="performance-and-caching">Performance and caching<a class="headerlink" href="#performance-and-caching" title="Permanent link">&para;</a></h2>
 <table>
@@ -3873,10 +3875,11 @@ configured proxy providers), or a <code>provider:region</code> form.</p>
 </span></code></pre></div>
 <h2 id="keys-vaults-and-export">Keys, vaults, and export<a class="headerlink" href="#keys-vaults-and-export" title="Permanent link">&para;</a></h2>
 <p>By default, unshackle checks your <strong>key vaults</strong> first and only asks a <strong>CDM</strong> to license
-a key when the vault misses. You can force one side or the other:</p>
+a content key when the vault misses. You can force one side or the other:</p>
 <ul>
 <li><code>--cdm-only</code>: only use the CDM (skip vaults).</li>
-<li><code>--vaults-only</code>: only use key vaults (never license via the CDM); a missing key fails.</li>
+<li><code>--vaults-only</code>: only use key vaults and never license through the CDM. A missing
+  content key fails.</li>
 </ul>
 <div class="language-shell highlight"><span class="filename">Fetch keys only, no download</span><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
@@ -3887,8 +3890,8 @@ info and the acquired content keys for each title. This is the format consumed b
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Region is recorded only with a proxy</p>
-<p>When <code>--proxy</code> is used, the export records the region so an import can reproduce the
-correct geofence. Without a proxy, no region is stored.</p>
+<p>When you use <code>--proxy</code>, the export records the region so an import can reproduce the
+correct geofence. Without a proxy, the export stores no region.</p>
 </div>
 <div class="admonition warning">
 <p class="admonition-title">Some DASH and Smooth exports need a title language</p>
@@ -3903,7 +3906,7 @@ the service. Neither end guesses a language for you, so the fix belongs in the s
 tagging and naming. An ID you give is authoritative: unshackle looks it up directly instead of
 searching by title, and the ID stays in the tags. An ID only settles <em>which</em> title this is.
 To also take that source's title, year and original language, add <code>--enrich</code>. Give at most one
-of <code>--tmdb</code>, <code>--imdb</code> and <code>--tvdb</code>; unshackle works the rest out from it. To stop the automatic
+of <code>--tmdb</code>, <code>--imdb</code> and <code>--tvdb</code>, and unshackle works the rest out from it. To stop the automatic
 lookups but keep the IDs you give, set
 <a href="../../reference/configuration/misc/#external-api-keys"><code>disable_metadata</code></a> in your config.</p>
 <table>
@@ -3923,7 +3926,7 @@ lookups but keep the IDs you give, set
 <tr>
 <td><code>--imdb</code></td>
 <td><code>--imdb tt1375666</code></td>
-<td>Use this IMDb ID instead of an automatic search. Needs no key.</td>
+<td>Use this IMDb ID instead of an automatic search. Needs no API key.</td>
 </tr>
 <tr>
 <td><code>--tvdb</code></td>
@@ -3933,7 +3936,7 @@ lookups but keep the IDs you give, set
 <tr>
 <td><code>--anilist</code></td>
 <td><code>--anilist 21</code></td>
-<td>Use this AniList ID instead of an automatic search. <code>mal:12345</code> is also accepted. Needs no key.</td>
+<td>Use this AniList ID instead of an automatic search. <code>mal:12345</code> is also accepted. Needs no API key.</td>
 </tr>
 <tr>
 <td><code>--enrich</code></td>
@@ -3952,8 +3955,9 @@ lookups but keep the IDs you give, set
 <div class="language-shell highlight"><span class="filename">Force the match and take IMDb&#x27;s title, year and language too</span><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--imdb<span class="w"> </span>tt1375666<span class="w"> </span>--enrich<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <h3 id="what-each-metadata-provider-supplies">What each metadata provider supplies<a class="headerlink" href="#what-each-metadata-provider-supplies" title="Permanent link">&para;</a></h3>
-<p>Providers differ in what they answer with, so the fields <code>--enrich</code> can replace depend on
-which ID you gave. Every provider except <code>imdb</code> only runs when its key is configured:</p>
+<p>Metadata providers differ in what they answer with, so the fields <code>--enrich</code> can replace
+depend on which ID you gave. Every metadata provider except <code>imdb</code> and <code>anilist</code> only
+operates when you set its config key:</p>
 <table>
 <thead>
 <tr>
@@ -3988,7 +3992,7 @@ which ID you gave. Every provider except <code>imdb</code> only runs when its ke
 </tr>
 <tr>
 <td>IMDb</td>
-<td><em>(no key needed)</em></td>
+<td><em>(no config key needed)</em></td>
 <td>yes</td>
 <td>yes, alpha-2 such as <code>ko</code></td>
 <td>IMDb</td>
@@ -4002,7 +4006,7 @@ which ID you gave. Every provider except <code>imdb</code> only runs when its ke
 </tr>
 <tr>
 <td>AniList</td>
-<td><em>(no key needed)</em></td>
+<td><em>(no config key needed)</em></td>
 <td>yes</td>
 <td>yes, worked out from the country of origin, such as <code>ja</code></td>
 <td>AniList</td>
@@ -4013,11 +4017,11 @@ which ID you gave. Every provider except <code>imdb</code> only runs when its ke
 all end up as the same language.</p>
 <div class="admonition note">
 <p class="admonition-title">AniList only answers for anime</p>
-<p>It is last in the default provider order and returns nothing for a title that is not
-anime. The only cost is one search that misses. Put <code>anilist</code> earlier in
+<p>It is last in the default metadata provider order and returns nothing for a title
+that is not anime. The only cost is one search that misses. Put <code>anilist</code> earlier in
 <a href="../../reference/configuration/misc/#external-api-keys"><code>metadata_providers</code></a> if you mostly
-download anime. Which of the three AniList title variants is used is set by
-<a href="../../reference/configuration/misc/#external-api-keys"><code>anilist_title_language</code></a>.</p>
+download anime. <a href="../../reference/configuration/misc/#external-api-keys"><code>anilist_title_language</code></a>
+sets which of the three AniList title variants unshackle uses.</p>
 <p>A service can also mark its titles as anime. For those titles unshackle tries AniList
 first. When AniList has no match, it falls through to the normal order.</p>
 </div>
@@ -4025,30 +4029,32 @@ first. When AniList has no match, it falls through to the normal order.</p>
 <a href="../../reference/configuration/misc/#external-api-keys"><code>metadata_providers</code></a> order:</p>
 <ul>
 <li><code>--tmdb</code> reads TMDB.</li>
-<li><code>--imdb</code> reads IMDb, then falls back to OMDb. IMDb needs no key, so this path works out of
-  the box, and an OMDb key only matters when IMDb has no answer.</li>
+<li><code>--imdb</code> reads IMDb, then falls back to OMDb. IMDb needs no API key, so this path works
+  out of the box, and an OMDb API key only matters when IMDb has no answer.</li>
 <li><code>--tvdb</code> reads TVDB. It needs <code>tvdb_api_key</code>.</li>
-<li><code>--anilist</code> reads AniList, which needs no key. It supplies the title, the year and the
+<li><code>--anilist</code> reads AniList, which needs no API key. It supplies the title, the year and the
   original language, and writes an AniList tag. It knows no TMDB, IMDB or TVDB ID, so pair it
   with <code>--tmdb</code>, <code>--imdb</code> or <code>--tvdb</code> when you want those tags as well.</li>
 </ul>
-<p>Give <strong>one</strong> of <code>--tmdb</code>, <code>--imdb</code> and <code>--tvdb</code>. They cannot be combined, because one ID does
-the job on its own: unshackle resolves the other two from it and writes all three to the tags.
+<p>Give <strong>one</strong> of <code>--tmdb</code>, <code>--imdb</code> and <code>--tvdb</code>. You cannot combine them, because one ID
+does the job on its own: unshackle finds the other two from it and writes all three to the
+tags.
 Passing two is an error rather than a silent choice between them. <code>--anilist</code> is the exception
 and still pairs with one of the three, which is how you tag an anime title with a western ID.</p>
-<p>The ID you give must have a provider that can actually resolve it, so unshackle checks that
-before it downloads anything. <code>--tmdb</code> without <code>tmdb_api_key</code>, or an ID whose providers your
-<code>metadata_providers</code> list leaves out, fails immediately with a message naming what to set.
-<code>--imdb</code> needs no key, since the <code>imdb</code> provider is keyless and in the default order.</p>
+<p>The ID you give must have a metadata provider that can find it, so unshackle makes sure of
+that before it downloads anything. <code>--tmdb</code> without <code>tmdb_api_key</code>, or an ID whose metadata
+providers your <code>metadata_providers</code> list leaves out, fails immediately with a message naming
+what to set. <code>--imdb</code> needs no API key, because the <code>imdb</code> metadata provider is keyless
+and in the default order.</p>
 <p>With <code>--enrich</code>, the title, year and original language are all replaced with the external
 source's values, whether or not the service already filled them in. A field the source does
-not answer with is left alone, and unshackle logs which fields those were, so a provider with
-a thin record cannot blank out what the service told you.</p>
+not answer with is left alone, and unshackle logs which fields those were, so a metadata provider
+with a thin record cannot blank out what the service told you.</p>
 <p><code>--enrich</code> also fills in the absolute episode number of each episode from TVDB's absolute
 order, for any series that has one and where the service did not supply it. Anime is the
-usual beneficiary, but no part of this is limited to anime. This only adds the
-<a href="../../reference/configuration/output/#output_template"><code>{absolute}</code></a> naming variable. The
-season and episode numbers are never changed.</p>
+usual beneficiary, but nothing here applies only to anime. This only adds the
+<a href="../../reference/configuration/output/#output_template"><code>{absolute}</code></a> naming variable.
+<code>--enrich</code> never changes the season and episode numbers.</p>
 <p>With <code>--daily</code>, <code>--enrich</code> also fills in the air date of each episode from TVDB. See
 <a href="#daily-and-date-based-content">Daily and date-based content</a>.</p>
 <div class="admonition warning">
@@ -4056,11 +4062,12 @@ season and episode numbers are never changed.</p>
 <p>Track selection reads the original language, so replacing it changes which audio is
 treated as the original. That is the point when a service mislabels it, but it means a
 wrong ID can pick the wrong audio track and not only write a wrong name. Without
-<code>--enrich</code> the service's own value is kept and track selection is untouched.</p>
+<code>--enrich</code>, unshackle keeps the service's own value and does not change track
+selection.</p>
 </div>
 <h3 id="episode-ordering">Episode ordering<a class="headerlink" href="#episode-ordering" title="Permanent link">&para;</a></h3>
-<p>A service does not always number a series the way TVDB's aired order does. Some services list
-Futurama in TVDB's <code>alternate</code> (Streaming) order, for example, while TVDB's <code>official</code> order
+<p>A service does not always number a series the way TVDB's aired order does. Some services use
+TVDB's <code>alternate</code> (Streaming) order for Futurama, for example, while TVDB's <code>official</code> order
 holds back four season-one episodes to the start of season two. <code>--tvdb-order</code> works out which
 order the service used, then renumbers the episodes into the order you asked for:</p>
 <div class="language-shell highlight"><span class="filename">Download Futurama in DVD order</span><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--tvdb-order<span class="w"> </span>dvd<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
@@ -4069,24 +4076,24 @@ order the service used, then renumbers the episodes into the order you asked for
 <code>tvdb_order</code> in your config to apply one by default.</p>
 <div class="admonition warning">
 <p class="admonition-title">Orders that do not cover the whole series</p>
-<p>An order can leave out episodes the service carries. TVDB's <code>dvd</code> order does not list
-Futurama's four movies. Those episodes keep their original numbering. If that would give
+<p>An order can leave out episodes the service carries. TVDB's <code>dvd</code> order does not
+contain Futurama's four movies. Those episodes keep their original numbering. If that would give
 two episodes the same season/episode slot, and so the same filename, unshackle logs an
 error and leaves the numbering untouched. Pick an order that covers the whole series.</p>
 </div>
 <h2 id="configuration-defaults">Configuration defaults<a class="headerlink" href="#configuration-defaults" title="Permanent link">&para;</a></h2>
-<p>Every flag on this page can be set as a default in your configuration file so you don't
-have to type it each time, and defaults can be scoped per service. See
+<p>You can set every flag on this page as a default in your configuration file so you do not
+have to type it each time, and you can scope defaults per service. See
 <a href="../../getting-started/configuration-file/">Configuration file</a> for the <code>dl:</code> block and
 per-service overrides.</p>
 <div class="admonition tip">
 <p class="admonition-title">Explicit flags always win</p>
-<p>A value you pass on the command line (or via an environment variable) always takes
+<p>A value you pass on the command line (or through an environment variable) always takes
 precedence over both the global <code>dl:</code> defaults and any per-service <code>dl:</code> overrides.
-Config only fills in options you didn't set explicitly.</p>
+Config only fills in options you did not set explicitly.</p>
 </div>
 <h2 id="quick-reference">Quick reference<a class="headerlink" href="#quick-reference" title="Permanent link">&para;</a></h2>
-<p>A condensed lookup of the most-used options. Run <code>unshackle dl --help</code> for the complete,
+<p>A condensed lookup of the most-used options. Use <code>unshackle dl --help</code> for the complete,
 authoritative list.</p>
 <table>
 <thead>
@@ -4115,7 +4122,7 @@ authoritative list.</p>
 <tr>
 <td><code>--range</code></td>
 <td><code>-r</code></td>
-<td>Color range(s); default <code>SDR</code>.</td>
+<td>Colour range(s). Default <code>SDR</code>.</td>
 </tr>
 <tr>
 <td><code>--channels</code></td>
@@ -4165,7 +4172,7 @@ authoritative list.</p>
 <tr>
 <td><code>--wanted</code></td>
 <td><code>-w</code></td>
-<td>Episode/season range, an air date, or a music track (<code>1-5</code>, <code>2x3</code>).</td>
+<td>Episode/season range, an air date, or a track number for a music release (<code>1-5</code>, <code>2x3</code>).</td>
 </tr>
 <tr>
 <td><code>--daily</code></td>
@@ -4235,7 +4242,7 @@ authoritative list.</p>
 <tr>
 <td><code>--cdm-only</code> / <code>--vaults-only</code></td>
 <td></td>
-<td>Key source control.</td>
+<td>Content key source control.</td>
 </tr>
 <tr>
 <td><code>--export</code></td>

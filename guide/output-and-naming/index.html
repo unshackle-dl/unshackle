@@ -872,10 +872,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#how-an-output-path-is-assembled" class="md-nav__link">
+  <a href="#how-unshackle-assembles-an-output-path" class="md-nav__link">
     <span class="md-ellipsis">
       
-        How an output path is assembled
+        How unshackle assembles an output path
       
     </span>
   </a>
@@ -2199,10 +2199,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#how-an-output-path-is-assembled" class="md-nav__link">
+  <a href="#how-unshackle-assembles-an-output-path" class="md-nav__link">
     <span class="md-ellipsis">
       
-        How an output path is assembled
+        How unshackle assembles an output path
       
     </span>
   </a>
@@ -2485,17 +2485,17 @@
 
 
 <h1 id="output-naming">Output &amp; Naming<a class="headerlink" href="#output-naming" title="Permanent link">&para;</a></h1>
-<p>This page explains where unshackle writes finished downloads and how it names them. You control naming with <strong>output templates</strong> (the filename) and <strong>folder templates</strong> (the directory the file lands in), using a set of <code>{variable}</code> placeholders that unshackle fills in from the media it just downloaded. It also covers muxing options, release-group tagging, Unicode filenames, and how to relocate unshackle's working directories.</p>
+<p>This page tells you where unshackle writes finished downloads and how it names them. You control naming with <strong>output templates</strong> (the filename) and <strong>folder templates</strong> (the directory the file lands in). Both take <code>{variable}</code> placeholders that unshackle fills in from the downloaded media. This page also covers muxing options, release-group tagging, Unicode filenames, and how to relocate unshackle's working directories.</p>
 <p>If you have not configured <code>unshackle.yaml</code> yet, read <a href="../../getting-started/configuration-file/">Configuration File</a> first. Everything below lives in that file.</p>
-<h2 id="how-an-output-path-is-assembled">How an output path is assembled<a class="headerlink" href="#how-an-output-path-is-assembled" title="Permanent link">&para;</a></h2>
+<h2 id="how-unshackle-assembles-an-output-path">How unshackle assembles an output path<a class="headerlink" href="#how-unshackle-assembles-an-output-path" title="Permanent link">&para;</a></h2>
 <p>When a download finishes, unshackle builds the final path from three pieces:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>&lt;output directory&gt; / &lt;folder template&gt; / &lt;filename template&gt;&lt;extension&gt;
 </span></code></pre></div>
 <ul>
 <li><strong>Output directory</strong>: <code>directories.downloads</code> from your config, or whatever you pass to <code>-o/--output</code> on the command line for a single run.</li>
-<li><strong>Folder template</strong>: an optional per-title subfolder. TV episodes and music tracks are <strong>always</strong> placed in a folder; movies only get one if you define a <code>movies</code> folder template, or a single-string <code>folder</code> template that applies to all title kinds (see <a href="#folder-templates">Folder templates</a>).</li>
+<li><strong>Folder template</strong>: an optional per-title subfolder. unshackle <strong>always</strong> puts TV episodes and songs in a folder. Movies only get one if you define a <code>movies</code> folder template, or a single-string <code>folder</code> template that applies to all title kinds (see <a href="#folder-templates">Folder templates</a>).</li>
 <li><strong>Filename template</strong>: the <code>output_template</code> for the title kind (movie, series, or song).</li>
-<li><strong>Extension</strong>: chosen by the muxer for a movie or an episode: <code>.mkv</code> for video, <code>.mka</code> for audio-only, <code>.mks</code> for subtitle-only. A music track is not muxed. It keeps the container the service delivered, such as <code>.flac</code>, <code>.m4a</code>, or <code>.mp3</code>. Read <a href="#music-output-files">Music output files</a>.</li>
+<li><strong>Extension</strong>: chosen by the muxer for a movie or an episode: <code>.mkv</code> for video, <code>.mka</code> for audio-only, <code>.mks</code> for subtitle-only. unshackle does not mux a song. A song keeps the container the service delivered, such as <code>.flac</code>, <code>.m4a</code>, or <code>.mp3</code>. Read <a href="#music-output-files">Music output files</a>.</li>
 </ul>
 <div class="admonition example">
 <p class="admonition-title">A typical episode path</p>
@@ -2529,7 +2529,7 @@ The folder name comes from the <code>series</code> folder template and the file 
 </tbody>
 </table>
 <h2 id="output-templates">Output templates<a class="headerlink" href="#output-templates" title="Permanent link">&para;</a></h2>
-<p>Filename templates live under the <code>output_template</code> key, keyed by title kind. Each value is a format string built from <code>{variable}</code> placeholders.</p>
+<p>Filename templates live under the <code>output_template</code> config key, keyed by title kind. Each value is a format string built from <code>{variable}</code> placeholders.</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">output_template</span><span class="p">:</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}.{year}.{quality}.{source}.WEB-DL.{audio_full}.{video}-{tag}"</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}.{season_episode}.{episode_name?}.{quality}.{source}.WEB-DL.{audio_full}.{video}-{tag}"</span>
@@ -2573,18 +2573,18 @@ The folder name comes from the <code>series</code> folder template and the file 
 </div>
 <h3 id="required-vs-optional-variables">Required vs. optional variables<a class="headerlink" href="#required-vs-optional-variables" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>{variable}</code>: <strong>required</strong>. If it is missing from the download's context, formatting raises an error. (Note that most variables are always present in context but resolve to an <em>empty string</em> when not applicable, so being "present but empty" is different from "missing".)</li>
-<li><code>{variable?}</code>: <strong>optional</strong>. A trailing <code>?</code> marks the variable conditional. When it resolves to empty, unshackle removes the placeholder <em>and</em> one adjacent separator (<code>.</code>, <code>-</code>, or space), so the surrounding text collapses cleanly.</li>
+<li><code>{variable}</code>: <strong>required</strong>. If it is missing from the download's context, formatting raises an error. Note that most variables are always present in context. A variable that does not apply becomes an <em>empty string</em>, so "present but empty" is different from "missing".</li>
+<li><code>{variable?}</code>: <strong>optional</strong>. A trailing <code>?</code> marks the variable conditional. When it is empty, unshackle removes the placeholder <em>and</em> one adjacent separator (<code>.</code>, <code>-</code>, or space), so the surrounding text collapses cleanly.</li>
 </ul>
 <div class="admonition tip">
-<p class="admonition-title">Use <code>?</code> for anything that isn't always there</p>
-<p>Episode names, editions, tags, HDR labels and audio extras aren't present on every title. Mark them optional so you never get doubled dots or dangling separators:</p>
+<p class="admonition-title">Use <code>?</code> for anything that is not always there</p>
+<p>Episode names, editions, tags, HDR labels and audio extras are not present on every title. Mark them optional so you never get doubled dots or dangling separators:</p>
 <p><div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}.{season_episode}.{episode_name?}.{quality}.{hdr?}.{source}-{tag?}"</span>
 </span></code></pre></div>
-For an episode with no on-screen name, <code>{episode_name?}</code> and its adjacent dot simply disappear.</p>
+For an episode with no on-screen name, <code>{episode_name?}</code> and its adjacent dot disappear.</p>
 </div>
 <h3 id="separator-style-dots-vs-spaces">Separator style (dots vs. spaces)<a class="headerlink" href="#separator-style-dots-vs-spaces" title="Permanent link">&para;</a></h3>
-<p>unshackle looks at the characters you place <em>between</em> variables to decide the filename's separator style. If spaces outnumber dots in your template, it sanitizes with spaces; otherwise it uses dots (the scene-style default). This is also applied to the auto-generated date separators for daily/dated content, and to every segment of a nested folder template.</p>
+<p>unshackle looks at the characters you place <em>between</em> variables to decide the filename's separator style. If spaces outnumber dots in your template, it sanitises with spaces. If not, it uses dots (the scene-style default). unshackle also applies this style to the auto-generated date separators of daily content, and to every segment of a nested folder template.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Scene style (dots)</label><label for="__tabbed_1_2">Readable style (spaces)</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -2604,7 +2604,7 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 </div>
 </div>
 <h2 id="template-variables">Template variables<a class="headerlink" href="#template-variables" title="Permanent link">&para;</a></h2>
-<p>Every variable below is valid in both output and folder templates. Values are derived from the downloaded media (via MediaInfo), from the title metadata, or from your config. Variables that don't apply to a given title resolve to an empty string.</p>
+<p>Every variable below is valid in both output and folder templates. unshackle takes the values from the downloaded media (through MediaInfo), from the title metadata, or from your config. A variable that does not apply to a title becomes an empty string.</p>
 <h3 id="common-video">Common / video<a class="headerlink" href="#common-video" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -2684,7 +2684,7 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 </table>
 <div class="admonition note">
 <p class="admonition-title">How <code>language_tags</code> rules match</p>
-<p>Rules are tried in order, but language comparison is <strong>fuzzy</strong>: a rule condition of <code>en</code> matches <code>en-US</code>, <code>en-GB</code>, and any other <code>en-*</code> variant. Within a single rule, <strong>all</strong> conditions must match (AND logic) for it to apply. The first rule that fully matches wins; if none match, <code>{lang_tag?}</code> is removed from the filename cleanly.</p>
+<p>unshackle tries the rules in order, but language comparison is <strong>fuzzy</strong>: a rule condition of <code>en</code> matches <code>en-US</code>, <code>en-GB</code>, and any other <code>en-*</code> form. Within a single rule, <strong>all</strong> conditions must match (AND logic) for it to apply. The first rule that fully matches wins. If none match, unshackle removes <code>{lang_tag?}</code> from the filename cleanly.</p>
 </div>
 <h3 id="episode-specific">Episode-specific<a class="headerlink" href="#episode-specific" title="Permanent link">&para;</a></h3>
 <table>
@@ -2728,30 +2728,30 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 </tr>
 <tr>
 <td><code>date</code></td>
-<td>ISO air date for daily/dated content</td>
+<td>ISO air date, empty when the episode has none</td>
 <td><code>2024-06-01</code></td>
 </tr>
 </tbody>
 </table>
 <div class="admonition note">
 <p class="admonition-title">Daily &amp; sports content</p>
-<p>When an episode has an air date, unshackle switches to date-based naming automatically: <code>season</code> and <code>season_episode</code> become the formatted air date, <code>episode</code> and <code>year</code> are cleared, and <code>{date}</code> holds the ISO date. The date's internal separator (dots or spaces) follows your <code>series</code> template style.</p>
+<p>When an episode has an air date, unshackle switches to date-based naming automatically. <code>season</code> and <code>season_episode</code> become the formatted air date, unshackle clears <code>episode</code> and <code>year</code>, and <code>{date}</code> holds the ISO date. The date's internal separator (dots or spaces) follows your <code>series</code> template style.</p>
 </div>
 <h3 id="split-episodes">Split episodes<a class="headerlink" href="#split-episodes" title="Permanent link">&para;</a></h3>
-<p>A few services split one episode into several separately playable videos. Where a service reports that, the part index is folded into <code>{episode}</code> and <code>{season_episode}</code>, so the stock <code>series</code> template names it with no change to your config.</p>
+<p>A few services split one episode into several separately playable videos. Where a service reports that, unshackle folds the part index into <code>{episode}</code> and <code>{season_episode}</code>, so the stock <code>series</code> template names it with no change to your config.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>Show.Name.S01E01.Part.2.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
 </span></code></pre></div>
-<p>The part token sits immediately after the episode token, before the quality tags, and the group tag stays last. Its separator follows your template's own style, the same way dated content does, so a spaced template gives <code>S01E01 Part 2</code> instead.</p>
+<p>The part token sits immediately after the episode token, before the quality tags, and the group tag stays last. Its separator follows your template's own style, the same way daily content does, so a spaced template gives <code>S01E01 Part 2</code> instead.</p>
 <p>The part is left out of the folder name, so every part of an episode lands in the same season folder:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>The.Show.S01.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG/
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>  ├─ The.Show.S01E01.Part.1.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>  ├─ The.Show.S01E01.Part.2.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>  └─ The.Show.S01E02.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
 </span></code></pre></div>
-<p>The same holds for a folder template of your own: <code>{season}</code> never picks up the part, and <code>{season_episode}</code> drops it inside a folder template. An episode with no part is named like any other episode.</p>
+<p>The same holds for a folder template of your own: <code>{season}</code> never picks up the part, and <code>{season_episode}</code> drops it inside a folder template. unshackle names an episode with no part like any other episode.</p>
 <div class="admonition note">
 <p class="admonition-title">What media servers do with the part token</p>
-<p>The form above follows scene practice for genuinely split episodes. Kodi stacks the parts back into one playable episode automatically. Jellyfin lists two versions of S01E01, still correct and playable, because its stacking pattern expects the part marker at the end of the name. Plex's scanner is closed-source, so its handling of text after the part token is unverified.</p>
+<p>The form above follows scene practice for genuinely split episodes. Kodi stacks the parts back into one playable episode automatically. Jellyfin lists two versions of S01E01, still correct and playable, because its stacking pattern expects the part marker at the end of the name. Plex uses a closed-source scanner, so what it does with text after the part token is not known.</p>
 </div>
 <p>For custom templates there is also a standalone <a href="../../reference/configuration/output/#output_template"><code>{part}</code></a> variable. You rarely want it, see the caveat on that page.</p>
 <h3 id="audio">Audio<a class="headerlink" href="#audio" title="Permanent link">&para;</a></h3>
@@ -2832,7 +2832,7 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 </tr>
 <tr>
 <td><code>release_type</code></td>
-<td><code>album</code>, <code>single</code>, <code>ep</code>, etc.</td>
+<td><code>album</code>, <code>single</code>, <code>ep</code>, or another type the service supplies</td>
 </tr>
 <tr>
 <td><code>genre</code></td>
@@ -2850,10 +2850,10 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 </table>
 <div class="admonition warning">
 <p class="admonition-title">Unknown variables are ignored, not errors</p>
-<p>If you use a variable that isn't in the list above, unshackle emits a warning at startup but continues. Double-check spelling. A typo'd <code>{quailty}</code> will simply be left in the filename literally or dropped, not filled in.</p>
+<p>If you use a variable that is not in the list above, unshackle gives a warning at startup but continues. Double-check spelling. A typo'd <code>{quailty}</code> stays in the filename literally, or unshackle drops it. unshackle does not fill it in.</p>
 </div>
 <h2 id="folder-templates">Folder templates<a class="headerlink" href="#folder-templates" title="Permanent link">&para;</a></h2>
-<p>Folder templates are nested under a special <code>folder</code> key inside <code>output_template</code>. This key is handled separately from the filename kinds. You can give it a single string (used for all title kinds) or a per-kind map.</p>
+<p>Folder templates sit under a special <code>folder</code> config key inside <code>output_template</code>. unshackle reads this config key separately from the filename kinds. You can give it a single string (for all title kinds) or a per-kind map.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Single folder template</label><label for="__tabbed_2_2">Per-kind folder templates</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -2875,18 +2875,18 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 </div>
 </div>
 </div>
-<p>The per-kind folder keys are <code>movies</code>, <code>series</code>, <code>songs</code>, and <code>albums</code>. Any other key produces a startup warning. Path separators (<code>/</code> or <code>\</code>) are allowed in folder templates. Each segment is formatted independently, so you can build nested directory structures like <code>Show/Season 01</code>. unshackle reads the separator style from the whole template, so every segment is spaced alike.</p>
-<p><strong>Fallback behavior:</strong></p>
+<p>The per-kind folder config keys are <code>movies</code>, <code>series</code>, <code>songs</code>, and <code>albums</code>. Any other config key gives a startup warning. Folder templates permit path separators (<code>/</code> or <code>\</code>). unshackle formats each segment independently, so you can assemble nested directory structures like <code>Show/Season 01</code>. unshackle reads the separator style from the whole template, so it spaces every segment alike.</p>
+<p><strong>Fallback behaviour:</strong></p>
 <ul>
-<li>A per-kind folder template wins if present; otherwise the single <code>folder</code> string is used; otherwise unshackle falls back to a built-in default.</li>
+<li>A per-kind folder template wins if present. If there is none, unshackle uses the single <code>folder</code> string. If there is no <code>folder</code> string either, unshackle falls back to a built-in default.</li>
 <li>Built-in defaults when no folder template is set. Movies get no folder at all unless a <code>movies</code> folder template (or a single-string <code>folder</code> template) exists. Series fall back to a folder <em>derived</em> from the <code>series</code> output template (stripping <code>{episode}</code>, <code>{episode_name}</code>, and collapsing <code>{season_episode}</code> down to <code>{season}</code>). Music albums fall back to <code>{artist} - {album} ({year})</code>. If the song has no year, the folder name is only <code>{artist} - {album}</code>.</li>
 </ul>
 <div class="admonition note">
 <p class="admonition-title">Movies are flat by default</p>
-<p>Episodes and songs are always foldered. Movies are written directly into the output directory <em>unless</em> you define a <code>movies</code> folder template (or a single-string <code>folder</code> template, which folders every kind). Set one if you want each movie in its own directory.</p>
+<p>Episodes and songs are always foldered. unshackle writes movies directly into the output directory <em>unless</em> you define a <code>movies</code> folder template (or a single-string <code>folder</code> template, which folders every kind). Set one if you want each movie in its own directory.</p>
 </div>
 <h2 id="music-output-files">Music output files<a class="headerlink" href="#music-output-files" title="Permanent link">&para;</a></h2>
-<p>A music track does not go through the muxer. unshackle moves the downloaded audio file to
+<p>A song does not go through the muxer. unshackle moves the downloaded audio file to
 its final path. It keeps the container that the service delivered. A lossless download
 arrives as a <code>.flac</code> file. An AAC download arrives as a <code>.m4a</code> file. unshackle writes no
 <code>.mkv</code> file for music, and the <a href="#muxing-options">muxing options</a> below do not apply.</p>
@@ -2903,9 +2903,9 @@ comments for FLAC and Ogg, ID3 frames for MP3, and MP4 atoms for M4A. The tags h
 track title, artist, album artist, track and disc numbers, date, genre, ISRC, UPC,
 copyright, and record label. When <code>tag</code> and <code>tag_group_name</code> are set, unshackle also writes the group
 name into a <code>GROUP</code> tag.</p>
-<p>Cover art is embedded when the service gives an artwork URL. unshackle downloads the image
+<p>unshackle embeds cover art when the service gives an artwork URL. It downloads the image
 and puts it in the file.</p>
-<p>Lyrics are written when the service supplies them: a <code>LYRICS</code> Vorbis comment for FLAC, a
+<p>unshackle writes lyrics when the service supplies them: a <code>LYRICS</code> Vorbis comment for FLAC, a
 <code>USLT</code> frame for MP3, and a <code>©lyr</code> atom for M4A. Ogg uses the same <code>LYRICS</code> field as
 FLAC. unshackle does not write synchronized lyrics (<code>SYLT</code>).</p>
 <p>A metadata fault does not stop the run. The file is already in place, so unshackle writes a
@@ -2915,7 +2915,7 @@ warning and continues.</p>
 <p><a href="../cli-reference/#output-muxing-files"><code>--no-mux</code></a> moves each downloaded track file to the output path without the tagging step. A music file from such a run holds only the metadata that the service put in it.</p>
 </div>
 <h2 id="muxing-options">Muxing options<a class="headerlink" href="#muxing-options" title="Permanent link">&para;</a></h2>
-<p>Muxing (combining video, audio, subtitle, chapter and attachment tracks into a single Matroska file with <code>mkvmerge</code>) is configured under the <code>muxing</code> key. Only movies and episodes are muxed. Read <a href="#music-output-files">Music output files</a> for what a music download does instead.</p>
+<p>You configure muxing (the combination of video, audio, subtitle, chapter and attachment tracks into a single Matroska file with <code>mkvmerge</code>) under the <code>muxing</code> config key. unshackle muxes only movies and episodes. Read <a href="#music-output-files">Music output files</a> for what a music download does instead.</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">muxing</span><span class="p">:</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">set_title</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span><span class="nt">merge_video</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
@@ -2960,28 +2960,28 @@ warning and continues.</p>
 </tr>
 </tbody>
 </table>
-<p>When no preferred language is matched, unshackle applies sensible defaults: the video default falls back to the title language / original-language track / first track; the audio default is the original-language track; and the subtitle default is a forced track matching the first audio's language.</p>
+<p>When no track has the preferred language, unshackle applies sensible defaults. The video default falls back to the title language, then the original-language track, then the first track. The audio default is the original-language track. The subtitle default is a forced track in the first audio's language.</p>
 <div class="admonition note">
 <p class="admonition-title"><code>default_language</code> only sets the default-track flag</p>
-<p><code>default_language</code> controls <strong>which track carries the MKV <code>--default-track</code> flag</strong>. Nothing else. It does not change track <em>selection</em> (that stays with <code>-l</code>/<code>--alang</code> and friends), and it does not touch which track is marked as original: <code>--original-flag</code> still tags the <em>true</em> original-audio track. That is the point: you can make your player default to, say, Polish audio on an English-original title without altering the original marker. When the configured language isn't present in the manifest, each track type falls back to its normal default rule described above.</p>
+<p><code>default_language</code> controls <strong>which track carries the MKV <code>--default-track</code> flag</strong>. Nothing else. It does not change track <em>selection</em> (that stays with <code>-l</code>/<code>--a-lang</code> and friends). It also does not touch which track carries the original flag: <code>--original-flag</code> still tags the <em>true</em> original-audio track. That is the point: you can make your player default to, say, Polish audio on an English-original title without altering the original marker. When the configured language is not present in the manifest, each track type falls back to its normal default rule described above.</p>
 </div>
 <div class="admonition warning">
 <p class="admonition-title"><code>merge_video</code> collapses only the language dimension</p>
-<p><code>merge_video</code> groups video tracks by <code>(resolution, range, codec)</code> and merges them so that only <strong>language</strong> differs within a single file, with no re-encode and no concatenation. Different resolutions, ranges (SDR / HDR10 / HDR10+ / DV / HYBRID), and codecs (H.264 / H.265) <strong>always</strong> land in separate files. So <code>-r HYBRID,DV,HDR10,SDR --merge-video</code> produces one file <em>per range</em> (never a single fused file), whereas English + French video of identical resolution, range, and codec yields one file containing both video tracks. <code>merge_audio</code> works the same way for audio languages.</p>
+<p><code>merge_video</code> groups video tracks by <code>(resolution, range, codec)</code> and merges them so that only <strong>language</strong> differs within a single file, with no re-encode and no concatenation. Different resolutions, ranges (SDR / HDR10 / HDR10+ / DV / HYBRID), and codecs (H.264 / H.265) <strong>always</strong> land in separate files. So <code>-r HYBRID,DV,HDR10,SDR --merge-video</code> gives one file <em>per range</em>, never a single fused file. English and French video of identical resolution, range, and codec gives one file that holds both video tracks. <code>merge_audio</code> works the same way for audio languages.</p>
 </div>
 <p>A few muxing behaviors are automatic and not configurable:</p>
 <ul>
 <li><code>--no-date</code> is always passed for privacy (no timestamps embedded).</li>
-<li>Descriptive audio gets the visually-impaired flag; SDH subtitles get the hearing-impaired flag; forced subtitles get the forced flag.</li>
-<li>Chapters are written from the title's chapter list (see <a href="#chapters-naming">Chapters</a> below).</li>
+<li>Descriptive audio gets the visually-impaired flag. SDH subtitles get the hearing-impaired flag. Forced subtitles get the forced flag.</li>
+<li>unshackle writes the chapters from the title's chapter list (see <a href="#chapters-naming">Chapters</a> below).</li>
 </ul>
 <p>The <code>--no-mux</code> flag skips muxing entirely and writes the individual track files, each with a track-type suffix, into the same output/folder structure.</p>
 <h2 id="tags-group-naming">Tags &amp; group naming<a class="headerlink" href="#tags-group-naming" title="Permanent link">&para;</a></h2>
-<p>The release-group tag is the <code>-TAG</code> portion at the end of scene-style names, produced by the <code>{tag}</code> variable.
-It can be swapped per release with <a href="../../reference/configuration/output/#tag_rules"><code>tag_rules</code></a>: ordered rules that
-match on the release-attribute variables only (<code>quality</code>, <code>resolution</code>, <code>hdr</code>, <code>source</code>, <code>lang_tag</code>,
-<code>title_type</code>, and so on), first match wins. The title's own fields, such as <code>title</code> and <code>season_episode</code>,
-cannot be matched. See the <a href="../../reference/configuration/output/#tag_rules">reference page</a> for the exact list.</p>
+<p>The release-group tag is the <code>-TAG</code> portion at the end of scene-style names, which the <code>{tag}</code> variable gives.
+You can swap it per release with <a href="../../reference/configuration/output/#tag_rules"><code>tag_rules</code></a>: ordered rules whose
+conditions read the release-attribute variables only (<code>quality</code>, <code>resolution</code>, <code>hdr</code>, <code>source</code>, <code>lang_tag</code>,
+<code>title_type</code>, and so on), and the first rule that matches wins. <code>tag_rules</code> cannot read the title's own fields,
+such as <code>title</code> and <code>season_episode</code>. See the <a href="../../reference/configuration/output/#tag_rules">reference page</a> for the exact list.</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">"MYGROUP"</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="nt">tag_group_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="nt">tag_imdb_tmdb</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
@@ -3016,7 +3016,7 @@ cannot be matched. See the <a href="../../reference/configuration/output/#tag_ru
 </tr>
 </tbody>
 </table>
-<p>The IDs are written as the Matroska <code>IMDB</code>, <code>TMDB</code>, and <code>TVDB2</code> tags. <code>TVDB2</code> values carry the
+<p>unshackle writes the IDs as the Matroska <code>IMDB</code>, <code>TMDB</code>, and <code>TVDB2</code> tags. <code>TVDB2</code> values carry the
 entity prefix the <a href="https://www.matroska.org/technical/tagging.html">Matroska tagging spec</a>
 requires: <code>series/73871</code> for a show, <code>movies/113</code> for a film.</p>
 <p>You can override the tag per run without editing config:</p>
@@ -3030,7 +3030,7 @@ requires: <code>series/73871</code> for a show, <code>movies/113</code> for a fi
 <p>If <code>config.tag</code> is empty and your template ends with <code>-{tag?}</code>, the trailing <code>-</code> and the placeholder are both removed. Use the optional form <code>{tag?}</code> if you sometimes download without a tag set.</p>
 </div>
 <h2 id="unicode-filenames">Unicode filenames<a class="headerlink" href="#unicode-filenames" title="Permanent link">&para;</a></h2>
-<p>By default unshackle transliterates non-ASCII characters (Korean, Japanese, Chinese, accented Latin, etc.) into ASCII equivalents, which is safest for older tools, DDL, and P2P sharing. Set <code>unicode_filenames</code> to keep the native characters.</p>
+<p>By default unshackle transliterates non-ASCII characters into ASCII equivalents. Korean, Japanese, Chinese, and accented Latin are examples. This is safest for older tools, DDL, and P2P sharing. Set <code>unicode_filenames</code> to keep the native characters.</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nt">unicode_filenames</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 <table>
@@ -3051,9 +3051,10 @@ requires: <code>series/73871</code> for a show, <code>movies/113</code> for a fi
 </tr>
 </tbody>
 </table>
-<p>Regardless of this setting, a set of filesystem-unsafe and structural characters is always removed or replaced during sanitization (for example <code>/</code> and <code>;</code> become <code>&amp;</code>, and characters like <code>\ * ! ? , ' " &lt; &gt; | $ # ~</code> are stripped). This is why you should never put path-unsafe characters directly in a template. unshackle warns about templates containing <code>&lt; &gt; : " / \ | ? *</code> at startup (folder templates are checked per path segment, so <code>/</code> is allowed there as a directory separator).</p>
+<p>Regardless of this setting, unshackle always removes or replaces a set of filesystem-unsafe and structural characters during sanitisation. For example, <code>/</code> and <code>;</code> become <code>&amp;</code>, and unshackle removes characters like <code>\ * ! ? , ' " &lt; &gt; | $ # ~</code>. This is why you must never put path-unsafe characters directly in a template.</p>
+<p>unshackle warns at startup about a template that contains <code>&lt; &gt; : " / \ | ? *</code>. It examines a folder template per path segment, so you can use <code>/</code> there as a directory separator.</p>
 <h2 id="directory-filename-configuration">Directory &amp; filename configuration<a class="headerlink" href="#directory-filename-configuration" title="Permanent link">&para;</a></h2>
-<p>The <code>directories</code> key relocates unshackle's working folders. Only the folders listed here can be moved; core package paths are protected and silently ignored if you try to override them.</p>
+<p>The <code>directories</code> config key relocates unshackle's working folders. You can move only the folders in the table below. unshackle protects the core package paths and silently ignores them if you try to override them.</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nt">directories</span><span class="p">:</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="nt">downloads</span><span class="p">:</span><span class="w"> </span><span class="s">"~/Media/unshackle"</span>
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">  </span><span class="nt">temp</span><span class="p">:</span><span class="w"> </span><span class="s">"/mnt/fast/unshackle-temp"</span>
@@ -3103,9 +3104,9 @@ requires: <code>series/73871</code> for a show, <code>movies/113</code> for a fi
 </tr>
 </tbody>
 </table>
-<p>Paths support <code>~</code> expansion. The names <code>app_dirs</code>, <code>core_dir</code>, <code>namespace_dir</code>, <code>user_configs</code>, and <code>data</code> are protected and cannot be changed.</p>
+<p>Paths can hold a <code>~</code> for expansion. unshackle protects the names <code>app_dirs</code>, <code>core_dir</code>, <code>namespace_dir</code>, <code>user_configs</code>, and <code>data</code>, so you cannot change them.</p>
 <h3 id="filename-patterns">Filename patterns<a class="headerlink" href="#filename-patterns" title="Permanent link">&para;</a></h3>
-<p>The <code>filenames</code> key overrides the naming patterns for a handful of internal files. These are <strong>not</strong> your media output names. They are logs, temp files, and per-service configs.</p>
+<p>The <code>filenames</code> config key overrides the naming patterns for a handful of internal files. These are <strong>not</strong> your media output names. They are logs, temp files, and per-service configs.</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nt">filenames</span><span class="p">:</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="s">"unshackle_{name}_{time}.log"</span>
 </span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span><span class="nt">chapters</span><span class="p">:</span><span class="w"> </span><span class="s">"Chapters_{title}_{random}.txt"</span>
@@ -3153,10 +3154,10 @@ requires: <code>series/73871</code> for a show, <code>movies/113</code> for a fi
 </tbody>
 </table>
 <h3 id="chapters-naming">Chapters naming<a class="headerlink" href="#chapters-naming" title="Permanent link">&para;</a></h3>
-<p>When a title has chapters, they are written to an OGM chapters file (<code>filenames.chapters</code>) and passed to the muxer. Unnamed chapters use the <code>chapter_fallback_name</code> template:</p>
+<p>When a title has chapters, unshackle writes them to an OGM chapters file (<code>filenames.chapters</code>) and passes it to the muxer. Unnamed chapters use the <code>chapter_fallback_name</code> template:</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="nt">chapter_fallback_name</span><span class="p">:</span><span class="w"> </span><span class="s">"Chapter</span><span class="nv"> </span><span class="s">{i:02}"</span>
 </span></code></pre></div>
-<p>The fallback supports two placeholders: <code>{i}</code> (chapter number, starting at 1) and <code>{j}</code> (which increments only for unnamed chapters). Standard format directives like <code>{i:02}</code> are allowed.</p>
+<p>The fallback can hold two placeholders: <code>{i}</code> (chapter number, starting at 1) and <code>{j}</code> (which increments only for unnamed chapters). It permits standard format directives like <code>{i:02}</code>.</p>
 <h2 id="removed-migrated-options">Removed &amp; migrated options<a class="headerlink" href="#removed-migrated-options" title="Permanent link">&para;</a></h2>
 <div class="admonition warning">
 <p class="admonition-title"><code>scene_naming</code> was removed</p>
@@ -3224,11 +3225,11 @@ empty ones collapse:</p>
 three variables is set:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>The.Movie.2024.1080p.EXAMPLE.WEB-DL.DDP5.1.H.264-TAG.mkv
 </span></code></pre></div>
-<p>For finer control (e.g. a <code>SUBBED</code> tag driven by subtitle languages), use <code>{lang_tag?}</code>
+<p>For finer control (for example a <code>SUBBED</code> tag driven by subtitle languages), use <code>{lang_tag?}</code>
 with <a href="../../reference/configuration/download/#language_tags"><code>language_tags</code> rules</a> instead.</p>
 </div>
 <div class="tabbed-block">
-<p>Dated content needs no special template. When an episode carries an air date,
+<p>Daily content needs no special template. When an episode carries an air date,
 <code>{season_episode}</code> becomes the date automatically and <code>{episode}</code> and <code>{year}</code> clear:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="nt">output_template</span><span class="p">:</span>
 </span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="w">  </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}.{season_episode}.{episode_name?}.{quality}.{source}.WEB-DL.{audio_full}.{video}-{tag}"</span>
@@ -3239,8 +3240,8 @@ with <a href="../../reference/configuration/download/#language_tags"><code>langu
 </span></code></pre></div>
 <p>The date separator follows your template style: dots here, spaces if your <code>series</code>
 template uses spaces.</p>
-<p>In folder names, <code>{season}</code> becomes the air year (<code>Season 2024</code> style grouping), and a
-<code>{year?}</code> in the folder template is skipped when it would just repeat that year.</p>
+<p>In folder names, <code>{season}</code> becomes the air year (<code>Season 2024</code> style grouping), and
+unshackle skips a <code>{year?}</code> in the folder template when it would only repeat that year.</p>
 </div>
 <div class="tabbed-block">
 <p><div class="language-yaml highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="nt">output_template</span><span class="p">:</span>
@@ -3251,8 +3252,8 @@ template uses spaces.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>The Artist - The Album (2024)/
 </span><span id="__span-36-2"><a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a>  └─ 01.Opening.Track.mka
 </span></code></pre></div></p>
-<p>In <code>"{track_number}. {title}"</code> dots and spaces are tied, and ties go to dot style; add
-more spaces between variables (as below) if you want space-separated names.</p>
+<p>In <code>"{track_number}. {title}"</code> the number of dots and spaces is equal, and a tie goes to
+dot style. Add more spaces between variables (as below) if you want space-separated names.</p>
 <p>A multi-disc album with explicit tracks, using more of the music variables. <code>{disc}</code> is
 empty on disc 1, so <code>{disc?}</code> and its separator only appear from disc 2 onward:</p>
 <p><div class="language-yaml highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="nt">output_template</span><span class="p">:</span>

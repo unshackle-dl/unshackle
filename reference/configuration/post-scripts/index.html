@@ -2263,12 +2263,12 @@
 
 
 <h1 id="post-scripts">Post-download scripts<a class="headerlink" href="#post-scripts" title="Permanent link">&para;</a></h1>
-<p>Run your own script when a download finishes, with unshackle's metadata passed in as
+<p>Operate your own script when a download finishes, with unshackle's metadata passed in as
 <code>{variable}</code> placeholders. Use it to hand a finished file to an uploader, send a
 notification, or start a library scan.</p>
 <h2 id="post_scripts"><code>post_scripts</code><a class="headerlink" href="#post_scripts" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Type:</strong> <code>list[dict]</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>[]</code> (no scripts run)</li>
+<li><strong>Type:</strong> <code>list[dict]</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>[]</code> (unshackle operates no scripts)</li>
 </ul>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">post_scripts</span><span class="p">:</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="s">"python</span><span class="nv"> </span><span class="s">/opt/upload.py</span><span class="nv"> </span><span class="s">{filepath}</span><span class="nv"> </span><span class="s">--service={service}</span><span class="nv"> </span><span class="s">--season={season}</span><span class="nv"> </span><span class="s">--episode={episode}</span><span class="nv"> </span><span class="s">--tmdb={tmdb}</span><span class="nv"> </span><span class="s">--subs={sidecars}"</span>
@@ -2277,7 +2277,7 @@ notification, or start a library scan.</p>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="s">"python</span><span class="nv"> </span><span class="s">/opt/notify.py</span><span class="nv"> </span><span class="s">--title={title}</span><span class="nv"> </span><span class="s">--episode={episode}"</span>
 </span></code></pre></div>
 <p>Every entry that matches the event and mode runs, so one download can feed an uploader and
-a notifier without a wrapper script. An entry may also be written as a plain string, which
+a notifier without a wrapper script. You can also write an entry as a plain string, which
 is the same as <code>{command: "...", event: success, mode: file}</code>.</p>
 <table>
 <thead>
@@ -2305,13 +2305,13 @@ is the same as <code>{command: "...", event: success, mode: file}</code>.</p>
 </tr>
 </tbody>
 </table>
-<p>An entry whose <code>event</code> or <code>mode</code> is not one of the listed values is skipped and logs a
-warning naming the bad value, once per command. An entry whose <code>command</code> cannot be split
-into arguments, such as one with an unbalanced quote, is skipped with a warning too. Neither
-stops the download or the other entries.</p>
+<p>unshackle skips an entry whose <code>event</code> or <code>mode</code> is not one of the listed values, and logs a
+warning that names the bad value, once per command. unshackle also skips an entry whose
+<code>command</code> it cannot split into arguments, such as one with an unbalanced quote, and logs a
+warning. Neither stops the download or the other entries.</p>
 <h2 id="how-the-command-runs">How the command runs<a class="headerlink" href="#how-the-command-runs" title="Permanent link">&para;</a></h2>
-<p>The command is split into arguments <strong>first</strong>, and variables are substituted into those
-arguments afterwards. The process runs without a shell.</p>
+<p>unshackle splits the command into arguments <strong>first</strong>, and then substitutes the variables
+into those arguments. The process runs without a shell.</p>
 <p>This is what keeps a title like <code>Bob"; rm -rf ~</code> harmless: a value can never turn into an
 extra argument or a shell operator, and you never have to think about quoting. It also
 means a path containing spaces always arrives as a single argument on every OS.</p>
@@ -2321,19 +2321,19 @@ means a path containing spaces always arrives as a single argument on every OS.<
 first stops a value becoming a <em>new</em> argument, but a value on its own can still be a
 whole argument. A bare <code>{title}</code> whose value is <code>--upload-file=/etc/passwd</code> would arrive
 as an option to your script, not as text. Write <code>--title={title}</code>, not a bare <code>{title}</code>,
-so a service can never forge a flag. unshackle refuses to run a command when a
+so a service can never forge a flag. unshackle refuses to operate a command when a
 substituted value would become an option-like token (one that starts with <code>-</code>), and logs
 a warning instead.</p>
 </div>
 <div class="admonition warning">
 <p class="admonition-title">No shell features, and name your interpreter</p>
-<p>Pipes, <code>&amp;&amp;</code>, <code>&gt;</code> redirection, <code>~</code> and globs do not work, because no shell is involved.
+<p>Pipes, <code>&amp;&amp;</code>, <code>&gt;</code> redirection, <code>~</code> and globs do not work, because unshackle uses no shell.
 If you want them, make the shell explicit: <code>bash -c "..."</code>.</p>
 <p>For the same reason there is no interpreter lookup. Write <code>python /opt/upload.py</code>
 rather than <code>/opt/upload.py</code>. unshackle will not guess whether you meant the system
 Python or the one in its own virtual environment.</p>
 <p>On Windows, when a <strong>fixed</strong> part of an argument contains a space, quote the whole
-argument (<code>"--out=C:\My Dir\{filename}"</code>), not just the value. Substituted values
+argument (<code>"--out=C:\My Dir\{filename}"</code>), not only the value. Substituted values
 never need quoting on any OS.</p>
 <p>On Windows, do not target a <code>.bat</code> or <code>.cmd</code> file directly. Windows runs batch files
 through <code>cmd.exe</code>, whose argument quoting differs from every other program and has a
@@ -2352,7 +2352,7 @@ throttling them. If your script is heavy, queue the work inside it or use <code>
 </div>
 <h2 id="variables">Variables<a class="headerlink" href="#variables" title="Permanent link">&para;</a></h2>
 <p>Metadata comes from the same naming context that produced the file's name, built per output
-file. So <code>{quality}</code> and <code>{hdr}</code> always describe the file being passed. Downloading
+file. So <code>{quality}</code> and <code>{hdr}</code> always give the values for the file unshackle passes in. Downloading
 <code>-q 1080,2160 -r HDR10,SDR</code> produces four files, each with its own invocation and its own
 values.</p>
 <table>
@@ -2422,10 +2422,10 @@ values.</p>
 <div class="admonition warning">
 <p class="admonition-title">Empty variables become an empty string</p>
 <p><code>--tmdb={tmdb}</code> with no ID resolved hands your script <code>--tmdb=</code>, so treat an empty
-string as absent. Write your script to handle every variable being empty.</p>
+string as absent. Write your script to accept an empty value for every variable.</p>
 <p>Empty is common, and not only when data is missing:</p>
 <ul>
-<li>Nothing was resolved. <code>{tmdb}</code> is empty when no metadata provider found the title,
+<li>No metadata provider found an ID. <code>{tmdb}</code> is empty when no metadata provider found the title,
   the matching API key is missing, or the title is a movie you gave no ID for.</li>
 <li>The title has no such field. Movies have no <code>{season}</code> or <code>{episode}</code>, and music has
   neither.</li>
@@ -2495,22 +2495,21 @@ puts in <code>{title}</code>.</p>
 <p><code>{year}</code> is empty when the service gives the release no year. <code>{ext}</code> is the container the
 track arrived in, such as <code>.flac</code>, because a music download is not muxed.</p>
 <h3 id="tagging-ids">Tagging IDs<a class="headerlink" href="#tagging-ids" title="Permanent link">&para;</a></h3>
-<p><code>{tmdb}</code>, <code>{imdb}</code> and <code>{tvdb}</code> carry the IDs unshackle is tagging the file with, read at
-the moment the hook is dispatched rather than snapshotted at the start of the run. An
-episode's TMDB ID is resolved by the title search inside the download loop, so a hook fires
-with it already filled in.</p>
+<p><code>{tmdb}</code>, <code>{imdb}</code> and <code>{tvdb}</code> carry the IDs unshackle tags the file with. unshackle reads
+them at the moment it sends the hook, and not at the start of the run. The title search inside
+the download loop finds an episode's TMDB ID, so a hook fires with it already filled in.</p>
 <p>They hold an ID you passed with <code>--tmdb</code>, <code>--imdb</code> or <code>--tvdb</code>, plus a TMDB ID the episode
 search resolved. No such search runs for a movie, so a movie hook gets them empty unless you
 passed one.</p>
 <h3 id="sidecar-files">Sidecar files<a class="headerlink" href="#sidecar-files" title="Permanent link">&para;</a></h3>
 <p><code>{sidecars}</code> holds the sidecar subtitle files written beside the output, which are the only
-extra files a download leaves next to it. Attachments such as fonts are muxed into the
-container and temporary artwork is deleted, so neither appears. Expect <code>{sidecars}</code> to be
+extra files a download leaves next to it. unshackle muxes attachments such as fonts into the
+container and deletes temporary artwork, so neither appears. Expect <code>{sidecars}</code> to be
 empty unless <a href="../download/#subtitle"><code>subtitle.output_mode</code></a> is <code>sidecar</code> or <code>both</code>, which is
 not the default. A music download writes no sidecars at all.</p>
 <p>Paths are absolute and separated by a newline, because a newline is the only character that
 cannot appear in a filename on any supported OS. The whole list arrives as a single
-argument, so no quoting is needed in your template.</p>
+argument, so your template needs no quoting.</p>
 <p>When one download writes several outputs (<code>-q 1080,720</code>), each output's folder gets its own
 copy of the sidecar files, and each invocation lists the copies sitting beside its own
 <code>{filepath}</code>.</p>
@@ -2558,7 +2557,7 @@ that title and then returns. It downloads no further title, and no <code>season<
 hook fires after that point. This applies to every title type. If one episode of S01
 fails, the S01 hook does not fire at all.</p>
 </div>
-<p>The hook is keyed to the folder, not to the season, so one season landing in several
+<p>unshackle attaches the hook to the folder, not to the season, so one season landing in several
 folders (<code>-q 1080,720</code> with a quality-dependent folder template) fires it once per folder,
 each with its own <code>{folder}</code>. A movie is a group of its own: a <code>season</code> hook fires for a
 movie's folder as soon as the movie finishes.</p>
@@ -2611,9 +2610,9 @@ title object already knew: <code>{title}</code>, <code>{title_raw}</code>, <code
 <code>{episode}</code>, <code>{episode_name}</code>, <code>{service}</code>, the tagging IDs and <code>{error}</code>. Everything that
 comes from the naming context, such as <code>{quality}</code>, <code>{hdr}</code>, <code>{artist}</code> and <code>{album}</code>, is
 empty.</p>
-<p>A resumed <code>--continue</code> download that finishes runs <code>success</code> as usual. Because unshackle
-does not wait for your script, it never sees its exit code, so a failing script is not
-reported anywhere. Your script owns its own error handling and logging.</p>
+<p>A resumed <code>--continue-downloads</code> download that finishes runs <code>success</code> as usual. Because
+unshackle does not wait for your script, it never sees its exit code, so a failing script
+is not reported anywhere. Your script owns its own error handling and logging.</p>
 <p>A <code>success</code> hook always names a file this run wrote. There is no skip-if-exists path in
 <code>dl</code> today, so nothing fires for a title that was not downloaded.</p>
 <h2 id="-postscript"><code>--postscript</code><a class="headerlink" href="#-postscript" title="Permanent link">&para;</a></h2>
@@ -2626,29 +2625,30 @@ configured entry runs while it is in use. That includes your <code>season</code>
 entries, which have no <code>--postscript</code> equivalent.</p>
 <h2 id="the-rest-api">The REST API<a class="headerlink" href="#the-rest-api" title="Permanent link">&para;</a></h2>
 <p>The API never accepts a post-script command. <code>postscript</code>, <code>post_script</code> and <code>post_scripts</code>
-in a <code>POST /api/download</code> body are rejected with <code>400 INVALID_PARAMETERS</code>, because a command
-arriving from an HTTP caller would be remote code execution.</p>
-<p>Scripts defined in <code>unshackle.yaml</code> do run for API jobs, music jobs included. Only the
+in a <code>POST /api/download</code> body get <code>400 INVALID_PARAMETERS</code>. A command that arrives from an
+HTTP caller would be remote code execution.</p>
+<p>unshackle does operate the scripts defined in <code>unshackle.yaml</code> for API jobs, music jobs
+included. Only the
 command itself may not cross the network.</p>
 <h2 id="logging">Logging<a class="headerlink" href="#logging" title="Permanent link">&para;</a></h2>
-<p>The command that was run is logged twice: at <code>DEBUG</code> level on the console, and as a
+<p>unshackle logs the command it operated twice: at <code>DEBUG</code> level on the console, and as a
 <code>post_script_dispatch</code> entry in the
 <a href="../../../guide/troubleshooting/#the-structured-json-debug-log">structured JSON debug log</a>
-when that log is enabled.</p>
-<p>Both are masked the same way, honouring <a href="../misc/"><code>redact_paths</code></a>, which is on by default.
+when that log is on.</p>
+<p>unshackle masks both the same way, and honours <a href="../misc/"><code>redact_paths</code></a>, which is on by default.
 Debug logs get shared in issue reports, and a hook command line is mostly paths. URL
 credentials and <code>token=</code> / <code>api_key=</code> query parameters are also masked.</p>
 <div class="admonition warning">
 <p class="admonition-title">Do not hardcode secrets in the command</p>
-<p>An arbitrary secret in the command line, such as <code>-H "Authorization: Bearer &lt;key&gt;"</code>,
-cannot be recognised and is logged verbatim. Read the secret from a file or an
+<p>unshackle cannot recognise an arbitrary secret in the command line, such as
+<code>-H "Authorization: Bearer &lt;key&gt;"</code>, and logs it verbatim. Read the secret from a file or an
 environment variable inside your script rather than putting it in the <code>command</code>.</p>
 </div>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
 <ul>
-<li>No <code>success</code> hooks run under <code>--no-mux</code> or <code>--skip-dl</code>, because neither writes a muxed
+<li>No <code>success</code> hook operates under <code>--no-mux</code> or <code>--skip-dl</code>, because neither writes a muxed
   output. A <code>failure</code> hook still runs under <code>--no-mux</code> if the download itself fails.</li>
-<li><code>failure</code> hooks only run in <code>file</code> mode.</li>
+<li><code>failure</code> hooks only operate in <code>file</code> mode.</li>
 <li>There is no webhook sender. Call <code>curl</code> from a script instead.</li>
 <li>Script output is not captured. Redirect it inside your own script if you want a log.</li>
 </ul>

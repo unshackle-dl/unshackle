@@ -2070,18 +2070,18 @@
 <p>Per-service configuration, keyed by the canonical service tag (for example <code>EXAMPLE1</code>, <code>EXAMPLE2</code>,
 <code>EXAMPLE3</code>). unshackle reads several well-known sub-keys out of each service's block:</p>
 <ul>
-<li><strong><code>proxy_map</code></strong>: remaps the region query you passed to <code>-p/--proxy</code> for this service. A key is
-  that query, or <code>"provider:query"</code> when the flag also named a provider; the value is the query
-  asked of the proxy provider instead. It has no effect when <code>-p</code> was given a full proxy URL.</li>
+<li><strong><code>proxy_map</code></strong>: remaps the region query you passed to <code>-p/--proxy</code> for this service.
+  A config key is that query, or <code>"provider:query"</code> when the flag also named a proxy provider. The value is
+  the query asked of the proxy provider instead. It has no effect when you give <code>-p</code> a full proxy URL.</li>
 <li><strong><code>title_map</code></strong>: an exact-match rename map applied to fetched titles (source name →
   desired name), so a service that names a title differently from your library still matches.</li>
 <li><strong><code>dl</code></strong>: per-service download defaults, using the same keys as the global
   <a href="../download/#dl"><code>dl</code></a> block.</li>
 </ul>
-<p>Individual services may read any additional keys they define. The merged result (the service's
-own <code>config.yaml</code> with this block layered on top) is handed to the service as <code>self.config</code>.</p>
+<p>Individual services may read any additional keys they define. unshackle hands the merged result
+(the service's own <code>config.yaml</code> with this block layered on top) to the service as <code>self.config</code>.</p>
 <p>User- or device-specific values (API keys, account IDs, device attributes) belong in this block
-rather than in the service's own <code>config.yaml</code>, which holds shared defaults; see
+rather than in the service's own <code>config.yaml</code>, which holds shared defaults. See
 <a href="../../../dev/creating-a-service/">creating a service</a>.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">services</span><span class="p">:</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">EXAMPLE1</span><span class="p">:</span>
@@ -2097,10 +2097,10 @@ rather than in the service's own <code>config.yaml</code>, which holds shared de
 </ul>
 <p>Per-service login credentials. Each value is a <code>username:password[:extra]</code> string, the same
 data as a <code>[username, password]</code> (or <code>[username, password, extra]</code>) list, or a dict of profile
-name to either of those. With the dict form, <code>-p/--profile</code> selects the entry, and the
-<code>default</code> key is used when no profile was given or the named profile is missing. These are
-parsed into <code>Credential</code> objects; the credential's SHA-1 is also used as an account hash for
-cache keys.</p>
+name to either of those. With the dict form, <code>-p/--profile</code> selects the entry, and unshackle
+uses the <code>default</code> config key when you give no profile, or when the named profile is missing.
+unshackle parses these into <code>Credential</code> objects. It also uses the credential's SHA-1 as an
+account hash for cache keys.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">credentials</span><span class="p">:</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">EXAMPLE2</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">user@example.com:hunter2</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">EXAMPLE1</span><span class="p">:</span>
@@ -2109,22 +2109,22 @@ cache keys.</p>
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Cookies vs credentials</p>
-<p>Cookies are stored as files under <a href="../directories/"><code>directories.cookies</code></a>, not in this key.
+<p>unshackle stores cookies as files under <a href="../directories/"><code>directories.cookies</code></a>, not in this config key.
 A service's <code>authenticate()</code> accepts cookies, credentials, or both.</p>
 </div>
 <h2 id="firefox_cookies"><code>firefox_cookies</code><a class="headerlink" href="#firefox_cookies" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Type:</strong> <code>dict</code> keyed by service tag &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
 </ul>
-<p>Settings for extracting cookies directly from a local Firefox profile. A service block is
-expected to provide <code>hosts</code> (a list of cookie hostnames; entries shorter than 3 characters
-are ignored to prevent dumping the whole cookie store) and an optional <code>local_storage</code>
-boolean to also pull matching entries from <code>webappsstore.sqlite</code>, which only services that
-keep auth tokens in localStorage rather than in HTTP cookies need. Extraction is read-only.</p>
+<p>Settings for extracting cookies directly from a local Firefox profile. A service block must give
+<code>hosts</code>, a list of cookie hostnames. unshackle ignores an entry shorter than 3 characters, to
+prevent a broad match dumping most of the profile. With an optional <code>local_storage</code> boolean,
+unshackle also pulls matching entries from <code>webappsstore.sqlite</code>, which only services that keep
+auth tokens in localStorage rather than in HTTP cookies need. Extraction is read-only.</p>
 <div class="admonition note">
 <p class="admonition-title">Firefox does not need to be closed</p>
 <p>The extractor copies <strong>both</strong> <code>cookies.sqlite</code> <strong>and</strong> its WAL file into a <code>0700</code> temp
-directory, so writes Firefox has not yet flushed to the main DB are included. Extraction
+directory, so the copy holds the writes Firefox has not yet flushed to the main DB. Extraction
 fails only if Firefox holds an exclusive write lock at the instant of the copy. The live
 profile is not modified.</p>
 </div>
@@ -2139,19 +2139,19 @@ to the normal file-based cookie path (<code>cookies/&lt;SERVICE&gt;.txt</code> o
 <li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
 </ul>
 <p>Definitions of remote unshackle service servers, used by the <code>--remote</code> mode. Each entry is
-named by you (pick it with <code>--server</code>, or omit that flag when only one is configured) and gives
+named by you (pick it with <code>--server</code>, or do not write that flag when you configure only one) and gives
 the server's <code>url</code> (required), an optional <code>api_key</code>, an optional <code>auth_headers</code> list, an
 optional <code>server_cdm</code> boolean, and an optional <code>services</code> sub-dict of per-service local
 overrides such as <code>title_map</code>.</p>
 <p><code>auth_headers</code> lists extra header names to send the API key in, tried before the defaults
 <code>X-Secret-Key</code> and <code>X-Api-Key</code>, which are always appended as fallbacks. unshackle sends the
-first name; if the server answers <code>401</code>, it retries the same request with the next name, and
-keeps the one that works for the rest of the session. Names you list keep your spelling and are
-not repeated in the fallbacks, so <code>auth_headers: ["Authorization", "x-secret-key"]</code> is tried as
-<code>Authorization</code>, <code>x-secret-key</code>, <code>X-Api-Key</code>.</p>
+first name. If the server answers <code>401</code>, it retries the same request with the next name, and
+keeps the one that works for the rest of the HTTP session. Names you give keep your spelling and
+are not repeated in the fallbacks, so unshackle tries
+<code>auth_headers: ["Authorization", "x-secret-key"]</code> as <code>Authorization</code>, <code>x-secret-key</code>, <code>X-Api-Key</code>.</p>
 <p>In <code>--remote</code> mode unshackle turns the server's service list into synthetic CLI
-commands that run against it, falling back to the tags in that <code>services</code> sub-dict when the
-list cannot be fetched. Each synthetic command carries the server-side service's options and
+commands that operate against it, falling back to the tags in that <code>services</code> sub-dict when
+unshackle cannot fetch the list. Each synthetic command carries the server-side service's options and
 documentation, so <code>unshackle dl --remote &lt;TAG&gt; -h</code> shows the same help text as it does on the
 server. See <a href="../../../dev/rest-api/remote-sessions/">remote sessions</a> for the
 full setup.</p>
@@ -2160,7 +2160,7 @@ full setup.</p>
 <li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
 </ul>
 <p>Configuration for the <code>serve</code> command (the built-in REST API server). The full server guide
-is the <a href="../../../dev/rest-api/">REST API</a> section; these are the config keys.</p>
+is the <a href="../../../dev/rest-api/">REST API</a> section. These are the config keys.</p>
 <table>
 <thead>
 <tr>
@@ -2251,14 +2251,15 @@ is the <a href="../../../dev/rest-api/">REST API</a> section; these are the conf
 </tr>
 </tbody>
 </table>
-<p>Each entry under <code>users</code> is keyed by that user's API key and may set its own <code>services</code>,
+<p>Each entry under <code>users</code> uses that user's API key as its name, and can set its own <code>services</code>,
 <code>devices</code>, and <code>playready_devices</code> allowlists, narrowing the global ones, plus an optional
-<code>username</code> used as the log label for that key (defaults to a truncated form of the key). A
-user with no <code>playready_devices</code> key gets no PlayReady access at all, not the global list.</p>
-<p><code>server_cdm</code> decides whether the server runs the CDM licensing for that key. It is <code>false</code>
+<code>username</code> used as the log label for that API key (defaults to a truncated form of the API key).
+A user with no <code>playready_devices</code> config key gets no PlayReady access at all, not the global
+list.</p>
+<p><code>server_cdm</code> decides whether the server runs the CDM licensing for that API key. It is <code>false</code>
 unless the entry sets it, so a remote client configured with <code>server_cdm: true</code> is told to
 license with its own local CDM instead, and a client that asks anyway gets a <code>FORBIDDEN</code>
-error. Because a download job always licenses with the server's CDM, a key without
+error. Because a download job always licenses with the server's CDM, an API key without
 <code>server_cdm</code> also cannot submit or retry <code>/api/download</code> jobs. Keys that have no <code>users</code>
 entry, such as <code>api_secret</code>, keep server CDM access.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">serve</span><span class="p">:</span>

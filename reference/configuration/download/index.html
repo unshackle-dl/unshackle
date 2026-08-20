@@ -2111,12 +2111,13 @@
 <ul>
 <li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
 </ul>
-<p>Persistent defaults for the <code>dl</code> command. The block is used as Click's <code>default_map</code>, so any
-<code>dl</code> flag can be given a default here. See <a href="../../../guide/downloading/">Downloading</a> and the
+<p>Persistent defaults for the <code>dl</code> command. unshackle uses the block as Click's <code>default_map</code>,
+so you can give any <code>dl</code> flag a default here. See <a href="../../../guide/downloading/">Downloading</a> and the
 <a href="../../../guide/cli-reference/">CLI Reference</a> for what each flag does.</p>
-<p><strong>Key naming.</strong> A key is the flag's long name with dashes replaced by underscores
-(<code>--best-available</code> → <code>best_available</code>, <code>--sub-format</code> → <code>sub_format</code>). A few keys are named
-after the flag's internal destination rather than its visible name; set these exact keys:</p>
+<p><strong>Config key naming.</strong> A config key is the flag's long name with dashes replaced by
+underscores (<code>--best-available</code> → <code>best_available</code>, <code>--sub-format</code> → <code>sub_format</code>). A few
+config keys use the flag's internal destination and not its visible name. Set these exact
+config keys:</p>
 <table>
 <thead>
 <tr>
@@ -2162,7 +2163,7 @@ after the flag's internal destination rather than its visible name; set these ex
 <p><strong>Precedence</strong> (highest first): an explicit CLI flag → a per-service
 <a href="../services/"><code>services.&lt;TAG&gt;.dl</code></a> override → this global <code>dl:</code> block → the built-in
 default. In other words, config only fills in options you did not set on the command line.</p>
-<p>Common keys (a useful subset; every <code>dl</code> flag works):</p>
+<p>Common config keys. This is a useful subset, and every <code>dl</code> flag works:</p>
 <table>
 <thead>
 <tr>
@@ -2323,28 +2324,28 @@ applies to that service only.</p>
 <div class="admonition note">
 <p class="admonition-title"><code>serve</code> uses these same keys</p>
 <p>The <a href="../services/#serve"><code>serve</code></a> block accepts most of the same <code>dl</code> option keys at its top level
-to set server-wide download defaults for every request it handles. Keys the API does not know
-are ignored there (<code>speed_limit</code>, for example; <code>serve</code> has its own <code>global_speed_limit</code>).</p>
+to set server-wide download defaults for every request it handles. The API ignores the
+config keys it does not know there, <code>speed_limit</code> for example. <code>serve</code> has its own
+<code>global_speed_limit</code>.</p>
 </div>
 <h2 id="continue_downloads"><code>continue_downloads</code><a class="headerlink" href="#continue_downloads" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Type:</strong> <code>bool</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>false</code></li>
 </ul>
-<p>Keep a failed download's completed segment files so the next attempt resumes from where it
+<p>Keep a failed download's completed segment files so the next download resumes from where it
 stopped instead of restarting from byte zero.</p>
-<p>Only whole, fully downloaded segments are reused; partially written segments are always
-discarded, and no partial-byte (<code>Range</code>) resume across runs takes place. Reuse also
-requires proof that the remote content is unchanged: the manifest URL, segment count, and
-byte ranges must all match the previous run, otherwise the download silently restarts
-clean.</p>
+<p>unshackle reuses only whole, fully downloaded segments. It always discards partially written
+segments, and no partial-byte (<code>Range</code>) resume across runs takes place. Reuse is possible only
+with proof that the segmentation did not change. The manifest URL, segment count, and byte
+ranges must all match the previous download, or the download silently restarts clean.</p>
 <div class="admonition note">
 <p class="admonition-title">What can and cannot resume</p>
 <ul>
 <li>Segmented DASH, ISM, and HLS tracks resume.</li>
 <li>Single-file (non-segmented) downloads and DASH tracks collapsed to a single ranged
-  download never produce segment files, so this option does not apply to them (the
+  download never make segment files, so this option does not apply to them (the
   downloader has its own in-flight partial-file handling for those).</li>
-<li>HLS resumes Widevine/PlayReady and unencrypted content only; AES-128 content always
+<li>HLS resumes Widevine/PlayReady and unencrypted titles only. An AES-128 title always
   restarts. An HLS failure during the post-download merge step also restarts.</li>
 </ul>
 </div>
@@ -2356,8 +2357,8 @@ command line (the flag can only enable resume, never disable it).</p>
 <ul>
 <li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
 </ul>
-<p>Subtitle handling: SDH stripping, format conversion, and whether subtitles are muxed in or
-written as sidecar files. See <a href="../../../guide/subtitles/">Subtitles</a> for the full guide.</p>
+<p>Subtitle handling: SDH stripping, format conversion, and whether unshackle muxes the subtitles
+in or writes them as sidecar files. See <a href="../../../guide/subtitles/">Subtitles</a> for the full guide.</p>
 <table>
 <thead>
 <tr>
@@ -2482,7 +2483,7 @@ controls the order inside each language.</p>
 </tr>
 </tbody>
 </table>
-<p>Nothing is removed, unlike <code>-sl</code>, which drops every subtitle language it does not name.</p>
+<p>unshackle removes nothing, unlike <code>-sl</code>, which drops every subtitle language it does not name.</p>
 <p>Use <code>orig</code> in the list for the title's original language. A base tag also covers its
 regional forms, so <code>en</code> sorts <code>en-US</code> and <code>en-GB</code>, but <code>zh</code> does <strong>not</strong> cover
 <code>zh-Hant</code>, which you must name. The sort ignores entries that match no track, and it
@@ -2580,8 +2581,8 @@ bitrate alone, with those same Atmos/descriptive rules still applied.</p>
 <li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
 </ul>
 <p>Language-tag remapping and the rule engine behind the <code>{lang_tag}</code> filename variable. When a
-<code>rules</code> list is present, each rule is evaluated in order and the first match's <code>tag</code> is used.
-A rule may test:</p>
+<code>rules</code> list is present, unshackle evaluates each rule in order and uses the first match's
+<code>tag</code>. A rule can examine:</p>
 <table>
 <thead>
 <tr>

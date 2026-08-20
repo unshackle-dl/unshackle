@@ -2564,13 +2564,13 @@ walkthrough and <a href="../../../dev/service-architecture/">Service Architectur
 
 
         <p>requests.Session applying DEFAULT_TIMEOUT when the caller passes none.</p>
-<p>requests has no native default timeout; without one a stalled connect or
-read hangs forever. RnetSession bounds every request via its client's
+<p>requests has no native default timeout. Without one, a stalled connect or
+read hangs forever. RnetSession bounds every request through its client's
 connect_timeout/read_timeout, so this mirrors that on the requests path.
-A per-request non-None <code>timeout=</code> wins; an explicit <code>timeout=None</code> is
-still replaced with the default by :class:<code>TimeoutHTTPAdapter</code> on the
-mounted adapters, so there is no unbounded read, matching RnetSession where
-the client-level timeouts always apply. Pass a large timeout instead.</p>
+A per-request non-None <code>timeout=</code> wins. :class:<code>TimeoutHTTPAdapter</code> on the
+mounted adapters still replaces an explicit <code>timeout=None</code> with the default,
+so there is no unbounded read, as with RnetSession where the client-level
+timeouts always apply. Pass a large timeout instead.</p>
 
 
 
@@ -2623,8 +2623,8 @@ the client-level timeouts always apply. Pass a large timeout instead.</p>
 
         <p>HTTPAdapter applying DEFAULT_TIMEOUT when the caller passes none.</p>
 <p>Backstops :class:<code>TimeoutSession</code> for the <code>session.send(prepared)</code> path,
-which bypasses <code>Session.request</code>; RnetSession bounds those too via its
-client, so this keeps parity. A per-request non-None <code>timeout=</code> wins;
+which bypasses <code>Session.request</code>. RnetSession bounds those too through its
+client, so this keeps parity. A per-request non-None <code>timeout=</code> wins.
 <code>None</code> (unset, or explicitly passed) gets the default, because the adapter
 cannot distinguish the two, and rnet has no unbounded mode either.</p>
 
@@ -2775,10 +2775,10 @@ cannot distinguish the two, and rnet has no unbounded mode either.</p>
 
 
         <p>The Service Base Class.</p>
-<p>A Service must implement the abstract methods; the rest are optional overrides that fall back to the base
-implementation when a Service does not define them. The main flow runs the session and authentication
-methods first, then titles, then tracks and chapters. The license callbacks run later still, during track
-download.</p>
+<p>A Service must define the abstract methods. The rest are optional overrides that fall back to the base
+implementation when a Service does not define them. The main flow operates the HTTP session and
+authentication methods first, then titles, then tracks and chapters. The license callbacks operate later
+still, during track download.</p>
 
 
 
@@ -3081,8 +3081,8 @@ download.</p>
 <p>Services that need separate API calls per codec/range combo can use this
 helper from their get_tracks() implementation.</p>
 <p>The fetch_fn signature should be: (title, codec, range_) -&gt; Tracks</p>
-<p>For HYBRID range, fetch_fn is called with HDR10 and DV separately and
-the DV video tracks are merged into the HDR10 result.</p>
+<p>For HYBRID range, this helper calls fetch_fn with HDR10 and DV separately,
+then merges the DV video tracks into the HDR10 result.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -3105,7 +3105,7 @@ the DV video tracks are merged into the HDR10 result.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The title being processed.</p>
+                <p>The title to process.</p>
               </div>
             </td>
             <td>
@@ -3216,11 +3216,11 @@ the DV video tracks are merged into the HDR10 result.</p>
 </span><span id="__span-0-299"><a id="__codelineno-0-299" name="__codelineno-0-299"></a>
 </span><span id="__span-0-300"><a id="__codelineno-0-300" name="__codelineno-0-300"></a><span class="sd">    The fetch_fn signature should be: (title, codec, range_) -&gt; Tracks</span>
 </span><span id="__span-0-301"><a id="__codelineno-0-301" name="__codelineno-0-301"></a>
-</span><span id="__span-0-302"><a id="__codelineno-0-302" name="__codelineno-0-302"></a><span class="sd">    For HYBRID range, fetch_fn is called with HDR10 and DV separately and</span>
-</span><span id="__span-0-303"><a id="__codelineno-0-303" name="__codelineno-0-303"></a><span class="sd">    the DV video tracks are merged into the HDR10 result.</span>
+</span><span id="__span-0-302"><a id="__codelineno-0-302" name="__codelineno-0-302"></a><span class="sd">    For HYBRID range, this helper calls fetch_fn with HDR10 and DV separately,</span>
+</span><span id="__span-0-303"><a id="__codelineno-0-303" name="__codelineno-0-303"></a><span class="sd">    then merges the DV video tracks into the HDR10 result.</span>
 </span><span id="__span-0-304"><a id="__codelineno-0-304" name="__codelineno-0-304"></a>
 </span><span id="__span-0-305"><a id="__codelineno-0-305" name="__codelineno-0-305"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-306"><a id="__codelineno-0-306" name="__codelineno-0-306"></a><span class="sd">        title: The title being processed.</span>
+</span><span id="__span-0-306"><a id="__codelineno-0-306" name="__codelineno-0-306"></a><span class="sd">        title: The title to process.</span>
 </span><span id="__span-0-307"><a id="__codelineno-0-307" name="__codelineno-0-307"></a><span class="sd">        fetch_fn: A callable that fetches tracks for a specific codec/range.</span>
 </span><span id="__span-0-308"><a id="__codelineno-0-308" name="__codelineno-0-308"></a><span class="sd">    """</span>
 </span><span id="__span-0-309"><a id="__codelineno-0-309" name="__codelineno-0-309"></a>    <span class="n">all_tracks</span> <span class="o">=</span> <span class="n">Tracks</span><span class="p">()</span>
@@ -3298,9 +3298,9 @@ the DV video tracks are merged into the HDR10 result.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Creates a Python-requests Session, adds common headers
+        <p>Creates a Python-requests HTTP session, adds common headers
 from config, cookies, retry handler, and a proxy if available.
-:returns: Prepared Python-requests Session</p>
+:returns: Prepared Python-requests HTTP session</p>
 
 
             <details class="mkdocstrings-source">
@@ -3340,9 +3340,9 @@ from config, cookies, retry handler, and a proxy if available.
 <span class="normal"><a href="#__codelineno-0-397">397</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-365"><a id="__codelineno-0-365" name="__codelineno-0-365"></a><span class="nd">@staticmethod</span>
 </span><span id="__span-0-366"><a id="__codelineno-0-366" name="__codelineno-0-366"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_session</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">requests</span><span class="o">.</span><span class="n">Session</span><span class="p">:</span>
 </span><span id="__span-0-367"><a id="__codelineno-0-367" name="__codelineno-0-367"></a><span class="w">    </span><span class="sd">"""</span>
-</span><span id="__span-0-368"><a id="__codelineno-0-368" name="__codelineno-0-368"></a><span class="sd">    Creates a Python-requests Session, adds common headers</span>
+</span><span id="__span-0-368"><a id="__codelineno-0-368" name="__codelineno-0-368"></a><span class="sd">    Creates a Python-requests HTTP session, adds common headers</span>
 </span><span id="__span-0-369"><a id="__codelineno-0-369" name="__codelineno-0-369"></a><span class="sd">    from config, cookies, retry handler, and a proxy if available.</span>
-</span><span id="__span-0-370"><a id="__codelineno-0-370" name="__codelineno-0-370"></a><span class="sd">    :returns: Prepared Python-requests Session</span>
+</span><span id="__span-0-370"><a id="__codelineno-0-370" name="__codelineno-0-370"></a><span class="sd">    :returns: Prepared Python-requests HTTP session</span>
 </span><span id="__span-0-371"><a id="__codelineno-0-371" name="__codelineno-0-371"></a><span class="sd">    """</span>
 </span><span id="__span-0-372"><a id="__codelineno-0-372" name="__codelineno-0-372"></a>    <span class="n">session</span> <span class="o">=</span> <span class="n">TimeoutSession</span><span class="p">()</span>
 </span><span id="__span-0-373"><a id="__codelineno-0-373" name="__codelineno-0-373"></a>    <span class="n">session</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">headers</span><span class="p">)</span>
@@ -3391,12 +3391,12 @@ from config, cookies, retry handler, and a proxy if available.
 
         <p>Authenticate the Service with Cookies and/or Credentials (Email/Username and Password).</p>
 <p>This is effectively a login() function. Any API calls or object initializations
-needing to be made, should be made here. This will be run before any of the
-following abstract functions.</p>
+needing to be made, should be made here. unshackle operates this method before
+any of the following abstract functions.</p>
 <p>You should avoid storing or using the Credential outside this function.
 Make any calls you need for any Cookies, Tokens, or such, then use those.</p>
-<p>The Cookie jar should also not be stored outside this function. However, you may load
-the Cookie jar into the service session.</p>
+<p>Do not store the cookies outside this function either. However, you can load
+the cookies into the service HTTP session.</p>
 
 
             <details class="mkdocstrings-source">
@@ -3426,14 +3426,14 @@ the Cookie jar into the service session.</p>
 </span><span id="__span-0-401"><a id="__codelineno-0-401" name="__codelineno-0-401"></a><span class="sd">    Authenticate the Service with Cookies and/or Credentials (Email/Username and Password).</span>
 </span><span id="__span-0-402"><a id="__codelineno-0-402" name="__codelineno-0-402"></a>
 </span><span id="__span-0-403"><a id="__codelineno-0-403" name="__codelineno-0-403"></a><span class="sd">    This is effectively a login() function. Any API calls or object initializations</span>
-</span><span id="__span-0-404"><a id="__codelineno-0-404" name="__codelineno-0-404"></a><span class="sd">    needing to be made, should be made here. This will be run before any of the</span>
-</span><span id="__span-0-405"><a id="__codelineno-0-405" name="__codelineno-0-405"></a><span class="sd">    following abstract functions.</span>
+</span><span id="__span-0-404"><a id="__codelineno-0-404" name="__codelineno-0-404"></a><span class="sd">    needing to be made, should be made here. unshackle operates this method before</span>
+</span><span id="__span-0-405"><a id="__codelineno-0-405" name="__codelineno-0-405"></a><span class="sd">    any of the following abstract functions.</span>
 </span><span id="__span-0-406"><a id="__codelineno-0-406" name="__codelineno-0-406"></a>
 </span><span id="__span-0-407"><a id="__codelineno-0-407" name="__codelineno-0-407"></a><span class="sd">    You should avoid storing or using the Credential outside this function.</span>
 </span><span id="__span-0-408"><a id="__codelineno-0-408" name="__codelineno-0-408"></a><span class="sd">    Make any calls you need for any Cookies, Tokens, or such, then use those.</span>
 </span><span id="__span-0-409"><a id="__codelineno-0-409" name="__codelineno-0-409"></a>
-</span><span id="__span-0-410"><a id="__codelineno-0-410" name="__codelineno-0-410"></a><span class="sd">    The Cookie jar should also not be stored outside this function. However, you may load</span>
-</span><span id="__span-0-411"><a id="__codelineno-0-411" name="__codelineno-0-411"></a><span class="sd">    the Cookie jar into the service session.</span>
+</span><span id="__span-0-410"><a id="__codelineno-0-410" name="__codelineno-0-410"></a><span class="sd">    Do not store the cookies outside this function either. However, you can load</span>
+</span><span id="__span-0-411"><a id="__codelineno-0-411" name="__codelineno-0-411"></a><span class="sd">    the cookies into the service HTTP session.</span>
 </span><span id="__span-0-412"><a id="__codelineno-0-412" name="__codelineno-0-412"></a><span class="sd">    """</span>
 </span><span id="__span-0-413"><a id="__codelineno-0-413" name="__codelineno-0-413"></a>    <span class="k">if</span> <span class="n">cookies</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
 </span><span id="__span-0-414"><a id="__codelineno-0-414" name="__codelineno-0-414"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cookies</span><span class="p">,</span> <span class="n">CookieJar</span><span class="p">):</span>
@@ -3462,7 +3462,7 @@ the Cookie jar into the service session.</p>
     <div class="doc doc-contents ">
 
         <p>Request interactive input from the user.</p>
-<p>When running locally (CLI), prompts via the shared rich console so the
+<p>When running locally (CLI), prompts through the shared rich console so the
 prompt renders correctly alongside Live progress / log handlers.
 When running in serve mode with an :class:<code>InputBridge</code> attached,
 delegates to the bridge which relays the prompt to the remote client.</p>
@@ -3483,7 +3483,7 @@ delegates to the bridge which relays the prompt to the remote client.</p>
 <span class="normal"><a href="#__codelineno-0-431">431</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-421"><a id="__codelineno-0-421" name="__codelineno-0-421"></a><span class="k">def</span><span class="w"> </span><span class="nf">request_input</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prompt</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 </span><span id="__span-0-422"><a id="__codelineno-0-422" name="__codelineno-0-422"></a><span class="w">    </span><span class="sd">"""Request interactive input from the user.</span>
 </span><span id="__span-0-423"><a id="__codelineno-0-423" name="__codelineno-0-423"></a>
-</span><span id="__span-0-424"><a id="__codelineno-0-424" name="__codelineno-0-424"></a><span class="sd">    When running locally (CLI), prompts via the shared rich console so the</span>
+</span><span id="__span-0-424"><a id="__codelineno-0-424" name="__codelineno-0-424"></a><span class="sd">    When running locally (CLI), prompts through the shared rich console so the</span>
 </span><span id="__span-0-425"><a id="__codelineno-0-425" name="__codelineno-0-425"></a><span class="sd">    prompt renders correctly alongside Live progress / log handlers.</span>
 </span><span id="__span-0-426"><a id="__codelineno-0-426" name="__codelineno-0-426"></a><span class="sd">    When running in serve mode with an :class:`InputBridge` attached,</span>
 </span><span id="__span-0-427"><a id="__codelineno-0-427" name="__codelineno-0-427"></a><span class="sd">    delegates to the bridge which relays the prompt to the remote client.</span>
@@ -3510,10 +3510,10 @@ delegates to the bridge which relays the prompt to the remote client.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Search by query for titles from the Service.</p>
-<p>The query must be taken as a CLI argument by the Service class.
-Ideally just re-use the title ID argument (i.e. self.title).</p>
-<p>Search results will be displayed in the order yielded.</p>
+        <p>Find titles from the Service by query.</p>
+<p>The Service class must take the query as a CLI argument.
+Ideally re-use the title ID argument (that is, self.title).</p>
+<p>unshackle displays the search results in the order yielded.</p>
 
 
             <details class="mkdocstrings-source">
@@ -3529,12 +3529,12 @@ Ideally just re-use the title ID argument (i.e. self.title).</p>
 <span class="normal"><a href="#__codelineno-0-441">441</a></span>
 <span class="normal"><a href="#__codelineno-0-442">442</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-433"><a id="__codelineno-0-433" name="__codelineno-0-433"></a><span class="k">def</span><span class="w"> </span><span class="nf">search</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Generator</span><span class="p">[</span><span class="n">SearchResult</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">]:</span>
 </span><span id="__span-0-434"><a id="__codelineno-0-434" name="__codelineno-0-434"></a><span class="w">    </span><span class="sd">"""</span>
-</span><span id="__span-0-435"><a id="__codelineno-0-435" name="__codelineno-0-435"></a><span class="sd">    Search by query for titles from the Service.</span>
+</span><span id="__span-0-435"><a id="__codelineno-0-435" name="__codelineno-0-435"></a><span class="sd">    Find titles from the Service by query.</span>
 </span><span id="__span-0-436"><a id="__codelineno-0-436" name="__codelineno-0-436"></a>
-</span><span id="__span-0-437"><a id="__codelineno-0-437" name="__codelineno-0-437"></a><span class="sd">    The query must be taken as a CLI argument by the Service class.</span>
-</span><span id="__span-0-438"><a id="__codelineno-0-438" name="__codelineno-0-438"></a><span class="sd">    Ideally just re-use the title ID argument (i.e. self.title).</span>
+</span><span id="__span-0-437"><a id="__codelineno-0-437" name="__codelineno-0-437"></a><span class="sd">    The Service class must take the query as a CLI argument.</span>
+</span><span id="__span-0-438"><a id="__codelineno-0-438" name="__codelineno-0-438"></a><span class="sd">    Ideally re-use the title ID argument (that is, self.title).</span>
 </span><span id="__span-0-439"><a id="__codelineno-0-439" name="__codelineno-0-439"></a>
-</span><span id="__span-0-440"><a id="__codelineno-0-440" name="__codelineno-0-440"></a><span class="sd">    Search results will be displayed in the order yielded.</span>
+</span><span id="__span-0-440"><a id="__codelineno-0-440" name="__codelineno-0-440"></a><span class="sd">    unshackle displays the search results in the order yielded.</span>
 </span><span id="__span-0-441"><a id="__codelineno-0-441" name="__codelineno-0-441"></a><span class="sd">    """</span>
 </span><span id="__span-0-442"><a id="__codelineno-0-442" name="__codelineno-0-442"></a>    <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Search functionality has not been implemented by </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
@@ -3561,10 +3561,10 @@ Ideally just re-use the title ID argument (i.e. self.title).</p>
         <p>Get the Widevine Service Certificate used for Privacy Mode.</p>
 <p>:param challenge: The service challenge, providing this to a License endpoint should return the
     privacy certificate that the service uses.
-:param title: The current <code>Title</code> from get_titles that is being executed. This is provided in
-    case it has data needed to be used, e.g. for a HTTP request.
+:param title: The current <code>Title</code> from get_titles that unshackle processes now. unshackle
+    gives this in case it holds data you need, for example for an HTTP request.
 :param track: The current <code>Track</code> needing decryption. Provided for same reason as <code>title</code>.
-:return: The Service Privacy Certificate as Bytes or a Base64 string. Don't Base64 Encode or
+:return: The Service Privacy Certificate as Bytes or a Base64 string. Do not Base64 Encode or
     Decode the data, return as is to reduce unnecessary computations.</p>
 
 
@@ -3591,10 +3591,10 @@ Ideally just re-use the title ID argument (i.e. self.title).</p>
 </span><span id="__span-0-449"><a id="__codelineno-0-449" name="__codelineno-0-449"></a>
 </span><span id="__span-0-450"><a id="__codelineno-0-450" name="__codelineno-0-450"></a><span class="sd">    :param challenge: The service challenge, providing this to a License endpoint should return the</span>
 </span><span id="__span-0-451"><a id="__codelineno-0-451" name="__codelineno-0-451"></a><span class="sd">        privacy certificate that the service uses.</span>
-</span><span id="__span-0-452"><a id="__codelineno-0-452" name="__codelineno-0-452"></a><span class="sd">    :param title: The current `Title` from get_titles that is being executed. This is provided in</span>
-</span><span id="__span-0-453"><a id="__codelineno-0-453" name="__codelineno-0-453"></a><span class="sd">        case it has data needed to be used, e.g. for a HTTP request.</span>
+</span><span id="__span-0-452"><a id="__codelineno-0-452" name="__codelineno-0-452"></a><span class="sd">    :param title: The current `Title` from get_titles that unshackle processes now. unshackle</span>
+</span><span id="__span-0-453"><a id="__codelineno-0-453" name="__codelineno-0-453"></a><span class="sd">        gives this in case it holds data you need, for example for an HTTP request.</span>
 </span><span id="__span-0-454"><a id="__codelineno-0-454" name="__codelineno-0-454"></a><span class="sd">    :param track: The current `Track` needing decryption. Provided for same reason as `title`.</span>
-</span><span id="__span-0-455"><a id="__codelineno-0-455" name="__codelineno-0-455"></a><span class="sd">    :return: The Service Privacy Certificate as Bytes or a Base64 string. Don't Base64 Encode or</span>
+</span><span id="__span-0-455"><a id="__codelineno-0-455" name="__codelineno-0-455"></a><span class="sd">    :return: The Service Privacy Certificate as Bytes or a Base64 string. Do not Base64 Encode or</span>
 </span><span id="__span-0-456"><a id="__codelineno-0-456" name="__codelineno-0-456"></a><span class="sd">        Decode the data, return as is to reduce unnecessary computations.</span>
 </span><span id="__span-0-457"><a id="__codelineno-0-457" name="__codelineno-0-457"></a><span class="sd">    """</span>
 </span></code></pre></div></td></tr></table></div>
@@ -3617,16 +3617,16 @@ Ideally just re-use the title ID argument (i.e. self.title).</p>
     <div class="doc doc-contents ">
 
         <p>Get a Widevine License message by sending a License Request (challenge).</p>
-<p>This License message contains the encrypted Content Decryption Keys and will be
+<p>This License message contains the encrypted content keys and will be
 read by the Cdm and decrypted.</p>
 <p>This is a very important request to get correct. A bad, unexpected, or missing
-value in the request can cause your key to be detected and promptly banned,
-revoked, disabled, or downgraded.</p>
+value in the request can cause the service to detect your CDM device. The device
+can then be banned, revoked, disabled, or downgraded.</p>
 <p>:param challenge: The license challenge from the Widevine CDM.
-:param title: The current <code>Title</code> from get_titles that is being executed. This is provided in
-    case it has data needed to be used, e.g. for a HTTP request.
+:param title: The current <code>Title</code> from get_titles that unshackle processes now. unshackle
+    gives this in case it holds data you need, for example for an HTTP request.
 :param track: The current <code>Track</code> needing decryption. Provided for same reason as <code>title</code>.
-:return: The License response as Bytes or a Base64 string. Don't Base64 Encode or
+:return: The License response as Bytes or a Base64 string. Do not Base64 Encode or
     Decode the data, return as is to reduce unnecessary computations.</p>
 
 
@@ -3653,18 +3653,18 @@ revoked, disabled, or downgraded.</p>
 </span><span id="__span-0-460"><a id="__codelineno-0-460" name="__codelineno-0-460"></a><span class="w">    </span><span class="sd">"""</span>
 </span><span id="__span-0-461"><a id="__codelineno-0-461" name="__codelineno-0-461"></a><span class="sd">    Get a Widevine License message by sending a License Request (challenge).</span>
 </span><span id="__span-0-462"><a id="__codelineno-0-462" name="__codelineno-0-462"></a>
-</span><span id="__span-0-463"><a id="__codelineno-0-463" name="__codelineno-0-463"></a><span class="sd">    This License message contains the encrypted Content Decryption Keys and will be</span>
+</span><span id="__span-0-463"><a id="__codelineno-0-463" name="__codelineno-0-463"></a><span class="sd">    This License message contains the encrypted content keys and will be</span>
 </span><span id="__span-0-464"><a id="__codelineno-0-464" name="__codelineno-0-464"></a><span class="sd">    read by the Cdm and decrypted.</span>
 </span><span id="__span-0-465"><a id="__codelineno-0-465" name="__codelineno-0-465"></a>
 </span><span id="__span-0-466"><a id="__codelineno-0-466" name="__codelineno-0-466"></a><span class="sd">    This is a very important request to get correct. A bad, unexpected, or missing</span>
-</span><span id="__span-0-467"><a id="__codelineno-0-467" name="__codelineno-0-467"></a><span class="sd">    value in the request can cause your key to be detected and promptly banned,</span>
-</span><span id="__span-0-468"><a id="__codelineno-0-468" name="__codelineno-0-468"></a><span class="sd">    revoked, disabled, or downgraded.</span>
+</span><span id="__span-0-467"><a id="__codelineno-0-467" name="__codelineno-0-467"></a><span class="sd">    value in the request can cause the service to detect your CDM device. The device</span>
+</span><span id="__span-0-468"><a id="__codelineno-0-468" name="__codelineno-0-468"></a><span class="sd">    can then be banned, revoked, disabled, or downgraded.</span>
 </span><span id="__span-0-469"><a id="__codelineno-0-469" name="__codelineno-0-469"></a>
 </span><span id="__span-0-470"><a id="__codelineno-0-470" name="__codelineno-0-470"></a><span class="sd">    :param challenge: The license challenge from the Widevine CDM.</span>
-</span><span id="__span-0-471"><a id="__codelineno-0-471" name="__codelineno-0-471"></a><span class="sd">    :param title: The current `Title` from get_titles that is being executed. This is provided in</span>
-</span><span id="__span-0-472"><a id="__codelineno-0-472" name="__codelineno-0-472"></a><span class="sd">        case it has data needed to be used, e.g. for a HTTP request.</span>
+</span><span id="__span-0-471"><a id="__codelineno-0-471" name="__codelineno-0-471"></a><span class="sd">    :param title: The current `Title` from get_titles that unshackle processes now. unshackle</span>
+</span><span id="__span-0-472"><a id="__codelineno-0-472" name="__codelineno-0-472"></a><span class="sd">        gives this in case it holds data you need, for example for an HTTP request.</span>
 </span><span id="__span-0-473"><a id="__codelineno-0-473" name="__codelineno-0-473"></a><span class="sd">    :param track: The current `Track` needing decryption. Provided for same reason as `title`.</span>
-</span><span id="__span-0-474"><a id="__codelineno-0-474" name="__codelineno-0-474"></a><span class="sd">    :return: The License response as Bytes or a Base64 string. Don't Base64 Encode or</span>
+</span><span id="__span-0-474"><a id="__codelineno-0-474" name="__codelineno-0-474"></a><span class="sd">    :return: The License response as Bytes or a Base64 string. Do not Base64 Encode or</span>
 </span><span id="__span-0-475"><a id="__codelineno-0-475" name="__codelineno-0-475"></a><span class="sd">        Decode the data, return as is to reduce unnecessary computations.</span>
 </span><span id="__span-0-476"><a id="__codelineno-0-476" name="__codelineno-0-476"></a><span class="sd">    """</span>
 </span></code></pre></div></td></tr></table></div>
@@ -3687,16 +3687,16 @@ revoked, disabled, or downgraded.</p>
     <div class="doc doc-contents ">
 
         <p>Get a PlayReady License message by sending a License Request (challenge).</p>
-<p>This License message contains the encrypted Content Decryption Keys and will be
+<p>This License message contains the encrypted content keys and will be
 read by the CDM and decrypted.</p>
 <p>This is a very important request to get correct. A bad, unexpected, or missing
-value in the request can cause your key to be detected and promptly banned,
-revoked, disabled, or downgraded.</p>
+value in the request can cause the service to detect your CDM device. The device
+can then be banned, revoked, disabled, or downgraded.</p>
 <p>:param challenge: The license challenge from the PlayReady CDM.
-:param title: The current <code>Title</code> from get_titles that is being executed. This is provided in
-    case it has data needed to be used, e.g. for a HTTP request.
+:param title: The current <code>Title</code> from get_titles that unshackle processes now. unshackle
+    gives this in case it holds data you need, for example for an HTTP request.
 :param track: The current <code>Track</code> needing decryption. Provided for same reason as <code>title</code>.
-:return: The License response as Bytes or a Base64 string. Don't Base64 Encode or
+:return: The License response as Bytes or a Base64 string. Do not Base64 Encode or
     Decode the data, return as is to reduce unnecessary computations.</p>
 
 
@@ -3729,18 +3729,18 @@ revoked, disabled, or downgraded.</p>
 </span><span id="__span-0-481"><a id="__codelineno-0-481" name="__codelineno-0-481"></a><span class="w">    </span><span class="sd">"""</span>
 </span><span id="__span-0-482"><a id="__codelineno-0-482" name="__codelineno-0-482"></a><span class="sd">    Get a PlayReady License message by sending a License Request (challenge).</span>
 </span><span id="__span-0-483"><a id="__codelineno-0-483" name="__codelineno-0-483"></a>
-</span><span id="__span-0-484"><a id="__codelineno-0-484" name="__codelineno-0-484"></a><span class="sd">    This License message contains the encrypted Content Decryption Keys and will be</span>
+</span><span id="__span-0-484"><a id="__codelineno-0-484" name="__codelineno-0-484"></a><span class="sd">    This License message contains the encrypted content keys and will be</span>
 </span><span id="__span-0-485"><a id="__codelineno-0-485" name="__codelineno-0-485"></a><span class="sd">    read by the CDM and decrypted.</span>
 </span><span id="__span-0-486"><a id="__codelineno-0-486" name="__codelineno-0-486"></a>
 </span><span id="__span-0-487"><a id="__codelineno-0-487" name="__codelineno-0-487"></a><span class="sd">    This is a very important request to get correct. A bad, unexpected, or missing</span>
-</span><span id="__span-0-488"><a id="__codelineno-0-488" name="__codelineno-0-488"></a><span class="sd">    value in the request can cause your key to be detected and promptly banned,</span>
-</span><span id="__span-0-489"><a id="__codelineno-0-489" name="__codelineno-0-489"></a><span class="sd">    revoked, disabled, or downgraded.</span>
+</span><span id="__span-0-488"><a id="__codelineno-0-488" name="__codelineno-0-488"></a><span class="sd">    value in the request can cause the service to detect your CDM device. The device</span>
+</span><span id="__span-0-489"><a id="__codelineno-0-489" name="__codelineno-0-489"></a><span class="sd">    can then be banned, revoked, disabled, or downgraded.</span>
 </span><span id="__span-0-490"><a id="__codelineno-0-490" name="__codelineno-0-490"></a>
 </span><span id="__span-0-491"><a id="__codelineno-0-491" name="__codelineno-0-491"></a><span class="sd">    :param challenge: The license challenge from the PlayReady CDM.</span>
-</span><span id="__span-0-492"><a id="__codelineno-0-492" name="__codelineno-0-492"></a><span class="sd">    :param title: The current `Title` from get_titles that is being executed. This is provided in</span>
-</span><span id="__span-0-493"><a id="__codelineno-0-493" name="__codelineno-0-493"></a><span class="sd">        case it has data needed to be used, e.g. for a HTTP request.</span>
+</span><span id="__span-0-492"><a id="__codelineno-0-492" name="__codelineno-0-492"></a><span class="sd">    :param title: The current `Title` from get_titles that unshackle processes now. unshackle</span>
+</span><span id="__span-0-493"><a id="__codelineno-0-493" name="__codelineno-0-493"></a><span class="sd">        gives this in case it holds data you need, for example for an HTTP request.</span>
 </span><span id="__span-0-494"><a id="__codelineno-0-494" name="__codelineno-0-494"></a><span class="sd">    :param track: The current `Track` needing decryption. Provided for same reason as `title`.</span>
-</span><span id="__span-0-495"><a id="__codelineno-0-495" name="__codelineno-0-495"></a><span class="sd">    :return: The License response as Bytes or a Base64 string. Don't Base64 Encode or</span>
+</span><span id="__span-0-495"><a id="__codelineno-0-495" name="__codelineno-0-495"></a><span class="sd">    :return: The License response as Bytes or a Base64 string. Do not Base64 Encode or</span>
 </span><span id="__span-0-496"><a id="__codelineno-0-496" name="__codelineno-0-496"></a><span class="sd">        Decode the data, return as is to reduce unnecessary computations.</span>
 </span><span id="__span-0-497"><a id="__codelineno-0-497" name="__codelineno-0-497"></a><span class="sd">    """</span>
 </span><span id="__span-0-498"><a id="__codelineno-0-498" name="__codelineno-0-498"></a>    <span class="c1"># Delegates license handling to the Widevine license method by default if a service-specific PlayReady implementation is not provided.</span>
@@ -3765,12 +3765,12 @@ revoked, disabled, or downgraded.</p>
     <div class="doc doc-contents ">
 
         <p>Get a W3C ClearKey License (JWK Set) by sending a License Request (challenge).</p>
-<p>Used for DASH <code>org.w3.clearkey</code> content. No CDM is involved: the challenge is
+<p>Used for DASH <code>org.w3.clearkey</code> tracks. unshackle uses no CDM here: the challenge is
 the W3C EME JSON license request, e.g. <code>{"kids": ["&lt;base64url&gt;"], "type": "temporary"}</code>,
 and the license is a JWK Set, e.g. <code>{"keys": [{"kty": "oct", "k": "...", "kid": "..."}]}</code>.</p>
 <p>:param challenge: The JSON license request bytes to POST to the license server.
-:param title: The current <code>Title</code> from get_titles that is being executed. This is provided in
-    case it has data needed to be used, e.g. for a HTTP request.
+:param title: The current <code>Title</code> from get_titles that unshackle processes now. unshackle
+    gives this in case it holds data you need, for example for an HTTP request.
 :param track: The current <code>Track</code> needing decryption. Provided for same reason as <code>title</code>.
 :return: The JWK Set license as a dict, JSON str, or raw bytes. Return None (the default)
     to let the framework POST the challenge to the manifest-provided Laurl, if any.
@@ -3805,13 +3805,13 @@ and the license is a JWK Set, e.g. <code>{"keys": [{"kty": "oct", "k": "...", "k
 </span><span id="__span-0-504"><a id="__codelineno-0-504" name="__codelineno-0-504"></a><span class="w">    </span><span class="sd">"""</span>
 </span><span id="__span-0-505"><a id="__codelineno-0-505" name="__codelineno-0-505"></a><span class="sd">    Get a W3C ClearKey License (JWK Set) by sending a License Request (challenge).</span>
 </span><span id="__span-0-506"><a id="__codelineno-0-506" name="__codelineno-0-506"></a>
-</span><span id="__span-0-507"><a id="__codelineno-0-507" name="__codelineno-0-507"></a><span class="sd">    Used for DASH `org.w3.clearkey` content. No CDM is involved: the challenge is</span>
+</span><span id="__span-0-507"><a id="__codelineno-0-507" name="__codelineno-0-507"></a><span class="sd">    Used for DASH `org.w3.clearkey` tracks. unshackle uses no CDM here: the challenge is</span>
 </span><span id="__span-0-508"><a id="__codelineno-0-508" name="__codelineno-0-508"></a><span class="sd">    the W3C EME JSON license request, e.g. ``{"kids": ["&lt;base64url&gt;"], "type": "temporary"}``,</span>
 </span><span id="__span-0-509"><a id="__codelineno-0-509" name="__codelineno-0-509"></a><span class="sd">    and the license is a JWK Set, e.g. ``{"keys": [{"kty": "oct", "k": "...", "kid": "..."}]}``.</span>
 </span><span id="__span-0-510"><a id="__codelineno-0-510" name="__codelineno-0-510"></a>
 </span><span id="__span-0-511"><a id="__codelineno-0-511" name="__codelineno-0-511"></a><span class="sd">    :param challenge: The JSON license request bytes to POST to the license server.</span>
-</span><span id="__span-0-512"><a id="__codelineno-0-512" name="__codelineno-0-512"></a><span class="sd">    :param title: The current `Title` from get_titles that is being executed. This is provided in</span>
-</span><span id="__span-0-513"><a id="__codelineno-0-513" name="__codelineno-0-513"></a><span class="sd">        case it has data needed to be used, e.g. for a HTTP request.</span>
+</span><span id="__span-0-512"><a id="__codelineno-0-512" name="__codelineno-0-512"></a><span class="sd">    :param title: The current `Title` from get_titles that unshackle processes now. unshackle</span>
+</span><span id="__span-0-513"><a id="__codelineno-0-513" name="__codelineno-0-513"></a><span class="sd">        gives this in case it holds data you need, for example for an HTTP request.</span>
 </span><span id="__span-0-514"><a id="__codelineno-0-514" name="__codelineno-0-514"></a><span class="sd">    :param track: The current `Track` needing decryption. Provided for same reason as `title`.</span>
 </span><span id="__span-0-515"><a id="__codelineno-0-515" name="__codelineno-0-515"></a><span class="sd">    :return: The JWK Set license as a dict, JSON str, or raw bytes. Return None (the default)</span>
 </span><span id="__span-0-516"><a id="__codelineno-0-516" name="__codelineno-0-516"></a><span class="sd">        to let the framework POST the challenge to the manifest-provided Laurl, if any.</span>
@@ -3845,10 +3845,10 @@ and the license is a JWK Set, e.g. <code>{"keys": [{"kty": "oct", "k": "...", "k
         <p>Get Titles for the provided title ID.</p>
 <p>Return a Movies, Series, or Album objects containing Movie, Episode, or Song title objects respectively.
 The returned data must be for the given title ID, or a spawn of the title ID.</p>
-<p>At least one object is expected to be returned, or it will presume an invalid Title ID was
-provided.</p>
+<p>You must return at least one object. If you do not, unshackle presumes an invalid
+Title ID.</p>
 <p>You can use the <code>data</code> dictionary class instance attribute of each Title to store data you may need later on.
-This can be useful to store information on each title that will be required like any sub-asset IDs, or such.</p>
+This can be useful to store information on each title that you need later, like any sub-asset IDs, or such.</p>
 
 
             <details class="mkdocstrings-source">
@@ -3874,11 +3874,11 @@ This can be useful to store information on each title that will be required like
 </span><span id="__span-0-527"><a id="__codelineno-0-527" name="__codelineno-0-527"></a><span class="sd">    Return a Movies, Series, or Album objects containing Movie, Episode, or Song title objects respectively.</span>
 </span><span id="__span-0-528"><a id="__codelineno-0-528" name="__codelineno-0-528"></a><span class="sd">    The returned data must be for the given title ID, or a spawn of the title ID.</span>
 </span><span id="__span-0-529"><a id="__codelineno-0-529" name="__codelineno-0-529"></a>
-</span><span id="__span-0-530"><a id="__codelineno-0-530" name="__codelineno-0-530"></a><span class="sd">    At least one object is expected to be returned, or it will presume an invalid Title ID was</span>
-</span><span id="__span-0-531"><a id="__codelineno-0-531" name="__codelineno-0-531"></a><span class="sd">    provided.</span>
+</span><span id="__span-0-530"><a id="__codelineno-0-530" name="__codelineno-0-530"></a><span class="sd">    You must return at least one object. If you do not, unshackle presumes an invalid</span>
+</span><span id="__span-0-531"><a id="__codelineno-0-531" name="__codelineno-0-531"></a><span class="sd">    Title ID.</span>
 </span><span id="__span-0-532"><a id="__codelineno-0-532" name="__codelineno-0-532"></a>
 </span><span id="__span-0-533"><a id="__codelineno-0-533" name="__codelineno-0-533"></a><span class="sd">    You can use the `data` dictionary class instance attribute of each Title to store data you may need later on.</span>
-</span><span id="__span-0-534"><a id="__codelineno-0-534" name="__codelineno-0-534"></a><span class="sd">    This can be useful to store information on each title that will be required like any sub-asset IDs, or such.</span>
+</span><span id="__span-0-534"><a id="__codelineno-0-534" name="__codelineno-0-534"></a><span class="sd">    This can be useful to store information on each title that you need later, like any sub-asset IDs, or such.</span>
 </span><span id="__span-0-535"><a id="__codelineno-0-535" name="__codelineno-0-535"></a><span class="sd">    """</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
@@ -4116,21 +4116,21 @@ title cache so config edits take effect without a cache reset, and before any
         <p>Get Track objects of the Title.</p>
 <p>Return a Tracks object, which itself can contain Video, Audio, Subtitle or even Chapters.
 Tracks.videos, Tracks.audio, Tracks.subtitles, and Track.chapters should be a List of Track objects.</p>
-<p>Each Track in the Tracks should represent a Video/Audio Stream/Representation/Adaptation or
-a Subtitle file.</p>
-<p>While one Track should only hold information for one stream/downloadable, try to get as many
-unique Track objects per stream type so Stream selection by the root code can give you more
-options in terms of Resolution, Bitrate, Codecs, Language, e.t.c.</p>
+<p>Each Track in the Tracks should represent a Video/Audio track, Representation, or
+Adaptation, or a Subtitle file.</p>
+<p>While one Track should only hold information for one downloadable track, try to get as many
+unique Track objects per track type so track selection by the root code can give you more
+options in terms of Resolution, Bitrate, Codecs, Language, and such.</p>
 <p>No decision making or filtering of which Tracks get returned should happen here. It can be
 considered an error to filter for e.g. resolution, codec, and such. All filtering based on
 arguments will be done by the root code automatically when needed.</p>
-<p>Make sure you correctly mark which Tracks are encrypted or not, and by which DRM System
-via its <code>drm</code> property.</p>
-<p>If you are able to obtain the Track's KID (Key ID) as a 32 char (16 bit) HEX string, provide
-it to the Track's <code>kid</code> variable as it will speed up the decryption process later on. It may
-or may not be needed, that depends on the service. Generally if you can provide it, without
-downloading any of the Track's stream data, then do.</p>
-<p>:param title: The current <code>Title</code> from get_titles that is being executed.
+<p>Make sure you correctly mark which Tracks have encryption, and which DRM System they
+use, with the <code>drm</code> property.</p>
+<p>If you can get the Track's KID (Key ID) as a 32 char (16 bit) HEX string, give it to the
+Track's <code>kid</code> variable, as it will speed up the decryption process later on. The service
+decides whether it is necessary. Generally if you can give it, without downloading any of
+the Track's media data, then do.</p>
+<p>:param title: The current <code>Title</code> from get_titles that unshackle processes now.
 :return: Tracks object containing Video, Audio, Subtitles, and Chapters, if available.</p>
 
 
@@ -4173,26 +4173,26 @@ downloading any of the Track's stream data, then do.</p>
 </span><span id="__span-0-596"><a id="__codelineno-0-596" name="__codelineno-0-596"></a><span class="sd">    Return a Tracks object, which itself can contain Video, Audio, Subtitle or even Chapters.</span>
 </span><span id="__span-0-597"><a id="__codelineno-0-597" name="__codelineno-0-597"></a><span class="sd">    Tracks.videos, Tracks.audio, Tracks.subtitles, and Track.chapters should be a List of Track objects.</span>
 </span><span id="__span-0-598"><a id="__codelineno-0-598" name="__codelineno-0-598"></a>
-</span><span id="__span-0-599"><a id="__codelineno-0-599" name="__codelineno-0-599"></a><span class="sd">    Each Track in the Tracks should represent a Video/Audio Stream/Representation/Adaptation or</span>
-</span><span id="__span-0-600"><a id="__codelineno-0-600" name="__codelineno-0-600"></a><span class="sd">    a Subtitle file.</span>
+</span><span id="__span-0-599"><a id="__codelineno-0-599" name="__codelineno-0-599"></a><span class="sd">    Each Track in the Tracks should represent a Video/Audio track, Representation, or</span>
+</span><span id="__span-0-600"><a id="__codelineno-0-600" name="__codelineno-0-600"></a><span class="sd">    Adaptation, or a Subtitle file.</span>
 </span><span id="__span-0-601"><a id="__codelineno-0-601" name="__codelineno-0-601"></a>
-</span><span id="__span-0-602"><a id="__codelineno-0-602" name="__codelineno-0-602"></a><span class="sd">    While one Track should only hold information for one stream/downloadable, try to get as many</span>
-</span><span id="__span-0-603"><a id="__codelineno-0-603" name="__codelineno-0-603"></a><span class="sd">    unique Track objects per stream type so Stream selection by the root code can give you more</span>
-</span><span id="__span-0-604"><a id="__codelineno-0-604" name="__codelineno-0-604"></a><span class="sd">    options in terms of Resolution, Bitrate, Codecs, Language, e.t.c.</span>
+</span><span id="__span-0-602"><a id="__codelineno-0-602" name="__codelineno-0-602"></a><span class="sd">    While one Track should only hold information for one downloadable track, try to get as many</span>
+</span><span id="__span-0-603"><a id="__codelineno-0-603" name="__codelineno-0-603"></a><span class="sd">    unique Track objects per track type so track selection by the root code can give you more</span>
+</span><span id="__span-0-604"><a id="__codelineno-0-604" name="__codelineno-0-604"></a><span class="sd">    options in terms of Resolution, Bitrate, Codecs, Language, and such.</span>
 </span><span id="__span-0-605"><a id="__codelineno-0-605" name="__codelineno-0-605"></a>
 </span><span id="__span-0-606"><a id="__codelineno-0-606" name="__codelineno-0-606"></a><span class="sd">    No decision making or filtering of which Tracks get returned should happen here. It can be</span>
 </span><span id="__span-0-607"><a id="__codelineno-0-607" name="__codelineno-0-607"></a><span class="sd">    considered an error to filter for e.g. resolution, codec, and such. All filtering based on</span>
 </span><span id="__span-0-608"><a id="__codelineno-0-608" name="__codelineno-0-608"></a><span class="sd">    arguments will be done by the root code automatically when needed.</span>
 </span><span id="__span-0-609"><a id="__codelineno-0-609" name="__codelineno-0-609"></a>
-</span><span id="__span-0-610"><a id="__codelineno-0-610" name="__codelineno-0-610"></a><span class="sd">    Make sure you correctly mark which Tracks are encrypted or not, and by which DRM System</span>
-</span><span id="__span-0-611"><a id="__codelineno-0-611" name="__codelineno-0-611"></a><span class="sd">    via its `drm` property.</span>
+</span><span id="__span-0-610"><a id="__codelineno-0-610" name="__codelineno-0-610"></a><span class="sd">    Make sure you correctly mark which Tracks have encryption, and which DRM System they</span>
+</span><span id="__span-0-611"><a id="__codelineno-0-611" name="__codelineno-0-611"></a><span class="sd">    use, with the `drm` property.</span>
 </span><span id="__span-0-612"><a id="__codelineno-0-612" name="__codelineno-0-612"></a>
-</span><span id="__span-0-613"><a id="__codelineno-0-613" name="__codelineno-0-613"></a><span class="sd">    If you are able to obtain the Track's KID (Key ID) as a 32 char (16 bit) HEX string, provide</span>
-</span><span id="__span-0-614"><a id="__codelineno-0-614" name="__codelineno-0-614"></a><span class="sd">    it to the Track's `kid` variable as it will speed up the decryption process later on. It may</span>
-</span><span id="__span-0-615"><a id="__codelineno-0-615" name="__codelineno-0-615"></a><span class="sd">    or may not be needed, that depends on the service. Generally if you can provide it, without</span>
-</span><span id="__span-0-616"><a id="__codelineno-0-616" name="__codelineno-0-616"></a><span class="sd">    downloading any of the Track's stream data, then do.</span>
+</span><span id="__span-0-613"><a id="__codelineno-0-613" name="__codelineno-0-613"></a><span class="sd">    If you can get the Track's KID (Key ID) as a 32 char (16 bit) HEX string, give it to the</span>
+</span><span id="__span-0-614"><a id="__codelineno-0-614" name="__codelineno-0-614"></a><span class="sd">    Track's `kid` variable, as it will speed up the decryption process later on. The service</span>
+</span><span id="__span-0-615"><a id="__codelineno-0-615" name="__codelineno-0-615"></a><span class="sd">    decides whether it is necessary. Generally if you can give it, without downloading any of</span>
+</span><span id="__span-0-616"><a id="__codelineno-0-616" name="__codelineno-0-616"></a><span class="sd">    the Track's media data, then do.</span>
 </span><span id="__span-0-617"><a id="__codelineno-0-617" name="__codelineno-0-617"></a>
-</span><span id="__span-0-618"><a id="__codelineno-0-618" name="__codelineno-0-618"></a><span class="sd">    :param title: The current `Title` from get_titles that is being executed.</span>
+</span><span id="__span-0-618"><a id="__codelineno-0-618" name="__codelineno-0-618"></a><span class="sd">    :param title: The current `Title` from get_titles that unshackle processes now.</span>
 </span><span id="__span-0-619"><a id="__codelineno-0-619" name="__codelineno-0-619"></a><span class="sd">    :return: Tracks object containing Video, Audio, Subtitles, and Chapters, if available.</span>
 </span><span id="__span-0-620"><a id="__codelineno-0-620" name="__codelineno-0-620"></a><span class="sd">    """</span>
 </span></code></pre></div></td></tr></table></div>
@@ -4241,7 +4241,7 @@ downloading any of the Track's stream data, then do.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The current Title from <code>get_titles</code> that is being processed.</p>
+                <p>The current Title from <code>get_titles</code> that unshackle processes now.</p>
               </div>
             </td>
             <td>
@@ -4252,7 +4252,7 @@ downloading any of the Track's stream data, then do.</p>
     </table>
         <p>You must return a Chapters object containing 0 or more Chapter objects.</p>
 <p>You do not need to set a Chapter number or sort/order the chapters in any way as
-the Chapters class automatically handles all of that for you. If there's no
+the Chapters class automatically handles all of that for you. If there is no
 descriptive name for a Chapter then do not set a name at all.</p>
 <p>You must not set Chapter names to "Chapter {n}" or such. If you (or the user)
 wants "Chapter {n}" style Chapter names (or similar) then they can use the config
@@ -4284,12 +4284,12 @@ option <code>chapter_fallback_name</code>. For example, <code>"Chapter {i:02}"</
 </span><span id="__span-0-625"><a id="__codelineno-0-625" name="__codelineno-0-625"></a><span class="sd">    Get Chapters for the Title.</span>
 </span><span id="__span-0-626"><a id="__codelineno-0-626" name="__codelineno-0-626"></a>
 </span><span id="__span-0-627"><a id="__codelineno-0-627" name="__codelineno-0-627"></a><span class="sd">    Parameters:</span>
-</span><span id="__span-0-628"><a id="__codelineno-0-628" name="__codelineno-0-628"></a><span class="sd">        title: The current Title from `get_titles` that is being processed.</span>
+</span><span id="__span-0-628"><a id="__codelineno-0-628" name="__codelineno-0-628"></a><span class="sd">        title: The current Title from `get_titles` that unshackle processes now.</span>
 </span><span id="__span-0-629"><a id="__codelineno-0-629" name="__codelineno-0-629"></a>
 </span><span id="__span-0-630"><a id="__codelineno-0-630" name="__codelineno-0-630"></a><span class="sd">    You must return a Chapters object containing 0 or more Chapter objects.</span>
 </span><span id="__span-0-631"><a id="__codelineno-0-631" name="__codelineno-0-631"></a>
 </span><span id="__span-0-632"><a id="__codelineno-0-632" name="__codelineno-0-632"></a><span class="sd">    You do not need to set a Chapter number or sort/order the chapters in any way as</span>
-</span><span id="__span-0-633"><a id="__codelineno-0-633" name="__codelineno-0-633"></a><span class="sd">    the Chapters class automatically handles all of that for you. If there's no</span>
+</span><span id="__span-0-633"><a id="__codelineno-0-633" name="__codelineno-0-633"></a><span class="sd">    the Chapters class automatically handles all of that for you. If there is no</span>
 </span><span id="__span-0-634"><a id="__codelineno-0-634" name="__codelineno-0-634"></a><span class="sd">    descriptive name for a Chapter then do not set a name at all.</span>
 </span><span id="__span-0-635"><a id="__codelineno-0-635" name="__codelineno-0-635"></a>
 </span><span id="__span-0-636"><a id="__codelineno-0-636" name="__codelineno-0-636"></a><span class="sd">    You must not set Chapter names to "Chapter {n}" or such. If you (or the user)</span>
@@ -4354,7 +4354,7 @@ option <code>chapter_fallback_name</code>. For example, <code>"Chapter {i:02}"</
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The Path to the Segment that was downloaded.</p>
+                <p>The Path to the downloaded Segment.</p>
               </div>
             </td>
             <td>
@@ -4380,7 +4380,7 @@ option <code>chapter_fallback_name</code>. For example, <code>"Chapter {i:02}"</
 </span><span id="__span-0-646"><a id="__codelineno-0-646" name="__codelineno-0-646"></a>
 </span><span id="__span-0-647"><a id="__codelineno-0-647" name="__codelineno-0-647"></a><span class="sd">    Parameters:</span>
 </span><span id="__span-0-648"><a id="__codelineno-0-648" name="__codelineno-0-648"></a><span class="sd">        track: The Track object that had a Segment downloaded.</span>
-</span><span id="__span-0-649"><a id="__codelineno-0-649" name="__codelineno-0-649"></a><span class="sd">        segment: The Path to the Segment that was downloaded.</span>
+</span><span id="__span-0-649"><a id="__codelineno-0-649" name="__codelineno-0-649"></a><span class="sd">        segment: The Path to the downloaded Segment.</span>
 </span><span id="__span-0-650"><a id="__codelineno-0-650" name="__codelineno-0-650"></a><span class="sd">    """</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
@@ -4424,7 +4424,7 @@ option <code>chapter_fallback_name</code>. For example, <code>"Chapter {i:02}"</
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The Track object that was downloaded.</p>
+                <p>The downloaded Track object.</p>
               </div>
             </td>
             <td>
@@ -4448,7 +4448,7 @@ option <code>chapter_fallback_name</code>. For example, <code>"Chapter {i:02}"</
 </span><span id="__span-0-654"><a id="__codelineno-0-654" name="__codelineno-0-654"></a><span class="sd">    Called when a Track has finished downloading.</span>
 </span><span id="__span-0-655"><a id="__codelineno-0-655" name="__codelineno-0-655"></a>
 </span><span id="__span-0-656"><a id="__codelineno-0-656" name="__codelineno-0-656"></a><span class="sd">    Parameters:</span>
-</span><span id="__span-0-657"><a id="__codelineno-0-657" name="__codelineno-0-657"></a><span class="sd">        track: The Track object that was downloaded.</span>
+</span><span id="__span-0-657"><a id="__codelineno-0-657" name="__codelineno-0-657"></a><span class="sd">        track: The downloaded Track object.</span>
 </span><span id="__span-0-658"><a id="__codelineno-0-658" name="__codelineno-0-658"></a><span class="sd">    """</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
@@ -4492,7 +4492,7 @@ option <code>chapter_fallback_name</code>. For example, <code>"Chapter {i:02}"</
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The Track object that was decrypted.</p>
+                <p>The decrypted Track object.</p>
               </div>
             </td>
             <td>
@@ -4524,7 +4524,7 @@ option <code>chapter_fallback_name</code>. For example, <code>"Chapter {i:02}"</
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The HLS segment information that was decrypted.</p>
+                <p>The decrypted HLS segment information.</p>
               </div>
             </td>
             <td>
@@ -4550,9 +4550,9 @@ option <code>chapter_fallback_name</code>. For example, <code>"Chapter {i:02}"</
 </span><span id="__span-0-662"><a id="__codelineno-0-662" name="__codelineno-0-662"></a><span class="sd">    Called when a Track has finished decrypting.</span>
 </span><span id="__span-0-663"><a id="__codelineno-0-663" name="__codelineno-0-663"></a>
 </span><span id="__span-0-664"><a id="__codelineno-0-664" name="__codelineno-0-664"></a><span class="sd">    Parameters:</span>
-</span><span id="__span-0-665"><a id="__codelineno-0-665" name="__codelineno-0-665"></a><span class="sd">        track: The Track object that was decrypted.</span>
+</span><span id="__span-0-665"><a id="__codelineno-0-665" name="__codelineno-0-665"></a><span class="sd">        track: The decrypted Track object.</span>
 </span><span id="__span-0-666"><a id="__codelineno-0-666" name="__codelineno-0-666"></a><span class="sd">        drm: The DRM object it decrypted with.</span>
-</span><span id="__span-0-667"><a id="__codelineno-0-667" name="__codelineno-0-667"></a><span class="sd">        segment: The HLS segment information that was decrypted.</span>
+</span><span id="__span-0-667"><a id="__codelineno-0-667" name="__codelineno-0-667"></a><span class="sd">        segment: The decrypted HLS segment information.</span>
 </span><span id="__span-0-668"><a id="__codelineno-0-668" name="__codelineno-0-668"></a><span class="sd">    """</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
@@ -4596,7 +4596,7 @@ option <code>chapter_fallback_name</code>. For example, <code>"Chapter {i:02}"</
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The Track object that was repacked.</p>
+                <p>The repacked Track object.</p>
               </div>
             </td>
             <td>
@@ -4620,7 +4620,7 @@ option <code>chapter_fallback_name</code>. For example, <code>"Chapter {i:02}"</
 </span><span id="__span-0-672"><a id="__codelineno-0-672" name="__codelineno-0-672"></a><span class="sd">    Called when a Track has finished repacking.</span>
 </span><span id="__span-0-673"><a id="__codelineno-0-673" name="__codelineno-0-673"></a>
 </span><span id="__span-0-674"><a id="__codelineno-0-674" name="__codelineno-0-674"></a><span class="sd">    Parameters:</span>
-</span><span id="__span-0-675"><a id="__codelineno-0-675" name="__codelineno-0-675"></a><span class="sd">        track: The Track object that was repacked.</span>
+</span><span id="__span-0-675"><a id="__codelineno-0-675" name="__codelineno-0-675"></a><span class="sd">        track: The repacked Track object.</span>
 </span><span id="__span-0-676"><a id="__codelineno-0-676" name="__codelineno-0-676"></a><span class="sd">    """</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
@@ -4641,10 +4641,10 @@ option <code>chapter_fallback_name</code>. For example, <code>"Chapter {i:02}"</
 
     <div class="doc doc-contents ">
 
-        <p>Called when a Track is about to be Multiplexed into a Container.</p>
-<p>Note: Right now only MKV containers are multiplexed but in the future
-this may also be called when multiplexing to other containers like
-MP4 via ffmpeg/mp4box.</p>
+        <p>Called immediately before unshackle multiplexes a Track into a Container.</p>
+<p>Note: Right now unshackle multiplexes only MKV containers. In the future
+unshackle can also call this when it multiplexes to other containers like
+MP4 with FFmpeg/mp4box.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -4667,7 +4667,7 @@ MP4 via ffmpeg/mp4box.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The Track object that was repacked.</p>
+                <p>The repacked Track object.</p>
               </div>
             </td>
             <td>
@@ -4692,14 +4692,14 @@ MP4 via ffmpeg/mp4box.</p>
 <span class="normal"><a href="#__codelineno-0-687">687</a></span>
 <span class="normal"><a href="#__codelineno-0-688">688</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-678"><a id="__codelineno-0-678" name="__codelineno-0-678"></a><span class="k">def</span><span class="w"> </span><span class="nf">on_track_multiplex</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">track</span><span class="p">:</span> <span class="n">AnyTrack</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 </span><span id="__span-0-679"><a id="__codelineno-0-679" name="__codelineno-0-679"></a><span class="w">    </span><span class="sd">"""</span>
-</span><span id="__span-0-680"><a id="__codelineno-0-680" name="__codelineno-0-680"></a><span class="sd">    Called when a Track is about to be Multiplexed into a Container.</span>
+</span><span id="__span-0-680"><a id="__codelineno-0-680" name="__codelineno-0-680"></a><span class="sd">    Called immediately before unshackle multiplexes a Track into a Container.</span>
 </span><span id="__span-0-681"><a id="__codelineno-0-681" name="__codelineno-0-681"></a>
-</span><span id="__span-0-682"><a id="__codelineno-0-682" name="__codelineno-0-682"></a><span class="sd">    Note: Right now only MKV containers are multiplexed but in the future</span>
-</span><span id="__span-0-683"><a id="__codelineno-0-683" name="__codelineno-0-683"></a><span class="sd">    this may also be called when multiplexing to other containers like</span>
-</span><span id="__span-0-684"><a id="__codelineno-0-684" name="__codelineno-0-684"></a><span class="sd">    MP4 via ffmpeg/mp4box.</span>
+</span><span id="__span-0-682"><a id="__codelineno-0-682" name="__codelineno-0-682"></a><span class="sd">    Note: Right now unshackle multiplexes only MKV containers. In the future</span>
+</span><span id="__span-0-683"><a id="__codelineno-0-683" name="__codelineno-0-683"></a><span class="sd">    unshackle can also call this when it multiplexes to other containers like</span>
+</span><span id="__span-0-684"><a id="__codelineno-0-684" name="__codelineno-0-684"></a><span class="sd">    MP4 with FFmpeg/mp4box.</span>
 </span><span id="__span-0-685"><a id="__codelineno-0-685" name="__codelineno-0-685"></a>
 </span><span id="__span-0-686"><a id="__codelineno-0-686" name="__codelineno-0-686"></a><span class="sd">    Parameters:</span>
-</span><span id="__span-0-687"><a id="__codelineno-0-687" name="__codelineno-0-687"></a><span class="sd">        track: The Track object that was repacked.</span>
+</span><span id="__span-0-687"><a id="__codelineno-0-687" name="__codelineno-0-687"></a><span class="sd">        track: The repacked Track object.</span>
 </span><span id="__span-0-688"><a id="__codelineno-0-688" name="__codelineno-0-688"></a><span class="sd">    """</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
@@ -4729,7 +4729,7 @@ MP4 via ffmpeg/mp4box.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Sanitize a proxy URI for logs by redacting any embedded userinfo (username/password).</p>
+        <p>Sanitise a proxy URI for logs by redacting any embedded userinfo (username/password).</p>
 
 
 <p><span class="doc-section-title">Examples:</span></p>
@@ -4779,7 +4779,7 @@ MP4 via ffmpeg/mp4box.</p>
 <span class="normal"><a href="#__codelineno-0-136">136</a></span>
 <span class="normal"><a href="#__codelineno-0-137">137</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-101"><a id="__codelineno-0-101" name="__codelineno-0-101"></a><span class="k">def</span><span class="w"> </span><span class="nf">sanitize_proxy_for_log</span><span class="p">(</span><span class="n">uri</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
 </span><span id="__span-0-102"><a id="__codelineno-0-102" name="__codelineno-0-102"></a><span class="w">    </span><span class="sd">"""</span>
-</span><span id="__span-0-103"><a id="__codelineno-0-103" name="__codelineno-0-103"></a><span class="sd">    Sanitize a proxy URI for logs by redacting any embedded userinfo (username/password).</span>
+</span><span id="__span-0-103"><a id="__codelineno-0-103" name="__codelineno-0-103"></a><span class="sd">    Sanitise a proxy URI for logs by redacting any embedded userinfo (username/password).</span>
 </span><span id="__span-0-104"><a id="__codelineno-0-104" name="__codelineno-0-104"></a>
 </span><span id="__span-0-105"><a id="__codelineno-0-105" name="__codelineno-0-105"></a><span class="sd">    Examples:</span>
 </span><span id="__span-0-106"><a id="__codelineno-0-106" name="__codelineno-0-106"></a><span class="sd">      - http://user:pass@host:8080 -&gt; http://REDACTED@host:8080</span>

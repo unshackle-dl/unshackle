@@ -2861,7 +2861,7 @@
 
 
 <h1 id="cli-reference">CLI Reference<a class="headerlink" href="#cli-reference" title="Permanent link">&para;</a></h1>
-<p>A complete reference for every <code>unshackle</code> command, subcommand, and flag. Commands are grouped by purpose:</p>
+<p>A complete reference for every <code>unshackle</code> command, subcommand, and flag. This page groups the commands by purpose:</p>
 <ul>
 <li><strong><a href="#dl"><code>dl</code></a></strong>: the download pipeline (the command you use most).</li>
 <li><strong><a href="#search"><code>search</code></a></strong>: find titles on a service.</li>
@@ -2869,12 +2869,12 @@
 <li><strong><a href="#cfg"><code>cfg</code></a></strong>, <strong><a href="#env"><code>env</code></a></strong>: manage configuration and the environment.</li>
 <li><strong><a href="#kv"><code>kv</code></a></strong>: Key Vault operations.</li>
 <li><strong><a href="#wvd"><code>wvd</code></a></strong>, <strong><a href="#prd"><code>prd</code></a></strong>: Widevine / PlayReady device management.</li>
-<li><strong><a href="#serve"><code>serve</code></a></strong>: run the local CDM + REST API server.</li>
+<li><strong><a href="#serve"><code>serve</code></a></strong>: operate the local CDM and REST API server.</li>
 <li><strong><a href="#util"><code>util</code></a></strong>: helper media utilities.</li>
 </ul>
 <div class="admonition tip">
 <p class="admonition-title">Getting help on any command</p>
-<p>Every command accepts <code>-h</code>, <code>--help</code>, or <code>-?</code>. For example <code>unshackle dl --help</code> or <code>unshackle wvd new --help</code>. Service-specific arguments for <code>dl</code> and <code>search</code> (such as a title ID or search query) are defined by each service, so check <code>unshackle dl SERVICE --help</code> for those.</p>
+<p>Every command accepts <code>-h</code>, <code>--help</code>, or <code>-?</code>. For example <code>unshackle dl --help</code> or <code>unshackle wvd new --help</code>. Each service defines its own arguments for <code>dl</code> and <code>search</code> (such as a title ID or a query), so examine <code>unshackle dl SERVICE --help</code> for those.</p>
 </div>
 <hr />
 <h2 id="root-command">Root command<a class="headerlink" href="#root-command" title="Permanent link">&para;</a></h2>
@@ -2883,7 +2883,7 @@
 <blockquote>
 <p>unshackle: Modular Movie, TV, and Music Archival Software.</p>
 </blockquote>
-<p>Every invocation prints a banner and, when <code>update_checks</code> is enabled in your config, checks for a newer release.</p>
+<p>Every invocation prints a banner and, when you enable <code>update_checks</code> in your config, checks for a newer release.</p>
 <table>
 <thead>
 <tr>
@@ -2914,7 +2914,7 @@
 </span></code></pre></div>
 <ul>
 <li><code>OPTIONS</code>: every flag below, parsed at the <code>dl</code> level.</li>
-<li><code>SERVICE</code>: a service tag (e.g. <code>EXAMPLE1</code>, <code>EXAMPLE2</code>). Tags are case-insensitive and honour each service's aliases (<code>example+</code>, <code>EXAMPLE2</code>, etc. all resolve to the same tag).</li>
+<li><code>SERVICE</code>: a service tag (for example <code>EXAMPLE1</code> or <code>EXAMPLE2</code>). Tags are case-insensitive and honour each service's aliases (<code>example+</code>, <code>EXAMPLE2</code>, and the other alias forms all give the same tag).</li>
 <li><code>SERVICE ARGS</code>: the title, URL, or ID, plus any service-specific options. These belong to the service, not to <code>dl</code>.</li>
 </ul>
 <div class="admonition example">
@@ -2931,7 +2931,7 @@
 </div>
 <div class="admonition note">
 <p class="admonition-title">Config-driven defaults</p>
-<p>Any <code>dl</code> flag can be given a default under the <code>dl:</code> section of <code>unshackle.yaml</code>, and per-service under <code>services.&lt;TAG&gt;.dl</code>. Explicit command-line values (and environment values) always win over both; service defaults only fill in options you did not set. See the <a href="../../getting-started/configuration-file/">configuration file</a> guide.</p>
+<p>You can give any <code>dl</code> flag a default under the <code>dl:</code> section of <code>unshackle.yaml</code>, and per-service under <code>services.&lt;TAG&gt;.dl</code>. Explicit command-line values (and environment values) always win over both. Service defaults only fill in options you did not set. See the <a href="../../getting-started/configuration-file/">configuration file</a> guide.</p>
 </div>
 <h3 id="quality-codec-bitrate-range">Quality, codec, bitrate &amp; range<a class="headerlink" href="#quality-codec-bitrate-range" title="Permanent link">&para;</a></h3>
 <table>
@@ -3088,7 +3088,7 @@ your preferred ones first, use <code>audio.language_priority</code> and
 <a href="../../reference/configuration/download/#subtitle"><code>subtitle.language_priority</code></a> in your
 configuration file.</p>
 </div>
-<p>The special language tokens <code>orig</code>, <code>all</code>, and <code>best</code> are honoured everywhere a language is expected.</p>
+<p>unshackle honours the special language tokens <code>orig</code>, <code>all</code>, and <code>best</code> everywhere it expects a language.</p>
 <h3 id="title-episode-selection">Title &amp; episode selection<a class="headerlink" href="#title-episode-selection" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -3100,7 +3100,7 @@ configuration file.</p>
 <tbody>
 <tr>
 <td><code>-w</code>, <code>--wanted</code></td>
-<td>Wanted episodes, e.g. <code>S01-S05,S07</code>, <code>S01E01-S02E03</code>. Supports exclusions with a leading <code>-</code> (e.g. <code>-S03</code>). For a <a href="../downloading/#split-episodes">split episode</a>, <code>.N</code> picks one part (<code>S01E01.2</code>), a range must stay inside the episode (<code>S01E01.1-S01E01.3</code>), and <code>S01E01</code> on its own takes every part. For <a href="../downloading/#daily-and-date-based-content">dated content</a>, a token can also be an ISO air date (<code>2026-08-11</code>) or a date range with a colon (<code>2026-08-01:2026-08-31</code>). For a <a href="../downloading/#music-tracks">music release</a>, a token is a track number (<code>1-5</code>, <code>1,3,7</code>), or <code>{disc}x{track}</code> (<code>2x3</code>) when the release has more than one disc.</td>
+<td>Wanted episodes, e.g. <code>S01-S05,S07</code>, <code>S01E01-S02E03</code>. Supports exclusions with a leading <code>-</code> (e.g. <code>-S03</code>). For a <a href="../downloading/#split-episodes">split episode</a>, <code>.N</code> picks one part (<code>S01E01.2</code>), a range must stay inside the episode (<code>S01E01.1-S01E01.3</code>), and <code>S01E01</code> on its own takes every part. For a <a href="../downloading/#daily-and-date-based-content">dated episode</a>, a token can also be an ISO air date (<code>2026-08-11</code>) or a date range with a colon (<code>2026-08-01:2026-08-31</code>). For a <a href="../downloading/#music-tracks">music release</a>, a token is a track number (<code>1-5</code>, <code>1,3,7</code>), or <code>{disc}x{track}</code> (<code>2x3</code>) when the release has more than one disc.</td>
 </tr>
 <tr>
 <td><code>--select-titles</code></td>
@@ -3224,7 +3224,7 @@ configuration file.</p>
 </tr>
 <tr>
 <td><code>--imdb</code></td>
-<td>IMDb ID, e.g. <code>tt1375666</code>. Used for the tags. Skips the title search. <code>--enrich</code> reads it too. Needs no key.</td>
+<td>IMDb ID, e.g. <code>tt1375666</code>. Used for the tags. Skips the title search. <code>--enrich</code> reads it too. Needs no API key.</td>
 </tr>
 <tr>
 <td><code>--tvdb</code></td>
@@ -3232,7 +3232,7 @@ configuration file.</p>
 </tr>
 <tr>
 <td><code>--anilist</code></td>
-<td>AniList ID (integer), e.g. <code>--anilist 21</code>. A MyAnimeList ID is accepted as <code>mal:12345</code> and resolved to the AniList entry. Used for the tags. Skips the title search. <code>--enrich</code> reads it too. Needs no key.</td>
+<td>AniList ID (integer), e.g. <code>--anilist 21</code>. A MyAnimeList ID is accepted as <code>mal:12345</code> and resolved to the AniList entry. Used for the tags. Skips the title search. <code>--enrich</code> reads it too. Needs no API key.</td>
 </tr>
 <tr>
 <td><code>--enrich</code></td>
@@ -3250,20 +3250,20 @@ configuration file.</p>
 </table>
 <div class="admonition note">
 <p class="admonition-title">One ID at a time</p>
-<p><code>--tmdb</code>, <code>--imdb</code> and <code>--tvdb</code> cannot be combined. Give one and unshackle resolves the
-others from it, writing all three to the tags. <code>--anilist</code> is outside that rule and pairs
+<p>You cannot combine <code>--tmdb</code>, <code>--imdb</code> and <code>--tvdb</code>. Give one and unshackle finds the
+others from it, and writes all three to the tags. <code>--anilist</code> is outside that rule and pairs
 with one of them, which is how you attach a western ID to an anime title.
-An ID with no provider that can resolve it, such as <code>--tmdb</code> with no <code>tmdb_api_key</code>, fails
-before the download starts. <code>--anilist</code> needs no key, so it never fails this check.</p>
+An ID with no metadata provider that can find it, such as <code>--tmdb</code> with no <code>tmdb_api_key</code>,
+fails before the download starts. <code>--anilist</code> needs no API key, so it never fails this check.</p>
 </div>
 <h4 id="episode-ordering">Episode ordering<a class="headerlink" href="#episode-ordering" title="Permanent link">&para;</a></h4>
-<p>A service does not always number a series the way TVDB's aired order does. Some services list
-Futurama in TVDB's <code>alternate</code> (Streaming) order, for example. <code>--tvdb-order</code> works out which
+<p>A service does not always number a series the way TVDB's aired order does. Some services use
+TVDB's <code>alternate</code> (Streaming) order for Futurama, for example. <code>--tvdb-order</code> works out which
 order the service used, then renumbers the episodes into the order you asked for.</p>
 <div class="admonition note">
 <p class="admonition-title">Orders that do not cover the whole series</p>
-<p>An order can omit episodes the service carries; TVDB's <code>dvd</code> order for Futurama leaves out
-the four movies. Those episodes keep their original numbering. If that would give two
+<p>An order can ignore episodes the service carries. TVDB's <code>dvd</code> order for Futurama leaves
+out the four movies. Those episodes keep their original numbering. If that would give two
 episodes the same season/episode slot, and so the same filename, unshackle logs an error
 and keeps the service's numbering unchanged. Pick an order that covers the whole series.</p>
 </div>
@@ -3385,14 +3385,14 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 </table>
 <div class="admonition warning">
 <p class="admonition-title">Some flags cannot be combined</p>
-<p><code>--require-subs</code> and <code>--s-lang</code>; <code>--select-titles</code> and <code>--wanted</code>; <code>--worst</code> requires <code>--quality</code>; <code>--vbitrate</code> and <code>--vbitrate-range</code> (and the audio equivalents) are mutually exclusive.</p>
+<p><code>--require-subs</code> and <code>--s-lang</code> are mutually exclusive. <code>--select-titles</code> and <code>--wanted</code> are mutually exclusive. <code>--worst</code> needs <code>--quality</code>. <code>--vbitrate</code> and <code>--vbitrate-range</code> (and the audio equivalents) are mutually exclusive.</p>
 </div>
 <hr />
 <h2 id="search"><code>search</code><a class="headerlink" href="#search" title="Permanent link">&para;</a></h2>
-<p>Search a service for titles. Like <code>dl</code>, <code>search</code> is a group whose subcommands are the installed services, and it reuses <code>dl</code>'s authentication, cookie, and proxy machinery.</p>
+<p>Find titles on a service. Like <code>dl</code>, <code>search</code> is a group whose subcommands are the installed services, and it reuses <code>dl</code>'s authentication, cookie, and proxy machinery.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>unshackle search [OPTIONS] SERVICE [QUERY...]
 </span></code></pre></div>
-<p>The query syntax is defined per service. Results are printed as a tree of titles with their service IDs. Feed an ID straight into <code>dl</code>.</p>
+<p>Each service defines its own query syntax. unshackle prints the results as a tree of titles with their service IDs. Feed an ID straight into <code>dl</code>.</p>
 <table>
 <thead>
 <tr>
@@ -3427,17 +3427,17 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 <p>Reconstruct a download (download → decrypt → mux) from an <code>--export</code> JSON file without re-contacting the service. It re-fetches the manifest, injects the stored keys, and then runs the normal <code>dl</code> pipeline. The service tag is read from the export file, not passed by you.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>unshackle import EXPORT_FILE [DL_ARGS...]
 </span></code></pre></div>
-<p>Any <code>dl</code> options placed after the file are forwarded verbatim, so you can override quality, range, proxy, and so on.</p>
+<p>unshackle forwards any <code>dl</code> options after the file verbatim, so you can override quality, range, proxy, and so on.</p>
 <div class="admonition example">
 <p class="admonition-title">Example</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>unshackle<span class="w"> </span>import<span class="w"> </span>export.json
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>unshackle<span class="w"> </span>import<span class="w"> </span>export.json<span class="w"> </span>-r<span class="w"> </span>HDR10<span class="w"> </span>--proxy<span class="w"> </span>US
 </span></code></pre></div>
 </div>
-<p>The export file must be a valid v2 export (created by a current build of unshackle via <code>dl --export</code>) and must contain a <code>service</code> tag.</p>
+<p>The export file must be a valid v2 export from a current version of unshackle, made with <code>dl --export</code>, and must contain a <code>service</code> tag.</p>
 <hr />
 <h2 id="cfg"><code>cfg</code><a class="headerlink" href="#cfg" title="Permanent link">&para;</a></h2>
-<p>Read, set, delete, or list configuration values in <code>unshackle.yaml</code> without hand-editing YAML.</p>
+<p>Read, set, delete, or show configuration values in <code>unshackle.yaml</code> without hand-editing YAML.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>unshackle cfg [KEY] [VALUE] [OPTIONS]
 </span></code></pre></div>
 <table>
@@ -3468,7 +3468,7 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 </table>
 <div class="admonition warning">
 <p class="admonition-title">Comments are stripped</p>
-<p>Writing a value through <code>cfg</code> rewrites the YAML file and <strong>removes all comments</strong> from it. If your config relies on comments, edit it by hand instead. Setting a value and using <code>--unset</code> together is an error.</p>
+<p>Writing a value through <code>cfg</code> rewrites the configuration file and <strong>removes all comments</strong> from it. If your config relies on comments, edit it by hand instead. Setting a value and using <code>--unset</code> together is an error.</p>
 </div>
 <div class="admonition example">
 <p class="admonition-title">Example</p>
@@ -3488,7 +3488,7 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 <h3 id="env-check"><code>env check</code><a class="headerlink" href="#env-check" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>unshackle env check
 </span></code></pre></div>
-<p>Prints a dependency table (Category / Tool / Status / Required / Purpose) showing which external tools resolve on your <code>PATH</code>, and a summary of how many required tools are installed.</p>
+<p>Prints a dependency table (Category / Tool / Status / Required / Purpose) that shows which external tools unshackle finds on your <code>PATH</code>. It also gives a summary of how many required tools are present.</p>
 <table>
 <thead>
 <tr>
@@ -3523,17 +3523,17 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 </tr>
 </tbody>
 </table>
-<p><small>* required; all others are optional.</small></p>
+<p><small>* required. All others are optional.</small></p>
 <h3 id="env-info"><code>env info</code><a class="headerlink" href="#env-info" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>unshackle env info
 </span></code></pre></div>
-<p>Shows where the config was loaded from (or lists the candidate config locations if none was found) and prints a table of every configured directory (downloads, temp, cache, cookies, logs, exports, WVDs, PRDs, services, and more).</p>
+<p>Shows the location unshackle loaded the configuration file from. If it found no file, it shows the candidate locations instead. It then prints a table of every configured directory (downloads, temp, cache, cookies, logs, exports, WVDs, PRDs, services, and more).</p>
 <h3 id="env-theme"><code>env theme</code><a class="headerlink" href="#env-theme" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>unshackle env theme
 </span></code></pre></div>
-<p>Prints a sample of every available CLI theme: colour swatches, help text with option rows, a track listing with video/audio/subtitle entries, log lines, a progress bar, and the gradient pulse bar. The active theme is marked and each theme's aliases are listed. Set your choice with the <a href="../../reference/configuration/misc/#appearance"><code>theme</code></a> config key.</p>
+<p>Prints a sample of every available CLI theme. Each sample has colour swatches, help text with option rows, and a track listing with video, audio and subtitle entries. It also has log lines, a progress bar, and the gradient pulse bar. unshackle marks the active theme and shows each theme's aliases. Set your choice with the <a href="../../reference/configuration/misc/#appearance"><code>theme</code></a> config key.</p>
 <h3 id="env-clear"><code>env clear</code><a class="headerlink" href="#env-clear" title="Permanent link">&para;</a></h3>
-<p>Clear an environment directory. The directory is emptied and recreated, and the number of files and bytes freed is reported.</p>
+<p>Clear an environment directory. unshackle empties the directory, makes it again, and reports the number of files and bytes it freed.</p>
 <table>
 <thead>
 <tr>
@@ -3544,7 +3544,7 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 <tbody>
 <tr>
 <td><code>unshackle env clear cache [SERVICE]</code></td>
-<td>Clear the cache directory, or just one service's cache subdirectory.</td>
+<td>Clear the cache directory, or only one service's cache subdirectory.</td>
 </tr>
 <tr>
 <td><code>unshackle env clear temp</code></td>
@@ -3564,11 +3564,11 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 </div>
 <hr />
 <h2 id="kv"><code>kv</code><a class="headerlink" href="#kv" title="Permanent link">&para;</a></h2>
-<p>Manage Key Vaults. Vaults are configured under <code>key_vaults</code> in <code>unshackle.yaml</code>, each with a <code>name</code>, a <code>type</code> (<code>sqlite</code>, <code>mysql</code>, <code>http</code>, <code>api</code>), and type-specific options. Service tags are normalised automatically.</p>
+<p>Manage Key Vaults. You configure vaults under <code>key_vaults</code> in <code>unshackle.yaml</code>, each with a <code>name</code>, a <code>type</code> (<code>sqlite</code>, <code>mysql</code>, <code>http</code>, <code>api</code>), and type-specific options. unshackle normalises service tags automatically.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>unshackle kv COMMAND [ARGS]...
 </span></code></pre></div>
 <h3 id="kv-copy-to_vault-from_vault"><code>kv copy TO_VAULT FROM_VAULT...</code><a class="headerlink" href="#kv-copy-to_vault-from_vault" title="Permanent link">&para;</a></h3>
-<p>Copy keys from one or more source vaults into a destination vault. Rows with matching KIDs are skipped unless the existing row has no key; existing data is never altered or deleted.</p>
+<p>Copy content keys from one or more source vaults into a destination vault. unshackle skips rows whose KIDs match, unless the existing row has no content key. unshackle never alters or deletes existing data.</p>
 <table>
 <thead>
 <tr>
@@ -3588,11 +3588,11 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 </tbody>
 </table>
 <h3 id="kv-sync-vault"><code>kv sync VAULT...</code><a class="headerlink" href="#kv-sync-vault" title="Permanent link">&para;</a></h3>
-<p>Ensure two or more vaults hold the same set of keys, essentially a chained bidirectional copy. Requires more than one vault. Accepts the same <code>--service</code> / <code>--local-only</code> options as <code>copy</code>.</p>
+<p>Make sure that two or more vaults hold the same set of content keys, essentially a chained bidirectional copy. More than one vault is necessary. Accepts the same <code>--service</code> / <code>--local-only</code> options as <code>copy</code>.</p>
 <h3 id="kv-add-file-service-vault"><code>kv add FILE SERVICE VAULT...</code><a class="headerlink" href="#kv-add-file-service-vault" title="Permanent link">&para;</a></h3>
-<p>Add content keys to one or more vaults for a service. <code>FILE</code> contains one <code>KID:KEY</code> pair per line (32 hex : 32 hex, UTF-8). Lines that don't match are skipped.</p>
+<p>Add content keys to one or more vaults for a service. <code>FILE</code> contains one <code>KID:KEY</code> pair per line (32 hex : 32 hex, UTF-8). unshackle skips every line that does not match that form.</p>
 <h3 id="kv-search-kid"><code>kv search KID</code><a class="headerlink" href="#kv-search-kid" title="Permanent link">&para;</a></h3>
-<p>Search configured vaults for a KID (32 hex characters, no dashes) and report any matching key.</p>
+<p>Find a KID (32 hex characters, no dashes) in the configured vaults and report its content key.</p>
 <table>
 <thead>
 <tr>
@@ -3613,10 +3613,10 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 </table>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>Remote vaults cannot be enumerated without a service, so pass <code>--service</code> when searching them.</p>
+<p>unshackle cannot enumerate remote vaults without a service, so pass <code>--service</code> when you examine them.</p>
 </div>
 <h3 id="kv-prepare-vault"><code>kv prepare VAULT...</code><a class="headerlink" href="#kv-prepare-vault" title="Permanent link">&para;</a></h3>
-<p>Create service tables on vaults that use tables, for every installed service, where they don't already exist.</p>
+<p>Make service tables on vaults that use tables, for every installed service, where they do not already exist.</p>
 <div class="admonition example">
 <p class="admonition-title">Example</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>unshackle<span class="w"> </span>kv<span class="w"> </span>copy<span class="w"> </span>main<span class="w"> </span>backup1<span class="w"> </span>backup2
@@ -3703,7 +3703,7 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 <div class="language-text highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>unshackle prd COMMAND [ARGS]...
 </span></code></pre></div>
 <h3 id="prd-new-paths"><code>prd new PATHS...</code><a class="headerlink" href="#prd-new-paths" title="Permanent link">&para;</a></h3>
-<p>Create a new <code>.prd</code>. Provide either a single folder containing <code>zgpriv.dat</code> (group key) and <code>bgroupcert.dat</code> (group certificate), or two file paths (group key, then group certificate).</p>
+<p>Make a new <code>.prd</code>. Give either a single folder that contains <code>zgpriv.dat</code> (group key) and <code>bgroupcert.dat</code> (group certificate), or two file paths (group key, then group certificate).</p>
 <table>
 <thead>
 <tr>
@@ -3728,9 +3728,9 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 </table>
 <p><code>prd new</code> will not overwrite an existing file.</p>
 <h3 id="prd-reprovision-prd_path"><code>prd reprovision PRD_PATH</code><a class="headerlink" href="#prd-reprovision-prd_path" title="Permanent link">&para;</a></h3>
-<p>Reprovision an existing device by replacing its leaf certificate and keys. The device must support reprovisioning (version 3 or higher). Accepts the same <code>-e</code> / <code>-s</code> / <code>-o</code> options; defaults to overwriting the device in place.</p>
+<p>Reprovision an existing device by replacing its leaf certificate and keys. Only a device of version 3 or higher can do reprovisioning. Accepts the same <code>-e</code> / <code>-s</code> / <code>-o</code> options. By default it overwrites the device in place.</p>
 <h3 id="prd-test-device"><code>prd test DEVICE</code><a class="headerlink" href="#prd-test-device" title="Permanent link">&para;</a></h3>
-<p>Test a device against the Microsoft PlayReady demo server and print the returned keys.</p>
+<p>Do a test of a device against the Microsoft PlayReady demo server and print the returned content keys.</p>
 <table>
 <thead>
 <tr>
@@ -3829,7 +3829,7 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 <p>WVD files in the WVDs directory and PRD files in the PRDs directory are auto-loaded. The REST API lives under <code>http://&lt;host&gt;:&lt;port&gt;/api/</code>, with Swagger UI at <code>/api/docs/</code> and a health check at <code>/api/health</code> (exempt from auth).</p>
 <div class="admonition warning">
 <p class="admonition-title">Configure <code>api_secret</code> first</p>
-<p>Unless you pass <code>--no-key</code>, <code>serve.api_secret</code> must be set in your config. Requests authenticate with the <code>X-Secret-Key</code> header. Running with <code>--no-key</code> disables authentication entirely and should only be used on a trusted, private network.</p>
+<p>Unless you pass <code>--no-key</code>, <code>serve.api_secret</code> must be set in your config. Requests authenticate with the <code>X-Secret-Key</code> header. <code>--no-key</code> disables authentication entirely. Only use it on a trusted, private network.</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nt">serve</span><span class="p">:</span>
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="w">  </span><span class="nt">api_secret</span><span class="p">:</span><span class="w"> </span><span class="s">"your-api-secret"</span>
 </span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="w">  </span><span class="nt">users</span><span class="p">:</span>
@@ -3850,7 +3850,7 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 </div>
 <hr />
 <h2 id="util"><code>util</code><a class="headerlink" href="#util" title="Permanent link">&para;</a></h2>
-<p>Various helper media utilities. When a command is given a directory, it processes every <code>.mkv</code>/<code>.mp4</code> inside it in natural (S01E01 before S01E10) order.</p>
+<p>Various helper media utilities. When you give a command a directory, it processes every <code>.mkv</code>/<code>.mp4</code> inside it in natural (S01E01 before S01E10) order.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>unshackle util COMMAND [ARGS]...
 </span></code></pre></div>
 <h3 id="util-refresh-services"><code>util refresh-services</code><a class="headerlink" href="#util-refresh-services" title="Permanent link">&para;</a></h3>
@@ -3909,7 +3909,7 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 </tbody>
 </table>
 <h3 id="util-test-path"><code>util test PATH</code><a class="headerlink" href="#util-test-path" title="Permanent link">&para;</a></h3>
-<p>Decode an entire video with FFmpeg and report any corruptions or errors. All streams are tested by default; subtitles cannot be tested.</p>
+<p>Decode an entire video with FFmpeg and report any corruptions or errors. By default it does a test of every track. It cannot do a test of subtitles.</p>
 <table>
 <thead>
 <tr>
@@ -3922,7 +3922,7 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 <tr>
 <td><code>-m</code>, <code>--map</code></td>
 <td><code>0</code></td>
-<td>Test specific streams via FFmpeg's <code>-map</code>, e.g. <code>0:v:0</code> or <code>0:a</code>.</td>
+<td>Do a test of specific tracks with FFmpeg's <code>-map</code>, for example <code>0:v:0</code> or <code>0:a</code>.</td>
 </tr>
 </tbody>
 </table>

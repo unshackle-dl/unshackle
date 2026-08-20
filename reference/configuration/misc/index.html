@@ -2122,7 +2122,7 @@
 <p>Smaller configuration areas: external metadata API keys, caching and update checks, logging and debug flags, and deprecated keys.</p>
 <h2 id="external-api-keys">External API keys<a class="headerlink" href="#external-api-keys" title="Permanent link">&para;</a></h2>
 <p>All are unset by default and enable optional metadata/geolocation features. For which fields
-each metadata provider can actually answer with, see
+each metadata provider can answer with, see
 <a href="../../../guide/downloading/#what-each-metadata-provider-supplies">What each metadata provider supplies</a>.</p>
 <table>
 <thead>
@@ -2204,7 +2204,7 @@ each metadata provider can actually answer with, see
 </table>
 <div class="admonition note">
 <p class="admonition-title">How <code>metadata_providers</code> is applied</p>
-<p>A lookup goes to each provider in turn and stops at the first good match, so the order
+<p>A lookup goes to each metadata provider in turn and stops at the first good match, so the order
 decides which source wins. <code>metadata_providers</code> sets that order:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">metadata_providers</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">tvdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">tmdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">simkl</span><span class="p p-Indicator">]</span>
 </span></code></pre></div>
@@ -2212,8 +2212,8 @@ decides which source wins. <code>metadata_providers</code> sets that order:</p>
 ignored with a warning. Leave it unset for the default order:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">metadata_providers</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">imdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">omdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">simkl</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">tmdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">tvdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">anilist</span><span class="p p-Indicator">]</span>
 </span></code></pre></div>
-<p>Whatever the order, unshackle skips a provider that has no API key. <code>imdb</code> and
-<code>anilist</code> need no key, so they are always available. Available names are <code>imdb</code>, <code>omdb</code>,
+<p>Whatever the order, unshackle skips a metadata provider that has no API key. <code>imdb</code> and
+<code>anilist</code> need no API key, so they are always available. Available names are <code>imdb</code>, <code>omdb</code>,
 <code>simkl</code>, <code>tmdb</code>, <code>tvdb</code>, and <code>anilist</code>. The old name <code>imdbapi</code> still works and is read as
 <code>imdb</code>.</p>
 <p><code>anilist</code> is last in the default order. It only answers for anime and returns nothing for
@@ -2235,18 +2235,18 @@ that is set, so you always get a title.</p>
 <div class="admonition note">
 <p class="admonition-title">What <code>disable_metadata</code> turns off</p>
 <p>With <code>disable_metadata: true</code>, unshackle never contacts a metadata provider on its own.
-The title search is dead, and that includes the keyless <code>imdb</code> provider. Titles, years and
+The title search is dead, and that includes the keyless <code>imdb</code> metadata provider. Titles, years and
 languages then come only from the service.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">disable_metadata</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 <p>An ID you give with <code>--tmdb</code>, <code>--imdb</code>, <code>--tvdb</code>, or <code>--anilist</code> is your permission to use
 that ID. That lookup still works. unshackle looks the ID up directly, cross references the other
-IDs from it, and <code>--enrich</code> still reads that source. Only the lookups you did not ask for
-are stopped.</p>
+IDs from it, and <code>--enrich</code> still reads that source. unshackle stops only the lookups you
+did not ask for.</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title">The <code>imdb</code> provider needs no key</p>
-<p>It replaces the earlier <code>imdbapi</code> provider, which read a third-party mirror
+<p>It replaces the earlier <code>imdbapi</code> metadata provider, which read a third-party mirror
 (api.tiffara.com) and needed the <code>imdb_api_enabled</code> switch. That option is gone: delete it
 from your config, where it is now ignored.</p>
 </div>
@@ -2254,26 +2254,26 @@ from your config, where it is now ignored.</p>
 <p class="admonition-title">A different order per title kind</p>
 <p>Give a map instead of one list when the best source differs by kind. TVDB is strongest on
 series, TMDB on films. There are two kinds, <code>tv</code> and <code>movie</code>, and this example sets both
-of them and names every provider, so nothing is left to the default:</p>
+of them and names every metadata provider, so nothing is left to the default:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">metadata_providers</span><span class="p">:</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">tv</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">tvdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">tmdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">simkl</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">imdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">omdb</span><span class="p p-Indicator">]</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">movie</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">tmdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">imdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">omdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">simkl</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">tvdb</span><span class="p p-Indicator">]</span>
 </span></code></pre></div>
-<p>Each list is independent: it both orders and filters that kind on its own, so a provider
-you leave out of <code>tv</code> is still used for <code>movie</code>. Here TVDB is tried first for a series and
-last for a film.</p>
+<p>Each list is independent: it both orders and filters that kind on its own, so unshackle
+still uses for <code>movie</code> a metadata provider you leave out of <code>tv</code>. Here unshackle tries TVDB
+first for a series and last for a film.</p>
 <p>You do not need to give both keys, or a full list in each. A kind you leave out uses the
 default order:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">metadata_providers</span><span class="p">:</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">tv</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">tvdb</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">tmdb</span><span class="p p-Indicator">]</span><span class="w">     </span><span class="c1"># movies keep the default order</span>
 </span></code></pre></div>
 <p><code>tv</code> covers every episode and <code>movie</code> covers every film. unshackle only looks up
-metadata for those two kinds, so any other key, such as <code>anime</code> or <code>music</code>, is ignored.</p>
+metadata for those two kinds, so unshackle ignores any other config key, such as <code>anime</code> or <code>music</code>.</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title"><code>ipinfo_api_key</code> never touches your service sessions</p>
-<p>The token is only ever sent to <code>api.ipinfo.io</code> as a per-request <code>Authorization</code> header; it
-is <strong>never</strong> attached to your service session, so it cannot leak to a streaming provider.
+<p>unshackle sends the token only to <code>api.ipinfo.io</code>, as a per-request <code>Authorization</code> header.
+It <strong>never</strong> goes on your service HTTP session, so it cannot leak to a streaming service.
 Lookups degrade gracefully through a fallback chain: the authenticated Lite endpoint (higher
 rate limits, and ASN/continent data, but no city or region) → anonymous ipinfo →
 <code>ip-api.in</code> as a last resort.</p>
@@ -2409,19 +2409,19 @@ result in <code>directories.cache/update_check.json</code>.</p>
 </table>
 <div class="admonition note">
 <p class="admonition-title">Effect of <code>set_terminal_bg</code></p>
-<p>When on, the theme's background colour is appended to the foreground styles, which makes
+<p>When on, unshackle appends the theme's background colour to the foreground styles, which makes
 the full colour palette render correctly on terminals whose <em>default</em> background differs
 from unshackle's theme. When off, such terminals can render the ASCII-art banner and
 coloured output incorrectly.</p>
 </div>
 <div class="admonition danger">
 <p class="admonition-title">Key exposure</p>
-<p>With <code>debug_keys</code> on, decryption content keys are written to the structured debug log at
+<p>With <code>debug_keys</code> on, unshackle writes the content keys to the structured debug log at
 INFO level during the DRM handshake. Treat <code>debug</code>, <code>debug_keys</code>, and the <code>unshackle_debug_*.jsonl</code> files as
 sensitive, and keep <code>redact_paths</code> enabled when sharing logs.</p>
 <p><code>debug_keys</code> affects <strong>only</strong> content-encryption keys (the <code>content_key</code>/<code>key</code> fields).
 Passwords, tokens, cookies, and session tokens are <strong>always</strong> redacted regardless of this
-setting, and KIDs, key counts, and other metadata are always logged either way.</p>
+setting, and KIDs, content key counts, and other metadata are always logged either way.</p>
 </div>
 <hr />
 <h2 id="deprecated-removed-keys">Deprecated &amp; removed keys<a class="headerlink" href="#deprecated-removed-keys" title="Permanent link">&para;</a></h2>

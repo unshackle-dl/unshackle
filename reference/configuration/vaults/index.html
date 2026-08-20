@@ -2002,9 +2002,9 @@
 <ul>
 <li><strong>Type:</strong> <code>list[dict]</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>[]</code></li>
 </ul>
-<p>An ordered list of key-vault backends. unshackle queries them in order and reuses content
-keys instead of re-licensing. Each entry needs a <code>type</code> (the backend module name) and a
-<code>name</code>, plus backend-specific keys.</p>
+<p>An ordered list of key-vault backends. unshackle queries them in order and reuses the
+content keys instead of licensing them again. Each entry needs a <code>type</code> (the backend module
+name) and a <code>name</code>, plus backend-specific keys.</p>
 <table>
 <thead>
 <tr>
@@ -2056,12 +2056,12 @@ keys instead of re-licensing. Each entry needs a <code>type</code> (the backend 
 <div class="admonition note">
 <p class="admonition-title">Per-entry options</p>
 <ul>
-<li><code>no_push: true</code> makes a vault read-only (keys are fetched but never written to it).</li>
+<li><code>no_push: true</code> makes a vault read-only (unshackle fetches content keys from it but never writes to it).</li>
 <li>A vault of <code>type: API</code> whose <code>name</code> contains <code>decrypt_labs</code> auto-fills its <code>token</code> from
   <a href="../misc/#external-api-keys"><code>decrypt_labs_api_key</code></a> when not set inline. Vault <code>type</code> values are
   case-sensitive module names.</li>
-<li>An all-zero content key (32 zeros) is treated as "no key" everywhere and is never
-  stored.</li>
+<li>unshackle treats an all-zero content key (32 zeros) as "no key" everywhere and never
+  stores it.</li>
 </ul>
 </div>
 <h2 id="vault_timeout"><code>vault_timeout</code><a class="headerlink" href="#vault_timeout" title="Permanent link">&para;</a></h2>

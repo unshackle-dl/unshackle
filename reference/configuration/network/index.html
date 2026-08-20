@@ -2023,7 +2023,7 @@
 <ul>
 <li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
 </ul>
-<p>TLS-fingerprinting and HTTP client settings for the rnet-based session.</p>
+<p>TLS-fingerprinting and HTTP client settings for the rnet-based HTTP session.</p>
 <table>
 <thead>
 <tr>
@@ -2140,24 +2140,24 @@ honours it (only when <code>network</code> is absent) but emits a <code>Deprecat
 <ul>
 <li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
 </ul>
-<p>Default HTTP headers merged into every session unshackle creates.</p>
+<p>Default HTTP headers merged into every HTTP session unshackle makes.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">headers</span><span class="p">:</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">Accept-Language</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en-US,en;q=0.9</span>
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Don't set <code>Accept-Encoding</code> (and similar) here</p>
 <p>Compatibility headers such as <code>Accept-Encoding</code> are set by the rnet HTTP backend as part of
-its browser-impersonation profile; overriding them breaks the impersonation fingerprint.
-This block is for cross-service defaults only (for example <code>Accept-Language</code>,
-<code>User-Agent</code>); per-service headers belong in that service's own config.</p>
+its browser-impersonation profile. If you override them, you break the impersonation
+fingerprint. This block is for cross-service defaults only (for example <code>Accept-Language</code>,
+<code>User-Agent</code>). Per-service headers belong in that service's own config.</p>
 </div>
 <h2 id="proxy_providers"><code>proxy_providers</code><a class="headerlink" href="#proxy_providers" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
 </ul>
-<p>Proxy/VPN provider configuration. Each sub-key names a provider, and its block is passed
-straight to that provider's constructor. See <a href="../../../guide/proxies-and-vpn/">Proxies &amp; VPN</a> for
-the full provider guide. Recognised providers and their exit ports:</p>
+<p>Proxy/VPN provider configuration. Each sub-key names a proxy provider, and unshackle passes its
+block straight to that provider's constructor. See <a href="../../../guide/proxies-and-vpn/">Proxies &amp; VPN</a>
+for the full proxy provider guide. Recognised proxy providers and their exit ports:</p>
 <table>
 <thead>
 <tr>

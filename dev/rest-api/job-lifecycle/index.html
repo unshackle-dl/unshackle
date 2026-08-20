@@ -1776,15 +1776,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#under-the-hood-the-workermanager-model" class="md-nav__link">
+  <a href="#under-the-hood-the-job-worker-and-manager-model" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Under the hood: the worker/manager model
+        Under the hood: the job worker and manager model
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Under the hood: the worker/manager model">
+    <nav class="md-nav" aria-label="Under the hood: the job worker and manager model">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1821,10 +1821,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#how-cancellation-actually-works" class="md-nav__link">
+  <a href="#how-cancellation-works" class="md-nav__link">
     <span class="md-ellipsis">
       
-        How cancellation actually works
+        How cancellation works
       
     </span>
   </a>
@@ -2331,15 +2331,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#under-the-hood-the-workermanager-model" class="md-nav__link">
+  <a href="#under-the-hood-the-job-worker-and-manager-model" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Under the hood: the worker/manager model
+        Under the hood: the job worker and manager model
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Under the hood: the worker/manager model">
+    <nav class="md-nav" aria-label="Under the hood: the job worker and manager model">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2376,10 +2376,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#how-cancellation-actually-works" class="md-nav__link">
+  <a href="#how-cancellation-works" class="md-nav__link">
     <span class="md-ellipsis">
       
-        How cancellation actually works
+        How cancellation works
       
     </span>
   </a>
@@ -2435,22 +2435,22 @@
 
 <h1 id="download-job-lifecycle">Download Job Lifecycle<a class="headerlink" href="#download-job-lifecycle" title="Permanent link">&para;</a></h1>
 <p>When you submit a download over the REST API, the server does not block the request
-until the file is written. Instead it creates a <strong>job</strong>, hands it back to you with an
+until it writes the file. Instead it creates a <strong>job</strong>, hands it back to you with an
 ID, and works through it in the background. Everything you do afterwards (watching
 progress, cancelling, retrying, reading the result) is done by referring to that job
 ID.</p>
-<p>This page explains the states a job moves through, how live progress is reported, how
-to cancel or retry, and, in clearly marked developer sections, how the worker and
-manager behind the queue actually run the download.</p>
+<p>This page explains the states a job moves through, how the server reports live
+progress, and how to cancel or retry. Clearly marked developer sections tell you how
+the job worker and the manager behind the queue operate the download.</p>
 <div class="admonition info">
 <p class="admonition-title">Who this page is for</p>
 <p>The first half is for anyone driving the API: the states, the fields you can read,
 and the calls that move a job around. The <strong>Under the hood</strong> sections near the end
-describe the internal worker/manager model and are aimed at contributors and people
-debugging the server. You do not need them to use the API.</p>
+give the internal job worker and manager model, for contributors and for people
+who debug the server. You do not need them to use the API.</p>
 </div>
 <p>For the full request and response shape of each endpoint, see
-<a href="../endpoints/">Endpoints</a>. For how errors are reported, see
+<a href="../endpoints/">Endpoints</a>. For how the server reports errors, see
 <a href="../errors/">Error Responses</a>.</p>
 <h2 id="the-five-states">The five states<a class="headerlink" href="#the-five-states" title="Permanent link">&para;</a></h2>
 <p>A job is always in exactly one of five states, exposed as the <code>status</code> field:</p>
@@ -2464,11 +2464,11 @@ debugging the server. You do not need them to use the API.</p>
 <tbody>
 <tr>
 <td><code>queued</code></td>
-<td>Created and waiting for a free worker. No download has started yet.</td>
+<td>Created and waiting for a free job worker. No download has started yet.</td>
 </tr>
 <tr>
 <td><code>downloading</code></td>
-<td>A worker has picked the job up and the download is in progress.</td>
+<td>A job worker has picked the job up and the download is in progress.</td>
 </tr>
 <tr>
 <td><code>completed</code></td>
@@ -2485,8 +2485,8 @@ debugging the server. You do not need them to use the API.</p>
 </tbody>
 </table>
 <p>The last three (<code>completed</code>, <code>failed</code>, and <code>cancelled</code>) are <strong>terminal</strong>: once a
-job reaches one of them it never changes state again. Terminal jobs can be removed,
-retried, or read from history, but they will not resume.</p>
+job reaches one of them it never changes state again. You can remove, retry, or read
+terminal jobs from history, but they will not resume.</p>
 <h2 id="how-a-job-moves-between-states">How a job moves between states<a class="headerlink" href="#how-a-job-moves-between-states" title="Permanent link">&para;</a></h2>
 <pre class="mermaid"><code>stateDiagram-v2
     [*] --&gt; queued: POST /api/download
@@ -2506,7 +2506,7 @@ retried, or read from history, but they will not resume.</p>
 <ul>
 <li><strong><code>queued</code> → <code>downloading</code></strong> happens automatically. As soon as one of the server's
   workers is free, it takes the next job off the queue and starts it. You do not
-  trigger this; you only observe it.</li>
+  trigger this. You only observe it.</li>
 <li><strong><code>downloading</code> → <code>completed</code></strong> is the happy path: the download engine wrote all the
   requested files and reported success.</li>
 <li><strong><code>downloading</code> → <code>failed</code></strong> is any error during the download: a service failure, a
@@ -2520,11 +2520,11 @@ retried, or read from history, but they will not resume.</p>
 <div class="admonition note">
 <p class="admonition-title">Priority does not change status</p>
 <p>Moving a job to the front of the queue with the priority endpoint reorders <em>when</em>
-it will start, but it stays <code>queued</code> until a worker actually picks it up. It is not
+it will start, but it stays <code>queued</code> until a job worker picks it up. It is not
 a state change.</p>
 </div>
 <h2 id="creating-a-job">Creating a job<a class="headerlink" href="#creating-a-job" title="Permanent link">&para;</a></h2>
-<p>A download is queued with <code>POST /api/download</code>. The request needs at least a <code>service</code>
+<p>You queue a download with <code>POST /api/download</code>. The request needs at least a <code>service</code>
 and a <code>title_id</code>, plus any download options you want to set. On success the server
 replies with <strong><code>202 Accepted</code></strong> and the new job's identity:</p>
 <div class="language-shell highlight"><span class="filename">Queue a download</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://127.0.0.1:8786/api/download<span class="w"> </span><span class="se">\</span>
@@ -2543,14 +2543,15 @@ replies with <strong><code>202 Accepted</code></strong> and the new job's identi
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">"created_time"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-07-03T12:00:00.000000"</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="p">}</span>
 </span></code></pre></div>
-<p>The job starts in <code>queued</code>. Workers auto-start on the first job submitted, so there is
-nothing else to switch on. Keep the <code>job_id</code>; every later call is addressed to it.</p>
+<p>The job starts in <code>queued</code>. The job workers auto-start on the first job you submit, so
+you switch nothing else on. Keep the <code>job_id</code>. Every later call uses it.</p>
 <div class="admonition tip">
 <p class="admonition-title">The full parameter set</p>
 <p><code>POST /api/download</code> accepts the same download options as the <code>dl</code> command
 (quality, codecs, language selection, <code>wanted</code> episode ranges, and many more), with
-server-side defaults filling in anything you omit. The complete list, their
-defaults, and validation rules are documented on the <a href="../endpoints/">Endpoints</a> page.</p>
+server-side defaults filling in anything you do not write. The
+<a href="../endpoints/">Endpoints</a> page gives the complete list, their defaults, and the
+validation rules.</p>
 </div>
 <h2 id="reading-a-jobs-status-and-progress">Reading a job's status and progress<a class="headerlink" href="#reading-a-jobs-status-and-progress" title="Permanent link">&para;</a></h2>
 <p>There are two ways to look at jobs.</p>
@@ -2571,7 +2572,7 @@ single-job endpoint for every job.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>curl<span class="w"> </span><span class="s2">"http://127.0.0.1:8786/api/download/jobs?status=downloading&amp;sort_by=progress&amp;sort_order=desc"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"X-Secret-Key: your-api-secret"</span>
 </span></code></pre></div>
-<p>The list can be filtered by <code>status</code> and <code>service</code>, and ordered with <code>sort_by</code>
+<p>You can filter the list by <code>status</code> and <code>service</code>, and order it with <code>sort_by</code>
 (<code>created_time</code>, <code>started_time</code>, <code>completed_time</code>, <code>progress</code>, <code>status</code>, or
 <code>service</code>) and <code>sort_order</code> (<code>asc</code> / <code>desc</code>). See <a href="../endpoints/">Endpoints</a> for the
 query-parameter reference.</p>
@@ -2670,7 +2671,7 @@ full detail:</p>
 <div class="admonition tip">
 <p class="admonition-title">Or subscribe instead of polling</p>
 <p><code>GET /api/download/jobs/{job_id}/events</code> pushes the same job object as Server-Sent
-Events, and closes the stream when the job ends. See
+Events, and closes the event stream when the job ends. See
 <a href="../endpoints/#get-apidownloadjobsjob_idevents">Endpoints</a>.</p>
 </div>
 <div class="admonition note">
@@ -2692,13 +2693,13 @@ batch as a whole. To derive true overall completion, compare the growing
 <h2 id="terminal-states-in-detail">Terminal states in detail<a class="headerlink" href="#terminal-states-in-detail" title="Permanent link">&para;</a></h2>
 <h3 id="completed">Completed<a class="headerlink" href="#completed" title="Permanent link">&para;</a></h3>
 <p>A <code>completed</code> job has its <code>output_files</code> populated with the paths of the muxed
-results, and <code>progress</code> is <code>100</code>. This is the state you are waiting for.</p>
+results, and <code>progress</code> is <code>100</code>. This is the state you want.</p>
 <h3 id="failed">Failed<a class="headerlink" href="#failed" title="Permanent link">&para;</a></h3>
 <p>A <code>failed</code> job carries the error. <code>error_message</code> is the short human message,
 <code>error_code</code> is one of the API's structured error codes (for example <code>NETWORK_ERROR</code>,
 <code>DRM_ERROR</code>, <code>AUTH_FAILED</code>, or <code>DOWNLOAD_ERROR</code>), and <code>error_details</code> gives more
-context. When the server was started with <code>--debug-api</code>, <code>error_traceback</code> and
-<code>worker_stderr</code> are also filled in for diagnosis.</p>
+context. When you start the server with <code>--debug-api</code>, <code>error_traceback</code> and
+<code>worker_stderr</code> are also filled in, to help you find the cause.</p>
 <div class="admonition tip">
 <p class="admonition-title">Secrets are scrubbed from error text</p>
 <p>A service can echo a credential or a proxy URL into its output. The server masks
@@ -2708,8 +2709,8 @@ and <code>worker_stderr</code> before returning them, so it is safe to log these
 <p>The error-code catalogue and how each maps to an HTTP status is on the
 <a href="../errors/">Error Responses</a> page.</p>
 <h3 id="cancelled">Cancelled<a class="headerlink" href="#cancelled" title="Permanent link">&para;</a></h3>
-<p>A <code>cancelled</code> job was stopped on request before finishing. It may have partial output,
-but it is not considered complete. See below.</p>
+<p>The server stopped a <code>cancelled</code> job on request, before it finished. It may have
+partial output, but it is not considered complete. See below.</p>
 <h2 id="cancelling-a-job">Cancelling a job<a class="headerlink" href="#cancelling-a-job" title="Permanent link">&para;</a></h2>
 <p>Send <code>DELETE /api/download/jobs/{job_id}</code>. The behaviour depends on the job's current
 state, and this is important because the response differs:</p>
@@ -2745,7 +2746,7 @@ both stops in-flight work and tidies up afterwards.</p>
 <div class="admonition warning">
 <p class="admonition-title">Do not parse the body of a 204</p>
 <p>Removing a terminal job returns <code>204 No Content</code> with an empty body. A client must
-not try to decode JSON from it; check the status code first.</p>
+not try to decode JSON from it. Examine the status code first.</p>
 </div>
 <div class="language-shell highlight"><span class="filename">Cancel a running job</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>curl<span class="w"> </span>-X<span class="w"> </span>DELETE<span class="w"> </span>http://127.0.0.1:8786/api/download/jobs/b1e6c7de-6d0a-4f2f-9d1e-3a2b4c5d6e7f<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"X-Secret-Key: your-api-secret"</span>
@@ -2754,14 +2755,15 @@ not try to decode JSON from it; check the status code first.</p>
 which returns <code>{"removed": &lt;count&gt;}</code>.</p>
 <h2 id="retrying-a-job">Retrying a job<a class="headerlink" href="#retrying-a-job" title="Permanent link">&para;</a></h2>
 <p><code>POST /api/download/jobs/{job_id}/retry</code> re-runs a finished job by creating a <strong>new</strong>
-job with the same service, title, and parameters. The original job is untouched and
-stays in its terminal state; the response gives you the new job's ID with <code>202</code>.</p>
+job with the same service, title, and parameters. The retry does not change the
+original job. It stays in its terminal state, and the response gives you the new job's
+ID with <code>202</code>.</p>
 <ul>
-<li>Only terminal jobs can be retried. Retrying a <code>queued</code> or <code>downloading</code> job returns
+<li>You can retry only terminal jobs. A retry of a <code>queued</code> or <code>downloading</code> job returns
   <code>409</code> with error code <code>CONFLICT</code>.</li>
 <li>A missing job returns <code>404</code> (<code>JOB_NOT_FOUND</code>).</li>
-<li>The service allowlist and any download gates are re-checked for the new job, exactly
-  as they were for the original submission, so a retry can be rejected with
+<li>The server examines the service allowlist and any download gates again for the new
+  job, exactly as for the original submission. Thus the server can reject a retry with
   <code>INVALID_SERVICE</code> or <code>FORBIDDEN</code> if permissions changed.</li>
 </ul>
 <div class="language-json highlight"><span class="filename">202 Accepted, a fresh job</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span>
@@ -2772,35 +2774,36 @@ stays in its terminal state; the response gives you the new job's ID with <code>
 </span></code></pre></div>
 <h2 id="prioritising-a-job">Prioritising a job<a class="headerlink" href="#prioritising-a-job" title="Permanent link">&para;</a></h2>
 <p><code>POST /api/download/jobs/{job_id}/priority</code> moves a <strong>queued</strong> job to the front of the
-line, so it will be the next one a free worker picks up.</p>
+line, so it will be the next one a free job worker picks up.</p>
 <ul>
 <li>The job must be <code>queued</code>. Prioritising a job in any other state returns <code>409</code>
-  (<code>CONFLICT</code>); a missing job returns <code>404</code>.</li>
+  (<code>CONFLICT</code>). A missing job returns <code>404</code>.</li>
 <li>On success the response is <code>{"job_id": "&lt;id&gt;", "position": "front"}</code>.</li>
 </ul>
-<p>This only reorders the queue; the job's status stays <code>queued</code> until a worker starts
-it.</p>
+<p>This only reorders the queue. The job's status stays <code>queued</code> until a job worker
+starts it.</p>
 <h2 id="history-and-retention">History and retention<a class="headerlink" href="#history-and-retention" title="Permanent link">&para;</a></h2>
-<p>Every job that reaches a terminal state is also written once to a persistent history
-log, so it survives even after the job is removed from the live list.</p>
+<p>The server also writes every job that reaches a terminal state once to a persistent
+history log. The job survives there even after the server removes it from the live
+list.</p>
 <ul>
-<li>Read it with <code>GET /api/history</code> (newest first; supports <code>limit</code> and <code>service</code>
+<li>Read it with <code>GET /api/history</code> (newest first, with <code>limit</code> and <code>service</code>
   filters).</li>
 <li>Delete a single entry with <code>DELETE /api/history/{job_id}</code> (returns <code>204</code>).</li>
 </ul>
 <p>The live in-memory jobs are separate from this on-disk history. A background cleanup
 task periodically drops old terminal jobs from the live list based on a retention
-period; the history file keeps them for later reference. See <a href="../endpoints/">Endpoints</a>
+period. The history file keeps them for later reference. See <a href="../endpoints/">Endpoints</a>
 for the history response shape.</p>
 <div class="admonition note">
 <p class="admonition-title">Why the history file lives under the cache directory</p>
-<p><code>api_history.jsonl</code> is placed under the cache directory on purpose, so it stays out
-of the config/data tree. It is disposable runtime state, not user configuration or
+<p>unshackle puts <code>api_history.jsonl</code> under the cache directory on purpose, so it
+stays out of the config/data tree. It is disposable runtime state, not user configuration or
 curated data, which is exactly why clearing the cache is a safe operation against
 it.</p>
 </div>
 <hr />
-<h2 id="under-the-hood-the-workermanager-model">Under the hood: the worker/manager model<a class="headerlink" href="#under-the-hood-the-workermanager-model" title="Permanent link">&para;</a></h2>
+<h2 id="under-the-hood-the-job-worker-and-manager-model">Under the hood: the job worker and manager model<a class="headerlink" href="#under-the-hood-the-job-worker-and-manager-model" title="Permanent link">&para;</a></h2>
 <div class="admonition info">
 <p class="admonition-title">Developer section</p>
 <p>Everything below describes server internals. It is useful for contributors and for
@@ -2809,19 +2812,19 @@ anyone debugging the server, but it is not needed to <em>use</em> the API.</p>
 <h3 id="the-manager-and-its-queue">The manager and its queue<a class="headerlink" href="#the-manager-and-its-queue" title="Permanent link">&para;</a></h3>
 <p>A single process-wide <strong>download queue manager</strong> owns all jobs. It holds them in
 memory keyed by ID, backs the wait list with a FIFO queue, and keeps a separate
-priority deque for jobs that have been bumped to the front. On the first job, it starts
-a fixed pool of worker tasks plus one cleanup task; starting is idempotent, so later
-jobs reuse the same pool.</p>
+priority deque for the jobs it bumped to the front. On the first job, it starts
+a fixed pool of job worker tasks plus one cleanup task. The start is idempotent, so
+later jobs reuse the same pool.</p>
 <ul>
-<li><strong>Concurrency</strong> is capped by <code>max_concurrent_downloads</code> (default <strong>2</strong>). That many
-  jobs can be in <code>downloading</code> at once; the rest wait in <code>queued</code>.</li>
-<li><strong>Retention</strong> is governed by <code>job_retention_hours</code> (default <strong>24</strong>). An hourly
+<li><strong>Concurrency</strong>: <code>max_concurrent_downloads</code> (default <strong>2</strong>) caps it. That many
+  jobs can be in <code>downloading</code> at once. The rest wait in <code>queued</code>.</li>
+<li><strong>Retention</strong>: <code>job_retention_hours</code> (default <strong>24</strong>) controls it. An hourly
   cleanup task removes terminal jobs whose completion time (or, if never started,
   creation time) is older than the retention window.</li>
 </ul>
 <div class="admonition note">
 <p class="admonition-title">Two concurrency knobs that are easy to conflate</p>
-<p><code>max_concurrent_downloads</code> caps how many separate download <strong>jobs</strong> run at once.
+<p><code>max_concurrent_downloads</code> caps how many separate download <strong>jobs</strong> operate at once.
 The separate <code>serve.downloads</code> setting controls how many <strong>tracks</strong> download in
 parallel <em>within</em> a single job. They are independent, and raising one does not affect
 the other.</p>
@@ -2831,53 +2834,53 @@ the other.</p>
 <p>The manager reads these as top-level config attributes
 (<code>config.max_concurrent_downloads</code> and <code>config.download_job_retention_hours</code>).
 Those keys are not part of the standard config schema, so in practice the built-in
-defaults of <strong>2</strong> and <strong>24</strong> apply. The live values are surfaced by
-<a href="../endpoints/"><code>GET /api/config</code></a>. The related <code>serve.history_limit</code> (default
+defaults of <strong>2</strong> and <strong>24</strong> apply. <a href="../endpoints/"><code>GET /api/config</code></a> gives the
+live values. The related <code>serve.history_limit</code> (default
 <strong>100</strong>) instead controls how many entries the on-disk history file keeps.</p>
 </div>
-<p>Each worker loop drains the priority deque first, then the FIFO queue. A job that was
-promoted has its stale FIFO copy skipped so it does not run twice. When a worker takes
-a job it flips it to <code>downloading</code>, stamps <code>started_time</code>, runs it, and on finish
-stamps <code>completed_time</code> and records history.</p>
+<p>Each job worker loop drains the priority deque first, then the FIFO queue. The loop
+skips the stale FIFO copy of a promoted job, so it does not do the job twice. When
+a job worker takes a job it flips it to <code>downloading</code>, stamps <code>started_time</code>, does the
+download, and on finish stamps <code>completed_time</code> and records history.</p>
 <h3 id="each-job-runs-in-its-own-subprocess">Each job runs in its own subprocess<a class="headerlink" href="#each-job-runs-in-its-own-subprocess" title="Permanent link">&para;</a></h3>
-<p>The manager does <strong>not</strong> run the download in the server's event loop or even in the
+<p>The manager does <strong>not</strong> operate the download in the server's event loop or even in the
 server process. For each job it spawns a separate Python subprocess:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>python -m unshackle.core.api.download_worker &lt;payload.json&gt; &lt;result.json&gt; &lt;progress.json&gt;
 </span></code></pre></div>
-<p>Three temporary files bridge the parent and the worker:</p>
+<p>Three temporary files bridge the parent and the job worker:</p>
 <ul>
-<li><strong><code>payload.json</code></strong>: written by the manager before launch; contains the job ID,
+<li><strong><code>payload.json</code></strong>: the manager writes it before launch. It contains the job ID,
   service, title ID, and merged parameters.</li>
-<li><strong><code>progress.json</code></strong>: written continuously by the worker as the download proceeds.</li>
-<li><strong><code>result.json</code></strong>: written by the worker at the end.</li>
+<li><strong><code>progress.json</code></strong>: the job worker writes it continuously as the download proceeds.</li>
+<li><strong><code>result.json</code></strong>: the job worker writes it at the end.</li>
 </ul>
 <p>Running each download out-of-process isolates the server from crashes, memory growth,
 and blocking work inside the download engine, and makes hard cancellation (killing the
 process) reliable.</p>
-<p>The worker's exit codes are <code>0</code> for success, <code>1</code> for a download error, and <code>2</code> for bad
+<p>The job worker's exit codes are <code>0</code> for success, <code>1</code> for a download error, and <code>2</code> for bad
 arguments. Its <code>result.json</code> is either <code>{"status": "success", "output_files": [...]}</code>
 or <code>{"status": "error", "message", "error_details", "error_code", "traceback"}</code>. If the
 process exits non-zero, or the result is missing or not a success, the parent marks the
-job <code>failed</code> and adopts the worker's <code>error_code</code> (or derives one by categorising the
+job <code>failed</code> and adopts the job worker's <code>error_code</code> (or derives one by categorising the
 exception).</p>
 <h3 id="how-progress-reaches-the-api">How progress reaches the API<a class="headerlink" href="#how-progress-reaches-the-api" title="Permanent link">&para;</a></h3>
-<p>While the worker runs, the manager polls <code>progress.json</code> every <strong>0.5 s</strong> and copies the
+<p>While the job worker operates, the manager polls <code>progress.json</code> every <strong>0.5 s</strong> and copies the
 fields it finds onto the live <code>DownloadJob</code>. That is what the <code>GET</code> endpoints return.</p>
-<p>Inside the worker, progress is aggregated across all selected tracks. Each track's
-completion fraction is weighted by its bitrate, so video and audio dominate the bar and
-subtitles barely move it (subtitles get a small fixed weight). Track fractions are kept
-<strong>monotonic</strong>: the percentage only ever climbs. The download portion is scaled to fill
-<code>0</code> to <code>90</code>; the remaining <code>90</code> to <code>100</code> is driven by the download engine as it repackages
-and muxes. A track counts as done when it reaches a terminal state such as
+<p>The job worker aggregates progress across all selected tracks. It weights each track's
+completion fraction by its bitrate, so video and audio dominate the bar and subtitles
+barely move it (subtitles get a small fixed weight). Track fractions are kept
+<strong>monotonic</strong>: the percentage only ever climbs. The job worker scales the download
+portion to fill <code>0</code> to <code>90</code>. The download engine drives the remaining <code>90</code> to <code>100</code> as
+it repackages and muxes. A track counts as done when it reaches a terminal state such as
 <code>Downloaded</code>, <code>Decrypted</code>, or a skipped subtitle.</p>
-<h3 id="how-cancellation-actually-works">How cancellation actually works<a class="headerlink" href="#how-cancellation-actually-works" title="Permanent link">&para;</a></h3>
+<h3 id="how-cancellation-works">How cancellation works<a class="headerlink" href="#how-cancellation-works" title="Permanent link">&para;</a></h3>
 <p>Each job carries a cancellation event. When you <code>DELETE</code> a live job:</p>
 <ul>
-<li>If it is <strong><code>queued</code></strong>, it flips straight to <code>cancelled</code>, its history is recorded
-  immediately (it never reaches a worker), and the worker loop skips it if it later
-  pops it off the queue.</li>
+<li>If it is <strong><code>queued</code></strong>, it flips straight to <code>cancelled</code>, the manager records its
+  history immediately (it never reaches a job worker), and the job worker loop skips it
+  if it later pops it off the queue.</li>
 <li>If it is <strong><code>downloading</code></strong>, the manager sets the cancellation event and flips the job
-  to <code>cancelled</code>. The polling loop notices the event, <code>terminate()</code>s the worker
+  to <code>cancelled</code>. The polling loop notices the event, <code>terminate()</code>s the job worker
   subprocess (escalating to <code>kill()</code> if it does not exit within 5 seconds), and raises
   a cancellation so the task unwinds. The subprocess model is what makes this a clean,
   immediate stop rather than a cooperative one.</li>
@@ -2886,11 +2889,11 @@ and muxes. A track counts as done when it reaches a terminal state such as
 <p>Job parameters may carry secrets: a raw <code>user:pass</code> credential, or a proxy URL with
 embedded userinfo. Whenever the manager serializes a job (for an API response or the
 history file), it masks the sensitive keys (<code>credential</code>, <code>credentials</code>, <code>password</code>,
-<code>token</code>, <code>api_key</code>) and strips userinfo from proxy URLs. Free-text fields that a
-service might have leaked a secret into (<code>error_message</code>, <code>error_details</code>,
-<code>error_traceback</code>, <code>worker_stderr</code>, and worker stdout/stderr in the logs) are scrubbed
-of the job's known secret values, longest-match first, before they are ever returned or
-logged.</p>
+<code>token</code>, <code>api_key</code>) and strips userinfo from proxy URLs. The manager also scrubs
+free-text fields that a service might have leaked a secret into (<code>error_message</code>,
+<code>error_details</code>, <code>error_traceback</code>, <code>worker_stderr</code>, and job worker stdout/stderr in the
+logs). It removes the job's known secret values, longest-match first, before it returns
+or logs them.</p>
 <h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../endpoints/">Endpoints</a>: the full request/response reference for every job endpoint.</li>

@@ -2429,27 +2429,27 @@
 
 
 <h1 id="proxies-vpn">Proxies &amp; VPN<a class="headerlink" href="#proxies-vpn" title="Permanent link">&para;</a></h1>
-<p>Most streaming services are geo-restricted, region-priced, or simply refuse to hand
+<p>Most streaming services are geo-restricted, region-priced, or refuse to hand
 over a manifest from the "wrong" country. unshackle routes its traffic through a proxy
 so the service sees the location you choose instead of your own. You can point it at a
 single proxy URL, or configure one of several <strong>proxy providers</strong> (commercial VPNs and
 self-hosted tunnels), then ask for a country by its two-letter code and let
 unshackle pick a working server for you.</p>
-<p>The <code>--proxy</code> flag controls proxying, and a query is resolved to a real proxy URL by the
-providers unshackle supports: <a href="#basic-static-proxies">basic static proxies</a>,
+<p>The <code>--proxy</code> flag controls proxying, and the proxy providers unshackle supports change
+a query to a real proxy URL: <a href="#basic-static-proxies">basic static proxies</a>,
 <a href="#gluetun">Gluetun</a> (documented in the most detail, since it is the most flexible),
 <a href="#expressvpn">ExpressVPN</a>, <a href="#nordvpn">NordVPN</a>, <a href="#proton-vpn">Proton VPN</a>,
 <a href="#hola">Hola</a>, <a href="#surfshark">Surfshark</a>, and <a href="#windscribe">Windscribe</a>.</p>
 <div class="admonition note">
 <p class="admonition-title">Where proxies are configured</p>
-<p>All provider configuration lives under the top-level <code>proxy_providers:</code> key in your
-<code>unshackle.yaml</code>. Each provider has its own sub-key, and the keys inside it map
-directly onto that provider's settings. See the
+<p>All proxy provider configuration lives under the top-level <code>proxy_providers:</code>
+config key in your <code>unshackle.yaml</code>. Each proxy provider has its own sub-key, and
+the config keys inside it map directly onto that proxy provider's settings. See the
 <a href="../../getting-started/configuration-file/">Configuration file</a> page for where the
-file lives and how it is loaded.</p>
+file lives and how unshackle loads it.</p>
 </div>
 <h2 id="the-proxy-flag">The <code>--proxy</code> flag<a class="headerlink" href="#the-proxy-flag" title="Permanent link">&para;</a></h2>
-<p>Proxying is controlled at download time by three options on the <code>dl</code> command:</p>
+<p>Three options on the <code>dl</code> command control proxying at download time:</p>
 <table>
 <thead>
 <tr>
@@ -2480,13 +2480,13 @@ file lives and how it is loaded.</p>
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Set a default proxy in config</p>
-<p>Like every <code>dl</code> flag, <code>--proxy</code> can be given a default in your configuration so you
+<p>Like every <code>dl</code> flag, you can give <code>--proxy</code> a default in your configuration, so you
 do not have to pass it on every command. See
 <a href="../downloading/">Downloading</a> for how <code>dl</code> options and config defaults interact.</p>
 </div>
 <h3 id="-no-proxy-download"><code>--no-proxy-download</code><a class="headerlink" href="#-no-proxy-download" title="Permanent link">&para;</a></h3>
 <p>Segment downloads are usually the largest share of traffic, and a residential-grade VPN
-proxy is often the slowest link in the chain. <code>--no-proxy-download</code> lets you keep the
+proxy is frequently the slowest part of the chain. <code>--no-proxy-download</code> lets you keep the
 proxy where it matters (passing the geo-check for the manifest and the licence) while
 pulling the files themselves over your normal connection at full speed.</p>
 <div class="language-shell highlight"><span class="filename">Proxy the manifest and licence, download segments direct</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>gb<span class="w"> </span>--no-proxy-download<span class="w"> </span>EXAMPLE<span class="w"> </span>10a1234
@@ -2499,8 +2499,8 @@ cause segment fetches to fail or return the wrong region. If downloads break wit
 <code>--no-proxy-download</code>, remove it.</p>
 </div>
 <h2 id="how-proxy-resolution-works">How proxy resolution works<a class="headerlink" href="#how-proxy-resolution-works" title="Permanent link">&para;</a></h2>
-<p>The value you pass to <code>--proxy</code> is interpreted in one of three ways. unshackle checks
-them in order.</p>
+<p>unshackle interprets the value you pass to <code>--proxy</code> in one of three ways. It tries
+them in this order.</p>
 <pre class="mermaid"><code>flowchart TD
     A["--proxy value"] --&gt; B{"Looks like a URI?&lt;br/&gt;http:// https:// socks"}
     B -- yes --&gt; C["Use it verbatim"]
@@ -2508,48 +2508,50 @@ them in order.</p>
     D -- yes --&gt; E["Ask that one provider&lt;br/&gt;for the query"]
     D -- no --&gt; F["Ask every provider in order,&lt;br/&gt;first match wins"]</code></pre>
 <ol>
-<li><strong>An explicit URI.</strong> Anything shaped like <code>http://...</code>, <code>https://...</code>, or a <code>socks...</code>
-   URI is used exactly as given. unshackle logs <code>Using explicit Proxy: ...</code> and does no
-   lookup.</li>
+<li><strong>An explicit URI.</strong> unshackle uses anything shaped like <code>http://...</code>,
+   <code>https://...</code>, or a <code>socks...</code> URI exactly as you give it. unshackle logs
+   <code>Using explicit Proxy: ...</code> and does no lookup.</li>
 <li><strong>A provider-prefixed query</strong>: <code>provider:query</code>, for example <code>nordvpn:us</code> or
-   <code>gluetun:windscribe:us</code>. unshackle finds the provider whose name matches the prefix
-   (case-insensitive) and asks <em>only</em> that provider to resolve the remainder. If no such
-   provider is loaded, or it returns no proxy, the download errors.</li>
+   <code>gluetun:windscribe:us</code>. unshackle finds the proxy provider whose name matches
+   the prefix (case-insensitive). It then asks <em>only</em> that proxy provider to find a
+   proxy for the remainder. If unshackle loads no such proxy provider, or if that
+   proxy provider returns no proxy, the download errors.</li>
 <li><strong>A bare query</strong>: a region like <code>us</code>, <code>gb</code>, <code>us:seattle</code>, or <code>us1234</code>. unshackle
-   asks each loaded provider <strong>in order</strong> and uses the first proxy any of them returns.</li>
+   asks each loaded proxy provider <strong>in order</strong> and uses the first proxy any of them
+   returns.</li>
 </ol>
-<p>The query is matched against a region grammar (a two-letter country code, optionally
-followed by a server number and/or a <code>:city</code> or <code>-city</code> part), lowercased, and then
-handed to the provider. The exact forms each provider accepts are documented in its
-section below.</p>
+<p>unshackle compares the query against a region grammar: a two-letter country code,
+optionally followed by a server number and/or a <code>:city</code> or <code>-city</code> part. It then
+lowercases the query and hands it to the proxy provider. Its section below gives the
+exact forms each proxy provider accepts.</p>
 <h3 id="provider-load-order">Provider load order<a class="headerlink" href="#provider-load-order" title="Permanent link">&para;</a></h3>
-<p>When you run a download without <code>--no-proxy</code>, unshackle instantiates every configured
-provider once, in this fixed order, and that same order is used for bare-query
+<p>When you do a download without <code>--no-proxy</code>, unshackle instantiates every configured
+proxy provider once, in this fixed order. It uses that same order for bare-query
 resolution:</p>
 <p><strong>Basic → ExpressVPN → NordVPN → Proton VPN → Surfshark → Windscribe → Gluetun → Hola</strong></p>
-<p>So if you have both Basic and NordVPN configured and run <code>--proxy us</code>, a <code>us</code> entry in
-your Basic config wins because Basic is tried first. To skip ahead to a specific
-provider, prefix the query (<code>--proxy nordvpn:us</code>).</p>
+<p>So if you have both Basic and NordVPN configured and use <code>--proxy us</code>, a <code>us</code> entry in
+your Basic config wins, because unshackle tries Basic first. To skip ahead to a specific
+proxy provider, prefix the query (<code>--proxy nordvpn:us</code>).</p>
 <div class="admonition note">
 <p class="admonition-title">Auto-loading providers</p>
 <p>Most providers only load when you configure them under <code>proxy_providers:</code>. Three are
-special: <strong>ExpressVPN</strong> and <strong>Proton VPN</strong> also load automatically once their cached
-session file exists on disk (even with no YAML), and <strong>Hola</strong> loads automatically
+special: <strong>ExpressVPN</strong> and <strong>Proton VPN</strong> also load automatically once their cache
+file exists on disk (even with no YAML), and <strong>Hola</strong> loads automatically
 whenever the <code>hola-proxy</code> binary is found on your <code>PATH</code>.</p>
 </div>
 <h3 id="connection-feedback">Connection feedback<a class="headerlink" href="#connection-feedback" title="Permanent link">&para;</a></h3>
-<p>After a provider resolves a query, unshackle prints a line so you can confirm
+<p>After a proxy provider resolves a query, unshackle prints a line so you can see
 where you came out:</p>
 <ul>
 <li><strong>Gluetun</strong> reports the verified exit IP, country, and city of the container.</li>
 <li><strong>ExpressVPN</strong> and <strong>Proton VPN</strong> print a location summary such as
   <code>(USA - New York, #3 of 5): .214</code>.</li>
-<li>Other providers log the resolved proxy URL.</li>
+<li>Other proxy providers log the resolved proxy URL.</li>
 </ul>
 <h2 id="basic-static-proxies">Basic (static proxies)<a class="headerlink" href="#basic-static-proxies" title="Permanent link">&para;</a></h2>
-<p>The <code>Basic</code> provider is pure static configuration, with no accounts and no network calls. You
-list proxy URLs per country code, and unshackle serves them back when you query that
-country. This is the right choice when you already have proxy endpoints (from a proxy
+<p>The <code>Basic</code> proxy provider is pure static configuration, with no accounts and no network
+calls. You record proxy URLs under each country code, and unshackle serves them back
+when you query that country. This is the right choice when you already have proxy endpoints (from a proxy
 seller, your own servers, or a corporate gateway).</p>
 <p>Under each two-letter country code you can put either a single proxy string or a list of
 them:</p>
@@ -2581,10 +2583,10 @@ them:</p>
 </table>
 <ul>
 <li>If a country has a single proxy string, that proxy is always returned.</li>
-<li>If it has a list and you give a plain country code, one is picked at random; append an
-  index (<code>de1</code>, <code>de2</code>) to pin a specific entry.</li>
-<li>Each URL is normalised (a missing scheme defaults to <code>http</code>) and validated, so a
-  malformed URI is rejected up front rather than failing mid-download.</li>
+<li>If it has a list and you give a plain country code, unshackle picks one at random.
+  Append an index (<code>de1</code>, <code>de2</code>) to pin a specific entry.</li>
+<li>unshackle normalises each URL (a missing scheme defaults to <code>http</code>) and validates it,
+  so it rejects a malformed URI up front and does not fail mid-download.</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>de2<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
@@ -2602,12 +2604,12 @@ in unshackle itself.</p>
 <div class="admonition warning">
 <p class="admonition-title">Docker is required</p>
 <p>Gluetun needs a working <a href="https://docs.docker.com/get-docker/">Docker</a> installation on
-your <code>PATH</code>. If Docker is not found, the provider fails to load with an error linking
+your <code>PATH</code>. If Docker is not found, the proxy provider fails to load with an error linking
 to the install docs. The container also needs the <code>NET_ADMIN</code> capability and access
 to <code>/dev/net/tun</code> to bring up the tunnel. unshackle requests both automatically.</p>
 </div>
 <h3 id="query-format">Query format<a class="headerlink" href="#query-format" title="Permanent link">&para;</a></h3>
-<p>Gluetun uses a nested selector: the provider prefix picks Gluetun, and the rest names the
+<p>Gluetun uses a nested selector: the proxy provider prefix picks Gluetun, and the rest names the
 <strong>VPN provider</strong> and the <strong>region</strong>.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>gluetun:&lt;vpn-provider&gt;:&lt;region&gt;
 </span></code></pre></div>
@@ -2615,10 +2617,10 @@ to <code>/dev/net/tun</code> to bring up the tunnel. unshackle requests both aut
 </span></code></pre></div>
 <div class="language-shell highlight"><span class="filename">A NordVPN Germany exit via Gluetun</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>gluetun:nordvpn:de<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
-<p>After unshackle strips the leading <code>gluetun:</code>, the provider receives exactly
-<code>provider:region</code> (two colon-separated parts; anything else is an error). The
-<code>&lt;vpn-provider&gt;</code> must be one you have configured under <code>gluetun.providers</code>, and friendly
-names are normalised to Gluetun's identifiers (for example <code>pia</code> and
+<p>After unshackle strips the leading <code>gluetun:</code>, the proxy provider receives exactly
+<code>provider:region</code>. It must be two colon-separated parts, and anything else is an error.
+The <code>&lt;vpn-provider&gt;</code> must be one you have configured under <code>gluetun.providers</code>, and
+unshackle normalises friendly names to Gluetun's identifiers (for example <code>pia</code> and
 <code>privateinternetaccess</code> both map to <code>private internet access</code>).</p>
 <h3 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h3>
 <p>Each VPN provider you want to use gets an entry under <code>providers:</code>, carrying its VPN type,
@@ -2697,7 +2699,7 @@ credentials, and how your region aliases map onto Gluetun's server selectors.</p
 <li><code>private_key</code> is <strong>always</strong> required.</li>
 <li><code>surfshark</code>, <code>mullvad</code>, and <code>ivpn</code> also require <code>addresses</code>.</li>
 <li><code>windscribe</code> additionally requires <strong>both</strong> <code>addresses</code> and <code>preshared_key</code>
-  (<code>preshared_key</code> may be an empty string, but the key must be present).</li>
+  (<code>preshared_key</code> may be an empty string, but the config key must be present).</li>
 <li>NordVPN and Proton VPN need only <code>private_key</code>.</li>
 </ul>
 </div>
@@ -2712,10 +2714,10 @@ credentials, and how your region aliases map onto Gluetun's server selectors.</p
 <p class="admonition-title">Which <code>vpn_type</code> should I pick?</p>
 <p>WireGuard is the default because it <strong>can be faster</strong>, but it needs the fiddlier
 credential setup above (private keys, and for some providers <code>addresses</code> and a
-preshared key). OpenVPN is the <strong>simplest</strong> to configure (just a username and
-password) at the cost of some speed. If you are getting started or hitting credential
-trouble, OpenVPN is the path of least resistance; switch to WireGuard when you want the
-extra throughput.</p>
+<code>preshared_key</code>). OpenVPN is the <strong>simplest</strong> to configure (only a username and
+password) at the cost of some speed. If you start out, or if you have credential
+trouble, OpenVPN is the path of least resistance. Switch to WireGuard when you want
+the extra throughput.</p>
 </div>
 <p><strong>Global keys:</strong></p>
 <table>
@@ -2759,21 +2761,22 @@ extra throughput.</p>
 <ol>
 <li>An explicit entry in <code>server_hostnames</code>, <code>server_cities</code>, or <code>server_countries</code> for
    that alias always wins.</li>
-<li>A <code>us1239</code>-style query (country code + number) with no explicit mapping is turned
-   into a provider-specific server hostname (for example <code>us1239.nordvpn.com</code> for
-   NordVPN, <code>us-1239.prod.surfshark.com</code> for Surfshark).</li>
-<li>A bare two-letter code is expanded to the full country name Gluetun expects.</li>
+<li>unshackle changes a <code>us1239</code>-style query (country code + number) with no explicit
+   mapping into a provider-specific server hostname (for example <code>us1239.nordvpn.com</code>
+   for NordVPN, <code>us-1239.prod.surfshark.com</code> for Surfshark).</li>
+<li>unshackle expands a bare two-letter code to the full country name Gluetun expects.</li>
 </ol>
 <p>A few providers (Windscribe, VyprVPN, VPN Secure) select by <strong>region</strong> rather than
-country, and Windscribe region names are translated automatically. For instance <code>us</code>
+country, and unshackle converts Windscribe region names automatically. For instance <code>us</code>
 becomes <code>US East</code> and <code>uk</code>/<code>gb</code> become <code>United Kingdom</code>.</p>
 <h3 id="container-lifecycle">Container lifecycle<a class="headerlink" href="#container-lifecycle" title="Permanent link">&para;</a></h3>
 <p>Understanding what Gluetun does behind the scenes helps when something goes wrong:</p>
 <ol>
-<li><strong>Image check.</strong> <code>qmcgaw/gluetun:latest</code> is pulled if it is not already present.</li>
-<li><strong>Reuse.</strong> If a container for this exact <code>provider:region</code> is already running (from a
-   concurrent unshackle session), it is adopted instead of starting a new one. Stopped or
-   dead containers with the same name are pruned first.</li>
+<li><strong>Image check.</strong> unshackle pulls <code>qmcgaw/gluetun:latest</code> if it is not already
+   present.</li>
+<li><strong>Reuse.</strong> If a container for this exact <code>provider:region</code> already runs (from a
+   concurrent unshackle process), unshackle adopts it and does not start a new one. It
+   removes stopped or dead containers with the same name first.</li>
 </ol>
 <div class="admonition note">
 <p class="admonition-title">Expect a slow first request, then instant reuse</p>
@@ -2783,14 +2786,14 @@ Every subsequent request that reuses that same container is effectively <strong>
 slow first run is normal.</p>
 </div>
 <ol>
-<li><strong>Port allocation.</strong> A free local port is chosen starting from <code>base_port</code>.</li>
-<li><strong>Start.</strong> The container is launched bound to <code>127.0.0.1:{port}</code>. Credentials are
-   passed through a temporary, <code>0600</code>-permission env-file (never as <code>-e</code> flags), which is
-   overwritten and deleted immediately after.</li>
-<li><strong>Readiness wait.</strong> unshackle polls the container logs (up to 60 seconds) until both
-   the HTTP proxy is listening <strong>and</strong> the VPN reports a completed connection. Fatal
-   errors like <code>authentication failed</code> or <code>invalid credentials</code> abort early, and recent
-   logs are attached to the error to help you diagnose it.</li>
+<li><strong>Port allocation.</strong> unshackle chooses a free local port, starting from <code>base_port</code>.</li>
+<li><strong>Start.</strong> unshackle launches the container bound to <code>127.0.0.1:{port}</code>. It passes
+   credentials through a temporary, <code>0600</code>-permission env-file (never as <code>-e</code> flags),
+   and it overwrites and deletes that file immediately after.</li>
+<li><strong>Readiness wait.</strong> unshackle polls the container logs (up to 60 seconds) until the
+   HTTP proxy listens <strong>and</strong> the VPN reports a completed connection. Fatal errors like
+   <code>authentication failed</code> or <code>invalid credentials</code> abort early, and unshackle attaches
+   recent logs to the error to help you diagnose it.</li>
 <li><strong>IP verification.</strong> When <code>verify_ip</code> is on, unshackle queries the container's exit IP
    and checks the country matches what you asked for, raising a <em>region mismatch</em> error if
    it does not.</li>
@@ -2799,24 +2802,24 @@ slow first run is normal.</p>
 </ol>
 <div class="admonition note">
 <p class="admonition-title">Cleanup and Ctrl+C</p>
-<p>Containers are cleaned up via an <code>atexit</code> handler on normal exit. Gluetun deliberately
-does <strong>not</strong> install its own signal handlers, so <code>Ctrl+C</code> continues to work as you
-expect. If a run is killed hard (e.g. <code>kill -9</code>) a container can be left behind; with
-<code>auto_cleanup: true</code> the next run adopting that name will still work, or you can remove
-it manually with <code>docker rm -f</code>.</p>
+<p>unshackle cleans up containers with an <code>atexit</code> handler on normal exit. Gluetun
+deliberately does <strong>not</strong> install its own signal handlers, so <code>Ctrl+C</code> continues to
+work as you expect. If something kills a run hard (for example <code>kill -9</code>), a container
+can stay behind. With <code>auto_cleanup: true</code> the next run that adopts that name still
+works, or you can remove it manually with <code>docker rm -f</code>.</p>
 </div>
 <h3 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h3>
 <div class="admonition example">
 <p class="admonition-title">Common Gluetun issues</p>
 <ul>
-<li><strong><code>RuntimeError</code> about Docker not found.</strong> Install Docker and confirm <code>docker</code> is
-  on your <code>PATH</code>.</li>
+<li><strong><code>RuntimeError</code> about Docker not found.</strong> Install Docker and make sure that
+  <code>docker</code> is on your <code>PATH</code>.</li>
 <li><strong><code>invalid credentials</code> / <code>authentication failed</code> in the readiness wait.</strong> Your
   WireGuard/OpenVPN credentials are wrong or in the wrong fields. Double-check
   <code>private_key</code>, <code>addresses</code>, and (for Windscribe) <code>preshared_key</code>.</li>
 <li><strong>Region mismatch error.</strong> The VPN connected but exited in a different country than
-  requested. Check your <code>server_countries</code> mapping, or set <code>verify_ip: false</code> if you
-  are intentionally using a nearby region.</li>
+  requested. Examine your <code>server_countries</code> mapping, or set <code>verify_ip: false</code> if
+  you intentionally use a nearby region.</li>
 <li><strong>Timeout after 60 seconds.</strong> The tunnel never came up. Inspect the container logs
   (<code>docker logs &lt;container&gt;</code>) for the underlying VPN error.</li>
 </ul>
@@ -2824,16 +2827,16 @@ it manually with <code>docker rm -f</code>.</p>
 <h2 id="expressvpn">ExpressVPN<a class="headerlink" href="#expressvpn" title="Permanent link">&para;</a></h2>
 <p>ExpressVPN mirrors the ExpressVPN Android TV app: it signs in through Express's OAuth 2.0
 device-login flow, obtains proxy-capable locations from Express's API, and returns an
-authenticated HTTPS proxy. The device login runs once; after that the cached refresh token
-keeps the session alive headlessly.</p>
-<p>Enable it and run a download interactively once:</p>
+authenticated HTTPS proxy. The device login runs once. After that, the cached refresh
+token keeps you signed in headlessly.</p>
+<p>Enable it and do a download interactively once:</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">expressvpn</span><span class="p">:</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="nt">enable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 <p>With <code>enable: true</code> and an interactive terminal, unshackle prints a code and a URL to
-enter it at. Once approved, the tokens are cached and reused automatically, so later runs
-need no terminal. ExpressVPN also <strong>auto-loads</strong> once its token cache exists, so you can
+enter it at. Once you approve it, unshackle caches the tokens and reuses them
+automatically, so later runs need no terminal. ExpressVPN also <strong>auto-loads</strong> once its token cache exists, so you can
 drop <code>enable</code> after the first login, but you can keep a YAML block to pin regions or
 servers:</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml (optional)</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
@@ -2895,13 +2898,13 @@ servers:</p>
 location summary such as <code>(USA - New York, #3 of 5): .214</code>.</p>
 <div class="admonition note">
 <p class="admonition-title">Cache safety</p>
-<p>ExpressVPN's token cache is written with <code>0600</code> permissions so the refresh token is
-never briefly world-readable.</p>
+<p>unshackle writes ExpressVPN's token cache with <code>0600</code> permissions, so the refresh
+token is never briefly world-readable.</p>
 </div>
 <h2 id="nordvpn">NordVPN<a class="headerlink" href="#nordvpn" title="Permanent link">&para;</a></h2>
-<p>NordVPN uses your <strong>Service Credentials</strong>, not your normal NordVPN login. Generate them
+<p>NordVPN uses your <strong>Service Credentials</strong>, not your normal NordVPN login. Make them
 from the <a href="https://my.nordaccount.com/dashboard/nordvpn/">NordVPN dashboard</a> under manual
-setup; they are a long random username/password pair, not your email and password.</p>
+setup. They are a long random username/password pair, not your email and password.</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="nt">nordvpn</span><span class="p">:</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_USERNAME</span>
@@ -2915,9 +2918,9 @@ combined username and password must be exactly 48 alphanumeric characters (case-
 the username must not contain an <code>@</code>. If validation fails, you have almost certainly used
 your login credentials instead of your service credentials.</p>
 <p><code>server_map</code> is optional and maps a region (or <code>code:city</code>) to a pinned NordVPN server ID.
-Its main use is tuning: for a given streaming service one specific server often performs
-noticeably better than NordVPN's recommended pick, so hard-coding that server for a day or
-two is a handy workaround until it degrades and you swap in another.</p>
+Its main use is to tune performance: for a given streaming service one specific server
+often performs noticeably better than NordVPN's recommended pick. So you can hard-code
+that server for a day or two as a workaround, until it degrades and you swap in another.</p>
 <div class="admonition note">
 <p class="admonition-title">Use <code>gb</code>, not <code>uk</code>, for the United Kingdom</p>
 <p>Query the UK as <code>gb</code>. unshackle uses the Alpha-2 country code <code>gb</code> deliberately to stay
@@ -2957,39 +2960,39 @@ port 80 in 2021).</p>
 </span></code></pre></div>
 <h2 id="proton-vpn">Proton VPN<a class="headerlink" href="#proton-vpn" title="Permanent link">&para;</a></h2>
 <p>Proton VPN supports two authentication methods, and unshackle can work with either. Note
-that free Proton accounts work but are limited to Proton's free-tier exit countries.</p>
+that free Proton accounts work, but Proton limits them to its free-tier exit countries.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">TV login (recommended)</label><label for="__tabbed_2_2">Exported cookies</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<p>A self-sustaining, refreshable session obtained through Proton's TV device-login flow.
-This is the only method that can refresh itself headlessly, so it keeps working without
-re-exporting anything. Enable it and run a download interactively once:</p>
+<p>Proton's TV device-login flow gives a self-sustaining, refreshable sign-in. This is
+the only method that can refresh itself headlessly, so it keeps working without
+re-exporting anything. Enable it and do a download interactively once:</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">protonvpn</span><span class="p">:</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span><span class="nt">enable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 <p>With <code>enable: true</code> and an interactive terminal, unshackle prints a code and asks you
 to enter it at <a href="https://account.proton.me/vpn/tv/code">account.proton.me/vpn/tv/code</a>.
-Once approved, the session is cached and reused automatically.</p>
+Once you approve it, unshackle caches the sign-in and reuses it automatically.</p>
 </div>
 <div class="tabbed-block">
-<p>Export your <code>account.proton.me</code> session cookies (the <code>AUTH-&lt;UID&gt;</code> cookie) to the Proton
+<p>Export your <code>account.proton.me</code> cookies (the <code>AUTH-&lt;UID&gt;</code> cookie) to the Proton
 cookie file. This method is <strong>access-only</strong>: it cannot refresh, so you must re-export
 when it expires.</p>
 <div class="admonition warning">
 <p class="admonition-title">The <code>AUTH-&lt;UID&gt;</code> cookie is HttpOnly</p>
 <p>This is the single most common cause of a failed Proton cookie import: the required
 <code>AUTH-&lt;UID&gt;</code> cookie is <strong>HttpOnly</strong>, and many one-click cookie-export extensions
-silently skip HttpOnly cookies by default. If your import "doesn't work," use an
+silently skip HttpOnly cookies by default. If your import "does not work," use an
 exporter that explicitly includes HttpOnly cookies.</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Why this session can't refresh, and lapses after ~24h</p>
 <p>Proton rotates browser refresh tokens and ties them to the live browser, so a
 headless refresh is impossible. unshackle therefore deliberately uses only the
-cookie's short-lived <strong>access token</strong> and never attempts a refresh, which is why the
-session lapses at Proton's ~24h TTL and must be re-exported. This is exactly why TV
-login is preferred for set-and-forget use.</p>
+cookie's short-lived <strong>access token</strong> and never attempts a refresh. That is why
+the sign-in lapses at Proton's ~24h TTL and you must export it again. This is
+exactly why TV login is the better method for set-and-forget use.</p>
 </div>
 </div>
 </div>
@@ -3013,14 +3016,14 @@ login is preferred for set-and-forget use.</p>
 </tr>
 </tbody>
 </table>
-<p>Proton VPN <strong>auto-loads</strong> if its cookie file exists. Like ExpressVPN, its cached session
-is written with <code>0600</code> permissions.</p>
+<p>Proton VPN <strong>auto-loads</strong> if its cookie file exists. Like ExpressVPN, unshackle writes
+its cache file with <code>0600</code> permissions.</p>
 <div class="admonition note">
 <p class="admonition-title">Cache vs cookie precedence</p>
-<p>If both a TV-login cache and a cookie file exist, the <strong>cache is preferred</strong> unless the
-cookie file is newer. Cookies are read fresh every run and never written back to the
-cache. So to deliberately force use of the cookie session, just re-save (re-export) the
-cookie file so its modification time is newer than the cache.</p>
+<p>If both a TV-login cache and a cookie file exist, unshackle <strong>prefers the cache</strong>
+unless the cookie file is newer. unshackle reads cookies fresh every run and never
+writes them back to the cache. So to deliberately force use of the cookie file,
+re-save (re-export) it so its modification time is newer than the cache.</p>
 </div>
 <p><strong>Query forms (after the <code>protonvpn:</code> prefix):</strong></p>
 <table>
@@ -3046,19 +3049,19 @@ cookie file so its modification time is newer than the cache.</p>
 </tbody>
 </table>
 <p>The returned proxy is HTTPS on <strong>port 4443</strong> (or <strong>port 443</strong> for Secure Core servers).
-Secure Core and Tor servers are excluded from selection because they are too slow for a
-plain proxy. On success, unshackle prints a summary such as <code>(Name - City): server-host</code>.</p>
+unshackle excludes Secure Core and Tor servers from selection because they are too slow
+for a plain proxy. On success, unshackle prints a summary such as <code>(Name - City): server-host</code>.</p>
 <div class="admonition tip">
 <p class="admonition-title">Proton server numbers aren't sequential</p>
-<p>When pinning a server with <code>protonvpn:deNN</code>, don't guess a low number. A country may
-expose non-contiguous IDs like <code>#203</code>, <code>#813</code>, and so on. Copy the number from a
+<p>When pinning a server with <code>protonvpn:deNN</code>, do not guess a low number. A country may
+have non-contiguous IDs like <code>#203</code>, <code>#813</code>, and so on. Copy the number from a
 previous run's log line (e.g. <code>DE#203</code>) instead.</p>
 </div>
 <h2 id="hola">Hola<a class="headerlink" href="#hola" title="Permanent link">&para;</a></h2>
 <p>Hola requires no configuration at all. It uses the
 <a href="https://github.com/Snawoot/hola-proxy"><code>hola-proxy</code></a> binary, and <strong>auto-loads</strong> whenever
 that binary is found on your <code>PATH</code>. If you query Hola but the binary is missing, the
-provider raises an error telling you to install it.</p>
+proxy provider raises an error that tells you to install it.</p>
 <div class="language-shell highlight"><span class="filename">Install hola-proxy, then just query a country</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>hola:us<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p><strong>Query forms:</strong> a two-letter country code (e.g. <code>us</code>, <code>gb</code>). unshackle asks <code>hola-proxy</code>
@@ -3070,7 +3073,7 @@ you see a <em>temporary ban detected</em> error, wait before retrying. Hola curr
 only datacenter proxies.</p>
 </div>
 <h2 id="surfshark">Surfshark<a class="headerlink" href="#surfshark" title="Permanent link">&para;</a></h2>
-<p>Surfshark, like NordVPN, uses <strong>Service Credentials</strong> rather than your login. Generate
+<p>Surfshark, like NordVPN, uses <strong>Service Credentials</strong> rather than your login. Make
 them from the <a href="https://my.surfshark.com/vpn/manual-setup/main/openvpn">Surfshark manual-setup page</a>.</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">surfsharkvpn</span><span class="p">:</span>
@@ -3108,8 +3111,8 @@ NordVPN (combined username+password must be 48 alphanumeric characters, case-ins
 <p>The returned proxy is HTTPS on <strong>port 443</strong>.</p>
 <h2 id="windscribe">Windscribe<a class="headerlink" href="#windscribe" title="Permanent link">&para;</a></h2>
 <p>Windscribe uses <strong>Service Credentials</strong> from its
-<a href="https://windscribe.com/getconfig/openvpn">OpenVPN config page</a>. Only the presence of a
-username and password is checked (there is no 48-character rule).</p>
+<a href="https://windscribe.com/getconfig/openvpn">OpenVPN config page</a>. unshackle only makes
+sure that a username and a password are present (there is no 48-character rule).</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="nt">windscribevpn</span><span class="p">:</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_USERNAME</span>
@@ -3146,11 +3149,11 @@ username and password is checked (there is no 48-character rule).</p>
 <p>The returned proxy is HTTPS on <strong>port 443</strong>.</p>
 <div class="admonition warning">
 <p class="admonition-title">Windscribe is not loaded by the REST API resolver</p>
-<p>The standalone Windscribe provider (and Gluetun) are loaded by the <code>dl</code> command, but
-<strong>not</strong> by the proxy resolver used by the REST API and remote-download client. If you
-drive downloads through the API and need Windscribe
-or Gluetun exits, resolve the proxy on the CLI side or use a different provider for API
-jobs. See the developer note below.</p>
+<p>The <code>dl</code> command loads the standalone Windscribe proxy provider (and Gluetun), but
+the proxy resolver that the REST API and the remote-download client use does <strong>not</strong>.
+If you drive downloads through the API and need Windscribe or Gluetun exits, get the
+proxy on the CLI side, or use a different proxy provider for API jobs. See the
+developer note below.</p>
 </div>
 <h2 id="developer-notes">Developer notes<a class="headerlink" href="#developer-notes" title="Permanent link">&para;</a></h2>
 <div class="admonition note">
@@ -3166,23 +3169,23 @@ identical:</p>
 </ul>
 <p>Both paths accept the same query grammar (a direct URI, a <code>provider:query</code>, or a bare
 country query tried against providers in order), but the set of available providers
-differs. Keep this in mind when adding a provider: wiring it into <code>dl.py</code> does not make
-it available over the API, and vice versa.</p>
+differs. Keep this in mind when you add a proxy provider: an entry in <code>dl.py</code> does not
+make it available over the API, and the opposite is also true.</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Implementing a new provider (developers)</p>
-<p>Every provider subclasses <code>unshackle.core.proxies.proxy.Proxy</code> and implements three
+<p>Every proxy provider subclasses <code>unshackle.core.proxies.proxy.Proxy</code> and has three
 methods:</p>
 <ul>
 <li><code>__init__(self, **kwargs)</code> receives its <code>proxy_providers</code> sub-dict splatted as
   keyword arguments, so YAML keys map 1:1 to constructor parameters. Do authentication
-  and catalog pre-fetching here.</li>
+  and catalogue pre-fetching here.</li>
 <li><code>__repr__(self)</code> is a human summary, conventionally <code>"{n} Countries ({m} Servers)"</code>.</li>
 <li><code>get_proxy(self, query)</code> returns a Requests-compatible proxy URI, or <code>None</code> only
   when the query was valid but no proxy exists. Raise on genuine errors or bad queries.</li>
 </ul>
-<p>Optionally expose <code>get_connection_info(query)</code> (as Gluetun does) or
-<code>last_connection_display()</code> (as ExpressVPN and Proton VPN do) to have <code>dl</code> print a
+<p>Optionally add <code>get_connection_info(query)</code> (as Gluetun does) or
+<code>last_connection_display()</code> (as ExpressVPN and Proton VPN do) to make <code>dl</code> print a
 friendly connection line instead of the raw proxy URL.</p>
 </div>
 <h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>

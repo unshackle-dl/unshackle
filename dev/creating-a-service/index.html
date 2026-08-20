@@ -1397,10 +1397,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#how-a-service-is-discovered" class="md-nav__link">
+  <a href="#how-unshackle-finds-a-service" class="md-nav__link">
     <span class="md-ellipsis">
       
-        How a service is discovered
+        How unshackle finds a service
       
     </span>
   </a>
@@ -1447,15 +1447,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-methods-you-implement" class="md-nav__link">
+  <a href="#the-methods-you-write" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The methods you implement
+        The methods you write
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="The methods you implement">
+    <nav class="md-nav" aria-label="The methods you write">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2119,10 +2119,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#how-a-service-is-discovered" class="md-nav__link">
+  <a href="#how-unshackle-finds-a-service" class="md-nav__link">
     <span class="md-ellipsis">
       
-        How a service is discovered
+        How unshackle finds a service
       
     </span>
   </a>
@@ -2169,15 +2169,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-methods-you-implement" class="md-nav__link">
+  <a href="#the-methods-you-write" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The methods you implement
+        The methods you write
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="The methods you implement">
+    <nav class="md-nav" aria-label="The methods you write">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2323,16 +2323,16 @@
 
 <h1 id="creating-a-service">Creating a Service<a class="headerlink" href="#creating-a-service" title="Permanent link">&para;</a></h1>
 <p>A <strong>service</strong> is a plugin that teaches unshackle how to talk to one streaming
-provider: how to log in, how to look up a title, what video/audio/subtitle
-tracks exist, and how to license any DRM. Everything else (track selection,
-downloading, decryption, muxing, naming) is handled by the unshackle core.</p>
+platform: how to log in, how to look up a title, what video/audio/subtitle
+tracks exist, and how to license any DRM. The unshackle core does everything
+else (track selection, downloading, decryption, muxing, naming).</p>
 <div class="admonition info">
 <p class="admonition-title">Who this page is for</p>
 <p>This is a <strong>developer guide</strong>. If you only want to <em>use</em> services, see
 <a href="../../guide/downloading/">downloading</a> and
-<a href="../../reference/configuration/">configuration</a>. Nothing here is required to run
-the CLI. Service code is deliberately kept separate from the core so it can
-live in its own private repository.</p>
+<a href="../../reference/configuration/">configuration</a>. You do not need anything here to
+operate the CLI. The code of a service is deliberately separate from the
+core, so it can live in its own private repository.</p>
 </div>
 <p>unshackle ships two reference services. <strong>EXAMPLE</strong>, at
 <code>unshackle/services/EXAMPLE/</code>, is a non-runnable showcase of every framework
@@ -2340,10 +2340,10 @@ feature in a single file. Read it alongside this page. Most snippets below come
 from it. <strong>MUSIC_EXAMPLE</strong>, at <code>unshackle/services/MUSIC_EXAMPLE/</code>, is the same
 kind of showcase for a music service. If your platform has songs, read that one too.</p>
 <hr />
-<h2 id="how-a-service-is-discovered">How a service is discovered<a class="headerlink" href="#how-a-service-is-discovered" title="Permanent link">&para;</a></h2>
+<h2 id="how-unshackle-finds-a-service">How unshackle finds a service<a class="headerlink" href="#how-unshackle-finds-a-service" title="Permanent link">&para;</a></h2>
 <p>At startup unshackle scans every path in the <code>directories.services</code> config key
 (a <strong>list</strong>). Each entry is either a local directory of services or a remote
-repo spec (a git URL or <code>owner/repo</code> shorthand, which is cloned automatically).
+repo spec (a git URL or <code>owner/repo</code> shorthand, which unshackle clones for you).
 The default is the bundled <code>unshackle/services</code> directory.</p>
 <p>Within a services directory, <strong>every subfolder that contains an <code>__init__.py</code>
 is a service</strong>, and the folder name is the service <strong>tag</strong>:</p>
@@ -2354,13 +2354,13 @@ is a service</strong>, and the folder name is the service <strong>tag</strong>:<
 </span></code></pre></div>
 <p>Two rules the loader enforces:</p>
 <ol>
-<li><strong>The class name must exactly match the folder/tag name.</strong> Folder <code>EXAMPLE</code> must
+<li><strong>The class name must match the folder/tag name exactly.</strong> Folder <code>EXAMPLE</code> must
    define <code>class EXAMPLE</code>. A mismatch raises a <code>RuntimeError</code>.</li>
 <li><strong>List order is priority.</strong> The first services path to define a given tag
-   wins; later duplicates are shadowed. Put your own local overrides <em>last</em> to
+   wins, and unshackle ignores the later duplicates. Put your own local overrides <em>last</em> to
    use them as fallbacks, or <em>first</em> to override a repo.</li>
 </ol>
-<p>Once installed, a service is invoked as a subcommand of <code>dl</code>:</p>
+<p>After installation, you call a service as a subcommand of <code>dl</code>:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">20914</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>EX<span class="w"> </span><span class="m">20914</span><span class="w">          </span><span class="c1"># via an ALIAS</span>
 </span></code></pre></div>
@@ -2369,12 +2369,12 @@ is a service</strong>, and the folder name is the service <strong>tag</strong>:<
 <p>A service's own settings go in <code>config.yaml</code> <strong>inside the service folder</strong>
 (<code>directories.services/&lt;TAG&gt;/config.yaml</code>). This is separate from the global
 <code>unshackle.yaml</code>. Access it in code as <code>self.config[...]</code>. Never hardcode
-URLs, user agents, or certificates; put them here.</p>
+URLs, user agents, or certificates. Put them here.</p>
 </div>
 <div class="admonition warning">
 <p class="admonition-title"><code>config.yaml</code> is shared: keep secrets out of it</p>
 <p>Treat <code>config.yaml</code> as a checked-in file of <strong>defaults</strong>: it belongs in the
-service repo and is shared by everyone who runs the service. Per-user secrets
+service repo, and everyone who runs the service shares it. Per-user secrets
 (API keys, device IDs, account tokens) must <strong>not</strong> live here. Those go in the
 user's own <code>unshackle.yaml</code> under <code>services.&lt;TAG&gt;</code>, which is <strong>merged into
 <code>self.config</code> at runtime</strong>. That checked-in-defaults / per-user-overrides
@@ -2390,7 +2390,7 @@ modules <strong>relatively</strong>:</p>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">unshackle.services.TAG.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">parse_manifest</span>   <span class="c1"># breaks from a repo</span>
 </span></code></pre></div>
 <p>A service loaded from a remote repo lives outside the <code>unshackle</code> package,
-so the absolute <code>unshackle.services.&lt;TAG&gt;.*</code> path does not resolve and the
+so Python cannot find the absolute <code>unshackle.services.&lt;TAG&gt;.*</code> path and the
 import fails with <code>no known parent package</code>. Relative imports work both
 locally and from a cloned repo.</p>
 </div>
@@ -2437,21 +2437,21 @@ Click <code>cli</code> entry point plus three abstract methods.</p>
 <tr>
 <td><code>ANIME</code></td>
 <td><code>bool</code></td>
-<td>Set <code>True</code> when the catalog is anime, so metadata lookups prefer AniList. A title's own <code>anime</code> flag overrides it.</td>
+<td>Set <code>True</code> when the catalogue is anime, so metadata lookups prefer AniList. A title's own <code>anime</code> flag overrides it.</td>
 </tr>
 <tr>
 <td><code>DAILY</code></td>
 <td><code>bool</code></td>
-<td>Set <code>True</code> when the catalog is daily/date-based (talk shows, news, sports), so episodes are named by air date. A title's own <code>daily</code> flag overrides it.</td>
+<td>Set <code>True</code> when the catalogue is daily/date-based (talk shows, news, sports), so episodes are named by air date. A title's own <code>daily</code> flag overrides it.</td>
 </tr>
 </tbody>
 </table>
 <div class="admonition note">
 <p class="admonition-title"><code>NO_SUBTITLES</code> is a convention, not a base-class attribute</p>
-<p><code>NO_SUBTITLES</code> is checked by <code>dl.py</code> via <code>hasattr</code> and is deliberately <strong>not</strong>
-declared on the <code>Service</code> base class, so it only exists if your service
+<p><code>dl.py</code> uses <code>hasattr</code> to find <code>NO_SUBTITLES</code>, and the <code>Service</code> base class
+deliberately does <strong>not</strong> declare it, so it only exists if your service
 defines it. Setting <code>NO_SUBTITLES = True</code> is what makes the pipeline skip
-subtitle work for services that never carry subtitles; leave it off otherwise.</p>
+subtitle work for services that never carry subtitles. Leave it off otherwise.</p>
 </div>
 <p><code>GEOFENCE</code> drives an automatic proxy: on startup, if you did not pass an
 explicit <code>--proxy</code>, the base class does a live IP check and, if your region is
@@ -2486,7 +2486,7 @@ will use throughout the service:</p>
 </tr>
 <tr>
 <td><code>self.cache</code></td>
-<td>A <code>Cacher</code> for arbitrary key/value data (tokens, etc.).</td>
+<td>A <code>Cacher</code> for arbitrary key/value data, for example authentication tokens.</td>
 </tr>
 <tr>
 <td><code>self.title_cache</code></td>
@@ -2521,7 +2521,7 @@ fetching tracks:</p>
 <div class="admonition note">
 <p class="admonition-title">Read the request, don't second-guess the user</p>
 <p>Services may narrow <code>track_request</code> for hard technical constraints (e.g.
-<em>"HDR on this service is only delivered as HEVC"</em>), but must <strong>not</strong> filter
+<em>"this service delivers HDR only as HEVC"</em>), but must <strong>not</strong> filter
 the tracks they return by resolution, bitrate, or language. All selection is
 done by the core after <code>get_tracks</code> returns.</p>
 </div>
@@ -2529,7 +2529,7 @@ done by the core after <code>get_tracks</code> returns.</p>
 <p class="admonition-title">Override <code>get_session()</code> to defeat TLS-fingerprint bot detection</p>
 <p>The base <code>get_session()</code> returns a plain <code>requests.Session</code> (config headers +
 retry adapter) and <strong>deliberately does not</strong> do TLS impersonation. When a
-provider blocks you on TLS fingerprint alone, override it to return
+streaming platform blocks you on TLS fingerprint alone, override it to return
 <code>session("Chrome131")</code> (any <code>rnet.Impersonate</code> preset). <code>RnetSession</code> is a
 drop-in <code>requests.Session</code> replacement (same <code>.get</code>/<code>.post</code>/cookie-jar
 interface), so nothing else in the service changes. If instead you need
@@ -2537,8 +2537,8 @@ specific SSL <em>cipher</em> behaviour, mount
 <code>unshackle.core.utils.sslciphers.SSLCiphers</code> onto a plain <code>requests.Session</code>.</p>
 </div>
 <hr />
-<h2 id="the-methods-you-implement">The methods you implement<a class="headerlink" href="#the-methods-you-implement" title="Permanent link">&para;</a></h2>
-<p>Methods run in the order shown. Only the three abstract ones are mandatory.</p>
+<h2 id="the-methods-you-write">The methods you write<a class="headerlink" href="#the-methods-you-write" title="Permanent link">&para;</a></h2>
+<p>unshackle calls the methods in the order shown. Only the three abstract ones are mandatory.</p>
 <pre class="mermaid"><code>graph LR
     A[cli] --&gt; B[__init__] --&gt; C[authenticate] --&gt; D[get_titles] --&gt; E[get_tracks] --&gt; F[get_chapters]</code></pre>
 <h3 id="cli-the-click-entry-point"><code>cli</code>: the Click entry point<a class="headerlink" href="#cli-the-click-entry-point" title="Permanent link">&para;</a></h3>
@@ -2547,11 +2547,11 @@ returns an <strong>instance</strong> of your service. Keep the command <code>nam
 tag.</p>
 <div class="admonition note">
 <p class="admonition-title"><code>name=</code> is cosmetic: the directory name is what resolves the command</p>
-<p><code>unshackle dl EXAMPLE</code> is dispatched by the <strong>folder/class name</strong>, not by the
-<code>name=</code> in <code>@click.command</code>. A mismatched <code>name=</code> still loads and runs; it
-just produces confusing <code>--help</code>/usage output that names the wrong command.
-That confusing output is the reason to keep it in sync, not any dispatch
-requirement.</p>
+<p>unshackle chooses the command from the <strong>folder/class name</strong>, not from the
+<code>name=</code> in <code>@click.command</code>. A mismatched <code>name=</code> still loads and runs. It
+only produces confusing <code>--help</code>/usage output that names the wrong command.
+That confusing output is the reason to keep it in sync, not any requirement
+of the command lookup.</p>
 </div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nd">@staticmethod</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nd">@click</span><span class="o">.</span><span class="n">command</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"EXAMPLE"</span><span class="p">,</span> <span class="n">short_help</span><span class="o">=</span><span class="s2">"https://domain.com"</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="vm">__doc__</span><span class="p">)</span>
@@ -2575,14 +2575,14 @@ accepted URL/ID formats and options there.</p>
 <p class="admonition-title">CDM-aware behaviour</p>
 <p>The resolved CDM is on <code>ctx.obj.cdm</code> (may be <code>None</code> for DRM-free runs). Use
 <code>is_widevine_cdm()</code> / <code>is_playready_cdm()</code> from <code>unshackle.core.cdm.detect</code>
-to classify it. These correctly handle local <em>and</em> remote CDMs, so never
+to classify it. These work correctly for local <em>and</em> remote CDMs, so never
 hand-roll an <code>isinstance</code> check. Services often pick a device profile or
 manifest endpoint based on which DRM the CDM speaks.</p>
 </div>
 <h3 id="authenticate-optional-login"><code>authenticate</code>: optional login<a class="headerlink" href="#authenticate-optional-login" title="Permanent link">&para;</a></h3>
 <p>Override to log in with cookies and/or credentials. <strong>Call <code>super().authenticate()</code>
 first</strong>: the base implementation loads the cookie jar into <code>self.session.cookies</code>
-and stores <code>self.credential</code>. Do all token fetching here; it runs before
+and stores <code>self.credential</code>. Do all token fetching here. It runs before
 <code>get_titles</code>.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">authenticate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cookies</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">credential</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">authenticate</span><span class="p">(</span><span class="n">cookies</span><span class="p">,</span> <span class="n">credential</span><span class="p">)</span>
@@ -2596,30 +2596,30 @@ and stores <code>self.credential</code>. Do all token fetching here; it runs bef
 </span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>        <span class="n">cache</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">token</span><span class="p">,</span> <span class="n">expiration</span><span class="o">=</span><span class="n">token</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"expires_in"</span><span class="p">))</span>
 </span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">token</span> <span class="o">=</span> <span class="n">cache</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">"token"</span><span class="p">]</span>
 </span></code></pre></div>
-<p>Cookies come from files under <code>directories.cookies</code>; credentials from the
+<p>Cookies come from files under <code>directories.cookies</code>. Credentials come from the
 <code>credentials</code> map in <code>unshackle.yaml</code>. For interactive prompts (OTP, captcha)
 use <code>self.request_input(prompt)</code>, never a bare <code>input()</code>. Under <code>serve</code> mode
 there is no local terminal, so a bare <code>input()</code> would hang the server waiting on
-stdin that never arrives; <code>request_input</code> instead relays the prompt to the
+stdin that never arrives. <code>request_input</code> instead relays the prompt to the
 remote client through the attached <code>InputBridge</code>. Locally it routes through the
 shared Rich console (<code>prompt_user</code>) so the prompt renders correctly alongside
 progress and log output.</p>
 <div class="admonition warning">
-<p class="admonition-title">Key token caches by whatever varies per session</p>
-<p>The cache key above is <code>tokens_{device}_{profile}</code> on purpose. A token cache
+<p class="admonition-title">Make each token cache entry unique</p>
+<p>The cache above uses <code>tokens_{device}_{profile}</code> on purpose. A token cache
 must include every dimension that changes the token (device, profile, or
 <code>credential.sha1</code>), or two profiles/devices will share one cache entry and
-stomp each other's tokens. This isn't obvious from the caching API, which
-happily lets you use a single flat key.</p>
+stomp each other's tokens. This is not obvious from the caching API, which
+happily lets you use a single flat name.</p>
 </div>
 <div class="admonition warning">
-<p class="admonition-title">Handle the credential carefully</p>
-<p>Use the <code>Credential</code> only inside <code>authenticate()</code> to obtain tokens; don't
+<p class="admonition-title">Use the credential carefully</p>
+<p>Use the <code>Credential</code> only inside <code>authenticate()</code> to get tokens. Do not
 stash it or the raw cookie jar elsewhere. The base class already caches
 identity for you.</p>
 </div>
 <h3 id="get_titles-required"><code>get_titles</code>: required<a class="headerlink" href="#get_titles-required" title="Permanent link">&para;</a></h3>
-<p>Return a titles collection for the given ID. The return type depends on content:</p>
+<p>Return a titles collection for the given ID. The return type depends on the kind of title:</p>
 <table>
 <thead>
 <tr>
@@ -2647,8 +2647,8 @@ identity for you.</p>
 </tbody>
 </table>
 <p>Every title carries a <code>language</code> (its <strong>original recorded language</strong>) and an
-arbitrary <code>data</code> dict you can use to stash metadata for later methods. At least
-one title must be returned, or the ID is treated as invalid.</p>
+arbitrary <code>data</code> dict you can use to stash metadata for later methods. You must
+return at least one title. If you return none, unshackle treats the ID as invalid.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_titles</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Titles_T</span><span class="p">:</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">TITLE_RE</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">title</span><span class="p">)</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">match</span><span class="p">:</span>
@@ -2682,7 +2682,7 @@ one title must be returned, or the ID is treated as invalid.</p>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>        <span class="n">language</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">air_date</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>        <span class="n">part</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </span></code></pre></div>
-<p>Pass <code>air_date</code> for daily/sports content to name by date instead of
+<p>Pass <code>air_date</code> for daily and sports titles to name by date instead of
 <code>SxxExx</code>. Return a <code>Series([...])</code> of episodes. Pass <code>part</code> only when the
 service splits one episode into several videos, see
 <a href="#split-episodes">Split episodes</a>.</p>
@@ -2722,8 +2722,8 @@ example a variety show that ships episode 1 as <em>Episode 1 (Part 1)</em>, <em>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">Episode</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">season</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">number</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">part</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">"The Reckoning"</span><span class="p">)</span>
 </span></code></pre></div>
 <ol>
-<li><code>part</code> counts from 1, contiguous. <code>part=0</code> is rejected, and <code>-w</code> can only address
-   parts up to 99.</li>
+<li><code>part</code> counts from 1, contiguous. unshackle rejects <code>part=0</code>, and <code>-w</code> can only
+   address parts up to 99.</li>
 <li>Every part of one episode shares the same <code>season</code> and <code>number</code>.</li>
 <li>Each part is a separate <code>Episode</code> with its own unique <code>id_</code>.</li>
 <li>Unsplit episode: leave <code>part</code> unset. Never pass <code>part=1</code> for a whole episode.</li>
@@ -2744,13 +2744,13 @@ structurally, as the <code>part</code> argument.</p>
 <div class="admonition tip">
 <p class="admonition-title">Clean the part out of the name</p>
 <p><code>Episode</code> discards any <code>name</code> that starts with <code>Episode &lt;number&gt;</code>, so a raw
-<code>"Episode 1 (Part 2): The Reckoning"</code> leaves you with no episode name at all. Strip
+<code>"Episode 1 (Part 2): The Reckoning"</code> leaves you with no episode name at all. Remove
 the prefix before you pass it, or pass <code>None</code>.</p>
 </div>
 <p>Once <code>part</code> is set, the filename gains a part token (<code>S01E01.Part.2</code>, see
 <a href="../../guide/output-and-naming/#split-episodes">Output &amp; naming</a>), <code>-w S01E01.2</code> selects a
 single part while a bare <code>-w S01E01</code> selects them all, and the <code>--list-titles</code> tree labels
-the episode <code>01.2</code>. The REST API reports it as an extra <code>part</code> key on the serialized
+the episode <code>01.2</code>. The REST API reports it as an extra <code>part</code> field on the serialized
 title, described in <a href="../rest-api/endpoints/#post-apilist-titles">Endpoints</a>.</p>
 <div class="admonition note">
 <p class="admonition-title">Opt-in and additive</p>
@@ -2760,7 +2760,7 @@ has nothing to adopt.</p>
 </div>
 <h3 id="get_tracks-required"><code>get_tracks</code>: required<a class="headerlink" href="#get_tracks-required" title="Permanent link">&para;</a></h3>
 <p>Given one title, return a <code>Tracks</code> object holding <code>Video</code>, <code>Audio</code>, and
-<code>Subtitle</code> tracks. In almost all cases you build these by parsing a manifest,
+<code>Subtitle</code> tracks. In almost all cases you assemble these by parsing a manifest,
 not by hand.</p>
 <p>The manifest parsers live in <code>unshackle.core.manifests</code>:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">unshackle.core.manifests</span><span class="w"> </span><span class="kn">import</span> <span class="n">DASH</span><span class="p">,</span> <span class="n">HLS</span><span class="p">,</span> <span class="n">ISM</span>
@@ -2793,11 +2793,11 @@ not by hand.</p>
 <div class="admonition warning">
 <p class="admonition-title">Always pass <code>language=</code></p>
 <p>Pass the title's original language to <code>to_tracks(language=...)</code>. For DASH and
-HLS this is <strong>required as a fallback</strong>. If a track's language can't be
-derived and no valid fallback was given, <code>to_tracks</code> raises <code>ValueError</code>.
-It's also what lets the parser flag <code>is_original_lang</code> on each track (via
-<code>is_close_match</code>), driving <code>-l best/all</code> selection and the filename language
-token.</p>
+HLS this is <strong>required as a fallback</strong>. If <code>to_tracks</code> cannot derive a track's
+language and you gave no valid fallback, it raises <code>ValueError</code>.
+It is also what lets the parser flag <code>is_original_lang</code> on each track (through
+<code>is_close_match</code>), which drives <code>-l best/all</code> selection and the filename
+language token.</p>
 </div>
 <p>Some services deliver a <strong>separate manifest per codec/range</strong>. The base class
 provides <code>get_tracks_for_variants(title, fetch_fn)</code> to fan out over every
@@ -2817,31 +2817,31 @@ for a thorough demonstration.</p>
 <div class="admonition note">
 <p class="admonition-title">Flip HDR10 → HDR10+ by hand when you know the platform embeds it</p>
 <p>HDR10+ is a <strong>bitstream (SEI)</strong> feature. The HLS parser intentionally does
-not sniff it from the stream, so a manifest that embeds HDR10+ SEI but labels
+not sniff it from the bitstream, so a manifest that embeds HDR10+ SEI but labels
 the variant plain HDR10 will parse as HDR10. The label is the only signal
-the parser has, and it's wrong. Only the service author knows the platform
-embeds HDR10+, so it's on you to correct <code>video.range</code> to HDR10+ here for
+the parser has, and it is wrong. Only the service author knows the platform
+embeds HDR10+, so it is on you to correct <code>video.range</code> to HDR10+ here for
 those services.</p>
 </div>
 <div class="admonition warning">
 <p class="admonition-title"><code>get_tracks</code> is your only chance to capture license inputs</p>
-<p>The license callbacks (<code>get_widevine_license</code>, etc.) fire <strong>much later</strong>, in
+<p>The license callbacks (<code>get_widevine_license</code> and the others) fire <strong>much later</strong>, in
 the download/decrypt step, long after <code>get_tracks</code> has returned, and they
 receive <strong>only</strong> <code>challenge</code>, <code>title</code>, and <code>track</code>. Nothing else from the
-manifest response reaches them. So anything a license call needs (the license
-URL, <code>dt-custom-data</code>, a session token) has to be stashed <strong>now</strong>, during
+manifest response reaches them. So you must stash anything a license call needs
+(the license URL, <code>dt-custom-data</code>, a session token) <strong>now</strong>, during
 <code>get_tracks</code>, onto <code>self.license_data</code> or <code>title.data</code>. This is a
-lifecycle-timing consequence you can't infer from the callback signatures.</p>
+lifecycle-timing consequence you cannot infer from the callback signatures.</p>
 </div>
 <div class="admonition tip">
-<p class="admonition-title">Provide the KID if you cheaply can</p>
-<p>If you can obtain a track's Key ID (32-char hex) without downloading stream
-data, set <code>track.kid</code>; it speeds up the decryption/key-lookup path. And be
+<p class="admonition-title">Give the KID if you cheaply can</p>
+<p>If you can get a track's Key ID (32-char hex) without downloading the track
+data, set <code>track.kid</code>. It speeds up the decryption and key-lookup path. And be
 sure encrypted tracks carry the correct <code>drm</code> so the core licenses them.</p>
 </div>
 <h3 id="get_chapters-required"><code>get_chapters</code>: required<a class="headerlink" href="#get_chapters-required" title="Permanent link">&para;</a></h3>
-<p>Return a <code>Chapters</code> object (0 or more <code>Chapter</code>s). You don't need to number or
-sort them; <code>Chapters</code> does that automatically and inserts a <code>00:00:00.000</code>
+<p>Return a <code>Chapters</code> object (0 or more <code>Chapter</code>s). You do not need to number or
+sort them. <code>Chapters</code> does that automatically and inserts a <code>00:00:00.000</code>
 marker if missing. A <code>Chapter</code> timestamp accepts <code>"HH:MM:SS[.mmm]"</code>, an int in
 milliseconds, or a float in seconds.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_chapters</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">title</span><span class="p">:</span> <span class="n">Title_T</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Chapters</span><span class="p">:</span>
@@ -2874,8 +2874,8 @@ label applies only to that span.</p>
 </div>
 <div class="admonition warning">
 <p class="admonition-title">Don't invent chapter names</p>
-<p>Never name chapters <code>"Chapter 1"</code> yourself. Leave unnamed markers unnamed;
-users who want generic names set <code>chapter_fallback_name</code> (e.g.
+<p>Never name chapters <code>"Chapter 1"</code> yourself. Leave unnamed markers unnamed.
+Users who want generic names set <code>chapter_fallback_name</code> (for example,
 <code>"Chapter {i:02}"</code>) in their config.</p>
 </div>
 <hr />
@@ -2883,7 +2883,7 @@ users who want generic names set <code>chapter_fallback_name</code> (e.g.
 <p>The core drives licensing. Your job is to answer the license challenges the CDM
 produces. Mark encrypted tracks with the right DRM in <code>get_tracks</code> (the manifest
 parsers do this automatically for PSSH/<code>EXT-X-KEY</code> found in the manifest), then
-implement the license callbacks you need. Each receives the challenge plus the
+write the license callbacks you need. Each receives the challenge plus the
 current <code>title</code> and <code>track</code>:</p>
 <table>
 <thead>
@@ -2938,21 +2938,22 @@ flagged, banned, or downgraded.</p>
 <p class="admonition-title"><code>ClearKeyCENC</code> (<code>org.w3.clearkey</code>) has three escalating integration levels</p>
 <p>Pick the lowest level that works for the platform:</p>
 <ol>
-<li><strong>The manifest carries a <code>&lt;Laurl&gt;</code></strong>: implement nothing. The framework
+<li><strong>The manifest carries a <code>&lt;Laurl&gt;</code></strong>: write nothing. The framework
    POSTs the challenge to that URL itself.</li>
-<li><strong>A custom endpoint or extra headers are needed</strong>: override
+<li><strong>Your service needs a custom endpoint or extra headers</strong>: override
    <code>get_clearkey_license</code> to do the POST yourself.</li>
 <li><strong>Keys arrive obfuscated or through a bespoke channel</strong>: fetch and unwrap
-   the key in <code>get_tracks</code> and pre-populate
+   the content key in <code>get_tracks</code> and pre-populate
    <code>drm.content_keys[kid] = key_hex</code> on the track's <code>ClearKeyCENC</code>. The
    non-obvious payoff: when every KID is already keyed, the framework skips
    the license round-trip entirely.</li>
 </ol>
 </div>
-<p>Things you don't handle:</p>
+<p>Things the service does not do:</p>
 <ul>
-<li><strong>HLS AES-128 (<code>ClearKey</code>)</strong> and <strong>DRM-free</strong> content have no license
-  callback. The key comes from the manifest and is applied directly.</li>
+<li><strong>HLS AES-128 (<code>ClearKey</code>)</strong> tracks and <strong>DRM-free</strong> tracks have no license
+  callback. The content key comes from the manifest, and unshackle applies it
+  directly.</li>
 <li><strong>Key vaults</strong> cache <code>KID:KEY</code> pairs across runs, so repeat downloads skip the
   license round-trip entirely.</li>
 <li><strong>Decryption tooling</strong> (shaka-packager or mp4decrypt) and the choice of local
@@ -3056,18 +3057,18 @@ flagged, banned, or downgraded.</p>
 </span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="w">  </span><span class="nt">playback</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://api.myservice.com/v1/playback/{id}</span>
 </span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="w">  </span><span class="nt">license</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://api.myservice.com/v1/license/widevine</span>
 </span></code></pre></div>
-<p>Test it with:</p>
+<p>Try it with:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>MYSVC<span class="w"> </span>https://myservice.com/watch/abc123
 </span></code></pre></div>
 <hr />
 <h2 id="checklist">Checklist<a class="headerlink" href="#checklist" title="Permanent link">&para;</a></h2>
 <ul class="task-list">
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Folder name, class name, and Click <code>name=</code> all match the tag exactly.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <code>cli</code> is a <code>@staticmethod</code> returning an instance; <code>__init__</code> calls <code>super().__init__(ctx)</code>.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <code>get_titles</code>, <code>get_tracks</code>, <code>get_chapters</code> implemented; titles carry the original <code>language</code>.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Tracks come from a manifest parser with <code>to_tracks(language=title.language)</code>; no filtering by quality/language.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Encrypted tracks are marked with DRM; the license callbacks you need return responses <strong>unmodified</strong>.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> URLs, user agents, and certificates live in <code>config.yaml</code>, read via <code>self.config[...]</code>.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <code>cli</code> is a <code>@staticmethod</code> that returns an instance. <code>__init__</code> calls <code>super().__init__(ctx)</code>.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <code>get_titles</code>, <code>get_tracks</code> and <code>get_chapters</code> written. Titles carry the original <code>language</code>.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Tracks come from a manifest parser with <code>to_tracks(language=title.language)</code>. No filtering by quality or language.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Encrypted tracks carry their DRM. The license callbacks you need return responses <strong>unmodified</strong>.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> URLs, user agents, and certificates live in <code>config.yaml</code>, read through <code>self.config[...]</code>.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Multi-file services import their own modules relatively (<code>from .helpers import x</code>), so they work when loaded from a repo.</li>
 </ul>
 <p>Read <code>unshackle/services/EXAMPLE/</code> end to end. It annotates every feature

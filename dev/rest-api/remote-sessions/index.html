@@ -1710,10 +1710,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#session-lifecycle-and-expiry" class="md-nav__link">
+  <a href="#remote-session-lifecycle-and-expiry" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Session lifecycle and expiry
+        Remote session lifecycle and expiry
       
     </span>
   </a>
@@ -1744,10 +1744,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#session-endpoints" class="md-nav__link">
+  <a href="#remote-session-endpoints" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Session endpoints
+        Remote session endpoints
       
     </span>
   </a>
@@ -1799,10 +1799,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#session-info-response" class="md-nav__link">
+  <a href="#remote-session-info-response" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Session info response
+        Remote session info response
       
     </span>
   </a>
@@ -2187,10 +2187,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#session-lifecycle-and-expiry" class="md-nav__link">
+  <a href="#remote-session-lifecycle-and-expiry" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Session lifecycle and expiry
+        Remote session lifecycle and expiry
       
     </span>
   </a>
@@ -2221,10 +2221,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#session-endpoints" class="md-nav__link">
+  <a href="#remote-session-endpoints" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Session endpoints
+        Remote session endpoints
       
     </span>
   </a>
@@ -2276,10 +2276,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#session-info-response" class="md-nav__link">
+  <a href="#remote-session-info-response" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Session info response
+        Remote session info response
       
     </span>
   </a>
@@ -2334,7 +2334,7 @@
 
 
 <h1 id="remote-service-sessions">Remote Service Sessions<a class="headerlink" href="#remote-service-sessions" title="Permanent link">&para;</a></h1>
-<p>A <strong>remote service session</strong> lets one machine do the hard, service-specific work
+<p>A <strong>remote session</strong> lets one machine do the hard, service-specific work
 (authenticating to a streaming service, listing titles, resolving tracks and
 manifests, and, optionally, DRM licensing) while another machine runs the actual
 download, decryption, and muxing locally.</p>
@@ -2342,15 +2342,15 @@ download, decryption, and muxing locally.</p>
 A thin local client (<code>RemoteService</code>) talks to an unshackle <code>serve</code> instance over
 HTTP. The server keeps an authenticated service instance alive between requests so
 the client can authenticate once and then make many follow-up calls against the
-same session.</p>
+same remote session.</p>
 <div class="admonition note">
 <p class="admonition-title">Why you'd use this</p>
 <ul>
-<li>The server has service accounts, cookies, or a CDM you don't want to copy to
+<li>The server has service accounts, cookies, or a CDM you do not want to copy to
   every machine.</li>
-<li>You want to run downloads on a fast/local machine but keep credentials and
-  licensing centralized.</li>
-<li>A service is region-locked to where the server lives, and the client isn't.</li>
+<li>You want to do downloads on a fast/local machine but keep credentials and
+  licensing centralised.</li>
+<li>A service is region-locked to where the server lives, and the client is not.</li>
 </ul>
 </div>
 <hr />
@@ -2374,7 +2374,7 @@ selection (downloading segments, decrypting, and muxing) runs locally.</p>
 <p>The <code>RemoteService</code> adapter lives inside the ordinary <code>dl</code> command and replaces
 the old standalone <code>remote_dl</code> command. If you have prior scripts or docs that
 invoke <code>remote_dl</code>, use <code>dl</code> with a configured remote server instead. The
-functionality now rides on <code>dl</code> via <code>RemoteService</code>.</p>
+functionality now rides on <code>dl</code> through <code>RemoteService</code>.</p>
 </div>
 <p>For the auth-facing endpoints, header format, and error shapes referenced below,
 see <a href="../authentication/">Authentication</a> and the endpoint reference in
@@ -2429,14 +2429,14 @@ entry names a server and provides its URL and API key.</p>
 <div class="admonition warning">
 <p class="admonition-title">Port default</p>
 <p>The <code>unshackle serve</code> default port is <strong><code>8786</code></strong> (not <code>8080</code>). Use the port
-your server actually binds. Some older example snippets show <code>8080</code>, which is
+your server binds. Some older example snippets show <code>8080</code>, which is
 not the default.</p>
 </div>
 <h3 id="selecting-a-server">Selecting a server<a class="headerlink" href="#selecting-a-server" title="Permanent link">&para;</a></h3>
-<p>If exactly one server is configured, unshackle uses it implicitly:</p>
+<p>If you configure exactly one server, unshackle uses it implicitly:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>EXAMPLE<span class="w"> </span>0ABCDEF
 </span></code></pre></div>
-<p>If <strong>more than one</strong> server is configured, you must pick one with <code>--server</code>:</p>
+<p>If you configure <strong>more than one</strong> server, you must pick one with <code>--server</code>:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--server<span class="w"> </span>my_server<span class="w"> </span>EXAMPLE<span class="w"> </span>0ABCDEF
 </span></code></pre></div>
 <p>With no <code>remote_services</code> configured at all, unshackle raises a clear error telling
@@ -2444,17 +2444,17 @@ you to add the block shown above.</p>
 <hr />
 <h2 id="what-happens-during-a-download">What happens during a download<a class="headerlink" href="#what-happens-during-a-download" title="Permanent link">&para;</a></h2>
 <p>From your point of view the command looks like an ordinary download. Under the
-hood the client walks a session through its lifecycle.</p>
+hood the client walks a remote session through its lifecycle.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:5"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><input id="__tabbed_1_5" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">1. Create + authenticate</label><label for="__tabbed_1_2">2. Interactive prompts (if needed)</label><label for="__tabbed_1_3">3. Titles + tracks</label><label for="__tabbed_1_4">4. Licensing</label><label for="__tabbed_1_5">5. Download + close</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <p>The client calls <code>POST /api/session/create</code>, forwarding whatever it can so the
-server doesn't have to prompt:</p>
+server does not have to prompt:</p>
 <ul>
 <li>Local <strong>credentials</strong> for the service/profile (<code>{username, password, extra?}</code>)</li>
 <li>Local <strong>cookies</strong>, compressed and base64-encoded</li>
-<li>A resolved <strong>proxy</strong>, or, if you didn't set one, your detected
-  <strong>client region</strong> so the server can auto-proxy to match</li>
+<li>A resolved <strong>proxy</strong>, or, if you did not set one, your detected
+  <strong>client region</strong> so the server can auto-proxy to match it</li>
 <li>Track-selection hints (<code>range_</code>, <code>vcodec</code>, <code>quality</code>, <code>best_available</code>) so
   the server fetches the right manifests</li>
 <li>Your local per-service <strong>cache files</strong> (e.g. refreshed tokens)</li>
@@ -2464,7 +2464,7 @@ runs in the background on the server.</p>
 </div>
 <div class="tabbed-block">
 <p>Some services need a one-time code, PIN, or device confirmation. When the
-server's auth flow asks for input, the session enters <code>pending_input</code>. The
+server's auth flow asks for input, the remote session enters <code>pending_input</code>. The
 client polls, displays the prompt to you locally, collects your answer, and
 sends it back. The server's auth thread resumes with your response.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Enter the 6-digit code sent to your email: 483920
@@ -2472,30 +2472,30 @@ sends it back. The server's auth thread resumes with your response.</p>
 </div>
 <div class="tabbed-block">
 <p>Once authenticated, the client fetches the title list, then the tracks for the
-chosen title. The tracks come back with playback URLs, and DASH/ISM manifests
-are shipped as compressed XML so the client can re-parse them locally for
+chosen title. The tracks come back with playback URLs, and the server ships
+DASH/ISM manifests as compressed XML so the client can re-parse them locally for
 downloading. Any <code>session_headers</code> / <code>session_cookies</code> the server used are
 merged into the client's local HTTP session.</p>
 </div>
 <div class="tabbed-block">
-<p>For DRM content the client either <strong>proxies</strong> its CDM challenge through the
-server, or, if <code>server_cdm: true</code>, asks the server to run the full CDM flow
+<p>For a DRM-protected title the client either <strong>proxies</strong> its CDM challenge through
+the server, or, if <code>server_cdm: true</code>, asks the server to do the full CDM flow
 and return the content keys directly. See
 <a href="#server-side-vs-proxied-cdm">Server-side vs. proxied CDM</a> below.</p>
 </div>
 <div class="tabbed-block">
 <p>The client downloads, decrypts, and muxes locally. On completion it deletes
-the session. If the server has updated cache files (e.g. a refreshed token),
-they're returned on delete and saved locally so the <strong>next</strong> session can skip
-interactive auth.</p>
+the remote session. If the server has updated cache files (for example a refreshed
+token), the delete returns them and the client saves them locally, so the <strong>next</strong>
+remote session can skip interactive auth.</p>
 </div>
 </div>
 </div>
 <div class="admonition tip">
 <p class="admonition-title">Renaming remote titles locally</p>
-<p>You can rename titles for a remote service you don't have installed locally by
+<p>You can rename titles for a remote service you do not have installed locally by
 adding a <code>title_map</code> under that service in your client <code>remote_services.&lt;name&gt;.services</code>
-config. The server sends raw titles; your local map wins.</p>
+config. The server sends raw titles. Your local map wins.</p>
 <p>This is deliberate: the server does <strong>no</strong> <code>title_map</code> remapping of its own and
 sends titles exactly as the service returns them. All remapping happens on the
 client, applied to the titles the server sends back. It keeps the final output
@@ -2512,27 +2512,27 @@ services you have no local install of.</p>
 to <code>POST /api/session/{id}/license</code>, the server forwards it to the service, and
 the raw license bytes come back for your local CDM to parse.</p>
 <ul>
-<li>Keeps your CDM local; the server just relays the license request.</li>
+<li>Keeps your CDM local. The server only relays the license request.</li>
 <li>Used when <code>server_cdm</code> is <code>false</code> (the default).</li>
 </ul>
 </div>
 <div class="tabbed-block">
 <p>The <strong>server's CDM</strong> does everything. The client sends track IDs (or a PSSH),
 the server checks its key vaults, loads the device configured for your API key,
-runs the CDM flow, and returns <code>KID:KEY</code> pairs directly. No CDM is needed on the
-client.</p>
+runs the CDM flow, and returns <code>KID:KEY</code> pairs directly. The client needs no
+CDM.</p>
 <ul>
 <li>Enable with <code>server_cdm: true</code> in the server entry.</li>
-<li>The server tells the client which DRM type it actually used
+<li>The server tells the client which DRM type it used
   (<code>widevine</code> or <code>playready</code>).</li>
 </ul>
 </div>
 </div>
 </div>
 <hr />
-<h2 id="session-lifecycle-and-expiry">Session lifecycle and expiry<a class="headerlink" href="#session-lifecycle-and-expiry" title="Permanent link">&para;</a></h2>
-<p>Sessions live in an <strong>in-memory store on the server</strong> and expire on a timer. You
-generally never touch this directly, but it explains behavior you might observe.</p>
+<h2 id="remote-session-lifecycle-and-expiry">Remote session lifecycle and expiry<a class="headerlink" href="#remote-session-lifecycle-and-expiry" title="Permanent link">&para;</a></h2>
+<p>Remote sessions live in an <strong>in-memory store on the server</strong> and expire on a timer. You
+generally never touch this directly, but it explains behaviour you might observe.</p>
 <table>
 <thead>
 <tr>
@@ -2566,9 +2566,10 @@ generally never touch this directly, but it explains behavior you might observe.
 </table>
 <div class="admonition note">
 <p class="admonition-title">Auth is never rushed</p>
-<p>A session that is still <code>authenticating</code> or waiting on <code>pending_input</code> is <strong>not</strong>
-subject to the short 300s TTL; it gets the full 600s auth window. This gives you
-time to enter an interactive code without the session vanishing mid-prompt.</p>
+<p>A remote session that is still <code>authenticating</code> or waiting on <code>pending_input</code> is
+<strong>not</strong> subject to the short 300s TTL. It gets the full 600s auth window. This gives
+you time to enter an interactive code without the remote session vanishing
+mid-prompt.</p>
 </div>
 <p>The TTL and max-session limits are read from server config:</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml (server)</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">serve</span><span class="p">:</span>
@@ -2578,17 +2579,18 @@ time to enter an interactive code without the session vanishing mid-prompt.</p>
 <hr />
 <h2 id="security-properties-worth-knowing">Security properties worth knowing<a class="headerlink" href="#security-properties-worth-knowing" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>API key required.</strong> Every session request carries <code>X-Secret-Key</code>; requests
-  without a valid key are rejected (health check aside). See
+<li><strong>API key required.</strong> Every remote session request carries <code>X-Secret-Key</code>. The
+  server rejects requests without a valid API key (health check aside). See
   <a href="../authentication/">Authentication</a>.</li>
-<li><strong>IP binding.</strong> A session records the creator's IP at create time. If a later
-  request for the same session comes from a different IP, the server returns
-  <code>403 FORBIDDEN</code>. Sessions are not portable between hosts.</li>
-<li><strong>Namespaced, isolated cache.</strong> Each session gets its own cache directory,
-  namespaced by a hash of the API key and the session ID, so sessions can't read
-  each other's cached tokens. The directory is deleted when the session ends.</li>
-<li><strong>Secrets are scrubbed from logs.</strong> Session IDs, service tags, and other user
-  values are sanitized before logging.</li>
+<li><strong>IP binding.</strong> A remote session records the creator's IP when the server makes it.
+  If a later request for the same remote session comes from a different IP, the server
+  returns <code>403 FORBIDDEN</code>. Remote sessions are not portable between hosts.</li>
+<li><strong>Namespaced, isolated cache.</strong> Each remote session gets its own cache directory,
+  namespaced by a hash of the API key and the remote session ID, so remote sessions
+  cannot read each other's cached tokens. The server deletes the directory when the
+  remote session ends.</li>
+<li><strong>The server redacts secrets in logs.</strong> It redacts remote session IDs, service tags,
+  and other user values before it writes them to the log.</li>
 </ul>
 <hr />
 <h2 id="developer-reference">Developer reference<a class="headerlink" href="#developer-reference" title="Permanent link">&para;</a></h2>
@@ -2597,17 +2599,17 @@ time to enter an interactive code without the session vanishing mid-prompt.</p>
 <p>The material below documents the server-side implementation and the HTTP
 contract. End users configuring a client can stop at the sections above.</p>
 </div>
-<h3 id="session-endpoints">Session endpoints<a class="headerlink" href="#session-endpoints" title="Permanent link">&para;</a></h3>
-<p>All routes are exposed even in <code>--remote-only</code> server mode. Paths use the
-<code>session_id</code> returned by create.</p>
+<h3 id="remote-session-endpoints">Remote session endpoints<a class="headerlink" href="#remote-session-endpoints" title="Permanent link">&para;</a></h3>
+<p>The server mounts all these routes, even in <code>--remote-only</code> mode. Paths use the
+<code>session_id</code> that <code>create</code> returns.</p>
 <div class="admonition note">
 <p class="admonition-title">Why <code>--remote-only</code> exists</p>
-<p><code>--remote-only</code> narrows the server to just the health, services, search, and
-session subset (and emits CORS headers) precisely so it is safe to sit behind
+<p><code>--remote-only</code> narrows the server to only the health, services, search, and
+remote session subset (and emits CORS headers), precisely so it is safe to sit behind
 Cloudflare or serve cross-origin browser clients. That trimmed surface, rather
 than the full <code>--api-only</code> mode, is what makes a CORS/Cloudflare-fronted
 deployment practical: reach for it when the server is public-facing or accessed
-from a browser origin, not when you simply want the local HTTP API.</p>
+from a browser origin, not when you want only the local HTTP API.</p>
 </div>
 <table>
 <thead>
@@ -2661,7 +2663,7 @@ from a browser origin, not when you simply want the local HTTP API.</p>
 <tr>
 <td><code>DELETE</code></td>
 <td><code>/api/session/{id}</code></td>
-<td>Close the session, return updated cache, clean up</td>
+<td>Close the remote session, return updated cache, clean up</td>
 </tr>
 </tbody>
 </table>
@@ -2676,8 +2678,8 @@ from a browser origin, not when you simply want the local HTTP API.</p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"session_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"...uuid4..."</span><span class="p">,</span><span class="w"> </span><span class="nt">"service"</span><span class="p">:</span><span class="w"> </span><span class="s2">"EXAMPLE"</span><span class="p">,</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"authenticating"</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <p>Authentication runs on a background thread (<code>asyncio.to_thread(authenticate, ...)</code>).
-The session starts in <code>AUTHENTICATING</code>; the client must poll the prompt endpoint
-until it reaches <code>authenticated</code> (or <code>failed</code>).</p>
+The remote session starts in <code>AUTHENTICATING</code>. The client must poll the prompt
+endpoint until it reaches <code>authenticated</code> (or <code>failed</code>).</p>
 <h3 id="interactive-auth-the-inputbridge">Interactive auth: the <code>InputBridge</code><a class="headerlink" href="#interactive-auth-the-inputbridge" title="Permanent link">&para;</a></h3>
 <p>When the service calls its input function during <code>authenticate()</code> on the server
 thread, an <code>InputBridge</code> pauses that thread and exposes the prompt to the HTTP
@@ -2686,7 +2688,7 @@ layer.</p>
 <li><code>AuthStatus</code> values: <code>authenticating</code>, <code>pending_input</code>, <code>authenticated</code>, <code>failed</code>.</li>
 <li><code>InputBridge.request_input(prompt, timeout=600)</code> blocks the sync auth thread on a
   <code>threading.Event</code> until <code>submit_response()</code> or <code>cancel()</code> fires.</li>
-<li>A timeout raises <code>TimeoutError</code> and marks the session <code>FAILED</code>.</li>
+<li>A timeout raises <code>TimeoutError</code> and marks the remote session <code>FAILED</code>.</li>
 <li><code>AUTH_INPUT_TIMEOUT = 600.0</code> seconds. This is also the TTL granted to
   <code>AUTHENTICATING</code> / <code>PENDING_INPUT</code> sessions in the store.</li>
 </ul>
@@ -2696,28 +2698,28 @@ layer.</p>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"pending_input"</span><span class="p">,</span><span class="w"> </span><span class="nt">"prompt"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Enter code: "</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"failed"</span><span class="p">,</span><span class="w"> </span><span class="nt">"error"</span><span class="p">:</span><span class="w"> </span><span class="s2">"...message..."</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
-<p>A missing session returns <code>404 SESSION_NOT_FOUND</code>; an IP mismatch returns
+<p>A missing remote session returns <code>404 SESSION_NOT_FOUND</code>. An IP mismatch returns
 <code>403 FORBIDDEN</code>. <code>POST /api/session/{id}/prompt</code> takes <code>{ "response": "..." }</code> and
-returns <code>{ "status": "accepted" }</code>; posting with no pending prompt is an
+returns <code>{ "status": "accepted" }</code>. A post with no pending prompt is an
 <code>INVALID_INPUT</code> error.</p>
 <h3 id="sessionstore-internals"><code>SessionStore</code> internals<a class="headerlink" href="#sessionstore-internals" title="Permanent link">&para;</a></h3>
-<p>Source: <code>unshackle/core/api/session_store.py</code>. A singleton obtained via
+<p>Source: <code>unshackle/core/api/session_store.py</code>. A singleton you get from
 <code>get_session_store()</code>.</p>
 <ul>
 <li><strong>Config-driven limits.</strong> <code>serve.session_ttl</code> (default <code>300</code>) and
   <code>serve.max_sessions</code> (default <code>100</code>) are read as properties, so config changes
   take effect without recreating the store.</li>
-<li><strong><code>create()</code></strong> evicts the least-recently-accessed session when at capacity,
-  then stores a new <code>SessionEntry</code> (defaulting <code>auth_status</code> to <code>AUTHENTICATED</code>;
-  the create handler overrides it to <code>AUTHENTICATING</code>).</li>
-<li><strong><code>get()</code></strong> refreshes <code>last_accessed</code> via <code>touch()</code>. It returns <code>None</code> (and
-  deletes the entry) if an authenticated session has been idle longer than the TTL.
-  Sessions in <code>AUTHENTICATING</code> / <code>PENDING_INPUT</code> are exempt from TTL expiry.</li>
-<li><strong><code>cleanup_expired()</code></strong> runs every 60s: authenticated sessions expire at <code>ttl</code>,
-  in-flight-auth sessions expire at <code>AUTH_INPUT_TIMEOUT</code>. Removing a session
-  cancels its <code>InputBridge</code> and deletes its cache directory (pruning empty parent
-  dirs up to, but not including, the cache root).</li>
-<li><strong><code>cancel_all_bridges()</code></strong> is called on server shutdown to unblock any waiting
+<li><strong><code>create()</code></strong> evicts the least-recently-accessed remote session when at capacity,
+  then stores a new <code>SessionEntry</code>. It defaults <code>auth_status</code> to <code>AUTHENTICATED</code>, and
+  the <code>create</code> handler overrides it to <code>AUTHENTICATING</code>.</li>
+<li><strong><code>get()</code></strong> refreshes <code>last_accessed</code> through <code>touch()</code>. It returns <code>None</code> (and
+  deletes the entry) if an authenticated remote session has been idle longer than the
+  TTL. Remote sessions in <code>AUTHENTICATING</code> / <code>PENDING_INPUT</code> are exempt from TTL expiry.</li>
+<li><strong><code>cleanup_expired()</code></strong> runs every 60s: authenticated remote sessions expire at
+  <code>ttl</code>, in-flight-auth remote sessions expire at <code>AUTH_INPUT_TIMEOUT</code>. The removal of
+  a remote session cancels its <code>InputBridge</code> and deletes its cache directory (pruning
+  empty parent dirs up to, but not including, the cache root).</li>
+<li>The server calls <strong><code>cancel_all_bridges()</code></strong> on shutdown, to unblock any waiting
   auth threads.</li>
 </ul>
 <p><code>SessionEntry</code> fields:</p>
@@ -2772,16 +2774,16 @@ returns <code>{ "status": "accepted" }</code>; posting with no pending prompt is
 </tbody>
 </table>
 <h3 id="per-session-cache-namespacing">Per-session cache namespacing<a class="headerlink" href="#per-session-cache-namespacing" title="Permanent link">&para;</a></h3>
-<p>The create handler builds a <code>Cacher</code> namespaced as:</p>
+<p>The <code>create</code> handler builds a <code>Cacher</code> namespaced as:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>_sessions/&lt;pbkdf2_hmac(sha256, X-Secret-Key, "unshackle-session-ns", 100000)[:12]&gt;/&lt;session_id&gt;/&lt;service&gt;
 </span></code></pre></div>
-<p>Forwarded <code>cache</code> files are written into that directory before authentication.
+<p>The handler writes forwarded <code>cache</code> files into that directory before authentication.
 On <code>DELETE</code>, the handler harvests updated cache files (compressing each with zlib
 and base64-encoding, <strong>excluding</strong> <code>titles_*</code> files) and returns them under a
-<code>cache</code> key so the client can persist refreshed tokens:</p>
+<code>cache</code> field, so the client can keep refreshed tokens:</p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"ok"</span><span class="p">,</span><span class="w"> </span><span class="nt">"cache"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"tokens"</span><span class="p">:</span><span class="w"> </span><span class="s2">"...base64(zlib(bytes))..."</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
-<h3 id="session-info-response">Session info response<a class="headerlink" href="#session-info-response" title="Permanent link">&para;</a></h3>
+<h3 id="remote-session-info-response">Remote session info response<a class="headerlink" href="#remote-session-info-response" title="Permanent link">&para;</a></h3>
 <p><code>GET /api/session/{id}</code>:</p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p">{</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">"session_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span>
@@ -2795,11 +2797,11 @@ and base64-encoding, <strong>excluding</strong> <code>titles_*</code> files) and
 <div class="admonition warning">
 <p class="admonition-title"><code>expires_in</code> is the configured TTL, not time remaining</p>
 <p>The <code>expires_in</code> value reports the store's configured <code>session_ttl</code>, not the
-seconds left before this specific session expires.</p>
+seconds left before this specific remote session expires.</p>
 </div>
 <h3 id="reference-client-remoteservice">Reference client: <code>RemoteService</code><a class="headerlink" href="#reference-client-remoteservice" title="Permanent link">&para;</a></h3>
 <p>Source: <code>unshackle/core/remote_service.py</code>. This is the canonical consumer of the
-session API and a good template for any client.</p>
+remote session API and a good template for any client.</p>
 <ul>
 <li><strong><code>RemoteClient.request</code></strong> sets <code>X-Secret-Key</code> and <code>User-Agent: unshackle/&lt;version&gt;</code>,
   uses a 120s timeout for <code>POST</code> and 30s for <code>GET</code>/<code>DELETE</code>, and treats any
@@ -2808,10 +2810,10 @@ session API and a good template for any client.</p>
 <li><strong>Retries.</strong> The download-side HTTP session mounts an adapter with
   <code>Retry(total=5, backoff_factor=0.2, status_forcelist=[429, 500, 502, 503, 504])</code>.</li>
 <li><strong>Flow.</strong> <code>authenticate()</code> → <code>create</code> (+ poll <code>prompt</code> every 2s up to a 600s
-  deadline, answering <code>pending_input</code> prompts; with stdin closed the client logs an
+  deadline, answering <code>pending_input</code> prompts. With stdin closed the client logs an
   error and raises <code>SystemExit(1)</code> instead of posting an empty answer) → <code>get_titles()</code> → <code>get_tracks()</code>
   (merging returned <code>session_headers</code>/<code>session_cookies</code>, re-parsing <code>manifests</code>) →
-  license via proxy or <code>server_cdm</code> → <code>close()</code> (<code>DELETE</code>, saving any returned
+  get the licence in proxy mode or <code>server_cdm</code> mode → <code>close()</code> (<code>DELETE</code>, saving any returned
   <code>cache</code>).</li>
 <li><strong>Server resolution.</strong> <code>resolve_server()</code> reads <code>config.remote_services.&lt;name&gt;</code>
   into <code>{url, api_key, services, server_cdm}</code>, injecting the <code>server_cdm</code> flag into
@@ -2821,22 +2823,22 @@ session API and a good template for any client.</p>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <div class="admonition example">
 <p class="admonition-title">\"Could not connect to remote server ... Is it running?\"</p>
-<p>The client couldn't reach the URL. Confirm <code>unshackle serve</code> is running on the
-server, the <code>url</code>/port in <code>remote_services</code> are correct (default port <code>8786</code>),
+<p>The client could not reach the URL. Make sure that <code>unshackle serve</code> operates on
+the server, the <code>url</code>/port in <code>remote_services</code> are correct (default port <code>8786</code>),
 and any firewall or reverse proxy allows the connection.</p>
 </div>
 <div class="admonition example">
 <p class="admonition-title"><code>403 FORBIDDEN</code> mid-download</p>
-<p>The request came from a different IP than the one that created the session.
-Sessions are IP-bound. Don't move between networks (or NAT egress IPs) during a
+<p>The request came from a different IP than the one that made the remote session.
+Remote sessions are IP-bound. Do not move between networks (or NAT egress IPs) during a
 remote download.</p>
 </div>
 <div class="admonition example">
 <p class="admonition-title">Auth times out or the prompt never resolves</p>
-<p>Interactive auth allows up to 600s. If you miss that window the session is
-marked <code>failed</code> and cleaned up; just re-run the download. If the server never
-prompts you, check that credentials/cookies forwarded from the client are valid
-for the service.</p>
+<p>Interactive auth allows up to 600s. If you miss that window, the server marks the
+remote session <code>failed</code> and cleans it up. Operate the download again. If the server
+never prompts you, make sure that the credentials and cookies the client forwarded
+are valid for the service.</p>
 </div>
 <div class="admonition example">
 <p class="admonition-title">\"Multiple remote services configured. Use --server ...\"</p>

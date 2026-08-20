@@ -2497,25 +2497,25 @@
 
 
 <h1 id="drm-cdm-setup">DRM &amp; CDM Setup<a class="headerlink" href="#drm-cdm-setup" title="Permanent link">&para;</a></h1>
-<p>Most commercial streaming content is protected by a Digital Rights Management (DRM)
-system. To download and play it back, unshackle needs to obtain the <strong>content keys</strong>
+<p>A Digital Rights Management (DRM) system protects most commercial streaming titles.
+To download a title and play it back, unshackle needs to get the <strong>content keys</strong>
 for the encrypted tracks and then decrypt them. This page explains the DRM systems
-unshackle supports, how to provide a device so it can talk to a license server, the
+unshackle supports, how to install a device so it can talk to a license server, the
 difference between local and remote CDMs, and how to choose a decryption backend.</p>
 <div class="admonition note">
 <p class="admonition-title">Who this page is for</p>
 <p>This is a practical configuration guide for end users of the unshackle CLI.
-A few sections are marked <strong>Developer</strong>. They describe internal behaviour that is
-useful when writing a service, but you do not need them to download protected
-content.</p>
+A few sections have a <strong>Developer</strong> mark. They give internal behaviour that is
+useful when you write a service, but you do not need them to download a protected
+title.</p>
 </div>
 <h2 id="key-concepts">Key concepts<a class="headerlink" href="#key-concepts" title="Permanent link">&para;</a></h2>
 <p>Before configuring anything, it helps to know the vocabulary. unshackle draws a firm
 line between two things:</p>
 <ul>
 <li>A <strong>CDM</strong> (Content Decryption Module) is the trusted "black box" that turns a
-  <em>license challenge</em> into <em>content keys</em>. It is backed by a <strong>device</strong>, a file
-  containing the cryptographic identity of a real client (a phone, a browser, etc.).</li>
+  <em>license challenge</em> into <em>content keys</em>. A <strong>device</strong> backs it: a file that carries
+  the cryptographic identity of a real client, such as a phone or a browser.</li>
 <li>A <strong>DRM system</strong> is the wrapper around a CDM that parses the protection metadata,
   drives the challenge → license → keys handshake, and finally invokes an external
   tool to physically decrypt the downloaded file.</li>
@@ -2539,7 +2539,7 @@ line between two things:</p>
 </tr>
 <tr>
 <td><strong>CEK</strong></td>
-<td>Content Encryption Key: the actual AES key, mapped from its KID.</td>
+<td>Content Encryption Key: the AES content key, mapped from its KID.</td>
 </tr>
 <tr>
 <td><strong>Challenge</strong></td>
@@ -2557,7 +2557,7 @@ service's license server, hands the response back to the CDM to extract the keys
 then decrypts the file with those keys.</p>
 <h2 id="supported-drm-systems">Supported DRM systems<a class="headerlink" href="#supported-drm-systems" title="Permanent link">&para;</a></h2>
 <p>unshackle implements five DRM systems. Only the first two need a device file and a
-license-server handshake; the rest are special cases.</p>
+license-server handshake. The rest are special cases.</p>
 <table>
 <thead>
 <tr>
@@ -2603,30 +2603,30 @@ license-server handshake; the rest are special cases.</p>
 <div class="admonition warning">
 <p class="admonition-title">Two different ClearKeys</p>
 <p>"ClearKey (HLS)" and "ClearKey (CENC)" are entirely different systems that happen
-to share a name. The HLS variant is the AES-128 key referenced by an <code>EXT-X-KEY</code>
-tag and is decrypted in-process. The CENC variant is the W3C EME
-<code>org.w3.clearkey</code> scheme, delivers keys as a JWK Set, and is decrypted through
-shaka-packager or mp4decrypt just like Widevine. Neither involves a device file.</p>
+to share a name. The HLS variant is the AES-128 content key that an <code>EXT-X-KEY</code>
+tag references, and unshackle decrypts it in-process. The CENC variant is the W3C
+EME <code>org.w3.clearkey</code> scheme. It delivers keys as a JWK Set, and shaka-packager or
+mp4decrypt decrypts it like Widevine. Neither involves a device file.</p>
 </div>
 <h3 id="widevine-vs-playready">Widevine vs PlayReady<a class="headerlink" href="#widevine-vs-playready" title="Permanent link">&para;</a></h3>
 <p>These are the two "real" DRMs, and in unshackle they behave almost identically: the
 same PSSH/KID handling, the same decryption backends, and the same key-caching flow.
 The differences that matter to you are:</p>
 <ul>
-<li><strong>Device file</strong>: Widevine uses a <code>.wvd</code>; PlayReady uses a <code>.prd</code>.</li>
+<li><strong>Device file</strong>: Widevine uses a <code>.wvd</code>. PlayReady uses a <code>.prd</code>.</li>
 <li><strong>Availability</strong>: some services offer only one system, some offer both. When a
   manifest carries both, unshackle picks the appropriate CDM for each track (see
   <a href="#widevine-and-playready-on-the-same-title">Widevine and PlayReady on the same title</a>).</li>
 </ul>
-<p>To download a Widevine-protected title you need a <code>.wvd</code> device; for PlayReady you
+<p>To download a Widevine-protected title you need a <code>.wvd</code> device. For PlayReady you
 need a <code>.prd</code> device. You can hold both, and unshackle automatically selects the
 appropriate one for each track.</p>
 <div class="admonition info">
 <p class="admonition-title">Obtaining device files</p>
 <p>A <code>.wvd</code> or <code>.prd</code> encodes the private keys of a real client device. unshackle
-does <strong>not</strong> ship with one and cannot generate the underlying secret material for
+does <strong>not</strong> ship with one and cannot make the underlying secret material for
 you. You must supply your own. The <code>wvd</code> and <code>prd</code> commands below manage and
-provision device files once you have the raw key material.</p>
+provision device files once you have the raw cryptographic material.</p>
 </div>
 <h2 id="providing-a-device-with-the-wvd-and-prd-commands">Providing a device with the <code>wvd</code> and <code>prd</code> commands<a class="headerlink" href="#providing-a-device-with-the-wvd-and-prd-commands" title="Permanent link">&para;</a></h2>
 <p>Device files live in dedicated directories, by default:</p>
@@ -2660,15 +2660,15 @@ provision device files once you have the raw key material.</p>
 <div class="tabbed-block">
 <div class="language-console highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>wvd<span class="w"> </span>add<span class="w"> </span>./nexus_6p.wvd
 </span></code></pre></div>
-<p>The file is validated and moved into the WVDs directory. You can add several at
-once by passing multiple paths.</p>
+<p>unshackle validates the file and moves it into the WVDs directory. You can add
+several at once by passing multiple paths.</p>
 </div>
 <div class="tabbed-block">
 <div class="language-console highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>wvd<span class="w"> </span>parse<span class="w"> </span>nexus_6p
 </span></code></pre></div>
 <p>Prints the System ID, Security Level, Type, Flags, and whether a Private Key,
-Client ID, and VMP are present. A bare name (no extension) is resolved inside the
-WVDs directory; a path with an extension is used as-is.</p>
+Client ID, and VMP are present. unshackle finds a bare name (no extension) inside
+the WVDs directory. It uses a path with an extension as-is.</p>
 </div>
 <div class="tabbed-block">
 <div class="language-console highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>wvd<span class="w"> </span>new<span class="w"> </span><span class="s2">"Nexus 6P"</span><span class="w"> </span>./private_key.pem<span class="w"> </span>./client_id.bin<span class="w"> </span>./vmp.bin<span class="w"> </span>-t<span class="w"> </span>ANDROID<span class="w"> </span>-l<span class="w"> </span><span class="m">3</span>
@@ -2705,7 +2705,7 @@ an older format. Migrate it with pywidevine before use:</p>
 point at a single folder that contains <code>zgpriv.dat</code> and <code>bgroupcert.dat</code>:</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>prd<span class="w"> </span>new<span class="w"> </span>./device_folder/
 </span></code></pre></div>
-<p>A fresh leaf certificate is generated and the device is written to the PRDs
+<p>unshackle makes a fresh leaf certificate and writes the device to the PRDs
 directory (or to <code>-o/--output</code>). Use <code>-e/--encryption_key</code> and <code>-s/--signing_key</code>
 to supply your own ECC keys instead of generating them.</p>
 </div>
@@ -2713,21 +2713,21 @@ to supply your own ECC keys instead of generating them.</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>prd<span class="w"> </span>reprovision<span class="w"> </span>./data/PRDs/mydevice.prd
 </span></code></pre></div>
 <p>Regenerates the leaf certificate and encryption/signing keys of an existing
-device in place. The device must support reprovisioning (a group key must be
-present, i.e. a version 3 or higher device).</p>
+device in place. The device must be able to reprovision (a group key must be
+present, that is, a version 3 or higher device).</p>
 </div>
 <div class="tabbed-block">
 <div class="language-console highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>prd<span class="w"> </span><span class="nb">test</span><span class="w"> </span>./data/PRDs/mydevice.prd<span class="w"> </span>-sl<span class="w"> </span><span class="m">2000</span><span class="w"> </span>-c<span class="w"> </span>aesctr
 </span></code></pre></div>
 <p>Runs a full challenge/license/keys cycle against Microsoft's public PlayReady
 test server and prints the returned keys, confirming the device works.
-<code>-sl/--security-level</code> accepts <code>150</code>, <code>2000</code>, or <code>3000</code> (default <code>2000</code>);
+<code>-sl/--security-level</code> accepts <code>150</code>, <code>2000</code>, or <code>3000</code> (default <code>2000</code>).
 <code>-c/--ckt</code> accepts <code>aesctr</code> or <code>aescbc</code>.</p>
 </div>
 </div>
 </div>
 <h2 id="selecting-which-device-to-use-the-cdm-config">Selecting which device to use: the <code>cdm</code> config<a class="headerlink" href="#selecting-which-device-to-use-the-cdm-config" title="Permanent link">&para;</a></h2>
-<p>Having a device on disk is not enough; you must tell unshackle which device to use
+<p>A device on disk is not enough. You must tell unshackle which device to use
 for which service. That is the job of the <code>cdm</code> section, which maps a service tag to
 a device name (the file's name without extension). A <code>default</code> entry acts as the
 fallback:</p>
@@ -2751,8 +2751,9 @@ profile.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="3:3"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><input id="__tabbed_3_3" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">By quality</label><label for="__tabbed_3_2">By DRM system</label><label for="__tabbed_3_3">By profile</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<p>Keys are matched against the video height. You can use exact heights or
-comparisons (<code>&gt;=1080</code>, <code>&gt;720</code>, <code>&lt;=576</code>, <code>&lt;480</code>). More specific matches win.</p>
+<p>unshackle compares each config key against the video height. You can use exact
+heights or comparisons (<code>&gt;=1080</code>, <code>&gt;720</code>, <code>&lt;=576</code>, <code>&lt;480</code>). The most specific one
+wins.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">cdm</span><span class="p">:</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span><span class="nt">SOMESERVICE</span><span class="p">:</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span><span class="s">"&gt;=1080"</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sm_g935f_l1</span>
@@ -2770,7 +2771,8 @@ these automatically, using the <code>widevine</code> device for Widevine tracks 
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<p>Keys are matched against the active profile, with a <code>default</code> fallback.</p>
+<p>unshackle compares each config key against the active profile, with a <code>default</code>
+fallback.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">cdm</span><span class="p">:</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">SOMESERVICE</span><span class="p">:</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">    </span><span class="nt">premium</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sm_g935f_l1</span>
@@ -2780,25 +2782,25 @@ these automatically, using the <code>widevine</code> device for Widevine tracks 
 </div>
 </div>
 <h2 id="local-vs-remote-cdms">Local vs remote CDMs<a class="headerlink" href="#local-vs-remote-cdms" title="Permanent link">&para;</a></h2>
-<p>A CDM can run in two places:</p>
+<p>A CDM can operate in two places:</p>
 <ul>
 <li>A <strong>local CDM</strong> loads a <code>.wvd</code> or <code>.prd</code> device from your machine and performs the
   challenge/license/keys handshake locally. This is what the <code>cdm</code> mapping above
   resolves to by default.</li>
 <li>A <strong>remote CDM</strong> delegates the CDM operations to an HTTP API. Your device (and its
-  secrets) live on the remote server; unshackle sends it PSSH/challenge data and
+  secrets) live on the remote CDM host. unshackle sends it PSSH/challenge data and
   receives keys back. This is useful for sharing a high-security-level device, using
-  a hosted key service, or keeping device secrets off your download machine.</li>
+  a hosted content key service, or keeping device secrets off your download machine.</li>
 </ul>
 <p>The device name in your <code>cdm</code> mapping resolves to a remote CDM whenever it matches the
 <code>name</code> of an entry in the <code>remote_cdm</code> list. Otherwise it falls back to a local
 <code>.prd</code>/<code>.wvd</code> file of that name.</p>
 <h2 id="remote-cdms">Remote CDMs<a class="headerlink" href="#remote-cdms" title="Permanent link">&para;</a></h2>
-<p>Remote CDMs are declared as a list under <code>remote_cdm</code>. Each entry has a <code>name</code> (which
+<p>You declare remote CDMs as a list under <code>remote_cdm</code>. Each entry has a <code>name</code> (which
 you then reference from the <code>cdm</code> mapping) and a shape that depends on its <code>type</code>.
 There are four kinds.</p>
 <h3 id="widevine-remote-cdm-pywidevine-serve">Widevine remote CDM (pywidevine serve)<a class="headerlink" href="#widevine-remote-cdm-pywidevine-serve" title="Permanent link">&para;</a></h3>
-<p>With no <code>type</code> field and a non-PlayReady device type, the entry is treated as a
+<p>With no <code>type</code> field and a non-PlayReady device type, unshackle treats the entry as a
 standard pywidevine "serve" endpoint:</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">remote_cdm</span><span class="p">:</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_wv_remote</span>
@@ -2812,11 +2814,12 @@ standard pywidevine "serve" endpoint:</p>
 </span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="nt">cdm</span><span class="p">:</span>
 </span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_wv_remote</span>
 </span></code></pre></div>
-<p><code>security_level</code> defaults to <code>3000</code> if omitted. Field names are read
-case-insensitively, so <code>Device Type</code>/<code>device_type</code>, <code>System ID</code>/<code>system_id</code>, etc. are
-all accepted.</p>
+<p><code>security_level</code> defaults to <code>3000</code> if omitted. unshackle reads field names
+case-insensitively, so <code>Device Type</code>/<code>device_type</code>, <code>System ID</code>/<code>system_id</code>, and the
+other field names are all accepted.</p>
 <h3 id="playready-remote-cdm">PlayReady remote CDM<a class="headerlink" href="#playready-remote-cdm" title="Permanent link">&para;</a></h3>
-<p>If the device type is <code>PLAYREADY</code>, the entry is routed to the pyplayready remote CDM:</p>
+<p>If the device type is <code>PLAYREADY</code>, unshackle routes the entry to the pyplayready
+remote CDM:</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nt">remote_cdm</span><span class="p">:</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_pr_remote</span>
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">    </span><span class="nt">device_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PLAYREADY</span>
@@ -2845,11 +2848,11 @@ includes an intelligent key-caching layer:</p>
 </span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>
 </span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="nt">decrypt_labs_api_key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your-decrypt-labs-key</span>
 </span></code></pre></div>
-<p>The API key is sent as the <code>decrypt-labs-api-key</code> header. If you omit <code>secret</code> on the
-entry, unshackle falls back to the global <code>decrypt_labs_api_key</code> value; if neither is
-present it raises an error. The <code>host</code> defaults to
+<p>unshackle sends the API key as the <code>decrypt-labs-api-key</code> header. If you do not write
+<code>secret</code> on the entry, unshackle falls back to the global <code>decrypt_labs_api_key</code> value.
+If neither is present it raises an error. The <code>host</code> defaults to
 <code>https://keyxtractor.decryptlabs.com</code>. PlayReady devices (<code>SL2</code>/<code>SL3</code>) default to
-security level <code>2000</code>/<code>3000</code> respectively; Widevine devices default to
+security level <code>2000</code>/<code>3000</code> respectively. Widevine devices default to
 <code>system_id: 26830</code>, <code>security_level: 3</code>.</p>
 <h3 id="custom-api-custom_api">Custom API (<code>custom_api</code>)<a class="headerlink" href="#custom-api-custom_api" title="Permanent link">&para;</a></h3>
 <p>For an arbitrary CDM HTTP API, <code>type: custom_api</code> provides a fully configurable client
@@ -2876,24 +2879,29 @@ that adapts to almost any request/response shape through YAML alone. A minimal e
 </span></code></pre></div>
 <p>The <code>custom_api</code> type supports much more: request/response field remapping,
 transforms (base64/hex/JSON encoding, <code>kid:key</code> parsing), conditional parameters,
-success/error detection, and vault-backed caching. Its full schema is aimed at
-developers integrating a bespoke key server; see the developer note below.</p>
+success/error detection, and vault-backed caching. Its full schema is for developers
+who integrate a bespoke CDM API. See the developer note below.</p>
 <div class="admonition note">
 <p class="admonition-title">Developer: full <code>custom_api</code> schema</p>
-<p>A <code>custom_api</code> entry accepts these sub-objects: <code>device</code> (<code>name</code>, <code>type</code>,
-<code>system_id</code>, <code>security_level</code>); <code>auth</code> (<code>type</code> of <code>header</code>/<code>bearer</code>/<code>basic</code> with
-the matching credential fields, plus <code>custom_headers</code>); <code>endpoints</code>
-(<code>get_request</code> and <code>decrypt_response</code>, each <code>{path, method, timeout}</code>);
-per-endpoint <code>request_mapping</code> (<code>param_names</code>, <code>static_params</code>,
-<code>conditional_params</code>, <code>transforms</code>, <code>nested_params</code>, <code>exclude_params</code>) and
-<code>response_mapping</code> (<code>fields</code>, <code>transforms</code>, <code>response_types</code>,
-<code>success_conditions</code>, <code>error_fields</code>, <code>key_fields</code>); <code>caching</code> (<code>enabled</code>,
-<code>use_vaults</code>, <code>check_cached_first</code>); and <code>legacy</code>/<code>timeout</code>. PlayReady mode is
-inferred when <code>device.type == PLAYREADY</code> or the device name is <code>SL2</code>/<code>SL3</code>.</p>
+<p>A <code>custom_api</code> entry accepts these sub-objects:</p>
+<ul>
+<li><code>device</code> (<code>name</code>, <code>type</code>, <code>system_id</code>, <code>security_level</code>)</li>
+<li><code>auth</code> (<code>type</code> of <code>header</code>/<code>bearer</code>/<code>basic</code> with the matching credential fields,
+  plus <code>custom_headers</code>)</li>
+<li><code>endpoints</code> (<code>get_request</code> and <code>decrypt_response</code>, each <code>{path, method, timeout}</code>)</li>
+<li>per-endpoint <code>request_mapping</code> (<code>param_names</code>, <code>static_params</code>,
+  <code>conditional_params</code>, <code>transforms</code>, <code>nested_params</code>, <code>exclude_params</code>) and
+  <code>response_mapping</code> (<code>fields</code>, <code>transforms</code>, <code>response_types</code>,
+  <code>success_conditions</code>, <code>error_fields</code>, <code>key_fields</code>)</li>
+<li><code>caching</code> (<code>enabled</code>, <code>use_vaults</code>, <code>check_cached_first</code>)</li>
+<li><code>legacy</code> and <code>timeout</code></li>
+</ul>
+<p>unshackle infers PlayReady mode when <code>device.type == PLAYREADY</code> or the device name
+is <code>SL2</code>/<code>SL3</code>.</p>
 </div>
 <h2 id="decryption-backends">Decryption backends<a class="headerlink" href="#decryption-backends" title="Permanent link">&para;</a></h2>
-<p>Once the content keys are known, the encrypted file (for Widevine, PlayReady, and
-ClearKey-CENC) is decrypted by one of two external tools:</p>
+<p>Once unshackle knows the content keys, one of two external tools decrypts the
+encrypted file (for Widevine, PlayReady, and ClearKey-CENC):</p>
 <ul>
 <li><strong>shaka-packager</strong> is the default.</li>
 <li><strong>mp4decrypt</strong> is part of the Bento4 tools.</li>
@@ -2902,7 +2910,7 @@ ClearKey-CENC) is decrypted by one of two external tools:</p>
 <code>PATH</code>. If the selected tool's binary is missing at decrypt time, unshackle raises an
 "executable not found but is required" error. See <a href="../../getting-started/installation/">dependencies</a> for
 installation.</p>
-<p>You choose the backend with the <code>decryption</code> key. It can be a single value applied
+<p>You choose the backend with the <code>decryption</code> config key. It can be a single value applied
 globally, or a per-service mapping:</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="4:2"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">Global default</label><label for="__tabbed_4_2">Per service</label></div>
 <div class="tabbed-content">
@@ -2920,43 +2928,44 @@ globally, or a per-service mapping:</p>
 </div>
 <div class="admonition info">
 <p class="admonition-title">How the value is interpreted</p>
-<p>The default is <code>shaka</code>. Only the exact value <code>mp4decrypt</code> selects mp4decrypt;
-<strong>anything else</strong> (including <code>shaka</code>) selects shaka-packager. Per-service lookups
+<p>The default is <code>shaka</code>. Only the exact value <code>mp4decrypt</code> selects mp4decrypt.
+<strong>Anything else</strong> (including <code>shaka</code>) selects shaka-packager. Per-service lookups
 are case-insensitive, with the <code>default</code>/<code>DEFAULT</code> entry used as the fallback.</p>
 </div>
-<p>The two backends produce equivalent output for standard CENC content. shaka-packager
-is generally preferred; switch a specific service to <code>mp4decrypt</code> if you hit a track
-that shaka-packager cannot handle.</p>
+<p>The two backends give equivalent output for a standard CENC title. In most
+conditions shaka-packager is the better backend. Switch a specific service to
+<code>mp4decrypt</code> if you find a track that shaka-packager cannot decrypt.</p>
 <div class="admonition note">
 <p class="admonition-title">ClearKey (HLS) does not use these tools</p>
-<p>HLS AES-128 ClearKey content is decrypted in-process using AES-CBC and ignores the
-<code>decryption</code> setting entirely. There is nothing to configure.</p>
+<p>unshackle decrypts an HLS AES-128 ClearKey title in-process with AES-CBC, and
+ignores the <code>decryption</code> setting entirely. You do not need to configure anything.</p>
 </div>
 <h2 id="clearkey">ClearKey<a class="headerlink" href="#clearkey" title="Permanent link">&para;</a></h2>
 <h3 id="clearkey-over-hls-aes-128">ClearKey over HLS (AES-128)<a class="headerlink" href="#clearkey-over-hls-aes-128" title="Permanent link">&para;</a></h3>
-<p>When an HLS playlist references a key with an <code>EXT-X-KEY</code> tag, unshackle fetches the
-key directly (from the given URI or an inline <code>data:</code> URL) and decrypts each segment
-in-process with AES-CBC. There is no device, no CDM, and no license challenge, so
-there is nothing to set up. Such tracks are handled automatically during download.</p>
+<p>When an HLS playlist references a content key with an <code>EXT-X-KEY</code> tag, unshackle
+fetches the content key directly (from the given URI or an inline <code>data:</code> URL) and
+decrypts each segment in-process with AES-CBC. There is no device, no CDM, and no
+license challenge, so you do not set anything up. unshackle decrypts such tracks
+automatically during download.</p>
 <h3 id="clearkey-over-cenc-w3c-eme-orgw3clearkey">ClearKey over CENC (W3C EME <code>org.w3.clearkey</code>)<a class="headerlink" href="#clearkey-over-cenc-w3c-eme-orgw3clearkey" title="Permanent link">&para;</a></h3>
-<p>The CENC ClearKey scheme is a proper license flow, but the "license server" simply
-returns the keys as a JWK Set rather than a DRM-wrapped blob. unshackle builds a W3C
+<p>The CENC ClearKey scheme is a proper license flow, but the "license server"
+returns the keys as a JWK Set and not a DRM-wrapped blob. unshackle builds a W3C
 EME request of the form:</p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="p">{</span><span class="nt">"kids"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"&lt;base64url-kid&gt;"</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">],</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"temporary"</span><span class="p">}</span>
 </span></code></pre></div>
 <p>It sends this to the manifest's license URL (or to whatever a service's ClearKey
-license hook returns) and reads the JSON Web Key set back. No device file is needed.
-The decrypted content still goes through shaka-packager or mp4decrypt like any other
-CENC track, so the <code>decryption</code> setting applies.</p>
+license hook returns) and reads the JSON Web Key set back. You do not need a device
+file. The decrypted file still goes through shaka-packager or mp4decrypt like any
+other CENC track, so the <code>decryption</code> setting applies.</p>
 <h2 id="widevine-and-playready-on-the-same-title">Widevine and PlayReady on the same title<a class="headerlink" href="#widevine-and-playready-on-the-same-title" title="Permanent link">&para;</a></h2>
 <p>A single manifest can advertise both Widevine and PlayReady. unshackle picks the CDM
-per track: if a track needs a system that your loaded CDM does not provide, it
+per track: if a track needs a system that your loaded CDM cannot supply, it
 transparently switches to the appropriate device for that track using your <code>cdm</code>
 mapping. If it cannot find a matching device, it fails with a clear message such as:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>Title needs a Widevine CDM but SOMESERVICE is configured with PlayReady.
 </span></code></pre></div>
 <p>Use the <code>cdm</code> mapping's <a href="#advanced-selection-by-quality-drm-or-profile">DRM-based selection</a>
-to configure a device for each system; unshackle selects the right one per track
+to configure a device for each system. unshackle selects the right one per track
 automatically.</p>
 <h2 id="keys-vaults-and-caching">Keys, vaults, and caching<a class="headerlink" href="#keys-vaults-and-caching" title="Permanent link">&para;</a></h2>
 <p>Fetching a license is comparatively slow and, for some services, rate-limited.
@@ -2964,12 +2973,12 @@ unshackle therefore resolves each key ID in this order before ever contacting a
 license server:</p>
 <ol>
 <li>Keys already known for the current DRM object.</li>
-<li>An in-process license-key cache (for the running session).</li>
+<li>An in-process cache of content keys, for the current <code>dl</code> run.</li>
 <li>Your configured <a href="../vaults/">key vaults</a>.</li>
 <li>Only if still missing, a live license request.</li>
 </ol>
-<p>After a successful license request, the recovered keys are written back to all
-configured vaults so future downloads can skip the license server. Two flags let you
+<p>After a successful license request, unshackle writes the recovered keys back to all
+configured vaults, so future downloads can skip the license server. Two flags let you
 control this trade-off on the <code>dl</code> command:</p>
 <table>
 <thead>
@@ -2981,7 +2990,7 @@ control this trade-off on the <code>dl</code> command:</p>
 <tbody>
 <tr>
 <td><code>--vaults-only</code></td>
-<td>Never send a license request; use only cached/vault keys. Fails if a key is missing.</td>
+<td>Never send a license request; use only cached/vault keys. Fails if a content key is missing.</td>
 </tr>
 <tr>
 <td><code>--cdm-only</code></td>
@@ -3023,7 +3032,7 @@ control this trade-off on the <code>dl</code> command:</p>
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Keys and paths in logs</p>
-<p>When key logging is enabled, content keys (KID:key pairs) are written to the logs.
+<p>When you enable key logging, unshackle writes content keys (KID:key pairs) to the logs.
 Treat those logs as sensitive. The unrelated <code>redact_paths</code> option (default
 <code>true</code>) masks local directory paths in log output.</p>
 </div>

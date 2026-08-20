@@ -3369,10 +3369,10 @@ For configuring DRM as a user, see <a href="../../../guide/drm-and-cdm/">DRM &am
 
 
 
-        <p>AES Clear Key DRM System.</p>
+        <p>AES-128 ClearKey (HLS) DRM system.</p>
 
-        <p>Generally IV should be provided where possible. If not provided, it will be
-set to   of the same bit-size of the key.</p>
+        <p>Give the IV where possible. If you do not give an IV, unshackle sets it to
+  of the same bit-size as the content key.</p>
 
 
 
@@ -3408,7 +3408,7 @@ set to   of the same bit-size of the key.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Warn once per track that a segment was passed through undecrypted.</p>
+        <p>Warn once per track that unshackle passed a segment through undecrypted.</p>
 
 
     </div>
@@ -3428,7 +3428,7 @@ set to   of the same bit-size of the key.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Decrypt a Track with AES Clear Key DRM.</p>
+        <p>Decrypt a Track with AES-128 ClearKey (HLS) DRM.</p>
 
 
     </div>
@@ -3475,7 +3475,7 @@ set to   of the same bit-size of the key.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A Key object parsed from a m3u(8) playlist using
+                <p>A <code>Key</code> object parsed from a m3u(8) playlist using
 the <code>m3u8</code> library.</p>
               </div>
             </td>
@@ -3492,7 +3492,7 @@ the <code>m3u8</code> library.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional session used to request external URIs with.
+                <p>Optional HTTP session used to request external URIs with.
 Useful to set headers, proxies, cookies, and so forth.</p>
               </div>
             </td>
@@ -3532,9 +3532,9 @@ Useful to set headers, proxies, cookies, and so forth.</p>
 
 
 
-        <p>W3C EME ClearKey (org.w3.clearkey) DRM System over MPEG-CENC content.</p>
-<p>Distinct from the HLS AES-128 <code>ClearKey</code> class: keys here are delivered by a
-license server as a JWK Set keyed by KID, and content is standard CENC
+        <p>W3C EME ClearKey (org.w3.clearkey) DRM System over MPEG-CENC tracks.</p>
+<p>Distinct from the HLS AES-128 <code>ClearKey</code> class: a license server gives the keys
+here as a JWK Set keyed by KID, and the media is standard CENC
 (decrypted with shaka-packager/mp4decrypt KID:KEY pairs, same as Widevine).</p>
 
 
@@ -3733,7 +3733,8 @@ license server as a JWK Set keyed by KID, and content is standard CENC
     <div class="doc doc-contents ">
 
         <p>Serialise this DRM instance for export/import (KIDs + license URL).</p>
-<p>Content keys are stored once at the export's track level, not duplicated here.</p>
+<p>unshackle stores the content keys once at the export's track level, and does not
+duplicate them here.</p>
 
 
     </div>
@@ -3753,7 +3754,7 @@ license server as a JWK Set keyed by KID, and content is standard CENC
 
     <div class="doc doc-contents ">
 
-        <p>Build the W3C EME ClearKey JSON license request for the unkeyed KIDs.</p>
+        <p>Assemble the W3C EME ClearKey JSON license request for the unkeyed KIDs.</p>
 
 
     </div>
@@ -3773,11 +3774,11 @@ license server as a JWK Set keyed by KID, and content is standard CENC
 
     <div class="doc doc-contents ">
 
-        <p>Obtain Content Keys for this DRM Instance from a ClearKey license server.</p>
-<p>The licence param is expected to be a function and will be provided with the
-W3C JSON license request as <code>challenge</code>. It may return the JWK Set license as
-a dict, JSON str, or bytes. If it returns None and the manifest provided a
-Laurl, the challenge is POSTed there directly instead.</p>
+        <p>Get Content Keys for this DRM Instance from a ClearKey license server.</p>
+<p>The licence param is a function. unshackle gives it the W3C JSON license
+request as <code>challenge</code>. It may return the JWK Set license as a dict, JSON str,
+or bytes. If it returns None and the manifest gave a Laurl, unshackle POSTs the
+challenge there directly instead.</p>
 
 
     </div>
@@ -3802,7 +3803,7 @@ Args:
     path: Path to the encrypted file to decrypt
 Raises:
     EnvironmentError if the required decryption executable could not be found.
-    ValueError if the track has not yet been downloaded.
+    ValueError if unshackle has not yet downloaded the track.
     SubprocessError if the decryption process returned a non-zero exit code.</p>
 
 
@@ -3843,7 +3844,7 @@ Raises:
 
     <div class="doc doc-contents ">
 
-        <p>Decrypt using Shaka Packager</p>
+        <p>Decrypt with shaka-packager</p>
 
 
     </div>
@@ -3876,13 +3877,13 @@ Raises:
 
         <p>MonaLisa DRM System.</p>
 <p>Unlike Widevine/PlayReady, MonaLisa does not use a challenge/response flow
-with a license server. Instead, the PSSH value (ticket) is provided directly
-by the service API, and keys are extracted locally via a WASM module.</p>
-<p>Decryption is performed in two stages:
+with a license server. Instead, the service API gives the PSSH value (ticket)
+directly, and a WASM module extracts the content keys locally.</p>
+<p>Decryption has two stages:
 1. ML-Worker binary: Removes MonaLisa encryption layer (bbts -&gt; ents)
-2. AES-ECB decryption: Final decryption with service-provided key</p>
+2. AES-ECB decryption: Final decryption with the service-supplied content key</p>
 
-        <p>Initialize MonaLisa DRM.</p>
+        <p>Initialise MonaLisa DRM.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -3921,7 +3922,7 @@ by the service API, and keys are extracted locally via a WASM module.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>AES-ECB key for second-stage decryption (hex string or bytes).</p>
+                <p>AES-ECB content key for second-stage decryption (hex string or bytes).</p>
               </div>
             </td>
             <td>
@@ -3989,7 +3990,7 @@ by the service API, and keys are extracted locally via a WASM module.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>If key extraction fails.</p>
+                <p>If content key extraction fails.</p>
               </div>
             </td>
           </tr>
@@ -4194,7 +4195,7 @@ H5DCID-V3-P1-YYYYMMDD-HHMMSS-MEDIAID-TIMESTAMP-SUFFIX</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Dictionary mapping KID to key hex string.</p>
+                <p>Dictionary mapping KID to the content key hex string.</p>
               </div>
             </td>
           </tr>
@@ -4259,7 +4260,7 @@ H5DCID-V3-P1-YYYYMMDD-HHMMSS-MEDIAID-TIMESTAMP-SUFFIX</p>
 
 
 
-        <p>Raised when no PSSH/ticket data is provided.</p>
+        <p>Raised when the caller gives no PSSH/ticket data.</p>
 
 
 
@@ -4290,7 +4291,7 @@ H5DCID-V3-P1-YYYYMMDD-HHMMSS-MEDIAID-TIMESTAMP-SUFFIX</p>
 
 
 
-        <p>Raised when key extraction from the ticket fails.</p>
+        <p>Raised when content key extraction from the ticket fails.</p>
 
 
 
@@ -4413,7 +4414,7 @@ H5DCID-V3-P1-YYYYMMDD-HHMMSS-MEDIAID-TIMESTAMP-SUFFIX</p>
 
     <div class="doc doc-contents ">
 
-        <p>Create a MonaLisa DRM instance from a PSSH/ticket.</p>
+        <p>Make a MonaLisa DRM instance from a PSSH/ticket.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -4452,7 +4453,7 @@ H5DCID-V3-P1-YYYYMMDD-HHMMSS-MEDIAID-TIMESTAMP-SUFFIX</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>AES-ECB key for second-stage decryption.</p>
+                <p>AES-ECB content key for second-stage decryption.</p>
               </div>
             </td>
             <td>
@@ -4605,9 +4606,9 @@ Stage 2: AES-ECB decryption (ents -&gt; ts)</p>
 
     <div class="doc doc-contents ">
 
-        <p>MonaLisa uses per-segment decryption during download via the
-on_segment_downloaded callback. By the time this method is called,
-the content has already been decrypted and muxed into a container.</p>
+        <p>MonaLisa uses per-segment decryption during download, through the
+on_segment_downloaded callback. When the caller calls this method,
+unshackle has already decrypted the media and muxed it into a container.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -4726,7 +4727,8 @@ the content has already been decrypted and muxed into a container.</p>
     <div class="doc doc-contents ">
 
         <p>Serialise this DRM instance for export/import (PSSH + KIDs).</p>
-<p>Content keys are stored once at the export's track level, not duplicated here.</p>
+<p>unshackle stores the content keys once at the export's track level, and does not
+duplicate them here.</p>
 
 
     </div>
@@ -4842,7 +4844,7 @@ the content has already been decrypted and muxed into a container.</p>
 
         <p>Return the decoded error string if a revocation HRESULT is present, else None.</p>
 <p>Reads the code from the raw SOAP body (<StatusCode>0x8004C065</StatusCode>)
-or from an exception message that carries it, so any service is covered.</p>
+or from an exception message that carries it, so this method covers any service.</p>
 
 
     </div>
@@ -4867,7 +4869,7 @@ Args:
     path: Path to the encrypted file to decrypt
 Raises:
     EnvironmentError if the required decryption executable could not be found.
-    ValueError if the track has not yet been downloaded.
+    ValueError if unshackle has not yet downloaded the track.
     SubprocessError if the decryption process returned a non-zero exit code.</p>
 
 
@@ -4908,7 +4910,7 @@ Raises:
 
     <div class="doc doc-contents ">
 
-        <p>Decrypt using Shaka Packager (original method)</p>
+        <p>Decrypt with shaka-packager (original method)</p>
 
 
     </div>
@@ -5221,12 +5223,12 @@ Raises:
 
         <p>Get PSSH and KID from within the Initiation Segment of the Track Data.
 It also tries to get PSSH and KID from other track data like M3U8 data
-as well as through ffprobe.</p>
-<p>Create a Widevine DRM System object from a track's information.
-This should only be used if a PSSH could not be provided directly.
+as well as through FFprobe.</p>
+<p>Make a Widevine DRM System object from a track's information.
+Use this method only when a PSSH cannot be given directly.
 It is <em>rare</em> to need to use this.</p>
-<p>You may provide your own requests session to be able to use custom
-headers and more.</p>
+<p>You can give your own <code>requests.Session</code> to use custom headers
+and more.</p>
 
 
 <p><span class="doc-section-title">Raises:</span></p>
@@ -5284,7 +5286,7 @@ headers and more.</p>
     <div class="doc doc-contents ">
 
         <p>Get PSSH and KID from within Initialization Segment Data.</p>
-<p>This should only be used if a PSSH could not be provided directly.
+<p>Use this method only when a PSSH cannot be given directly.
 It is <em>rare</em> to need to use this.</p>
 
 
@@ -5339,7 +5341,8 @@ It is <em>rare</em> to need to use this.</p>
     <div class="doc doc-contents ">
 
         <p>Serialise this DRM instance for export/import (PSSH + KIDs).</p>
-<p>Content keys are stored once at the export's track level, not duplicated here.</p>
+<p>unshackle stores the content keys once at the export's track level, and does not
+duplicate them here.</p>
 
 
     </div>
@@ -5359,9 +5362,9 @@ It is <em>rare</em> to need to use this.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Create a CDM Session and obtain Content Keys for this DRM Instance.
-The certificate and license params are expected to be a function and will
-be provided with the challenge and session ID.</p>
+        <p>Make a CDM Session and get Content Keys for this DRM Instance.
+The certificate and license params are functions. unshackle gives them
+the challenge and the session ID.</p>
 
 
     </div>
@@ -5381,9 +5384,9 @@ be provided with the challenge and session ID.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Create a CDM Session and obtain Content Keys for this DRM Instance.
-The certificate and license params are expected to be a function and will
-be provided with the challenge and session ID.</p>
+        <p>Make a CDM Session and get Content Keys for this DRM Instance.
+The certificate and license params are functions. unshackle gives them
+the challenge and the session ID.</p>
 
 
     </div>
@@ -5408,7 +5411,7 @@ Args:
     path: Path to the encrypted file to decrypt
 Raises:
     EnvironmentError if the required decryption executable could not be found.
-    ValueError if the track has not yet been downloaded.
+    ValueError if unshackle has not yet downloaded the track.
     SubprocessError if the decryption process returned a non-zero exit code.</p>
 
 
@@ -5449,7 +5452,7 @@ Raises:
 
     <div class="doc doc-contents ">
 
-        <p>Decrypt using Shaka Packager (original method)</p>
+        <p>Decrypt with shaka-packager (original method)</p>
 
 
     </div>

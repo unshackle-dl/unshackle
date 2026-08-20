@@ -961,10 +961,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#kv-search-find-a-key-by-kid" class="md-nav__link">
+  <a href="#kv-search-find-a-content-key-by-kid" class="md-nav__link">
     <span class="md-ellipsis">
       
-        kv search: find a key by KID
+        kv search: find a content key by KID
       
     </span>
   </a>
@@ -2227,10 +2227,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#kv-search-find-a-key-by-kid" class="md-nav__link">
+  <a href="#kv-search-find-a-content-key-by-kid" class="md-nav__link">
     <span class="md-ellipsis">
       
-        kv search: find a key by KID
+        kv search: find a content key by KID
       
     </span>
   </a>
@@ -2307,17 +2307,17 @@
 
 
 <h1 id="key-vaults">Key Vaults<a class="headerlink" href="#key-vaults" title="Permanent link">&para;</a></h1>
-<p>A <strong>key vault</strong> is a store of DRM <strong>content keys</strong> that unshackle remembers between downloads. Once a title's keys have been recovered, unshackle saves them to your configured vaults. The next time you download something that reuses those same keys, unshackle finds them in a vault instead of performing another license exchange. The download starts faster and puts less load on the service.</p>
+<p>A <strong>key vault</strong> is a store of DRM <strong>content keys</strong> that unshackle remembers between downloads. Once unshackle has recovered a title's keys, it saves them to your configured vaults. The next time you download something that reuses those same keys, unshackle finds them in a vault instead of performing another license exchange. The download starts faster and puts less load on the service.</p>
 <p>Vaults are entirely optional, but if you download regularly they are one of the biggest quality-of-life improvements you can configure.</p>
 <div class="admonition tip">
 <p class="admonition-title">Vaults save license calls even on the very first download</p>
-<p>The benefit is not limited to repeat downloads. Within a single run, a service often issues the <em>same</em> Key ID and content key for both the video and audio tracks, and for several resolutions or bitrates of the same title. Once unshackle has recovered a key it writes it to your vaults immediately, so the moment the next track presents a KID it has already seen, the key is served from the vault instead of triggering another license exchange. A single fetched key can therefore satisfy many tracks in one run.</p>
+<p>The benefit is not limited to repeat downloads. Within a single run, a service often issues the <em>same</em> Key ID and content key for both the video and audio tracks. The same pair frequently covers several resolutions or bitrates of the same title. Once unshackle has recovered a key it writes it to your vaults immediately. The moment the next track presents a KID it has already seen, the key comes from the vault instead of another license exchange. A single fetched key can therefore satisfy many tracks in one run.</p>
 </div>
 <h2 id="what-a-vault-stores">What a vault stores<a class="headerlink" href="#what-a-vault-stores" title="Permanent link">&para;</a></h2>
-<p>Every key is stored as a <strong>KID → KEY</strong> pair, grouped by <strong>service</strong>:</p>
+<p>A vault stores every content key as a <strong>KID → KEY</strong> pair, grouped by <strong>service</strong>:</p>
 <ul>
-<li><strong>KID</strong> (Key ID): a 16-byte identifier for a specific encrypted stream, stored as 32 lowercase hex characters with no dashes.</li>
-<li><strong>KEY</strong>: the 16-byte content key that decrypts that stream, also 32 hex characters.</li>
+<li><strong>KID</strong> (Key ID): a 16-byte identifier for a specific encrypted track, stored as 32 lowercase hex characters with no dashes.</li>
+<li><strong>KEY</strong>: the 16-byte content key that decrypts that track, also 32 hex characters.</li>
 <li><strong>Service</strong>: the canonical service tag (for example <code>EXAMPLE</code>, not <code>ExampleService</code>) that namespaces the key. Each service gets its own logical table.</li>
 </ul>
 <div class="admonition note">
@@ -2326,21 +2326,21 @@
 </div>
 <div class="admonition info">
 <p class="admonition-title">Null keys are ignored everywhere</p>
-<p>A key made entirely of zeroes (<code>00000000000000000000000000000000</code>) is treated as "no key". Vault lookups skip it, and every backend raises an error if you try to add one. This prevents a placeholder key from masking a real one.</p>
+<p>A content key made entirely of zeroes (<code>00000000000000000000000000000000</code>) is treated as "no key". Vault lookups skip it, and every backend raises an error if you try to add one. This prevents a placeholder key from masking a real one.</p>
 </div>
 <h2 id="how-lookups-and-caching-work">How lookups and caching work<a class="headerlink" href="#how-lookups-and-caching-work" title="Permanent link">&para;</a></h2>
-<p>When unshackle needs a key during a download it asks your vaults <strong>in the order they are listed in your config</strong>. It returns the first non-null key it finds and stops searching. If a vault raises a permission error or is unreachable, that vault is skipped and the search continues with the next one.</p>
-<p>When new keys are recovered from a license, unshackle pushes them to <strong>all</strong> configured vaults, so every vault gradually converges on the same set of keys. Two rules apply to pushing:</p>
+<p>When unshackle needs a content key during a download it asks your vaults <strong>in the order they appear in your config</strong>. It returns the first non-null key it finds and stops searching. If a vault raises a permission error or is unreachable, unshackle skips it and continues the search with the next one.</p>
+<p>When unshackle recovers new keys from a license, it pushes them to <strong>all</strong> configured vaults, so every vault gradually converges on the same set of keys. Two rules apply to pushing:</p>
 <ul>
-<li>Keys that already exist in a vault are skipped (existing data is never overwritten or deleted).</li>
-<li>A vault marked <code>no_push: true</code> receives lookups but is never written to. This is useful for read-only or shared upstream vaults you do not own.</li>
+<li>unshackle skips keys that already exist in a vault (it never overwrites or deletes existing data).</li>
+<li>A vault marked <code>no_push: true</code> receives lookups, but unshackle never writes to it. This is useful for read-only or shared upstream vaults you do not own.</li>
 </ul>
 <div class="admonition tip">
 <p class="admonition-title">A good two-vault setup</p>
 <p>A common arrangement is a fast local <strong>SQLite</strong> vault plus a shared remote vault (<strong>MySQL</strong>, <strong>HTTP</strong>, or <strong>API</strong>). The local vault answers instantly and works offline; the remote vault lets you share keys across machines or with a group.</p>
 </div>
 <h2 id="configuring-vaults">Configuring vaults<a class="headerlink" href="#configuring-vaults" title="Permanent link">&para;</a></h2>
-<p>Vaults are declared under the <code>key_vaults</code> list in your unshackle config file. Each entry is a mapping with two required fields, <code>type</code> (which backend to use) and <code>name</code> (a label you choose), plus whatever settings that backend needs.</p>
+<p>Declare vaults under the <code>key_vaults</code> list in your unshackle config file. Each entry is a mapping with two required fields, <code>type</code> (which backend to use) and <code>name</code> (a label you choose), plus whatever settings that backend needs.</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">key_vaults</span><span class="p">:</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SQLite</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">local</span>
@@ -2401,10 +2401,10 @@
 </tr>
 </tbody>
 </table>
-<p>Each service gets its own table (named after the service tag), created on demand with <code>kid</code> and <code>key_</code> columns. Connections use WAL journaling with a 30-second busy timeout, so the same database file can be used safely from multiple threads.</p>
+<p>Each service gets its own table (named after the service tag), created on demand with <code>kid</code> and <code>key_</code> columns. Connections use WAL journaling with a 30-second busy timeout, so multiple threads can safely use the same database file.</p>
 <div class="admonition warning">
 <p class="admonition-title">Moving the .db file silently forks your vault</p>
-<p>Because the file is created on demand, if you relocate an existing <code>.db</code> without updating <code>path</code> to match, unshackle will simply create a fresh empty database at the old location, leaving you with two divergent vaults and no error to warn you. Always update the config path whenever you move the file.</p>
+<p>Because the file is created on demand, if you relocate an existing <code>.db</code> without updating <code>path</code> to match, unshackle will create a fresh empty database at the old location. That leaves you with two divergent vaults and no error to warn you. Always update the config path whenever you move the file.</p>
 </div>
 <div class="admonition tip">
 <p class="admonition-title">Keep a local SQLite vault even when you share a MySQL one</p>
@@ -2412,10 +2412,10 @@
 </div>
 <hr />
 <h2 id="mysql-backend">MySQL backend<a class="headerlink" href="#mysql-backend" title="Permanent link">&para;</a></h2>
-<p>A remotely-accessed MySQL/MariaDB database, ideal for sharing keys across several machines. It connects via <code>pymysql</code>. MariaDB is recommended over MySQL where you have the choice.</p>
+<p>A remotely-accessed MySQL/MariaDB database, ideal for sharing keys across several machines. It connects via <code>pymysql</code>. Prefer MariaDB over MySQL where you have the choice.</p>
 <div class="admonition warning">
 <p class="admonition-title">The vault connects directly to the database server</p>
-<p>A <code>MySQL</code> vault (like <code>SQLite</code>) speaks the database wire protocol directly to the host or IP you configure. It cannot sit behind a PHP API or any other application layer. A common real-world snag: many hosting providers firewall their MySQL server to their own internal network, so a database on shared hosting is frequently unreachable from the outside world even when your credentials are perfectly correct. If connections time out, confirm the server accepts remote connections from your address before suspecting the config.</p>
+<p>A <code>MySQL</code> vault (like <code>SQLite</code>) speaks the database wire protocol directly to the host or IP you configure. It cannot sit behind a PHP API or any other application layer. A common real-world snag: many hosting providers firewall their MySQL server to their own internal network. A database on shared hosting is therefore frequently unreachable from the outside world even when your credentials are perfectly correct. If connections time out, confirm the server accepts remote connections from your address before suspecting the config.</p>
 </div>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">key_vaults</span><span class="p">:</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MySQL</span>
@@ -2470,11 +2470,11 @@
 <p>Any additional fields you provide (such as <code>password</code>, <code>port</code>, or <code>ssl</code>) are passed straight through to <code>pymysql.connect</code>, so you can use the full range of its connection options.</p>
 <div class="admonition warning">
 <p class="admonition-title">Account security is on you, not on unshackle</p>
-<p>unshackle enforces none of this. It is operational policy for a database that may be shared with a group. Never connect with the <code>root</code> account, not even for yourself. Give every account a password, and never let two users share a username/password. Restrict each account's access to only the <code>unshackle</code> database, and grant normal users just <code>SELECT</code> and <code>INSERT</code>. Reserve the <code>CREATE</code> grant for a single trusted user who bootstraps the service tables (see <a href="#kv-prepare-pre-create-service-tables"><code>kv prepare</code></a>); everyone else can insert new keys but should not be creating tables.</p>
+<p>unshackle enforces none of this. It is operational policy for a database that may be shared with a group. Never connect with the <code>root</code> account, not even for yourself. Give every account a password, and never let two users share a username/password. Restrict each account's access to only the <code>unshackle</code> database, and grant normal users only <code>SELECT</code> and <code>INSERT</code>. Reserve the <code>CREATE</code> grant for a single trusted user who bootstraps the service tables (see <a href="#kv-prepare-pre-create-service-tables"><code>kv prepare</code></a>); everyone else can insert new keys but should not be creating tables.</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Grants determine what the vault can do</p>
-<p>On connection the backend reads its own <code>SHOW GRANTS</code>. It requires at least <code>SELECT</code> to load at all (a missing <code>SELECT</code> grant makes the vault fail to load). Writing keys additionally needs <code>INSERT</code>, and creating a new service table needs <code>CREATE</code>. A read-only account still works fine as a lookup source. It simply cannot push new keys. Because <code>MySQL</code> is loaded leniently during downloads, a permission problem will not abort the run.</p>
+<p>On connection the backend reads its own <code>SHOW GRANTS</code>. It requires at least <code>SELECT</code> to load at all (a missing <code>SELECT</code> grant makes the vault fail to load). Writing keys additionally needs <code>INSERT</code>, and creating a new service table needs <code>CREATE</code>. A read-only account still works fine as a lookup source. It cannot push new keys. Because <code>MySQL</code> is loaded leniently during downloads, a permission problem will not abort the run.</p>
 </div>
 <hr />
 <h2 id="http-backend">HTTP backend<a class="headerlink" href="#http-backend" title="Permanent link">&para;</a></h2>
@@ -2499,7 +2499,7 @@
 <td><code>json</code></td>
 <td><code>POST</code> with a JSON payload</td>
 <td><code>password</code> used as a token</td>
-<td>Read and write per key; cannot bulk-enumerate keys.</td>
+<td>Read and write per content key; cannot bulk-enumerate keys.</td>
 </tr>
 <tr>
 <td><code>decrypt_labs</code></td>
@@ -2520,7 +2520,7 @@
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">myuser</span>
 </span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="s">"your-password"</span>
 </span></code></pre></div>
-<p><code>username</code> is required in query mode. Both the username and password are sent as query parameters on each request.</p>
+<p>Query mode requires <code>username</code>. Both the username and password are sent as query parameters on each request.</p>
 </div>
 <div class="tabbed-block">
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">key_vaults</span><span class="p">:</span>
@@ -2540,7 +2540,7 @@
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="nt">api_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">decrypt_labs</span>
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">"your-decrypt-labs-key"</span>
 </span></code></pre></div>
-<p>A read-only lookup source. The key is sent in a <code>decrypt-labs-api-key</code> header and the vault refuses all writes.</p>
+<p>A read-only lookup source. The API key is sent in a <code>decrypt-labs-api-key</code> header and the vault refuses all writes.</p>
 </div>
 </div>
 </div>
@@ -2586,7 +2586,7 @@
 <tr>
 <td><code>api_key</code></td>
 <td>one of these</td>
-<td>Alternative to <code>password</code>; used for <code>decrypt_labs</code>. If both are given, <code>api_key</code> wins.</td>
+<td>Alternative to <code>password</code>; used for <code>decrypt_labs</code>. If you give both, <code>api_key</code> wins.</td>
 </tr>
 <tr>
 <td><code>no_push</code></td>
@@ -2659,14 +2659,14 @@
 </tr>
 </tbody>
 </table>
-<p>The backend talks to endpoints under <code>uri</code> (for example <code>GET {uri}/{service}/{kid}</code> to look up a single key) and interprets a numeric <code>code</code> field in each JSON response to detect errors such as an invalid token, rate limiting, or an invalid service tag.</p>
+<p>The backend talks to endpoints under <code>uri</code> (for example <code>GET {uri}/{service}/{kid}</code> to look up a single key). It interprets a numeric <code>code</code> field in each JSON response to detect errors such as an invalid token, rate limiting, or an invalid service tag.</p>
 <div class="admonition warning">
 <p class="admonition-title">This is unshackle's own protocol, not a generic vault client</p>
-<p>The <code>API</code> backend expects unshackle's specific HTTP request and response shape. An API or HTTP key-vault endpoint built for a different project or service will generally <em>not</em> be compatible. You cannot simply point this at an arbitrary third-party vault API and expect it to work. To bridge another service, put an adapter in front of it that speaks this format, or use the <code>HTTP</code> backend if one of its wire protocols matches. When pushing many keys at once it batches requests and automatically shrinks the batch size if the server rejects an over-large request.</p>
+<p>The <code>API</code> backend expects unshackle's specific HTTP request and response shape. An API or HTTP key-vault endpoint built for a different project or service will generally <em>not</em> be compatible. You cannot point this at an arbitrary third-party vault API and expect it to work. To bridge another service, put an adapter in front of it that speaks this format, or use the <code>HTTP</code> backend if one of its wire protocols matches. When pushing many keys at once it batches requests and automatically shrinks the batch size if the server rejects an over-large request.</p>
 </div>
 <div class="admonition tip">
 <p class="admonition-title">DecryptLabs shortcut</p>
-<p>An <code>API</code> vault whose <code>name</code> contains <code>decrypt_labs</code> will have its <code>token</code> filled in automatically from a global <code>decrypt_labs_api_key</code> in your config if you leave <code>token</code> unset. This lets you keep the key in one place.</p>
+<p>An <code>API</code> vault whose <code>name</code> contains <code>decrypt_labs</code> will have its <code>token</code> filled in automatically from a global <code>decrypt_labs_api_key</code> in your config if you leave <code>token</code> unset. This lets you keep the API key in one place.</p>
 </div>
 <hr />
 <h2 id="managing-vaults-with-unshackle-kv">Managing vaults with <code>unshackle kv</code><a class="headerlink" href="#managing-vaults-with-unshackle-kv" title="Permanent link">&para;</a></h2>
@@ -2681,11 +2681,11 @@
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>0e7cc1a4e2f9411db0f24a3fbb8f8b21:00112233445566778899aabbccddeeff
 </span></code></pre></div>
 <p>The service argument (<code>EXAMPLE</code> above) is normalized to its canonical tag automatically. Keys that already exist in a vault are reported as skipped.</p>
-<h3 id="kv-search-find-a-key-by-kid"><code>kv search</code>: find a key by KID<a class="headerlink" href="#kv-search-find-a-key-by-kid" title="Permanent link">&para;</a></h3>
-<p>Search your vaults for a KID and print any matching key.</p>
+<h3 id="kv-search-find-a-content-key-by-kid"><code>kv search</code>: find a content key by KID<a class="headerlink" href="#kv-search-find-a-content-key-by-kid" title="Permanent link">&para;</a></h3>
+<p>Search your vaults for a KID and print any matching content key.</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>kv<span class="w"> </span>search<span class="w"> </span>9a04f07998404286ab92e65be0885f95
 </span></code></pre></div>
-<p>The KID must be 32 hex characters (dashes are stripped for you). By default every configured vault and every service table is scanned; narrow the search with options:</p>
+<p>The KID must be 32 hex characters (dashes are stripped for you). By default the search scans every configured vault and every service table; narrow it with options:</p>
 <table>
 <thead>
 <tr>
@@ -2709,7 +2709,7 @@
 <p>Remote vaults that cannot enumerate their service tables (for example an <code>HTTP</code> vault in <code>json</code> or <code>decrypt_labs</code> mode) can only be searched when you also pass <code>--service</code>. Without it, they are skipped.</p>
 </div>
 <h3 id="kv-copy-copy-keys-between-vaults"><code>kv copy</code>: copy keys between vaults<a class="headerlink" href="#kv-copy-copy-keys-between-vaults" title="Permanent link">&para;</a></h3>
-<p>Copy every key from one or more source vaults into a single destination vault. Existing rows are never altered; only genuinely new KIDs are added, and null keys are skipped.</p>
+<p>Copy every content key from one or more source vaults into a single destination vault. <code>kv copy</code> never alters existing rows; it adds only genuinely new KIDs and skips null keys.</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>kv<span class="w"> </span>copy<span class="w"> </span>shared<span class="w"> </span><span class="nb">local</span>
 </span></code></pre></div>
 <p>The first argument is the destination; the rest are sources. You can supply several sources at once:</p>
@@ -2735,7 +2735,7 @@
 </table>
 <p><code>--service</code> and <code>--local-only</code> are mutually exclusive.</p>
 <h3 id="kv-sync-mirror-vaults-both-ways"><code>kv sync</code>: mirror vaults both ways<a class="headerlink" href="#kv-sync-mirror-vaults-both-ways" title="Permanent link">&para;</a></h3>
-<p>Ensure two or more vaults each end up with every key the others have. This is effectively a two-way <code>copy</code> between each pair, so afterwards all listed vaults hold the same set of keys.</p>
+<p>Make each of two or more vaults hold every content key the others have. This is effectively a two-way <code>copy</code> between each pair, so afterwards all listed vaults hold the same set of keys.</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>kv<span class="w"> </span>sync<span class="w"> </span><span class="nb">local</span><span class="w"> </span>shared
 </span></code></pre></div>
 <p>It accepts the same <code>--service</code> and <code>--local-only</code> options as <code>copy</code>, and requires at least two vaults.</p>

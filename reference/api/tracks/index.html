@@ -3943,10 +3943,10 @@
 
 
 
-        <p>Create a new Attachment.</p>
+        <p>Make a new Attachment.</p>
 <p>If providing a path, the file must already exist.
 If providing a URL, download() fetches the file during the download phase.
-Either path or url must be provided.</p>
+You must give either path or url.</p>
 <p>If name is not provided it will use the file name (without extension).
 If mime_type is not provided, it will try to guess it.</p>
 
@@ -4051,7 +4051,7 @@ If mime_type is not provided, it will try to guess it.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional requests session to use for downloading.</p>
+                <p>Optional requests HTTP session to download the file with.</p>
               </div>
             </td>
             <td>
@@ -4169,7 +4169,7 @@ If mime_type is not provided, it will try to guess it.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Create an attachment from a URL.</p>
+        <p>Make an attachment from a URL.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -4256,7 +4256,7 @@ If mime_type is not provided, it will try to guess it.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional requests session to use for downloading.</p>
+                <p>Optional requests HTTP session to download the file with.</p>
               </div>
             </td>
             <td>
@@ -4328,7 +4328,7 @@ If mime_type is not provided, it will try to guess it.</p>
 
 
 
-        <p>Create a new Audio track object.</p>
+        <p>Make a new Audio track object.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -4352,8 +4352,8 @@ If mime_type is not provided, it will try to guess it.</p>
             <td>
               <div class="doc-md-description">
                 <p>An Audio.Codec enum representing the audio codec.
-If not specified, MediaInfo will be used to retrieve the codec
-once the track has been downloaded.</p>
+If not specified, unshackle uses MediaInfo to get the codec
+after it downloads the track.</p>
               </div>
             </td>
             <td>
@@ -4370,7 +4370,7 @@ once the track has been downloaded.</p>
             <td>
               <div class="doc-md-description">
                 <p>A number or float representing the average bandwidth in bits/s.
-Float values are rounded up to the nearest integer.</p>
+unshackle rounds float values up to the nearest integer.</p>
               </div>
             </td>
             <td>
@@ -4404,7 +4404,7 @@ not supported. All numbers and strings will be cast to float.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The number of Joint-Object-Coding Channels/Objects in the audio stream.</p>
+                <p>The number of Joint-Object-Coding Channels/Objects in the audio track.</p>
               </div>
             </td>
             <td>
@@ -4469,7 +4469,7 @@ recommended.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Return True if the audio track contains Dolby Atmos.</p>
+        <p>Return True if the audio track contains Atmos.</p>
 
     </div>
 
@@ -4495,11 +4495,11 @@ recommended.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Converts a Channel string to a float representing audio channel count and layout.
+        <p>Converts a Channel string to a float representing the audio channel layout.
 E.g. "3" -&gt; "3.0", "2.1" -&gt; "2.1", ".1" -&gt; "0.1".</p>
 <p>This does not validate channel strings as genuine channel counts or valid layouts.
 It does not convert the value to assume a sub speaker channel layout, e.g. 5.1-&gt;6.0.
-It also does not support expanded surround sound channel layout strings like 7.1.2.</p>
+It also cannot read expanded surround sound channel layout strings like 7.1.2.</p>
 
 
     </div>
@@ -4550,14 +4550,14 @@ It also does not support expanded surround sound channel layout strings like 7.1
 
 
 
-        <p>Create a new Chapter with a Timestamp and optional name.</p>
+        <p>Make a new Chapter with a Timestamp and optional name.</p>
 <p>The timestamp may be in the following formats:
 - "HH:MM:SS" string, e.g., <code>25:05:23</code>.
 - "HH:MM:SS.mss" string, e.g., <code>25:05:23.120</code>.
 - a timecode integer in milliseconds, e.g., <code>90323120</code> is <code>25:05:23.120</code>.
 - a timecode float in seconds, e.g., <code>90323.12</code> is <code>25:05:23.120</code>.</p>
-<p>If you have a timecode integer in seconds, just multiply it by 1000.
-If you have a timecode float in milliseconds (no decimal value), just convert
+<p>If you have a timecode integer in seconds, multiply it by 1000.
+If you have a timecode float in milliseconds (no decimal value), convert
 it to an integer.</p>
 
 
@@ -4620,7 +4620,7 @@ it to an integer.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Check if Chapter is named.</p>
+        <p>True if the Chapter has a name.</p>
 
     </div>
 
@@ -4801,7 +4801,7 @@ https://mkvtoolnix.download/doc/mkvmerge.html#mkvmerge.chapters.simple</p>
 <li>{j}: A number starting at 1 that increments any time a Chapter has no name.
        E.g., <code>"Chapter {j}"</code>: "Chapter 1", "Intro", "Chapter 2".</li>
 </ul>
-<p>These are formatted with f-strings, directives are supported.
+<p>unshackle formats these with f-strings, so format directives work.
 For example, <code>"Chapter {i:02}"</code> will result in <code>"Chapter 01"</code>.</p>
 
 
@@ -4946,7 +4946,7 @@ If no DV track is available but HDR10+ is present, it will convert HDR10+ to DV.
 
     <div class="doc doc-contents ">
 
-        <p>Generate Level 5 active area metadata via crop detection on the HDR10 stream.</p>
+        <p>Make Level 5 active area metadata through crop detection on the HDR10 track.</p>
 <p>This resolves mismatches where DV has no black bars but HDR10 does (or vice versa)
 by telling the display the correct active area.</p>
 
@@ -4975,7 +4975,7 @@ by telling the display the correct active area.</p>
         <p>Clamp static L6 values to a valid relationship.</p>
 <p>MaxCLL must not exceed the mastering-display peak (some HDR10+ sources ship
 MaxCLL 10000 on a 1000-nit master), and MaxFALL must not exceed
-MaxCLL. A value of 0 means "unknown" and is preserved as-is.</p>
+MaxCLL. A value of 0 means "unknown", and this method keeps it as-is.</p>
 
 
     </div>
@@ -5015,7 +5015,7 @@ MaxCLL. A value of 0 means "unknown" and is preserved as-is.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Extract HDR10+ metadata from the video stream</p>
+        <p>Extract HDR10+ metadata from the video track</p>
 
 
     </div>
@@ -5035,7 +5035,7 @@ MaxCLL. A value of 0 means "unknown" and is preserved as-is.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Extract mastering display and content light level metadata from the HDR10 stream via ffprobe.</p>
+        <p>Extract mastering display and Content Light Level metadata from the HDR10 track with FFprobe.</p>
 <p>Returns (max_mdl, min_mdl, max_cll, max_fall) in dovi_tool level6 units:
 - max_mdl: nits (integer)
 - min_mdl: 0.0001 nit units (integer)
@@ -5099,7 +5099,7 @@ MaxCLL. A value of 0 means "unknown" and is preserved as-is.</p>
 
 
 
-        <p>Create a new Subtitle track object.</p>
+        <p>Make a new Subtitle track object.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -5123,8 +5123,8 @@ MaxCLL. A value of 0 means "unknown" and is preserved as-is.</p>
             <td>
               <div class="doc-md-description">
                 <p>A Subtitle.Codec enum representing the subtitle format.
-If not specified, MediaInfo will be used to retrieve the format
-once the track has been downloaded.</p>
+If not specified, unshackle uses MediaInfo to get the format
+after it downloads the track.</p>
               </div>
             </td>
             <td>
@@ -5141,18 +5141,18 @@ once the track has been downloaded.</p>
             <td>
               <div class="doc-md-description">
                 <p>Closed Caption.
-- Intended as if you couldn't hear the audio at all.
-- Can have Sound as well as Dialogue, but doesn't have to.
-- Original source would be from an EIA-CC encoded stream. Typically all
+- Intended as if you could not hear the audio at all.
+- Can have Sound as well as Dialogue, but does not have to.
+- Original source would be from EIA-CC encoded video. Typically all
   upper-case characters.
 Indicators of it being CC without knowing original source:
   - Extracted with CCExtractor, or
-  - &gt;&gt;&gt; (or similar) being used at the start of some or all lines, or
+  - &gt;&gt;&gt; (or similar) at the start of some or all lines, or
   - All text is uppercase or at least the majority, or
-  - Subtitles are Scrolling-text style (one line appears, oldest line
-    then disappears).
-Just because you downloaded it as a SRT or VTT or such, doesn't mean it
- isn't from an EIA-CC stream. And I wouldn't take the streaming services
+  - Subtitles use the scrolling-text style (one line appears, oldest
+    line then disappears).
+The fact that you downloaded it as a SRT or VTT or such does not mean it
+ is not from an EIA-CC stream. And I would not take the streaming services
  (CC) as gospel either as they tend to get it wrong too.</p>
               </div>
             </td>
@@ -5170,15 +5170,16 @@ Just because you downloaded it as a SRT or VTT or such, doesn't mean it
             <td>
               <div class="doc-md-description">
                 <p>Deaf or Hard-of-Hearing. Also known as HOH in the UK (EU?).
- - Intended as if you couldn't hear the audio at all.
- - MUST have Sound as well as Dialogue to be considered SDH.
- - It has no "syntax" or "format" but is not transmitted using archaic
-   forms like EIA-CC streams, would be intended for transmission via
-   SubRip (SRT), WebVTT (VTT), TTML, etc.
- If you can see important audio/sound transcriptions and not just dialogue
-  and it doesn't have the indicators of CC, then it's most likely SDH.
- If it doesn't have important audio/sounds transcriptions it might just be
-  regular subtitling (you wouldn't mark as CC or SDH). This would be the
+ - Intended as if you could not hear the audio at all.
+ - MUST have Sound as well as Dialogue to count as SDH.
+ - It has no "syntax" or "format", but it is not transmitted in
+   archaic forms like EIA-CC streams. It is intended for transmission
+   through SubRip (SRT), WebVTT (VTT), TTML, and the other modern
+   subtitle formats.
+ If you can see important audio/sound transcriptions and not only dialogue
+  and it does not have the indicators of CC, then it is most likely SDH.
+ If it does not have important audio/sounds transcriptions it might only be
+  regular subtitling (you would not mark as CC or SDH). This would be the
   case for most translation subtitles. Like Anime for example.</p>
               </div>
             </td>
@@ -5195,15 +5196,15 @@ Just because you downloaded it as a SRT or VTT or such, doesn't mean it
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Typically used if there's important information at some point in time
-     like watching Dubbed content and an important Sign or Letter is shown
+                <p>Typically used if there is important information at some point in time
+     like watching a Dubbed title and an important Sign or Letter is shown
      or someone talking in a different language.
-    Forced tracks are recommended by the Matroska Spec to be played if
+    The Matroska Spec recommends that the player plays Forced tracks if
      the player's current playback audio language matches a subtitle
      marked as "forced".
-    However, that doesn't mean every player works like this but there is
+    However, that does not mean every player works like this but there is
      no other way to reliably work with Forced subtitles where multiple
-     forced subtitles may be in the output file. Just know what to expect
+     forced subtitles may be in the output file. Know what to expect
      with "forced" subtitles.</p>
               </div>
             </td>
@@ -5213,17 +5214,17 @@ Just because you downloaded it as a SRT or VTT or such, doesn't mean it
           </tr>
       </tbody>
     </table>
-        <p>Note: If codec is not specified some checks may be skipped or assume a value.
-Specifying as much information as possible is highly recommended.</p>
+        <p>Note: If codec is not specified, unshackle can skip some checks or assume a value.
+Give as much information as possible.</p>
 
 
 <details class="information-on-subtitle-types" open>
   <summary>Information on Subtitle Types</summary>
   <p>https://bit.ly/2Oe4fLC (3PlayMedia Blog on SUB vs CC vs SDH).
-However, I wouldn't pay much attention to the claims about SDH needing to
-be in the original source language. It's logically not true.</p>
-<p>CC == Closed Captions. Source: Basically every site.
-SDH = Subtitles for the Deaf or Hard-of-Hearing. Source: Basically every site.
+However, I would not pay much attention to the claims about SDH needing to
+be in the original language. It is logically not true.</p>
+<p>CC == Closed Captions. Source: Every site.
+SDH = Subtitles for the Deaf or Hard-of-Hearing. Source: Every site.
 HOH = Exact same as SDH. Is a term used in the UK. Source: https://bit.ly/2PGJatz (ICO UK)</p>
 <p>More in-depth information, examples, and stuff to look for can be found in the Parameter
 explanation list above.</p>
@@ -5335,7 +5336,7 @@ every cue by it during conversion.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The WebVTT content as string</p>
+                <p>The WebVTT text as string</p>
               </div>
             </td>
             <td>
@@ -5361,7 +5362,7 @@ every cue by it during conversion.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Sanitized WebVTT content</p>
+                <p>Sanitized WebVTT text</p>
               </div>
             </td>
           </tr>
@@ -5390,7 +5391,7 @@ every cue by it during conversion.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Check if WebVTT content has cue identifiers that need removal.</p>
+        <p>Examine WebVTT text for cue identifiers that need removal.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -5413,7 +5414,7 @@ every cue by it during conversion.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The WebVTT content as string</p>
+                <p>The WebVTT text as string</p>
               </div>
             </td>
             <td>
@@ -5439,7 +5440,7 @@ every cue by it during conversion.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>True if cue identifiers are detected, False otherwise</p>
+                <p>True if the text has cue identifiers, False otherwise</p>
               </div>
             </td>
           </tr>
@@ -5469,9 +5470,9 @@ every cue by it during conversion.</p>
     <div class="doc doc-contents ">
 
         <p>Remove WebVTT cue identifiers that can confuse subtitle parsers.</p>
-<p>Some services use cue identifiers like "Q0", "Q1", etc.
+<p>Some services use cue identifiers such as "Q0" and "Q1"
 that appear on their own line before the timing line. These can be
-incorrectly parsed as part of the previous cue's text content by
+incorrectly parsed as part of the previous cue's text by
 some parsers (like pysubs2).</p>
 
 
@@ -5495,7 +5496,7 @@ some parsers (like pysubs2).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The WebVTT content as string</p>
+                <p>The WebVTT text as string</p>
               </div>
             </td>
             <td>
@@ -5521,7 +5522,7 @@ some parsers (like pysubs2).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Sanitized WebVTT content with cue identifiers removed</p>
+                <p>Sanitized WebVTT text with cue identifiers removed</p>
               </div>
             </td>
           </tr>
@@ -5574,7 +5575,7 @@ some parsers (like pysubs2).</p>
 
     <div class="doc doc-contents ">
 
-        <p>Check if WebVTT content has overlapping cues that need merging.</p>
+        <p>Examine WebVTT text for overlapping cues that need merging.</p>
 <p>Detects cues with start times within 50ms of each other and the same end time,
 which indicates multi-line subtitles split into separate cues.</p>
 
@@ -5599,7 +5600,7 @@ which indicates multi-line subtitles split into separate cues.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The WebVTT content as string</p>
+                <p>The WebVTT text as string</p>
               </div>
             </td>
             <td>
@@ -5625,7 +5626,7 @@ which indicates multi-line subtitles split into separate cues.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>True if overlapping cues are detected, False otherwise</p>
+                <p>True if the text has overlapping cues, False otherwise</p>
               </div>
             </td>
           </tr>
@@ -5681,7 +5682,7 @@ line: position (lower percentage = higher on screen = first line).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The WebVTT content as string</p>
+                <p>The WebVTT text as string</p>
               </div>
             </td>
             <td>
@@ -5707,7 +5708,7 @@ line: position (lower percentage = higher on screen = first line).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>WebVTT content with overlapping cues merged</p>
+                <p>WebVTT text with overlapping cues merged</p>
               </div>
             </td>
           </tr>
@@ -5736,10 +5737,11 @@ line: position (lower percentage = higher on screen = first line).</p>
 
     <div class="doc doc-contents ">
 
-        <p>More thorough sanitization of WebVTT files to handle multiple potential issues.</p>
-<p>This is lossy, so use it only as a fallback once normal parsing has failed. Everything before the
-WEBVTT header line is discarded and the header itself is reduced to a bare "WEBVTT" line. Negative
-timestamps become 00:00:00.000 and timestamps missing the hours field are padded to HH:MM:SS.mmm.</p>
+        <p>More thorough sanitization of WebVTT files that corrects multiple potential issues.</p>
+<p>This is lossy, so use it only as a fallback once normal parsing has failed. This method discards
+everything before the WEBVTT header line and reduces the header itself to a bare "WEBVTT" line.
+Negative timestamps become 00:00:00.000, and it pads timestamps that have no hours field to
+HH:MM:SS.mmm.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -5762,7 +5764,7 @@ timestamps become 00:00:00.000 and timestamps missing the hours field are padded
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The WebVTT content as string</p>
+                <p>The WebVTT text as string</p>
               </div>
             </td>
             <td>
@@ -5788,7 +5790,7 @@ timestamps become 00:00:00.000 and timestamps missing the hours field are padded
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Sanitized WebVTT content</p>
+                <p>Sanitized WebVTT text</p>
               </div>
             </td>
           </tr>
@@ -5814,14 +5816,14 @@ timestamps become 00:00:00.000 and timestamps missing the hours field are padded
     <div class="doc doc-contents ">
 
         <p>Convert this Subtitle to another format.</p>
-<p>Backend selection is data-driven (see <code>tracks/subtitle_convert.py</code>): the best
-available backend that supports source-&gt;target is used, falling back through the
-capability chain on failure. The backend can be pinned via the <code>conversion_method</code>
-config key (<code>auto</code> | <code>subby</code> | <code>pysubs2</code> | <code>subtitleedit</code> | <code>pycaption</code>),
-or nudged per-service via <code>preferred_conversion_method</code>; an explicit config value
-always wins.</p>
-<p><code>forced</code> marks an explicit user request (<code>--sub-format</code>). Lossy downconverts of
-styled formats (SSA/ASS -&gt; SRT) are skipped unless <code>forced</code> is True.</p>
+<p>Backend selection is data-driven (see <code>tracks/subtitle_convert.py</code>): unshackle
+uses the best available backend that can convert source-&gt;target, and falls back
+through the capability chain on failure. The <code>conversion_method</code> config key
+(<code>auto</code> | <code>subby</code> | <code>pysubs2</code> | <code>subtitleedit</code> | <code>pycaption</code>) pins the
+backend, and <code>preferred_conversion_method</code> nudges it per-service. An explicit
+config value always wins.</p>
+<p><code>forced</code> marks an explicit user request (<code>--sub-format</code>). unshackle skips lossy
+downconverts of styled formats (SSA/ASS -&gt; SRT) unless <code>forced</code> is True.</p>
 
 
     </div>
@@ -5850,8 +5852,8 @@ styled formats (SSA/ASS -&gt; SRT) are skipped unless <code>forced</code> is Tru
 - the <code>Fontname</code> column of every <code>Style:</code> line in <code>[V4+ Styles]</code>/<code>[V4 Styles]</code>
   (column located from the section's <code>Format:</code> line, not assumed by index), and
 - inline <code>\fn</code> font overrides inside <code>Dialogue</code> override blocks.</p>
-<p>Leading <code>@</code> (vertical-writing prefix) is stripped and names are de-duplicated
-case-insensitively, preferring a mixed-case spelling over an all-lowercase one.</p>
+<p>This method removes a leading <code>@</code> (vertical-writing prefix), de-duplicates the
+names case-insensitively, and prefers a mixed-case spelling over an all-lowercase one.</p>
 
 
     </div>
@@ -5898,7 +5900,7 @@ case-insensitively, preferring a mixed-case spelling over an all-lowercase one.<
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The WebVTT content as string</p>
+                <p>The WebVTT text as string</p>
               </div>
             </td>
             <td>
@@ -5924,7 +5926,7 @@ case-insensitively, preferring a mixed-case spelling over an all-lowercase one.<
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Sanitized WebVTT content with corrupted lines removed</p>
+                <p>Sanitized WebVTT text with corrupted lines removed</p>
               </div>
             </td>
           </tr>
@@ -5956,7 +5958,7 @@ case-insensitively, preferring a mixed-case spelling over an all-lowercase one.<
         <p>Space out the WEBVTT Headers from Captions.</p>
 <p>Segmented VTT when merged may have the WEBVTT headers part of the next caption
 as they were not separated far enough from the previous caption and ended up
-being considered as caption text rather than the header for the next segment.</p>
+as caption text rather than the header for the next segment.</p>
 
 
     </div>
@@ -6029,9 +6031,9 @@ being considered as caption text rather than the header for the next segment.</p
     <div class="doc doc-contents ">
 
         <p>Convert Segmented DASH WebVTT cues into a pycaption Caption List.
-Also returns an ISO 639-2 alpha-3 language code if available.</p>
+Also returns an ISO 639-2 alpha-3 language tag if available.</p>
 <p>Code ported originally by xhlove to Python from shaka-player.
-Has since been improved upon by rlaphoenix using pymp4 and
+rlaphoenix has since improved it with pymp4 and
 pycaption functions.</p>
 
 
@@ -6052,8 +6054,8 @@ pycaption functions.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Strip captions for hearing impaired (SDH).</p>
-<p>The SDH stripping method is determined by the 'sdh_method' setting in config:
+        <p>Remove the SDH captions.</p>
+<p>The 'sdh_method' setting in config gives the SDH stripping method:
 - 'auto' (default): Tries subby first, then SubtitleEdit, then filter-subs
 - 'subby': Uses subby's SDHStripper
 - 'subtitleedit': Uses SubtitleEdit when available
@@ -6078,7 +6080,7 @@ pycaption functions.</p>
     <div class="doc doc-contents ">
 
         <p>Reverse RTL (Right to Left) Start/End on Captions.
-This can be used to fix the positioning of sentence-ending characters.</p>
+Use this to fix the positioning of sentence-ending characters.</p>
 
 
     </div>
@@ -6160,7 +6162,7 @@ This can be used to fix the positioning of sentence-ending characters.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Return the session, or a new <code>Session</code> if none was set.</p>
+        <p>Return the HTTP session, or a new <code>Session</code> if none was set.</p>
 
 
     </div>
@@ -6245,7 +6247,7 @@ This can be used to fix the positioning of sentence-ending characters.</p>
     <div class="doc doc-contents ">
 
         <p>Arbitrary track data dictionary.</p>
-<p>A defaultdict is used with a dict as the factory for easier
+<p>This uses a defaultdict with a dict as the factory for easier
 nested saving and safer exists-checks.</p>
 <p>Reserved keys:</p>
 <ul>
@@ -6262,8 +6264,8 @@ nested saving and safer exists-checks.</p>
 <li>segment_durations: list[int] - A list of each segment's duration.</li>
 </ul>
 <p>You should not add, change, or remove any data within reserved keys.
-You may use their data but do note that the values of them may change
-or be removed at any point.</p>
+You may use their data, but note that these values can change or be removed
+at any point.</p>
 
     </div>
 
@@ -6296,8 +6298,8 @@ or be removed at any point.</p>
     <div class="doc doc-contents ">
 
         <p>Download and optionally Decrypt this Track.</p>
-<p>A URL-descriptor Video or Audio track with no <code>drm</code> set has its DRM probed from the init data of the
-stream and stored on the track, so a service need not declare <code>drm</code> itself.</p>
+<p>For a URL-descriptor Video or Audio track with no <code>drm</code> set, unshackle probes the DRM from the
+track's init data and stores it on the track, so a service need not declare <code>drm</code> itself.</p>
 
 
     </div>
@@ -6383,7 +6385,7 @@ This will overwrite anything at the target path.</p>
     <div class="doc doc-contents ">
 
         <p>Serialise the track for export/import (identity/URL/descriptor/language).</p>
-<p>DRM is not serialised here; the export writer attaches the licensed DRM + keys.
+<p>DRM is not serialised here. The export writer attaches the licensed DRM + keys.
 Subclasses add their own codec/quality fields.</p>
 
 
@@ -6408,7 +6410,7 @@ Subclasses add their own codec/quality fields.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Build the shared Track constructor kwargs from a <code>to_dict()</code> payload.</p>
+        <p>Assemble the shared Track constructor kwargs from a <code>to_dict()</code> payload.</p>
 <p>DRM is not reconstructed here: <code>to_dict</code> does not serialise it, and the import
 flow attaches the licensed DRM + content keys separately.</p>
 
@@ -6495,15 +6497,15 @@ flow attaches the licensed DRM + content keys separately.</p>
     <div class="doc doc-contents ">
 
         <p>Probe the DRM encryption Key ID (KID) for this specific track.</p>
-<p>It currently supports finding the Key ID by probing the track's stream
-with ffprobe for <code>enc_key_id</code> data, as well as for mp4 <code>tenc</code> (Track
-Encryption) boxes.</p>
+<p>It can find the Key ID by probing the track with FFprobe for
+<code>enc_key_id</code> data, as well as for mp4 <code>tenc</code> (Track Encryption)
+boxes.</p>
 <p>It explicitly ignores PSSH information like the <code>PSSH</code> box, as the box
 is likely to contain multiple Key IDs that may or may not be for this
 specific track.</p>
 <p>To retrieve the initialization segment, this method calls :meth:<code>get_init_segment</code>
-with the positional and keyword arguments. The return value of <code>get_init_segment</code>
-is then used to determine the Key ID.</p>
+with the positional and keyword arguments. This method then uses the return value
+of <code>get_init_segment</code> to find the Key ID.</p>
 
 
     <p><span class="doc-section-title">Returns:</span></p>
@@ -6521,7 +6523,7 @@ is then used to determine the Key ID.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The Key ID as a UUID object, or None if the Key ID could not be determined.</p>
+                <p>The Key ID as a UUID object, or None if unshackle cannot find the Key ID.</p>
               </div>
             </td>
           </tr>
@@ -6546,7 +6548,7 @@ is then used to determine the Key ID.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Load DRM information for this track if it was deferred during parsing.</p>
+        <p>Load DRM information for this track if the parser deferred it.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -6595,7 +6597,7 @@ is then used to determine the Key ID.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>True if DRM was loaded or already present, False if failed</p>
+                <p>True if the DRM loaded or is already present, False if the load failed</p>
               </div>
             </td>
           </tr>
@@ -6645,11 +6647,11 @@ is then used to determine the Key ID.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Get the Track's Initial Segment Data Stream.</p>
-<p>HLS and DASH tracks must explicitly provide a URL to the init segment or file.
-Providing the byte-range for the init segment is recommended where possible.</p>
-<p>If <code>byte_range</code> is not set, it will make a HEAD request and check the size of
-the file. If the size could not be determined, it will download up to the first
+        <p>Get the Track's initial segment data.</p>
+<p>HLS and DASH tracks must explicitly give a URL to the init segment or file.
+Give the byte-range for the init segment where possible.</p>
+<p>If <code>byte_range</code> is not set, it will make a HEAD request and examine the size of
+the file. If it cannot find the size, it will download up to the first
 20KB only, which should contain the entirety of the init segment. You may
 override this by changing the <code>maximum_size</code>.</p>
 <p>The default maximum_size of 20000 (20KB) is a tried-and-tested value that
@@ -6676,9 +6678,9 @@ seems to work well across the board.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Size to assume as the content length if byte-range is not
-used, the content size could not be determined, or the content size
-is larger than it. A value of 20000 (20KB) or higher is recommended.</p>
+                <p>Size to assume as the response body length if byte-range is
+not used, if unshackle cannot find the body size, or if the body size
+is larger than it. Use a value of 20000 (20KB) or higher.</p>
               </div>
             </td>
             <td>
@@ -6726,7 +6728,7 @@ is larger than it. A value of 20000 (20KB) or higher is recommended.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Session context, e.g., authorization and headers.</p>
+                <p>HTTP session context, for example authorization and headers.</p>
               </div>
             </td>
             <td>
@@ -6754,13 +6756,13 @@ is larger than it. A value of 20000 (20KB) or higher is recommended.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Remux the track with ffmpeg <code>-c copy</code>.</p>
-<p>When <code>bsf_v</code> is given it is folded into the same pass as <code>-bsf:v</code> (used to
-normalize video VUI colour metadata without a second full-file remux). Repackaging
-is mandatory; the bitstream filter is best-effort. If the combined run fails (and it
-isn't the AAC-retry case) it is retried once without <code>bsf_v</code> so the remux still
-succeeds. Returns True if the requested <code>bsf_v</code> was applied (always False when
-<code>bsf_v</code> is None, since nothing was requested).</p>
+        <p>Remux the track with FFmpeg <code>-c copy</code>.</p>
+<p>A given <code>bsf_v</code> goes into the same pass as <code>-bsf:v</code>, which normalises video VUI
+colour metadata without a second full-file remux. Repackaging is mandatory. The
+bitstream filter is best-effort: if the combined pass fails, and it is not the
+AAC-retry case, unshackle tries it again once without <code>bsf_v</code> so the remux still
+succeeds. Returns True if unshackle applied the requested <code>bsf_v</code> (always False
+when <code>bsf_v</code> is None, because the caller requested nothing).</p>
 
 
     </div>
@@ -6828,7 +6830,7 @@ It provides convenience functions for listing, sorting, and selecting tracks.</p
 
     <div class="doc doc-contents ">
 
-        <p>Check if a track already exists by various methods.</p>
+        <p>Examine whether a track already exists, by various methods.</p>
 
 
     </div>
@@ -6848,7 +6850,9 @@ It provides convenience functions for listing, sorting, and selecting tracks.</p
 
     <div class="doc doc-contents ">
 
-        <p>Add a provided track to its appropriate array and ensuring it's not a duplicate.</p>
+        <p>Add a provided track to its appropriate array.</p>
+<p>A track whose ID is already in the collection raises ValueError. With <code>warn_only</code>
+set, this method skips such a track and logs how many it skipped.</p>
 
 
     </div>
@@ -6916,7 +6920,7 @@ It provides convenience functions for listing, sorting, and selecting tracks.</p
     <div class="doc doc-contents ">
 
         <p>Sort subtitle tracks by various track attributes to a common P2P standard.
-You may optionally provide a sequence of languages to prioritize to the top.</p>
+You may optionally give a sequence of languages to prioritise to the top.</p>
 
 
 <details class="section-order" open>
@@ -6937,8 +6941,8 @@ You may optionally provide a sequence of languages to prioritize to the top.</p>
 (Least to most captions expected in the subtitle)</li>
 </ul>
 </details>        <p>type_priority overrides the Type Order with an explicit ranking of "forced",
-"normal", and "sdh" (cc counts as sdh); unlisted types fall to the end.</p>
-<p>group_by sets the major key. "type" (default) keeps every forced track together,
+"normal", and "sdh" (cc counts as sdh). Unlisted types fall to the end.</p>
+<p>group_by sets the major sort order. "type" (default) keeps every forced track together,
 then every normal, then every SDH, each block ascending by language. "language"
 groups by language instead, so Finnish sits next to Finnish SDH, with the Type
 Order applied inside each language.</p>
@@ -6988,8 +6992,9 @@ sorts "en-US" and "en-GB".</p>
     <div class="doc doc-contents ">
 
         <p>Concatenate video selections, dropping duplicates (by track id, order-preserving).</p>
-<p>A DV track can be chosen as both the hybrid ingredient (lowest) and an explicit
-deliverable; without dedup the same track would be muxed/downloaded twice.</p>
+<p>A caller can choose a DV track as both the hybrid ingredient (lowest) and an
+explicit deliverable. Without dedup, unshackle would mux and download the same
+track twice.</p>
 
 
     </div>
@@ -7014,9 +7019,10 @@ deliverable; without dedup the same track would be muxed/downloaded twice.</p>
     <div class="doc doc-contents ">
 
         <p>Split videos into hybrid-ingredient candidates and the standalone-deliverable pool.</p>
-<p>HDR10/HDR10+/DV tracks are hybrid ingredients; they only enter the standalone
-pool when their range was explicitly requested alongside HYBRID, so e.g.
-<code>-r HYBRID</code> muxes only the hybrid while <code>-r HYBRID,HDR10P</code> also delivers HDR10+.</p>
+<p>HDR10/HDR10+/DV tracks are hybrid ingredients. They only enter the standalone
+pool when the user explicitly requested their range alongside HYBRID, so for
+example <code>-r HYBRID</code> muxes only the hybrid while <code>-r HYBRID,HDR10P</code> also delivers
+HDR10+.</p>
 
 
     </div>
@@ -7043,8 +7049,8 @@ pool when their range was explicitly requested alongside HYBRID, so e.g.
     <div class="doc doc-contents ">
 
         <p>Mark tracks selected only as hybrid ingredients so the standalone mux loop skips them.</p>
-<p>A track that was also picked as an explicit deliverable (same track in both
-selections) stays unflagged and is muxed standalone alongside the hybrid.</p>
+<p>A track that the caller also selected as an explicit deliverable (same track in both
+selections) stays unflagged, and the standalone mux loop muxes it alongside the hybrid.</p>
 
 
     </div>
@@ -7074,7 +7080,7 @@ selections) stays unflagged and is muxed standalone alongside the hybrid.</p>
 
         <p>Multiplex all the Tracks into a Matroska Container file.</p>
 <p>A failed mux does not raise. mkvmerge's exit code and error lines come back alongside the
-output path, and the caller must check them.</p>
+output path, and the caller must examine them.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -7130,8 +7136,8 @@ instead of the filename if set.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Update a rich progress bar via <code>completed=...</code>. This must be the
-progress object's update() func, pre-set with task id via functools.partial.</p>
+                <p>Update a rich progress bar with <code>completed=...</code>. This must be the
+progress object's update() func, pre-set with task id by functools.partial.</p>
               </div>
             </td>
             <td>
@@ -7147,8 +7153,8 @@ progress object's update() func, pre-set with task id via functools.partial.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Whether audio is expected in the output. Used to determine
-if embedded audio metadata should be added.</p>
+                <p>Whether the output must have audio. unshackle uses this to
+decide if it adds embedded audio metadata.</p>
               </div>
             </td>
             <td>
@@ -7197,8 +7203,8 @@ for audio metadata when multiple video tracks exist.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Explicit destination for the muxed container. When None (default) the
-path is derived from the first track, so callers muxing several track groups that
+                <p>Explicit destination for the muxed container. When None (default)
+unshackle derives the path from the first track, so callers muxing several track groups that
 share a video list must pass distinct paths to avoid clobbering each other.</p>
               </div>
             </td>
@@ -7252,7 +7258,7 @@ share a video list must pass distinct paths to avoid clobbering each other.</p>
 
 
 
-        <p>Create a new Video track object.</p>
+        <p>Make a new Video track object.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -7276,8 +7282,8 @@ share a video list must pass distinct paths to avoid clobbering each other.</p>
             <td>
               <div class="doc-md-description">
                 <p>A Video.Codec enum representing the video codec.
-If not specified, MediaInfo will be used to retrieve the codec
-once the track has been downloaded.</p>
+If not specified, unshackle uses MediaInfo to get the codec
+after it downloads the track.</p>
               </div>
             </td>
             <td>
@@ -7293,7 +7299,7 @@ once the track has been downloaded.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A Video.Range enum representing the video color range.
+                <p>A Video.Range enum representing the video colour range.
 Defaults to SDR if not specified.</p>
               </div>
             </td>
@@ -7311,7 +7317,7 @@ Defaults to SDR if not specified.</p>
             <td>
               <div class="doc-md-description">
                 <p>A number or float representing the average bandwidth in bytes/s.
-Float values are rounded up to the nearest integer.</p>
+unshackle rounds float values up to the nearest integer.</p>
               </div>
             </td>
             <td>
@@ -7370,9 +7376,8 @@ All strings will be cast to either a number or float.</p>
           </tr>
       </tbody>
     </table>
-        <p>Note: If codec, bitrate, width, height, or fps is not specified some checks
-may be skipped or assume a value. Specifying as much information as possible
-is highly recommended.</p>
+        <p>Note: If codec, bitrate, width, height, or fps is not specified, unshackle can
+skip some checks or assume a value. Give as much information as possible.</p>
 
 
 
@@ -7450,18 +7455,18 @@ is highly recommended.</p>
     <div class="doc doc-contents ">
 
         <p>Convert CICP (Coding-Independent Code Points) values to Video Range.</p>
-<p>CICP is defined in ITU-T H.273 and ISO/IEC 23091-2 for signaling video
-color properties independently of the compression codec. These values are
+<p>ITU-T H.273 and ISO/IEC 23091-2 define CICP for signalling video
+colour properties independently of the compression codec. These values are
 used across AVC (H.264), HEVC (H.265), VVC, AV1, and other modern codecs.</p>
 <p>The enum values (Primaries, Transfer, Matrix) match the official specifications:
 - ITU-T H.273: Coding-independent code points for video signal type identification
-- ISO/IEC 23091-2: Information technology — Coding-independent code points — Part 2: Video
+- ISO/IEC 23091-2: Information technology - Coding-independent code points - Part 2: Video
 - H.264 Table E-3 (Colour Primaries) and Table E-4 (Transfer Characteristics)
 - H.265 Table E.3 and E.4 (identical to H.264)</p>
 <p>Note: Value 0 = "Reserved" and Value 2 = "Unspecified" per specification.
 While both effectively mean "unknown" in practice, the distinction matters for
-spec compliance. Value 2 was added based on user feedback (GitHub issue) and
-verified against FFmpeg's AVColorPrimaries/AVColorTransferCharacteristic enums.</p>
+spec compliance. Value 2 was added after user feedback (GitHub issue) and matches
+FFmpeg's AVColorPrimaries/AVColorTransferCharacteristic enums.</p>
 <p>Sources:
 - https://www.itu.int/rec/T-REC-H.273
 - https://www.itu.int/rec/T-REC-H.Sup19-202104-I
@@ -7494,7 +7499,7 @@ verified against FFmpeg's AVColorPrimaries/AVColorTransferCharacteristic enums.<
 
     <div class="doc doc-contents ">
 
-        <p>Change the Video's Color Range to Limited (0) or Full (1).</p>
+        <p>Change the Video's Colour Range to Limited (0) or Full (1).</p>
 
 
     </div>
@@ -7515,9 +7520,9 @@ verified against FFmpeg's AVColorPrimaries/AVColorTransferCharacteristic enums.<
     <div class="doc doc-contents ">
 
         <p>Return the <code>-bsf:v</code> value that rewrites SPS VUI colour metadata to match <code>self.range</code>.</p>
-<p>Returns None when no rewrite is needed: SDR/DV/HYBRID ranges, non-AVC/HEVC codecs, a
+<p>Returns None when a rewrite is not necessary: SDR/DV/HYBRID ranges, non-AVC/HEVC codecs, a
 missing file, or when the bitstream already ships the correct colour metadata. Otherwise
-returns a <code>{h264,hevc}_metadata=...</code> string suitable for ffmpeg <code>-bsf:v</code>.</p>
+returns a <code>{h264,hevc}_metadata=...</code> string suitable for FFmpeg <code>-bsf:v</code>.</p>
 
 
     </div>
@@ -7540,8 +7545,8 @@ returns a <code>{h264,hevc}_metadata=...</code> string suitable for ffmpeg <code
         <p>Rewrite SPS VUI colour metadata to match <code>self.range</code>.</p>
 <p>Some services ship HDR10/HLG bitstreams with stale BT.709 VUI, which makes
 downstream tools mis-classify the file. The manifest-derived range is the
-source of truth. Skips SDR, DV, and HYBRID. Returns True if the bitstream
-was rewritten.</p>
+source of truth. Skips SDR, DV, and HYBRID. Returns True if unshackle rewrote
+the bitstream.</p>
 
 
     </div>
@@ -7581,19 +7586,19 @@ was rewritten.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Extract Apple-Style c608 box (CEA-608) subtitle using ccextractor.</p>
-<p>This isn't much more than a wrapper to the track.ccextractor function.
-All this does, is actually check if a c608 box exists and only if so
-does it actually call ccextractor.</p>
-<p>Even though there is a possibility of more than one c608 box, only one
-can actually be extracted. It is also very possible this
+        <p>Extract Apple-Style c608 box (CEA-608) subtitle using CCExtractor.</p>
+<p>This is not much more than a wrapper to the track.ccextractor function.
+All this does is examine if a c608 box exists, and only then
+does it call CCExtractor.</p>
+<p>Even though there is a possibility of more than one c608 box, unshackle
+can extract only one. It is also very possible this
 needs to be done before any decryption as the decryption may destroy
 some of the metadata.</p>
 
 
 <details class="todo" open>
-  <summary>Need a test file with more than one c608 box to add support for</summary>
-  <p>more than one CEA-608 extraction.</p>
+  <summary>Need a test file with more than one c608 box, before unshackle can</summary>
+  <p>extract more than one CEA-608 track.</p>
 </details>
 
     </div>
@@ -7615,9 +7620,9 @@ some of the metadata.</p>
 
         <p>Remove EIA-CC data from Bitstream while keeping SEI data.</p>
 <p>This works by removing all NAL Unit's with the Type of 6 from the bistream
-and then re-adding SEI data (effectively a new NAL Unit with just the SEI data).
-Only bitstreams with x264 encoding information is currently supported due to the
-obscurity on the MDAT mp4 box structure. Therefore, we need to use hacky regex.</p>
+and then re-adding SEI data (effectively a new NAL Unit with only the SEI data).
+unshackle can do this only for bitstreams with x264 encoding information, because of
+the obscurity on the MDAT mp4 box structure. Therefore, we need to use hacky regex.</p>
 
 
     </div>

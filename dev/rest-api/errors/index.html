@@ -1755,10 +1755,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#how-errors-are-produced" class="md-nav__link">
+  <a href="#how-the-server-produces-errors" class="md-nav__link">
     <span class="md-ellipsis">
       
-        How errors are produced
+        How the server produces errors
       
     </span>
   </a>
@@ -2149,10 +2149,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#how-errors-are-produced" class="md-nav__link">
+  <a href="#how-the-server-produces-errors" class="md-nav__link">
     <span class="md-ellipsis">
       
-        How errors are produced
+        How the server produces errors
       
     </span>
   </a>
@@ -2225,19 +2225,19 @@
 
 <h1 id="error-responses">Error Responses<a class="headerlink" href="#error-responses" title="Permanent link">&para;</a></h1>
 <p>Every endpoint of the unshackle REST API reports failures in a single, predictable
-shape. Whether a request was rejected because a field was missing, a service refused
-to authenticate, or the download worker crashed, the server answers with a JSON body
+shape. The cause can be a missing field, a service that refuses to authenticate, or a
+download worker that crashed. In each case the server answers with a JSON body
 that carries a machine-readable <strong>error code</strong>, a human-readable <strong>message</strong>, and a
 matching <strong>HTTP status</strong>. This page documents that format and catalogues every error
-code the server can emit.</p>
-<p>If you are building a client against the API, read this page alongside the endpoint
-reference. Each endpoint lists the specific codes it raises, and the meanings of
-those codes are defined here.</p>
+code the server can send.</p>
+<p>If you write a client against the API, read this page alongside the endpoint
+reference. Each endpoint lists the specific codes it raises, and this page gives the
+meanings of those codes.</p>
 <div class="admonition note">
 <p class="admonition-title">Where this comes from</p>
-<p>The error format is defined in <code>unshackle/core/api/errors.py</code>, and the wrapper
+<p><code>unshackle/core/api/errors.py</code> defines the error format, and the wrapper
 that turns raised errors into responses lives in <code>unshackle/core/api/routes.py</code>.
-Nothing on this page is invented; it reflects the actual server behaviour.</p>
+Nothing on this page is invented. It reflects the actual server behaviour.</p>
 </div>
 <h2 id="the-standard-error-shape">The standard error shape<a class="headerlink" href="#the-standard-error-shape" title="Permanent link">&para;</a></h2>
 <p>A structured error is always a JSON object with <code>status</code> set to the literal string
@@ -2322,7 +2322,7 @@ included when it is non-empty, so a client must treat a missing <code>details</c
 extra information". Some concrete examples you may encounter:</p>
 <ul>
 <li>A validation failure may include the offending field or the list of valid values.</li>
-<li>A "title not found" error on a remote-dl session includes <code>available_titles</code>.</li>
+<li>A "title not found" error on a remote session includes <code>available_titles</code>.</li>
 <li>A maintenance conflict includes <code>active_jobs</code>, the jobs blocking the operation.</li>
 <li>Categorised exceptions add a <code>reason</code> tag, such as <code>"network_connectivity"</code> or
   <code>"geofence_restriction"</code>.</li>
@@ -2330,8 +2330,8 @@ extra information". Some concrete examples you may encounter:</p>
 <h3 id="the-retryable-hint">The <code>retryable</code> hint<a class="headerlink" href="#the-retryable-hint" title="Permanent link">&para;</a></h3>
 <p>The <code>retryable</code> field appears <strong>only when it is <code>true</code></strong>. It is set for conditions
 the server believes are transient: network errors, rate limiting, and temporary
-service unavailability. When you see it, backing off and retrying is reasonable; when
-it is absent, assume the request will keep failing until you change something.</p>
+service unavailability. When you see it, you can back off and try the request again.
+When it is absent, assume the request will keep failing until you change something.</p>
 <div class="admonition example">
 <p class="admonition-title">A retryable network error</p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span>
@@ -2387,12 +2387,12 @@ but the defaults hold for the overwhelming majority of responses.</p>
 <tr>
 <td><code>FORBIDDEN</code></td>
 <td>403</td>
-<td>The action is not allowed. Raised by server-side gates (per-key restrictions on CDM or credential overrides) and by session IP binding.</td>
+<td>The action is not allowed. Raised by server-side gates (per-key restrictions on CDM or credential overrides) and by remote session IP binding.</td>
 </tr>
 <tr>
 <td><code>GEOFENCE</code></td>
 <td>403</td>
-<td>The content is not available in the applicable region.</td>
+<td>The title is not available in the applicable region.</td>
 </tr>
 <tr>
 <td><code>NOT_FOUND</code></td>
@@ -2417,7 +2417,7 @@ but the defaults hold for the overwhelming majority of responses.</p>
 <tr>
 <td><code>TRACK_NOT_FOUND</code></td>
 <td>404</td>
-<td>A referenced track ID is not present in the session.</td>
+<td>A referenced track ID is not present in the remote session.</td>
 </tr>
 <tr>
 <td><code>CONFLICT</code></td>
@@ -2483,7 +2483,7 @@ but the defaults hold for the overwhelming majority of responses.</p>
 <p>If a code is ever emitted without a mapped status, the server falls back to
 <code>500</code>. In practice every code above has an explicit mapping.</p>
 </div>
-<h2 id="how-errors-are-produced">How errors are produced<a class="headerlink" href="#how-errors-are-produced" title="Permanent link">&para;</a></h2>
+<h2 id="how-the-server-produces-errors">How the server produces errors<a class="headerlink" href="#how-the-server-produces-errors" title="Permanent link">&para;</a></h2>
 <p>Understanding where an error comes from helps interpret it.</p>
 <p><strong>Explicitly raised errors.</strong> Most endpoints raise a structured <code>APIError</code> directly.
 For example, a missing <code>service</code> field yields <code>INVALID_INPUT</code>, and a disallowed
@@ -2503,42 +2503,42 @@ The classification is keyword-based, checked in order:</p>
 </thead>
 <tbody>
 <tr>
-<td>auth, login, credential, unauthorized, forbidden, token</td>
+<td><code>auth</code>, <code>login</code>, <code>credential</code>, <code>unauthorized</code>, <code>forbidden</code>, <code>token</code></td>
 <td><code>AUTH_FAILED</code> (401)</td>
 <td>no</td>
 </tr>
 <tr>
-<td>connection, timeout, network, unreachable, socket, dns, resolve (or <code>ConnectionError</code>, <code>TimeoutError</code>, <code>URLError</code>, <code>SSLError</code>)</td>
+<td><code>connection</code>, <code>timeout</code>, <code>network</code>, <code>unreachable</code>, <code>socket</code>, <code>dns</code>, <code>resolve</code> (or <code>ConnectionError</code>, <code>TimeoutError</code>, <code>URLError</code>, <code>SSLError</code>)</td>
 <td><code>NETWORK_ERROR</code> (503)</td>
 <td>yes</td>
 </tr>
 <tr>
-<td>geofence, region, "not available in", territory</td>
+<td><code>geofence</code>, <code>region</code>, <code>not available in</code>, <code>territory</code></td>
 <td><code>GEOFENCE</code> (403)</td>
 <td>no</td>
 </tr>
 <tr>
-<td>"not found", 404, "does not exist", "invalid id"</td>
+<td><code>not found</code>, <code>404</code>, <code>does not exist</code>, <code>invalid id</code></td>
 <td><code>NOT_FOUND</code> (404)</td>
 <td>no</td>
 </tr>
 <tr>
-<td>rate limit, too many requests, 429, throttle</td>
+<td><code>rate limit</code>, <code>too many requests</code>, <code>429</code>, <code>throttle</code></td>
 <td><code>RATE_LIMITED</code> (429)</td>
 <td>yes</td>
 </tr>
 <tr>
-<td>drm, license, widevine, playready, decrypt</td>
+<td><code>drm</code>, <code>license</code>, <code>widevine</code>, <code>playready</code>, <code>decrypt</code></td>
 <td><code>DRM_ERROR</code> (502)</td>
 <td>no</td>
 </tr>
 <tr>
-<td>"service unavailable", 503, maintenance, "temporarily unavailable"</td>
+<td><code>service unavailable</code>, <code>503</code>, <code>maintenance</code>, <code>temporarily unavailable</code></td>
 <td><code>SERVICE_UNAVAILABLE</code> (503)</td>
 <td>yes</td>
 </tr>
 <tr>
-<td>invalid, malformed, validation (or <code>ValueError</code>, <code>ValidationError</code>)</td>
+<td><code>invalid</code>, <code>malformed</code>, <code>validation</code> (or <code>ValueError</code>, <code>ValidationError</code>)</td>
 <td><code>INVALID_INPUT</code> (400)</td>
 <td>no</td>
 </tr>
@@ -2564,8 +2564,8 @@ the server returns <code>INVALID_INPUT</code> (400) with the parse error in
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">}</span>
 </span></code></pre></div>
 <h2 id="the-authentication-error-exception">The authentication error exception<a class="headerlink" href="#the-authentication-error-exception" title="Permanent link">&para;</a></h2>
-<p>There is one place where the response does <strong>not</strong> follow the standard shape: the API
-key authentication middleware. When you send a request to a protected endpoint
+<p>There is one place where the response does <strong>not</strong> follow the standard shape: the
+API key authentication middleware. When you send a request to a protected endpoint
 without a valid <code>X-Secret-Key</code> header, the middleware short-circuits with a legacy
 body that uses an integer <code>status</code> and no <code>error_code</code> or <code>timestamp</code>.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Missing key</label><label for="__tabbed_1_2">Invalid key</label></div>
@@ -2582,7 +2582,7 @@ body that uses an integer <code>status</code> and no <code>error_code</code> or 
 </div>
 <div class="admonition warning">
 <p class="admonition-title">Handle both shapes</p>
-<p>A robust client must expect two error formats: the standard structured error
+<p>A client must expect two error formats: the standard structured error
 (string <code>status</code> of <code>"error"</code>, with <code>error_code</code>), and this authentication error
 (integer <code>status</code>, no <code>error_code</code>). The <code>GET /api/health</code> endpoint is exempt
 from authentication, so it never returns the key-error shape.</p>
@@ -2593,12 +2593,12 @@ from authentication, so it never returns the key-error shape.</p>
 deleting a history entry.</p>
 <div class="admonition warning">
 <p class="admonition-title">Do not parse <code>204</code> bodies</p>
-<p>A <code>204</code> response has no body. Clients must check the status code before attempting
-to decode JSON, or the decode will fail on an empty string.</p>
+<p>A <code>204</code> response has no body. Clients must examine the status code before they
+decode JSON, or the decode will fail on an empty string.</p>
 </div>
 <h2 id="debug-information">Debug information<a class="headerlink" href="#debug-information" title="Permanent link">&para;</a></h2>
-<p>By default, error responses never include tracebacks or internal diagnostics. If the
-server was started with the <code>--debug-api</code> flag, every structured error gains a
+<p>By default, error responses never include tracebacks or internal diagnostics. If you
+start the server with the <code>--debug-api</code> flag, every structured error gains a
 <code>debug_info</code> object:</p>
 <div class="language-json highlight"><span class="filename">Error with --debug-api enabled</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"error"</span><span class="p">,</span>
@@ -2613,7 +2613,7 @@ server was started with the <code>--debug-api</code> flag, every structured erro
 </span></code></pre></div>
 <p>The <code>debug_info</code> object always carries <code>exception_type</code> and, for exception-derived
 errors, a formatted <code>traceback</code>. Some endpoints add extra diagnostics such as
-captured worker stderr.</p>
+captured job worker stderr.</p>
 <div class="admonition warning">
 <p class="admonition-title">Developer use only</p>
 <p><code>--debug-api</code> exposes internal tracebacks in responses. Enable it only for local
@@ -2622,16 +2622,16 @@ debugging, never on a server reachable by untrusted clients.</p>
 <h2 id="client-handling-recommendations">Client handling recommendations<a class="headerlink" href="#client-handling-recommendations" title="Permanent link">&para;</a></h2>
 <p>For anyone writing a consumer of the API, a durable strategy is:</p>
 <ol>
-<li><strong>Read the HTTP status first.</strong> It tells you the broad class of outcome and lets
-   you handle the <code>204</code>/no-body and authentication-error cases before touching the
+<li><strong>Read the HTTP status first.</strong> It tells you the broad class of outcome, and it
+   lets you find the <code>204</code>/no-body and authentication-error cases before you read the
    body.</li>
 <li><strong>Branch on <code>error_code</code>.</strong> For structured errors, this is the stable identifier
-   to switch on. Do not match on <code>message</code>.</li>
-<li><strong>Respect <code>retryable</code>.</strong> When it is <code>true</code>, back off and retry; the reference
-   client retries <code>429</code>, <code>500</code>, <code>502</code>, <code>503</code>, and <code>504</code> with exponential backoff. When
-   absent, fix the request rather than repeating it.</li>
-<li><strong>Fall back gracefully.</strong> Unrecognised codes should be surfaced using the
-   <code>message</code> plus the HTTP status.</li>
+   to switch on. Do not use <code>message</code> as the identifier.</li>
+<li><strong>Respect <code>retryable</code>.</strong> When it is <code>true</code>, back off and try the request again. The
+   reference client retries <code>429</code>, <code>500</code>, <code>502</code>, <code>503</code>, and <code>504</code> with exponential
+   backoff. When absent, fix the request rather than repeating it.</li>
+<li><strong>Fall back gracefully.</strong> For an unrecognised code, show the <code>message</code> and the
+   HTTP status.</li>
 </ol>
 <div class="admonition note">
 <p class="admonition-title">Reference consumer</p>

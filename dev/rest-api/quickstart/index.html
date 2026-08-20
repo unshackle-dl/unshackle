@@ -1570,10 +1570,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-3-confirm-the-server-is-alive" class="md-nav__link">
+  <a href="#step-3-make-sure-that-the-server-is-alive" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 3: Confirm the server is alive
+        Step 3: Make sure that the server is alive
       
     </span>
   </a>
@@ -2109,10 +2109,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-3-confirm-the-server-is-alive" class="md-nav__link">
+  <a href="#step-3-make-sure-that-the-server-is-alive" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 3: Confirm the server is alive
+        Step 3: Make sure that the server is alive
       
     </span>
   </a>
@@ -2234,11 +2234,11 @@
 
 
 <h1 id="rest-api-quick-start">REST API Quick Start<a class="headerlink" href="#rest-api-quick-start" title="Permanent link">&para;</a></h1>
-<p>Unshackle ships with a built-in REST API that exposes the same download engine you drive from the command line. It is served by the <code>unshackle serve</code> command and lets you queue downloads, poll their progress, browse services, and manage history over HTTP instead of the terminal.</p>
-<p>The full loop runs end to end: start the server, authenticate, submit a download job, and poll it to completion, using real <code>curl</code> commands built directly from the API routes.</p>
+<p>Unshackle ships with a built-in REST API that exposes the same download engine you drive from the command line. The <code>unshackle serve</code> command serves it and lets you queue downloads, poll their progress, browse services, and manage history over HTTP instead of the terminal.</p>
+<p>The full loop runs end to end: start the server, authenticate, submit a download job, and poll it to completion. The <code>curl</code> commands here come directly from the API routes.</p>
 <div class="admonition note">
 <p class="admonition-title">Who this page is for</p>
-<p>This is a <strong>developer</strong> guide. It assumes you are comfortable with HTTP, JSON, and a tool like <code>curl</code>. If you just want to download something, the <a href="../../../">command line</a> is simpler. The REST API is meant for building tools, UIs, and automation on top of unshackle.</p>
+<p>This is a <strong>developer</strong> guide. It assumes you are comfortable with HTTP, JSON, and a tool like <code>curl</code>. If you only want to download something, the <a href="../../../">command line</a> is simpler. The REST API is meant for building tools, UIs, and automation on top of unshackle.</p>
 </div>
 <hr />
 <h2 id="before-you-begin">Before you begin<a class="headerlink" href="#before-you-begin" title="Permanent link">&para;</a></h2>
@@ -2258,12 +2258,12 @@
 </div>
 <hr />
 <h2 id="step-1-configure-an-api-secret">Step 1: Configure an API secret<a class="headerlink" href="#step-1-configure-an-api-secret" title="Permanent link">&para;</a></h2>
-<p>Every request (except the health check) is authenticated with a secret key sent in the <code>X-Secret-Key</code> header. The server reads this key from the <code>serve</code> section of your <code>unshackle.yaml</code> config.</p>
+<p>The server authenticates every request (except the health check) with an API key that you send in the <code>X-Secret-Key</code> header. The server reads this API key from the <code>serve</code> section of your <code>unshackle.yaml</code> config.</p>
 <p>At minimum you must set <code>api_secret</code>:</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">serve</span><span class="p">:</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">api_secret</span><span class="p">:</span><span class="w"> </span><span class="s">"choose-a-long-random-secret"</span>
 </span></code></pre></div>
-<p>If you want the API to be able to license and download DRM-protected content, you also need to grant CDM devices to the key. Configure that under <code>serve.users</code>, keyed by the secret:</p>
+<p>If you want the API to license and download DRM-protected titles, you must also grant CDM devices to the API key. Configure that under <code>serve.users</code>, keyed by the secret:</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">serve</span><span class="p">:</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">api_secret</span><span class="p">:</span><span class="w"> </span><span class="s">"choose-a-long-random-secret"</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">users</span><span class="p">:</span>
@@ -2278,14 +2278,14 @@
 </div>
 <div class="admonition tip">
 <p class="admonition-title">Disabling auth for local testing</p>
-<p>Passing <code>--no-key</code> to <code>serve</code> turns authentication off entirely: every request is allowed and the <code>X-Secret-Key</code> header is ignored. This is convenient for a throwaway local test, but never expose a <code>--no-key</code> server to a network you do not fully trust.</p>
+<p><code>--no-key</code> turns authentication off entirely: the server allows every request and ignores the <code>X-Secret-Key</code> header. This is convenient for a throwaway local test, but never put a <code>--no-key</code> server on a network you do not fully trust.</p>
 </div>
 <hr />
 <h2 id="step-2-start-the-server">Step 2: Start the server<a class="headerlink" href="#step-2-start-the-server" title="Permanent link">&para;</a></h2>
 <p>Start the REST API with the <code>serve</code> command:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>unshackle<span class="w"> </span>serve<span class="w"> </span>--api-only
 </span></code></pre></div>
-<p>By default the server binds to <code>127.0.0.1:8786</code>. The <code>--api-only</code> flag serves just the REST API and omits the Widevine/PlayReady CDM HTTP endpoints; drop it if you also want to expose those.</p>
+<p>By default the server binds to <code>127.0.0.1:8786</code>. The <code>--api-only</code> flag serves only the REST API and omits the Widevine/PlayReady CDM HTTP endpoints. Drop it when you also want those endpoints.</p>
 <p>Common options:</p>
 <table>
 <thead>
@@ -2344,15 +2344,15 @@
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Swagger UI is also behind auth</p>
-<p>In <code>--api-only</code> mode (without <code>--no-key</code>), the Swagger UI at <code>/api/docs/</code> requires the <code>X-Secret-Key</code> header just like every other route. Only <code>/api/health</code> is exempt from authentication.</p>
+<p>In <code>--api-only</code> mode (without <code>--no-key</code>), the Swagger UI at <code>/api/docs/</code> requires the <code>X-Secret-Key</code> header, the same as every other route. Only <code>/api/health</code> is exempt from authentication.</p>
 </div>
-<p>For the rest of this page we will assume the server is reachable at <code>http://127.0.0.1:8786</code> and store the secret in a shell variable:</p>
+<p>For the rest of this page we will assume the server is reachable at <code>http://127.0.0.1:8786</code> and store the secret in an environment variable:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">SECRET</span><span class="o">=</span><span class="s2">"choose-a-long-random-secret"</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">BASE</span><span class="o">=</span><span class="s2">"http://127.0.0.1:8786"</span>
 </span></code></pre></div>
 <hr />
-<h2 id="step-3-confirm-the-server-is-alive">Step 3: Confirm the server is alive<a class="headerlink" href="#step-3-confirm-the-server-is-alive" title="Permanent link">&para;</a></h2>
-<p>The health endpoint is the one route that never requires a key. Use it to confirm the server is running and to read its version:</p>
+<h2 id="step-3-make-sure-that-the-server-is-alive">Step 3: Make sure that the server is alive<a class="headerlink" href="#step-3-make-sure-that-the-server-is-alive" title="Permanent link">&para;</a></h2>
+<p>The health endpoint is the one route that never requires an API key. Use it to make sure that the server operates, and to read its version:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>curl<span class="w"> </span><span class="s2">"</span><span class="nv">$BASE</span><span class="s2">/api/health"</span>
 </span></code></pre></div>
 <div class="language-json highlight"><span class="filename">200 OK</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span>
@@ -2368,7 +2368,7 @@
 <p>The <code>update_check</code> block is best effort. If unshackle cannot reach the update source, <code>update_available</code> and <code>latest_version</code> come back as <code>null</code> rather than failing the request.</p>
 <hr />
 <h2 id="step-4-authenticate-a-real-request">Step 4: Authenticate a real request<a class="headerlink" href="#step-4-authenticate-a-real-request" title="Permanent link">&para;</a></h2>
-<p>Every other endpoint needs the <code>X-Secret-Key</code> header. A quick way to prove your key works is to list the services the server can see:</p>
+<p>Every other endpoint needs the <code>X-Secret-Key</code> header. A quick way to prove your API key works is to show the services the server can see:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>curl<span class="w"> </span><span class="s2">"</span><span class="nv">$BASE</span><span class="s2">/api/services"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"X-Secret-Key: </span><span class="nv">$SECRET</span><span class="s2">"</span>
 </span></code></pre></div>
@@ -2390,12 +2390,12 @@
 </span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">  </span><span class="p">]</span>
 </span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="p">}</span>
 </span></code></pre></div>
-<p>If the key is missing or wrong, you get a <code>401</code> with a plain body:</p>
+<p>If the API key is missing or wrong, you get a <code>401</code> with a plain body:</p>
 <div class="language-json highlight"><span class="filename">401 Unauthorized</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="mi">401</span><span class="p">,</span><span class="w"> </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Secret Key is Invalid."</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Two error shapes exist</p>
-<p>The authentication middleware returns the short <code>{"status": 401, "message": "..."}</code> shape shown above. Every <strong>other</strong> error the API produces uses the richer structured shape (<code>error_code</code>, <code>timestamp</code>, <code>details</code>, ...) described in <a href="#error-handling">Error handling</a>. A robust client should handle both.</p>
+<p>The authentication middleware returns the short <code>{"status": 401, "message": "..."}</code> shape shown above. Every <strong>other</strong> error the API produces uses the richer structured shape (<code>error_code</code>, <code>timestamp</code>, <code>details</code>, ...) described in <a href="#error-handling">Error handling</a>. Parse both shapes in your client.</p>
 </div>
 <p>The <code>tag</code> value for the service you want is the identifier you pass as <code>service</code> in the calls below.</p>
 <hr />
@@ -2513,7 +2513,7 @@
 <p>Validation is strict: invalid codecs, subtitle formats, dynamic-range names, non-positive counts, or mutually exclusive flags (for example both <code>video_only</code> and <code>audio_only</code>) come back as <code>400</code> with error code <code>INVALID_PARAMETERS</code>. See the full reference on the <a href="../endpoints/">download reference page</a> for every accepted field.</p>
 <div class="admonition note">
 <p class="admonition-title">Gated fields</p>
-<p>Passing a per-request CDM (<code>cdm</code>) or inline credentials (<code>credential</code> / <code>credentials</code>) is refused with <code>403 FORBIDDEN</code> unless the server operator has explicitly opted in via <code>serve.cdm_overrides</code> and <code>serve.allow_job_credentials</code>. Both are off by default.</p>
+<p>The server refuses a per-request CDM (<code>cdm</code>) or inline credentials (<code>credential</code> / <code>credentials</code>) with <code>403 FORBIDDEN</code>, unless the server operator has explicitly opted in with <code>serve.cdm_overrides</code> and <code>serve.allow_job_credentials</code>. Both are off by default.</p>
 </div>
 <hr />
 <h2 id="step-6-poll-the-job-to-completion">Step 6: Poll the job to completion<a class="headerlink" href="#step-6-poll-the-job-to-completion" title="Permanent link">&para;</a></h2>
@@ -2524,7 +2524,7 @@
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>curl<span class="w"> </span><span class="s2">"</span><span class="nv">$BASE</span><span class="s2">/api/download/jobs/</span><span class="nv">$JOB</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"X-Secret-Key: </span><span class="nv">$SECRET</span><span class="s2">"</span>
 </span></code></pre></div>
-<p>While the download is running you will see <code>status: "downloading"</code> and a <code>progress</code> value climbing from <code>0</code> toward <code>100</code>:</p>
+<p>While the download runs you will see <code>status: "downloading"</code> and a <code>progress</code> value climbing from <code>0</code> toward <code>100</code>:</p>
 <div class="language-json highlight"><span class="filename">200 OK (in progress)</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="p">{</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="nt">"job_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"3f9c1e0a-8d2b-4e6f-9a1c-77b0f2a1c4d5"</span><span class="p">,</span>
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">  </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"downloading"</span><span class="p">,</span>
@@ -2570,12 +2570,12 @@
 </div>
 <div class="admonition tip">
 <p class="admonition-title">Or let the server push the updates</p>
-<p><code>GET /api/download/jobs/{job_id}/events</code> streams the same job record as Server-Sent Events, and closes the stream when the job ends. It removes the polling loop above. See <a href="../endpoints/#get-apidownloadjobsjob_idevents">Endpoints</a>.</p>
+<p><code>GET /api/download/jobs/{job_id}/events</code> streams the same job record as Server-Sent Events, and closes the event stream when the job ends. It removes the polling loop above. See <a href="../endpoints/#get-apidownloadjobsjob_idevents">Endpoints</a>.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>curl<span class="w"> </span>-N<span class="w"> </span><span class="s2">"</span><span class="nv">$BASE</span><span class="s2">/api/download/jobs/</span><span class="nv">$JOB</span><span class="s2">/events"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"X-Secret-Key: </span><span class="nv">$SECRET</span><span class="s2">"</span>
 </span></code></pre></div>
 </div>
-<p>If a job ends in <code>failed</code>, the full record includes <code>error_message</code>, <code>error_code</code>, and (when the server was started with <code>--debug-api</code>) <code>error_traceback</code> and <code>worker_stderr</code> to help you diagnose it. Sensitive values in these fields are scrubbed before they are returned.</p>
+<p>If a job ends in <code>failed</code>, the full record includes <code>error_message</code>, <code>error_code</code>, and (when you start the server with <code>--debug-api</code>) <code>error_traceback</code> and <code>worker_stderr</code> to help you find the cause. The server scrubs sensitive values in these fields before it returns them.</p>
 <hr />
 <h2 id="step-7-clean-up">Step 7: Clean up<a class="headerlink" href="#step-7-clean-up" title="Permanent link">&para;</a></h2>
 <p>Once you have collected the output you can remove the finished job. <code>DELETE</code> on a job has two behaviors depending on its state:</p>
@@ -2583,12 +2583,12 @@
 </span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"X-Secret-Key: </span><span class="nv">$SECRET</span><span class="s2">"</span>
 </span></code></pre></div>
 <ul>
-<li>If the job is <strong>terminal</strong> (completed/failed/cancelled) it is removed from the manager and you get <strong><code>204 No Content</code></strong> with an empty body.</li>
-<li>If the job is still <strong>queued or downloading</strong> it is cancelled instead, and you get <code>200</code> with <code>{"status": "success", "message": "Job cancelled"}</code>.</li>
+<li>If the job is <strong>terminal</strong> (completed/failed/cancelled), the manager removes it. You get <strong><code>204 No Content</code></strong> with an empty body.</li>
+<li>If the job is still <strong>queued or downloading</strong>, the manager cancels it instead. You get <code>200</code> with <code>{"status": "success", "message": "Job cancelled"}</code>.</li>
 </ul>
 <div class="admonition warning">
 <p class="admonition-title">Do not parse JSON on 204</p>
-<p>A <code>204</code> response has no body. This applies to terminal-job removal here and to deleting history entries; check the status code before attempting to decode JSON.</p>
+<p>A <code>204</code> response has no body. This applies to terminal-job removal here and to deleting history entries. Examine the status code before you decode JSON.</p>
 </div>
 <p>To clear every finished job at once instead of one at a time:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span><span class="s2">"</span><span class="nv">$BASE</span><span class="s2">/api/download/jobs/clear-finished"</span><span class="w"> </span><span class="se">\</span>
@@ -2640,7 +2640,7 @@
 </tr>
 </tbody>
 </table>
-<p>Listing supports query parameters for filtering by <code>status</code> or <code>service</code>, sorting via <code>sort_by</code> (<code>created_time</code>, <code>started_time</code>, <code>completed_time</code>, <code>progress</code>, <code>status</code>, <code>service</code>) and <code>sort_order</code> (<code>asc</code> / <code>desc</code>), and requesting full per-job detail with <code>full=true</code>:</p>
+<p>Listing supports query parameters for filtering by <code>status</code> or <code>service</code>, sorting with <code>sort_by</code> (<code>created_time</code>, <code>started_time</code>, <code>completed_time</code>, <code>progress</code>, <code>status</code>, <code>service</code>) and <code>sort_order</code> (<code>asc</code> / <code>desc</code>), and requesting full per-job detail with <code>full=true</code>:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>curl<span class="w"> </span><span class="s2">"</span><span class="nv">$BASE</span><span class="s2">/api/download/jobs?status=downloading&amp;sort_by=progress&amp;sort_order=desc"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"X-Secret-Key: </span><span class="nv">$SECRET</span><span class="s2">"</span>
 </span></code></pre></div>
@@ -2660,15 +2660,15 @@
 </span><span id="__span-26-14"><a id="__codelineno-26-14" name="__codelineno-26-14" href="#__codelineno-26-14"></a><span class="w">  </span><span class="p">]</span>
 </span><span id="__span-26-15"><a id="__codelineno-26-15" name="__codelineno-26-15" href="#__codelineno-26-15"></a><span class="p">}</span>
 </span></code></pre></div>
-<p>Retrying reuses the original job's service, title, and parameters to enqueue a brand new job (returning <code>202</code> with a fresh <code>job_id</code>); it only works on terminal jobs and returns <code>409 CONFLICT</code> otherwise. Prioritizing only works on jobs still in the <code>queued</code> state.</p>
+<p>A retry reuses the original job's service, title, and parameters to enqueue a brand new job, and returns <code>202</code> with a fresh <code>job_id</code>. A retry works only on terminal jobs, and returns <code>409 CONFLICT</code> otherwise. A priority change works only on jobs still in the <code>queued</code> state.</p>
 <hr />
 <h2 id="beyond-a-single-download">Beyond a single download<a class="headerlink" href="#beyond-a-single-download" title="Permanent link">&para;</a></h2>
 <p>The download loop above is the core of the API, but the same server exposes more:</p>
 <ul>
-<li><strong>Discovery</strong>: <code>POST /api/search</code> finds titles by query, and <code>POST /api/list-titles</code> / <code>POST /api/list-tracks</code> inspect what a title offers before you commit to downloading it. See <a href="../endpoints/">list titles and tracks</a>.</li>
+<li><strong>Discovery</strong>: <code>POST /api/search</code> finds titles by query, and <code>POST /api/list-titles</code> / <code>POST /api/list-tracks</code> inspect what a title offers before you commit to downloading it. See <a href="../endpoints/">titles and tracks</a>.</li>
 <li><strong>History</strong>: <code>GET /api/history</code> reads a persisted log of jobs that reached a terminal state (newest first), and <code>DELETE /api/history/{job_id}</code> removes a single entry. See <a href="../endpoints/">history</a>.</li>
-<li><strong>Introspection</strong>: <code>GET /api/profiles</code> lists configured credential profiles per service, <code>GET /api/config</code> returns a redacted view of the effective server config, and <code>GET /api/env/check</code> reports which external binaries are installed.</li>
-<li><strong>Maintenance</strong>: <code>POST /api/maintenance/clear-cache</code>, <code>.../clear-temp</code>, and <code>.../refresh-services</code> perform housekeeping (the cache/temp clears are blocked with <code>409</code> while a download is active).</li>
+<li><strong>Introspection</strong>: <code>GET /api/profiles</code> lists configured credential profiles per service, <code>GET /api/config</code> returns a redacted view of the effective server config, and <code>GET /api/env/check</code> reports which external binaries the machine has.</li>
+<li><strong>Maintenance</strong>: <code>POST /api/maintenance/clear-cache</code>, <code>.../clear-temp</code>, and <code>.../refresh-services</code> do housekeeping (the server blocks the cache and temp clears with <code>409</code> while a download is active).</li>
 <li><strong>Remote sessions</strong>: the <code>/api/session/*</code> endpoints drive the thin-client "remote download" flow, where the server authenticates and licenses on behalf of a local client. See <a href="../remote-sessions/">remote sessions</a>.</li>
 </ul>
 <p>The interactive <strong>Swagger UI at <code>/api/docs/</code></strong> documents every route and lets you try them in the browser (send your <code>X-Secret-Key</code> there too).</p>
@@ -2683,7 +2683,7 @@
 </span><span id="__span-27-6"><a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a><span class="w">  </span><span class="nt">"details"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-27-7"><a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a><span class="p">}</span>
 </span></code></pre></div>
-<p><code>details</code> appears only when there is something to add, <code>retryable: true</code> appears only for transient failures, and a <code>debug_info</code> block (exception type and traceback) is included only when the server runs with <code>--debug-api</code>.</p>
+<p><code>details</code> appears only when the server has more to add. <code>retryable: true</code> appears only for transient failures. The server includes a <code>debug_info</code> block (exception type and traceback) only when it runs with <code>--debug-api</code>.</p>
 <p>The <code>error_code</code> maps to an HTTP status. The ones you will meet most often:</p>
 <table>
 <thead>

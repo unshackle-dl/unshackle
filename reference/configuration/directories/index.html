@@ -1975,11 +1975,11 @@
 
 
 <h1 id="directories">Directories<a class="headerlink" href="#directories" title="Permanent link">&para;</a></h1>
-<p>The <code>directories</code> key is a <strong>dict</strong> mapping directory names to filesystem paths. Only the
-names listed below are honoured; a handful are <strong>protected</strong> and cannot be moved (attempts
-to override them are silently skipped). All defaults are computed relative to the installed
-package, and every user-settable path is passed through <code>Path(...).expanduser()</code>, so <code>~</code>
-works.</p>
+<p>The <code>directories</code> config key is a <strong>dict</strong> mapping directory names to filesystem paths.
+unshackle honours only the names listed below. A handful are <strong>protected</strong> and you cannot
+move them, and unshackle silently ignores an override of one. unshackle computes all
+defaults relative to the installed package, and passes every user-settable path through
+<code>Path(...).expanduser()</code>, so <code>~</code> works.</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">directories</span><span class="p">:</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">downloads</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/Media/unshackle</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">temp</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/mnt/fast-scratch/unshackle-temp</span>
@@ -2129,9 +2129,9 @@ works.</p>
 <p class="admonition-title">The <code>services</code> directory is special</p>
 <p><code>services</code> may be a <strong>list</strong>, and each entry can be either a local directory or a
 <strong>repository spec</strong>: a git URL (<code>https://...</code>, <code>ssh://...</code>, <code>git@...</code>, or anything ending in
-<code>.git</code>) or <code>owner/repo</code> shorthand. Repo specs are cloned and updated automatically; plain
-paths are used as-is. <strong>List order is priority</strong>: the first source to define a service
-tag wins.</p>
+<code>.git</code>) or <code>owner/repo</code> shorthand. unshackle clones and updates repo specs automatically,
+and uses plain paths as they are. <strong>List order is priority</strong>: the first source to define a
+service tag wins.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">directories</span><span class="p">:</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">services</span><span class="p">:</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">you/your-services</span><span class="w">                 </span><span class="c1"># cloned from GitHub</span>
@@ -2141,11 +2141,11 @@ tag wins.</p>
 </div>
 <div class="admonition info">
 <p class="admonition-title">How git-backed service repos are handled</p>
-<p>unshackle's use of git is <strong>read-only on the remote</strong>: it only ever performs a shallow
-<code>clone</code>, <code>fetch</code>, <code>pull</code>, and a local <code>reset</code>; <strong>nothing is ever pushed</strong>. Private repos
-are authenticated through your existing git credential helper, and unshackle stores no
+<p>unshackle's use of git is <strong>read-only on the remote</strong>: it only ever does a shallow
+<code>clone</code>, <code>fetch</code>, <code>pull</code>, and a local <code>reset</code>. <strong>unshackle never pushes anything</strong>. Your
+existing git credential helper authenticates private repos, and unshackle stores no
 tokens of its own. Clones live under <code>&lt;first-local-services-dir&gt;/_repos/&lt;host&gt;__&lt;owner&gt;__&lt;repo&gt;/</code>
-(or the bundled <code>unshackle/services</code>), and <strong>nothing is written to the cache directory</strong>. After
+(or the bundled <code>unshackle/services</code>), and <strong>unshackle writes nothing to the cache directory</strong>. After
 the first clone unshackle re-pulls <strong>at most once every 24 h</strong>, so it does not touch the
 network on every run.</p>
 </div>
@@ -2165,9 +2165,9 @@ discarding any local edits.</p>
 point <code>services</code> at a writable path, or cloning will fail.</p>
 </div>
 <h2 id="filenames">Filenames<a class="headerlink" href="#filenames" title="Permanent link">&para;</a></h2>
-<p>The <code>filenames</code> key is a <strong>dict</strong> of templated file/name patterns. Each value is used
-verbatim (no path processing). Braced fields like <code>{time}</code> and <code>{service}</code> are filled in at
-runtime.</p>
+<p>The <code>filenames</code> config key is a <strong>dict</strong> of templated file/name patterns. unshackle uses
+each value verbatim (no path processing). It fills in braced fields like <code>{time}</code> and
+<code>{service}</code> at runtime.</p>
 <table>
 <thead>
 <tr>

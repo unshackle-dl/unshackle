@@ -699,10 +699,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-filenames-key" class="md-nav__link">
+  <a href="#the-filenames-config-key" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The filenames key
+        The filenames config key
       
     </span>
   </a>
@@ -2110,10 +2110,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-filenames-key" class="md-nav__link">
+  <a href="#the-filenames-config-key" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The filenames key
+        The filenames config key
       
     </span>
   </a>
@@ -2163,13 +2163,13 @@
 
 
 <h1 id="the-configuration-file">The Configuration File<a class="headerlink" href="#the-configuration-file" title="Permanent link">&para;</a></h1>
-<p>Almost everything about how unshackle behaves is controlled by a single YAML file named <code>unshackle.yaml</code>: where it saves downloads, which CDM it uses, your credentials, proxies, filename templates, and more. This page covers where that file lives, how unshackle finds it, the shape of its contents, the directory layout unshackle builds around it, and how to edit values from the command line.</p>
+<p>A single configuration file named <code>unshackle.yaml</code> controls almost everything about how unshackle behaves. It sets where unshackle saves downloads, which CDM it uses, your credentials, proxies, filename templates, and more. This page gives where that file lives, how unshackle finds it, and the shape of its contents. It also gives the directory layout unshackle makes around it, and how to edit values from the command line.</p>
 <div class="admonition note">
 <p class="admonition-title">Where the exhaustive key list lives</p>
 <p>This page is an overview. For the complete, key-by-key breakdown of every setting, its type, and its default, see the <a href="../../reference/configuration/">Configuration Reference</a>.</p>
 </div>
 <h2 id="the-config-filename">The config filename<a class="headerlink" href="#the-config-filename" title="Permanent link">&para;</a></h2>
-<p>The main configuration file is always named <code>unshackle.yaml</code>. It is a plain YAML file. You can open and edit it in any text editor, or manage individual values with the <a href="#editing-the-config-with-unshackle-cfg"><code>unshackle cfg</code></a> command.</p>
+<p>The main configuration file is always named <code>unshackle.yaml</code>. It uses plain YAML. You can open and edit it in any text editor, or manage individual values with the <a href="#editing-the-config-with-unshackle-cfg"><code>unshackle cfg</code></a> command.</p>
 <p>If you have never created one, that is fine: unshackle runs entirely on built-in defaults when no config file exists. The file only needs to contain the keys you want to change from their defaults.</p>
 <h2 id="where-the-config-file-lives">Where the config file lives<a class="headerlink" href="#where-the-config-file-lives" title="Permanent link">&para;</a></h2>
 <p>When unshackle starts, it searches a fixed list of locations and uses the <strong>first one that exists</strong>. In order of priority:</p>
@@ -2218,11 +2218,11 @@
 </div>
 <div class="admonition tip">
 <p class="admonition-title">Not sure which file is being used?</p>
-<p>Run <code>unshackle env info</code>. It prints the path the config was loaded from (or tells you none was found), along with every directory unshackle is currently using.</p>
+<p>Operate <code>unshackle env info</code>. It prints the path unshackle loaded the config from, or tells you that it found none. It also prints every directory unshackle currently uses.</p>
 </div>
-<p>The config is read exactly once, when unshackle starts. If you edit the file, the change takes effect on the next command you run.</p>
+<p>The config is read exactly once, when unshackle starts. If you edit the file, the change takes effect on the next command.</p>
 <h2 id="top-level-structure">Top-level structure<a class="headerlink" href="#top-level-structure" title="Permanent link">&para;</a></h2>
-<p><code>unshackle.yaml</code> is a flat map of top-level keys. Each key configures one area of the program. You only include the keys you want to change; everything else falls back to its default.</p>
+<p><code>unshackle.yaml</code> is a flat map of top-level config keys. Each config key configures one area of the program. You include only the config keys you want to change. Everything else falls back to its default.</p>
 <p>Here is a small, realistic example that sets a download location, a release tag, a default CDM, and one service's credentials:</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Where finished downloads are written</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">directories</span><span class="p">:</span>
@@ -2286,7 +2286,7 @@
 <td><code>tmdb_api_key</code>, <code>tvdb_api_key</code>, <code>simkl_client_id</code>, <code>ipinfo_api_key</code>, <code>metadata_providers</code></td>
 </tr>
 <tr>
-<td>Behavior &amp; logging</td>
+<td>Behaviour &amp; logging</td>
 <td><code>update_checks</code>, <code>redact_paths</code>, <code>debug</code>, <code>unicode_filenames</code></td>
 </tr>
 <tr>
@@ -2302,13 +2302,13 @@
 <p>For the full list with types and defaults, see the <a href="../../reference/configuration/">Configuration Reference</a>.</p>
 <div class="admonition warning">
 <p class="admonition-title">Unknown keys are silently ignored</p>
-<p>unshackle does not validate your config against a schema. If you misspell a key, it is simply skipped and the default is used. You will not get an error. Double-check key names (and their nesting) if a setting does not seem to apply.</p>
+<p>unshackle does not validate your config against a schema. If you misspell a config key, unshackle skips it and uses the default. You will not get an error. Examine the config key names (and their nesting) if a setting does not seem to apply.</p>
 </div>
 <h2 id="setting-download-defaults-dl">Setting download defaults (<code>dl:</code>)<a class="headerlink" href="#setting-download-defaults-dl" title="Permanent link">&para;</a></h2>
 <p>If you always pass the same <code>dl</code> flags (a language, a resolution, a codec), put them under a
-<code>dl:</code> key once and unshackle applies them to every download. Any flag from
-<a href="../../guide/downloading/">Downloading</a> works here; the key is the flag's long name with dashes
-turned into underscores (<code>--best-available</code> → <code>best_available</code>).</p>
+<code>dl:</code> config key once and unshackle applies them to every download. Any flag from
+<a href="../../guide/downloading/">Downloading</a> works here. The config key is the flag's long name with
+dashes turned into underscores (<code>--best-available</code> → <code>best_available</code>).</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">dl</span><span class="p">:</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">lang</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">]</span><span class="w">          </span><span class="c1"># -l en</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">quality</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">1080</span><span class="p p-Indicator">]</span><span class="w">     </span><span class="c1"># -q 1080</span>
@@ -2316,7 +2316,7 @@ turned into underscores (<code>--best-available</code> → <code>best_available<
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span><span class="nt">sub_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">srt</span><span class="w">     </span><span class="c1"># convert subtitles to SRT</span>
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span><span class="nt">downloads</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span><span class="w">        </span><span class="c1"># two tracks at once</span>
 </span></code></pre></div>
-<p>You can still override any of these on the command line for a one-off; an explicit flag
+<p>You can still override any of these on the command line for a one-off. An explicit flag
 always beats the config default. You can also scope defaults to a single service by nesting a
 <code>dl:</code> block under it:</p>
 <div class="language-yaml highlight"><span class="filename">Per-service defaults</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">dl</span><span class="p">:</span>
@@ -2331,10 +2331,10 @@ always beats the config default. You can also scope defaults to a single service
 <p>Most keys are obvious, but set these exact ones: <code>range</code> (<code>-r</code>), <code>list</code> (<code>--list</code>),
 <code>tmdb_id</code> (<code>--tmdb</code>), <code>imdb_id</code> (<code>--imdb</code>), <code>tvdb_id</code> (<code>--tvdb</code>), <code>no_atmos</code> (<code>--noatmos</code>), and <code>output_dir</code>
 (<code>-o</code>). The <a href="../../reference/configuration/download/#dl">Configuration Reference</a> has the full list
-and every available key.</p>
+and every available config key.</p>
 </div>
 <h2 id="the-directory-layout">The directory layout<a class="headerlink" href="#the-directory-layout" title="Permanent link">&para;</a></h2>
-<p>The <code>directories</code> key controls where unshackle reads and writes its various files. Each directory has a sensible default, and you can override most of them by giving a new path. Paths support <code>~</code> for your home directory.</p>
+<p>The <code>directories</code> config key controls where unshackle reads and writes its various files. Each directory has a sensible default, and you can override most of them by giving a new path. A path can use <code>~</code> for your home directory.</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">directories</span><span class="p">:</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">downloads</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/Videos/unshackle</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="nt">temp</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/mnt/fast/unshackle-temp</span>
@@ -2419,49 +2419,49 @@ and every available key.</p>
 </table>
 <div class="admonition note">
 <p class="admonition-title">Some directories cannot be moved</p>
-<p>unshackle protects five internal entries: <code>app_dirs</code>, <code>core_dir</code>, <code>namespace_dir</code>, <code>user_configs</code>, and <code>data</code>. If you list any of them under <code>directories</code>, unshackle ignores the override. This is intentional; those paths are tied to where the package is installed.</p>
+<p>unshackle protects five internal entries: <code>app_dirs</code>, <code>core_dir</code>, <code>namespace_dir</code>, <code>user_configs</code>, and <code>data</code>. If you write any of them under <code>directories</code>, unshackle ignores the override. This is intentional. Those paths come from the package location and your OS user directories.</p>
 </div>
 <h3 id="the-services-directory-is-special">The <code>services</code> directory is special<a class="headerlink" href="#the-services-directory-is-special" title="Permanent link">&para;</a></h3>
-<p>Unlike the other entries, <code>services</code> is a <strong>list</strong>, and each entry can be either a local folder or a remote repository. This lets you mix your own local service code with services pulled from Git:</p>
+<p>Unlike the other entries, <code>services</code> is a <strong>list</strong>, and each entry can be either a local folder or a remote repository. This lets you mix your own local services with services pulled from Git:</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">directories</span><span class="p">:</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">services</span><span class="p">:</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">you/your-services</span><span class="w">          </span><span class="c1"># a GitHub owner/repo shorthand</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://example.com/private-services.git</span>
 </span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/code/local-services</span><span class="w">      </span><span class="c1"># a local folder</span>
 </span></code></pre></div>
-<p>unshackle searches entries in the order listed, and <strong>the first source to define a given service tag wins</strong>, so put local folders last if you want them to act as fallbacks rather than overrides. unshackle clones remote repositories on first use and refreshes them at most once a day. See <a href="../../dev/creating-a-service/">Creating a Service</a> for how service discovery and repositories work.</p>
-<h2 id="the-filenames-key">The <code>filenames</code> key<a class="headerlink" href="#the-filenames-key" title="Permanent link">&para;</a></h2>
-<p>Alongside <code>directories</code>, the <code>filenames</code> key lets you override the templates unshackle uses when naming its own working and log files (for example the log filename or the temporary chapters file). Most users never need to touch this. The available names and their default templates are listed in the <a href="../../reference/configuration/directories/#filenames">Configuration Reference</a>.</p>
+<p>unshackle examines the entries in the order you wrote them, and <strong>the first source to define a given service tag wins</strong>. Put local folders last if you want them to act as fallbacks and not overrides. unshackle clones remote repositories on first use and refreshes them at most once a day. See <a href="../../dev/creating-a-service/">Creating a Service</a> for how service discovery and repositories work.</p>
+<h2 id="the-filenames-config-key">The <code>filenames</code> config key<a class="headerlink" href="#the-filenames-config-key" title="Permanent link">&para;</a></h2>
+<p>Alongside <code>directories</code>, the <code>filenames</code> config key lets you override the templates unshackle uses when it names its own working and log files. Two examples are the log filename and the temporary chapters file. Most users never need to touch this. The <a href="../../reference/configuration/directories/#filenames">Configuration Reference</a> gives the available names and their default templates.</p>
 <h2 id="editing-the-config-with-unshackle-cfg">Editing the config with <code>unshackle cfg</code><a class="headerlink" href="#editing-the-config-with-unshackle-cfg" title="Permanent link">&para;</a></h2>
 <p>You do not have to edit <code>unshackle.yaml</code> by hand. The <code>unshackle cfg</code> command reads and writes individual values for you, creating the config file (and its parent directory) if it does not exist yet.</p>
-<p><strong>Read a single value</strong> by passing its key. Nested keys use dot notation:</p>
+<p><strong>Read a single value</strong> by passing its config key. Nested config keys use dot notation:</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>tag
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>cdm.default
 </span></code></pre></div>
-<p><strong>Set a value</strong> by passing a key and a value:</p>
+<p><strong>Set a value</strong> by passing a config key and a value:</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>tag<span class="w"> </span>MYGRP
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>cdm.default<span class="w"> </span>my_device_l3
 </span></code></pre></div>
-<p>unshackle parses the value as a Python literal, so write booleans as <code>True</code>/<code>False</code> and quote the strings inside a list (<code>"['en']"</code>). Anything that is not valid Python literal syntax is stored as a plain string:</p>
+<p>unshackle parses the value as a Python literal, so write booleans as <code>True</code>/<code>False</code> and quote the strings inside a list (<code>"['en']"</code>). unshackle stores anything that is not valid Python literal syntax as a plain string:</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>update_checks<span class="w"> </span>False
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>vault_timeout<span class="w"> </span><span class="m">30</span>
 </span></code></pre></div>
 <p><strong>Remove a value</strong> with <code>--unset</code>:</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>cdm.default<span class="w"> </span>--unset
 </span></code></pre></div>
-<p><strong>List everything</strong> currently set with <code>--list</code>:</p>
+<p><strong>Show everything</strong> currently set with <code>--list</code>:</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>cfg<span class="w"> </span>--list
 </span></code></pre></div>
-<p>When it writes, <code>unshackle cfg</code> targets the config file that was loaded. If none exists yet, it creates <code>unshackle.yaml</code> inside the <code>unshackle</code> package folder (search location 1), not your OS user-config directory. To keep the config outside the package, create the file at the user-config path yourself first, then <code>unshackle cfg</code> writes to it.</p>
+<p>When it writes, <code>unshackle cfg</code> targets the config file that unshackle loaded. If none exists yet, it makes <code>unshackle.yaml</code> inside the <code>unshackle</code> package folder (location 1 above), not your OS user-config directory. To keep the config outside the package, make the file at the user-config path yourself first, then <code>unshackle cfg</code> writes to it.</p>
 <div class="admonition warning">
 <p class="admonition-title">Editing with <code>cfg</code> strips comments</p>
-<p>Because <code>unshackle cfg</code> rewrites the whole file when it saves, any comments in <code>unshackle.yaml</code> are removed by a write. If you keep important notes as comments, edit the file by hand instead, or keep those notes elsewhere.</p>
+<p>Because <code>unshackle cfg</code> rewrites the whole file when it saves, a write removes any comments in <code>unshackle.yaml</code>. If you keep important notes as comments, edit the file by hand instead, or keep those notes elsewhere.</p>
 </div>
 <h2 id="next-steps">Next steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Browse the <a href="../../reference/configuration/">Configuration Reference</a> for every key and default.</li>
+<li>Browse the <a href="../../reference/configuration/">Configuration Reference</a> for every config key and default.</li>
 <li>Set up your first download in <a href="../../guide/downloading/">Downloading</a>.</li>
-<li>Learn how services are discovered and updated in <a href="../../dev/creating-a-service/">Creating a Service</a>.</li>
+<li>Learn how unshackle discovers and updates services in <a href="../../dev/creating-a-service/">Creating a Service</a>.</li>
 </ul>
 
 

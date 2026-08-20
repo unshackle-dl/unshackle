@@ -1887,10 +1887,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#session-lifecycle-overview" class="md-nav__link">
+  <a href="#remote-session-lifecycle-overview" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Session lifecycle overview
+        Remote session lifecycle overview
       
     </span>
   </a>
@@ -2680,10 +2680,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#session-lifecycle-overview" class="md-nav__link">
+  <a href="#remote-session-lifecycle-overview" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Session lifecycle overview
+        Remote session lifecycle overview
       
     </span>
   </a>
@@ -2854,27 +2854,27 @@
 
 
 <h1 id="rest-api-endpoints">REST API Endpoints<a class="headerlink" href="#rest-api-endpoints" title="Permanent link">&para;</a></h1>
-<p>This is the full endpoint reference for the unshackle REST API. It covers every route: its method and path, the request body it accepts, the response shape it returns, and the status codes it can produce. Routes are grouped into general, download jobs, server management, and remote-dl sessions.</p>
-<p>Start the server with <a href="../../../guide/cli-reference/"><code>unshackle serve</code></a>. By default it binds to <code>127.0.0.1:8786</code>, and every route lives under the <code>/api/</code> prefix. Authentication, server modes, and the <code>X-Secret-Key</code> header are covered in detail on the <a href="../authentication/">Authentication</a> page. Read that first if you have not already. For an end-to-end walkthrough, see the <a href="../quickstart/">Quickstart</a>.</p>
+<p>This is the full endpoint reference for the unshackle REST API. It covers every route: its method and path, the request body it accepts, the response shape it returns, and the status codes it can give. This page groups the routes into general, download jobs, server management, and remote-dl sessions.</p>
+<p>Start the server with <a href="../../../guide/cli-reference/"><code>unshackle serve</code></a>. By default it binds to <code>127.0.0.1:8786</code>, and every route lives under the <code>/api/</code> prefix. The <a href="../authentication/">Authentication</a> page gives authentication, server modes, and the <code>X-Secret-Key</code> header in detail. Read that first if you have not already. For an end-to-end walkthrough, see the <a href="../quickstart/">Quickstart</a>.</p>
 <div class="admonition note">
 <p class="admonition-title">Base URL</p>
-<p>All examples below assume a base URL of <code>http://127.0.0.1:8786</code>. Replace the host and port to match your own <code>unshackle serve -h &lt;host&gt; -p &lt;port&gt;</code> invocation.</p>
+<p>All examples below assume a base URL of <code>http://127.0.0.1:8786</code>. Replace the host and port so that they match your own <code>unshackle serve -h &lt;host&gt; -p &lt;port&gt;</code> invocation.</p>
 </div>
 <div class="admonition tip">
 <p class="admonition-title">Interactive docs</p>
-<p>A live Swagger UI is mounted at <strong><code>/api/docs/</code></strong> whenever the server is not running in <code>--remote-only</code> mode. Its title is "Unshackle REST API" and its version tracks the installed package version. In API-only mode with a key configured, the Swagger UI itself sits behind <code>X-Secret-Key</code>; only <code>/api/health</code> is exempt.</p>
+<p>The server mounts a live Swagger UI at <strong><code>/api/docs/</code></strong> whenever it does not operate in <code>--remote-only</code> mode. Its title is "Unshackle REST API" and its version tracks the installed package version. In API-only mode with an API key configured, the Swagger UI itself sits behind <code>X-Secret-Key</code>. Only <code>/api/health</code> is exempt.</p>
 </div>
 <h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Authentication.</strong> Every request except <code>GET /api/health</code> requires the <code>X-Secret-Key</code> header when a key is configured. Starting the server with <code>--no-key</code> disables the check entirely. See <a href="../authentication/">Authentication</a>.</li>
-<li><strong>Content type.</strong> Request bodies are JSON (<code>Content-Type: application/json</code>); all success responses are JSON unless a <code>204 No Content</code> is documented.</li>
-<li><strong>CORS.</strong> Every response carries permissive CORS headers, and <code>OPTIONS</code> preflight requests are answered automatically.</li>
+<li><strong>Authentication.</strong> Every request except <code>GET /api/health</code> requires the <code>X-Secret-Key</code> header when you configure an API key. <code>--no-key</code> disables the check entirely. See <a href="../authentication/">Authentication</a>.</li>
+<li><strong>Content type.</strong> Request bodies are JSON (<code>Content-Type: application/json</code>). All success responses are JSON unless this page documents a <code>204 No Content</code>.</li>
+<li><strong>CORS.</strong> Every response carries permissive CORS headers, and the server answers <code>OPTIONS</code> preflight requests automatically.</li>
 <li><strong>Compression.</strong> JSON responses of 256 bytes or more are gzip-compressed when the client sends <code>Accept-Encoding: gzip</code>.</li>
-<li><strong>Service allowlist.</strong> Service-facing endpoints are filtered by the effective allowlist for your API key (the intersection of the global <code>serve.services</code> list and your per-key list). Services you are not allowed to use are treated as unknown.</li>
+<li><strong>Service allowlist.</strong> The effective allowlist for your API key filters the service-facing endpoints (the intersection of the global <code>serve.services</code> list and your per-key list). The server treats services you cannot use as unknown.</li>
 </ul>
 <div class="admonition warning">
 <p class="admonition-title">Error responses have two shapes</p>
-<p>Structured application errors (raised inside a handler) return <code>{"status": "error", "error_code": "...", "message": "...", "timestamp": "..."}</code>. The authentication middleware, however, returns a <strong>different</strong> shape: <code>{"status": 401, "message": "..."}</code> with an integer <code>status</code> and no <code>error_code</code>. Clients must handle both. The full error model is documented in the <a href="#error-responses">Error responses</a> section at the bottom of this page.</p>
+<p>Structured application errors (raised inside a handler) return <code>{"status": "error", "error_code": "...", "message": "...", "timestamp": "..."}</code>. The authentication middleware, however, returns a <strong>different</strong> shape: <code>{"status": 401, "message": "..."}</code> with an integer <code>status</code> and no <code>error_code</code>. Clients must accept both shapes. The <a href="#error-responses">Error responses</a> section at the bottom of this page gives the full error model.</p>
 </div>
 <hr />
 <h2 id="general-endpoints">General endpoints<a class="headerlink" href="#general-endpoints" title="Permanent link">&para;</a></h2>
@@ -2902,7 +2902,7 @@
 </div>
 </div>
 </div>
-<p><code>code_hash</code> fingerprints the framework source the server is running, so it identifies the code itself rather than the release. It is the same value for a git checkout and for an installed package built from that checkout, and it changes if anything under <code>unshackle/core</code>, <code>unshackle/commands</code>, <code>unshackle/utils</code>, or <code>unshackle/vaults</code> is edited. Service modules are not included. The value is <code>null</code> only when the source files cannot be read.</p>
+<p><code>code_hash</code> fingerprints the framework source the server operates, so it names the code itself rather than the release. It is the same value for a git checkout and for an installed package built from that checkout. It changes when you edit anything under <code>unshackle/core</code>, <code>unshackle/commands</code>, <code>unshackle/utils</code>, or <code>unshackle/vaults</code>. Service modules are not included. unshackle sets the value to <code>null</code> only when it cannot read the source files.</p>
 <p>If the update check fails (for example, no network), <code>update_available</code> and <code>latest_version</code> are <code>null</code> while <code>current_version</code> still reports the installed version.</p>
 <table>
 <thead>
@@ -2919,7 +2919,7 @@
 </tbody>
 </table>
 <h3 id="get-apiservices"><code>GET /api/services</code><a class="headerlink" href="#get-apiservices" title="Permanent link">&para;</a></h3>
-<p>List the streaming services available on this server, filtered by your allowlist. Each entry describes the service's tag, matching rules, capability flags, and its CLI parameters (useful for building a UI that accepts service-specific options).</p>
+<p>Show the streaming services available on this server, filtered by your allowlist. Each entry gives the service's tag, matching rules, capability flags, and its CLI parameters (useful when you make a UI that accepts service-specific options).</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Request</label><label for="__tabbed_2_2">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -3034,7 +3034,7 @@
 </tbody>
 </table>
 <h3 id="post-apisearch"><code>POST /api/search</code><a class="headerlink" href="#post-apisearch" title="Permanent link">&para;</a></h3>
-<p>Search a service for titles by query string. The service must implement <code>search()</code> (see <code>has_search</code> above).</p>
+<p>Find titles in a service by query string. The service must have a <code>search()</code> method (see <code>has_search</code> above).</p>
 <p><strong>Request body</strong></p>
 <table>
 <thead>
@@ -3142,12 +3142,12 @@
 <tr>
 <td><code>502</code></td>
 <td><code>SERVICE_ERROR</code></td>
-<td>Service failed to initialize, or does not support search.</td>
+<td>Service failed to initialise, or does not support search.</td>
 </tr>
 </tbody>
 </table>
 <h3 id="post-apilist-titles"><code>POST /api/list-titles</code><a class="headerlink" href="#post-apilist-titles" title="Permanent link">&para;</a></h3>
-<p>Resolve a title ID into its list of titles (episodes, movie, etc.) without downloading anything.</p>
+<p>Get the list of titles behind a title ID, for example episodes or a movie, without downloading anything.</p>
 <p><strong>Request body</strong></p>
 <table>
 <thead>
@@ -3197,7 +3197,7 @@
 </tr>
 </tbody>
 </table>
-<p>Service-specific CLI options may also be passed as additional keys.</p>
+<p>You can also pass service-specific CLI options as additional keys.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="4:2"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">Request</label><label for="__tabbed_4_2">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -3229,13 +3229,13 @@
 </div>
 </div>
 </div>
-<p>Each serialized title carries <code>type</code> (<code>"episode"</code>, <code>"movie"</code>, or <code>"other"</code>), <code>name</code>, <code>id</code>, <code>language</code>, <code>description</code>, <code>date</code>, and <code>cover_url</code>. Episodes and movies add <code>year</code>; episodes additionally add <code>series_title</code>, <code>season</code>, and <code>number</code>.</p>
+<p>Each serialized title carries <code>type</code> (<code>"episode"</code>, <code>"movie"</code>, or <code>"other"</code>), <code>name</code>, <code>id</code>, <code>language</code>, <code>description</code>, <code>date</code>, and <code>cover_url</code>. Episodes and movies add <code>year</code>. Episodes also add <code>series_title</code>, <code>season</code>, and <code>number</code>.</p>
 <div class="admonition warning">
 <p class="admonition-title">A song serializes as <code>"other"</code></p>
-<p>A music track has no <code>type</code> of its own. It is sent as <code>"other"</code>, and the response
+<p>A song has no <code>type</code> of its own. The server sends it as <code>"other"</code>, and the response
 carries none of its music fields: no artist, no album, no track or disc number, and no
-<code>year</code>. <code>name</code> holds the track name. To read the disc and track numbers of a release,
-run the CLI with <code>--list-titles</code>. Selecting music tracks over the API still works,
+<code>year</code>. <code>name</code> holds the song name. To read the disc and track numbers of a release,
+operate the CLI with <code>--list-titles</code>. You can still select songs over the API,
 through the <code>wanted</code> parameter.</p>
 </div>
 <p>These keys are sent only when the title carries them, so a title without them serializes exactly as before:</p>
@@ -3259,7 +3259,7 @@ through the <code>wanted</code> parameter.</p>
 <td><code>air_date</code></td>
 <td>string</td>
 <td>episode</td>
-<td>ISO air date of <a href="../../../guide/downloading/#daily-and-date-based-content">dated content</a>. unshackle names the episode by date instead of <code>SxxExx</code>.</td>
+<td>ISO air date of <a href="../../../guide/downloading/#daily-and-date-based-content">daily and date-based content</a>. unshackle names the episode by date instead of <code>SxxExx</code>.</td>
 </tr>
 <tr>
 <td><code>absolute</code></td>
@@ -3285,8 +3285,8 @@ through the <code>wanted</code> parameter.</p>
 <p class="admonition-title"><code>part</code> on a split episode</p>
 <p>A service that splits one episode into several separately playable videos reports each
 one as its own episode. Those titles share a <code>season</code> and <code>number</code> and add a <code>part</code>
-integer counting from 1. No other title carries the key, so a client that ignores it
-is unaffected. See <a href="../../creating-a-service/#split-episodes">Split episodes</a>.</p>
+integer counting from 1. No other title carries the <code>part</code> field, so a client can
+ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split episodes</a>.</p>
 </div>
 <table>
 <thead>
@@ -3330,10 +3330,10 @@ is unaffected. See <a href="../../creating-a-service/#split-episodes">Split epis
 </tbody>
 </table>
 <h3 id="post-apilist-tracks"><code>POST /api/list-tracks</code><a class="headerlink" href="#post-apilist-tracks" title="Permanent link">&para;</a></h3>
-<p>List the video, audio, and subtitle tracks for a title. For series, you can scope to specific episodes.</p>
+<p>Show the video, audio, and subtitle tracks for a title. For series, you can scope to specific episodes.</p>
 <div class="admonition tip">
 <p class="admonition-title">Spotting the original-language audio</p>
-<p>Each audio track carries <code>is_original</code>, which marks the track the default <code>lang</code> of <code>orig</code> selects. Unshackle resolves it with the same language matcher the downloader uses, so it stays correct for regional variants a client cannot separate from tag text alone (<code>pt</code> marks <code>pt-BR</code> rather than <code>pt-PT</code>). Services need not report a title's language, so every track can legitimately come back <code>false</code>.</p>
+<p>Each audio track carries <code>is_original</code>, which marks the track the default <code>lang</code> of <code>orig</code> selects. unshackle finds it with the same language matcher the downloader uses. Thus it stays correct for regional variants a client cannot separate from tag text alone (<code>pt</code> marks <code>pt-BR</code> rather than <code>pt-PT</code>). Services need not report a title's language, so every track can legitimately come back <code>false</code>.</p>
 </div>
 <p><strong>Request body</strong></p>
 <table>
@@ -3362,7 +3362,7 @@ is unaffected. See <a href="../../creating-a-service/#split-episodes">Split epis
 <td><code>wanted</code></td>
 <td>string / string[]</td>
 <td>no</td>
-<td>Episode/season range (e.g. <code>"S01E01-S01E03"</code>), or a music track selector (e.g. <code>"1-5"</code>, <code>"1,3,7"</code>, or <code>"2x3"</code> for disc 2 track 3). A list of selectors is accepted too.</td>
+<td>Episode/season range (e.g. <code>"S01E01-S01E03"</code>), or a song selector (e.g. <code>"1-5"</code>, <code>"1,3,7"</code>, or <code>"2x3"</code> for disc 2 track 3). A list of selectors is accepted too.</td>
 </tr>
 <tr>
 <td><code>season</code></td>
@@ -3390,7 +3390,7 @@ is unaffected. See <a href="../../creating-a-service/#split-episodes">Split epis
 </tr>
 </tbody>
 </table>
-<p>When both <code>season</code> and <code>episode</code> are given, they are combined into a <code>"{season}x{episode}"</code> selector. Adding <code>part</code> narrows that to <code>"{season}x{episode}.{part}"</code>, one part of a <a href="../../creating-a-service/#split-episodes">split episode</a>; without it you get every part of the episode. <code>part</code> is read only when <code>season</code> and <code>episode</code> are both given, and <code>wanted</code> takes precedence over all three. To scope a part by range, put it in <code>wanted</code> instead (<code>"S01E01.2"</code>).</p>
+<p>When you give both <code>season</code> and <code>episode</code>, the server combines them into a <code>"{season}x{episode}"</code> selector. <code>part</code> narrows that to <code>"{season}x{episode}.{part}"</code>, one part of a <a href="../../creating-a-service/#split-episodes">split episode</a>. Without <code>part</code> you get every part of the episode. The server reads <code>part</code> only when you give both <code>season</code> and <code>episode</code>, and <code>wanted</code> takes precedence over all three. To scope a part by range, put it in <code>wanted</code> instead (<code>"S01E01.2"</code>).</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="5:2"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">Single title / movie: Response <code>200</code></label><label for="__tabbed_5_2">Multiple episodes: Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -3436,7 +3436,7 @@ is unaffected. See <a href="../../creating-a-service/#split-episodes">Split epis
 </div>
 </div>
 </div>
-<p>Tracks are sorted by bitrate, descending. Episodes that fail to resolve are collected into <code>unavailable_episodes</code> rather than failing the whole request. Track objects here do <strong>not</strong> include a download <code>url</code>; segment URLs are only exposed through the remote-dl session endpoints.</p>
+<p>The server sorts tracks by bitrate, descending. Episodes the server cannot get go into <code>unavailable_episodes</code>, rather than failing the whole request. Track objects here do <strong>not</strong> include a download <code>url</code>. Only the remote session endpoints give segment URLs.</p>
 <p>The <code>drm</code> array on a track is a list of <code>{type, pssh?, kids?, content_keys?, license_url?}</code> objects.</p>
 <table>
 <thead>
@@ -3476,13 +3476,13 @@ is unaffected. See <a href="../../creating-a-service/#split-episodes">Split epis
 </table>
 <hr />
 <h2 id="download-jobs">Download jobs<a class="headerlink" href="#download-jobs" title="Permanent link">&para;</a></h2>
-<p>Downloads are asynchronous. <code>POST /api/download</code> enqueues a job and returns immediately with a <code>job_id</code>; the server runs each job in a background worker subprocess. You then poll the job endpoints for progress and results.</p>
+<p>Downloads are asynchronous. <code>POST /api/download</code> enqueues a job and returns immediately with a <code>job_id</code>. The server runs each job in a background job worker subprocess. You then poll the job endpoints for progress and results.</p>
 <div class="admonition info">
 <p class="admonition-title">Job states</p>
-<p>A job moves through <code>queued</code> → <code>downloading</code> → one of the terminal states <code>completed</code>, <code>failed</code>, or <code>cancelled</code>. Only queued jobs can be prioritized; only terminal jobs can be retried or removed.</p>
+<p>A job moves through <code>queued</code> → <code>downloading</code> → one of the terminal states <code>completed</code>, <code>failed</code>, or <code>cancelled</code>. You can prioritise only queued jobs. You can retry or remove only terminal jobs.</p>
 </div>
 <h3 id="post-apidownload"><code>POST /api/download</code><a class="headerlink" href="#post-apidownload" title="Permanent link">&para;</a></h3>
-<p>Create a download job. Requires <code>service</code> and <code>title_id</code>; every other field is an optional download parameter with a server-side default. On success this returns <strong><code>202 Accepted</code></strong>, not <code>200</code>.</p>
+<p>Make a download job. It requires <code>service</code> and <code>title_id</code>. Every other field is an optional download parameter with a server-side default. On success this returns <strong><code>202 Accepted</code></strong>, not <code>200</code>.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="6:2"><input checked="checked" id="__tabbed_6_1" name="__tabbed_6" type="radio" /><input id="__tabbed_6_2" name="__tabbed_6" type="radio" /><div class="tabbed-labels"><label for="__tabbed_6_1">Request</label><label for="__tabbed_6_2">Response <code>202</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -3566,7 +3566,7 @@ is unaffected. See <a href="../../creating-a-service/#split-episodes">Split epis
 <td><code>channels</code></td>
 <td>number</td>
 <td><code>null</code></td>
-<td>Audio channel count.</td>
+<td>Audio channel layout.</td>
 </tr>
 <tr>
 <td><code>no_atmos</code></td>
@@ -3734,7 +3734,7 @@ is unaffected. See <a href="../../creating-a-service/#split-episodes">Split epis
 <td><code>tmdb_id</code> / <code>imdb_id</code> / <code>tvdb_id</code> / <code>anilist_id</code></td>
 <td>-</td>
 <td><code>null</code></td>
-<td>External ID overrides. Each resolves its metadata directly instead of by a title search, and is used for tagging. Set <code>enrich</code> to also take the title, year and original language. Give at most one of <code>tmdb_id</code>, <code>imdb_id</code> and <code>tvdb_id</code>, since unshackle resolves the others from it. Sending two returns <code>400</code>. <code>anilist_id</code> still combines with one of them. <code>tmdb_id</code> and <code>tvdb_id</code> must be positive integers, <code>imdb_id</code> must look like <code>tt1375666</code>, and <code>anilist_id</code> must be a positive integer or a string like <code>mal:12345</code>, or the request returns <code>400</code>. An ID whose provider is unconfigured, such as <code>tmdb_id</code> with no <code>tmdb_api_key</code>, fails the job rather than returning <code>400</code>. <code>anilist_id</code> needs no key.</td>
+<td>External ID overrides. Each resolves its metadata directly instead of by a title search, and is used for tagging. Set <code>enrich</code> to also take the title, year and original language. Give at most one of <code>tmdb_id</code>, <code>imdb_id</code> and <code>tvdb_id</code>, since unshackle resolves the others from it. Sending two returns <code>400</code>. <code>anilist_id</code> still combines with one of them. <code>tmdb_id</code> and <code>tvdb_id</code> must be positive integers, <code>imdb_id</code> must look like <code>tt1375666</code>, and <code>anilist_id</code> must be a positive integer or a string like <code>mal:12345</code>, or the request returns <code>400</code>. An ID whose provider is unconfigured, such as <code>tmdb_id</code> with no <code>tmdb_api_key</code>, fails the job rather than returning <code>400</code>. <code>anilist_id</code> needs no API key.</td>
 </tr>
 <tr>
 <td><code>tvdb_order</code></td>
@@ -3768,23 +3768,23 @@ is unaffected. See <a href="../../creating-a-service/#split-episodes">Split epis
 </tr>
 </tbody>
 </table>
-<p><strong>Validation.</strong> Invalid values return <code>400 INVALID_PARAMETERS</code>. Notably: <code>vcodec</code> must be one of H264/H265/H.264/H.265/AVC/HEVC/VC1/VC-1/VP8/VP9/AV1; <code>acodec</code> one of AAC/AC3/EC3/EAC3/DD/DD+/AC4/OPUS/FLAC/ALAC/VORBIS/OGG/DTS; <code>range</code> one of SDR/HDR10/HDR10P/DV/HLG/HYBRID (<code>HDR10+</code> is accepted); bitrate/worker/download counts must be positive integers; at most one of the <code>*_only</code> flags may be set; <code>no_subs</code> cannot be combined with <code>subs_only</code>, <code>no_audio</code> with <code>audio_only</code>, or <code>s_lang</code> with <code>require_subs</code>.</p>
+<p><strong>Validation.</strong> Invalid values return <code>400 INVALID_PARAMETERS</code>. <code>vcodec</code> must be one of H264/H265/H.264/H.265/AVC/HEVC/VC1/VC-1/VP8/VP9/AV1. <code>acodec</code> must be one of AAC/AC3/EC3/EAC3/DD/DD+/AC4/OPUS/FLAC/ALAC/VORBIS/OGG/DTS. <code>range</code> must be one of SDR/HDR10/HDR10P/DV/HLG/HYBRID, and <code>HDR10+</code> is also valid. The bitrate, download worker, and download counts must be positive integers. You may set at most one of the <code>*_only</code> flags. You cannot combine <code>no_subs</code> with <code>subs_only</code>, <code>no_audio</code> with <code>audio_only</code>, or <code>s_lang</code> with <code>require_subs</code>.</p>
 <div class="admonition danger">
 <p class="admonition-title">Rejected parameters</p>
 <p><code>postscript</code>, <code>post_script</code> and <code>post_scripts</code> are never accepted. A body containing any
-of them is rejected with <code>400 INVALID_PARAMETERS</code>, because a command string arriving from
-an HTTP caller would be remote code execution. Post-download hooks are configured only in
-<code>unshackle.yaml</code>, where they still run for API jobs. See
+of them gets <code>400 INVALID_PARAMETERS</code>, because a command string that arrives from
+an HTTP caller would be remote code execution. You configure post-download hooks only in
+<code>unshackle.yaml</code>, where they still operate for API jobs. See
 <a href="../../../reference/configuration/post-scripts/">Post-download scripts</a>.</p>
 </div>
 <div class="admonition warning">
 <p class="admonition-title">Gated parameters (developer)</p>
-<p>A few keys are accepted but only permitted when the server config opts in, otherwise the request is rejected with <code>403 FORBIDDEN</code>:</p>
+<p>The server accepts a few keys, but permits them only when the server config opts in. Otherwise the server rejects the request with <code>403 FORBIDDEN</code>:</p>
 <ul>
 <li><code>cdm</code> (per-request CDM device name): allowed only if <code>serve.cdm_overrides</code> is <code>true</code> or a list containing that device name.</li>
 <li><code>credential</code> (<code>"user:pass"</code>) and <code>credentials</code> (a map): allowed only if <code>serve.allow_job_credentials</code> is truthy (off by default).</li>
 </ul>
-<p>Server-side, effective parameters are merged as defaults → <code>serve:</code> config overrides → service-specific defaults → your request body.</p>
+<p>On the server, unshackle merges the effective parameters in this order: defaults → <code>serve:</code> config overrides → service-specific defaults → your request body.</p>
 </div>
 <table>
 <thead>
@@ -3823,7 +3823,7 @@ an HTTP caller would be remote code execution. Post-download hooks are configure
 </tbody>
 </table>
 <h3 id="get-apidownloadjobs"><code>GET /api/download/jobs</code><a class="headerlink" href="#get-apidownloadjobs" title="Permanent link">&para;</a></h3>
-<p>List download jobs, with optional filtering and sorting.</p>
+<p>Show download jobs, with optional filtering and sorting.</p>
 <p><strong>Query parameters</strong></p>
 <table>
 <thead>
@@ -3976,30 +3976,30 @@ an HTTP caller would be remote code execution. Post-download hooks are configure
 </tr>
 <tr>
 <td><code>completed</code></td>
-<td>The job finished. The server then closes the stream.</td>
+<td>The job finished. The server then closes the event stream.</td>
 </tr>
 <tr>
 <td><code>failed</code></td>
-<td>The job failed. The server then closes the stream.</td>
+<td>The job failed. The server then closes the event stream.</td>
 </tr>
 <tr>
 <td><code>cancelled</code></td>
-<td>The job was cancelled. The server then closes the stream.</td>
+<td>The job was cancelled. The server then closes the event stream.</td>
 </tr>
 </tbody>
 </table>
 <p>The server sends a <code>: keep-alive</code> comment each 15 seconds while the job is quiet, to keep proxies from closing an idle connection. Ignore these lines.</p>
-<p>If the job is already in a terminal state, the server sends the <code>snapshot</code> event, then the terminal event, and closes the stream immediately.</p>
+<p>If the job is already in a terminal state, the server sends the <code>snapshot</code> event, then the terminal event, and closes the event stream immediately.</p>
 <div class="admonition tip">
 <p class="admonition-title">Authentication from a browser</p>
-<p><code>EventSource</code> cannot set headers. For this endpoint only, the server also accepts the key in the <code>secret_key</code> query parameter. This works in both server modes, the default integrated server and <code>--api-only</code>:</p>
+<p><code>EventSource</code> cannot set headers. For this endpoint only, the server also accepts the API key in the <code>secret_key</code> query parameter. This works in both server modes, the default integrated server and <code>--api-only</code>:</p>
 <div class="language-javascript highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="kd">const</span><span class="w"> </span><span class="nx">events</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">EventSource</span><span class="p">(</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="sb">`http://127.0.0.1:8786/api/download/jobs/</span><span class="si">${</span><span class="nx">jobId</span><span class="si">}</span><span class="sb">/events?secret_key=</span><span class="si">${</span><span class="nx">key</span><span class="si">}</span><span class="sb">`</span>
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="p">);</span>
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="nx">events</span><span class="p">.</span><span class="nx">addEventListener</span><span class="p">(</span><span class="s2">"progress"</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="nx">e</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nb">JSON</span><span class="p">.</span><span class="nx">parse</span><span class="p">(</span><span class="nx">e</span><span class="p">.</span><span class="nx">data</span><span class="p">).</span><span class="nx">progress</span><span class="p">));</span>
 </span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="nx">events</span><span class="p">.</span><span class="nx">addEventListener</span><span class="p">(</span><span class="s2">"completed"</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">events</span><span class="p">.</span><span class="nx">close</span><span class="p">());</span>
 </span></code></pre></div>
-<p>The header always wins. Send the key in the query parameter <em>or</em> in the header, not both: if an <code>X-Secret-Key</code> header is present, the server checks that header and ignores the query parameter. See <a href="../authentication/#how-clients-present-credentials">Authentication</a>.</p>
+<p>The header always wins. Send the API key in the query parameter <em>or</em> in the header, not both. If an <code>X-Secret-Key</code> header is present, the server examines that header and ignores the query parameter. See <a href="../authentication/#how-clients-present-credentials">Authentication</a>.</p>
 </div>
 <div class="tabbed-set tabbed-alternate" data-tabs="8:2"><input checked="checked" id="__tabbed_8_1" name="__tabbed_8" type="radio" /><input id="__tabbed_8_2" name="__tabbed_8" type="radio" /><div class="tabbed-labels"><label for="__tabbed_8_1">Request</label><label for="__tabbed_8_2">Response <code>200</code></label></div>
 <div class="tabbed-content">
@@ -4052,7 +4052,7 @@ an HTTP caller would be remote code execution. Post-download hooks are configure
 </ul>
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
-<p>A <code>204</code> response has no body. Do not attempt to parse JSON from it.</p>
+<p>A <code>204</code> response has no body. Do not try to parse JSON from it.</p>
 </div>
 <table>
 <thead>
@@ -4099,7 +4099,7 @@ an HTTP caller would be remote code execution. Post-download hooks are configure
 <p>Enqueue a <strong>new</strong> job that reuses a terminal job's service, title, and parameters. The service allowlist and parameter gates are re-checked. Returns <code>202</code> with the new job's ID.</p>
 <div class="admonition warning">
 <p class="admonition-title">Retry reuses the original, unredacted parameters</p>
-<p>Retry replays the finished job's stored parameters exactly as they were submitted, including any secrets such as <code>credential</code>/<code>credentials</code>, not the redacted <code>parameters</code> view that <code>GET /api/download/jobs</code> and <code>GET /api/history</code> expose. This is deliberate: it lets a retried job reproduce a credentialed download that the redacted job record alone never could. It also means anyone who can retry a job can re-run it with its original credentials, even though those credentials are masked everywhere else in the API.</p>
+<p>A retry replays the finished job's stored parameters exactly as the original client submitted them, including any secrets such as <code>credential</code>/<code>credentials</code>. It does not use the redacted <code>parameters</code> view that <code>GET /api/download/jobs</code> and <code>GET /api/history</code> give. This is deliberate: it lets a retried job reproduce a credentialed download that the redacted job record alone never could. The API masks those credentials everywhere else. But anyone who can retry a job can operate it again with the original credentials.</p>
 </div>
 <div class="tabbed-set tabbed-alternate" data-tabs="10:1"><input checked="checked" id="__tabbed_10_1" name="__tabbed_10" type="radio" /><div class="tabbed-labels"><label for="__tabbed_10_1">Response <code>202</code></label></div>
 <div class="tabbed-content">
@@ -4189,7 +4189,7 @@ an HTTP caller would be remote code execution. Post-download hooks are configure
 <h2 id="server-management">Server management<a class="headerlink" href="#server-management" title="Permanent link">&para;</a></h2>
 <p>Endpoints for profiles, effective configuration, download history, environment checks, and maintenance actions.</p>
 <h3 id="get-apiprofiles"><code>GET /api/profiles</code><a class="headerlink" href="#get-apiprofiles" title="Permanent link">&para;</a></h3>
-<p>List the named credential profiles configured per service (usable as the <code>profile</code> parameter elsewhere). Only services whose credentials are a mapping of profile name to credential are listed; services with a single unnamed credential are omitted. Filtered by your allowlist.</p>
+<p>Show the named credential profiles configured per service (usable as the <code>profile</code> parameter elsewhere). The response holds only services whose credentials are a mapping of profile name to credential. It leaves out services with a single unnamed credential. Your allowlist filters the response.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="12:1"><input checked="checked" id="__tabbed_12_1" name="__tabbed_12" type="radio" /><div class="tabbed-labels"><label for="__tabbed_12_1">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -4204,7 +4204,7 @@ an HTTP caller would be remote code execution. Post-download hooks are configure
 </div>
 </div>
 <h3 id="get-apiconfig"><code>GET /api/config</code><a class="headerlink" href="#get-apiconfig" title="Permanent link">&para;</a></h3>
-<p>Return a read-only, redacted view of the effective server configuration, suitable for a settings page in a UI. Secrets are never emitted: keys matching <code>secret</code>, <code>password</code>, <code>token</code>, <code>api_key</code>, or <code>credential</code>, and any userinfo in proxy URLs, are masked.</p>
+<p>Return a read-only, redacted view of the effective server configuration, suitable for a settings page in a UI. The server never sends secrets: it masks every config key whose name contains <code>secret</code>, <code>password</code>, <code>token</code>, <code>api_key</code>, or <code>credential</code>, and any userinfo in proxy URLs.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="13:1"><input checked="checked" id="__tabbed_13_1" name="__tabbed_13" type="radio" /><div class="tabbed-labels"><label for="__tabbed_13_1">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -4233,7 +4233,7 @@ an HTTP caller would be remote code execution. Post-download hooks are configure
 </div>
 </div>
 <h3 id="get-apihistory"><code>GET /api/history</code><a class="headerlink" href="#get-apihistory" title="Permanent link">&para;</a></h3>
-<p>Read the persisted history of jobs that reached a terminal state, newest first. History is stored in <code>api_history.jsonl</code> in the cache directory; corrupt lines are skipped and a missing file yields an empty list.</p>
+<p>Read the persisted history of jobs that reached a terminal state, newest first. unshackle stores the history in <code>api_history.jsonl</code> in the cache directory. It skips corrupt lines, and a missing file yields an empty list.</p>
 <p><strong>Query parameters</strong></p>
 <table>
 <thead>
@@ -4328,11 +4328,11 @@ an HTTP caller would be remote code execution. Post-download hooks are configure
 </tbody>
 </table>
 <h3 id="post-apimaintenanceclear-cache-and-post-apimaintenanceclear-temp"><code>POST /api/maintenance/clear-cache</code> and <code>POST /api/maintenance/clear-temp</code><a class="headerlink" href="#post-apimaintenanceclear-cache-and-post-apimaintenanceclear-temp" title="Permanent link">&para;</a></h3>
-<p>Delete and recreate the cache or temp directory. Neither takes a request body. Both are blocked with <code>409 CONFLICT</code> if any job is currently <code>downloading</code> (the <code>details</code> include the offending <code>active_jobs</code>).</p>
-<p>The <code>409</code> guard is about active file I/O, not an arbitrary lock: an in-flight job may still be <em>reading</em> cached title data under the cache directory, and active download workers are <em>writing</em> segment files under temp. Removing either directory mid-download would corrupt those running jobs, so the endpoints refuse until nothing is downloading.</p>
+<p>Delete and recreate the cache or temp directory. Neither takes a request body. The server blocks both with <code>409 CONFLICT</code> if any job is currently <code>downloading</code> (the <code>details</code> include the offending <code>active_jobs</code>).</p>
+<p>The <code>409</code> guard is about active file I/O, not an arbitrary lock. An in-flight job may still be <em>reading</em> cached title data under the cache directory, and active download workers are <em>writing</em> segment files under temp. The removal of either directory mid-download would corrupt those jobs, so the endpoints refuse while a download is in progress.</p>
 <div class="admonition warning">
 <p class="admonition-title">clear-cache also wipes download history</p>
-<p>The persistent history read by <a href="#get-apihistory"><code>GET /api/history</code></a> lives in <code>api_history.jsonl</code> <strong>inside the cache directory</strong>. Because clear-cache deletes and recreates that whole directory, calling it also erases your entire download history, not just cached title data. If you want to keep history, do not clear the cache; remove individual entries with <a href="#delete-apihistoryjob_id"><code>DELETE /api/history/{job_id}</code></a> instead.</p>
+<p>The persistent history read by <a href="#get-apihistory"><code>GET /api/history</code></a> lives in <code>api_history.jsonl</code> <strong>inside the cache directory</strong>. Because clear-cache deletes and recreates that whole directory, calling it also erases your entire download history, not only cached title data. If you want to keep history, do not clear the cache. Remove individual entries with <a href="#delete-apihistoryjob_id"><code>DELETE /api/history/{job_id}</code></a> instead.</p>
 </div>
 <div class="tabbed-set tabbed-alternate" data-tabs="15:1"><input checked="checked" id="__tabbed_15_1" name="__tabbed_15" type="radio" /><div class="tabbed-labels"><label for="__tabbed_15_1">Response <code>200</code></label></div>
 <div class="tabbed-content">
@@ -4364,7 +4364,7 @@ an HTTP caller would be remote code execution. Post-download hooks are configure
 </tbody>
 </table>
 <h3 id="post-apimaintenancerefresh-services"><code>POST /api/maintenance/refresh-services</code><a class="headerlink" href="#post-apimaintenancerefresh-services" title="Permanent link">&para;</a></h3>
-<p>git-pull every service repository configured under <code>directories.services</code>. <code>refreshed</code> is <code>true</code> when all repos updated successfully (or none are configured).</p>
+<p>git-pull every service repository configured under <code>directories.services</code>. <code>refreshed</code> becomes <code>true</code> when all repos updated successfully, or when you configure no repository.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="16:1"><input checked="checked" id="__tabbed_16_1" name="__tabbed_16" type="radio" /><div class="tabbed-labels"><label for="__tabbed_16_1">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -4397,10 +4397,10 @@ an HTTP caller would be remote code execution. Post-download hooks are configure
 <h2 id="remote-dl-sessions">Remote-dl sessions<a class="headerlink" href="#remote-dl-sessions" title="Permanent link">&para;</a></h2>
 <div class="admonition note">
 <p class="admonition-title">Developer feature</p>
-<p>The <code>/api/session/*</code> endpoints power unshackle's <strong>remote download</strong> mode, where a thin local client authenticates once against a remote server, then fetches titles, tracks, and segments and proxies DRM licensing back through it. These endpoints are exposed in <code>--remote-only</code> mode, and they are what the built-in <code>RemoteService</code> client drives. Most end users never call them directly.</p>
+<p>The <code>/api/session/*</code> endpoints power unshackle's <strong>remote download</strong> mode. A thin local client authenticates once against a remote server, then fetches titles, tracks, and segments, and proxies DRM licensing back through it. The server mounts these endpoints in <code>--remote-only</code> mode, and they are what the built-in <code>RemoteService</code> client drives. Most end users never call them directly.</p>
 </div>
-<p>Sessions are held in memory. They expire after <code>serve.session_ttl</code> (default 300s), except while awaiting interactive authentication input, which uses a 600s window. A session is bound to the IP that created it, so a request from a different IP is rejected with <code>403 FORBIDDEN</code>.</p>
-<h3 id="session-lifecycle-overview">Session lifecycle overview<a class="headerlink" href="#session-lifecycle-overview" title="Permanent link">&para;</a></h3>
+<p>The server holds remote sessions in memory. They expire after <code>serve.session_ttl</code> (default 300s), except while awaiting interactive authentication input, which uses a 600s window. A remote session binds to the IP that made it, so the server rejects a request from a different IP with <code>403 FORBIDDEN</code>.</p>
+<h3 id="remote-session-lifecycle-overview">Remote session lifecycle overview<a class="headerlink" href="#remote-session-lifecycle-overview" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>POST /api/session/create        → returns session_id, status "authenticating"
 </span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>GET  /api/session/{id}/prompt   → poll until authenticated (submit answers via POST)
 </span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>GET  /api/session/{id}/titles   → list titles
@@ -4410,7 +4410,7 @@ an HTTP caller would be remote code execution. Post-download hooks are configure
 </span><span id="__span-27-7"><a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a>DELETE /api/session/{id}        → tear down, harvest updated cache
 </span></code></pre></div>
 <h3 id="post-apisessioncreate"><code>POST /api/session/create</code><a class="headerlink" href="#post-apisessioncreate" title="Permanent link">&para;</a></h3>
-<p>Create a session for a service and title. Authentication runs asynchronously in the background. This call returns immediately with <code>status: "authenticating"</code>, and you then poll the prompt endpoint. The body accepts <code>service</code> and <code>title_id</code> (both required) plus a broad set of optional keys (<code>additionalProperties</code> is allowed): <code>credentials</code> (<code>{username, password, extra?}</code>), <code>cookies</code> (base64 of zlib-compressed Netscape cookie file), <code>proxy</code>, <code>no_proxy</code>, <code>profile</code>, <code>cache</code> (map of forwarded cache files), <code>client_region</code>, <code>cdm_type</code>, <code>range_</code>, <code>vcodec</code>, <code>quality</code>, <code>best_available</code>, and any service CLI options.</p>
+<p>Make a remote session for a service and title. Authentication runs asynchronously in the background. This call returns immediately with <code>status: "authenticating"</code>, and you then poll the prompt endpoint. The body accepts <code>service</code> and <code>title_id</code> (both required). It also accepts a broad set of optional keys, because the body allows <code>additionalProperties</code>. These are <code>credentials</code> (<code>{username, password, extra?}</code>), <code>cookies</code> (base64 of zlib-compressed Netscape cookie file), <code>proxy</code>, <code>no_proxy</code>, <code>profile</code>, <code>cache</code> (map of forwarded cache files), <code>client_region</code>, <code>cdm_type</code>, <code>range_</code>, <code>vcodec</code>, <code>quality</code>, <code>best_available</code>, and any service CLI options.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="18:1"><input checked="checked" id="__tabbed_18_1" name="__tabbed_18" type="radio" /><div class="tabbed-labels"><label for="__tabbed_18_1">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -4488,7 +4488,7 @@ an HTTP caller would be remote code execution. Post-download hooks are configure
 <tr>
 <td><code>403</code></td>
 <td><code>FORBIDDEN</code></td>
-<td>Request IP differs from the session creator.</td>
+<td>Request IP differs from the remote session creator.</td>
 </tr>
 <tr>
 <td><code>404</code></td>
@@ -4534,7 +4534,7 @@ an HTTP caller would be remote code execution. Post-download hooks are configure
 </tbody>
 </table>
 <h3 id="get-apisessionsession_idtitles"><code>GET /api/session/{session_id}/titles</code><a class="headerlink" href="#get-apisessionsession_idtitles" title="Permanent link">&para;</a></h3>
-<p>Fetch the titles for an authenticated session.</p>
+<p>Fetch the titles for an authenticated remote session.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="21:1"><input checked="checked" id="__tabbed_21_1" name="__tabbed_21" type="radio" /><div class="tabbed-labels"><label for="__tabbed_21_1">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -4546,9 +4546,9 @@ an HTTP caller would be remote code execution. Post-download hooks are configure
 </div>
 </div>
 </div>
-<p>Requires an authenticated session; <code>404 SESSION_NOT_FOUND</code> otherwise.</p>
+<p>Requires an authenticated remote session. Otherwise it returns <code>404 SESSION_NOT_FOUND</code>.</p>
 <h3 id="post-apisessionsession_idtracks"><code>POST /api/session/{session_id}/tracks</code><a class="headerlink" href="#post-apisessionsession_idtracks" title="Permanent link">&para;</a></h3>
-<p>Get tracks and chapters for a specific title within the session. Body: <code>{ "title_id": "..." }</code> (required). Unlike <code>list-tracks</code>, track objects here <strong>include</strong> download URLs, along with session headers/cookies and manifest data the client needs to download directly.</p>
+<p>Get tracks and chapters for a specific title within the remote session. Body: <code>{ "title_id": "..." }</code> (required). Unlike <code>list-tracks</code>, track objects here <strong>include</strong> download URLs, along with session headers/cookies and manifest data the client needs to download directly.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="22:1"><input checked="checked" id="__tabbed_22_1" name="__tabbed_22" type="radio" /><div class="tabbed-labels"><label for="__tabbed_22_1">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -4595,7 +4595,7 @@ an HTTP caller would be remote code execution. Post-download hooks are configure
 </tbody>
 </table>
 <h3 id="post-apisessionsession_idsegments"><code>POST /api/session/{session_id}/segments</code><a class="headerlink" href="#post-apisessionsession_idsegments" title="Permanent link">&para;</a></h3>
-<p>Resolve the download URL, DRM info, headers, cookies, and raw track data for selected tracks. Body: <code>{ "track_ids": ["v-1", "a-1"] }</code> (required).</p>
+<p>Get the download URL, DRM info, headers, cookies, and raw track data for the selected tracks. Body: <code>{ "track_ids": ["v-1", "a-1"] }</code> (required).</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="23:1"><input checked="checked" id="__tabbed_23_1" name="__tabbed_23" type="radio" /><div class="tabbed-labels"><label for="__tabbed_23_1">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -4635,7 +4635,7 @@ an HTTP caller would be remote code execution. Post-download hooks are configure
 </tbody>
 </table>
 <h3 id="post-apisessionsession_idlicense"><code>POST /api/session/{session_id}/license</code><a class="headerlink" href="#post-apisessionsession_idlicense" title="Permanent link">&para;</a></h3>
-<p>Acquire DRM keys. Two modes are supported via the <code>mode</code> field.</p>
+<p>Get the content keys for the DRM. The <code>mode</code> field selects one of two modes.</p>
 <p><strong>Proxy mode</strong> (<code>mode: "proxy"</code>, the default) forwards the client's CDM <code>challenge</code> to the service's license endpoint and returns the raw license bytes:</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="24:2"><input checked="checked" id="__tabbed_24_1" name="__tabbed_24" type="radio" /><input id="__tabbed_24_2" name="__tabbed_24" type="radio" /><div class="tabbed-labels"><label for="__tabbed_24_1">Request</label><label for="__tabbed_24_2">Response <code>200</code></label></div>
 <div class="tabbed-content">
@@ -4709,7 +4709,7 @@ an HTTP caller would be remote code execution. Post-download hooks are configure
 <tr>
 <td><code>400</code></td>
 <td><code>INVALID_INPUT</code></td>
-<td>Missing challenge/PSSH, or no CDM device configured for the key.</td>
+<td>Missing challenge/PSSH, or no CDM device configured for the API key.</td>
 </tr>
 <tr>
 <td><code>400</code></td>
@@ -4734,7 +4734,7 @@ an HTTP caller would be remote code execution. Post-download hooks are configure
 </tbody>
 </table>
 <h3 id="get-apisessionsession_id"><code>GET /api/session/{session_id}</code><a class="headerlink" href="#get-apisessionsession_id" title="Permanent link">&para;</a></h3>
-<p>Return session metadata and validity.</p>
+<p>Return remote session metadata and validity.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="26:1"><input checked="checked" id="__tabbed_26_1" name="__tabbed_26" type="radio" /><div class="tabbed-labels"><label for="__tabbed_26_1">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -4750,9 +4750,9 @@ an HTTP caller would be remote code execution. Post-download hooks are configure
 </div>
 </div>
 </div>
-<p><code>404 SESSION_NOT_FOUND</code> if the session does not exist or has expired.</p>
+<p><code>404 SESSION_NOT_FOUND</code> if the remote session does not exist or has expired.</p>
 <h3 id="delete-apisessionsession_id"><code>DELETE /api/session/{session_id}</code><a class="headerlink" href="#delete-apisessionsession_id" title="Permanent link">&para;</a></h3>
-<p>Tear down a session. Its input bridge is cancelled, any updated cache files are harvested, and the session plus its cache directory are deleted.</p>
+<p>Tear down a remote session. The server cancels its input bridge, harvests any updated cache files, and deletes the remote session and its cache directory.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="27:1"><input checked="checked" id="__tabbed_27_1" name="__tabbed_27" type="radio" /><div class="tabbed-labels"><label for="__tabbed_27_1">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -4764,10 +4764,10 @@ an HTTP caller would be remote code execution. Post-download hooks are configure
 </div>
 </div>
 </div>
-<p>The <code>cache</code> field is present only if the session produced cache files. <code>404 SESSION_NOT_FOUND</code> if the session does not exist.</p>
+<p>The <code>cache</code> field is present only if the remote session produced cache files. <code>404 SESSION_NOT_FOUND</code> if the remote session does not exist.</p>
 <hr />
 <h2 id="error-responses">Error responses<a class="headerlink" href="#error-responses" title="Permanent link">&para;</a></h2>
-<p>Every structured error raised inside a handler is serialized to the same JSON envelope:</p>
+<p>The server serialises every structured error raised inside a handler to the same JSON envelope:</p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="p">{</span>
 </span><span id="__span-43-2"><a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a><span class="w">  </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"error"</span><span class="p">,</span>
 </span><span id="__span-43-3"><a id="__codelineno-43-3" name="__codelineno-43-3" href="#__codelineno-43-3"></a><span class="w">  </span><span class="nt">"error_code"</span><span class="p">:</span><span class="w"> </span><span class="s2">"INVALID_PARAMETERS"</span><span class="p">,</span>
@@ -4781,7 +4781,7 @@ an HTTP caller would be remote code execution. Post-download hooks are configure
 <ul>
 <li><code>details</code> appears only when non-empty.</li>
 <li><code>retryable</code> appears only when the error is retryable (e.g. network errors, rate limiting).</li>
-<li><code>debug_info</code> appears only when the server was started with <code>--debug-api</code>.</li>
+<li><code>debug_info</code> appears only when you start the server with <code>--debug-api</code>.</li>
 </ul>
 <div class="admonition warning">
 <p class="admonition-title">Authentication errors differ</p>
