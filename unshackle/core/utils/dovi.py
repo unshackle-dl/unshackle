@@ -12,6 +12,7 @@ re-implement subprocess plumbing per call site. Each wrapper:
 
 from __future__ import annotations
 
+import json
 import subprocess
 import time
 from pathlib import Path
@@ -98,6 +99,34 @@ def info_summary(rpu: Path) -> str:
     return p.stdout
 
 
+def info_frame(rpu: Path, frame: int = 0) -> dict:
+    """Return the parsed RPU data for one frame (`dovi_tool info -i ... -f N`)."""
+    tool = require_dovi_tool()
+    info_start = time.monotonic()
+    p = subprocess.run(
+        [tool, "info", "-i", str(rpu), "-f", str(frame)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    log_tool_run(
+        "dovi_tool info",
+        "dovi_tool",
+        p.returncode,
+        duration_ms=round((time.monotonic() - info_start) * 1000, 1),
+    )
+    if p.returncode != 0:
+        raise RuntimeError(f"dovi_tool info failed: {(p.stderr or '')[-400:]}")
+    start = p.stdout.find("{")
+    if start < 0:
+        raise RuntimeError("dovi_tool info returned no JSON")
+    try:
+        return json.loads(p.stdout[start:])
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"dovi_tool info returned invalid JSON: {e}")
+
+
 def generate_from_hdr10plus(
     extra_json: Path,
     hdr10plus_json: Path,
@@ -136,5 +165,6 @@ __all__ = (
     "inject_rpu",
     "editor",
     "info_summary",
+    "info_frame",
     "generate_from_hdr10plus",
 )

@@ -5,6 +5,7 @@ import random
 import re
 import subprocess
 import sys
+from concurrent import futures
 from pathlib import Path
 from typing import Optional
 
@@ -20,7 +21,7 @@ from unshackle.core.utils.subprocess import run_step
 
 
 class Hybrid:
-    def __init__(self, videos, source) -> None:
+    def __init__(self, videos, source, output_name: Optional[str] = None) -> None:
         self.log = logging.getLogger("hybrid")
 
         """
@@ -35,7 +36,7 @@ class Hybrid:
         self.source = source
         self.rpu_file = "RPU.bin"
         self.hdr_type = "HDR10"
-        self.hevc_file = f"{self.hdr_type}-DV.hevc"
+        self.hevc_file = output_name or f"{self.hdr_type}-DV.hevc"
         self.hdr10plus_to_dv = False
         self.hdr10plus_file = "HDR10Plus.json"
 
@@ -90,7 +91,8 @@ class Hybrid:
                 self.extract_stream(save_path, "HDR10")
                 self.hdr_type = "HDR10+"
             elif video.range == Video.Range.DV:
-                self.extract_stream(save_path, "DV")
+                if not os.path.isfile(config.directories.temp / "DV.hevc"):
+                    self.extract_stream(save_path, "DV")
 
         if self.hdr10plus_to_dv:
             hdr10p_video = next(v for v in videos if v.range == Video.Range.HDR10P)
@@ -130,9 +132,7 @@ class Hybrid:
             Path.unlink(config.directories.temp / "hdr10.mkv")
             Path.unlink(config.directories.temp / "dv.mkv")
         Path.unlink(config.directories.temp / "HDR10.hevc", missing_ok=True)
-        Path.unlink(config.directories.temp / "DV.hevc", missing_ok=True)
-        for rpu_name in ("RPU.bin", "RPU_UNT.bin", "RPU_L5.bin", "RPU_L6.bin"):
-            Path.unlink(config.directories.temp / rpu_name, missing_ok=True)
+        Path.unlink(config.directories.temp / "RPU_L5.bin", missing_ok=True)
         Path.unlink(config.directories.temp / "L5.json", missing_ok=True)
         Path.unlink(config.directories.temp / "L6.json", missing_ok=True)
 
@@ -206,6 +206,7 @@ class Hybrid:
         by telling the display the correct active area.
         """
         if os.path.isfile(config.directories.temp / "RPU_L5.bin"):
+            self.rpu_file = "RPU_L5.bin"
             return
 
         ffprobe_bin = str(FFProbe) if FFProbe else "ffprobe"
@@ -270,8 +271,7 @@ class Hybrid:
 
             random_times = sorted(random.uniform(0, duration) for _ in range(10))
 
-            crop_results = []
-            for t in random_times:
+            def sample_crop(t: float) -> Optional[tuple[int, int, int, int]]:
                 result_cropdetect = subprocess.run(
                     [
                         ffmpeg_bin,
@@ -286,7 +286,7 @@ class Hybrid:
                         "-vf",
                         "cropdetect=round=2",
                         "-vframes",
-                        "10",
+                        "4",
                         "-f",
                         "null",
                         "-",
@@ -303,14 +303,14 @@ class Hybrid:
                     r"crop=(\d+):(\d+):(\d+):(\d+)",
                     (result_cropdetect.stdout or "") + (result_cropdetect.stderr or ""),
                 )
-                if crop_match:
-                    w, h = int(crop_match.group(1)), int(crop_match.group(2))
-                    x, y = int(crop_match.group(3)), int(crop_match.group(4))
-                    left = x
-                    top = y
-                    right = original_width - w - x
-                    bottom = original_height - h - y
-                    crop_results.append((left, top, right, bottom))
+                if not crop_match:
+                    return None
+                w, h = int(crop_match.group(1)), int(crop_match.group(2))
+                x, y = int(crop_match.group(3)), int(crop_match.group(4))
+                return (x, y, original_width - w - x, original_height - h - y)
+
+            with futures.ThreadPoolExecutor(max_workers=len(random_times)) as pool:
+                crop_results = [crop for crop in pool.map(sample_crop, random_times) if crop]
 
         if not crop_results:
             log_event(
@@ -388,11 +388,12 @@ class Hybrid:
     def level_6(self):
         """Edit RPU Level 6 values using the static L6 luminance data from the RPU."""
         if os.path.isfile(config.directories.temp / "RPU_L6.bin"):
+            self.rpu_file = "RPU_L6.bin"
             return
 
         try:
             with console.status("Reading RPU luminance metadata...", spinner="dots"):
-                info_text = dovi.info_summary(config.directories.temp / self.rpu_file)
+                rpu_info = dovi.info_frame(config.directories.temp / self.rpu_file)
         except RuntimeError as e:
             log_event(
                 "hybrid_level6",
@@ -402,31 +403,21 @@ class Hybrid:
             )
             raise ValueError("Failed reading RPU metadata for Level 6 values")
 
-        max_cll = None
-        max_fall = None
-        max_mdl = None
-        min_mdl = None
+        blocks = rpu_info.get("vdr_dm_data", {}).get("cmv29_metadata", {}).get("ext_metadata_blocks", [])
+        level6 = next((b["Level6"] for b in blocks if isinstance(b, dict) and "Level6" in b), {})
 
-        in_l6 = False
-        for line in info_text.splitlines():
-            stripped = line.strip()
-            if "L6 metadata" in stripped:
-                in_l6 = True
-            if stripped.startswith("RPU mastering display:"):
-                mastering = stripped.split(":", 1)[1].strip()
-                min_lum, max_lum = mastering.split("/")[0], mastering.split("/")[1].split(" ")[0]
-                min_mdl = int(float(min_lum) * 10000)
-                max_mdl = int(float(max_lum))
-            elif in_l6 and "MaxCLL:" in stripped and max_cll is None:
-                max_cll = int(float(stripped.split("MaxCLL:")[1].split("nits")[0].strip().rstrip(",")))
-                if "MaxFALL:" in stripped:
-                    max_fall = int(float(stripped.split("MaxFALL:")[1].split("nits")[0].strip().rstrip(",")))
+        max_cll = level6.get("max_content_light_level")
+        max_fall = level6.get("max_frame_average_light_level")
+        max_mdl = level6.get("max_display_mastering_luminance")
+        min_mdl = level6.get("min_display_mastering_luminance")
 
-        if any(v is None for v in (max_cll, max_fall, max_mdl, min_mdl)):
+        rpu_values = (max_mdl, min_mdl, max_cll, max_fall)
+
+        if not max_cll or not max_fall or max_mdl is None or min_mdl is None:
             base_max_mdl, base_min_mdl, base_cll, base_fall = self.probe_hdr_metadata()
-            if max_cll is None:
+            if not max_cll and base_cll:
                 max_cll = base_cll
-            if max_fall is None:
+            if not max_fall and base_fall:
                 max_fall = base_fall
             if max_mdl is None:
                 max_mdl = base_max_mdl
@@ -443,6 +434,21 @@ class Hybrid:
                 context={"max_cll": max_cll, "max_fall": max_fall, "max_mdl": max_mdl, "min_mdl": min_mdl},
             )
             raise ValueError("Could not extract Level 6 luminance data from RPU")
+
+        if (max_mdl, min_mdl, max_cll, max_fall) == rpu_values:
+            log_event(
+                "hybrid_level6",
+                level="DEBUG",
+                message="Level 6 luminance values already correct, skipping edit",
+                context={
+                    "max_cll": max_cll,
+                    "max_fall": max_fall,
+                    "max_mdl": max_mdl,
+                    "min_mdl": min_mdl,
+                },
+                success=True,
+            )
+            return
 
         level6_data = {
             "level6": {
@@ -588,8 +594,11 @@ class Hybrid:
                 "error",
                 "-select_streams",
                 "v:0",
+                "-read_intervals",
+                "%+#1",
+                "-show_frames",
                 "-show_entries",
-                "stream_side_data=max_luminance,min_luminance,max_content,max_average",
+                "frame_side_data_list",
                 "-of",
                 "json",
                 str(config.directories.temp / "HDR10.hevc"),
@@ -609,14 +618,15 @@ class Hybrid:
         if result.returncode == 0 and result.stdout:
             try:
                 probe = json.loads(result.stdout)
-                for stream in probe.get("streams", []):
-                    for sd in stream.get("side_data_list", []):
+                for frame in probe.get("frames", []):
+                    for sd in frame.get("side_data_list", []):
                         if "max_luminance" in sd:
                             num, den = sd["max_luminance"].split("/")
                             max_mdl = int(int(num) / int(den))
                         if "min_luminance" in sd:
                             num, den = sd["min_luminance"].split("/")
-                            min_mdl = int(int(num) / int(den) * 10000)
+                            # Integer math, because float rounding turns 0.0003 nits into 2 units.
+                            min_mdl = int(num) * 10000 // int(den)
                         if "max_content" in sd:
                             max_cll = int(sd["max_content"])
                         if "max_average" in sd:

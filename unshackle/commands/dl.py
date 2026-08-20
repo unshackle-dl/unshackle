@@ -3281,16 +3281,11 @@ class dl:
                                             for track in resolution_tracks:
                                                 track.needs_duration_fix = True
 
-                                            Hybrid(resolution_tracks, self.service)
-
                                             hybrid_filename = f"HDR10-DV-{resolution}p.hevc"
                                             hybrid_output_path = config.directories.temp / hybrid_filename
                                             hybrid_temp_paths.append(hybrid_output_path)
 
-                                            default_output = config.directories.temp / "HDR10-DV.hevc"
-                                            if default_output.exists():
-                                                hybrid_output_path.unlink(missing_ok=True)
-                                                shutil.move(str(default_output), str(hybrid_output_path))
+                                            Hybrid(resolution_tracks, self.service, output_name=hybrid_filename)
 
                                             task_description = f"Multiplexing Hybrid HDR10+DV {resolution}p"
                                             task_tracks = (
@@ -3398,19 +3393,18 @@ class dl:
                             for temp_path in sidecar_original_paths.values():
                                 temp_path.unlink(missing_ok=True)
                     finally:
-                        # Hybrid() produces a temp HEVC output we rename; make sure it's never left behind.
-                        # Also attempt to remove the default hybrid output name if it still exists.
+                        # Hybrid() writes a temp HEVC per resolution, so delete each one here.
                         for temp_path in hybrid_temp_paths:
                             try:
                                 temp_path.unlink(missing_ok=True)
                             except PermissionError:
                                 self.log.warning(f"Failed to delete temp file (in use?): {temp_path}")
-                        try:
-                            (config.directories.temp / "HDR10-DV.hevc").unlink(missing_ok=True)
-                        except PermissionError:
-                            self.log.warning(
-                                f"Failed to delete temp file (in use?): {config.directories.temp / 'HDR10-DV.hevc'}"
-                            )
+                        for leftover in ("HDR10-DV.hevc", "DV.hevc", "RPU.bin", "RPU_UNT.bin", "RPU_L6.bin"):
+                            leftover_path = config.directories.temp / leftover
+                            try:
+                                leftover_path.unlink(missing_ok=True)
+                            except PermissionError:
+                                self.log.warning(f"Failed to delete temp file (in use?): {leftover_path}")
 
                 else:
                     muxed_paths.extend(track.path for track in title.tracks.audio if track.path and track.path.exists())
