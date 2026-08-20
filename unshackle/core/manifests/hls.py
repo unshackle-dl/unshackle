@@ -79,6 +79,7 @@ class HLS:
         if isinstance(res, requests.Response):
             if not res.ok:
                 raise requests.ConnectionError("Failed to request the M3U(8) document.", response=res)
+            res.encoding = res.encoding or "utf-8"
             content = res.text
         elif isinstance(res, RnetResponse):
             if not res.ok:
@@ -349,7 +350,9 @@ class HLS:
             session = Session()
 
         res = session.get(variant_url)
-        variant = m3u8.loads(res.text if hasattr(res, "text") else res.text, uri=variant_url)
+        if isinstance(res, requests.Response):
+            res.encoding = res.encoding or "utf-8"
+        variant = m3u8.loads(res.text, uri=variant_url)
         if not variant.segments:
             return None
 
@@ -542,6 +545,8 @@ class HLS:
                 if not response.ok:
                     log.error(f"Failed to request the invariant M3U8 playlist: {response.status_code}")
                     sys.exit(1)
+                if isinstance(response, requests.Response):
+                    response.encoding = response.encoding or "utf-8"
                 playlist_text = response.text
             else:
                 raise TypeError(f"Expected response to be a requests.Response or rnet.Response, not {type(response)}")

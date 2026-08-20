@@ -15,7 +15,7 @@ from uuid import UUID
 from zlib import crc32
 
 from langcodes import Language
-from requests import Session
+from requests import Response, Session
 from requests.adapters import HTTPAdapter, Retry
 
 from unshackle.core import binaries
@@ -805,6 +805,8 @@ class Track:
             session = getattr(self, "session", None) or Session()
 
             response = session.get(self.url)
+            if isinstance(response, Response):
+                response.encoding = response.encoding or "utf-8"
             playlist = m3u8.loads(response.text, self.url)
 
             drm_list = []

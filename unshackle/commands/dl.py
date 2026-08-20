@@ -2757,9 +2757,10 @@ class dl:
                     list(title.tracks), tracks_progress_callables, progress_sink
                 )
 
-            for track in title.tracks:
-                if hasattr(track, "needs_drm_loading") and track.needs_drm_loading:
-                    track.load_drm_if_needed(service)
+            drm_pending = [track for track in title.tracks if getattr(track, "needs_drm_loading", False)]
+            if drm_pending:
+                with ThreadPoolExecutor(min(16, len(drm_pending))) as drm_pool:
+                    list(drm_pool.map(lambda track: track.load_drm_if_needed(service), drm_pending))
 
             download_table = Table.grid()
             download_table.add_row(selected_tracks)
@@ -3094,6 +3095,7 @@ class dl:
 
                 muxed_paths = []
                 muxed_audio_codecs: dict[Path, Optional[Audio.Codec]] = {}
+                tagged_paths: set[Path] = set()
                 append_audio_codec_suffix = True
 
                 if no_mux:
@@ -3121,6 +3123,7 @@ class dl:
                     merge_video = merge_video if merge_video is not None else config.muxing.get("merge_video", False)
 
                     multiplex_tasks: list[tuple[TaskID, Tracks, Optional[Audio.Codec]]] = []
+                    mux_futures: list[futures.Future[tuple[Path, int, list[str]]]] = []
                     # Track hybrid-processing outputs explicitly so we can always clean them up,
                     # even if muxing fails early (e.g. SystemExit) before the normal delete loop.
                     hybrid_temp_paths: list[Path] = []
@@ -3134,12 +3137,55 @@ class dl:
                         task_tracks.attachments = list(base_tracks.attachments)
                         return task_tracks
 
-                    def enqueue_mux_tasks(task_description: str, base_tracks: Tracks) -> None:
+                    audio_expected = not video_only and not no_audio
+
+                    def unique_mux_output(task_tracks: Tracks, index: int) -> Optional[Path]:
+                        src: Optional[Path] = None
+                        ext = ".muxed.mkv"
+                        if task_tracks.videos:
+                            src = task_tracks.videos[0].path
+                        elif task_tracks.audio:
+                            src, ext = task_tracks.audio[0].path, ".muxed.mka"
+                        elif task_tracks.subtitles:
+                            src, ext = task_tracks.subtitles[0].path, ".muxed.mks"
+                        if src is None:
+                            return None
+                        base = src.with_suffix(ext)
+                        return base.with_name(f"{base.stem}.{index}{base.suffix}")
+
+                    def mux_one(mux_index: int, task_id: TaskID, task_tracks: Tracks) -> tuple[Path, int, list[str]]:
+                        progress.start_task(task_id)
+                        muxed_path, return_code, errors = task_tracks.mux(
+                            str(title),
+                            progress=partial(progress.update, task_id=task_id),
+                            delete=False,
+                            audio_expected=audio_expected,
+                            title_language=title.language,
+                            skip_subtitles=skip_subtitle_mux,
+                            output_path=unique_mux_output(task_tracks, mux_index),
+                        )
+                        if return_code < 2:
+                            tags.tag_file(
+                                muxed_path,
+                                title,
+                                self.tmdb_id,
+                                self.imdb_id,
+                                self.tvdb_id,
+                                self.anilist_id,
+                                self.anime_hint(title),
+                                session=service.session,
+                            )
+                            tagged_paths.add(muxed_path)
+                        return muxed_path, return_code, errors
+
+                    def enqueue_mux_tasks(task_description: str, base_tracks: Tracks, hybrid: bool = False) -> None:
+                        pool = hybrid_mux_pool if hybrid else mux_pool
                         if merge_audio or not base_tracks.audio:
                             task_id = progress.add_task(
                                 f"{task_description}...", total=None, start=False, downloaded=""
                             )
                             multiplex_tasks.append((task_id, base_tracks, None))
+                            mux_futures.append(pool.submit(mux_one, len(multiplex_tasks), task_id, base_tracks))
                             return
 
                         audio_by_codec: dict[Optional[Audio.Codec], list[Audio]] = {}
@@ -3154,6 +3200,7 @@ class dl:
                             task_id = progress.add_task(f"{description}...", total=None, start=False, downloaded="")
                             task_tracks = clone_tracks_for_audio(base_tracks, codec_audio_tracks)
                             multiplex_tasks.append((task_id, task_tracks, audio_codec))
+                            mux_futures.append(pool.submit(mux_one, len(multiplex_tasks), task_id, task_tracks))
 
                     def mux_video_group(video_tracks: list[Optional[Video]]) -> None:
                         for video_track in video_tracks:
@@ -3177,122 +3224,98 @@ class dl:
 
                         enqueue_mux_tasks(task_description, task_tracks)
 
-                    if any(r == Video.Range.HYBRID for r in range_) and title.tracks.videos:
-                        self.log.info("Processing Hybrid HDR10+DV tracks...")
-
-                        # Snapshot videos before hybrid tracks are added so the originals
-                        # can still be muxed standalone afterwards.
-                        original_videos = list(title.tracks.videos)
-
-                        # Prefer HDR10+ over HDR10 as the hybrid base layer.
-                        resolutions_processed = set()
-                        base_tracks_list = [
-                            v for v in title.tracks.videos if v.range in (Video.Range.HDR10P, Video.Range.HDR10)
-                        ]
-                        dv_tracks = [v for v in title.tracks.videos if v.range == Video.Range.DV]
-
-                        for hdr10_track in base_tracks_list:
-                            resolution = hdr10_track.height
-                            if resolution in resolutions_processed:
-                                continue
-
-                            # DV layer only supplies RPU metadata, so the lowest resolution suffices.
-                            matching_dv = min(dv_tracks, key=lambda v: v.height) if dv_tracks else None
-
-                            if matching_dv:
-                                resolutions_processed.add(resolution)
-
-                                # Operate on copies so the originals stay muxable standalone.
-                                resolution_tracks = [deepcopy(hdr10_track), deepcopy(matching_dv)]
-                                for track in resolution_tracks:
-                                    track.needs_duration_fix = True
-
-                                Hybrid(resolution_tracks, self.service)
-
-                                hybrid_filename = f"HDR10-DV-{resolution}p.hevc"
-                                hybrid_output_path = config.directories.temp / hybrid_filename
-                                hybrid_temp_paths.append(hybrid_output_path)
-
-                                # Hybrid always writes HDR10-DV.hevc; rename it per resolution.
-                                default_output = config.directories.temp / "HDR10-DV.hevc"
-                                if default_output.exists():
-                                    hybrid_output_path.unlink(missing_ok=True)
-                                    shutil.move(str(default_output), str(hybrid_output_path))
-
-                                task_description = f"Multiplexing Hybrid HDR10+DV {resolution}p"
-                                task_tracks = Tracks(title.tracks) + title.tracks.chapters + title.tracks.attachments
-
-                                hybrid_track = deepcopy(hdr10_track)
-                                hybrid_track.id = f"hybrid_{hdr10_track.id}_{resolution}"
-                                hybrid_track.path = hybrid_output_path
-                                hybrid_track.range = Video.Range.DV
-                                hybrid_track.needs_duration_fix = True
-                                title.tracks.add(hybrid_track)
-                                task_tracks.videos = [hybrid_track]
-
-                                enqueue_mux_tasks(task_description, task_tracks)
-
-                        # Mux every requested range standalone, skipping the ingredient-only DV.
-                        # merge_video collapses only language variants (same height/range/codec).
-                        standalone_videos = [v for v in original_videos if not v.hybrid_base_only]
-                        for group in group_videos_by_variant(standalone_videos, merge=merge_video):
-                            mux_video_group(group)
-
-                        console.print()
-                    else:
-                        # Normal mode: one file per video track, unless merge_video groups
-                        # same-(height, range, codec) language variants into one file.
-                        groups = group_videos_by_variant(title.tracks.videos, merge=merge_video)
-                        for group in groups or [[None]]:
-                            mux_video_group(group)
+                    def group_file_size(video_tracks: Sequence[Optional[Video]]) -> int:
+                        return sum(v.path.stat().st_size for v in video_tracks if v and v.path and v.path.exists())
 
                     if progress_sink:
                         progress_sink(
                             {"phase": "muxing", "progress": 96.0, "status": "downloading", "active_tracks": []}
                         )
 
-                    def unique_mux_output(task_tracks: Tracks, index: int) -> Optional[Path]:
-                        src: Optional[Path] = None
-                        ext = ".muxed.mkv"
-                        if task_tracks.videos:
-                            src = task_tracks.videos[0].path
-                        elif task_tracks.audio:
-                            src, ext = task_tracks.audio[0].path, ".muxed.mka"
-                        elif task_tracks.subtitles:
-                            src, ext = task_tracks.subtitles[0].path, ".muxed.mks"
-                        if src is None:
-                            return None
-                        base = src.with_suffix(ext)
-                        return base.with_name(f"{base.stem}.{index}{base.suffix}")
-
                     try:
                         with SyncLive(Padding(progress, (0, 5, 1, 5)), console=console, refresh_per_second=20):
                             mux_failed = False
-                            audio_expected = not video_only and not no_audio
+                            mux_concurrency = max(1, int(config.muxing.get("concurrency", 4)))
 
-                            def mux_one(
-                                mux_index: int, task_id: TaskID, task_tracks: Tracks
-                            ) -> tuple[Path, int, list[str]]:
-                                progress.start_task(task_id)
-                                return task_tracks.mux(
-                                    str(title),
-                                    progress=partial(progress.update, task_id=task_id),
-                                    delete=False,
-                                    audio_expected=audio_expected,
-                                    title_language=title.language,
-                                    skip_subtitles=skip_subtitle_mux,
-                                    output_path=unique_mux_output(task_tracks, mux_index),
-                                )
+                            with (
+                                ThreadPoolExecutor(mux_concurrency) as mux_pool,
+                                ThreadPoolExecutor(mux_concurrency) as extra_mux_pool,
+                            ):
+                                hybrid_mux_pool = mux_pool if mux_concurrency == 1 else extra_mux_pool
 
-                            with ThreadPoolExecutor(
-                                max(1, min(len(multiplex_tasks), int(config.muxing.get("concurrency", 4))))
-                            ) as mux_pool:
-                                mux_results = list(
-                                    mux_pool.map(
-                                        lambda args: mux_one(*args),
-                                        [(i, t, tt) for i, (t, tt, _) in enumerate(multiplex_tasks, start=1)],
+                                if any(r == Video.Range.HYBRID for r in range_) and title.tracks.videos:
+                                    self.log.info("Processing Hybrid HDR10+DV tracks...")
+
+                                    original_videos = list(title.tracks.videos)
+
+                                    standalone_videos = [v for v in original_videos if not v.hybrid_base_only]
+                                    standalone_groups: list[list[Optional[Video]]] = [
+                                        list(g) for g in group_videos_by_variant(standalone_videos, merge=merge_video)
+                                    ]
+                                    for group in sorted(standalone_groups, key=group_file_size, reverse=True):
+                                        mux_video_group(group)
+
+                                    resolutions_processed = set()
+                                    base_tracks_list = sorted(
+                                        (
+                                            v
+                                            for v in title.tracks.videos
+                                            if v.range in (Video.Range.HDR10P, Video.Range.HDR10)
+                                        ),
+                                        key=lambda v: v.height,
+                                        reverse=True,
                                     )
-                                )
+                                    dv_tracks = [v for v in title.tracks.videos if v.range == Video.Range.DV]
+
+                                    for hdr10_track in base_tracks_list:
+                                        resolution = hdr10_track.height
+                                        if resolution in resolutions_processed:
+                                            continue
+
+                                        matching_dv = min(dv_tracks, key=lambda v: v.height) if dv_tracks else None
+
+                                        if matching_dv:
+                                            resolutions_processed.add(resolution)
+
+                                            resolution_tracks = [deepcopy(hdr10_track), deepcopy(matching_dv)]
+                                            for track in resolution_tracks:
+                                                track.needs_duration_fix = True
+
+                                            Hybrid(resolution_tracks, self.service)
+
+                                            hybrid_filename = f"HDR10-DV-{resolution}p.hevc"
+                                            hybrid_output_path = config.directories.temp / hybrid_filename
+                                            hybrid_temp_paths.append(hybrid_output_path)
+
+                                            default_output = config.directories.temp / "HDR10-DV.hevc"
+                                            if default_output.exists():
+                                                hybrid_output_path.unlink(missing_ok=True)
+                                                shutil.move(str(default_output), str(hybrid_output_path))
+
+                                            task_description = f"Multiplexing Hybrid HDR10+DV {resolution}p"
+                                            task_tracks = (
+                                                Tracks(title.tracks) + title.tracks.chapters + title.tracks.attachments
+                                            )
+
+                                            hybrid_track = deepcopy(hdr10_track)
+                                            hybrid_track.id = f"hybrid_{hdr10_track.id}_{resolution}"
+                                            hybrid_track.path = hybrid_output_path
+                                            hybrid_track.range = Video.Range.DV
+                                            hybrid_track.needs_duration_fix = True
+                                            title.tracks.add(hybrid_track)
+                                            task_tracks.videos = [hybrid_track]
+
+                                            enqueue_mux_tasks(task_description, task_tracks, hybrid=True)
+
+                                    console.print()
+                                else:
+                                    groups: list[list[Optional[Video]]] = [
+                                        list(g) for g in group_videos_by_variant(title.tracks.videos, merge=merge_video)
+                                    ] or [[None]]
+                                    for group in sorted(groups, key=group_file_size, reverse=True):
+                                        mux_video_group(group)
+
+                            mux_results = [f.result() for f in mux_futures]
                             for (task_id, task_tracks, audio_codec), (muxed_path, return_code, errors) in zip(
                                 multiplex_tasks, mux_results
                             ):
@@ -3480,16 +3503,17 @@ class dl:
                             shutil.move(muxed_path, final_path)
                         used_final_paths.add(final_path)
                         self.completed_files.append(final_path)
-                        tags.tag_file(
-                            final_path,
-                            title,
-                            self.tmdb_id,
-                            self.imdb_id,
-                            self.tvdb_id,
-                            self.anilist_id,
-                            self.anime_hint(title),
-                            session=service.session,
-                        )
+                        if muxed_path not in tagged_paths:
+                            tags.tag_file(
+                                final_path,
+                                title,
+                                self.tmdb_id,
+                                self.imdb_id,
+                                self.tvdb_id,
+                                self.anilist_id,
+                                self.anime_hint(title),
+                                session=service.session,
+                            )
 
                         post_script_context = build_context(
                             title,
