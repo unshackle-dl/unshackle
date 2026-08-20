@@ -4,6 +4,9 @@ from uuid import UUID
 
 
 class Vault(metaclass=ABCMeta):
+    # a vault on this machine; Vaults.get_key tries these first, before the network ones
+    local: bool = False
+
     def __init__(self, name: str, no_push: bool = False):
         self.name = name
         self.no_push = no_push

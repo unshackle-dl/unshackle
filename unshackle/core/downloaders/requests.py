@@ -1019,6 +1019,11 @@ def build_session_spec(session: Optional[Any]) -> Optional[dict[str, Any]]:
     return None
 
 
+def default_max_workers() -> int:
+    """Return the per-track worker count to use when the caller gives none."""
+    return min(16, (os.cpu_count() or 1) + 4)
+
+
 def rebuild_session(spec: dict[str, Any], max_workers: int) -> Optional[Any]:
     """Reconstruct an HTTP session inside a child process from a spec built by ``build_session_spec``.
 
@@ -1343,7 +1348,7 @@ def requests(
         urls = [urls]
 
     if not max_workers:
-        max_workers = min(16, (os.cpu_count() or 1) + 4)
+        max_workers = default_max_workers()
 
     # A spawned child re-imports this module and would start with no TokenBucket, so the
     # configured cap would silently stop applying; the cap wins over the fan-out, matching

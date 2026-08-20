@@ -46,13 +46,13 @@ from unshackle.core.config import config, resolve_cdm_name, resolve_decryption
 from unshackle.core.console import GradientPulseBarColumn, SyncLive, console, listing_panel
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack, context_settings
 from unshackle.core.credential import Credential
-from unshackle.core.downloaders import format_speed, parse_speed_limit, set_speed_limit
+from unshackle.core.downloaders import default_max_workers, format_speed, parse_speed_limit, set_speed_limit
 from unshackle.core.drm import DRM_T, ClearKeyCENC, MonaLisa, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.providers.tvdb import SEASON_TYPES, parse_int
 from unshackle.core.proxies import Basic, ExpressVPN, Gluetun, Hola, NordVPN, ProtonVPN, SurfsharkVPN, WindscribeVPN
-from unshackle.core.service import Service
+from unshackle.core.service import Service, grow_session_pool
 from unshackle.core.services import Services
 from unshackle.core.temp import with_task_temp
 from unshackle.core.title_cacher import get_account_hash
@@ -907,7 +907,8 @@ class dl:
     def cli(ctx: click.Context, **kwargs: Any) -> dl:
         return dl(ctx, **kwargs)
 
-    DRM_TABLE_LOCK = Lock()
+    DRM_LOCKS: dict[str, Lock] = {}
+    DRM_LOCKS_GUARD = Lock()
     VAULT_WRITE_LOCK = Lock()
     EXPORT_LOCK = Lock()
     LICENSE_KEY_CACHE: dict[UUID, str] = {}
@@ -2846,6 +2847,7 @@ class dl:
                             self.log.debug(f"Skipped subtitle {track.id} was already absent from the track list.")
 
                     skipped_before = len(self.skipped_subtitles)
+                    grow_session_pool(service.session, downloads * (workers or default_max_workers()))
                     download_tracks_in_passes(
                         title.tracks,
                         downloads,
@@ -3266,10 +3268,13 @@ class dl:
                     try:
                         with SyncLive(Padding(progress, (0, 5, 1, 5)), console=console, refresh_per_second=20):
                             mux_failed = False
-                            for mux_index, (task_id, task_tracks, audio_codec) in enumerate(multiplex_tasks, start=1):
+                            audio_expected = not video_only and not no_audio
+
+                            def mux_one(
+                                mux_index: int, task_id: TaskID, task_tracks: Tracks
+                            ) -> tuple[Path, int, list[str]]:
                                 progress.start_task(task_id)
-                                audio_expected = not video_only and not no_audio
-                                muxed_path, return_code, errors = task_tracks.mux(
+                                return task_tracks.mux(
                                     str(title),
                                     progress=partial(progress.update, task_id=task_id),
                                     delete=False,
@@ -3278,6 +3283,19 @@ class dl:
                                     skip_subtitles=skip_subtitle_mux,
                                     output_path=unique_mux_output(task_tracks, mux_index),
                                 )
+
+                            with ThreadPoolExecutor(
+                                max(1, min(len(multiplex_tasks), int(config.muxing.get("concurrency", 4))))
+                            ) as mux_pool:
+                                mux_results = list(
+                                    mux_pool.map(
+                                        lambda args: mux_one(*args),
+                                        [(i, t, tt) for i, (t, tt, _) in enumerate(multiplex_tasks, start=1)],
+                                    )
+                                )
+                            for (task_id, task_tracks, audio_codec), (muxed_path, return_code, errors) in zip(
+                                multiplex_tasks, mux_results
+                            ):
                                 muxed_paths.append(muxed_path)
                                 muxed_audio_codecs[muxed_path] = audio_codec
                                 if return_code >= 2:
@@ -3291,7 +3309,6 @@ class dl:
                                         self.log.warning(line)
                                 if return_code >= 2:
                                     mux_failed = True
-                                    break
                             if mux_failed:
                                 sys.exit(1)
 
@@ -3827,6 +3844,19 @@ class dl:
             f"{successful_caches}/{len(self.vaults)} Vaults"
         )
 
+    @classmethod
+    def drm_lock(cls, drm: DRM_T) -> Lock:
+        """Return the lock for one DRM's set of content keys.
+
+        Tracks that share KIDs still take turns, so the second one finds the content keys in
+        LICENSE_KEY_CACHE and skips the challenge. Tracks with different KIDs send a challenge
+        and query the key vaults at the same time.
+        """
+        kids = getattr(drm, "kids", None) or []
+        key = ",".join(sorted(getattr(k, "hex", str(k)) for k in kids)) or getattr(drm, "content_id", None)
+        with cls.DRM_LOCKS_GUARD:
+            return cls.DRM_LOCKS.setdefault(key or type(drm).__name__, Lock())
+
     def prepare_drm(
         self,
         drm: DRM_T,
@@ -3871,7 +3901,7 @@ class dl:
                 keys=[{"kid": k.hex, "key": v} for k, v in drm.content_keys.items()],
                 remote=True,
             )
-            with self.DRM_TABLE_LOCK:
+            with self.drm_lock(drm):
                 pssh_str = ""
                 expected_class = "PlayReady" if server_drm_type == "playready" else "Widevine"
                 matching_drm = next(
@@ -3949,7 +3979,7 @@ class dl:
                 )
 
             pending_vault_writes: list[Callable[[], Any]] = []
-            with self.DRM_TABLE_LOCK:
+            with self.drm_lock(drm):
                 pssh_display = self.truncate_pssh_for_display(drm.pssh.dumps(), "Widevine")
                 cek_tree = Tree(Text.assemble(("Widevine", "cyan"), (f"({pssh_display})", "text"), overflow="fold"))
                 pre_existing_tree = next(
@@ -4144,7 +4174,7 @@ class dl:
                 )
 
             pending_vault_writes = []
-            with self.DRM_TABLE_LOCK:
+            with self.drm_lock(drm):
                 pssh_display = self.truncate_pssh_for_display(drm.pssh_b64 or "", "PlayReady")
                 cek_tree = Tree(
                     Text.assemble(
@@ -4303,7 +4333,7 @@ class dl:
 
         elif isinstance(drm, ClearKeyCENC):
             pending_vault_writes = []
-            with self.DRM_TABLE_LOCK:
+            with self.drm_lock(drm):
                 cek_tree = Tree(Text.assemble(("ClearKey", "cyan"), overflow="fold"))
                 pre_existing_tree = next(
                     (x for x in table.columns[0].cells if isinstance(x, Tree) and x.label == cek_tree.label), None
@@ -4442,7 +4472,7 @@ class dl:
             self.flush_vault_writes(pending_vault_writes)
 
         elif isinstance(drm, MonaLisa):
-            with self.DRM_TABLE_LOCK:
+            with self.drm_lock(drm):
                 display_id = drm.content_id or drm.pssh
                 pssh_display = self.truncate_pssh_for_display(display_id, "MonaLisa")
                 cek_tree = Tree(Text.assemble(("MonaLisa", "cyan"), (f"({pssh_display})", "text"), overflow="fold"))

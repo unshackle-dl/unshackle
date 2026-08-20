@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import re
+import threading
 from abc import ABC
 from pathlib import Path
 from typing import Any, Iterable, Optional, Union
@@ -120,7 +122,10 @@ class Chapters(SortedKeyList, ABC):
         path.parent.mkdir(parents=True, exist_ok=True)
 
         ogm_text = self.dumps(*args, **kwargs)
-        return path.write_text(ogm_text, encoding="utf8")
+        tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+        written = tmp.write_text(ogm_text, encoding="utf8")
+        os.replace(tmp, path)
+        return written
 
     def add(self, value: Chapter) -> None:
         if not isinstance(value, Chapter):

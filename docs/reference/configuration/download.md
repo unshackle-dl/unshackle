@@ -232,10 +232,12 @@ Matroska (MKV) muxing options.
 | `default_language` | dict | `{}` | Force which language is flagged *default* per track type, e.g. `{audio: en, subtitle: en}`. |
 | `merge_audio` | bool | `true` | Merge all audio into one file. `--split-audio` on the CLI flips this off. |
 | `merge_video` | bool | `false` | Merge video tracks that share height, range, and codec into one file, so only language varies inside a file. `--merge-video` on the CLI flips this on. |
+| `concurrency` | int | `4` | How many mkvmerge processes run at the same time when a title muxes more than one output file (one per video variant or audio codec). Each process uses one CPU core, so this shortens the mux step on an SSD. Set it to `1` on a hard disk, where parallel writes are slower. |
 
 ```yaml
 muxing:
   set_title: true
+  concurrency: 4
   default_language:
     audio: en
     subtitle: en

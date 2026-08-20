@@ -82,6 +82,31 @@ class TimeoutHTTPAdapter(HTTPAdapter):
         return super().send(request, **kwargs)
 
 
+def grow_session_pool(session: Any, size: int) -> None:
+    """Grow a shared requests session's connection pool to ``size`` before track downloads start.
+
+    The worker threads of every track draw on this one pool, because the downloader never
+    remounts an HTTP session the caller passes in (see downloaders/requests.py). The pool must hold
+    ``downloads * workers`` connections, or threads queue for a slot instead of reading.
+    Call this before any download thread exists: a remount races with other threads that call
+    ``get_adapter``. RnetSession does not block on its idle-pool cap, so this function skips it.
+    """
+    if not isinstance(session, requests.Session):
+        return
+    adapter = session.get_adapter("https://")
+    if not isinstance(adapter, HTTPAdapter) or getattr(adapter, "_pool_maxsize", 0) >= size:
+        return
+    grown = TimeoutHTTPAdapter(
+        max_retries=adapter.max_retries,
+        pool_connections=size,
+        pool_maxsize=size,
+        pool_block=True,
+        timeout=getattr(adapter, "default_timeout", DEFAULT_TIMEOUT),
+    )
+    session.mount("https://", grown)
+    session.mount("http://", grown)
+
+
 @dataclass
 class TrackRequest:
     """Holds what the user requested for video codec and range selection.

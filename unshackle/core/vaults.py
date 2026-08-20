@@ -1,6 +1,7 @@
 import inspect
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Iterator, Optional, Union
 from uuid import UUID
 
@@ -56,39 +57,62 @@ class Vaults:
         self.vaults.append(vault)
 
     def get_key(self, kid: Union[UUID, str]) -> tuple[Optional[str], Optional[Vault]]:
-        """Get Key from the first Vault it can by KID (Key ID) and Service."""
+        """Get Key from the first Vault it can by KID (Key ID) and Service.
+
+        Local vaults go first, one at a time: a hit there costs nothing and skips the network.
+        The remaining vaults run at the same time, and the first one with the content key wins.
+        """
+        local = [v for v in self.vaults if v.local]
+        remote = [v for v in self.vaults if not v.local]
+        for vault in local:
+            key = self.query_vault(vault, kid)
+            if key:
+                return key, vault
+        if not remote:
+            return None, None
+        pool = ThreadPoolExecutor(len(remote))
+        try:
+            futures = {pool.submit(self.query_vault, vault, kid): vault for vault in remote}
+            for future in as_completed(futures):
+                key = future.result()
+                if key:
+                    return key, futures[future]
+            return None, None
+        finally:
+            # a slow vault must not hold up a content key another vault already returned
+            pool.shutdown(wait=False, cancel_futures=True)
+
+    def query_vault(self, vault: Vault, kid: Union[UUID, str]) -> Optional[str]:
+        """Ask one vault for a content key. A failure logs a warning and returns None."""
         dl = get_debug_logger()
-        for vault in self.vaults:
-            start = time.monotonic()
-            try:
-                key = vault.get_key(kid, self.service)
-            except (PermissionError, NotImplementedError):
-                continue
-            except Exception as e:
-                log.warning(f"Failed to get key from Vault '{vault.name}': {e}")
-                if dl:
-                    dl.log_vault_query(
-                        vault.name,
-                        "get_key",
-                        kid=str(kid),
-                        reachable=False,
-                        error=e,
-                        duration_ms=round((time.monotonic() - start) * 1000, 1),
-                    )
-                continue
-            found = bool(key and key.count("0") != len(key))
+        start = time.monotonic()
+        try:
+            key = vault.get_key(kid, self.service)
+        except (PermissionError, NotImplementedError):
+            return None
+        except Exception as e:
+            log.warning(f"Failed to get key from Vault '{vault.name}': {e}")
             if dl:
                 dl.log_vault_query(
                     vault.name,
                     "get_key",
                     kid=str(kid),
-                    key_found=found,
-                    reachable=True,
+                    reachable=False,
+                    error=e,
                     duration_ms=round((time.monotonic() - start) * 1000, 1),
                 )
-            if found:
-                return key, vault
-        return None, None
+            return None
+        found = bool(key and key.count("0") != len(key))
+        if dl:
+            dl.log_vault_query(
+                vault.name,
+                "get_key",
+                kid=str(kid),
+                key_found=found,
+                reachable=True,
+                duration_ms=round((time.monotonic() - start) * 1000, 1),
+            )
+        return key if found else None
 
     def add_key(self, kid: Union[UUID, str], key: str, excluding: Optional[Vault] = None) -> int:
         """Add a KID:KEY to all Vaults, optionally with an exclusion."""

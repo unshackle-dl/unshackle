@@ -11,6 +11,8 @@ from unshackle.core.vault import Vault
 class SQLite(Vault):
     """Key Vault using a locally-accessed sqlite DB file."""
 
+    local = True
+
     def __init__(self, name: str, path: Union[str, Path], no_push: bool = False):
         super().__init__(name, no_push)
         self.path = Path(path).expanduser()
