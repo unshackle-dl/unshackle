@@ -65,8 +65,8 @@ Declared at the top of your service class, these are static descriptors:
 | `GEOFENCE` | `tuple[str, ...]` | ISO region codes the service requires; empty means no geofence. The first entry is treated as the "main region" for automatic proxy selection. |
 | `VAULT_TAG` | `Optional[str]` | Overrides the key-vault namespace; defaults to the service's own tag. |
 | `AUTH_METHODS` | `Optional[tuple[str, ...]]` | Accepted auth methods (`"cookies"` / `"credentials"`). When `None`, the REST `/services` endpoint infers them from `authenticate()`. |
-| `ANIME` | `bool` | The catalog is anime, so metadata lookups prefer AniList. A title's own `anime` flag overrides it. |
-| `DAILY` | `bool` | The catalog is daily/date-based, so episodes are named by air date. A title's own `daily` flag overrides it. |
+| `ANIME` | `bool` | The catalogue is anime, so metadata lookups prefer AniList. A title's own `anime` flag overrides it. |
+| `DAILY` | `bool` | The catalogue is daily/date-based, so episodes are named by air date. A title's own `daily` flag overrides it. |
 
 ### Required methods
 
@@ -105,7 +105,7 @@ up the objects your methods rely on:
 
 | Attribute | What it is |
 |---|---|
-| `self.config` | The per-service config slice (see [Request and session objects](#request-and-session-objects)). |
+| `self.config` | The per-service config slice (see [Request and HTTP session objects](#request-and-http-session-objects)). |
 | `self.log` | A `logging.Logger` named after your class. |
 | `self.session` | A ready-to-use HTTP session (headers, retries, and proxy applied). |
 | `self.cache` | A generic key/value `Cacher` namespaced to the service. |
@@ -114,10 +114,11 @@ up the objects your methods rely on:
 | `self.credential` | The active `Credential`, or `None` until authenticated. |
 | `self.track_request` | A `TrackRequest` describing the requested codecs, ranges, and best-available flag (see below). |
 
-The constructor also resolves proxies: it reads `--proxy` / `--proxy-query` /
-`--proxy-provider`, consults the per-service `proxy_map`, and, if `GEOFENCE` is set and
-you did not give an explicit proxy, does a live IP check and auto-fetches a proxy to
-`GEOFENCE[0]` when it detects a geoblock. See [Proxies and VPN](../guide/proxies-and-vpn.md).
+The constructor also resolves proxies: it reads `--proxy` and the `proxy_query` and
+`proxy_provider` context params that `dl` derives from it, consults the per-service
+`proxy_map`, and, if `GEOFENCE` is set and you did not give an explicit proxy, does a live
+IP check and auto-fetches a proxy to `GEOFENCE[0]` when it detects a geoblock.
+See [Proxies and VPN](../guide/proxies-and-vpn.md).
 
 !!! note "`TrackRequest`"
     `self.track_request` is a small dataclass built from the CLI: `codecs`
@@ -223,7 +224,7 @@ After the service fetches the titles (and after any cache), the framework applie
 **exact-string** rename (it compares `Episode`s on their show `title`, and `Movie`s and
 `Song`s on their `name`), so you can change a platform's odd naming to what your
 library expects. `get_titles_cached()` also cache-wraps the titles, and it is region-
-and account-aware. See the [TitleCacher](#request-and-session-objects) notes.
+and account-aware. See the [TitleCacher](#request-and-http-session-objects) notes.
 
 The ordering here is deliberate on both sides. The framework applies `title_map` **after**
 the title cache so that editing the map takes effect immediately, without forcing a cache
@@ -376,7 +377,7 @@ service to talk to the platform's license server. unshackle recognizes five DRM 
 | `Widevine` | Widevine | CDM challenge → license server → content keys (`.wvd` device) |
 | `PlayReady` | PlayReady | CDM challenge (WRM header) → license server → content keys (`.prd` device) |
 | `ClearKeyCENC` | W3C `org.w3.clearkey` over CENC | JSON KID request → JWK set; no CDM |
-| `ClearKey` | HLS AES-128 | key fetched directly from a URI; no CDM, no challenge |
+| `ClearKey` | HLS AES-128 | content key fetched directly from a URI; no CDM, no challenge |
 | `MonaLisa` | Proprietary WASM DRM | keys extracted locally; no license server |
 
 !!! warning "`ClearKey` vs `ClearKeyCENC`"
@@ -422,7 +423,7 @@ extracts the RPU with `dovi_tool`, and injects it onto the base layer, to make a
 track that carries both HDR10 metadata and the DV RPU. Both are automatic once the
 pipeline selects the right tracks. A service only needs to give accurate ranges.
 
-## Request and session objects
+## Request and HTTP session objects
 
 Everything a service does over the network flows through objects the base constructor
 prepared, all derived from the Click context (`ctx`) that `dl` passes in.

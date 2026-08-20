@@ -146,7 +146,7 @@ class Song(Title):
 
         A song shares the episode key space, its disc reading as the season and its track
         as the episode, so ``-w 1-5`` takes tracks 1 to 5 and ``-w 2x3`` takes disc 2
-        track 3. A song has no parts and no air date, so it answers to one key only.
+        track 3. A song has no parts and no air date, so it answers to its disc-and-track key only.
         """
         return f"{self.disc}x{self.track}" in wanted
 

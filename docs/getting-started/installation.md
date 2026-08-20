@@ -99,7 +99,7 @@ These must be present for core downloading, decryption, and muxing to work:
 
 | Tool | Binary looked up | Why it is needed |
 | --- | --- | --- |
-| FFmpeg | `ffmpeg` | Media processing: remuxing, conversion, stream handling |
+| FFmpeg | `ffmpeg` | Media processing: remuxing, conversion, track handling |
 | FFprobe | `ffprobe` | Media analysis: inspecting tracks and container details |
 | MKVToolNix | `mkvmerge` | Muxing downloaded tracks into a final MKV |
 | mkvpropedit | `mkvpropedit` | Editing MKV metadata after muxing |

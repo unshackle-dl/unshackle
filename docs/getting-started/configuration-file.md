@@ -86,7 +86,7 @@ The top-level keys group loosely into these areas:
 | Proxies & remote | `proxy_providers`, `remote_services`, `serve`, `services` |
 | Naming & tagging | `tag`, `output_template`, `chapter_fallback_name` |
 | External API keys | `tmdb_api_key`, `tvdb_api_key`, `simkl_client_id`, `ipinfo_api_key`, `metadata_providers` |
-| Behavior & logging | `update_checks`, `redact_paths`, `debug`, `unicode_filenames` |
+| Behaviour & logging | `update_checks`, `redact_paths`, `debug`, `unicode_filenames` |
 | Post-download scripts | `post_scripts` |
 | Paths | `directories`, `filenames` |
 

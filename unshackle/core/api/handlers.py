@@ -2241,7 +2241,7 @@ def resolve_server_cdm(service: str, profile: Optional[str], cdm_type: Optional[
 
     Checks the server's own CDM config (``config.cdm[service]``) to
     determine the CDM type without loading the full CDM object. This
-    ensures that when you use ``server_cdm: true``, the server's CDM
+    makes sure that when you use ``server_cdm: true``, the server's CDM
     determines device selection (e.g. PlayReady vs Widevine).
 
     Falls back to a lightweight stub from *cdm_type* only if the configuration

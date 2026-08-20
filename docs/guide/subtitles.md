@@ -247,7 +247,7 @@ With `conversion_method: auto`, unshackle ranks these automatically per conversi
 Setting it to a specific value pins that backend as the first choice, falling back to
 others only if the pin cannot convert the pair.
 
-#### What each backend actually preserves
+#### What each backend preserves
 
 The table below comes from round-tripping a subtitle that carries italics, bold,
 underline, positioning, and colour through every backend. Each cell shows the

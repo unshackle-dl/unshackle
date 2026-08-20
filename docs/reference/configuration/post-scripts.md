@@ -245,9 +245,9 @@ title object already knew: `{title}`, `{title_raw}`, `{title_id}`, `{year}`, `{s
 comes from the naming context, such as `{quality}`, `{hdr}`, `{artist}` and `{album}`, is
 empty.
 
-A resumed `--continue` download that finishes runs `success` as usual. Because unshackle
-does not wait for your script, it never sees its exit code, so a failing script is not
-reported anywhere. Your script owns its own error handling and logging.
+A resumed `--continue-downloads` download that finishes runs `success` as usual. Because
+unshackle does not wait for your script, it never sees its exit code, so a failing script
+is not reported anywhere. Your script owns its own error handling and logging.
 
 A `success` hook always names a file this run wrote. There is no skip-if-exists path in
 `dl` today, so nothing fires for a title that was not downloaded.

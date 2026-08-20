@@ -3760,7 +3760,7 @@ class dl:
         code) only when the export used ``--proxy``, as an import geofence. Each track records
         only the licensed DRM system. Content keys live once under the track's ``keys``. ``drm`` may be None
         (DRM-free track) or a DRM system without ``to_dict``/``content_keys`` (e.g. ClearKey) -
-        the track, manifest, chapter and attachment info is still exported.
+        the export still records the track, manifest, chapter and attachment info.
         """
         with self.EXPORT_LOCK:
             doc: dict[str, Any] = {}

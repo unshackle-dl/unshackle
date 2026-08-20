@@ -66,7 +66,7 @@ folder-kind keys.
 | `tag` | str | `""` | Release-group tag. Fills the `{tag}` template variable and is written into MKV/audio tags. |
 | `tag_group_name` | bool | `true` | Include the group name (`tag`) in the MKV `Group` tag. |
 | `tag_imdb_tmdb` | bool | `true` | Write IMDb/TMDB/TVDB external-ID tags into the MKV (needs metadata providers). |
-| `chapter_fallback_name` | str | `""` | Fallback chapter-name template, e.g. `"Chapter {i:02}"`. |
+| `chapter_fallback_name` | str | `""` | Fallback template for chapter names, e.g. `"Chapter {i:02}"`. |
 | `unicode_filenames` | bool | `false` | Allow Unicode in filenames; when `false`, names are ASCII-sanitised. |
 
 ## `tag_rules`
@@ -97,7 +97,7 @@ Rule semantics:
   `year`, `season`, `episode`, and so on) after it evaluates the rules, so a condition cannot
   use them.
 - An unknown key in `when` is a mistake: unshackle logs a warning that names the key
-  and skips that rule. A rule without conditions or without a `tag` is also warned about and skipped.
+  and skips that rule. unshackle also warns about a rule without conditions or without a `tag`, and skips it.
 
 Put the more specific rules first, because unshackle stops at the first match.
 

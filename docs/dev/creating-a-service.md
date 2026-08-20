@@ -100,8 +100,8 @@ Declared at class level to configure framework behaviour:
 | `VAULT_TAG` | `Optional[str]` | Overrides the key-vault namespace so sibling services can share one vault. Default `None` (use the service's own tag). |
 | `AUTH_METHODS` | `Optional[tuple[str, ...]]` | Auth methods accepted (`"cookies"` / `"credentials"`). When `None`, the REST `/services` endpoint infers them from `authenticate()`. |
 | `NO_SUBTITLES` | `bool` | Set `True` on a service with no subtitle tracks to skip subtitle handling entirely. |
-| `ANIME` | `bool` | Set `True` when the catalog is anime, so metadata lookups prefer AniList. A title's own `anime` flag overrides it. |
-| `DAILY` | `bool` | Set `True` when the catalog is daily/date-based (talk shows, news, sports), so episodes are named by air date. A title's own `daily` flag overrides it. |
+| `ANIME` | `bool` | Set `True` when the catalogue is anime, so metadata lookups prefer AniList. A title's own `anime` flag overrides it. |
+| `DAILY` | `bool` | Set `True` when the catalogue is daily/date-based (talk shows, news, sports), so episodes are named by air date. A title's own `daily` flag overrides it. |
 
 !!! note "`NO_SUBTITLES` is a convention, not a base-class attribute"
     `dl.py` uses `hasattr` to find `NO_SUBTITLES`, and the `Service` base class
@@ -130,7 +130,7 @@ will use throughout the service:
 | `self.config` | This service's `config.yaml` contents (a dict), or `None` if absent. |
 | `self.log` | A `logging.Logger` named after your class. |
 | `self.session` | A prepared `requests.Session` with config headers and a retry adapter (5 retries, backoff 0.2, retries on 429/500/502/503/504). |
-| `self.cache` | A `Cacher` for arbitrary key/value data (tokens, etc.). |
+| `self.cache` | A `Cacher` for arbitrary key/value data, for example authentication tokens. |
 | `self.title_cache` | A region/account-aware `TitleCacher` used by `get_titles_cached`. |
 | `self.cache_dir` | `config.directories.cache / <ClassName>`. |
 | `self.track_request` | A `TrackRequest` built from the CLI `--vcodec` / `--range` / `--best-available` flags. |

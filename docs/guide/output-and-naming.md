@@ -128,7 +128,7 @@ Every variable below is valid in both output and folder templates. unshackle tak
 | `episode_name` | Episode title | `Pilot` |
 | `part` | Part index of a [split episode](#split-episodes), empty otherwise | `2` |
 | `absolute` | Absolute episode number, zero-padded to 3 digits, empty when unknown | `007` |
-| `date` | ISO air date for daily/dated content | `2024-06-01` |
+| `date` | ISO air date, empty when the episode has none | `2024-06-01` |
 
 !!! note "Daily & sports content"
     When an episode has an air date, unshackle switches to date-based naming automatically. `season` and `season_episode` become the formatted air date, unshackle clears `episode` and `year`, and `{date}` holds the ISO date. The date's internal separator (dots or spaces) follows your `series` template style.
@@ -180,7 +180,7 @@ For custom templates there is also a standalone [`{part}`](../reference/configur
 | `album` | Album name |
 | `disc` | Disc number (only shown when greater than 1) |
 | `track_total` / `disc_total` | Totals |
-| `release_type` | `album`, `single`, `ep`, etc. |
+| `release_type` | `album`, `single`, `ep`, or another type the service supplies |
 | `genre` | Genre |
 | `explicit` | `Explicit` when flagged |
 | `isrc` / `upc` / `label` | ISRC, UPC and record label |
@@ -285,7 +285,7 @@ muxing:
 When no track has the preferred language, unshackle applies sensible defaults. The video default falls back to the title language, then the original-language track, then the first track. The audio default is the original-language track. The subtitle default is a forced track in the first audio's language.
 
 !!! note "`default_language` only sets the default-track flag"
-    `default_language` controls **which track carries the MKV `--default-track` flag**. Nothing else. It does not change track *selection* (that stays with `-l`/`--alang` and friends). It also does not touch which track carries the original flag: `--original-flag` still tags the *true* original-audio track. That is the point: you can make your player default to, say, Polish audio on an English-original title without altering the original marker. When the configured language is not present in the manifest, each track type falls back to its normal default rule described above.
+    `default_language` controls **which track carries the MKV `--default-track` flag**. Nothing else. It does not change track *selection* (that stays with `-l`/`--a-lang` and friends). It also does not touch which track carries the original flag: `--original-flag` still tags the *true* original-audio track. That is the point: you can make your player default to, say, Polish audio on an English-original title without altering the original marker. When the configured language is not present in the manifest, each track type falls back to its normal default rule described above.
 
 !!! warning "`merge_video` collapses only the language dimension"
     `merge_video` groups video tracks by `(resolution, range, codec)` and merges them so that only **language** differs within a single file, with no re-encode and no concatenation. Different resolutions, ranges (SDR / HDR10 / HDR10+ / DV / HYBRID), and codecs (H.264 / H.265) **always** land in separate files. So `-r HYBRID,DV,HDR10,SDR --merge-video` gives one file *per range*, never a single fused file. English and French video of identical resolution, range, and codec gives one file that holds both video tracks. `merge_audio` works the same way for audio languages.

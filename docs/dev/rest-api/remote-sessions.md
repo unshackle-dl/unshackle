@@ -268,7 +268,7 @@ The server mounts all these routes, even in `--remote-only` mode. Paths use the
 | `GET` | `/api/session/{id}/prompt` | Poll interactive auth status / pending prompt |
 | `POST` | `/api/session/{id}/prompt` | Submit an answer to a pending prompt |
 | `GET` | `/api/session/{id}` | Session info (validity, TTL, counts) |
-| `DELETE` | `/api/session/{id}` | Close the session, return updated cache, clean up |
+| `DELETE` | `/api/session/{id}` | Close the remote session, return updated cache, clean up |
 
 ### Create: request and response
 

@@ -1,41 +1,41 @@
 # Key Vaults
 
-A **key vault** is a store of DRM **content keys** that unshackle remembers between downloads. Once a title's keys have been recovered, unshackle saves them to your configured vaults. The next time you download something that reuses those same keys, unshackle finds them in a vault instead of performing another license exchange. The download starts faster and puts less load on the service.
+A **key vault** is a store of DRM **content keys** that unshackle remembers between downloads. Once unshackle has recovered a title's keys, it saves them to your configured vaults. The next time you download something that reuses those same keys, unshackle finds them in a vault instead of performing another license exchange. The download starts faster and puts less load on the service.
 
 Vaults are entirely optional, but if you download regularly they are one of the biggest quality-of-life improvements you can configure.
 
 !!! tip "Vaults save license calls even on the very first download"
-    The benefit is not limited to repeat downloads. Within a single run, a service often issues the *same* Key ID and content key for both the video and audio tracks, and for several resolutions or bitrates of the same title. Once unshackle has recovered a key it writes it to your vaults immediately, so the moment the next track presents a KID it has already seen, the key is served from the vault instead of triggering another license exchange. A single fetched key can therefore satisfy many tracks in one run.
+    The benefit is not limited to repeat downloads. Within a single run, a service often issues the *same* Key ID and content key for both the video and audio tracks. The same pair frequently covers several resolutions or bitrates of the same title. Once unshackle has recovered a key it writes it to your vaults immediately. The moment the next track presents a KID it has already seen, the key comes from the vault instead of another license exchange. A single fetched key can therefore satisfy many tracks in one run.
 
 ## What a vault stores
 
-Every key is stored as a **KID → KEY** pair, grouped by **service**:
+A vault stores every content key as a **KID → KEY** pair, grouped by **service**:
 
-- **KID** (Key ID): a 16-byte identifier for a specific encrypted stream, stored as 32 lowercase hex characters with no dashes.
-- **KEY**: the 16-byte content key that decrypts that stream, also 32 hex characters.
+- **KID** (Key ID): a 16-byte identifier for a specific encrypted track, stored as 32 lowercase hex characters with no dashes.
+- **KEY**: the 16-byte content key that decrypts that track, also 32 hex characters.
 - **Service**: the canonical service tag (for example `EXAMPLE`, not `ExampleService`) that namespaces the key. Each service gets its own logical table.
 
 !!! note "Why keys are matched by KID"
     Vaults match keys by KID, never by PSSH/CENC header. A KID does not change unless the underlying video file itself changes, whereas the PSSH box can vary between requests for the very same content. That makes the KID a far more reliable match key.
 
 !!! info "Null keys are ignored everywhere"
-    A key made entirely of zeroes (`00000000000000000000000000000000`) is treated as "no key". Vault lookups skip it, and every backend raises an error if you try to add one. This prevents a placeholder key from masking a real one.
+    A content key made entirely of zeroes (`00000000000000000000000000000000`) is treated as "no key". Vault lookups skip it, and every backend raises an error if you try to add one. This prevents a placeholder key from masking a real one.
 
 ## How lookups and caching work
 
-When unshackle needs a key during a download it asks your vaults **in the order they are listed in your config**. It returns the first non-null key it finds and stops searching. If a vault raises a permission error or is unreachable, that vault is skipped and the search continues with the next one.
+When unshackle needs a content key during a download it asks your vaults **in the order they appear in your config**. It returns the first non-null key it finds and stops searching. If a vault raises a permission error or is unreachable, unshackle skips it and continues the search with the next one.
 
-When new keys are recovered from a license, unshackle pushes them to **all** configured vaults, so every vault gradually converges on the same set of keys. Two rules apply to pushing:
+When unshackle recovers new keys from a license, it pushes them to **all** configured vaults, so every vault gradually converges on the same set of keys. Two rules apply to pushing:
 
-- Keys that already exist in a vault are skipped (existing data is never overwritten or deleted).
-- A vault marked `no_push: true` receives lookups but is never written to. This is useful for read-only or shared upstream vaults you do not own.
+- unshackle skips keys that already exist in a vault (it never overwrites or deletes existing data).
+- A vault marked `no_push: true` receives lookups, but unshackle never writes to it. This is useful for read-only or shared upstream vaults you do not own.
 
 !!! tip "A good two-vault setup"
     A common arrangement is a fast local **SQLite** vault plus a shared remote vault (**MySQL**, **HTTP**, or **API**). The local vault answers instantly and works offline; the remote vault lets you share keys across machines or with a group.
 
 ## Configuring vaults
 
-Vaults are declared under the `key_vaults` list in your unshackle config file. Each entry is a mapping with two required fields, `type` (which backend to use) and `name` (a label you choose), plus whatever settings that backend needs.
+Declare vaults under the `key_vaults` list in your unshackle config file. Each entry is a mapping with two required fields, `type` (which backend to use) and `name` (a label you choose), plus whatever settings that backend needs.
 
 ```yaml title="unshackle.yaml"
 key_vaults:
@@ -85,10 +85,10 @@ key_vaults:
 | `path` | yes | Path to the database file. `~` is expanded. The file (and its tables) are created automatically on first use. |
 | `no_push` | no | If `true`, keys are read but never written. Defaults to `false`. |
 
-Each service gets its own table (named after the service tag), created on demand with `kid` and `key_` columns. Connections use WAL journaling with a 30-second busy timeout, so the same database file can be used safely from multiple threads.
+Each service gets its own table (named after the service tag), created on demand with `kid` and `key_` columns. Connections use WAL journaling with a 30-second busy timeout, so multiple threads can safely use the same database file.
 
 !!! warning "Moving the .db file silently forks your vault"
-    Because the file is created on demand, if you relocate an existing `.db` without updating `path` to match, unshackle will simply create a fresh empty database at the old location, leaving you with two divergent vaults and no error to warn you. Always update the config path whenever you move the file.
+    Because the file is created on demand, if you relocate an existing `.db` without updating `path` to match, unshackle will create a fresh empty database at the old location. That leaves you with two divergent vaults and no error to warn you. Always update the config path whenever you move the file.
 
 !!! tip "Keep a local SQLite vault even when you share a MySQL one"
     The SQLite vault is best thought of as an offline-only backup should anything ever happen to a shared `MySQL` vault. Each member of a group should keep their own local SQLite vault alongside the shared database, so no one loses their keys if the shared vault goes down or away.
@@ -97,10 +97,10 @@ Each service gets its own table (named after the service tag), created on demand
 
 ## MySQL backend
 
-A remotely-accessed MySQL/MariaDB database, ideal for sharing keys across several machines. It connects via `pymysql`. MariaDB is recommended over MySQL where you have the choice.
+A remotely-accessed MySQL/MariaDB database, ideal for sharing keys across several machines. It connects via `pymysql`. Prefer MariaDB over MySQL where you have the choice.
 
 !!! warning "The vault connects directly to the database server"
-    A `MySQL` vault (like `SQLite`) speaks the database wire protocol directly to the host or IP you configure. It cannot sit behind a PHP API or any other application layer. A common real-world snag: many hosting providers firewall their MySQL server to their own internal network, so a database on shared hosting is frequently unreachable from the outside world even when your credentials are perfectly correct. If connections time out, confirm the server accepts remote connections from your address before suspecting the config.
+    A `MySQL` vault (like `SQLite`) speaks the database wire protocol directly to the host or IP you configure. It cannot sit behind a PHP API or any other application layer. A common real-world snag: many hosting providers firewall their MySQL server to their own internal network. A database on shared hosting is therefore frequently unreachable from the outside world even when your credentials are perfectly correct. If connections time out, confirm the server accepts remote connections from your address before suspecting the config.
 
 ```yaml title="unshackle.yaml"
 key_vaults:
@@ -125,10 +125,10 @@ key_vaults:
 Any additional fields you provide (such as `password`, `port`, or `ssl`) are passed straight through to `pymysql.connect`, so you can use the full range of its connection options.
 
 !!! warning "Account security is on you, not on unshackle"
-    unshackle enforces none of this. It is operational policy for a database that may be shared with a group. Never connect with the `root` account, not even for yourself. Give every account a password, and never let two users share a username/password. Restrict each account's access to only the `unshackle` database, and grant normal users just `SELECT` and `INSERT`. Reserve the `CREATE` grant for a single trusted user who bootstraps the service tables (see [`kv prepare`](#kv-prepare-pre-create-service-tables)); everyone else can insert new keys but should not be creating tables.
+    unshackle enforces none of this. It is operational policy for a database that may be shared with a group. Never connect with the `root` account, not even for yourself. Give every account a password, and never let two users share a username/password. Restrict each account's access to only the `unshackle` database, and grant normal users only `SELECT` and `INSERT`. Reserve the `CREATE` grant for a single trusted user who bootstraps the service tables (see [`kv prepare`](#kv-prepare-pre-create-service-tables)); everyone else can insert new keys but should not be creating tables.
 
 !!! note "Grants determine what the vault can do"
-    On connection the backend reads its own `SHOW GRANTS`. It requires at least `SELECT` to load at all (a missing `SELECT` grant makes the vault fail to load). Writing keys additionally needs `INSERT`, and creating a new service table needs `CREATE`. A read-only account still works fine as a lookup source. It simply cannot push new keys. Because `MySQL` is loaded leniently during downloads, a permission problem will not abort the run.
+    On connection the backend reads its own `SHOW GRANTS`. It requires at least `SELECT` to load at all (a missing `SELECT` grant makes the vault fail to load). Writing keys additionally needs `INSERT`, and creating a new service table needs `CREATE`. A read-only account still works fine as a lookup source. It cannot push new keys. Because `MySQL` is loaded leniently during downloads, a permission problem will not abort the run.
 
 ---
 
@@ -139,7 +139,7 @@ A flexible HTTP vault that speaks one of three wire protocols, selected with `ap
 | `api_mode` | Transport | Authentication | Notes |
 |------------|-----------|----------------|-------|
 | `query` (default) | `GET` with query parameters | `username` + `password` | Full read and write. |
-| `json` | `POST` with a JSON payload | `password` used as a token | Read and write per key; cannot bulk-enumerate keys. |
+| `json` | `POST` with a JSON payload | `password` used as a token | Read and write per content key; cannot bulk-enumerate keys. |
 | `decrypt_labs` | `POST` in DecryptLabs format | `api_key` sent as a header | **Read-only**. `no_push` is forced on. |
 
 === "query mode"
@@ -154,7 +154,7 @@ A flexible HTTP vault that speaks one of three wire protocols, selected with `ap
         password: "your-password"
     ```
 
-    `username` is required in query mode. Both the username and password are sent as query parameters on each request.
+    Query mode requires `username`. Both the username and password are sent as query parameters on each request.
 
 === "json mode"
 
@@ -180,7 +180,7 @@ A flexible HTTP vault that speaks one of three wire protocols, selected with `ap
         api_key: "your-decrypt-labs-key"
     ```
 
-    A read-only lookup source. The key is sent in a `decrypt-labs-api-key` header and the vault refuses all writes.
+    A read-only lookup source. The API key is sent in a `decrypt-labs-api-key` header and the vault refuses all writes.
 
 | Field | Required | Description |
 |-------|----------|-------------|
@@ -190,7 +190,7 @@ A flexible HTTP vault that speaks one of three wire protocols, selected with `ap
 | `api_mode` | no | `query` (default), `json`, or `decrypt_labs`. |
 | `username` | for `query` | Required in query mode; ignored otherwise. |
 | `password` | one of these | Password (query mode) or token (json mode). |
-| `api_key` | one of these | Alternative to `password`; used for `decrypt_labs`. If both are given, `api_key` wins. |
+| `api_key` | one of these | Alternative to `password`; used for `decrypt_labs`. If you give both, `api_key` wins. |
 | `no_push` | no | Read-only when `true` (always `true` for `decrypt_labs`). |
 | `timeout` | no | Request timeout in seconds; defaults to `vault_timeout`. |
 
@@ -223,13 +223,13 @@ key_vaults:
 | `timeout` | no | Request timeout in seconds; defaults to `vault_timeout`. |
 | `headers` | no | Extra HTTP `headers` sent with every request, for example the Cloudflare Access service-token headers `CF-Access-Client-Id` and `CF-Access-Client-Secret`. |
 
-The backend talks to endpoints under `uri` (for example `GET {uri}/{service}/{kid}` to look up a single key) and interprets a numeric `code` field in each JSON response to detect errors such as an invalid token, rate limiting, or an invalid service tag.
+The backend talks to endpoints under `uri` (for example `GET {uri}/{service}/{kid}` to look up a single key). It interprets a numeric `code` field in each JSON response to detect errors such as an invalid token, rate limiting, or an invalid service tag.
 
 !!! warning "This is unshackle's own protocol, not a generic vault client"
-    The `API` backend expects unshackle's specific HTTP request and response shape. An API or HTTP key-vault endpoint built for a different project or service will generally *not* be compatible. You cannot simply point this at an arbitrary third-party vault API and expect it to work. To bridge another service, put an adapter in front of it that speaks this format, or use the `HTTP` backend if one of its wire protocols matches. When pushing many keys at once it batches requests and automatically shrinks the batch size if the server rejects an over-large request.
+    The `API` backend expects unshackle's specific HTTP request and response shape. An API or HTTP key-vault endpoint built for a different project or service will generally *not* be compatible. You cannot point this at an arbitrary third-party vault API and expect it to work. To bridge another service, put an adapter in front of it that speaks this format, or use the `HTTP` backend if one of its wire protocols matches. When pushing many keys at once it batches requests and automatically shrinks the batch size if the server rejects an over-large request.
 
 !!! tip "DecryptLabs shortcut"
-    An `API` vault whose `name` contains `decrypt_labs` will have its `token` filled in automatically from a global `decrypt_labs_api_key` in your config if you leave `token` unset. This lets you keep the key in one place.
+    An `API` vault whose `name` contains `decrypt_labs` will have its `token` filled in automatically from a global `decrypt_labs_api_key` in your config if you leave `token` unset. This lets you keep the API key in one place.
 
 ---
 
@@ -256,15 +256,15 @@ $ unshackle kv add keys.txt EXAMPLE local shared
 
 The service argument (`EXAMPLE` above) is normalized to its canonical tag automatically. Keys that already exist in a vault are reported as skipped.
 
-### `kv search`: find a key by KID
+### `kv search`: find a content key by KID
 
-Search your vaults for a KID and print any matching key.
+Search your vaults for a KID and print any matching content key.
 
 ```console
 $ unshackle kv search 9a04f07998404286ab92e65be0885f95
 ```
 
-The KID must be 32 hex characters (dashes are stripped for you). By default every configured vault and every service table is scanned; narrow the search with options:
+The KID must be 32 hex characters (dashes are stripped for you). By default the search scans every configured vault and every service table; narrow it with options:
 
 | Option | Description |
 |--------|-------------|
@@ -276,7 +276,7 @@ The KID must be 32 hex characters (dashes are stripped for you). By default ever
 
 ### `kv copy`: copy keys between vaults
 
-Copy every key from one or more source vaults into a single destination vault. Existing rows are never altered; only genuinely new KIDs are added, and null keys are skipped.
+Copy every content key from one or more source vaults into a single destination vault. `kv copy` never alters existing rows; it adds only genuinely new KIDs and skips null keys.
 
 ```console
 $ unshackle kv copy shared local
@@ -297,7 +297,7 @@ $ unshackle kv copy local shared community
 
 ### `kv sync`: mirror vaults both ways
 
-Ensure two or more vaults each end up with every key the others have. This is effectively a two-way `copy` between each pair, so afterwards all listed vaults hold the same set of keys.
+Make each of two or more vaults hold every content key the others have. This is effectively a two-way `copy` between each pair, so afterwards all listed vaults hold the same set of keys.
 
 ```console
 $ unshackle kv sync local shared

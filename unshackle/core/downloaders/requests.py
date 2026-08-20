@@ -626,11 +626,11 @@ def download(
     RnetSession streams natively. requests.Session reads the raw socket, except
     on a content-encoded body: only iter_content decodes such a body.
 
-    Yields these download status updates while the chunks download:
+    Yields these download status updates while the segments download:
 
-    - {total: 123} (there are 123 chunks to download)
-    - {total: None} (there are an unknown number of chunks to download)
-    - {advance: 1} (the downloader finished one chunk)
+    - {total: 123} (there are 123 segments to download)
+    - {total: None} (there are an unknown number of segments to download)
+    - {advance: 1} (the downloader finished one segment)
     - {downloaded: "10.1 MB/s"} (currently downloading at a rate of 10.1 MB/s)
     - {file_downloaded: Path(...), written: 1024} (download finished, has the save path and size)
 
@@ -1260,11 +1260,11 @@ def requests(
     reports it as downloaded at its on-disk size without any request, so a second call resumes a
     batch from the segments the earlier run completed.
 
-    Yields these download status updates while the chunks download:
+    Yields these download status updates while the segments download:
 
-    - {total: 123} (there are 123 chunks to download)
-    - {total: None} (there are an unknown number of chunks to download)
-    - {advance: 1} (the downloader finished one chunk)
+    - {total: 123} (there are 123 segments to download)
+    - {total: None} (there are an unknown number of segments to download)
+    - {advance: 1} (the downloader finished one segment)
     - {downloaded: "10.1 MB/s"} (currently downloading at a rate of 10.1 MB/s)
     - {file_downloaded: Path(...), written: 1024} (download finished, has the save path and size)
 

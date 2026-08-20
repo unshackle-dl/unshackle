@@ -181,7 +181,7 @@ class Episode(Title):
         return str(self.air_date)
 
     def folder_season(self) -> str:
-        """Season folder label: air year for dated content, else SxxExx-style season."""
+        """Season folder label: air year when the air date parsed to a date, else SxxExx-style season."""
         if isinstance(self.air_date, date):
             return f"{self.air_date.year:04}"
         return f"S{self.season:02}"

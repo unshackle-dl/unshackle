@@ -81,7 +81,7 @@ class DecryptLabsRemoteCDM:
     Main Features:
     - Compatible with both Widevine and PlayReady DRM schemes
     - Intelligent caching that compares required vs. available keys
-    - Optimized caching for L1/L2 devices (leverages API auto-optimization)
+    - Optimized caching for L1/L2 devices (uses API auto-optimization)
     - Automatic content key combination for mixed cache/license scenarios
     - Fallback to license requests when keys are missing
 
@@ -367,7 +367,7 @@ class DecryptLabsRemoteCDM:
         - For other devices: Uses cache retry logic based on CDM session state
         - With required KIDs set: Only requests license for missing keys
         - Without required KIDs: Returns any available cached keys
-        - For PlayReady: Combines vault, cached, and license keys seamlessly
+        - For PlayReady: Combines vault, cached, and license keys
 
         Args:
             session_id: Session identifier
@@ -549,8 +549,8 @@ class DecryptLabsRemoteCDM:
         Parse license response with the Decrypt Labs API and intelligent content key combination.
 
         For PlayReady titles with partial cached keys, this method intelligently
-        combines the cached keys with newly obtained license keys, avoiding
-        duplicates while ensuring all required keys are available.
+        combines the cached keys with newly obtained license keys, skipping a
+        license key whose KID is already present.
 
         The content key combination process:
         1. Extracts keys from the license response

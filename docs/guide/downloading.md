@@ -759,9 +759,9 @@ lookups but keep the IDs you give, set
 | Flag | Example | Purpose |
 | --- | --- | --- |
 | `--tmdb` | `--tmdb 27205` | Use this TMDB ID instead of an automatic search. Needs `tmdb_api_key`. |
-| `--imdb` | `--imdb tt1375666` | Use this IMDb ID instead of an automatic search. Needs no key. |
+| `--imdb` | `--imdb tt1375666` | Use this IMDb ID instead of an automatic search. Needs no API key. |
 | `--tvdb` | `--tvdb 73871` | Use this TVDB ID instead of looking the series up. Needs `tvdb_api_key`. |
-| `--anilist` | `--anilist 21` | Use this AniList ID instead of an automatic search. `mal:12345` is also accepted. Needs no key. |
+| `--anilist` | `--anilist 21` | Use this AniList ID instead of an automatic search. `mal:12345` is also accepted. Needs no API key. |
 | `--enrich` | - | Overwrite the show title, year and original language with the external source's. **Requires** one of `--tmdb`, `--imdb`, `--tvdb`, or `--anilist`. |
 | `--tvdb-order` | `--tvdb-order dvd` | Renumber episodes to a TVDB season order. Needs `tvdb_api_key`. |
 
@@ -784,9 +784,9 @@ operates when you set its config key:
 | TMDB | `tmdb_api_key` | yes | yes, alpha-2 such as `ko` | IMDb, TMDB, TVDB |
 | TVDB | `tvdb_api_key` | yes | yes, alpha-3 such as `kor` | TMDB, TVDB, sometimes IMDb |
 | OMDb | `omdb_api_key` | yes | yes, as an English name such as `Korean` | IMDb |
-| IMDb | *(no key needed)* | yes | yes, alpha-2 such as `ko` | IMDb |
+| IMDb | *(no config key needed)* | yes | yes, alpha-2 such as `ko` | IMDb |
 | SIMKL | `simkl_client_id` | yes | no, it publishes a country and no language | IMDb, TMDB, TVDB |
-| AniList | *(no key needed)* | yes | yes, worked out from the country of origin, such as `ja` | AniList |
+| AniList | *(no config key needed)* | yes | yes, worked out from the country of origin, such as `ja` | AniList |
 
 Whatever the tag looks like, unshackle normalises it before use, so `ko`, `kor` and `Korean`
 all end up as the same language.
@@ -832,8 +832,8 @@ with a thin record cannot blank out what the service told you.
 `--enrich` also fills in the absolute episode number of each episode from TVDB's absolute
 order, for any series that has one and where the service did not supply it. Anime is the
 usual beneficiary, but nothing here applies only to anime. This only adds the
-[`{absolute}`](../reference/configuration/output.md#output_template) naming variable. The
-season and episode numbers are never changed.
+[`{absolute}`](../reference/configuration/output.md#output_template) naming variable.
+`--enrich` never changes the season and episode numbers.
 
 With `--daily`, `--enrich` also fills in the air date of each episode from TVDB. See
 [Daily and date-based content](#daily-and-date-based-content).
@@ -897,7 +897,7 @@ authoritative list.
 | `--forced-subs` | `-fs` | Include forced subtitles. |
 | `--forced-s-lang` | `-fsl` | Forced subtitle language(s); implies `-fs`. `-` excludes. |
 | `--sub-format` | | Output subtitle format. |
-| `--wanted` | `-w` | Episode/season range, an air date, or a music track (`1-5`, `2x3`). |
+| `--wanted` | `-w` | Episode/season range, an air date, or a track number for a music release (`1-5`, `2x3`). |
 | `--daily` | | Fill missing air dates from TVDB during `--enrich`. |
 | `--select-titles` | | Interactively pick episodes or films. |
 | `--latest-episode` | | Only the newest episode. |
@@ -911,7 +911,7 @@ authoritative list.
 | `--proxy` / `--no-proxy` / `--no-proxy-download` | | Proxy control. |
 | `--workers` / `--downloads` / `--slow` | | Concurrency and pacing. |
 | `--list` / `--list-titles` / `--skip-dl` | | Dry runs. |
-| `--cdm-only` / `--vaults-only` | | Key source control. |
+| `--cdm-only` / `--vaults-only` | | Content key source control. |
 | `--export` | | Export track info and keys to JSON. |
 | `--tmdb` / `--imdb` / `--tvdb` / `--anilist` / `--enrich` | | Metadata overrides. |
 | `--tvdb-order` | | Renumber episodes to a TVDB season order. |

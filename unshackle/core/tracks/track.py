@@ -918,7 +918,7 @@ class Track:
         return init_data
 
     def repackage(self, bsf_v: Optional[str] = None) -> bool:
-        """Remux the track with ffmpeg ``-c copy``.
+        """Remux the track with FFmpeg ``-c copy``.
 
         A given ``bsf_v`` goes into the same pass as ``-bsf:v``, which normalises video VUI
         colour metadata without a second full-file remux. Repackaging is mandatory. The

@@ -199,7 +199,7 @@ The required tools (unshackle will not get far without them) are:
 | **FFprobe** | Media analysis |
 | **MKVToolNix** (`mkvmerge`) | MKV muxing |
 | **mkvpropedit** | MKV metadata |
-| **Shaka Packager** | DRM decryption |
+| **shaka-packager** | DRM decryption |
 
 Optional tools unlock extra capabilities. For example, `mp4decrypt` (alternative decryptor), `dovi_tool` / `HDR10Plus_tool` (Dolby Vision / HDR10+), `SubtitleEdit` / `CCExtractor` (subtitle conversion and CC extraction), `MPV` / `FFplay` (playback preview), and `git` (service repositories) or `docker` (Gluetun VPN, see [Proxies & VPN](proxies-and-vpn.md)).
 

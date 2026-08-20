@@ -204,7 +204,11 @@ class Tracks:
         ],
         warn_only: bool = False,
     ) -> None:
-        """Add a provided track to its appropriate array and ensuring it is not a duplicate."""
+        """Add a provided track to its appropriate array.
+
+        A track whose ID is already in the collection raises ValueError. With `warn_only`
+        set, this method skips such a track and logs how many it skipped.
+        """
         if isinstance(tracks, Tracks):
             if tracks.manifest_url and not self.manifest_url:
                 self.manifest_url = tracks.manifest_url

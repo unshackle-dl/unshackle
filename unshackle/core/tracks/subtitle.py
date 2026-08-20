@@ -163,8 +163,8 @@ class Subtitle(Track):
             However, I would not pay much attention to the claims about SDH needing to
             be in the original language. It is logically not true.
 
-            CC == Closed Captions. Source: Basically every site.
-            SDH = Subtitles for the Deaf or Hard-of-Hearing. Source: Basically every site.
+            CC == Closed Captions. Source: Every site.
+            SDH = Subtitles for the Deaf or Hard-of-Hearing. Source: Every site.
             HOH = Exact same as SDH. Is a term used in the UK. Source: https://bit.ly/2PGJatz (ICO UK)
 
             More in-depth information, examples, and stuff to look for can be found in the Parameter

@@ -112,7 +112,7 @@ unshackle honours the special language tokens `orig`, `all`, and `best` everywhe
 
 | Flag | Description |
 |---|---|
-| `-w`, `--wanted` | Wanted episodes, e.g. `S01-S05,S07`, `S01E01-S02E03`. Supports exclusions with a leading `-` (e.g. `-S03`). For a [split episode](downloading.md#split-episodes), `.N` picks one part (`S01E01.2`), a range must stay inside the episode (`S01E01.1-S01E01.3`), and `S01E01` on its own takes every part. For [dated content](downloading.md#daily-and-date-based-content), a token can also be an ISO air date (`2026-08-11`) or a date range with a colon (`2026-08-01:2026-08-31`). For a [music release](downloading.md#music-tracks), a token is a track number (`1-5`, `1,3,7`), or `{disc}x{track}` (`2x3`) when the release has more than one disc. |
+| `-w`, `--wanted` | Wanted episodes, e.g. `S01-S05,S07`, `S01E01-S02E03`. Supports exclusions with a leading `-` (e.g. `-S03`). For a [split episode](downloading.md#split-episodes), `.N` picks one part (`S01E01.2`), a range must stay inside the episode (`S01E01.1-S01E01.3`), and `S01E01` on its own takes every part. For a [dated episode](downloading.md#daily-and-date-based-content), a token can also be an ISO air date (`2026-08-11`) or a date range with a colon (`2026-08-01:2026-08-31`). For a [music release](downloading.md#music-tracks), a token is a track number (`1-5`, `1,3,7`), or `{disc}x{track}` (`2x3`) when the release has more than one disc. |
 | `--select-titles` | Interactively select what to download: episodes of a series, or films when a title has more than one. **Cannot combine with `-w`.** |
 | `--latest-episode` | Download only the single most recent episode. |
 | `--list-titles` | List titles only; do not download. |
@@ -152,9 +152,9 @@ Keep only certain track types, or skip certain track types. Attachments are alwa
 | Flag | Description |
 |---|---|
 | `--tmdb` | TMDB ID (integer). Used for the tags. Skips the title search. `--enrich` reads it too. Needs `tmdb_api_key`. |
-| `--imdb` | IMDb ID, e.g. `tt1375666`. Used for the tags. Skips the title search. `--enrich` reads it too. Needs no key. |
+| `--imdb` | IMDb ID, e.g. `tt1375666`. Used for the tags. Skips the title search. `--enrich` reads it too. Needs no API key. |
 | `--tvdb` | TVDB ID (integer). Used for the tags. Skips the series lookup that `--tvdb-order` would otherwise do. `--enrich` reads it too. Needs `tvdb_api_key`. |
-| `--anilist` | AniList ID (integer), e.g. `--anilist 21`. A MyAnimeList ID is accepted as `mal:12345` and resolved to the AniList entry. Used for the tags. Skips the title search. `--enrich` reads it too. Needs no key. |
+| `--anilist` | AniList ID (integer), e.g. `--anilist 21`. A MyAnimeList ID is accepted as `mal:12345` and resolved to the AniList entry. Used for the tags. Skips the title search. `--enrich` reads it too. Needs no API key. |
 | `--enrich` | Overwrite show title, year and original language with the external source's. **Requires** one of `--tmdb`, `--imdb`, `--tvdb`, or `--anilist`. |
 | `--daily` | Treat the title as daily/date-based content and fill missing episode air dates from TVDB. The fill needs `--enrich` and a TVDB ID. See [Daily and date-based content](downloading.md#daily-and-date-based-content). |
 | `--tvdb-order` | Renumber episodes to a TVDB season order: `official` (aired), `dvd`, `absolute`, `alternate`, or `regional`. Needs `tvdb_api_key`. |
@@ -340,7 +340,7 @@ Clear an environment directory. unshackle empties the directory, makes it again,
 
 | Command | Description |
 |---|---|
-| `unshackle env clear cache [SERVICE]` | Clear the cache directory, or just one service's cache subdirectory. |
+| `unshackle env clear cache [SERVICE]` | Clear the cache directory, or only one service's cache subdirectory. |
 | `unshackle env clear temp` | Clear the temp directory. |
 
 !!! example

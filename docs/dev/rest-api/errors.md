@@ -99,13 +99,13 @@ but the defaults hold for the overwhelming majority of responses.
 | `INVALID_PROXY` | 400 | The supplied proxy specification could not be resolved or is malformed. |
 | `INVALID_PARAMETERS` | 400 | One or more download or query parameters failed validation (bad codec, bitrate, sort field, and so on). |
 | `AUTH_FAILED` | 401 | Authentication with the streaming service failed (bad credentials or cookies). |
-| `FORBIDDEN` | 403 | The action is not allowed. Raised by server-side gates (per-key restrictions on CDM or credential overrides) and by session IP binding. |
-| `GEOFENCE` | 403 | The content is not available in the applicable region. |
+| `FORBIDDEN` | 403 | The action is not allowed. Raised by server-side gates (per-key restrictions on CDM or credential overrides) and by remote session IP binding. |
+| `GEOFENCE` | 403 | The title is not available in the applicable region. |
 | `NOT_FOUND` | 404 | A requested resource (title, history entry, and so on) does not exist. |
 | `NO_CONTENT` | 404 | The request was valid but produced nothing: no matching titles, tracks, episodes, or keys. |
 | `JOB_NOT_FOUND` | 404 | The referenced download job does not exist. |
 | `SESSION_NOT_FOUND` | 404 | The remote-dl session does not exist or has expired. |
-| `TRACK_NOT_FOUND` | 404 | A referenced track ID is not present in the session. |
+| `TRACK_NOT_FOUND` | 404 | A referenced track ID is not present in the remote session. |
 | `CONFLICT` | 409 | The target resource is in a state that disallows the action (retrying a running job, prioritising a non-queued job, clearing cache during an active download). |
 | `RATE_LIMITED` | 429 | The streaming service is rate-limiting requests. Retryable. |
 
@@ -141,14 +141,14 @@ The classification is keyword-based, checked in order:
 
 | If the error mentions... | It becomes | Retryable |
 |---|---|---|
-| auth, login, credential, unauthorized, forbidden, token | `AUTH_FAILED` (401) | no |
-| connection, timeout, network, unreachable, socket, dns, resolve (or `ConnectionError`, `TimeoutError`, `URLError`, `SSLError`) | `NETWORK_ERROR` (503) | yes |
-| geofence, region, "not available in", territory | `GEOFENCE` (403) | no |
-| "not found", 404, "does not exist", "invalid id" | `NOT_FOUND` (404) | no |
-| rate limit, too many requests, 429, throttle | `RATE_LIMITED` (429) | yes |
-| drm, license, widevine, playready, decrypt | `DRM_ERROR` (502) | no |
-| "service unavailable", 503, maintenance, "temporarily unavailable" | `SERVICE_UNAVAILABLE` (503) | yes |
-| invalid, malformed, validation (or `ValueError`, `ValidationError`) | `INVALID_INPUT` (400) | no |
+| `auth`, `login`, `credential`, `unauthorized`, `forbidden`, `token` | `AUTH_FAILED` (401) | no |
+| `connection`, `timeout`, `network`, `unreachable`, `socket`, `dns`, `resolve` (or `ConnectionError`, `TimeoutError`, `URLError`, `SSLError`) | `NETWORK_ERROR` (503) | yes |
+| `geofence`, `region`, `not available in`, `territory` | `GEOFENCE` (403) | no |
+| `not found`, `404`, `does not exist`, `invalid id` | `NOT_FOUND` (404) | no |
+| `rate limit`, `too many requests`, `429`, `throttle` | `RATE_LIMITED` (429) | yes |
+| `drm`, `license`, `widevine`, `playready`, `decrypt` | `DRM_ERROR` (502) | no |
+| `service unavailable`, `503`, `maintenance`, `temporarily unavailable` | `SERVICE_UNAVAILABLE` (503) | yes |
+| `invalid`, `malformed`, `validation` (or `ValueError`, `ValidationError`) | `INVALID_INPUT` (400) | no |
 | anything else | `INTERNAL_ERROR` (500) | no |
 
 Categorised errors include a `reason` tag inside `details` (such as

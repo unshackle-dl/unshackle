@@ -171,7 +171,7 @@ Find titles in a service by query string. The service must have a `search()` met
 | `400` | `INVALID_PARAMETERS` | Missing `query`. |
 | `400` | `INVALID_SERVICE` | Unknown or disallowed service. |
 | `400` | `INVALID_PROXY` | Proxy could not be resolved. |
-| `502` | `SERVICE_ERROR` | Service failed to initialize, or does not support search. |
+| `502` | `SERVICE_ERROR` | Service failed to initialise, or does not support search. |
 
 ### `POST /api/list-titles`
 
@@ -235,7 +235,7 @@ These keys are sent only when the title carries them, so a title without them se
 | Key | Type | On | Meaning |
 | --- | --- | --- | --- |
 | `part` | integer | episode | Part index of a [split episode](../creating-a-service.md#split-episodes), counting from 1. |
-| `air_date` | string | episode | ISO air date of [dated content](../../guide/downloading.md#daily-and-date-based-content). unshackle names the episode by date instead of `SxxExx`. |
+| `air_date` | string | episode | ISO air date of [daily and date-based content](../../guide/downloading.md#daily-and-date-based-content). unshackle names the episode by date instead of `SxxExx`. |
 | `absolute` | integer | episode | Absolute episode number across all seasons. |
 | `daily` | boolean | episode | The episode is daily/date-based. Set from the title, or from the service's `DAILY` class attribute. |
 | `anime` | boolean | episode, movie | The title is anime, so metadata lookups prefer AniList. Set from the title, or from the service's `ANIME` class attribute. |
@@ -268,7 +268,7 @@ Show the video, audio, and subtitle tracks for a title. For series, you can scop
 | --- | --- | --- | --- |
 | `service` | string | yes | Service tag. |
 | `title_id` | string | yes | Title identifier. |
-| `wanted` | string / string[] | no | Episode/season range (e.g. `"S01E01-S01E03"`), or a music track selector (e.g. `"1-5"`, `"1,3,7"`, or `"2x3"` for disc 2 track 3). A list of selectors is accepted too. |
+| `wanted` | string / string[] | no | Episode/season range (e.g. `"S01E01-S01E03"`), or a song selector (e.g. `"1-5"`, `"1,3,7"`, or `"2x3"` for disc 2 track 3). A list of selectors is accepted too. |
 | `season` | int/string | no | Season number (combined with `episode`). |
 | `episode` | int/string | no | Episode number (combined with `season`). |
 | `part` | int/string | no | Part index of a split episode (combined with `season` and `episode`). |
@@ -383,7 +383,7 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | `vbitrate` / `abitrate` | int | `null` | Video / audio bitrate in kbps (positive). |
 | `vbitrate_range` / `abitrate_range` | string | `null` | `"MIN-MAX"` bitrate window. |
 | `range` | string[] | `["SDR"]` | Dynamic range(s). |
-| `channels` | number | `null` | Audio channel count. |
+| `channels` | number | `null` | Audio channel layout. |
 | `no_atmos` | boolean | `false` | Exclude Atmos tracks. |
 | `wanted` | string / string[] | `[]` | Episode/season selectors, as a list or as one comma-separated string. Accepts the part form, `"S01E01.2"`, and the air-date form, `"2026-08-11"` or `"2026-08-01:2026-08-31"`. For a music release, a selector is a track number, `"1-5"` or `"1,3,7"`, or `"{disc}x{track}"` such as `"2x3"`. |
 | `latest_episode` | boolean | `false` | Only the newest episode. |
@@ -411,7 +411,7 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | `best_available` | boolean | `false` | Fall back to best available. |
 | `repack` | boolean | `false` | Add REPACK tag. |
 | `tag` | string | `null` | Release group tag. |
-| `tmdb_id` / `imdb_id` / `tvdb_id` / `anilist_id` | - | `null` | External ID overrides. Each resolves its metadata directly instead of by a title search, and is used for tagging. Set `enrich` to also take the title, year and original language. Give at most one of `tmdb_id`, `imdb_id` and `tvdb_id`, since unshackle resolves the others from it. Sending two returns `400`. `anilist_id` still combines with one of them. `tmdb_id` and `tvdb_id` must be positive integers, `imdb_id` must look like `tt1375666`, and `anilist_id` must be a positive integer or a string like `mal:12345`, or the request returns `400`. An ID whose provider is unconfigured, such as `tmdb_id` with no `tmdb_api_key`, fails the job rather than returning `400`. `anilist_id` needs no key. |
+| `tmdb_id` / `imdb_id` / `tvdb_id` / `anilist_id` | - | `null` | External ID overrides. Each resolves its metadata directly instead of by a title search, and is used for tagging. Set `enrich` to also take the title, year and original language. Give at most one of `tmdb_id`, `imdb_id` and `tvdb_id`, since unshackle resolves the others from it. Sending two returns `400`. `anilist_id` still combines with one of them. `tmdb_id` and `tvdb_id` must be positive integers, `imdb_id` must look like `tt1375666`, and `anilist_id` must be a positive integer or a string like `mal:12345`, or the request returns `400`. An ID whose provider is unconfigured, such as `tmdb_id` with no `tmdb_api_key`, fails the job rather than returning `400`. `anilist_id` needs no API key. |
 | `tvdb_order` | `official`, `dvd`, `absolute`, `alternate`, `regional` | `null` | Renumber episodes to a TVDB season order. Falls back to the `tvdb_order` config option. |
 | `enrich` | boolean | `false` | Overwrite title, year and original language with the external source's. Needs one of `tmdb_id`, `imdb_id`, `tvdb_id` or `anilist_id`. Without one the job fails instead of returning `400`. |
 | `daily` | boolean | `false` | Treat the title as daily/date-based content and fill missing episode air dates from TVDB. The fill needs `enrich` and a TVDB ID. An air date the service already set is kept. |
@@ -527,9 +527,9 @@ The `data` field of every event is the same job object that `GET /api/download/j
 | `snapshot` | Immediately, as the first event. Gives the job's current state. |
 | `status` | The job leaves the queue and starts to download. |
 | `progress` | The worker's progress record changed. The server reads that record every 0.5 seconds, so you get at most two of these events each second, and none while the record stays the same. |
-| `completed` | The job finished. The server then closes the stream. |
-| `failed` | The job failed. The server then closes the stream. |
-| `cancelled` | The job was cancelled. The server then closes the stream. |
+| `completed` | The job finished. The server then closes the event stream. |
+| `failed` | The job failed. The server then closes the event stream. |
+| `cancelled` | The job was cancelled. The server then closes the event stream. |
 
 The server sends a `: keep-alive` comment each 15 seconds while the job is quiet, to keep proxies from closing an idle connection. Ignore these lines.
 
@@ -862,7 +862,7 @@ Poll for the authentication status and any pending interactive prompt (OTP, PIN,
 | Status | Error code | Meaning |
 | --- | --- | --- |
 | `200` | - | Status returned. |
-| `403` | `FORBIDDEN` | Request IP differs from the session creator. |
+| `403` | `FORBIDDEN` | Request IP differs from the remote session creator. |
 | `404` | `SESSION_NOT_FOUND` | No such session. |
 
 ### `POST /api/session/{session_id}/prompt`
@@ -986,7 +986,7 @@ Get the content keys for the DRM. The `mode` field selects one of two modes.
 | Status | Error code | Meaning |
 | --- | --- | --- |
 | `200` | - | License/keys returned. |
-| `400` | `INVALID_INPUT` | Missing challenge/PSSH, or no CDM device configured for the key. |
+| `400` | `INVALID_INPUT` | Missing challenge/PSSH, or no CDM device configured for the API key. |
 | `400` | `INVALID_PARAMETERS` | Unsupported `drm_type`. |
 | `404` | `TRACK_NOT_FOUND` | Unknown track ID. |
 | `404` | `NO_CONTENT` | Server CDM produced no keys. |

@@ -30,7 +30,7 @@ A handful of other terms show up throughout:
 |------|---------|
 | **PSSH** | Protection System Specific Header. The per-system init data extracted from the file's init segment or the manifest. |
 | **KID** | Key ID: a 16-byte UUID identifying *which* key a track needs. |
-| **CEK** | Content Encryption Key: the actual AES key, mapped from its KID. |
+| **CEK** | Content Encryption Key: the AES content key, mapped from its KID. |
 | **Challenge** | The license request the CDM produces, sent to the service's license server. |
 | **License** | The server's response, which the CDM parses to recover the content keys. |
 
@@ -496,7 +496,7 @@ control this trade-off on the `dl` command:
 
 | Flag | Effect |
 |------|--------|
-| `--vaults-only` | Never send a license request; use only cached/vault keys. Fails if a key is missing. |
+| `--vaults-only` | Never send a license request; use only cached/vault keys. Fails if a content key is missing. |
 | `--cdm-only` | Ignore vaults for sourcing keys and always perform a fresh license request. |
 
 See [key vaults](vaults.md) for how to configure vault backends.

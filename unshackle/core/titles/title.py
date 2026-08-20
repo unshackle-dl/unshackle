@@ -217,7 +217,7 @@ class Title:
     @abstractmethod
     def get_filename(self, media_info: MediaInfo, folder: bool = False, show_service: bool = True) -> str:
         """
-        Get a Filename for this Title with the provided Media Info.
+        Get a Filename for this Title with the provided MediaInfo.
         All filenames should be sanitized with the sanitize_filename() utility function.
 
         Parameters:

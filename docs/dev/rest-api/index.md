@@ -148,7 +148,7 @@ request and response in full.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/health` | Liveness and version check. Never requires a key. |
+| `GET` | `/api/health` | Liveness and version check. Never requires an API key. |
 | `GET` | `/api/services` | List the services available on this server. |
 | `POST` | `/api/search` | Run a service's search for a query. |
 | `POST` | `/api/list-titles` | List the titles behind a service title ID. |
@@ -190,7 +190,7 @@ request and response in full.
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/api/session/create` | Start a server-side, authenticated service session. |
-| `GET` | `/api/session/{session_id}` | Session info and time-to-live. |
+| `GET` | `/api/session/{session_id}` | Remote session info and time-to-live. |
 | `DELETE` | `/api/session/{session_id}` | Tear down a session. |
 | `GET` | `/api/session/{session_id}/titles` | Titles for the session's title ID. |
 | `POST` | `/api/session/{session_id}/tracks` | Tracks (with URLs) for a chosen title. |

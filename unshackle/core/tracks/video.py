@@ -415,7 +415,7 @@ class Video(Track):
 
         Returns None when a rewrite is not necessary: SDR/DV/HYBRID ranges, non-AVC/HEVC codecs, a
         missing file, or when the bitstream already ships the correct colour metadata. Otherwise
-        returns a ``{h264,hevc}_metadata=...`` string suitable for ffmpeg ``-bsf:v``.
+        returns a ``{h264,hevc}_metadata=...`` string suitable for FFmpeg ``-bsf:v``.
         """
         if not self.path or not self.path.exists():
             return None

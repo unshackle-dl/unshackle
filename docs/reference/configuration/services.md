@@ -61,9 +61,9 @@ credentials:
 
 Settings for extracting cookies directly from a local Firefox profile. A service block must give
 `hosts`, a list of cookie hostnames. unshackle ignores an entry shorter than 3 characters, to
-prevent dumping the whole cookie store. With an optional `local_storage` boolean, unshackle also
-pulls matching entries from `webappsstore.sqlite`, which only services that keep auth tokens
-in localStorage rather than in HTTP cookies need. Extraction is read-only.
+prevent a broad match dumping most of the profile. With an optional `local_storage` boolean,
+unshackle also pulls matching entries from `webappsstore.sqlite`, which only services that keep
+auth tokens in localStorage rather than in HTTP cookies need. Extraction is read-only.
 
 !!! note "Firefox does not need to be closed"
     The extractor copies **both** `cookies.sqlite` **and** its WAL file into a `0700` temp
