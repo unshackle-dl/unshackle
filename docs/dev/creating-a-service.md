@@ -481,43 +481,31 @@ for a thorough demonstration.
 
 ### `get_chapters`: required
 
-Return a `Chapters` object (0 or more `Chapter`s). You do not need to number or
-sort them. `Chapters` does that automatically and inserts a `00:00:00.000`
-marker if missing. A `Chapter` timestamp accepts `"HH:MM:SS[.mmm]"`, an int in
-milliseconds, or a float in seconds.
+Return a `Chapters` object of 0 or more `Chapter`s. It sorts by timestamp,
+numbers the chapters at mux time, and adds a `00:00:00.000` chapter if none
+exists. Timestamps take `"HH:MM:SS[.mmm]"`, int milliseconds, or float seconds.
 
 ```python
 def get_chapters(self, title: Title_T) -> Chapters:
-    chapters = Chapters()
-    seen: set[int] = set()
-    for ch in title.data.get("chapters", []):
-        chapter = Chapter(timestamp=ch["start"], name=ch.get("name"))
-        if chapter.timestamp == 0 or chapter.timestamp in seen:
-            continue                     # see the warning below
-        seen.add(chapter.timestamp)
-        chapters.add(chapter)
-    return chapters
+    chapters = [Chapter(name=c.get("name"), timestamp=c["start"]) for c in title.data.get("chapters", [])]
+    return Chapters(sorted(chapters, key=lambda c: c.timestamp))
 ```
 
-!!! warning "Skip markers at 0 and de-duplicate timestamps before `add()`"
-    `Chapters.add()` auto-injects a `Chapter(0)` at `00:00:00.000` the first time
-    you add *any* chapter, **and** it raises `ValueError` if a chapter already
-    exists at an exact timestamp. So an API marker reported at `0` (an intro or
-    recap that starts at the very beginning) collides with that auto-inserted
-    opening chapter, and two markers sharing a timestamp collide with each other.
-    Guard both cases: drop any marker at timestamp `0` and de-duplicate timestamps
-    before adding, as above.
+!!! warning "Sort by timestamp before you build the `Chapters`"
+    `Chapters.add()` adds its own unnamed `Chapter(0)` once you add a chapter that is
+    not at `0`, and a duplicate timestamp raises `ValueError`. Sort first, so yours
+    lands before it.
 
-!!! note "An unnamed chapter is the idiom for closing a named range"
-    A `Chapter` with no name is perfectly valid. Inserting an unnamed marker is
-    the standard way to *close out* a named range: e.g. add `Chapter(name="Intro")`
-    at the start and an unnamed `Chapter` where the intro ends, so the "Intro"
-    label applies only to that span.
+    You never need to add `Chapter(0)`. An API chapter at `0` keeps its name. Drop
+    duplicate timestamps.
+
+!!! note "Close a named range with an unnamed chapter"
+    An unnamed `Chapter` ends the range before it: `Chapter(name="Intro")` at the
+    start, an unnamed one where the intro ends.
 
 !!! warning "Don't invent chapter names"
-    Never name chapters `"Chapter 1"` yourself. Leave unnamed markers unnamed.
-    Users who want generic names set `chapter_fallback_name` (for example,
-    `"Chapter {i:02}"`) in their config.
+    Never write `"Chapter 1"`; leave unnamed chapters unnamed. Users set
+    `chapter_fallback_name` in their config (for example, `"Chapter {i:02}"`).
 
 ---
 
