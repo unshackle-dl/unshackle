@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import sys
+import time
 import traceback
 from pathlib import Path
 from typing import Any, Dict
@@ -21,10 +22,19 @@ def read_payload(path: Path) -> Dict[str, Any]:
 
 
 def write_result(path: Path, payload: Dict[str, Any]) -> None:
-    # Atomic replace: the parent polls this file while it is being rewritten.
+    """Write the payload with an atomic replace, because the parent polls this file during the write.
+
+    Windows denies the replace while the parent holds the destination open, so retry with a backoff.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(payload), encoding="utf-8")
+    for attempt in range(5):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            time.sleep(0.02 * (attempt + 1))
     os.replace(tmp, path)
 
 

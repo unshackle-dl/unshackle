@@ -1004,7 +1004,6 @@ class DownloadQueueManager:
                     stat = os.stat(progress_path)
                     stat_key = (stat.st_mtime_ns, stat.st_size)
                     if stat_key != last_progress_stat:
-                        last_progress_stat = stat_key
                         with open(progress_path, "r", encoding="utf-8") as handle:
                             progress_data = json.load(handle)
                             if progress_data.get("phase") and progress_data["phase"] != job.phase:
@@ -1041,7 +1040,8 @@ class DownloadQueueManager:
                             if progress_data != last_published:
                                 last_published = progress_data
                                 self.publish(job, "progress")
-                except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
+                        last_progress_stat = stat_key
+                except (OSError, json.JSONDecodeError, ValueError) as e:
                     log.debug(f"Could not read progress for job {job.job_id}: {e}")
 
                 if job.cancel_event.is_set() or job.status == JobStatus.CANCELLED:

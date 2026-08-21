@@ -7,6 +7,7 @@ cleanup/serialize); they do not exercise the actual subprocess download path.
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -141,3 +142,30 @@ def test_normalize_sub_format_preserves_original_sentinel() -> None:
     # A real codec still maps to its enum member; unknowns collapse to None.
     assert normalize_sub_format("srt") is Subtitle.Codec.SubRip
     assert normalize_sub_format("nonsense") is None
+
+
+def test_worker_write_result_retries_denied_replace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Windows denies os.replace while the parent holds the progress file open, so the write must retry.
+
+    Without the retry a denied replace loses that update. A value the worker writes once, such as a
+    phase change, then stays invisible until the next write.
+    """
+    import json
+    import os
+
+    from unshackle.core.api import download_worker
+
+    target = tmp_path / "progress.json"
+    real_replace = os.replace
+    attempts = []
+
+    def flaky_replace(src: Path, dst: Path) -> None:
+        attempts.append(dst)
+        if len(attempts) == 1:
+            raise PermissionError(13, "Permission denied", str(dst))
+        real_replace(src, dst)
+
+    monkeypatch.setattr(download_worker.os, "replace", flaky_replace)
+    download_worker.write_result(target, {"progress": 42.0})
+    assert json.loads(target.read_text(encoding="utf-8")) == {"progress": 42.0}
+    assert len(attempts) == 2
