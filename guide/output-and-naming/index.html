@@ -2495,7 +2495,7 @@
 <li><strong>Output directory</strong>: <code>directories.downloads</code> from your config, or whatever you pass to <code>-o/--output</code> on the command line for a single run.</li>
 <li><strong>Folder template</strong>: an optional per-title subfolder. unshackle <strong>always</strong> puts TV episodes and songs in a folder. Movies only get one if you define a <code>movies</code> folder template, or a single-string <code>folder</code> template that applies to all title kinds (see <a href="#folder-templates">Folder templates</a>).</li>
 <li><strong>Filename template</strong>: the <code>output_template</code> for the title kind (movie, series, or song).</li>
-<li><strong>Extension</strong>: chosen by the muxer for a movie or an episode: <code>.mkv</code> for video, <code>.mka</code> for audio-only, <code>.mks</code> for subtitle-only. unshackle does not mux a song. A song keeps the container the service delivered, such as <code>.flac</code>, <code>.m4a</code>, or <code>.mp3</code>. Read <a href="#music-output-files">Music output files</a>.</li>
+<li><strong>Extension</strong>: chosen by the muxer for a movie or an episode: <code>.mkv</code> for video, <code>.mka</code> for audio-only, <code>.mks</code> for subtitle-only. unshackle does not mux a song. It remuxes a song into the container of its codec, such as <code>.flac</code>, <code>.opus</code>, or <code>.m4a</code>. Read <a href="#music-output-files">Music output files</a>.</li>
 </ul>
 <div class="admonition example">
 <p class="admonition-title">A typical episode path</p>
@@ -2886,10 +2886,41 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 <p>Episodes and songs are always foldered. unshackle writes movies directly into the output directory <em>unless</em> you define a <code>movies</code> folder template (or a single-string <code>folder</code> template, which folders every kind). Set one if you want each movie in its own directory.</p>
 </div>
 <h2 id="music-output-files">Music output files<a class="headerlink" href="#music-output-files" title="Permanent link">&para;</a></h2>
-<p>A song does not go through the muxer. unshackle moves the downloaded audio file to
-its final path. It keeps the container that the service delivered. A lossless download
-arrives as a <code>.flac</code> file. An AAC download arrives as a <code>.m4a</code> file. unshackle writes no
-<code>.mkv</code> file for music, and the <a href="#muxing-options">muxing options</a> below do not apply.</p>
+<p>A song does not go through the muxer. Music services deliver audio in a fragmented MP4, which is
+not a music file. Its header states a length of zero, so a player stops after the first fragment.
+FLAC inside an MP4 is also not a FLAC stream. A rename cannot correct either fault, so unshackle
+remuxes each downloaded audio track into the container of its codec, then moves the file to its
+final path.</p>
+<table>
+<thead>
+<tr>
+<th>Codec</th>
+<th>Extension</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FLAC</td>
+<td><code>.flac</code></td>
+</tr>
+<tr>
+<td>Opus</td>
+<td><code>.opus</code></td>
+</tr>
+<tr>
+<td>Vorbis</td>
+<td><code>.ogg</code></td>
+</tr>
+<tr>
+<td>AAC, ALAC, and all other codecs</td>
+<td><code>.m4a</code></td>
+</tr>
+</tbody>
+</table>
+<p>unshackle re-encodes FLAC in this step. The audio does not change, but the new file states its
+true length. A plain copy cannot, because it keeps the source header and the zero in it.</p>
+<p>unshackle writes no <code>.mkv</code> file for music, and the <a href="#muxing-options">muxing options</a> below do not
+apply.</p>
 <p>The <code>songs</code> output template names the file. The <code>albums</code> folder template names the folder
 around it.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>/home/user/Downloads/

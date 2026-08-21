@@ -1941,6 +1941,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Audio.to_music_container" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;to_music_container
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Audio.get_track_name" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3000,6 +3011,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;parse_channels
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Audio.to_music_container" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;to_music_container
       
     </span>
   </a>
@@ -4500,6 +4522,31 @@ E.g. "3" -&gt; "3.0", "2.1" -&gt; "2.1", ".1" -&gt; "0.1".</p>
 <p>This does not validate channel strings as genuine channel counts or valid layouts.
 It does not convert the value to assume a sub speaker channel layout, e.g. 5.1-&gt;6.0.
 It also cannot read expanded surround sound channel layout strings like 7.1.2.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Audio.to_music_container" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">to_music_container</span>
+
+
+<a href="#unshackle.core.tracks.Audio.to_music_container" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">to_music_container</span><span class="p">()</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Remux the track into the container of its codec, as a standalone audio file.</p>
+<p>Music titles never reach the muxer, so the downloaded file is the delivered file, and
+after decryption that is still a fragmented MP4. Its header states a length of zero, so
+a player stops after the first fragment. FLAC inside an MP4 is also not a FLAC stream.
+A rename cannot correct either fault. Returns True once the new file replaces the
+downloaded one; every failure raises.</p>
 
 
     </div>
