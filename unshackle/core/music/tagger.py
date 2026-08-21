@@ -36,10 +36,11 @@ try:
     )
     from mutagen.mp3 import MP3
     from mutagen.mp4 import MP4, MP4Cover
+    from mutagen.oggopus import OggOpus
     from mutagen.oggvorbis import OggVorbis
 except ImportError:  # pragma: no cover - optional tagging dependency
     FLAC = Picture = None
-    MP3 = MP4 = MP4Cover = OggVorbis = None
+    MP3 = MP4 = MP4Cover = OggOpus = OggVorbis = None  # type: ignore[assignment]
     ID3NoHeaderError = Exception
     APIC = COMM = TALB = TCOM = TCON = TCOP = TDRC = TIT2 = TPE1 = TPE2 = TPOS = TRCK = TSRC = TXXX = None
     USLT = None
@@ -65,10 +66,10 @@ class MusicMetadataResult:
 
 
 def write_music_metadata(path: Path, song: Any, *, session: Any = None, source_md5: str = "") -> MusicMetadataResult:
-    """Write normalized music metadata for FLAC, Ogg, MP3, and M4A/MP4 audio files."""
+    """Write normalized music metadata for FLAC, Ogg, Opus, MP3, and M4A/MP4 audio files."""
     path = Path(path)
     extension = path.suffix.lower()
-    if extension not in {".flac", ".mp3", ".m4a", ".mp4", ".ogg"}:
+    if extension not in {".flac", ".mp3", ".m4a", ".mp4", ".ogg", ".opus"}:
         return MusicMetadataResult(skipped=True, reason=f"Unsupported music metadata container: {extension}")
 
     if extension == ".flac" and FLAC is None:
@@ -77,7 +78,7 @@ def write_music_metadata(path: Path, song: Any, *, session: Any = None, source_m
         return MusicMetadataResult(skipped=True, reason="install mutagen to write MP3 tags")
     if extension in {".m4a", ".mp4"} and MP4 is None:
         return MusicMetadataResult(skipped=True, reason="install mutagen to write MP4/M4A tags")
-    if extension == ".ogg" and OggVorbis is None:
+    if extension in {".ogg", ".opus"} and OggVorbis is None:
         return MusicMetadataResult(skipped=True, reason="install mutagen to write Ogg tags")
 
     tags = build_tag_values(song, source_md5=source_md5)
@@ -86,8 +87,8 @@ def write_music_metadata(path: Path, song: Any, *, session: Any = None, source_m
 
     if extension == ".flac":
         write_flac_tags(path, tags, cover_data, mime_type)
-    elif extension == ".ogg":
-        write_ogg_tags(path, tags, cover_data, mime_type)
+    elif extension in {".ogg", ".opus"}:
+        write_ogg_tags(path, tags, cover_data, mime_type, OggOpus if extension == ".opus" else OggVorbis)
     elif extension == ".mp3":
         write_mp3_tags(path, tags, cover_data, mime_type)
     else:
@@ -180,8 +181,10 @@ def build_picture(cover_data: Optional[bytes], mime_type: str) -> Optional[Any]:
     return picture
 
 
-def write_ogg_tags(path: Path, tags: dict[str, str], cover_data: Optional[bytes], mime_type: str) -> None:
-    audio = OggVorbis(path)
+def write_ogg_tags(
+    path: Path, tags: dict[str, str], cover_data: Optional[bytes], mime_type: str, reader: Any = None
+) -> None:
+    audio = (reader or OggVorbis)(path)
     for key, value in tags.items():
         audio[key] = [value]
     picture = build_picture(cover_data, mime_type)

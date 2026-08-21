@@ -210,6 +210,22 @@ def post_script_group(candidate: Any) -> Any:
     return ("title", id(candidate))
 
 
+def remux_music_tracks(title: Any, log: logging.Logger) -> None:
+    """Remux each audio track of a Song into the container of its codec.
+
+    A Song never reaches the muxer, so each downloaded audio track is itself a delivered
+    file. A failure warns, keeps that downloaded track, and moves on to the next one: the
+    user still gets the audio, in a container a player cuts short.
+    """
+    if not isinstance(title, Song):
+        return
+    for track in title.tracks.audio:
+        try:
+            track.to_music_container()
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"Could not remux audio track {track.id} for music: {e}")
+
+
 def apply_service_dl_overrides(ctx: click.Context, service_dl_config: dict[str, Any], log: logging.Logger) -> None:
     """Apply ``services.<TAG>.dl`` config onto ``ctx.params``. Explicit CLI/env values win.
     The config replaces defaults and global ``dl:`` default_map values."""
@@ -3092,6 +3108,8 @@ class dl:
                             track.normalize_vui()
                         except Exception as e:  # noqa: BLE001
                             self.log.warning(f"VUI normalization skipped for {track.id}: {e}")
+
+                remux_music_tracks(title, self.log)
 
                 muxed_paths = []
                 muxed_audio_codecs: dict[Path, Optional[Audio.Codec]] = {}

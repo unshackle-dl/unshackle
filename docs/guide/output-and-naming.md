@@ -15,7 +15,7 @@ When a download finishes, unshackle builds the final path from three pieces:
 - **Output directory**: `directories.downloads` from your config, or whatever you pass to `-o/--output` on the command line for a single run.
 - **Folder template**: an optional per-title subfolder. unshackle **always** puts TV episodes and songs in a folder. Movies only get one if you define a `movies` folder template, or a single-string `folder` template that applies to all title kinds (see [Folder templates](#folder-templates)).
 - **Filename template**: the `output_template` for the title kind (movie, series, or song).
-- **Extension**: chosen by the muxer for a movie or an episode: `.mkv` for video, `.mka` for audio-only, `.mks` for subtitle-only. unshackle does not mux a song. A song keeps the container the service delivered, such as `.flac`, `.m4a`, or `.mp3`. Read [Music output files](#music-output-files).
+- **Extension**: chosen by the muxer for a movie or an episode: `.mkv` for video, `.mka` for audio-only, `.mks` for subtitle-only. unshackle does not mux a song. It remuxes a song into the container of its codec, such as `.flac`, `.opus`, or `.m4a`. Read [Music output files](#music-output-files).
 
 !!! example "A typical episode path"
     ```text
@@ -225,10 +225,24 @@ The per-kind folder config keys are `movies`, `series`, `songs`, and `albums`. A
 
 ## Music output files
 
-A song does not go through the muxer. unshackle moves the downloaded audio file to
-its final path. It keeps the container that the service delivered. A lossless download
-arrives as a `.flac` file. An AAC download arrives as a `.m4a` file. unshackle writes no
-`.mkv` file for music, and the [muxing options](#muxing-options) below do not apply.
+A song does not go through the muxer. Music services deliver audio in a fragmented MP4, which is
+not a music file. Its header states a length of zero, so a player stops after the first fragment.
+FLAC inside an MP4 is also not a FLAC stream. A rename cannot correct either fault, so unshackle
+remuxes each downloaded audio track into the container of its codec, then moves the file to its
+final path.
+
+| Codec | Extension |
+|---|---|
+| FLAC | `.flac` |
+| Opus | `.opus` |
+| Vorbis | `.ogg` |
+| AAC, ALAC, and all other codecs | `.m4a` |
+
+unshackle re-encodes FLAC in this step. The audio does not change, but the new file states its
+true length. A plain copy cannot, because it keeps the source header and the zero in it.
+
+unshackle writes no `.mkv` file for music, and the [muxing options](#muxing-options) below do not
+apply.
 
 The `songs` output template names the file. The `albums` folder template names the folder
 around it.

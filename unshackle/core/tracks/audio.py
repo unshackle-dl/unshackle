@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import math
+import subprocess
 from enum import Enum
 from typing import Any, Optional, Union
 
+from unshackle.core import binaries
 from unshackle.core.tracks.track import Track
 
 
@@ -207,6 +209,77 @@ class Audio(Track):
             raise NotImplementedError(f"Unsupported Channels string value, '{channels}'")
 
         return float(channels)
+
+    def to_music_container(self) -> bool:
+        """Remux the track into the container of its codec, as a standalone audio file.
+
+        Music titles never reach the muxer, so the downloaded file is the delivered file, and
+        after decryption that is still a fragmented MP4. Its header states a length of zero, so
+        a player stops after the first fragment. FLAC inside an MP4 is also not a FLAC stream.
+        A rename cannot correct either fault. Returns True once the new file replaces the
+        downloaded one; every failure raises.
+        """
+        if not self.path or not self.path.exists():
+            raise ValueError("Cannot remux a Track that has not been downloaded.")
+
+        if not binaries.FFMPEG:
+            raise EnvironmentError('FFmpeg executable "ffmpeg" was not found but is required for this call.')
+
+        containers: dict[Optional[Audio.Codec], str] = {
+            Audio.Codec.FLAC: ".flac",
+            Audio.Codec.OPUS: ".opus",
+            Audio.Codec.OGG: ".ogg",
+        }
+        extension = containers.get(self.codec, ".m4a")
+        original_path = self.path
+        output_path = original_path.with_name(f"{original_path.stem}_music{extension}")
+
+        def ffmpeg(*extra_args: str) -> None:
+            subprocess.run(
+                [
+                    str(binaries.FFMPEG),
+                    "-nostdin",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-y",
+                    "-i",
+                    str(original_path),
+                    "-map",
+                    "0:a:0",
+                    "-map_metadata",
+                    "-1",
+                    # a copy keeps the source STREAMINFO, whose sample count a fragmenting writer
+                    # leaves at zero, so the FLAC states no length; the encoder writes a real one
+                    *(["-c:a", "flac"] if extension == ".flac" else ["-c", "copy"]),
+                    # the fragmented moov is what cuts playback short, so ask for one contiguous header
+                    *(["-movflags", "+faststart"] if extension == ".m4a" else []),
+                    *extra_args,
+                    str(output_path),
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+        try:
+            try:
+                ffmpeg()
+            except subprocess.CalledProcessError as e:
+                if b"not currently supported in container" not in e.stderr:
+                    raise
+                # a .m4a name picks FFmpeg's ipod muxer, which refuses Dolby Digital Plus and the
+                # other codecs Apple never put in an M4A; the plain mp4 muxer accepts them
+                ffmpeg("-f", "mp4")
+        except subprocess.CalledProcessError:
+            # FFmpeg creates the output before it fails, and nothing sweeps the shared temp
+            # directory for it, so a failed run must remove its own partial file
+            output_path.unlink(missing_ok=True)
+            raise
+
+        original_path.unlink()
+        self.path = output_path
+        return True
 
     def get_track_name(self) -> Optional[str]:
         """Return the base Track Name."""
