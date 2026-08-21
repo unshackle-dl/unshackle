@@ -1073,13 +1073,19 @@ class DownloadQueueManager:
                     log.debug(f"Worker stderr for job {job.job_id}: {safe_stderr}")
 
             result_data: Optional[Dict[str, Any]] = None
-            try:
-                with open(result_path, "r", encoding="utf-8") as handle:
-                    result_data = json.load(handle)
-            except FileNotFoundError:
-                log.error(f"Result file missing for job {job.job_id}")
-            except json.JSONDecodeError as exc:
-                log.error(f"Failed to parse worker result for job {job.job_id}: {exc}")
+            for attempt in range(5):
+                try:
+                    with open(result_path, "r", encoding="utf-8") as handle:
+                        result_data = json.load(handle)
+                except FileNotFoundError:
+                    log.error(f"Result file missing for job {job.job_id}")
+                except PermissionError as exc:
+                    log.debug(f"Result file for job {job.job_id} denied, retrying: {exc}")
+                    await asyncio.sleep(0.02 * (attempt + 1))
+                    continue
+                except json.JSONDecodeError as exc:
+                    log.error(f"Failed to parse worker result for job {job.job_id}: {exc}")
+                break
 
             if returncode != 0:
                 message = result_data.get("message") if result_data else "unknown error"

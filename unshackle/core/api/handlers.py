@@ -1861,8 +1861,10 @@ def create_service_instance(
             cookies.load(ignore_discard=True, ignore_expires=True)
         finally:
             import os
+            from contextlib import suppress
 
-            os.unlink(tmp_path)
+            with suppress(OSError):
+                os.unlink(tmp_path)
     else:
         cookies = dl.get_cookie_jar(normalized_service, profile)
 
