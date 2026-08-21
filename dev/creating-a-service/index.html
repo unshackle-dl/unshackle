@@ -2840,43 +2840,30 @@ data, set <code>track.kid</code>. It speeds up the decryption and key-lookup pat
 sure encrypted tracks carry the correct <code>drm</code> so the core licenses them.</p>
 </div>
 <h3 id="get_chapters-required"><code>get_chapters</code>: required<a class="headerlink" href="#get_chapters-required" title="Permanent link">&para;</a></h3>
-<p>Return a <code>Chapters</code> object (0 or more <code>Chapter</code>s). You do not need to number or
-sort them. <code>Chapters</code> does that automatically and inserts a <code>00:00:00.000</code>
-marker if missing. A <code>Chapter</code> timestamp accepts <code>"HH:MM:SS[.mmm]"</code>, an int in
-milliseconds, or a float in seconds.</p>
+<p>Return a <code>Chapters</code> object of 0 or more <code>Chapter</code>s. It sorts by timestamp,
+numbers the chapters at mux time, and adds a <code>00:00:00.000</code> chapter if none
+exists. Timestamps take <code>"HH:MM:SS[.mmm]"</code>, int milliseconds, or float seconds.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_chapters</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">title</span><span class="p">:</span> <span class="n">Title_T</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Chapters</span><span class="p">:</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>    <span class="n">chapters</span> <span class="o">=</span> <span class="n">Chapters</span><span class="p">()</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>    <span class="n">seen</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>    <span class="k">for</span> <span class="n">ch</span> <span class="ow">in</span> <span class="n">title</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"chapters"</span><span class="p">,</span> <span class="p">[]):</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>        <span class="n">chapter</span> <span class="o">=</span> <span class="n">Chapter</span><span class="p">(</span><span class="n">timestamp</span><span class="o">=</span><span class="n">ch</span><span class="p">[</span><span class="s2">"start"</span><span class="p">],</span> <span class="n">name</span><span class="o">=</span><span class="n">ch</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"name"</span><span class="p">))</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>        <span class="k">if</span> <span class="n">chapter</span><span class="o">.</span><span class="n">timestamp</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">chapter</span><span class="o">.</span><span class="n">timestamp</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
-</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>            <span class="k">continue</span>                     <span class="c1"># see the warning below</span>
-</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>        <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">chapter</span><span class="o">.</span><span class="n">timestamp</span><span class="p">)</span>
-</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>        <span class="n">chapters</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">chapter</span><span class="p">)</span>
-</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a>    <span class="k">return</span> <span class="n">chapters</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>    <span class="n">chapters</span> <span class="o">=</span> <span class="p">[</span><span class="n">Chapter</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"name"</span><span class="p">),</span> <span class="n">timestamp</span><span class="o">=</span><span class="n">c</span><span class="p">[</span><span class="s2">"start"</span><span class="p">])</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">title</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"chapters"</span><span class="p">,</span> <span class="p">[])]</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>    <span class="k">return</span> <span class="n">Chapters</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">chapters</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">c</span><span class="p">:</span> <span class="n">c</span><span class="o">.</span><span class="n">timestamp</span><span class="p">))</span>
 </span></code></pre></div>
 <div class="admonition warning">
-<p class="admonition-title">Skip markers at 0 and de-duplicate timestamps before <code>add()</code></p>
-<p><code>Chapters.add()</code> auto-injects a <code>Chapter(0)</code> at <code>00:00:00.000</code> the first time
-you add <em>any</em> chapter, <strong>and</strong> it raises <code>ValueError</code> if a chapter already
-exists at an exact timestamp. So an API marker reported at <code>0</code> (an intro or
-recap that starts at the very beginning) collides with that auto-inserted
-opening chapter, and two markers sharing a timestamp collide with each other.
-Guard both cases: drop any marker at timestamp <code>0</code> and de-duplicate timestamps
-before adding, as above.</p>
+<p class="admonition-title">Sort by timestamp before you build the <code>Chapters</code></p>
+<p><code>Chapters.add()</code> adds its own unnamed <code>Chapter(0)</code> once you add a chapter that is
+not at <code>0</code>, and a duplicate timestamp raises <code>ValueError</code>. Sort first, so yours
+lands before it.</p>
+<p>You never need to add <code>Chapter(0)</code>. An API chapter at <code>0</code> keeps its name. Drop
+duplicate timestamps.</p>
 </div>
 <div class="admonition note">
-<p class="admonition-title">An unnamed chapter is the idiom for closing a named range</p>
-<p>A <code>Chapter</code> with no name is perfectly valid. Inserting an unnamed marker is
-the standard way to <em>close out</em> a named range: e.g. add <code>Chapter(name="Intro")</code>
-at the start and an unnamed <code>Chapter</code> where the intro ends, so the "Intro"
-label applies only to that span.</p>
+<p class="admonition-title">Close a named range with an unnamed chapter</p>
+<p>An unnamed <code>Chapter</code> ends the range before it: <code>Chapter(name="Intro")</code> at the
+start, an unnamed one where the intro ends.</p>
 </div>
 <div class="admonition warning">
 <p class="admonition-title">Don't invent chapter names</p>
-<p>Never name chapters <code>"Chapter 1"</code> yourself. Leave unnamed markers unnamed.
-Users who want generic names set <code>chapter_fallback_name</code> (for example,
-<code>"Chapter {i:02}"</code>) in their config.</p>
+<p>Never write <code>"Chapter 1"</code>; leave unnamed chapters unnamed. Users set
+<code>chapter_fallback_name</code> in their config (for example, <code>"Chapter {i:02}"</code>).</p>
 </div>
 <hr />
 <h2 id="handling-drm">Handling DRM<a class="headerlink" href="#handling-drm" title="Permanent link">&para;</a></h2>
