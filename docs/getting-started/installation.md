@@ -19,7 +19,7 @@ version it needs, and the external command-line tools it expects to find on your
 | [uv](https://docs.astral.sh/uv/) | ≥ 0.5 | Installing and running unshackle |
 | [FFmpeg](https://ffmpeg.org/) | ≥ 6.0 | Media processing and analysis |
 | [MKVToolNix](https://mkvtoolnix.download/) | ≥ 80 | MKV muxing and metadata editing |
-| [shaka-packager](https://github.com/shaka-project/shaka-packager) | 2.6.1 | DRM decryption |
+| [shaka-packager](https://github.com/shaka-project/shaka-packager) | 2.6.1, or ≥ 3.10.0 | DRM decryption |
 | [Bento4](https://github.com/axiomatic-systems/Bento4) | ≥ 1.6.0-639 | Alternate DRM decryption (`mp4decrypt`) |
 | [dovi_tool](https://github.com/quietvoid/dovi_tool) | ≥ 2.1 | Dolby Vision handling |
 | [SubtitleEdit](https://github.com/SubtitleEdit/subtitleedit/releases) | ≥ 5.0 | Subtitle conversion (optional) |
@@ -110,6 +110,11 @@ These must be present for core downloading, decryption, and muxing to work:
     different decryptor. If it is missing, protected downloads will fail at the
     decryption step. See the [configuration reference](../reference/configuration/drm.md#decryption) for the
     `decryption` config key if you want to switch to `mp4decrypt`.
+
+!!! danger "Do not use shaka-packager 3.0 through 3.9.x"
+    These versions stop with a segmentation fault on a single-track MP4 whose
+    internal `track_id` is 2 or more. A track that unshackle downloads from a
+    DASH or HLS manifest usually has such a `track_id`.
 
 ### Recommended and optional tools
 

@@ -42,7 +42,7 @@ External tools. (recommended versions):
 - [uv](https://docs.astral.sh/uv/) - ≥ 0.5
 - [FFmpeg](https://ffmpeg.org/) - ≥ 6.0
 - [MKVToolNix](https://mkvtoolnix.download/) - ≥ 80
-- [shaka-packager](https://github.com/shaka-project/shaka-packager/releases/tag/v2.6.1) - 2.6.1
+- [shaka-packager](https://github.com/shaka-project/shaka-packager/releases) - 2.6.1, or ≥ 3.10.0
 
 Optional:
 
