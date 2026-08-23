@@ -34,7 +34,7 @@ from unshackle.core.drm import DRM_T, ClearKey, MonaLisa, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.session import RnetResponse, RnetSession
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video, resume
-from unshackle.core.tracks.track import assert_fragments_decrypted
+from unshackle.core.tracks.track import DRM_PREFERENCE_TYPES, assert_fragments_decrypted
 from unshackle.core.utilities import get_extension, is_close_match, log_event, try_ensure_utf8
 from unshackle.core.utils.redact import safe_display_url
 from unshackle.core.utils.subprocess import log_tool_run
@@ -567,7 +567,7 @@ class HLS:
         initial_drm_key = None  # Track the EXT-X-KEY used for initial licensing
         media_keys = [k for k in (master.keys or []) if k is not None]
         if media_keys:
-            cdm_media_keys = HLS.filter_keys_for_cdm(media_keys, cdm)
+            cdm_media_keys = HLS.filter_keys_for_cdm(media_keys, cdm, track.drm_preference)
             media_playlist_key = HLS.get_supported_key(cdm_media_keys) if cdm_media_keys else None
 
             if media_playlist_key:
@@ -919,7 +919,7 @@ class HLS:
             segment_keys = getattr(segment, "keys", None)
             if segment_keys and segment not in unwanted_segments:
                 if cdm:
-                    cdm_segment_keys = HLS.filter_keys_for_cdm(segment_keys, cdm)
+                    cdm_segment_keys = HLS.filter_keys_for_cdm(segment_keys, cdm, track.drm_preference)
                     key = (
                         HLS.get_supported_key(cdm_segment_keys)
                         if cdm_segment_keys
@@ -1190,15 +1190,30 @@ class HLS:
     def filter_keys_for_cdm(
         keys: list[Union[m3u8.model.SessionKey, m3u8.model.Key]],
         cdm: object,
+        drm_preference: Optional[str] = None,
     ) -> list[Union[m3u8.model.SessionKey, m3u8.model.Key]]:
         """
         Filter EXT-X-KEY entries to only include those matching the CDM type.
 
         This makes sure that we select the correct DRM system (Widevine or PlayReady)
         for the CDM in the configuration, so the challenge does not fail.
+
+        A track's drm_preference wins over the CDM. If the playlist has no EXT-X-KEY entry
+        for it, the CDM decides as usual.
         """
         playready_urn = f"urn:uuid:{PR_PSSH.SYSTEM_ID}"
         playready_keyformats = {playready_urn, "com.microsoft.playready"}
+        if drm_preference:
+            if DRM_PREFERENCE_TYPES[drm_preference] is PlayReady:
+                preferred = [k for k in keys if k.keyformat and k.keyformat.lower() in playready_keyformats]
+            else:
+                preferred = [k for k in keys if k.keyformat and k.keyformat.lower() == WidevineCdm.urn]
+            if preferred:
+                return preferred
+            logging.getLogger("HLS").warning(
+                f"Track wants {drm_preference} DRM but this playlist has no EXT-X-KEY entry for it, "
+                "using the CDM's DRM instead"
+            )
         if is_widevine_cdm(cdm):
             return [k for k in keys if k.keyformat and k.keyformat.lower() == WidevineCdm.urn]
         elif is_playready_cdm(cdm):

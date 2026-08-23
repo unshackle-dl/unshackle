@@ -7,6 +7,7 @@ from langcodes import Language
 
 from unshackle.core.api.errors import APIError, APIErrorCode
 from unshackle.core.api.handlers import (
+    drm_preference_name,
     sanitize_log,
     search_handler,
     serialize_audio_track,
@@ -159,6 +160,31 @@ def test_serialize_audio_track_basic() -> None:
     assert d["bitrate"] == 128
     assert d["channels"] == 2
     assert d["descriptive"] is False
+
+
+def test_serialize_video_track_drm_preference_round_trip() -> None:
+    d = serialize_video_track(video())
+    assert d["drm_preference"] is None
+    v = video()
+    v.drm_preference = "pr"
+    assert serialize_video_track(v)["drm_preference"] == "pr"
+
+
+def test_serialize_audio_track_drm_preference() -> None:
+    a = audio()
+    a.drm_preference = "widevine"
+    assert serialize_audio_track(a)["drm_preference"] == "widevine"
+
+
+def test_drm_preference_name_maps_short_forms() -> None:
+    v = video()
+    assert drm_preference_name(v) is None
+    v.drm_preference = "pr"
+    assert drm_preference_name(v) == "playready"
+    v.drm_preference = "wv"
+    assert drm_preference_name(v) == "widevine"
+    v.drm_preference = "widevine"
+    assert drm_preference_name(v) == "widevine"
 
 
 def test_serialize_subtitle_track_basic() -> None:

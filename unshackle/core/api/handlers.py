@@ -551,6 +551,14 @@ def descriptor_name(track: Any) -> Optional[str]:
     return enum_name(descriptor) if descriptor else None
 
 
+def drm_preference_name(track: Any) -> Optional[str]:
+    """The track's drm_preference as a full DRM system name, "widevine" or "playready"; None when unset."""
+    preference = getattr(track, "drm_preference", None)
+    if not preference:
+        return None
+    return {"wv": "widevine", "pr": "playready"}.get(preference, preference)
+
+
 def serialize_video_track(track: Video, include_url: bool = False) -> Dict[str, Any]:
     """Convert video track to JSON-serializable dict."""
     codec_name = enum_name(track.codec)
@@ -569,6 +577,7 @@ def serialize_video_track(track: Video, include_url: bool = False) -> Dict[str, 
         "range_display": DYNAMIC_RANGE_MAP.get(range_name, range_name),
         "language": str(track.language) if track.language else None,
         "drm": serialize_drm(track.drm) if hasattr(track, "drm") and track.drm else None,
+        "drm_preference": getattr(track, "drm_preference", None),
         "descriptor": descriptor_name(track),
     }
     if include_url and hasattr(track, "url") and track.url:
@@ -614,6 +623,7 @@ def serialize_audio_track(track: Audio, include_url: bool = False, is_original: 
         "atmos": track.atmos if hasattr(track, "atmos") else False,
         "descriptive": track.descriptive if hasattr(track, "descriptive") else False,
         "drm": serialize_drm(track.drm) if hasattr(track, "drm") and track.drm else None,
+        "drm_preference": getattr(track, "drm_preference", None),
         "descriptor": descriptor_name(track),
     }
     if include_url and hasattr(track, "url") and track.url:
@@ -2783,6 +2793,7 @@ async def session_license_handler(
         config_cdm_type = detect_cdm_type_for_service(service_tag, app_config)
 
         all_keys: Dict[str, Dict[str, str]] = {}
+        drm_types: Dict[str, str] = {}
         seen_pssh: set[str] = set()
         actual_drm_type: Optional[str] = None
 
@@ -2797,41 +2808,45 @@ async def session_license_handler(
 
             title = find_title_for_track(tid, session)
 
+            if config_cdm_type == "playready":
+                candidates = ["playready", "widevine"]
+            elif config_cdm_type == "widevine":
+                candidates = ["widevine", "playready"]
+            else:
+                candidates = [
+                    name
+                    for name, has_device in (("widevine", has_wv_device), ("playready", has_pr_device))
+                    if has_device
+                ]
+
+            preferred = drm_preference_name(track)
+            if preferred:
+                if preferred in candidates:
+                    candidates.remove(preferred)
+                    candidates.insert(0, preferred)
+                else:
+                    log.warning(
+                        f"Track {sanitize_log(tid[:12])} wants {preferred} DRM "
+                        "but the server has no device for it, using the configured DRM instead"
+                    )
+
             track_drm_type = None
             pssh_str = None
-            if config_cdm_type == "playready":
-                pssh_str = extract_pssh_from_track(track, "playready")
+            for candidate in candidates:
+                pssh_str = extract_pssh_from_track(track, candidate)
                 if pssh_str:
-                    track_drm_type = "playready"
-                if not pssh_str:
-                    pssh_str = extract_pssh_from_track(track, "widevine")
-                    if pssh_str:
-                        track_drm_type = "widevine"
-            elif config_cdm_type == "widevine":
-                pssh_str = extract_pssh_from_track(track, "widevine")
-                if pssh_str:
-                    track_drm_type = "widevine"
-                if not pssh_str:
-                    pssh_str = extract_pssh_from_track(track, "playready")
-                    if pssh_str:
-                        track_drm_type = "playready"
-            else:
-                if has_wv_device:
-                    pssh_str = extract_pssh_from_track(track, "widevine")
-                    if pssh_str:
-                        track_drm_type = "widevine"
-                if not pssh_str and has_pr_device:
-                    pssh_str = extract_pssh_from_track(track, "playready")
-                    if pssh_str:
-                        track_drm_type = "playready"
+                    track_drm_type = candidate
+                    break
 
             if not pssh_str or not track_drm_type:
                 continue
 
             if pssh_str in seen_pssh:
-                for prev_keys in all_keys.values():
+                for prev_tid, prev_keys in all_keys.items():
                     if prev_keys:
                         all_keys[tid] = prev_keys
+                        if prev_tid in drm_types:
+                            drm_types[tid] = drm_types[prev_tid]
                         break
                 continue
             seen_pssh.add(pssh_str)
@@ -2841,6 +2856,7 @@ async def session_license_handler(
                 if keys:
                     all_keys[tid] = keys
                     if track_drm_type:
+                        drm_types[tid] = track_drm_type
                         actual_drm_type = track_drm_type
             except SystemExit:
                 log.warning(f"Service exited while resolving keys for track {sanitize_log(tid[:12])}, skipping")
@@ -2850,6 +2866,8 @@ async def session_license_handler(
         response: Dict[str, Any] = {"keys": all_keys}
         if actual_drm_type:
             response["drm_type"] = actual_drm_type
+        if drm_types:
+            response["drm_types"] = drm_types
         return web.json_response(response)
 
     if not track_id:

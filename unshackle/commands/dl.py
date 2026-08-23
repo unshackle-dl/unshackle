@@ -2852,9 +2852,8 @@ class dl:
                                     track=track,
                                 ),
                                 licence=partial(
-                                    service.get_playready_license
-                                    if is_playready_cdm(self.cdm)
-                                    else service.get_widevine_license,
+                                    self.service_licence,
+                                    service,
                                     title=title,
                                     track=track,
                                 ),
@@ -3919,6 +3918,18 @@ class dl:
         with cls.DRM_LOCKS_GUARD:
             return cls.DRM_LOCKS.setdefault(key or type(drm).__name__, Lock())
 
+    def service_licence(self, service: Service, drm_system: Optional[str] = None, **kwargs: Any) -> Any:
+        """Call the service's licence function for the track's DRM system.
+
+        prepare_drm passes drm_system so the choice follows the track, not the loaded CDM:
+        a track downloading at the same time can swap self.cdm.
+        """
+        if drm_system is None:
+            drm_system = "playready" if is_playready_cdm(self.cdm) else "widevine"
+        if drm_system == "playready":
+            return service.get_playready_license(**kwargs)
+        return service.get_widevine_license(**kwargs)
+
     def prepare_drm(
         self,
         drm: DRM_T,
@@ -3999,6 +4010,12 @@ class dl:
         track_quality = None
         if isinstance(track, Video) and track.height:
             track_quality = track.height
+        elif title is not None:
+            track_quality = max((v.height for v in title.tracks.videos if v.height), default=None)
+
+        track_cdm = self.cdm
+
+        licence = partial(licence, drm_system="playready" if isinstance(drm, PlayReady) else "widevine")
 
         if not server_cdm:
             if isinstance(drm, Widevine):
@@ -4010,6 +4027,7 @@ class dl:
                         else:
                             self.log.info("Switching to Widevine CDM for Widevine content")
                         self.cdm = widevine_cdm
+                        track_cdm = widevine_cdm
                     else:
                         raise ValueError(f"Title needs a Widevine CDM but {self.service} is configured with PlayReady.")
 
@@ -4022,6 +4040,7 @@ class dl:
                         else:
                             self.log.info("Switching to PlayReady CDM for PlayReady content")
                         self.cdm = playready_cdm
+                        track_cdm = playready_cdm
                     else:
                         raise ValueError(f"Title needs a PlayReady CDM but {self.service} is configured with Widevine.")
 
@@ -4148,9 +4167,9 @@ class dl:
 
                     try:
                         if self.service == "NF":
-                            drm.get_NF_content_keys(cdm=self.cdm, licence=licence, certificate=certificate)
+                            drm.get_NF_content_keys(cdm=track_cdm, licence=licence, certificate=certificate)
                         else:
-                            drm.get_content_keys(cdm=self.cdm, licence=licence, certificate=certificate)
+                            drm.get_content_keys(cdm=track_cdm, licence=licence, certificate=certificate)
                     except Exception as e:
                         if drm.content_keys:
                             self.log.debug(f"License call failed but keys already in content_keys: {e}")
@@ -4338,7 +4357,7 @@ class dl:
                     from_vaults = drm.content_keys.copy()
 
                     try:
-                        drm.get_content_keys(cdm=self.cdm, licence=licence, certificate=certificate)
+                        drm.get_content_keys(cdm=track_cdm, licence=licence, certificate=certificate)
                     except Exception as e:
                         if drm.content_keys:
                             self.log.debug(f"License call failed but keys already in content_keys: {e}")

@@ -108,6 +108,23 @@ def test_build_tracks_aggregates() -> None:
     assert len(t.subtitles) == 1
 
 
+def test_build_tracks_restores_drm_preference() -> None:
+    data = {
+        "video": [{"id": "v", "codec": "AVC", "width": 1280, "height": 720, "drm_preference": "playready"}],
+        "audio": [{"id": "a", "codec": "AAC", "channels": 2, "drm_preference": "wv"}],
+        "subtitles": [],
+    }
+    t = build_tracks(data)
+    assert t.videos[0].drm_preference == "playready"
+    assert t.audio[0].drm_preference == "wv"
+
+
+def test_build_tracks_ignores_unknown_drm_preference() -> None:
+    data = {"video": [{"id": "v", "codec": "AVC", "width": 1, "height": 1, "drm_preference": "fairplay"}]}
+    t = build_tracks(data)
+    assert t.videos[0].drm_preference is None
+
+
 def test_match_track_by_id() -> None:
     a = deserialize_video({"id": "v1", "codec": "AVC", "width": 1920, "height": 1080})
     b = deserialize_video({"id": "v2", "codec": "AVC", "width": 1280, "height": 720})

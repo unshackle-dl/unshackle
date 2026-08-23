@@ -22,14 +22,13 @@ from pywidevine.cdm import Cdm as WidevineCdm
 from pywidevine.pssh import PSSH
 from requests import Session
 
-from unshackle.core.cdm.detect import is_playready_cdm
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.events import events
 from unshackle.core.session import RnetSession
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video, resume
-from unshackle.core.tracks.track import assert_fragments_decrypted
+from unshackle.core.tracks.track import DRM_PREFERENCE_TYPES, assert_fragments_decrypted
 from unshackle.core.utilities import is_close_match, log_event, try_ensure_utf8
 from unshackle.core.utils.redact import safe_display_url
 from unshackle.core.utils.xml import load_xml
@@ -334,6 +333,17 @@ class DASH:
         else:
             track.drm = existing_drm
 
+        if track.drm and track.drm_preference:
+            wanted = DRM_PREFERENCE_TYPES[track.drm_preference]
+            preferred = [drm_obj for drm_obj in track.drm if isinstance(drm_obj, wanted)]
+            if preferred:
+                track.drm = preferred
+            else:
+                log.warning(
+                    f"Track wants {track.drm_preference} DRM but this manifest does not offer it, "
+                    "using the manifest's DRM instead"
+                )
+
         if pre_existing_keys and track.drm:
             for drm_obj in track.drm:
                 if hasattr(drm_obj, "content_keys"):
@@ -406,7 +416,7 @@ class DASH:
         track.data["dash"]["segment_durations"] = segment_durations
 
         if not track.drm and init_data and isinstance(track, (Video, Audio)):
-            prefers_playready = is_playready_cdm(cdm)
+            prefers_playready = track.prefers_playready(cdm)
             if prefers_playready:
                 try:
                     track.drm = [PlayReady.from_init_data(init_data)]

@@ -30,6 +30,13 @@ from unshackle.core.tracks import resume
 from unshackle.core.utilities import get_boxes, log_event, try_ensure_utf8
 from unshackle.core.utils.subprocess import ffprobe
 
+DRM_PREFERENCE_TYPES: dict[str, Union[type[Widevine], type[PlayReady]]] = {
+    "wv": Widevine,
+    "widevine": Widevine,
+    "pr": PlayReady,
+    "playready": PlayReady,
+}
+
 
 def direct_session(session: Union[Session, "RnetSession"]) -> Session:
     """requests.Session with copied headers/cookies and no proxy."""
@@ -320,6 +327,7 @@ class Track:
         self.needs_repack = needs_repack
         self.name = name
         self.drm = drm
+        self._drm_preference: Optional[str] = None
         self.edition: list[str] = [edition] if isinstance(edition, str) else (edition or [])
         self.session = session
         self.downloader = downloader
@@ -400,6 +408,33 @@ class Track:
         if isinstance(value, dict):
             value = defaultdict(dict, **value)
         self._data = value
+
+    @property
+    def drm_preference(self) -> Optional[str]:
+        """
+        DRM system this track must license with, one of the names in DRM_PREFERENCE_TYPES.
+
+        None (the default) lets the loaded CDM choose. Set it when the manifest advertises more
+        than one DRM system but only one of them licenses this track.
+        """
+        return self._drm_preference
+
+    @drm_preference.setter
+    def drm_preference(self, value: Optional[str]) -> None:
+        if value is None:
+            self._drm_preference = None
+            return
+        if not isinstance(value, str) or value.lower() not in DRM_PREFERENCE_TYPES:
+            raise ValueError(
+                f"Expected drm_preference to be one of {sorted(DRM_PREFERENCE_TYPES)} or None, not {value!r}"
+            )
+        self._drm_preference = value.lower()
+
+    def prefers_playready(self, cdm: Optional[object]) -> bool:
+        """Whether to try PlayReady before Widevine. The track's preference wins over the loaded CDM."""
+        if self._drm_preference:
+            return DRM_PREFERENCE_TYPES[self._drm_preference] is PlayReady
+        return is_playready_cdm(cdm)
 
     def download(
         self,
@@ -493,7 +528,7 @@ class Track:
             elif self.descriptor == self.Descriptor.URL:
                 try:
                     if not self.drm and track_type in ("Video", "Audio"):
-                        if is_playready_cdm(cdm):
+                        if self.prefers_playready(cdm):
                             try:
                                 self.drm = [PlayReady.from_track(self, session)]
                             except PlayReady.Exceptions.PSSHNotFound:
@@ -704,6 +739,12 @@ class Track:
         """Return the DRM matching the provided CDM, if available."""
         if not self.drm:
             return None
+
+        if self._drm_preference:
+            wanted = DRM_PREFERENCE_TYPES[self._drm_preference]
+            for drm in self.drm:
+                if isinstance(drm, wanted):
+                    return drm
 
         if is_widevine_cdm(cdm):
             for drm in self.drm:

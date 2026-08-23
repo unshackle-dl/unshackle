@@ -212,6 +212,12 @@ def build_tracks(data: Dict[str, Any]) -> Tracks:
         drm_objs = reconstruct_drm(track_data.get("drm"))
         if drm_objs:
             track_obj.drm = drm_objs
+        preference = track_data.get("drm_preference")
+        if preference:
+            try:
+                track_obj.drm_preference = preference
+            except ValueError:
+                log.warning(f"Ignoring unknown drm_preference {preference!r} from the server for track {track_obj.id}")
     tracks.attachments = [
         Attachment(url=a["url"], name=a.get("name"), mime_type=a.get("mime_type"), description=a.get("description"))
         for a in data.get("attachments", [])
@@ -710,6 +716,7 @@ class RemoteService:
                 )
             keys_by_track = resp.get("keys", {})
             server_drm_type = resp.get("drm_type", drm_type)
+            drm_types_by_track = resp.get("drm_types", {})
             self._server_cdm_type = server_drm_type
             self.log.debug(f"Server responded with drm_type={server_drm_type}, keys for {len(keys_by_track)} track(s)")
 
@@ -719,7 +726,8 @@ class RemoteService:
                     continue
 
                 kid_list = list(track_keys.keys())
-                drm_obj = self.create_drm_stub(server_drm_type, kid_list)
+                track_drm_type = drm_types_by_track.get(str(track.id), server_drm_type)
+                drm_obj = self.create_drm_stub(track_drm_type, kid_list)
                 for kid_hex, key_hex in track_keys.items():
                     drm_obj.content_keys[UUID(hex=kid_hex)] = key_hex
                 track.drm = [drm_obj]
