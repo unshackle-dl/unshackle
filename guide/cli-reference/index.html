@@ -3004,9 +3004,9 @@
 <td>Pick the lowest bitrate within the requested quality. <strong>Requires <code>-q</code>.</strong></td>
 </tr>
 <tr>
-<td><code>--best-available</code></td>
+<td><code>--best-available</code>, <code>--warn-only</code></td>
 <td>off</td>
-<td>Continue with the best available if a requested resolution/language is absent, instead of failing.</td>
+<td>Warn and continue when a requested resolution, range, or language is absent, instead of failing.</td>
 </tr>
 <tr>
 <td><code>-rvb</code>, <code>--real-video-bitrate</code></td>
@@ -3055,9 +3055,19 @@
 <td>Subtitle language(s). A <code>-</code> prefix excludes, e.g. <code>all,-es</code>.</td>
 </tr>
 <tr>
+<td><code>--require-audio</code></td>
+<td>-</td>
+<td>Audio langs that must exist. The title fails even with <code>--best-available</code>. Does not select tracks.</td>
+</tr>
+<tr>
+<td><code>--require-video</code></td>
+<td>-</td>
+<td>Video langs that must exist. The title fails even with <code>--best-available</code>. Does not select tracks.</td>
+</tr>
+<tr>
 <td><code>--require-subs</code></td>
 <td>-</td>
-<td>Required subtitle langs; keeps <strong>all</strong> subs only if these exist. <strong>Cannot combine with <code>--s-lang</code>.</strong></td>
+<td>Subtitle langs that must exist. Fails the title if one is missing. <code>--s-lang</code> still decides what to keep.</td>
 </tr>
 <tr>
 <td><code>-fs</code>, <code>--forced-subs</code></td>
@@ -3385,7 +3395,7 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 </table>
 <div class="admonition warning">
 <p class="admonition-title">Some flags cannot be combined</p>
-<p><code>--require-subs</code> and <code>--s-lang</code> are mutually exclusive. <code>--select-titles</code> and <code>--wanted</code> are mutually exclusive. <code>--worst</code> needs <code>--quality</code>. <code>--vbitrate</code> and <code>--vbitrate-range</code> (and the audio equivalents) are mutually exclusive.</p>
+<p><code>--select-titles</code> and <code>--wanted</code> are mutually exclusive. <code>--worst</code> needs <code>--quality</code>. <code>--vbitrate</code> and <code>--vbitrate-range</code> (and the audio equivalents) are mutually exclusive.</p>
 </div>
 <hr />
 <h2 id="search"><code>search</code><a class="headerlink" href="#search" title="Permanent link">&para;</a></h2>

@@ -3593,10 +3593,22 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <td>Language filters.</td>
 </tr>
 <tr>
+<td><code>require_audio</code></td>
+<td>string[]</td>
+<td><code>[]</code></td>
+<td>Audio languages that must exist. The job fails if one is missing, even with <code>best_available</code>.</td>
+</tr>
+<tr>
+<td><code>require_video</code></td>
+<td>string[]</td>
+<td><code>[]</code></td>
+<td>Video languages that must exist. The job fails if one is missing, even with <code>best_available</code>.</td>
+</tr>
+<tr>
 <td><code>require_subs</code></td>
 <td>string[]</td>
 <td><code>[]</code></td>
-<td>Required subtitle languages.</td>
+<td>Subtitle languages that must exist. The job fails if one is missing. <code>s_lang</code> still decides what to keep.</td>
 </tr>
 <tr>
 <td><code>forced_subs</code></td>
@@ -3768,7 +3780,7 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 </tr>
 </tbody>
 </table>
-<p><strong>Validation.</strong> Invalid values return <code>400 INVALID_PARAMETERS</code>. <code>vcodec</code> must be one of H264/H265/H.264/H.265/AVC/HEVC/VC1/VC-1/VP8/VP9/AV1. <code>acodec</code> must be one of AAC/AC3/EC3/EAC3/DD/DD+/AC4/OPUS/FLAC/ALAC/VORBIS/OGG/DTS. <code>range</code> must be one of SDR/HDR10/HDR10P/DV/HLG/HYBRID, and <code>HDR10+</code> is also valid. The bitrate, download worker, and download counts must be positive integers. You may set at most one of the <code>*_only</code> flags. You cannot combine <code>no_subs</code> with <code>subs_only</code>, <code>no_audio</code> with <code>audio_only</code>, or <code>s_lang</code> with <code>require_subs</code>.</p>
+<p><strong>Validation.</strong> Invalid values return <code>400 INVALID_PARAMETERS</code>. <code>vcodec</code> must be one of H264/H265/H.264/H.265/AVC/HEVC/VC1/VC-1/VP8/VP9/AV1. <code>acodec</code> must be one of AAC/AC3/EC3/EAC3/DD/DD+/AC4/OPUS/FLAC/ALAC/VORBIS/OGG/DTS. <code>range</code> must be one of SDR/HDR10/HDR10P/DV/HLG/HYBRID, and <code>HDR10+</code> is also valid. The bitrate, download worker, and download counts must be positive integers. You may set at most one of the <code>*_only</code> flags. You cannot combine <code>no_subs</code> with <code>subs_only</code>, or <code>no_audio</code> with <code>audio_only</code>.</p>
 <div class="admonition danger">
 <p class="admonition-title">Rejected parameters</p>
 <p><code>postscript</code>, <code>post_script</code> and <code>post_scripts</code> are never accepted. A body containing any
