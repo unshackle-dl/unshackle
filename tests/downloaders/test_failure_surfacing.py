@@ -76,6 +76,11 @@ class _Server:
                     self.send_206(conn, BODY[5:], f"bytes 5-{len(BODY) - 1}/{len(BODY)}")
                 elif self.mode == "resume_missing_content_range":
                     self.send_206(conn, BODY)
+                elif self.mode == "range_clamped_206":
+                    # RFC 9110: a range end at or past the last byte clamps to it, so the whole slice arrives
+                    start, _, end = headers["range"].removeprefix("bytes=").partition("-")
+                    start, end = int(start), min(int(end), len(BODY) - 1)
+                    self.send_206(conn, BODY[start : end + 1], f"bytes {start}-{end}/{len(BODY)}")
                 elif self.mode == "range_capped_206":
                     # honors the requested start but caps the span, as size-capping CDNs do
                     start, _, end = headers["range"].removeprefix("bytes=").partition("-")
@@ -201,6 +206,21 @@ def test_slice_segment_rejects_a_206_for_the_wrong_range(tmp_path, server):
         )
     assert not save_path.exists()
     assert len(server.requests) == downloader.MAX_ATTEMPTS
+
+
+@pytest.mark.parametrize("server", ["range_clamped_206"], indirect=True)
+def test_slice_segment_accepts_a_206_clamped_to_the_last_byte(tmp_path, server):
+    # some manifests author a range end past the resource; the clamped 206 is the whole slice
+    save_path = tmp_path / "0.mp4"
+    list(
+        download(
+            url=server.url,
+            save_path=save_path,
+            session=rq.Session(),
+            headers={"Range": f"bytes=0-{len(BODY)}"},
+        )
+    )
+    assert save_path.read_bytes() == BODY
 
 
 @pytest.mark.parametrize("server", ["range_capped_206"], indirect=True)

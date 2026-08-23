@@ -427,6 +427,16 @@ def parse_content_range(value: Any) -> Optional[tuple[int, int, Optional[int]]]:
     return int(match.group(1)), int(match.group(2)), None if match.group(3) == "*" else int(match.group(3))
 
 
+def range_clamped_to_end(content_range: tuple[int, int, Optional[int]], slice_end: int) -> bool:
+    """Whether a 206 stops early only because the requested range ends past the resource.
+
+    RFC 9110 clamps a range end at or beyond the complete length to the last byte, so the
+    response still carries the whole slice. Some manifests author such ranges.
+    """
+    _, end, total = content_range
+    return total is not None and end == total - 1 and slice_end >= total
+
+
 def request_range(headers: MutableMapping[str, Any]) -> Optional[tuple[int, Optional[int]]]:
     """
     The request's ``Range`` as ``(start, end)``. Gives None when absent or not ``bytes=start-...``.
@@ -821,7 +831,11 @@ def download(
                     if (
                         content_range is None
                         or content_range[0] != slice_start
-                        or (slice_end is not None and content_range[1] != slice_end)
+                        or (
+                            slice_end is not None
+                            and content_range[1] != slice_end
+                            and not range_clamped_to_end(content_range, slice_end)
+                        )
                     ):
                         raise IOError(
                             f"byte-range segment got Content-Range {content_range!r}, "

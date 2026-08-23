@@ -2660,6 +2660,9 @@ class dl:
                 if keep_audio and len(title.tracks.audio) > 0:
                     if not audio_description:
                         title.tracks.select_audio(lambda x: not x.descriptive)
+                        if not title.tracks.audio:
+                            self.log.error("Audio description only, use --audio-description...")
+                            sys.exit(1)
                     if acodec:
                         title.tracks.select_audio(lambda x: x.codec in acodec)
                         if not title.tracks.audio:
