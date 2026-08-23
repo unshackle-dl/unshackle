@@ -44,6 +44,8 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "v_lang": [],
     "a_lang": [],
     "s_lang": ["all"],
+    "require_audio": [],
+    "require_video": [],
     "require_subs": [],
     "forced_subs": False,
     "forced_s_lang": [],
@@ -1044,8 +1046,10 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
     if data.get("no_audio") and data.get("audio_only"):
         return "Cannot use both no_audio and audio_only"
 
-    if data.get("s_lang") and data.get("require_subs"):
-        return "Cannot use both s_lang and require_subs"
+    for key in ("require_audio", "require_video", "require_subs"):
+        value = data.get(key)
+        if value is not None and (not isinstance(value, list) or not all(isinstance(v, str) for v in value)):
+            return f"{key} must be an array of language strings"
 
     if "range" in data and data["range"]:
         # "HDR10P" is the canonical range value ("+" is awkward in scripts); "HDR10+" stays valid.

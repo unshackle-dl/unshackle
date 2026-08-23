@@ -48,7 +48,7 @@ Common config keys. This is a useful subset, and every `dl` flag works:
 | `workers` | int | *(downloader default)* | Threads per track. |
 | `speed_limit` | str | *(unlimited)* | Total download speed cap across all downloads combined, e.g. `500k`, `5M`, `1.5G` or plain bytes/sec. Values are bytes, not bits (`5M` = 5.0 MB/s). |
 | `slow` | str | *(unset)* | Inter-title delay, e.g. `"20-40"`. |
-| `best_available` | bool | `false` | Fall back to best quality if the request is unavailable. |
+| `best_available` | bool | `false` | Warn instead of failing when a requested resolution, range, or language is missing. The CLI flag is `--best-available`, also spelled `--warn-only`. |
 | `proxy` | str | *(unset)* | Default proxy URI or 2-letter country. |
 | `no_folder` | bool | `false` | Do not create a per-title folder. |
 

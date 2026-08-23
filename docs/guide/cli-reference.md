@@ -79,7 +79,7 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 | `-c`, `--channels` | - | Audio channels; matches sub-layouts (5.1 ≈ 6.0). |
 | `-naa`, `--noatmos` | off | Exclude Dolby Atmos audio tracks. |
 | `--worst` | off | Pick the lowest bitrate within the requested quality. **Requires `-q`.** |
-| `--best-available` | off | Continue with the best available if a requested resolution/language is absent, instead of failing. |
+| `--best-available`, `--warn-only` | off | Warn and continue when a requested resolution, range, or language is absent, instead of failing. |
 | `-rvb`, `--real-video-bitrate` | off | Probe real media size for true video bitrates, overriding the manifest. |
 | `-rab`, `--real-audio-bitrate` | off | Same for audio (slower). |
 
@@ -94,7 +94,9 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 | `-vl`, `--v-lang` | - | Video-only language (overrides `-l` for video). A `-` prefix excludes. |
 | `-al`, `--a-lang` | - | Audio-only language (overrides `-l` for audio). A `-` prefix excludes. |
 | `-sl`, `--s-lang` | `all` | Subtitle language(s). A `-` prefix excludes, e.g. `all,-es`. |
-| `--require-subs` | - | Required subtitle langs; keeps **all** subs only if these exist. **Cannot combine with `--s-lang`.** |
+| `--require-audio` | - | Audio langs that must exist. The title fails even with `--best-available`. Does not select tracks. |
+| `--require-video` | - | Video langs that must exist. The title fails even with `--best-available`. Does not select tracks. |
+| `--require-subs` | - | Subtitle langs that must exist. Fails the title if one is missing. `--s-lang` still decides what to keep. |
 | `-fs`, `--forced-subs` | off | Include forced subtitle tracks. |
 | `-fsl`, `--forced-s-lang` | none | Language(s) wanted for forced subtitles; implies `-fs`. A `-` prefix excludes. |
 | `--exact-lang` | off | Exact matching only: `-l es-419` matches `es-419`, not `es-ES`. Applies to selection and to sort order. |
@@ -212,7 +214,7 @@ order the service used, then renumbers the episodes into the order you asked for
 | `--slow` | - | Inter-title delay. Bare `--slow` = 60-120s; `--slow 20-40` = custom range (minimum 20s). |
 
 !!! warning "Some flags cannot be combined"
-    `--require-subs` and `--s-lang` are mutually exclusive. `--select-titles` and `--wanted` are mutually exclusive. `--worst` needs `--quality`. `--vbitrate` and `--vbitrate-range` (and the audio equivalents) are mutually exclusive.
+    `--select-titles` and `--wanted` are mutually exclusive. `--worst` needs `--quality`. `--vbitrate` and `--vbitrate-range` (and the audio equivalents) are mutually exclusive.
 
 ---
 

@@ -388,7 +388,9 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | `wanted` | string / string[] | `[]` | Episode/season selectors, as a list or as one comma-separated string. Accepts the part form, `"S01E01.2"`, and the air-date form, `"2026-08-11"` or `"2026-08-01:2026-08-31"`. For a music release, a selector is a track number, `"1-5"` or `"1,3,7"`, or `"{disc}x{track}"` such as `"2x3"`. |
 | `latest_episode` | boolean | `false` | Only the newest episode. |
 | `lang` / `v_lang` / `a_lang` / `s_lang` | string[] | `["orig"]` / `[]` / `[]` / `["all"]` | Language filters. |
-| `require_subs` | string[] | `[]` | Required subtitle languages. |
+| `require_audio` | string[] | `[]` | Audio languages that must exist. The job fails if one is missing, even with `best_available`. |
+| `require_video` | string[] | `[]` | Video languages that must exist. The job fails if one is missing, even with `best_available`. |
+| `require_subs` | string[] | `[]` | Subtitle languages that must exist. The job fails if one is missing. `s_lang` still decides what to keep. |
 | `forced_subs` | boolean | `false` | Include forced subtitles. |
 | `forced_s_lang` | string[] | `[]` | Forced subtitle language(s); implies `forced_subs`. |
 | `exact_lang` | boolean | `false` | Exact language matching. |
@@ -418,7 +420,7 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | `output_dir` | string | `null` | Override output directory. |
 | `no_cache` / `reset_cache` | boolean | `false` | Title cache controls. |
 
-**Validation.** Invalid values return `400 INVALID_PARAMETERS`. `vcodec` must be one of H264/H265/H.264/H.265/AVC/HEVC/VC1/VC-1/VP8/VP9/AV1. `acodec` must be one of AAC/AC3/EC3/EAC3/DD/DD+/AC4/OPUS/FLAC/ALAC/VORBIS/OGG/DTS. `range` must be one of SDR/HDR10/HDR10P/DV/HLG/HYBRID, and `HDR10+` is also valid. The bitrate, download worker, and download counts must be positive integers. You may set at most one of the `*_only` flags. You cannot combine `no_subs` with `subs_only`, `no_audio` with `audio_only`, or `s_lang` with `require_subs`.
+**Validation.** Invalid values return `400 INVALID_PARAMETERS`. `vcodec` must be one of H264/H265/H.264/H.265/AVC/HEVC/VC1/VC-1/VP8/VP9/AV1. `acodec` must be one of AAC/AC3/EC3/EAC3/DD/DD+/AC4/OPUS/FLAC/ALAC/VORBIS/OGG/DTS. `range` must be one of SDR/HDR10/HDR10P/DV/HLG/HYBRID, and `HDR10+` is also valid. The bitrate, download worker, and download counts must be positive integers. You may set at most one of the `*_only` flags. You cannot combine `no_subs` with `subs_only`, or `no_audio` with `audio_only`.
 
 !!! danger "Rejected parameters"
     `postscript`, `post_script` and `post_scripts` are never accepted. A body containing any

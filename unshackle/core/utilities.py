@@ -243,6 +243,23 @@ def find_missing_langs(
     return [tok for tok in requested if tok not in skip and not match_func(tok, available)]
 
 
+def missing_required_langs(
+    required: Sequence[str],
+    available: Sequence[Union[str, Language, None]],
+    original: Optional[Union[str, Language]] = None,
+    *,
+    exact: bool = False,
+) -> list[str]:
+    """
+    Return the required language tokens that match no available track language.
+
+    "orig" becomes the title language, and drops out when the title has none. An exclusion
+    token ("-fr") asks for a language to be absent, so it is never a required language.
+    """
+    wanted, _ = partition_exclusions(list(required))
+    return find_missing_langs(resolve_sort_langs(wanted, original), available, exact=exact)
+
+
 def as_requested(tokens: Sequence[str], orig_token: Optional[str]) -> str:
     """Return language tokens as the user wrote them, so 'orig' reads as 'orig' and not the language it resolved to."""
     return ", ".join("orig" if tok == orig_token else tok for tok in tokens)

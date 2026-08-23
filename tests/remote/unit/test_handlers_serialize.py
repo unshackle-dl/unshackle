@@ -237,7 +237,7 @@ def test_validate_download_params_accepts_defaults() -> None:
         ({"video_only": True, "audio_only": True}, "exclusive"),
         ({"no_subs": True, "subs_only": True}, "no_subs and subs_only"),
         ({"no_audio": True, "audio_only": True}, "no_audio and audio_only"),
-        ({"s_lang": ["en"], "require_subs": ["en"]}, "s_lang and require_subs"),
+        ({"require_subs": "en"}, "require_subs must be an array"),
         ({"range": "UHD"}, "Invalid range"),
         ({"range": ["SDR", "UHD"]}, "Invalid range value"),
     ],

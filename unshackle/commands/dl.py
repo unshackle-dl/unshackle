@@ -76,6 +76,7 @@ from unshackle.core.utilities import (
     is_exact_match,
     keep_forced_subtitle,
     log_event,
+    missing_required_langs,
     partition_exclusions,
     resolve_sort_langs,
     suggest_font_packages,
@@ -637,6 +638,18 @@ class dl:
         help="Language wanted for Audio, overrides -l/--lang for audio tracks. Prefix a value with '-' to exclude it, e.g. 'all,-es'.",
     )
     @click.option(
+        "--require-audio",
+        type=LANGUAGE_RANGE,
+        default=[],
+        help="Audio languages that must exist. The title fails even with --best-available.",
+    )
+    @click.option(
+        "--require-video",
+        type=LANGUAGE_RANGE,
+        default=[],
+        help="Video languages that must exist. The title fails even with --best-available.",
+    )
+    @click.option(
         "-sl",
         "--s-lang",
         type=LANGUAGE_RANGE,
@@ -647,7 +660,7 @@ class dl:
         "--require-subs",
         type=LANGUAGE_RANGE,
         default=[],
-        help="Required subtitle languages. Downloads all subtitles only if these languages exist. Cannot be used with --s-lang.",
+        help="Subtitle languages that must exist. The title fails if one is missing. -sl still decides what to keep.",
     )
     @click.option("-fs", "--forced-subs", is_flag=True, default=False, help="Include forced subtitle tracks.")
     @click.option(
@@ -900,10 +913,11 @@ class dl:
     )
     @click.option(
         "--best-available",
+        "--warn-only",
         "best_available",
         is_flag=True,
         default=False,
-        help="Continue with best available quality if requested resolutions are not available.",
+        help="Warn instead of failing when a requested resolution, range, or language is missing, and continue with what is available.",
     )
     @click.option(
         "--remote",
@@ -1430,6 +1444,8 @@ class dl:
         v_lang: list[str],
         a_lang: list[str],
         s_lang: list[str],
+        require_audio: list[str],
+        require_video: list[str],
         require_subs: list[str],
         forced_subs: bool,
         forced_s_lang: list[str],
@@ -1506,6 +1522,16 @@ class dl:
         # an override that names languages replaces -l entirely, so it must not inherit its exclusions
         video_excl = list(dict.fromkeys(v_lang_excl + ([] if v_lang else lang_excl)))
         audio_excl = list(dict.fromkeys(a_lang_excl + ([] if a_lang else lang_excl)))
+        for flag, tokens, excludes in (
+            ("--require-audio", require_audio, audio_excl),
+            ("--require-video", require_video, video_excl),
+            ("--require-subs", require_subs, s_lang_excl),
+        ):
+            required, own_excl = partition_exclusions(tokens)
+            clash = own_excl + [t for t in required if any(t.lower() == e.lower() for e in excludes)]
+            if clash:
+                self.log.error(f"{flag}: {clash[0]} cannot be required and excluded at the same time.")
+                sys.exit(1)
 
         ctx = getattr(service, "ctx", None)
         parent_params = ctx.parent.params if ctx and ctx.parent else None
@@ -1588,10 +1614,6 @@ class dl:
             isinstance(acodec, list) and not all(isinstance(v, Audio.Codec) for v in acodec)
         ):
             acodec = AUDIO_CODEC_LIST.convert(acodec)
-
-        if require_subs and s_lang != ["all"]:
-            self.log.error("--require-subs and --s-lang cannot be used together")
-            sys.exit(1)
 
         if worst and not quality:
             self.log.error("--worst requires -q/--quality to be specified")
@@ -2196,6 +2218,24 @@ class dl:
             if no_proxy_download and any(service.session.proxies.values()):
                 console.log("Bypassing proxy for downloads as --no-proxy-download was used...")
 
+            for kind, required, available in (
+                (
+                    "audio",
+                    require_audio if keep_audio else [],
+                    [a.language for a in title.tracks.audio] + embedded_audio_langs(title.tracks.videos, keep_videos),
+                ),
+                ("video", require_video if keep_videos else [], [v.language for v in title.tracks.videos]),
+                (
+                    "subtitle",
+                    require_subs if keep_subtitles else [],
+                    [t.language for t in title.tracks.subtitles],
+                ),
+            ):
+                missing_required = missing_required_langs(required, available, title.language, exact=exact_lang)
+                if missing_required:
+                    self.log.error(f"Required {kind} language(s) not found: {', '.join(missing_required)}")
+                    sys.exit(1)
+
             if not keep_videos:
                 title.tracks.videos = []
             if not keep_audio:
@@ -2557,21 +2597,7 @@ class dl:
                             s_excl_r, [t.language for t in title.tracks.subtitles], exact_lang
                         )
                         title.tracks.select_subtitles(lambda x: str(x.language) not in drop)
-                    if keep_subtitles and require_subs:
-                        missing_langs = [
-                            lang
-                            for lang in require_subs
-                            if not any(is_close_match(lang, [sub.language]) for sub in title.tracks.subtitles)
-                        ]
-
-                        if missing_langs:
-                            self.log.error(f"Required subtitle language(s) not found: {', '.join(missing_langs)}")
-                            sys.exit(1)
-
-                        self.log.info(
-                            f"Required languages found ({', '.join(require_subs)}), downloading all available subtitles"
-                        )
-                    elif keep_subtitles and s_lang and "all" not in s_lang:
+                    if keep_subtitles and s_lang and "all" not in s_lang:
                         match_func = is_exact_match if exact_lang else is_close_match
 
                         missing_langs = find_missing_langs(

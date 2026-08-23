@@ -681,6 +681,16 @@ async def download(request: web.Request) -> web.Response:
                 items:
                   type: string
                 description: Language for subtitle tracks (a '-' prefix excludes, e.g. ["all", "-es"]) (default - ["all"])
+              require_audio:
+                type: array
+                items:
+                  type: string
+                description: Audio languages that must exist, else the job fails (default - [])
+              require_video:
+                type: array
+                items:
+                  type: string
+                description: Video languages that must exist, else the job fails (default - [])
               require_subs:
                 type: array
                 items:

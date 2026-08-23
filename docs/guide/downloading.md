@@ -94,7 +94,7 @@ By default a missing requested resolution is an error. Two flags change that:
 
 | Flag | Behaviour |
 | --- | --- |
-| `--best-available` | If the requested resolution(s) are not present, continue with the best that *is* available instead of failing. Also softens missing video/audio/subtitle languages and hybrid fallbacks. |
+| `--best-available` (`--warn-only`) | If the requested resolution(s) are not present, continue with the best that *is* available instead of failing. Also softens missing video/audio/subtitle languages and hybrid fallbacks. |
 | `--worst` | Within the specified quality, pick the **lowest** bitrate rendition. **Requires `-q/--quality`.** |
 
 ```shell title="Never fail on a missing resolution"
@@ -364,12 +364,42 @@ except Spanish, forced Spanish subtitles included.
 
 ### Requiring subtitles
 
-`--require-subs` takes a list of languages that **must** exist. If they all exist,
-unshackle downloads *all* subtitles. If any is missing, the title fails. This is useful
-when you want a download only if a specific subtitle track is present.
+`--require-subs` takes a list of languages that **must** exist. If any is missing, the
+title fails, even under `--best-available` / `--warn-only`. Use it when a download is only
+worth keeping if a specific subtitle track is present.
 
-!!! warning "Cannot combine with `--s-lang`"
-    `--require-subs` and `--s-lang` are mutually exclusive. Use one or the other.
+It gates the title. It does not select tracks: `--s-lang` still decides what to keep, and
+it defaults to `all`:
+
+```bash
+# every subtitle language, but only if English is one of them
+unshackle dl --require-subs en EXAMPLE 0ABC123
+
+# English, Korean and Japanese only, and only if English is present
+unshackle dl -sl en,ko,ja --require-subs en EXAMPLE 0ABC123
+```
+
+### Requiring audio and video languages
+
+`--require-audio` and `--require-video` take a list of languages that **must** exist. If
+one is missing, the title fails, even under `--best-available` / `--warn-only`. Like
+`--require-subs`, they gate the title without selecting tracks: `-l` / `-al` / `-vl` still
+decide what unshackle downloads.
+
+This matters most with `-l best` or `-l all`, which accept whatever the service offers and
+so never report a missing language on their own:
+
+```bash
+# every audio language except French, but only if English is one of them
+unshackle dl -l best,-fr --require-audio en EXAMPLE 0ABC123
+
+# English is required, French is optional
+unshackle dl -l en,fr --require-audio en --warn-only EXAMPLE 0ABC123
+```
+
+The check runs against the full track list, before any language selection or exclusion.
+`orig` resolves to the title language, and `--exact-lang` applies. Audio carried inside the
+video track counts. `--no-audio` and `--no-video` drop the matching requirement.
 
 ### Forced subtitles and output format
 
@@ -904,6 +934,8 @@ authoritative list.
 | `--video-only` / `--audio-only` / `--subs-only` | `-V` / `-A` / `-S` | Restrict track types. |
 | `--no-video` / `--no-audio` / `--no-subs` / `--no-chapters` | `-nv` / `-na` / `-ns` / `-nc` | Skip track types. |
 | `--worst` | | Lowest bitrate within `-q`. |
+| `--require-audio` | | Audio languages that must exist. The title fails if one is missing. |
+| `--require-video` | | Video languages that must exist. The title fails if one is missing. |
 | `--best-available` | | Degrade gracefully instead of failing. |
 | `--output` | `-o` | Output directory for this run. |
 | `--split-audio` / `--merge-video` / `--no-mux` | | Muxing behaviour. |
