@@ -31,9 +31,9 @@ class EXAMPLE(Service):
     every framework feature in one place. Music is the one exception: it has its
     own reference service, MUSIC_EXAMPLE.
 
-    Version: 2.0.0
+    Version: 2.1.0
     Author: sp4rk.y
-    Date: 2026-06-28
+    Date: 2026-08-23
     Authorization: Cookies + Credentials
     Geofence: US, UK
     Robustness:
@@ -58,7 +58,8 @@ class EXAMPLE(Service):
         get_tracks            DASH variant fan-out (default) + HLS/ISM alternates
         fetch_dash_manifest  range override, HDR10+ flip, DV-composite, Atmos,
                               descriptive audio, channel fixups, cover-art attachment,
-                              VUI normalise, bitrate-window awareness
+                              VUI normalise, bitrate-window awareness,
+                              drm_preference pinning for dual-PSSH manifests
         get_chapters          Chapters() with named + unnamed markers
         get_widevine_*        service certificate + license (per-segment PSSH through `track`)
         get_playready_license PlayReady challenge POST
@@ -346,6 +347,25 @@ class EXAMPLE(Service):
         # the flag. It also backfills that language onto any track the manifest leaves
         # unlabelled. HLS/ISM accept the same `language=` arg identically.
         tracks = DASH.from_url(url=manifest_url, session=self.session).to_tracks(language=title.language)
+
+        # A manifest can advertise BOTH a Widevine and a PlayReady PSSH while only one of
+        # them will actually license a given track. Left alone, the loaded CDM decides, and
+        # the wrong pick fails at licence time. `drm_preference` pins the track instead: it
+        # wins over the CDM in DASH/HLS selection AND in the licence call, so it survives a
+        # mid-run CDM swap. Accepts "widevine" or "wv", and "playready" or "pr".
+        #
+        # The ladder here: L3 is capped at 1080p, and 4K licenses with an L1 Widevine box or
+        # an SL3000 PlayReady one. So 4K follows the CDM, and 1080p is always Widevine.
+        for video in tracks.videos:
+            if video.height and video.height > 1080:
+                video.drm_preference = "playready" if self.is_playready else "widevine"
+            else:
+                video.drm_preference = "widevine"
+
+        # Pin audio to match. Audio carries no height of its own, so a track left unpinned
+        # in a mixed-DRM title can be handed whichever CDM another track happened to load.
+        for audio in tracks.audio:
+            audio.drm_preference = tracks.videos[0].drm_preference if tracks.videos else "widevine"
 
         for video in tracks.videos:
             # The manifest can't always be trusted for range - stamp what we asked for.
