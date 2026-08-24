@@ -61,12 +61,12 @@ Declared at the top of your service class, these are static descriptors:
 
 | Class variable | Type | Purpose |
 |---|---|---|
-| `ALIASES` | `tuple[str, ...]` | Alternate tags the service answers to (resolved by `Services.get_tag`). |
-| `GEOFENCE` | `tuple[str, ...]` | ISO region codes the service requires; empty means no geofence. The first entry is treated as the "main region" for automatic proxy selection. |
+| `ALIASES` | `tuple[str, ...]` | Alternate tags the service answers to, in any case (resolved by `Services.get_tag`). |
+| `GEOFENCE` | `tuple[str, ...]` | ISO region codes the service requires; empty means no geofence. unshackle treats the first entry as the "main region" for automatic proxy selection. |
 | `VAULT_TAG` | `Optional[str]` | Overrides the key-vault namespace; defaults to the service's own tag. |
 | `AUTH_METHODS` | `Optional[tuple[str, ...]]` | Accepted auth methods (`"cookies"` / `"credentials"`). When `None`, the REST `/services` endpoint infers them from `authenticate()`. |
 | `ANIME` | `bool` | The catalogue is anime, so metadata lookups prefer AniList. A title's own `anime` flag overrides it. |
-| `DAILY` | `bool` | The catalogue is daily/date-based, so episodes are named by air date. A title's own `daily` flag overrides it. |
+| `DAILY` | `bool` | The catalogue is daily/date-based, so unshackle names episodes by air date. A title's own `daily` flag overrides it. |
 
 ### Required methods
 
@@ -141,7 +141,7 @@ families, one per media kind:
 All items subclass `Title`, which carries the shared identity: a **unique `id`**, the
 originating `service` class, an optional original `language`, arbitrary `data`, and a
 freshly-constructed `self.tracks = Tracks()` that `get_tracks` will fill. Collections
-are sorted lists, so titles stay in a stable order.
+use sorted lists, so titles stay in a stable order.
 
 !!! warning "The unique ID is validated"
     `Title.__init__` rejects a falsy `id_`, and rejects any ID shorter than 4 characters
@@ -330,7 +330,7 @@ in `unshackle.core.manifests`. Each parser has the same three-part contract:
 ### The parser contract
 
 1. **Construct**: `DASH.from_url(url, session=...)` or `DASH.from_text(text, url)`
-   (and likewise for `HLS` / `ISM`). A `url` is always required, even for `from_text`,
+   (and likewise for `HLS` / `ISM`). Always pass a `url`, even to `from_text`,
    because the parser needs it to make relative segment paths absolute.
 2. **`to_tracks(...)`**: parses the manifest into a `Tracks` container of `Video`,
    `Audio`, and `Subtitle` objects, each carrying descriptor-specific state.

@@ -95,13 +95,13 @@ Declared at class level to configure framework behaviour:
 
 | Variable | Type | Purpose |
 |---|---|---|
-| `ALIASES` | `tuple[str, ...]` | Extra tags that resolve to this service (e.g. `("EX", "DOMAIN")`). Default `()`. |
-| `GEOFENCE` | `tuple[str, ...]` | IP region codes the service requires. Empty = no geofence. The **first** entry is treated as the main region for auto-proxy. |
+| `ALIASES` | `tuple[str, ...]` | Extra tags that resolve to this service (e.g. `("EX", "DOMAIN")`). Case does not matter. Default `()`. |
+| `GEOFENCE` | `tuple[str, ...]` | IP region codes the service requires. Empty = no geofence. unshackle treats the **first** entry as the main region for auto-proxy. |
 | `VAULT_TAG` | `Optional[str]` | Overrides the key-vault namespace so sibling services can share one vault. Default `None` (use the service's own tag). |
 | `AUTH_METHODS` | `Optional[tuple[str, ...]]` | Auth methods accepted (`"cookies"` / `"credentials"`). When `None`, the REST `/services` endpoint infers them from `authenticate()`. |
 | `NO_SUBTITLES` | `bool` | Set `True` on a service with no subtitle tracks to skip subtitle handling entirely. |
 | `ANIME` | `bool` | Set `True` when the catalogue is anime, so metadata lookups prefer AniList. A title's own `anime` flag overrides it. |
-| `DAILY` | `bool` | Set `True` when the catalogue is daily/date-based (talk shows, news, sports), so episodes are named by air date. A title's own `daily` flag overrides it. |
+| `DAILY` | `bool` | Set `True` when the catalogue is daily/date-based (talk shows, news, sports), so unshackle names episodes by air date. A title's own `daily` flag overrides it. |
 
 !!! note "`NO_SUBTITLES` is a convention, not a base-class attribute"
     `dl.py` uses `hasattr` to find `NO_SUBTITLES`, and the `Service` base class

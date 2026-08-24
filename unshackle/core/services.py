@@ -317,18 +317,22 @@ class Services(click.Group):
     def get_tag(value: str) -> str:
         """
         Get the Service Tag (the name of the service's directory, not one of its aliases) by an Alias.
-        Input value can be of any case-sensitivity.
+        Input value can be of any case-sensitivity, and so can the alias it matches.
+        A real tag always wins over an alias: services do declare aliases that collide with another service's tag.
         This method returns the original input value if it does not match a service tag.
         """
-        original_value = value
-        value = value.lower()
+        value_lower = value.lower()
+        tags = [path.parent.stem for path in SERVICES]
 
-        for path in SERVICES:
-            tag = path.parent.stem
-            if value in (tag.lower(), *ALIASES.get(tag, [])):
+        for tag in tags:
+            if value_lower == tag.lower():
                 return tag
 
-        return original_value
+        for tag in tags:
+            if any(value_lower == alias.lower() for alias in ALIASES.get(tag, ())):
+                return tag
+
+        return value
 
     @staticmethod
     def load(tag: str) -> Service:

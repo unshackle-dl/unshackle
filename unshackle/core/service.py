@@ -171,7 +171,7 @@ class Service(metaclass=ABCMeta):
     still, during track download.
     """
 
-    ALIASES: tuple[str, ...] = ()  # list of aliases for the service; alternatives to the service tag.
+    ALIASES: tuple[str, ...] = ()  # alternative tags for the service, matched without case.
     GEOFENCE: tuple[str, ...] = ()  # list of ip regions required to use the service. empty list == no specific region.
     ANIME: bool = False  # service catalogue is anime; metadata lookups prefer AniList. Title.anime overrides per title.
     DAILY: bool = False  # catalog is daily/date-based. episodes are named by air date. Title.daily overrides per title.
@@ -489,8 +489,8 @@ class Service(metaclass=ABCMeta):
         read by the Cdm and decrypted.
 
         This is a very important request to get correct. A bad, unexpected, or missing
-        value in the request can cause the service to detect your CDM device. The device
-        can then be banned, revoked, disabled, or downgraded.
+        value in the request can cause the service to detect your CDM device.
+        The service can then ban, revoke, disable, or downgrade that device.
 
         :param challenge: The license challenge from the Widevine CDM.
         :param title: The current `Title` from get_titles that unshackle processes now. unshackle
@@ -510,8 +510,8 @@ class Service(metaclass=ABCMeta):
         read by the CDM and decrypted.
 
         This is a very important request to get correct. A bad, unexpected, or missing
-        value in the request can cause the service to detect your CDM device. The device
-        can then be banned, revoked, disabled, or downgraded.
+        value in the request can cause the service to detect your CDM device.
+        The service can then ban, revoke, disable, or downgrade that device.
 
         :param challenge: The license challenge from the PlayReady CDM.
         :param title: The current `Title` from get_titles that unshackle processes now. unshackle
