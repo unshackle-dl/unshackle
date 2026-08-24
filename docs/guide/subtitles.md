@@ -55,6 +55,9 @@ format-appropriate clean-up to make a single, valid file:
   that confuse downstream parsers, and merges multi-line cues that a service split into
   separate overlapping cues. By default unshackle keeps the original styling and layout
   (see [`preserve_formatting`](#subtitle-configuration)).
+- **Cue markup normalisation**: unshackle removes the WebVTT-only parts of a cue
+  payload, so no player draws them as dialogue. See
+  [Cue markup](#cue-markup-and-html-entities).
 - **TTML for muxing**: Matroska cannot carry TTML. If you do not request a specific
   output format, unshackle automatically converts any plain TTML track to WebVTT before
   muxing (the closest lossless equivalent). Boxed `fTTML` is likewise unwrapped to TTML
@@ -188,6 +191,20 @@ itself. The default (`auto`) prefers the `subby` cleaner for SRT, falls back to
 SubtitleEdit when you install it, and otherwise uses the built-in `filter-subs`
 approach.
 
+Every engine removes the same three things: bracketed sound effects (`[MUSIC PLAYING]`,
+`(door creaks)`), speaker labels (`MAN:`), and font tags. Every engine keeps plain
+dialogue and inline `<i>` styling. They differ on music and lyric lines:
+
+| `sdh_method` | Engine that runs | Lyric lines (`♪ ... ♪`) |
+| --- | --- | --- |
+| `auto` | `subby` for an SRT track. SubtitleEdit for any other format when you install it, otherwise `filter-subs`. | Kept, unless the fallback reaches `filter-subs`. |
+| `subby` | `subby`, but only for a track that is already SRT. Any other format falls through to `filter-subs`. | Kept for SRT, removed otherwise. |
+| `subtitleedit` | SubtitleEdit when you install it, otherwise `filter-subs`. | Kept with SubtitleEdit, removed without it. |
+| `filter-subs` | `filter-subs` always. | Removed. |
+
+Pick `filter-subs` when you want lyrics gone as well. Pick `subby` or install
+SubtitleEdit when you want to read along with the songs.
+
 !!! note "Why `convert_before_strip` exists"
     `subby`'s SDH stripper only operates on SRT. Handed any other codec it returns
     silently without stripping anything, not an error but a no-op that leaves the SDH
@@ -288,6 +305,28 @@ Reading the table:
     Install [SubtitleEdit / `seconv`](#subtitle-configuration) if you need colour or the
     highest → SRT fidelity.
 
+### Cue markup and HTML entities
+
+Styling is not the only thing a conversion has to handle. WebVTT carries markup that no
+other format understands, and a player that does not know a tag draws it as dialogue.
+unshackle removes that markup before any backend runs, so the result is the same for
+every `conversion_method`:
+
+| WebVTT markup | Result |
+| --- | --- |
+| `<c.bg_transparent>text</c>` | Tags removed, text kept. A class only selects a CSS `::cue` rule that no player ever receives, so it carries no styling. |
+| `<i.loud>`, `<b.x>`, `<u.y>` | Class list removed, the styling tag kept. |
+| `<v Bob>`, `<lang ja>`, `<ruby>`, `<rt>` | Tags removed, text kept. |
+| `<00:00:02.000>` | Removed. These are karaoke timings that no subtitle player renders. |
+| `&amp;`, `&nbsp;`, `&#39;` | Decoded to real characters for SRT, SSA, and ASS output. Kept escaped for WebVTT and TTML, which need them. |
+
+!!! warning "A class list breaks more than you expect"
+    FFmpeg reads SubRip markup as a tag only while the tag name stays inside
+    `[0-9a-zA-Z_/]`. The dot in `<i.loud>` fails that test, so FFmpeg prints the opening
+    tag on screen and then closes an italic run that never opened. The FFmpeg WebVTT
+    reader matches `i`, `b`, and `u` exactly, so there the same class silently loses the
+    styling. mpv, VLC, Plex, and Jellyfin all use one of those two readers.
+
 !!! note "Config wins over a service's preference"
     A service may set a `preferred_conversion_method` on its own tracks (for example when
     it ships subtitles that a particular backend handles best). An explicit
@@ -380,6 +419,32 @@ subtitle:
 | `sidecar_format` | `srt` | a format name (e.g. `srt`, `vtt`) or `original` | Format used for sidecar files. |
 | `group_by` | `type` | `type`, `language` | Whether all tracks of one type stay together, or each language stays next to its own variants. |
 | `language_priority` | *(unset)* | a list of languages | Languages to sort to the top. The rest keep the default order. Nothing is removed. |
+
+### Which settings to change
+
+The defaults give a clean, player-safe file, so most people change nothing. Start here
+only when you want something the defaults do not do:
+
+| If you want | Set |
+| --- | --- |
+| Every original style kept, with no re-encode at all | `--sub-format original`, and `sidecar_format: original` for sidecars |
+| The highest conversion fidelity, including colour | Install SubtitleEdit. `conversion_method` stays `auto` |
+| Music and lyric lines stripped along with the sound effects | `sdh_method: filter-subs` |
+| Lyric lines kept | `sdh_method: subby`, or install SubtitleEdit |
+| No stripped copies made at all | `strip_sdh: false` |
+| One backend for every conversion, whatever you install | `conversion_method: <backend>` |
+
+Two keys read as if they control markup, and do not:
+
+- **`preserve_formatting`** decides whether unshackle re-encodes a WebVTT file after
+  the repair pipeline. Left `true`, the cue text passes through as written. Set to
+  `false`, unshackle re-encodes the file through pycaption, which merges identical cues
+  and drops empty ones but also flattens styling. Neither setting leaves WebVTT-only
+  markup in the file: [cue markup normalisation](#cue-markup-and-html-entities) runs
+  either way.
+- **`convert_before_strip`** applies to SDH stripping, not to your output format. It
+  converts the working copy to SRT so a non-SubtitleEdit engine can read it. Turning it
+  off makes `subby` and `filter-subs` no-ops on anything that is not already SRT.
 
 !!! tip "SubtitleEdit is optional but recommended"
     Several high-fidelity paths (the best-quality conversions and the SubtitleEdit SDH

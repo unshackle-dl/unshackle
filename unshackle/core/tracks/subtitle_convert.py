@@ -14,7 +14,9 @@ the codec enum, ``parse``, sanitizers and cue helpers (the collaborators backend
 
 from __future__ import annotations
 
+import html
 import logging
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -204,7 +206,7 @@ class Pysubs2Backend:
         return 1 if source in (Codec.SubStationAlpha, Codec.SubStationAlphav4) else 2
 
     def convert(self, source: Codec, src: Path, target: Codec, out: Path) -> None:
-        subs = pysubs2.load(str(src), encoding="utf-8")
+        subs = pysubs2.load(str(src), encoding="utf-8-sig")
         subs.save(str(out), format_=PYSUBS2_FORMATS[target], encoding="utf-8")
 
 
@@ -289,6 +291,30 @@ def resolve_backends(source: Codec, target: Codec, *, pin: Optional[str] = None)
     return sorted(available, key=lambda b: b.rank(source, target))
 
 
+# Formats with no entity syntax of their own. WebVTT and TTML keep theirs escaped.
+PLAIN_TEXT_TARGETS: frozenset[Codec] = frozenset({Codec.SubRip, Codec.SubStationAlpha, Codec.SubStationAlphav4})
+
+
+def decode_entities(out: Path) -> None:
+    """
+    Turn HTML entities into real characters in a format that has no entity syntax.
+
+    FFmpeg's SubRip reader (mpv, VLC, Plex, Jellyfin) and libass draw ``&amp;`` and the
+    other entities as literal text. Backends differ here: subby and SubtitleEdit
+    decode, pysubs2 does not.
+    """
+    text = out.read_text(encoding="utf8")
+    if "&" not in text:
+        return
+    decoded = re.sub(
+        r"&(?:#\d{1,7}|#[xX][0-9a-fA-F]{1,6}|[A-Za-z][A-Za-z0-9]{1,31});",
+        lambda m: html.unescape(m.group(0)),
+        text,
+    )
+    if decoded != text:
+        out.write_text(decoded, encoding="utf8")
+
+
 def finalize(sub: Subtitle, target: Codec, out: Path) -> Path:
     """Swap the track onto the converted file and fire the OnConverted callback."""
     original = sub.path
@@ -338,6 +364,8 @@ def run_conversion(sub: Subtitle, target: Codec, *, pin: Optional[str] = None, f
             last_exc = e
             log.debug(f"Subtitle backend {backend.name} failed ({source.name}->{target.name}): {e}")
             continue
+        if target in PLAIN_TEXT_TARGETS:
+            decode_entities(out)
         return finalize(sub, target, out)
 
     raise RuntimeError(f"All subtitle backends failed for {source.name}->{target.name}") from last_exc

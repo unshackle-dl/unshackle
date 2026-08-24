@@ -43,7 +43,7 @@ Common config keys. This is a useful subset, and every `dl` flag works:
 | `sub_format` | str | *(unset)* | Convert subtitles to this format (`srt`, `vtt`, `original`, ...). |
 | `forced_subs` | bool | `false` | Include forced subtitle tracks. |
 | `forced_s_lang` | list | `[]` | Forced subtitle language(s); implies `forced_subs`. A `-` prefix excludes. |
-| `no_subs` / `no_audio` / `no_chapters` | bool | `false` | Skip that track type. |
+| `no_subs` / `no_audio` / `no_chapters` / `no_attachments` | bool | `false` | Skip that track type. `no_attachments` also skips subtitle font attaching. |
 | `downloads` | int | `1` | Tracks downloaded concurrently. |
 | `workers` | int | *(downloader default)* | Threads per track. |
 | `speed_limit` | str | *(unlimited)* | Total download speed cap across all downloads combined, e.g. `500k`, `5M`, `1.5G` or plain bytes/sec. Values are bytes, not bits (`5M` = 5.0 MB/s). |
@@ -132,7 +132,7 @@ in or writes them as sidecar files. See [Subtitles](../../guide/subtitles.md) fo
 |---------|------|---------|-------------|
 | `strip_sdh` | bool | `true` | Strip SDH/CC cues (hearing-impaired annotations) into a clean track. |
 | `sdh_method` | str | `"auto"` | SDH-stripping backend to use. |
-| `preserve_formatting` | bool | `true` | Keep styling/positioning when converting or stripping. |
+| `preserve_formatting` | bool | `true` | Pass WebVTT cue text through as written. `false` re-encodes it through pycaption, which merges identical cues but flattens styling. unshackle removes WebVTT-only cue markup either way. |
 | `convert_before_strip` | bool | `true` | Convert to the working format before stripping SDH. |
 | `conversion_method` | str | `"auto"` | Subtitle conversion backend. |
 | `output_mode` | str | `"mux"` | `mux` embeds subtitles in the MKV; `sidecar` writes separate files; `both` writes sidecars and still muxes. |

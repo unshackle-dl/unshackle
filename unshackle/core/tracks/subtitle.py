@@ -288,6 +288,7 @@ class Subtitle(Track):
             text = Subtitle.sanitize_webvtt_timestamps(text)
             text = Subtitle.sanitize_webvtt_cue_identifiers(text)
             text = Subtitle.merge_overlapping_webvtt_cues(text)
+            text = Subtitle.strip_webvtt_cue_classes(text)
 
             preserve_formatting = config.subtitle.get("preserve_formatting", True)
 
@@ -314,6 +315,29 @@ class Subtitle(Track):
                     except Exception:
                         # Keep the sanitized version even if parsing failed
                         self.path.write_text(text, encoding="utf8")
+
+    @staticmethod
+    def strip_webvtt_cue_classes(text: str) -> str:
+        """
+        Reduce a cue payload to the markup every target format shares: ``<i>``, ``<b>``
+        and ``<u>`` without their class list. It removes class spans (``<c.foo>``),
+        ``<v>``, ``<lang>``, ``<ruby>``/``<rt>`` and karaoke timestamps
+        (``<00:00:01.000>``).
+
+        A class only selects a CSS ``::cue`` rule that no player receives, so it never
+        carries styling, but it does break rendering. FFmpeg's SubRip reader treats a tag
+        name as a tag only while it matches ``[0-9a-zA-Z_/]``. The dot fails that test, so
+        FFmpeg prints ``<i.loud>`` as cue text and then emits the closing italic-off with
+        nothing opened. FFmpeg's WebVTT reader matches ``i``/``b``/``u`` exactly and drops
+        the rest, so there a class silently loses the styling instead. The tags this
+        method removes outright are the ones both readers already discard, and that
+        libass would draw as text if a conversion carried them into ASS.
+        """
+        text = re.sub(r"</?c(?:\.[^\s>]*)?(?:\s[^>]*)?>", "", text)
+        text = re.sub(r"(</?)([ibu])\.[^\s>]*", r"\1\2", text)
+        text = re.sub(r"</?(?:v|lang)(?:\.[^\s>]*)?(?:\s[^>]*)?>", "", text)
+        text = re.sub(r"</?(?:ruby|rt)>", "", text)
+        return re.sub(r"<\d{2,}:\d{2}(?::\d{2})?\.\d{3}>", "", text)
 
     @staticmethod
     def strip_webvtt_timestamp_map(text: str) -> str:
@@ -1000,22 +1024,6 @@ class Subtitle(Track):
             return
         elif sdh_method == "subtitleedit" and binaries.SubtitleEdit:
             pass  # Continue to SubtitleEdit section below
-        elif sdh_method == "filter-subs":
-            sub = Subtitles(self.path)
-            try:
-                sub.filter(rm_fonts=True, rm_ast=True, rm_music=True, rm_effects=True, rm_names=True, rm_author=True)
-            except ValueError as e:
-                if "too many values to unpack" in str(e):
-                    # Retry without name removal if the error is due to multiple colons in time references
-                    # This can happen with lines like "at 10:00 and 2:00"
-                    sub = Subtitles(self.path)
-                    sub.filter(
-                        rm_fonts=True, rm_ast=True, rm_music=True, rm_effects=True, rm_names=False, rm_author=True
-                    )
-                else:
-                    raise
-            sub.save()
-            return
         elif sdh_method == "auto":
             if self.codec == Subtitle.Codec.SubRip:
                 try:
