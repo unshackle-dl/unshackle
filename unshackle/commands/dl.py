@@ -833,6 +833,13 @@ class dl:
         default=None,
         help="Only use CDM, or only use Key Vaults for retrieval of Decryption Keys.",
     )
+    @click.option(
+        "--cdm",
+        "cdm_name",
+        type=str,
+        default=None,
+        help="Use this CDM device for the run, overriding the cdm config mapping.",
+    )
     @click.option("--no-proxy", is_flag=True, default=False, help="Force disable all proxy use.")
     @click.option(
         "--no-proxy-download",
@@ -1201,6 +1208,7 @@ class dl:
                             f"Applied service-specific '{config_key}' overrides for {self.service}: {override_value}"
                         )
 
+        self.cdm_override = ctx.params.get("cdm_name")
         cdm_only = ctx.params.get("cdm_only")
 
         if cdm_only:
@@ -1504,6 +1512,8 @@ class dl:
         self.service_anime = bool(getattr(service, "ANIME", False))
         self.service_daily = bool(getattr(service, "DAILY", False))
         self.server_cdm = getattr(service, "_server_cdm", False)
+        if self.server_cdm and self.cdm_override:
+            self.log.warning("--cdm is ignored: this remote service licenses with the server CDM")
         self._remote_service = service if hasattr(service, "_server_cdm") else None
         start_time = time.time()
 

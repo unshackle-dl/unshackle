@@ -9,8 +9,9 @@ the [DRM & CDM guide](../../guide/drm-and-cdm.md). Device files themselves live 
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
 
 Maps a service tag to the CDM (Widevine/PlayReady device) to use, with a `default` fallback.
-Resolution is case-insensitive: a per-request API override wins, then the per-service entry,
-then `default`.
+Resolution is case-insensitive: an override (`dl --cdm <name>`, or the `cdm` field of an API
+job) wins, then the per-service entry, then `default`. An override pins one device for the whole
+run and skips any quality or Widevine/PlayReady sub-entries.
 
 ```yaml
 cdm:

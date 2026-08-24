@@ -440,6 +440,7 @@ def perform_download(
         "no_proxy": params.get("no_proxy", False),
         "no_proxy_download": params.get("no_proxy_download", False),
         "profile": params.get("profile"),
+        "cdm_name": params.get("cdm"),
         "repack": params.get("repack", False),
         "tag": params.get("tag"),
         "tmdb_id": params.get("tmdb_id"),
@@ -484,10 +485,6 @@ def perform_download(
         daily=params.get("daily", False),
         output_dir=Path(params["output_dir"]) if params.get("output_dir") else None,
     )
-    # Per-request CDM override (a device name in the WVDs dir); get_cdm() takes it first.
-    if params.get("cdm"):
-        dl_instance.cdm_override = params["cdm"]
-
     # Per-request credential ("user:pass"); feed it into the map get_credentials() reads so a
     # client can authenticate without anything being persisted to disk. Without a profile,
     # get_credentials() falls back to "default", so store it there too rather than dropping it

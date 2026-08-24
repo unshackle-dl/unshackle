@@ -757,6 +757,9 @@ async def download(request: web.Request) -> web.Response:
               cdm_only:
                 type: boolean
                 description: Only use CDM for content key retrieval (true) or only vaults (false) (default - None)
+              cdm:
+                type: string
+                description: CDM device name on the server to license with, overriding the cdm config mapping. Requires serve.cdm_overrides to allow it (default - None)
               proxy:
                 type: string
                 description: Proxy URI or country code (default - None)

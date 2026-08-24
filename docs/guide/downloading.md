@@ -751,6 +751,7 @@ By default, unshackle checks your **key vaults** first and only asks a **CDM** t
 a content key when the vault misses. You can force one side or the other:
 
 - `--cdm-only`: only use the CDM (skip vaults).
+- `--cdm <name>`: use the named CDM device for this run, ignoring the `cdm` config mapping (including its quality and Widevine/PlayReady sub-entries).
 - `--vaults-only`: only use key vaults and never license through the CDM. A missing
   content key fails.
 
@@ -945,6 +946,7 @@ authoritative list.
 | `--workers` / `--downloads` / `--slow` | | Concurrency and pacing. |
 | `--list` / `--list-titles` / `--skip-dl` | | Dry runs. |
 | `--cdm-only` / `--vaults-only` | | Content key source control. |
+| `--cdm <name>` | | Pin one CDM device, bypassing the `cdm` config mapping. |
 | `--export` | | Export track info and keys to JSON. |
 | `--tmdb` / `--imdb` / `--tvdb` / `--anilist` / `--enrich` | | Metadata overrides. |
 | `--tvdb-order` | | Renumber episodes to a TVDB season order. |
