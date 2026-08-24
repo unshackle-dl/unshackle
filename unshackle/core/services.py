@@ -127,8 +127,15 @@ class Services(click.Group):
 
     remote_services_cache: list[dict] | None = None
 
+    def format_help(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
+        """Name the commands panel ``Services``, because this group's commands are services."""
+        config = getattr(formatter, "config", None)
+        if config is not None:
+            config.commands_panel_title = "Services"
+        super().format_help(ctx, formatter)
+
     def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
-        """Preprocess --slow so it can take an optional range value before Click parses args."""
+        """Preprocess ``--slow`` so it can take an optional range value before Click parses the arguments."""
         processed = []
         i = 0
         while i < len(args):

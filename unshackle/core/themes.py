@@ -193,7 +193,7 @@ def resolve_palette(name: object) -> dict[str, str] | None:
 
 
 def build_help_config(palette: dict[str, str]) -> RichHelpConfiguration:
-    """Assemble the rich-click help styling for a palette."""
+    """Assemble the rich-click help configuration for a palette."""
     return RichHelpConfiguration(
         style_option=palette["text"],
         style_switch=palette["green"],
@@ -224,6 +224,13 @@ def build_help_config(palette: dict[str, str]) -> RichHelpConfiguration:
         style_options_table_box="HORIZONTALS",
         style_options_table_show_lines=True,
         style_options_table_border_style=palette["dark_gray"],
+        padding_helptext=(0, 1, 1, 5),
+        padding_usage=(1, 1, 1, 5),
+        style_options_panel_padding=(0, 1, 0, 3),
+        style_commands_panel_padding=(0, 1, 0, 4),
+        panel_title_padding=3,
+        padding_errors_panel=(0, 1, 1, 5),
+        padding_errors_suggestion=(0, 1, 0, 5),
     )
 
 
