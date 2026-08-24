@@ -2241,10 +2241,10 @@ default. In other words, config only fills in options you did not set on the com
 <td>Forced subtitle language(s); implies <code>forced_subs</code>. A <code>-</code> prefix excludes.</td>
 </tr>
 <tr>
-<td><code>no_subs</code> / <code>no_audio</code> / <code>no_chapters</code></td>
+<td><code>no_subs</code> / <code>no_audio</code> / <code>no_chapters</code> / <code>no_attachments</code></td>
 <td>bool</td>
 <td><code>false</code></td>
-<td>Skip that track type.</td>
+<td>Skip that track type. <code>no_attachments</code> also skips attaching subtitle fonts.</td>
 </tr>
 <tr>
 <td><code>downloads</code></td>
@@ -2385,7 +2385,7 @@ in or writes them as sidecar files. See <a href="../../../guide/subtitles/">Subt
 <td><code>preserve_formatting</code></td>
 <td>bool</td>
 <td><code>true</code></td>
-<td>Keep styling/positioning when converting or stripping.</td>
+<td>Pass WebVTT cue text through as written. <code>false</code> re-encodes it through pycaption, which merges identical cues but flattens styling. unshackle removes WebVTT-only cue markup either way.</td>
 </tr>
 <tr>
 <td><code>convert_before_strip</code></td>

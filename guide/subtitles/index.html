@@ -1050,6 +1050,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#cue-markup-and-html-entities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cue markup and HTML entities
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1085,6 +1096,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Subtitle configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#which-settings-to-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which settings to change
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2283,6 +2311,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#cue-markup-and-html-entities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cue markup and HTML entities
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2318,6 +2357,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Subtitle configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#which-settings-to-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which settings to change
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2468,6 +2524,9 @@ format-appropriate clean-up to make a single, valid file:</p>
   that confuse downstream parsers, and merges multi-line cues that a service split into
   separate overlapping cues. By default unshackle keeps the original styling and layout
   (see <a href="#subtitle-configuration"><code>preserve_formatting</code></a>).</li>
+<li><strong>Cue markup normalisation</strong>: unshackle removes the WebVTT-only parts of a cue
+  payload, so no player draws them as dialogue. See
+  <a href="#cue-markup-and-html-entities">Cue markup</a>.</li>
 <li><strong>TTML for muxing</strong>: Matroska cannot carry TTML. If you do not request a specific
   output format, unshackle automatically converts any plain TTML track to WebVTT before
   muxing (the closest lossless equivalent). Boxed <code>fTTML</code> is likewise unwrapped to TTML
@@ -2605,6 +2664,42 @@ you end up with both.</p>
 itself. The default (<code>auto</code>) prefers the <code>subby</code> cleaner for SRT, falls back to
 SubtitleEdit when you install it, and otherwise uses the built-in <code>filter-subs</code>
 approach.</p>
+<p>Every engine removes the same three things: bracketed sound effects (<code>[MUSIC PLAYING]</code>,
+<code>(door creaks)</code>), speaker labels (<code>MAN:</code>), and font tags. Every engine keeps plain
+dialogue and inline <code>&lt;i&gt;</code> styling. They differ on music and lyric lines:</p>
+<table>
+<thead>
+<tr>
+<th><code>sdh_method</code></th>
+<th>Engine that runs</th>
+<th>Lyric lines (<code>♪ ... ♪</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>auto</code></td>
+<td><code>subby</code> for an SRT track. SubtitleEdit for any other format when you install it, otherwise <code>filter-subs</code>.</td>
+<td>Kept, unless the fallback reaches <code>filter-subs</code>.</td>
+</tr>
+<tr>
+<td><code>subby</code></td>
+<td><code>subby</code>, but only for a track that is already SRT. Any other format falls through to <code>filter-subs</code>.</td>
+<td>Kept for SRT, removed otherwise.</td>
+</tr>
+<tr>
+<td><code>subtitleedit</code></td>
+<td>SubtitleEdit when you install it, otherwise <code>filter-subs</code>.</td>
+<td>Kept with SubtitleEdit, removed without it.</td>
+</tr>
+<tr>
+<td><code>filter-subs</code></td>
+<td><code>filter-subs</code> always.</td>
+<td>Removed.</td>
+</tr>
+</tbody>
+</table>
+<p>Pick <code>filter-subs</code> when you want lyrics gone as well. Pick <code>subby</code> or install
+SubtitleEdit when you want to read along with the songs.</p>
 <div class="admonition note">
 <p class="admonition-title">Why <code>convert_before_strip</code> exists</p>
 <p><code>subby</code>'s SDH stripper only operates on SRT. Handed any other codec it returns
@@ -2764,6 +2859,49 @@ do not ship SubtitleEdit, so in practice <code>auto</code> means <code>subby</co
 Install <a href="#subtitle-configuration">SubtitleEdit / <code>seconv</code></a> if you need colour or the
 highest → SRT fidelity.</p>
 </div>
+<h3 id="cue-markup-and-html-entities">Cue markup and HTML entities<a class="headerlink" href="#cue-markup-and-html-entities" title="Permanent link">&para;</a></h3>
+<p>Styling is not the only thing a conversion has to handle. WebVTT carries markup that no
+other format understands, and a player that does not know a tag draws it as dialogue.
+unshackle removes that markup before any backend runs, so the result is the same for
+every <code>conversion_method</code>:</p>
+<table>
+<thead>
+<tr>
+<th>WebVTT markup</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>&lt;c.bg_transparent&gt;text&lt;/c&gt;</code></td>
+<td>Tags removed, text kept. A class only selects a CSS <code>::cue</code> rule that no player ever receives, so it carries no styling.</td>
+</tr>
+<tr>
+<td><code>&lt;i.loud&gt;</code>, <code>&lt;b.x&gt;</code>, <code>&lt;u.y&gt;</code></td>
+<td>Class list removed, the styling tag kept.</td>
+</tr>
+<tr>
+<td><code>&lt;v Bob&gt;</code>, <code>&lt;lang ja&gt;</code>, <code>&lt;ruby&gt;</code>, <code>&lt;rt&gt;</code></td>
+<td>Tags removed, text kept.</td>
+</tr>
+<tr>
+<td><code>&lt;00:00:02.000&gt;</code></td>
+<td>Removed. These are karaoke timings that no subtitle player renders.</td>
+</tr>
+<tr>
+<td><code>&amp;amp;</code>, <code>&amp;nbsp;</code>, <code>&amp;#39;</code></td>
+<td>Decoded to real characters for SRT, SSA, and ASS output. Kept escaped for WebVTT and TTML, which need them.</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition warning">
+<p class="admonition-title">A class list breaks more than you expect</p>
+<p>FFmpeg reads SubRip markup as a tag only while the tag name stays inside
+<code>[0-9a-zA-Z_/]</code>. The dot in <code>&lt;i.loud&gt;</code> fails that test, so FFmpeg prints the opening
+tag on screen and then closes an italic run that never opened. The FFmpeg WebVTT
+reader matches <code>i</code>, <code>b</code>, and <code>u</code> exactly, so there the same class silently loses the
+styling. mpv, VLC, Plex, and Jellyfin all use one of those two readers.</p>
+</div>
 <div class="admonition note">
 <p class="admonition-title">Config wins over a service's preference</p>
 <p>A service may set a <code>preferred_conversion_method</code> on its own tracks (for example when
@@ -2895,6 +3033,55 @@ relevant font packages.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="which-settings-to-change">Which settings to change<a class="headerlink" href="#which-settings-to-change" title="Permanent link">&para;</a></h3>
+<p>The defaults give a clean, player-safe file, so most people change nothing. Start here
+only when you want something the defaults do not do:</p>
+<table>
+<thead>
+<tr>
+<th>If you want</th>
+<th>Set</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Every original style kept, with no re-encode at all</td>
+<td><code>--sub-format original</code>, and <code>sidecar_format: original</code> for sidecars</td>
+</tr>
+<tr>
+<td>The highest conversion fidelity, including colour</td>
+<td>Install SubtitleEdit. <code>conversion_method</code> stays <code>auto</code></td>
+</tr>
+<tr>
+<td>Music and lyric lines stripped along with the sound effects</td>
+<td><code>sdh_method: filter-subs</code></td>
+</tr>
+<tr>
+<td>Lyric lines kept</td>
+<td><code>sdh_method: subby</code>, or install SubtitleEdit</td>
+</tr>
+<tr>
+<td>No stripped copies made at all</td>
+<td><code>strip_sdh: false</code></td>
+</tr>
+<tr>
+<td>One backend for every conversion, whatever you install</td>
+<td><code>conversion_method: &lt;backend&gt;</code></td>
+</tr>
+</tbody>
+</table>
+<p>Two keys read as if they control markup, and do not:</p>
+<ul>
+<li><strong><code>preserve_formatting</code></strong> decides whether unshackle re-encodes a WebVTT file after
+  the repair pipeline. Left <code>true</code>, the cue text passes through as written. Set to
+  <code>false</code>, unshackle re-encodes the file through pycaption, which merges identical cues
+  and drops empty ones but also flattens styling. Neither setting leaves WebVTT-only
+  markup in the file: <a href="#cue-markup-and-html-entities">cue markup normalisation</a> runs
+  either way.</li>
+<li><strong><code>convert_before_strip</code></strong> applies to SDH stripping, not to your output format. It
+  converts the working copy to SRT so a non-SubtitleEdit engine can read it. Turning it
+  off makes <code>subby</code> and <code>filter-subs</code> no-ops on anything that is not already SRT.</li>
+</ul>
 <div class="admonition tip">
 <p class="admonition-title">SubtitleEdit is optional but recommended</p>
 <p>Several high-fidelity paths (the best-quality conversions and the SubtitleEdit SDH
