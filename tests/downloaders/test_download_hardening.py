@@ -201,3 +201,27 @@ def test_transient_429_with_retry_after_does_not_abort_track(server, tmp_path, m
     assert all(f.read_bytes() == PARENT for f in files)
     assert not dl.DOWNLOAD_CANCELLED.is_set()
     assert len(server.requests) == 5  # 3 successes + 2 rate-limited attempts
+
+
+def test_session_retry_does_not_nest_inside_an_attempt(server, tmp_path, monkeypatch):
+    # a service session mounts urllib3 Retry with a 429 forcelist; download() owns segment
+    # retries, so the two must not multiply (MAX_ATTEMPTS requests, not MAX_ATTEMPTS x 6)
+    from requests import Session
+    from requests.adapters import HTTPAdapter, Retry
+
+    dl.DOWNLOAD_CANCELLED.clear()
+    server.fail_429_first = 10**6
+    monkeypatch.setattr(dl, "RETRY_WAIT", 0.01)
+    session = Session()
+    adapter = HTTPAdapter(
+        max_retries=Retry(total=5, backoff_factor=0, status_forcelist=[429, 500, 502, 503, 504]),
+    )
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+
+    with pytest.raises(Exception):
+        run(server, tmp_path, [{"url": url(server)}], max_workers=1, session=session)
+
+    assert len(server.requests) == dl.MAX_ATTEMPTS
+    # the caller's session keeps its own retry policy
+    assert session.get_adapter("http://x/").max_retries.total == 5

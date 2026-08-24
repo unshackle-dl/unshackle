@@ -9,9 +9,10 @@ import sys
 import threading
 import time
 import traceback
-from collections import deque
+from collections import OrderedDict, deque
 from concurrent.futures import FIRST_COMPLETED, wait
 from concurrent.futures.thread import ThreadPoolExecutor
+from copy import copy
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from http.cookiejar import CookieJar
@@ -21,7 +22,7 @@ from string import Formatter
 from typing import Any, Callable, Generator, MutableMapping, Optional, Union, cast
 
 from requests import Session
-from requests.adapters import HTTPAdapter
+from requests.adapters import HTTPAdapter, Retry
 from rich import filesize
 
 from unshackle.core.constants import DOWNLOAD_CANCELLED
@@ -31,8 +32,16 @@ MAX_ATTEMPTS = 5
 RETRY_WAIT = 2
 # a cut that still delivered bytes is resumable and refreshes the attempt budget; bound it
 # so a server that sends a little and closes, over and over, still terminates
-MAX_RESUMES = 500
-MIN_RESUME_PROGRESS = 64 * 1024
+MAX_RESUMES = 50
+MIN_RESUME_PROGRESS = 1024 * 1024
+
+# a host that cuts a body it already started (per-request time limit, per-flow throttle) will
+# cut the next one at the same place. After such a cut each following request asks for a
+# bounded sub-range instead of the whole remainder, halving it on every further cut until the
+# requests fit under the limit: a sub-range that completes is a success, so it costs neither
+# an attempt nor a backoff nap.
+REQUEST_CHUNK_SIZE = 4 * 1024 * 1024
+MIN_REQUEST_CHUNK = 256 * 1024
 PROGRESS_WINDOW = 2
 
 # read timeout bounds the gap between chunks so a quiet connection errors instead of hanging
@@ -302,6 +311,23 @@ class AdaptiveWorkerController:
         return self.target
 
 
+def permanent_status(exc: BaseException) -> Optional[int]:
+    """HTTP status of ``exc`` when it is a client error that no retry can fix.
+
+    Both session types raise requests' HTTPError; RnetSession wraps it in MaxRetriesError
+    as ``__cause__``, so unwrap one level like retry_sleep does. 408 and 429 do not count:
+    they are transient, and a fan-out that trips a per-client rate limit can still succeed
+    over one sequential connection.
+    """
+    response = getattr(exc, "response", None)
+    if response is None:
+        response = getattr(getattr(exc, "__cause__", None), "response", None)
+    status = getattr(response, "status_code", None)
+    if isinstance(status, int) and 400 <= status < 500 and status not in (408, 429):
+        return status
+    return None
+
+
 def retry_sleep(exc: Exception, attempts: int) -> float:
     """Seconds to wait before retry number ``attempts``.
 
@@ -344,6 +370,24 @@ def is_requests_session(session: Any) -> bool:
     return isinstance(session, Session)
 
 
+def no_retry_session(session: Session) -> Session:
+    """A shallow copy of ``session`` whose adapters never retry, sharing its state and pools.
+
+    download() owns segment retries, so a mounted urllib3 ``Retry`` nests inside a single
+    attempt: one 429 carrying ``Retry-After: 60`` costs five one-minute sleeps before
+    download() even sees the failure. requests takes no per-call retry override, and track
+    threads share the caller's session, so remounting it is not an option. A shallow adapter
+    copy keeps the poolmanager object, so TLS and pooling behaviour does not change.
+    """
+    view = copy(session)
+    view.adapters = OrderedDict()
+    for prefix, adapter in session.adapters.items():
+        twin = copy(adapter)
+        twin.max_retries = Retry(0, read=False)
+        view.adapters[prefix] = twin
+    return view
+
+
 def is_rnet_session(session: Any) -> bool:
     """Whether the HTTP session is an RnetSession (it uses ``resp.stream()``)."""
     from unshackle.core.session import RnetSession
@@ -372,6 +416,7 @@ def probe_ranged(url: str, session: Any, **kwargs: Any) -> tuple[int, bool]:
         rest.setdefault("max_retries", 0)
     else:
         rest.setdefault("timeout", (CONNECT_TIMEOUT, READ_TIMEOUT))
+        session = no_retry_session(session)
     try:
         resp = session.get(url, stream=True, headers=headers, **rest)
     except Exception:
@@ -684,6 +729,9 @@ def download(
             to request Byte-ranges use e.g., `headers={"Range": "bytes=0-128"}`.
     """
     session = session or Session()
+    if is_requests_session(session):
+        # same reason as the rnet max_retries=0 below: download() owns segment retries
+        session = no_retry_session(session)
     part_mode = part_offset is not None and part_end is not None
 
     # partial data lives at the .!dev name and is renamed into place on completion:
@@ -715,6 +763,11 @@ def download(
     attempts = 1
     written = 0
     resumes = 0
+    # None until a cut proves the host bounds one request; the sequential path also needs a
+    # known complete length, or a short body could not be told apart from a finished download
+    request_limit: Optional[int] = None
+    known_total: Optional[int] = None
+    progress_seeded = False
     while True:
         if claimed is not None and claimed():
             return
@@ -742,10 +795,24 @@ def download(
             # Content-Length accounting and is meaningless on ranged requests
             if not any(str(k).lower() == "accept-encoding" for k in req_headers):
                 req_headers["Accept-Encoding"] = "identity"
-            if part_mode:
-                req_headers["Range"] = f"bytes={part_offset + written}-{part_end}"
+            # inclusive end of this request when it covers only part of what is left, else None
+            chunk_end: Optional[int] = None
+            if part_mode and part_offset is not None and part_end is not None:  # spelled so mypy narrows
+                req_start = part_offset + written
+                chunk_end = part_end
+                if request_limit is not None and part_end - req_start + 1 > request_limit:
+                    chunk_end = req_start + request_limit - 1
+                req_headers["Range"] = f"bytes={req_start}-{chunk_end}"
             elif resume_offset > 0 and not item_range:
-                req_headers["Range"] = f"bytes={resume_offset}-"
+                if (
+                    request_limit is not None
+                    and known_total is not None
+                    and known_total - resume_offset > request_limit
+                ):
+                    chunk_end = resume_offset + request_limit - 1
+                    req_headers["Range"] = f"bytes={resume_offset}-{chunk_end}"
+                else:
+                    req_headers["Range"] = f"bytes={resume_offset}-"
             request_kwargs["headers"] = req_headers
 
             stream = session.get(url, stream=True, **request_kwargs)
@@ -789,6 +856,8 @@ def download(
                         resume_offset = 0
                         written = 0
                         continue
+                elif content_range[2] is not None:
+                    known_total = content_range[2]
             if (not part_mode) and resume_offset > 0 and not resumed:
                 resume_offset = 0
             if part_mode and part_offset is not None and part_end is not None:  # spelled so mypy narrows
@@ -800,13 +869,13 @@ def download(
                 if (
                     content_range is None
                     or content_range[0] != part_offset + written
-                    or content_range[1] > part_end
+                    or (chunk_end is not None and content_range[1] > chunk_end)
                     or (content_range[2] is not None and content_range[2] <= part_end)
                 ):
                     # a wrong start would land bytes at the wrong offset in the shared file,
-                    # an end past part_end would spill into a sibling part's region, and a
-                    # total at or below part_end means the resource changed under the part
-                    # plan; fail the attempt before any byte is written
+                    # an end past what this request asked for would spill into a sibling
+                    # part's region, and a total at or below part_end means the resource
+                    # changed under the part plan; fail the attempt before any byte is written
                     raise IOError(f"part {part_offset}-{part_end} got Content-Range {content_range!r}")
             if use_rnet:
                 content_encoded = is_content_encoded(
@@ -821,6 +890,10 @@ def download(
                         content_length = 0
                 except ValueError:
                     content_length = 0
+
+            if known_total is None and not part_mode and not item_range and stream.status_code == 200:
+                # a 200 carries the whole resource, so its length is the complete length
+                known_total = content_length or None
 
             if item_range and not part_mode and stream.status_code != 206:
                 # server ignored the slice's Range and sent the whole parent (RFC 9110 allows
@@ -870,7 +943,10 @@ def download(
             secured = written if part_mode else resume_offset
             total_size = (resume_offset + content_length) if resumed and content_length > 0 else content_length
 
-            if not segmented and not part_mode:
+            if not segmented and not part_mode and not progress_seeded:
+                # only the first response of this call sees the true total, and the bytes a
+                # previous run left on disk are progress that the loop below never reports
+                progress_seeded = True
                 if total_size > 0:
                     yield dict(total=total_size)
                 else:
@@ -961,10 +1037,16 @@ def download(
                 # and skip the size checks below (a short read here is expected, not an error)
                 return
 
-            if part_mode:
+            if part_mode and part_offset is not None and part_end is not None:  # spelled so mypy narrows
                 expected = part_end - part_offset + 1
-                if written < expected:
+                target = expected if chunk_end is None else chunk_end - part_offset + 1
+                if written < target:
                     raise IOError(f"Failed to read part {part_offset}-{part_end}: got {written}/{expected}")
+                if written < expected:
+                    # this request's sub-range arrived whole; the rest of the part is the next
+                    # request, not a retry, so the attempt budget starts over for it
+                    attempts = 1
+                    continue
             elif content_length and written < content_length:
                 # applies to segments too: a connection FIN'd mid-body is a clean EOF, so the
                 # chunk loop ends without raising, so without this check a truncated segment would
@@ -973,6 +1055,10 @@ def download(
                 raise IOError(f"Failed to read {content_length} bytes from the track URI.")
 
             if not part_mode:
+                if chunk_end is not None and known_total is not None and resume_offset + written < known_total:
+                    resume_offset += written
+                    attempts = 1
+                    continue
                 os.replace(tmp_file, save_path)
                 yield dict(file_downloaded=save_path, written=resume_offset + written)
                 if segmented:
@@ -1003,6 +1089,11 @@ def download(
             if progress - secured >= MIN_RESUME_PROGRESS and resumes < MAX_RESUMES:
                 resumes += 1
                 attempts = 0
+                if not item_range:
+                    # the host cut a body it was already delivering, so ask for less next time
+                    request_limit = (
+                        REQUEST_CHUNK_SIZE if request_limit is None else max(MIN_REQUEST_CHUNK, request_limit // 2)
+                    )
             elif on_retry is not None:
                 try:
                     on_retry(exc)
@@ -1500,7 +1591,9 @@ def requests(
                         ranged_used = True
                     except KeyboardInterrupt:
                         raise
-                    except Exception:
+                    except Exception as exc:
+                        # the pre-truncated save_path is full-size, so the sequential path would
+                        # read it as already complete: drop it either way, no resume from it
                         save_path = url_item.get("save_path")
                         if save_path:
                             sp = Path(save_path)
@@ -1509,6 +1602,25 @@ def requests(
                                     stray.unlink(missing_ok=True)
                                 except OSError:
                                     pass
+                        if DOWNLOAD_CANCELLED.is_set():
+                            return
+                        status = permanent_status(exc)
+                        fatal = status is not None
+                        if debug_logger:
+                            debug_logger.log(
+                                level="DEBUG",
+                                operation="ranged_parallel_failed",
+                                message=f"ranged download failed: {exc.__class__.__name__}",
+                                context={
+                                    "error": exc.__class__.__name__,
+                                    "status": status,
+                                    "action": "raise" if fatal else "sequential_fallback",
+                                },
+                            )
+                        if fatal:
+                            # retrying a 4xx from byte 0 only burns MAX_ATTEMPTS again at
+                            # twice the wall clock
+                            raise
             if not ranged_used:
                 yield from download(
                     session=session,

@@ -17,6 +17,7 @@ Fault profiles:
     tail-slow    heavily throttle the last K segments' bodies
     throttle-cut throttle every body and close it (FIN) after N seconds or N bytes
     flaky-first  fail attempt 1 per path (503), succeed on retry
+    deny         reply 403 to every request (a permanent error no retry can fix)
     loopback     no faults; payloads served from memory (overhead ceiling)
 
 Range requests are honored (206 + Content-Range) so byte-range / hedge / tail-boost
@@ -26,6 +27,7 @@ Standalone:
     uv run python scripts/fault_server.py --profile rate-limit --segments 32
     uv run python scripts/fault_server.py --profile stall --stall-secs 4 --port 8080
     uv run python scripts/fault_server.py --profile throttle-cut --segments 1 --seg-size 71303168
+    uv run python scripts/fault_server.py --profile deny --deny-after 1
 
 Importable: build a ``FaultServer``, serve it on a thread, and hash output against
 ``segment_payload(path, size)``.
@@ -78,6 +80,9 @@ class FaultProfile:
     flaky_status: int = 503  # status returned by a flaky-first failure
     cut_secs: float = 0.0  # close the body cleanly (FIN) after this long (0 = never)
     cut_bytes: int = 0  # close the body cleanly (FIN) after this many bytes (0 = never)
+    deny: bool = False  # reply deny_status to every request past deny_after
+    deny_status: int = 403  # status returned by a deny
+    deny_after: int = 0  # serve this many attempts per path before denying (0 = deny all)
 
 
 PROFILES: dict[str, FaultProfile] = {
@@ -96,6 +101,10 @@ PROFILES: dict[str, FaultProfile] = {
     # and then ends short, so each retry makes progress but no single attempt finishes. Not
     # seed-gated like stall and reset, because the real host cuts every attempt, not a share.
     "throttle-cut": FaultProfile("throttle-cut", body_rate_kib=480, cut_secs=6.5, cut_bytes=5 * MIB // 2),
+    # a permanently refused resource (expired token, geo block): no retry and no fallback
+    # recovers, so a client that keeps trying is burning attempts for nothing. --deny-after
+    # serves the first N attempts per path, which lets a range probe through first.
+    "deny": FaultProfile("deny", deny=True),
 }
 
 
@@ -231,6 +240,9 @@ class FaultHandler(BaseHTTPRequestHandler):
         attempt = server.note_attempt(self.path)
         prof = server.profile
 
+        if prof.deny and attempt > prof.deny_after:
+            self._send_status(prof.deny_status)
+            return
         if prof.flaky_first and attempt == 1:  # first attempt per path always fails, retry recovers
             self._send_status(prof.flaky_status)
             return
@@ -388,6 +400,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--body-rate-kib", type=int, help="Override: throttle every body to this KiB/s (0 = off).")
     p.add_argument("--tail-slow", type=int, help="Override: throttle the last K segments.")
     p.add_argument("--tail-rate-kib", type=int, help="Override: tail-slow throttle rate (KiB/s).")
+    p.add_argument("--deny-after", type=int, help="Override: serve this many attempts per path before denying.")
     p.add_argument("--cut-secs", type=float, help="Override: close each body (FIN) after this long (0 = never).")
     p.add_argument("--cut-bytes", type=int, help="Override: close each body (FIN) after this many bytes (0 = never).")
     return p
@@ -407,6 +420,7 @@ def main() -> None:
         "tail_rate_kib": args.tail_rate_kib,
         "cut_secs": args.cut_secs,
         "cut_bytes": args.cut_bytes,
+        "deny_after": args.deny_after,
     }
     profile = resolve_profile(args.profile, overrides)
     server = FaultServer(profile, args.seg_size, args.segments, args.seed, port=args.port)
