@@ -2412,12 +2412,12 @@ Click <code>cli</code> entry point plus three abstract methods.</p>
 <tr>
 <td><code>ALIASES</code></td>
 <td><code>tuple[str, ...]</code></td>
-<td>Extra tags that resolve to this service (e.g. <code>("EX", "DOMAIN")</code>). Default <code>()</code>.</td>
+<td>Extra tags that resolve to this service (e.g. <code>("EX", "DOMAIN")</code>). Case does not matter. Default <code>()</code>.</td>
 </tr>
 <tr>
 <td><code>GEOFENCE</code></td>
 <td><code>tuple[str, ...]</code></td>
-<td>IP region codes the service requires. Empty = no geofence. The <strong>first</strong> entry is treated as the main region for auto-proxy.</td>
+<td>IP region codes the service requires. Empty = no geofence. unshackle treats the <strong>first</strong> entry as the main region for auto-proxy.</td>
 </tr>
 <tr>
 <td><code>VAULT_TAG</code></td>
@@ -2442,7 +2442,7 @@ Click <code>cli</code> entry point plus three abstract methods.</p>
 <tr>
 <td><code>DAILY</code></td>
 <td><code>bool</code></td>
-<td>Set <code>True</code> when the catalogue is daily/date-based (talk shows, news, sports), so episodes are named by air date. A title's own <code>daily</code> flag overrides it.</td>
+<td>Set <code>True</code> when the catalogue is daily/date-based (talk shows, news, sports), so unshackle names episodes by air date. A title's own <code>daily</code> flag overrides it.</td>
 </tr>
 </tbody>
 </table>

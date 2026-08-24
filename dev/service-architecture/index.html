@@ -2651,12 +2651,12 @@ Two kinds of members matter: <strong>class variables</strong> that give the deta
 <tr>
 <td><code>ALIASES</code></td>
 <td><code>tuple[str, ...]</code></td>
-<td>Alternate tags the service answers to (resolved by <code>Services.get_tag</code>).</td>
+<td>Alternate tags the service answers to, in any case (resolved by <code>Services.get_tag</code>).</td>
 </tr>
 <tr>
 <td><code>GEOFENCE</code></td>
 <td><code>tuple[str, ...]</code></td>
-<td>ISO region codes the service requires; empty means no geofence. The first entry is treated as the "main region" for automatic proxy selection.</td>
+<td>ISO region codes the service requires; empty means no geofence. unshackle treats the first entry as the "main region" for automatic proxy selection.</td>
 </tr>
 <tr>
 <td><code>VAULT_TAG</code></td>
@@ -2676,7 +2676,7 @@ Two kinds of members matter: <strong>class variables</strong> that give the deta
 <tr>
 <td><code>DAILY</code></td>
 <td><code>bool</code></td>
-<td>The catalogue is daily/date-based, so episodes are named by air date. A title's own <code>daily</code> flag overrides it.</td>
+<td>The catalogue is daily/date-based, so unshackle names episodes by air date. A title's own <code>daily</code> flag overrides it.</td>
 </tr>
 </tbody>
 </table>
@@ -2799,7 +2799,7 @@ families, one per media kind:</p>
 <p>All items subclass <code>Title</code>, which carries the shared identity: a <strong>unique <code>id</code></strong>, the
 originating <code>service</code> class, an optional original <code>language</code>, arbitrary <code>data</code>, and a
 freshly-constructed <code>self.tracks = Tracks()</code> that <code>get_tracks</code> will fill. Collections
-are sorted lists, so titles stay in a stable order.</p>
+use sorted lists, so titles stay in a stable order.</p>
 <div class="admonition warning">
 <p class="admonition-title">The unique ID is validated</p>
 <p><code>Title.__init__</code> rejects a falsy <code>id_</code>, and rejects any ID shorter than 4 characters
@@ -3001,7 +3001,7 @@ in <code>unshackle.core.manifests</code>. Each parser has the same three-part co
 <h3 id="the-parser-contract">The parser contract<a class="headerlink" href="#the-parser-contract" title="Permanent link">&para;</a></h3>
 <ol>
 <li><strong>Construct</strong>: <code>DASH.from_url(url, session=...)</code> or <code>DASH.from_text(text, url)</code>
-   (and likewise for <code>HLS</code> / <code>ISM</code>). A <code>url</code> is always required, even for <code>from_text</code>,
+   (and likewise for <code>HLS</code> / <code>ISM</code>). Always pass a <code>url</code>, even to <code>from_text</code>,
    because the parser needs it to make relative segment paths absolute.</li>
 <li><strong><code>to_tracks(...)</code></strong>: parses the manifest into a <code>Tracks</code> container of <code>Video</code>,
    <code>Audio</code>, and <code>Subtitle</code> objects, each carrying descriptor-specific state.</li>
