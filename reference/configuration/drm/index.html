@@ -2083,8 +2083,9 @@ the <a href="../../../guide/drm-and-cdm/">DRM &amp; CDM guide</a>. Device files 
 <li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
 </ul>
 <p>Maps a service tag to the CDM (Widevine/PlayReady device) to use, with a <code>default</code> fallback.
-Resolution is case-insensitive: a per-request API override wins, then the per-service entry,
-then <code>default</code>.</p>
+Resolution is case-insensitive: an override (<code>dl --cdm &lt;name&gt;</code>, or the <code>cdm</code> field of an API
+job) wins, then the per-service entry, then <code>default</code>. An override pins one device for the whole
+run and skips any quality or Widevine/PlayReady sub-entries.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">cdm</span><span class="p">:</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">EXAMPLE2</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span>

@@ -3921,6 +3921,7 @@ configured proxy providers), or a <code>provider:region</code> form.</p>
 a content key when the vault misses. You can force one side or the other:</p>
 <ul>
 <li><code>--cdm-only</code>: only use the CDM (skip vaults).</li>
+<li><code>--cdm &lt;name&gt;</code>: use the named CDM device for this run, ignoring the <code>cdm</code> config mapping (including its quality and Widevine/PlayReady sub-entries).</li>
 <li><code>--vaults-only</code>: only use key vaults and never license through the CDM. A missing
   content key fails.</li>
 </ul>
@@ -4296,6 +4297,11 @@ authoritative list.</p>
 <td><code>--cdm-only</code> / <code>--vaults-only</code></td>
 <td></td>
 <td>Content key source control.</td>
+</tr>
+<tr>
+<td><code>--cdm &lt;name&gt;</code></td>
+<td></td>
+<td>Pin one CDM device, bypassing the <code>cdm</code> config mapping.</td>
 </tr>
 <tr>
 <td><code>--export</code></td>
