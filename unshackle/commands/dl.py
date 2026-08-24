@@ -781,6 +781,13 @@ class dl:
     @click.option("-na", "--no-audio", is_flag=True, default=False, help="Do not download audio tracks.")
     @click.option("-nc", "--no-chapters", is_flag=True, default=False, help="Do not download chapter markers.")
     @click.option("-nv", "--no-video", is_flag=True, default=False, help="Do not download video tracks.")
+    @click.option(
+        "-nt",
+        "--no-attachments",
+        is_flag=True,
+        default=False,
+        help="Do not download or mux attachments (cover art, subtitle fonts, and files the service attaches).",
+    )
     @click.option("-ad", "--audio-description", is_flag=True, default=False, help="Download audio description tracks.")
     @click.option(
         "--slow",
@@ -1460,6 +1467,7 @@ class dl:
         no_audio: bool,
         no_chapters: bool,
         no_video: bool,
+        no_attachments: bool,
         audio_description: bool,
         slow: Optional[tuple[int, int]],
         list_: bool,
@@ -2215,6 +2223,9 @@ class dl:
                 console.log("Skipped chapters as --no-chapters was used...")
                 keep_chapters = False
 
+            if no_attachments:
+                console.log("Skipped attachments as --no-attachments was used...")
+
             if no_proxy_download and any(service.session.proxies.values()):
                 console.log("Bypassing proxy for downloads as --no-proxy-download was used...")
 
@@ -2770,7 +2781,8 @@ class dl:
                     kept_tracks.extend(title.tracks.subtitles)
                 if keep_chapters:
                     kept_tracks.extend(title.tracks.chapters)
-                kept_tracks.extend(title.tracks.attachments)
+                if not no_attachments:
+                    kept_tracks.extend(title.tracks.attachments)
 
                 title.tracks = Tracks(kept_tracks, manifest_url=title.tracks.manifest_url)
 
@@ -3021,7 +3033,7 @@ class dl:
 
                 with console.status("Checking Subtitles for Fonts..."):
                     font_names: list[str] = []
-                    for subtitle in title.tracks.subtitles:
+                    for subtitle in [] if no_attachments else title.tracks.subtitles:
                         if subtitle.codec in (Subtitle.Codec.SubStationAlpha, Subtitle.Codec.SubStationAlphav4):
                             font_names.extend(Subtitle.extract_fonts(subtitle.path.read_text("utf8")))
 

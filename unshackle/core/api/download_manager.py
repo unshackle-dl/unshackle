@@ -579,6 +579,7 @@ def perform_download(
                 no_audio=params.get("no_audio", False),
                 no_chapters=params.get("no_chapters", False),
                 no_video=params.get("no_video", False),
+                no_attachments=params.get("no_attachments", False),
                 audio_description=params.get("audio_description", False),
                 slow=params.get("slow", None),
                 list_=False,

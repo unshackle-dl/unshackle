@@ -617,6 +617,7 @@ or negatively (everything but these).
 - `-na` / `--no-audio`
 - `-ns` / `--no-subs`
 - `-nc` / `--no-chapters`
+- `-nt` / `--no-attachments` (cover art, subtitle fonts, and files the service attaches)
 
 Additional track-type flags:
 
@@ -932,7 +933,7 @@ authoritative list.
 | `--select-titles` | | Interactively pick episodes or films. |
 | `--latest-episode` | | Only the newest episode. |
 | `--video-only` / `--audio-only` / `--subs-only` | `-V` / `-A` / `-S` | Restrict track types. |
-| `--no-video` / `--no-audio` / `--no-subs` / `--no-chapters` | `-nv` / `-na` / `-ns` / `-nc` | Skip track types. |
+| `--no-video` / `--no-audio` / `--no-subs` / `--no-chapters` / `--no-attachments` | `-nv` / `-na` / `-ns` / `-nc` / `-nt` | Skip track types. |
 | `--worst` | | Lowest bitrate within `-q`. |
 | `--require-audio` | | Audio languages that must exist. The title fails if one is missing. |
 | `--require-video` | | Video languages that must exist. The title fails if one is missing. |

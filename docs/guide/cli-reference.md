@@ -121,7 +121,7 @@ unshackle honours the special language tokens `orig`, `all`, and `best` everywhe
 
 ### Track-type inclusion / exclusion
 
-Keep only certain track types, or skip certain track types. Attachments are always kept.
+Keep only certain track types, or skip certain track types.
 
 | Include-only | Skip |
 |---|---|
@@ -129,6 +129,7 @@ Keep only certain track types, or skip certain track types. Attachments are alwa
 | `-A`, `--audio-only` | `-na`, `--no-audio` |
 | `-S`, `--subs-only` | `-ns`, `--no-subs` |
 | `-C`, `--chapters-only` | `-nc`, `--no-chapters` |
+| | `-nt`, `--no-attachments` (cover art, subtitle fonts, and files the service attaches) |
 
 | Flag | Description |
 |---|---|

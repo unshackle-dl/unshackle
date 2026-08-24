@@ -396,7 +396,7 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | `exact_lang` | boolean | `false` | Exact language matching. |
 | `sub_format` | string | `null` | Output subtitle format. |
 | `video_only` / `audio_only` / `subs_only` / `chapters_only` | boolean | `false` | Track-type restriction (at most one). |
-| `no_subs` / `no_audio` / `no_chapters` / `no_video` | boolean | `false` | Skip a track type. |
+| `no_subs` / `no_audio` / `no_chapters` / `no_video` / `no_attachments` | boolean | `false` | Skip a track type. |
 | `audio_description` | boolean | `false` | Download audio description. |
 | `slow` | boolean/string | `null` | Randomized delay between downloads. |
 | `split_audio` | boolean | `null` | Separate files per audio codec. |

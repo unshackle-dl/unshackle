@@ -734,6 +734,9 @@ async def download(request: web.Request) -> web.Response:
               no_video:
                 type: boolean
                 description: Do not download video tracks (default - false)
+              no_attachments:
+                type: boolean
+                description: Do not download or mux attachments such as cover art or subtitle fonts (default - false)
               audio_description:
                 type: boolean
                 description: Download audio description tracks (default - false)
