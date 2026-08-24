@@ -15,6 +15,7 @@ Fault profiles:
     rate-limit   reply 429 + Retry-After during recurring throttle windows
                  (window_open seconds serving / window_closed seconds throttled)
     tail-slow    heavily throttle the last K segments' bodies
+    throttle-cut throttle every body and close it (FIN) after N seconds or N bytes
     flaky-first  fail attempt 1 per path (503), succeed on retry
     loopback     no faults; payloads served from memory (overhead ceiling)
 
@@ -24,6 +25,7 @@ download paths exercise correctly, and an unsatisfiable resume gets a 416.
 Standalone:
     uv run python scripts/fault_server.py --profile rate-limit --segments 32
     uv run python scripts/fault_server.py --profile stall --stall-secs 4 --port 8080
+    uv run python scripts/fault_server.py --profile throttle-cut --segments 1 --seg-size 71303168
 
 Importable: build a ``FaultServer``, serve it on a thread, and hash output against
 ``segment_payload(path, size)``.
@@ -74,6 +76,8 @@ class FaultProfile:
     tail_rate_kib: int = 256  # throttle rate for tail-slow segments (KiB/s)
     flaky_first: bool = False  # fail attempt 1 per path, succeed after
     flaky_status: int = 503  # status returned by a flaky-first failure
+    cut_secs: float = 0.0  # close the body cleanly (FIN) after this long (0 = never)
+    cut_bytes: int = 0  # close the body cleanly (FIN) after this many bytes (0 = never)
 
 
 PROFILES: dict[str, FaultProfile] = {
@@ -88,6 +92,10 @@ PROFILES: dict[str, FaultProfile] = {
     ),
     "tail-slow": FaultProfile("tail-slow", tail_slow=4, tail_rate_kib=256),
     "flaky-first": FaultProfile("flaky-first", flaky_first=True, flaky_status=503),
+    # a CDN that throttles one flow and drops it on a timer: every connection delivers bytes
+    # and then ends short, so each retry makes progress but no single attempt finishes. Not
+    # seed-gated like stall and reset, because the real host cuts every attempt, not a share.
+    "throttle-cut": FaultProfile("throttle-cut", body_rate_kib=480, cut_secs=6.5, cut_bytes=5 * MIB // 2),
 }
 
 
@@ -235,7 +243,14 @@ class FaultHandler(BaseHTTPRequestHandler):
             rate = prof.tail_rate_kib
         stall = server.decides("stall", self.path, attempt, prof.stall_pct)
         reset = server.decides("reset", self.path, attempt, prof.reset_pct)
-        self._serve(server.payload(self.path), stall=stall, reset=reset, rate_kib=rate)
+        self._serve(
+            server.payload(self.path),
+            stall=stall,
+            reset=reset,
+            rate_kib=rate,
+            cut_secs=prof.cut_secs,
+            cut_bytes=prof.cut_bytes,
+        )
 
     def _send_status(self, code: int) -> None:
         server: FaultServer = self.server  # type: ignore[assignment]
@@ -252,7 +267,15 @@ class FaultHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", "0")
         self.end_headers()
 
-    def _serve(self, full: bytes, stall: bool = False, reset: bool = False, rate_kib: int = 0) -> None:
+    def _serve(
+        self,
+        full: bytes,
+        stall: bool = False,
+        reset: bool = False,
+        rate_kib: int = 0,
+        cut_secs: float = 0.0,
+        cut_bytes: int = 0,
+    ) -> None:
         server: FaultServer = self.server  # type: ignore[assignment]
         rng = self._parse_range(len(full))
         if rng is not None and rng[0] >= len(full):  # unsatisfiable resume: a real CDN answers 416
@@ -294,20 +317,47 @@ class FaultHandler(BaseHTTPRequestHandler):
                 self.wfile.write(body[half:])
                 self.wfile.flush()
             else:
-                self._write_body(body, rate_kib)
+                self._write_body(body, rate_kib, cut_secs, cut_bytes)
         except (BrokenPipeError, ConnectionError, OSError):
             self.close_connection = True
 
-    def _write_body(self, body: bytes, rate_kib: int) -> None:
-        if rate_kib <= 0:
+    def _cut(self) -> None:
+        """End the body early with a clean half-close.
+
+        FIN rather than RST: the client reads fewer bytes than Content-Length promised and
+        raises IncompleteRead, which is the resumable short read a throttling CDN produces.
+        An RST (see the reset fault) is a different error class on the client side.
+        """
+        try:
+            self.wfile.flush()
+            self.connection.shutdown(socket.SHUT_WR)
+        except OSError:
+            pass
+        self.close_connection = True
+
+    def _write_body(self, body: bytes, rate_kib: int, cut_secs: float = 0.0, cut_bytes: int = 0) -> None:
+        if rate_kib <= 0 and cut_secs <= 0 and cut_bytes <= 0:
             self.wfile.write(body)
             return
         chunk = 64 * 1024  # throttle: fixed-size chunks paced to rate_kib KiB/s
-        per_chunk = chunk / (rate_kib * 1024)
+        per_chunk = chunk / (rate_kib * 1024) if rate_kib > 0 else 0.0
+        deadline = time.monotonic() + cut_secs if cut_secs > 0 else None
+        sent = 0
         for off in range(0, len(body), chunk):
-            self.wfile.write(body[off : off + chunk])
+            size = min(chunk, len(body) - off)
+            if cut_bytes > 0:
+                size = min(size, cut_bytes - sent)
+            self.wfile.write(body[off : off + size])
             self.wfile.flush()
-            time.sleep(per_chunk)
+            sent += size
+            if cut_bytes > 0 and sent >= cut_bytes:
+                self._cut()
+                return
+            if deadline is not None and time.monotonic() >= deadline:
+                self._cut()
+                return
+            if per_chunk:
+                time.sleep(per_chunk)
 
 
 def resolve_profile(name: str, overrides: Optional[dict[str, Any]] = None) -> FaultProfile:
@@ -338,6 +388,8 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--body-rate-kib", type=int, help="Override: throttle every body to this KiB/s (0 = off).")
     p.add_argument("--tail-slow", type=int, help="Override: throttle the last K segments.")
     p.add_argument("--tail-rate-kib", type=int, help="Override: tail-slow throttle rate (KiB/s).")
+    p.add_argument("--cut-secs", type=float, help="Override: close each body (FIN) after this long (0 = never).")
+    p.add_argument("--cut-bytes", type=int, help="Override: close each body (FIN) after this many bytes (0 = never).")
     return p
 
 
@@ -353,6 +405,8 @@ def main() -> None:
         "body_rate_kib": args.body_rate_kib,
         "tail_slow": args.tail_slow,
         "tail_rate_kib": args.tail_rate_kib,
+        "cut_secs": args.cut_secs,
+        "cut_bytes": args.cut_bytes,
     }
     profile = resolve_profile(args.profile, overrides)
     server = FaultServer(profile, args.seg_size, args.segments, args.seed, port=args.port)

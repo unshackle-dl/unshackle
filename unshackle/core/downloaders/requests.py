@@ -29,6 +29,10 @@ from unshackle.core.utilities import get_debug_logger, get_extension
 
 MAX_ATTEMPTS = 5
 RETRY_WAIT = 2
+# a cut that still delivered bytes is resumable and refreshes the attempt budget; bound it
+# so a server that sends a little and closes, over and over, still terminates
+MAX_RESUMES = 500
+MIN_RESUME_PROGRESS = 64 * 1024
 PROGRESS_WINDOW = 2
 
 # read timeout bounds the gap between chunks so a quiet connection errors instead of hanging
@@ -710,6 +714,7 @@ def download(
 
     attempts = 1
     written = 0
+    resumes = 0
     while True:
         if claimed is not None and claimed():
             return
@@ -719,6 +724,7 @@ def download(
             return
         if not part_mode:
             written = 0
+        secured = written if part_mode else resume_offset
         last_speed_refresh = _time()
 
         try:
@@ -791,10 +797,16 @@ def download(
                 content_range = parse_content_range(
                     stream.headers.get("Content-Range") or stream.headers.get("content-range")
                 )
-                if content_range is None or content_range[0] != part_offset + written or content_range[1] > part_end:
+                if (
+                    content_range is None
+                    or content_range[0] != part_offset + written
+                    or content_range[1] > part_end
+                    or (content_range[2] is not None and content_range[2] <= part_end)
+                ):
                     # a wrong start would land bytes at the wrong offset in the shared file,
-                    # and an end past part_end would spill into a sibling part's region; fail
-                    # the attempt before any byte is written
+                    # an end past part_end would spill into a sibling part's region, and a
+                    # total at or below part_end means the resource changed under the part
+                    # plan; fail the attempt before any byte is written
                     raise IOError(f"part {part_offset}-{part_end} got Content-Range {content_range!r}")
             if use_rnet:
                 content_encoded = is_content_encoded(
@@ -855,6 +867,7 @@ def download(
             chunk_size = adaptive_chunk_size(content_length)
             if limiter:
                 chunk_size = min(chunk_size, max(8192, int(limiter.rate / 4)))
+            secured = written if part_mode else resume_offset
             total_size = (resume_offset + content_length) if resumed and content_length > 0 else content_length
 
             if not segmented and not part_mode:
@@ -901,47 +914,46 @@ def download(
                 emit_progress = (not segmented) or part_mode
                 if register is not None:
                     register(stream, True)
-                for chunk in chunks:
-                    if DOWNLOAD_CANCELLED.is_set() or (abort is not None and abort.is_set()):
-                        break
-                    if claimed is not None and claimed():
-                        # close the handle or Windows can't delete the stray .!dev at merge (WinError 32)
-                        if register is not None:
-                            register(stream, False)
-                        try:
-                            stream.close()
-                        except Exception:
-                            pass
-                        return
-                    if limiter is not None:
-                        limiter.consume(len(chunk))
-                    _write(chunk)
-                    download_size = len(chunk)
-                    written += download_size
-
-                    if emit_progress:
-                        _bytes_since_yield += download_size
-                        _data_accumulated += download_size
-                        now = _time()
-                        time_since = now - last_speed_refresh
-                        if time_since > PROGRESS_WINDOW:
-                            yield dict(advance=_bytes_since_yield)
-                            _bytes_since_yield = 0
-                            if not part_mode:
-                                download_speed = math.ceil(_data_accumulated / (time_since or 1))
-                                yield dict(downloaded=f"{filesize.decimal(download_speed)}/s")
-                            last_speed_refresh = now
-                            _data_accumulated = 0
-
-                if emit_progress and _bytes_since_yield > 0:
-                    yield dict(advance=_bytes_since_yield)
-
-                if register is not None:
-                    register(stream, False)
+                # finally, not a trailing close: when the consumer abandons this generator it
+                # raises GeneratorExit at a yield, and the leaked stream then holds a
+                # pool_block=True connection forever, plus the .!dev handle on Windows. The
+                # same finally closes a superseded hedge loser, or Windows can't delete its
+                # stray .!dev at merge (WinError 32)
                 try:
-                    stream.close()
-                except Exception:
-                    pass
+                    for chunk in chunks:
+                        if DOWNLOAD_CANCELLED.is_set() or (abort is not None and abort.is_set()):
+                            break
+                        if claimed is not None and claimed():
+                            return
+                        if limiter is not None:
+                            limiter.consume(len(chunk))
+                        _write(chunk)
+                        download_size = len(chunk)
+                        written += download_size
+
+                        if emit_progress:
+                            _bytes_since_yield += download_size
+                            _data_accumulated += download_size
+                            now = _time()
+                            time_since = now - last_speed_refresh
+                            if time_since > PROGRESS_WINDOW:
+                                yield dict(advance=_bytes_since_yield)
+                                _bytes_since_yield = 0
+                                if not part_mode:
+                                    download_speed = math.ceil(_data_accumulated / (time_since or 1))
+                                    yield dict(downloaded=f"{filesize.decimal(download_speed)}/s")
+                                last_speed_refresh = now
+                                _data_accumulated = 0
+
+                    if emit_progress and _bytes_since_yield > 0:
+                        yield dict(advance=_bytes_since_yield)
+                finally:
+                    if register is not None:
+                        register(stream, False)
+                    try:
+                        stream.close()
+                    except Exception:
+                        pass
 
             aborted = abort is not None and abort.is_set()
             if (DOWNLOAD_CANCELLED.is_set() or aborted) and (not content_length or written < content_length):
@@ -981,14 +993,22 @@ def download(
                 if not cancelled:
                     raise
                 return
-            if on_retry is not None:
+            if not part_mode:
+                resume_offset = tmp_file.stat().st_size if tmp_file.exists() else 0
+            # a CDN that throttles a flow and closes it every few seconds would otherwise
+            # exhaust MAX_ATTEMPTS partway into a large part; a cut with no progress (or a
+            # slice item, which rewrites from scratch) still spends an attempt, and only
+            # those reach on_retry so the adaptive controller does not slow a healthy flow
+            progress = written if part_mode else (0 if item_range else resume_offset)
+            if progress - secured >= MIN_RESUME_PROGRESS and resumes < MAX_RESUMES:
+                resumes += 1
+                attempts = 0
+            elif on_retry is not None:
                 try:
                     on_retry(exc)
                 except Exception:
                     pass
-            if not part_mode:
-                resume_offset = tmp_file.stat().st_size if tmp_file.exists() else 0
-            delay = retry_sleep(exc, attempts)
+            delay = retry_sleep(exc, max(1, attempts))
             if abort is not None:
                 # interruptible nap: backoff can reach MAX_BACKOFF, and teardown always
                 # sets the batch abort, so a parked worker must wake and exit at once
@@ -1462,7 +1482,12 @@ def requests(
         url_item = urls[0]
         try:
             ranged_used = False
-            if max_workers > 1 and speed_limiter is None and not has_range_header(url_item):
+            if (
+                max_workers > 1
+                and speed_limiter is None
+                and not has_range_header(url_item)
+                and not url_item["save_path"].exists()
+            ):
                 total_size, supports_ranges = probe_ranged(url_item["url"], session)
                 if supports_ranges and total_size >= RANGE_PARALLEL_MIN_SIZE:
                     try:
