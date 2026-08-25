@@ -1,7 +1,7 @@
 import json
 import random
 import re
-from typing import Optional
+from typing import Iterator, Optional
 
 import requests
 
@@ -35,12 +35,7 @@ class WindscribeVPN(Proxy):
 
     def __repr__(self) -> str:
         countries = len(set(x.get("country_code") for x in self.countries if x.get("country_code")))
-        servers = sum(
-            len(host)
-            for location in self.countries
-            for group in location.get("groups", [])
-            for host in group.get("hosts", [])
-        )
+        servers = sum(1 for _ in self.iter_hostnames())
 
         return f"{countries} Countr{['ies', 'y'][countries == 1]} ({servers} Server{['s', ''][servers == 1]})"
 
@@ -50,10 +45,11 @@ class WindscribeVPN(Proxy):
 
         Supports:
         - Country code: "us", "ca", "gb"
-        - Specific server: "sg007", "us150"
+        - Specific server: "sg007", "us150", "us-central-150"
         - City selection: "us:seattle", "ca:toronto"
         """
-        query = query.lower()
+        # Windscribe names GB hosts "uk-NNN"; Ukraine is "ua", so "uk" is unambiguous.
+        query = re.sub(r"^uk(?=$|[:\d])", "gb", query.lower())
         city = None
 
         if ":" in query:
@@ -62,7 +58,7 @@ class WindscribeVPN(Proxy):
 
         server_map_key = f"{query}:{city}" if city else query
         if server_map_key in self.server_map:
-            hostname = self.server_map[server_map_key]
+            hostname: Optional[str] = self.server_map[server_map_key]
         elif query in self.server_map:
             hostname = self.server_map[query]
         else:
@@ -77,45 +73,44 @@ class WindscribeVPN(Proxy):
                     )
             elif re.match(r"^[a-z]+$", query):
                 hostname = self.get_random_server(query, city)
+            elif "-" in query:
+                hostname = next((h for h in self.iter_hostnames() if h.startswith(f"{query}.")), None)
+                if not hostname:
+                    raise ValueError(f"No WindscribeVPN server found matching '{query}'.")
             else:
                 raise ValueError(f"The query provided is unsupported and unrecognized: {query}")
 
-            if not hostname:
-                return None
+        if not hostname:
+            return None
 
         hostname = hostname.split(":")[0]
         return f"https://{self.username}:{self.password}@{hostname}:443"
 
+    def iter_hostnames(self) -> Iterator[str]:
+        """Yield every known server hostname."""
+        for location in self.countries:
+            for group in location.get("groups", []):
+                for host in group.get("hosts", []):
+                    if host.get("hostname"):
+                        yield host["hostname"]
+
     def get_specific_server(self, country_code: str, server_num: str) -> Optional[str]:
         """
-        Find a specific server by country code and server number.
+        Find a server by country code and number, e.g. "sg007" -> "sg-007.totallyacdn.com".
 
-        Matches against hostnames like "sg-007.totallyacdn.com" for query "sg007".
-        Tries both the raw number and zero-padded variants.
-
-        Args:
-            country_code: Two-letter country code (e.g., "sg", "us")
-            server_num: Server number as string (e.g., "007", "7", "150")
-
-        Returns:
-            The matching hostname, or None if not found.
+        Matches on the trailing number of the hostname, so "us150" also finds "us-central-150"
+        and "gb044" finds "uk-044" (hostnames do not always share the country code).
         """
-        num_stripped = server_num.lstrip("0") or "0"
-        candidates = {
-            f"{country_code}-{server_num}.",
-            f"{country_code}-{num_stripped}.",
-            f"{country_code}-{server_num.zfill(3)}.",
-        }
-
+        num = server_num.lstrip("0") or "0"
         for location in self.countries:
             if location.get("country_code", "").lower() != country_code:
                 continue
             for group in location.get("groups", []):
                 for host in group.get("hosts", []):
                     hostname = host.get("hostname", "")
-                    if any(hostname.startswith(prefix) for prefix in candidates):
+                    match = re.match(r"^[a-z]+(?:-[a-z]+)?-0*(\d+)\.", hostname)
+                    if match and match.group(1) == num:
                         return hostname
-
         return None
 
     def get_random_server(self, country_code: str, city: Optional[str] = None) -> Optional[str]:
