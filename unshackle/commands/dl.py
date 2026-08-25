@@ -953,7 +953,7 @@ class dl:
 
     DRM_LOCKS: dict[str, Lock] = {}
     DRM_LOCKS_GUARD = Lock()
-    VAULT_WRITE_LOCK = Lock()
+    VAULT_WRITER = ThreadPoolExecutor(1, thread_name_prefix="vault-writer")
     EXPORT_LOCK = Lock()
     LICENSE_KEY_CACHE: dict[UUID, str] = {}
 
@@ -2949,6 +2949,7 @@ class dl:
                     message="Download cancelled by user",
                     context={"title": str(title)},
                 )
+                self.wait_vault_writes()
                 return
             except Exception as e:  # noqa
                 # Reported and swallowed (no re-raise) so the CLI exits cleanly; flag it so the
@@ -2990,6 +2991,7 @@ class dl:
                     ),
                     postscript,
                 )
+                self.wait_vault_writes()
                 return
 
             if skip_dl:
@@ -3626,6 +3628,7 @@ class dl:
                 run_context["folder"] = str(folder)
                 dispatch("success", "run", run_context, postscript)
 
+        self.wait_vault_writes()
         dl_time = time_elapsed_since(start_time)
 
         console.print(Padding(f"Processed all titles in [progress.elapsed]{dl_time}", (0, 5, 1, 5)))
@@ -3916,12 +3919,18 @@ class dl:
             export.write_text(json.dumps(doc, indent=4, ensure_ascii=False), encoding="utf8")
 
     def flush_vault_writes(self, pending: list[Callable[[], Any]]) -> None:
-        if not pending:
-            return
-        with self.VAULT_WRITE_LOCK:
-            for write in pending:
-                write()
+        """Hand the queued vault writes to the background writer so the track does not wait on them."""
+        for write in pending:
+            self.VAULT_WRITER.submit(write).add_done_callback(self.report_vault_write)
         pending.clear()
+
+    def report_vault_write(self, future: futures.Future[Any]) -> None:
+        if exc := future.exception():
+            self.log.error(f"Vault write failed: {exc!r}")
+
+    def wait_vault_writes(self) -> None:
+        """Block until every queued vault write has run."""
+        self.VAULT_WRITER.submit(lambda: None).result()
 
     def cache_keys_to_vaults(self, content_keys: dict[UUID, str]) -> None:
         successful_caches = self.vaults.add_keys(content_keys)
@@ -4245,7 +4254,7 @@ class dl:
 
                     self.LICENSE_KEY_CACHE.update(drm.content_keys)
 
-                    pending_vault_writes.append(partial(self.cache_keys_to_vaults, drm.content_keys))
+                    pending_vault_writes.append(partial(self.cache_keys_to_vaults, dict(drm.content_keys)))
 
                 if track_kid and track_kid not in drm.content_keys:
                     msg = f"No Content Key for KID {track_kid.hex} was returned in the License"
@@ -4259,10 +4268,9 @@ class dl:
                     table.add_row()
                     table.add_row(cek_tree)
 
-                if export:
-                    self.write_export(export, title, track, drm)
-
             self.flush_vault_writes(pending_vault_writes)
+            if export:
+                self.write_export(export, title, track, drm)
 
         elif isinstance(drm, PlayReady):
             if self.debug_logger:
@@ -4418,7 +4426,7 @@ class dl:
 
                     self.LICENSE_KEY_CACHE.update(drm.content_keys)
 
-                    pending_vault_writes.append(partial(self.cache_keys_to_vaults, drm.content_keys))
+                    pending_vault_writes.append(partial(self.cache_keys_to_vaults, dict(drm.content_keys)))
 
                 if track_kid and track_kid not in drm.content_keys:
                     msg = f"No Content Key for KID {track_kid.hex} was returned in the License"
@@ -4432,10 +4440,9 @@ class dl:
                     table.add_row()
                     table.add_row(cek_tree)
 
-                if export:
-                    self.write_export(export, title, track, drm)
-
             self.flush_vault_writes(pending_vault_writes)
+            if export:
+                self.write_export(export, title, track, drm)
 
         elif isinstance(drm, ClearKeyCENC):
             pending_vault_writes = []
@@ -4558,7 +4565,7 @@ class dl:
 
                     self.LICENSE_KEY_CACHE.update(drm.content_keys)
 
-                    pending_vault_writes.append(partial(self.cache_keys_to_vaults, drm.content_keys))
+                    pending_vault_writes.append(partial(self.cache_keys_to_vaults, dict(drm.content_keys)))
 
                 if track_kid and track_kid not in drm.content_keys:
                     msg = f"No Content Key for KID {track_kid.hex} was returned in the License"
@@ -4572,10 +4579,9 @@ class dl:
                     table.add_row()
                     table.add_row(cek_tree)
 
-                if export:
-                    self.write_export(export, title, track, drm)
-
             self.flush_vault_writes(pending_vault_writes)
+            if export:
+                self.write_export(export, title, track, drm)
 
         elif isinstance(drm, MonaLisa):
             with self.drm_lock(drm):
