@@ -686,16 +686,16 @@ By default, `mkvmerge` muxes the tracks of a movie or an episode into a single M
 
 `--postscript "<command>"` runs your own command once per output file, with unshackle's
 metadata substituted into `{variable}` placeholders. It is repeatable, and it replaces the
-`post_scripts` config for that run. No `success` hook operates under `--no-mux`, because
-that run writes no muxed output. A `failure` hook still operates if the download fails.
+`post_scripts` config for that run. No `success` post-script operates under `--no-mux`, because
+that run writes no muxed output. A `failure` post-script still operates if the download fails.
 
 ```shell title="Hand each finished file to an uploader"
 unshackle dl --postscript "python /opt/upload.py {filepath} --service={service}" EXAMPLE 81234567
 ```
 
-For hooks that continue across runs, for the `season` and `run` modes, for `failure` hooks
-and for the full variable list, see
-[Post-download scripts](../reference/configuration/post-scripts.md).
+For post-scripts that continue across runs, for the `season` and `run` modes, for `failure`
+post-scripts and for the full variable list, see
+[Post-scripts](../reference/configuration/post-scripts.md).
 
 ### Naming tags
 

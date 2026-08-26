@@ -1,9 +1,9 @@
-"""Music post-script hooks, which no live service was available to test against.
+"""Music post-scripts, which no live service was available to test against.
 
-A Song runs through the same title loop as an Episode, so its hooks come from the same
+A Song runs through the same title loop as an Episode, so its post-scripts come from the same
 two functions: ``build_context`` for a file and ``season_context`` for the release folder.
 These check what those two feed a script: that a Song builds a usable context, that an
-album groups the way a season does, and that the album hook describes the album rather
+album groups the way a season does, and that the album post-script describes the album rather
 than whichever track landed last.
 """
 
@@ -18,7 +18,7 @@ from unshackle.core.utils.post_scripts import build_context, dispatch, season_co
 
 
 class FakeSong(SimpleNamespace):
-    """A Song as the hook sees it: name/artist/album, no season or episode."""
+    """A Song as the post-script sees it: name/artist/album, no season or episode."""
 
     def build_template_context(self, media_info, show_service=True):
         return {
@@ -45,7 +45,7 @@ def song(**kwargs):
 
 
 class FakeEpisode(SimpleNamespace):
-    """An Episode as the hook sees it: a show title, a season, and a number."""
+    """An Episode as the post-script sees it: a show title, a season, and a number."""
 
     def build_template_context(self, media_info, show_service=True):
         return {"title": self.title, "season": f"{self.season:02}", "audio": "EAC3", "video": "H.265"}
@@ -109,7 +109,7 @@ def test_album_grouping_matches_the_season_grouping_rule():
 
 @pytest.mark.parametrize("mode", ["season", "run"])
 def test_album_and_run_contexts_blank_the_file_variables(mode):
-    """Mirrors the blanking dl.py applies before dispatching an album or run hook."""
+    """Mirrors the blanking dl.py applies before dispatching an album or run post-script."""
     base = build_context(
         song(),
         media_info=object(),
@@ -133,7 +133,7 @@ def test_album_and_run_contexts_blank_the_file_variables(mode):
         assert context["album"] == "Example Album, Live & Remastered"
 
 
-def test_a_music_hook_command_builds_the_argv_a_script_would_get(monkeypatch, tmp_path):
+def test_a_music_post_script_command_builds_the_argv_a_script_would_get(monkeypatch, tmp_path):
     """End to end through the real dispatcher: config entry in, argv out."""
     from unshackle.core.config import config
 
@@ -163,7 +163,7 @@ def test_a_music_hook_command_builds_the_argv_a_script_would_get(monkeypatch, tm
         import time
 
         time.sleep(0.05)
-    assert marker.exists(), "the hook process never ran"
+    assert marker.exists(), "the post-script process never ran"
     argv = marker.read_text().splitlines()
     assert "--album=Example Album, Live & Remastered" in argv
     assert "--artist=Example Artist" in argv
@@ -172,7 +172,7 @@ def test_a_music_hook_command_builds_the_argv_a_script_would_get(monkeypatch, tm
 
 
 def test_season_context_blanks_the_file_variables_and_sets_the_folder():
-    """An album hook describes the release folder, so no track's file may leak into it."""
+    """An album post-script describes the release folder, so no track's file may leak into it."""
     folder = Path("/dl/Example Artist - Example Album, Live & Remastered (1983)")
     context = build_context(
         song(),
@@ -194,7 +194,7 @@ def test_season_context_blanks_the_file_variables_and_sets_the_folder():
 def test_season_context_identifies_the_album_not_the_last_track():
     """A Song's ``{title}`` is the song, so blanking only the file fields is not enough.
 
-    Guards a regression where an album hook was handed whichever track landed last:
+    Guards a regression where an album post-script was handed whichever track landed last:
     ``{title}`` was a song name and ``{track_number}``/``{isrc}`` were that track's.
     """
     folder = Path("/dl/Example Artist - Example Album (1983)")
@@ -219,7 +219,7 @@ def test_season_context_identifies_the_album_not_the_last_track():
 
 
 def test_season_context_leaves_a_non_music_context_untouched():
-    """The music branch is gated on ``{album}``; a season hook must not lose its own keys."""
+    """The music branch is gated on ``{album}``; a season post-script must not lose its own keys."""
     folder = Path("/dl/Some Show/Season 1")
     context = build_context(
         episode(),

@@ -1,4 +1,4 @@
-# Post-download scripts { #post-scripts }
+# Post-scripts { #post-scripts }
 
 Operate your own script when a download finishes, with unshackle's metadata passed in as
 `{variable}` placeholders. Use it to hand a finished file to an uploader, send a
@@ -87,7 +87,7 @@ post_scripts:
 ```
 
 With `wait: true`, unshackle waits until the script exits, then writes the exit code to the
-debug log and carries on. Because the `file` hook runs between titles, unshackle runs one
+debug log and carries on. Because the `file` post-script runs between titles, unshackle runs one
 script at a time over a season pack instead of starting them all at once. unshackle only
 logs the exit code: a failing script does not fail the download or change unshackle's own
 exit code. `--postscript` entries never wait.
@@ -132,7 +132,7 @@ Every variable from your `output_template` is available here as well, including
       file, because SDR is the absence of an HDR tag in a filename rather than a tag that
       reads `SDR`. `{edition}`, `{atmos}`, `{multi}`, `{dual}` and `{hfr}` behave the same
       way. If your script needs the word `SDR`, derive it from an empty `{hdr}` yourself.
-    - The hook is a `failure` hook. A failed download has no output file to read metadata
+    - The post-script is a `failure` one. A failed download has no output file to read metadata
       from, so everything that comes from the naming context is empty. See
       [Events](#events).
 
@@ -146,7 +146,7 @@ Every variable from your `output_template` is available here as well, including
 
 ### Music variables
 
-A music download builds its variables from the music naming context, so a hook gets the
+A music download builds its variables from the music naming context, so a post-script gets the
 release fields instead of the season and episode ones. `{season}`, `{episode}` and
 `{episode_name}` are always empty for music.
 
@@ -161,7 +161,7 @@ release fields instead of the season and episode ones. `{season}`, `{episode}` a
 | `{release_type}` | `album`, `single`, `ep`, and so on. A service that reports nothing gives `album` |
 | `{explicit}` | The word `Explicit` when the track is flagged, otherwise empty |
 
-In a `file` hook `{title}` is the track name. See [Modes](#modes) for what an album hook
+In a `file` post-script `{title}` is the track name. See [Modes](#modes) for what an album post-script
 puts in `{title}`.
 
 `{year}` is empty when the service gives the release no year. `{ext}` is the container the
@@ -170,11 +170,11 @@ track arrived in, such as `.flac`, because a music download is not muxed.
 ### Tagging IDs { #tagging-ids }
 
 `{tmdb}`, `{imdb}` and `{tvdb}` carry the IDs unshackle tags the file with. unshackle reads
-them at the moment it sends the hook, and not at the start of the run. The title search inside
-the download loop finds an episode's TMDB ID, so a hook fires with it already filled in.
+them at the moment it dispatches the post-script, and not at the start of the run. The title search
+inside the download loop finds an episode's TMDB ID, so a post-script fires with it already filled in.
 
 They hold an ID you passed with `--tmdb`, `--imdb` or `--tvdb`, plus a TMDB ID the episode
-search resolved. No such search runs for a movie, so a movie hook gets them empty unless you
+search resolved. No such search runs for a movie, so a movie post-script gets them empty unless you
 passed one.
 
 ### Sidecar files
@@ -206,19 +206,19 @@ subs = [p for p in sys.argv[i].removeprefix("--subs=").split("\n") if p]
 | `run` | Once per folder written, at the end of the run | Empty | Empty |
 
 !!! warning "`season` means everything this run asked for"
-    A `season` hook fires when the last title **this run queued** for that season finishes.
-    With `-w S01-S02` the S01 hook runs while S02 is still downloading. It says nothing
-    about whether the season is complete on disk. Downloading a single episode fires the
-    hook for that season as soon as the episode lands.
+    A `season` post-script fires when the last title **this run queued** for that season
+    finishes. With `-w S01-S02` the S01 post-script runs while S02 is still downloading. It says
+    nothing about whether the season is complete on disk. Downloading a single episode fires
+    the post-script for that season as soon as the episode lands.
 
-    A title that fails stops the whole run. unshackle dispatches the `failure` hook for
+    A title that fails stops the whole run. unshackle dispatches the `failure` post-script for
     that title and then returns. It downloads no further title, and no `season` or `run`
-    hook fires after that point. This applies to every title type. If one episode of S01
-    fails, the S01 hook does not fire at all.
+    post-script fires after that point. This applies to every title type. If one episode of S01
+    fails, the S01 post-script does not fire at all.
 
-unshackle attaches the hook to the folder, not to the season, so one season landing in several
-folders (`-q 1080,720` with a quality-dependent folder template) fires it once per folder,
-each with its own `{folder}`. A movie is a group of its own: a `season` hook fires for a
+unshackle attaches the post-script to the folder, not to the season, so one season landing in
+several folders (`-q 1080,720` with a quality-dependent folder template) fires it once per
+folder, each with its own `{folder}`. A movie is a group of its own: a `season` post-script fires for a
 movie's folder as soon as the movie finishes.
 
 In `run` mode every variable except `{folder}` is empty, because one run can cover several
@@ -235,27 +235,27 @@ Music uses the same three modes, with the album standing in for the season.
 | `season` | Once per album folder, after every queued track of that album has landed |
 | `run` | Once per folder written, at the end of the run |
 
-In a `file` hook `{title}` and `{title_raw}` are the track name. In an album hook they are
-the album name, and the per-track variables `{track_number}`, `{disc}` and `{isrc}` are
-empty, in the same way that `{episode}` is empty in a season hook.
+In a `file` post-script `{title}` and `{title_raw}` are the track name. In an album post-script they
+are the album name, and the per-track variables `{track_number}`, `{disc}` and `{isrc}` are
+empty, in the same way that `{episode}` is empty in a season post-script.
 
-An album hook obeys the same rule as a season hook. It fires when the last track **this run
-queued** for that album lands. This does not mean that the album is complete on disk. A
-one-track download fires the album hook as soon as that track lands. If a track fails, the
-run stops there, so the album hook never fires, in the same way as an episode and its
+An album post-script obeys the same rule as a season post-script. It fires when the last track
+**this run queued** for that album lands. This does not mean that the album is complete on disk.
+A one-track download fires the album post-script as soon as that track lands. If a track fails,
+the run stops there, so the album post-script never fires, in the same way as an episode and its
 season.
 
 ## Events { #events }
 
 `success` runs after the file has moved to its final path. `failure` runs when the download
 fails, with `{filepath}` empty and `{error}` set. Each track of an album is its own title.
-A music `failure` hook therefore describes the track that failed, not the release.
+A music `failure` post-script therefore describes the track that failed, not the release.
 
 !!! warning "`failure` only fires in `file` mode"
     A `failure` entry with `mode: season` or `mode: run` never runs. Leave `mode` at its
     default on a failure entry.
 
-A `failure` hook has no output file to read metadata from, so it carries only what the
+A `failure` post-script has no output file to read metadata from, so it carries only what the
 title object already knew: `{title}`, `{title_raw}`, `{title_id}`, `{year}`, `{season}`,
 `{episode}`, `{episode_name}`, `{service}`, the tagging IDs and `{error}`. Everything that
 comes from the naming context, such as `{quality}`, `{hdr}`, `{artist}` and `{album}`, is
@@ -266,7 +266,7 @@ sees your script's exit code only when that entry sets `wait: true`, and even th
 writes the code to the debug log. Nothing else reports a failing script. Your script owns
 its own error handling and logging.
 
-A `success` hook always names a file this run wrote. There is no skip-if-exists path in
+A `success` post-script always names a file this run wrote. There is no skip-if-exists path in
 `dl` today, so nothing fires for a title that was not downloaded.
 
 ## `--postscript`
@@ -300,7 +300,7 @@ unshackle logs the command it operated twice: at `DEBUG` level on the console, a
 when that log is on.
 
 unshackle masks both the same way, and honours [`redact_paths`](misc.md), which is on by default.
-Debug logs get shared in issue reports, and a hook command line is mostly paths. URL
+Debug logs get shared in issue reports, and a post-script command line is mostly paths. URL
 credentials and `token=` / `api_key=` query parameters are also masked.
 
 !!! warning "Do not hardcode secrets in the command"
@@ -310,8 +310,8 @@ credentials and `token=` / `api_key=` query parameters are also masked.
 
 ## Limitations
 
-- No `success` hook operates under `--no-mux` or `--skip-dl`, because neither writes a muxed
-  output. A `failure` hook still runs under `--no-mux` if the download itself fails.
-- `failure` hooks only operate in `file` mode.
+- No `success` post-script operates under `--no-mux` or `--skip-dl`, because neither writes a
+  muxed output. A `failure` post-script still runs under `--no-mux` if the download itself fails.
+- `failure` post-scripts only operate in `file` mode.
 - There is no webhook sender. Call `curl` from a script instead.
 - Script output is not captured. Redirect it inside your own script if you want a log.

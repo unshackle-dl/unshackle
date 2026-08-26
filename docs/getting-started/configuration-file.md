@@ -87,7 +87,7 @@ The top-level keys group loosely into these areas:
 | Naming & tagging | `tag`, `output_template`, `chapter_fallback_name` |
 | External API keys | `tmdb_api_key`, `tvdb_api_key`, `simkl_client_id`, `ipinfo_api_key`, `metadata_providers` |
 | Behaviour & logging | `update_checks`, `redact_paths`, `debug`, `unicode_filenames` |
-| Post-download scripts | `post_scripts` |
+| Post-scripts | `post_scripts` |
 | Paths | `directories`, `filenames` |
 
 For the full list with types and defaults, see the [Configuration Reference](../reference/configuration/index.md).

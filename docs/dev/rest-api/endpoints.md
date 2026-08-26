@@ -425,9 +425,9 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 !!! danger "Rejected parameters"
     `postscript`, `post_script` and `post_scripts` are never accepted. A body containing any
     of them gets `400 INVALID_PARAMETERS`, because a command string that arrives from
-    an HTTP caller would be remote code execution. You configure post-download hooks only in
+    an HTTP caller would be remote code execution. You configure post-scripts only in
     `unshackle.yaml`, where they still operate for API jobs. See
-    [Post-download scripts](../../reference/configuration/post-scripts.md).
+    [Post-scripts](../../reference/configuration/post-scripts.md).
 
 !!! warning "Gated parameters (developer)"
     The server accepts a few keys, but permits them only when the server config opts in. Otherwise the server rejects the request with `403 FORBIDDEN`:

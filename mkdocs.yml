@@ -128,7 +128,7 @@ nav:
       - DRM & CDM: reference/configuration/drm.md
       - Network & Proxy: reference/configuration/network.md
       - Key Vaults: reference/configuration/vaults.md
-      - Post-Download Scripts: reference/configuration/post-scripts.md
+      - Post-Scripts: reference/configuration/post-scripts.md
       - Other Settings: reference/configuration/misc.md
       - Annotated Example: reference/configuration/example.md
   - Developer:

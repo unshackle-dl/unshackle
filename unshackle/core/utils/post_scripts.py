@@ -142,7 +142,7 @@ def build_context(
 
 
 def season_context(context: dict[str, str], folder: Path) -> dict[str, str]:
-    """Blank the file-level variables so a season/album hook describes the folder."""
+    """Blank the file-level variables so a season/album post-script describes the folder."""
     out = dict(context)
     for key in ("filepath", "filename", "ext", "sidecars", "episode", "episode_name"):
         out[key] = ""
