@@ -154,7 +154,7 @@ def test_dispatch_survives_an_unbalanced_quote(caplog):
 )
 def test_malformed_post_scripts_config_shapes(monkeypatch, raw, expected):
     monkeypatch.setattr(config, "post_scripts", raw)
-    assert list(_entries("success", "file")) == expected
+    assert [c for c, _ in _entries("success", "file")] == expected
 
 
 def test_typoed_event_or_mode_warns_instead_of_silently_dropping(monkeypatch, caplog):
@@ -165,7 +165,7 @@ def test_typoed_event_or_mode_warns_instead_of_silently_dropping(monkeypatch, ca
         [{"command": "typo.py", "mode": "seson"}, {"command": "ok.py", "mode": "season"}],
     )
     for dispatch_mode in ("file", "season", "run"):
-        assert list(_entries("success", dispatch_mode)) == (["ok.py"] if dispatch_mode == "season" else [])
+        assert [c for c, _ in _entries("success", dispatch_mode)] == (["ok.py"] if dispatch_mode == "season" else [])
     assert caplog.text.count("unknown event/mode") == 1  # warned once, not per dispatch
 
 
@@ -196,3 +196,24 @@ def test_tagging_ids_are_read_at_dispatch_not_snapshotted():
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+def _dispatch_seconds(monkeypatch, entry: dict) -> float:
+    import time
+
+    monkeypatch.setattr(config, "post_scripts", [entry])
+    start = time.monotonic()
+    dispatch("success", "file", {})
+    return time.monotonic() - start
+
+
+def test_wait_true_waits_for_the_script_and_logs_the_exit_code(monkeypatch, caplog):
+    caplog.set_level("DEBUG", logger="post-script")
+    slow = 'python -c "import time,sys; time.sleep(0.3); sys.exit(3)"'
+    assert _dispatch_seconds(monkeypatch, {"command": slow, "wait": True}) >= 0.3
+    assert "Post-script exited 3" in caplog.text
+
+
+def test_wait_defaults_to_fire_and_forget(monkeypatch):
+    slow = 'python -c "import time; time.sleep(0.3)"'
+    assert _dispatch_seconds(monkeypatch, {"command": slow}) < 0.3

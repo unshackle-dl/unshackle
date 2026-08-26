@@ -6,8 +6,10 @@ is what makes a title like ``Bob"; rm -rf ~`` harmless: a value can never become
 token or a shell operator. The cost is that the command has no shell features and no
 interpreter lookup, so users name the interpreter themselves (``python upload.py``).
 
-Scripts are fire-and-forget: unshackle spawns them, logs the command, and moves on. It
-does not wait, capture output, time them out, or let a script's exit code change its own.
+Scripts are fire-and-forget by default: unshackle spawns them, logs the command, and moves
+on. With ``wait: true`` unshackle waits for the script to exit, which runs heavy scripts one
+at a time over a season pack. It logs the exit code, but a script never changes unshackle's
+own exit code, and unshackle never captures output or times a script out.
 """
 
 from __future__ import annotations
@@ -151,11 +153,11 @@ def season_context(context: dict[str, str], folder: Path) -> dict[str, str]:
     return out | {"folder": str(folder)}
 
 
-def _entries(event: str, mode: str, overrides: Sequence[str] = ()) -> Iterator[str]:
-    """Commands configured for this event and mode. --postscript replaces the config list."""
+def _entries(event: str, mode: str, overrides: Sequence[str] = ()) -> Iterator[tuple[str, bool]]:
+    """``(command, wait)`` pairs for this event and mode. --postscript replaces the config list."""
     if overrides:
         if event == "success" and mode == "file":
-            yield from overrides
+            yield from ((command, False) for command in overrides)
         return
 
     raw = config.post_scripts
@@ -189,12 +191,12 @@ def _entries(event: str, mode: str, overrides: Sequence[str] = ()) -> Iterator[s
             continue
         if entry_event != event or entry_mode != mode:
             continue
-        yield command
+        yield command, bool(entry.get("wait", False))
 
 
 def dispatch(event: str, mode: str, context: dict[str, str], overrides: Sequence[str] = ()) -> None:
     """Spawn every post-script configured for `event` and `mode`. Never raises."""
-    for command in _entries(event, mode, overrides):
+    for command, wait in _entries(event, mode, overrides):
         try:
             tokens = tokenize(command)
         except ValueError as e:  # shlex: unbalanced quote in the command template
@@ -224,6 +226,15 @@ def dispatch(event: str, mode: str, context: dict[str, str], overrides: Sequence
             else {"start_new_session": True}
         )
         try:
-            subprocess.Popen(argv, stdin=subprocess.DEVNULL, **detach)
+            proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, **detach)
         except (OSError, ValueError) as e:
             log.warning("Post-script failed to start (%s): %s", e, redact_text(redact_path(argv[0])))
+            continue
+        if wait:
+            rc = proc.wait()
+            log.debug("Post-script exited %s: %s", rc, safe_command)
+            log_event(
+                "post_script_exit",
+                message=f"Post-script for {event}/{mode} exited {rc}",
+                context={"event": event, "mode": mode, "command": safe_command, "returncode": rc},
+            )

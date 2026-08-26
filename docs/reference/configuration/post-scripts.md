@@ -25,6 +25,7 @@ is the same as `{command: "...", event: success, mode: file}`.
 | `command` | required | The command to run, with `{variable}` placeholders |
 | `event` | `success` | `success` when a file was written, `failure` when the download failed |
 | `mode` | `file` | `file`, `season`, or `run`. See [Modes](#modes) |
+| `wait` | `false` | `true` makes unshackle wait for the script to exit before carrying on. See [Waiting for a script](#wait) |
 
 unshackle skips an entry whose `event` or `mode` is not one of the listed values, and logs a
 warning that names the bad value, once per command. unshackle also skips an entry whose
@@ -66,15 +67,30 @@ means a path containing spaces always arrives as a single argument on every OS.
     history of letting a crafted value break out (CVE-2024-3566). Call the interpreter and
     pass the script as an argument (`python upload.py`, `pwsh -File upload.ps1`) instead.
 
-Scripts are fire and forget. unshackle starts the process, writes the command to the debug
-log, and carries on. It does not wait for the script, capture its output, time it out, or
-change its own exit code when a script fails. A script keeps running if unshackle exits
-first, and <kbd>Ctrl</kbd>+<kbd>C</kbd> during a season pack does not kill the scripts
-already started.
+By default, scripts are fire and forget. unshackle starts the process, writes the command to
+the debug log, and carries on. It does not wait for the script, capture its output, time it
+out, or change its own exit code when a script fails. A script keeps running if unshackle
+exits first, and <kbd>Ctrl</kbd>+<kbd>C</kbd> during a season pack does not kill the
+scripts already started.
 
 !!! note "One process per file"
     In `file` mode a large season pack starts one process per episode with nothing
-    throttling them. If your script is heavy, queue the work inside it or use `mode: season`.
+    throttling them. If your script is heavy, set `wait: true`, queue the work inside the
+    script, or use `mode: season`.
+
+### Waiting for a script { #wait }
+
+```yaml title="unshackle.yaml"
+post_scripts:
+  - command: "python /opt/upload.py --file={filepath}"
+    wait: true
+```
+
+With `wait: true`, unshackle waits until the script exits, then writes the exit code to the
+debug log and carries on. Because the `file` hook runs between titles, unshackle runs one
+script at a time over a season pack instead of starting them all at once. unshackle only
+logs the exit code: a failing script does not fail the download or change unshackle's own
+exit code. `--postscript` entries never wait.
 
 ## Variables
 
@@ -245,9 +261,10 @@ title object already knew: `{title}`, `{title_raw}`, `{title_id}`, `{year}`, `{s
 comes from the naming context, such as `{quality}`, `{hdr}`, `{artist}` and `{album}`, is
 empty.
 
-A resumed `--continue-downloads` download that finishes runs `success` as usual. Because
-unshackle does not wait for your script, it never sees its exit code, so a failing script
-is not reported anywhere. Your script owns its own error handling and logging.
+A resumed `--continue-downloads` download that finishes runs `success` as usual. unshackle
+sees your script's exit code only when that entry sets `wait: true`, and even then it only
+writes the code to the debug log. Nothing else reports a failing script. Your script owns
+its own error handling and logging.
 
 A `success` hook always names a file this run wrote. There is no skip-if-exists path in
 `dl` today, so nothing fires for a title that was not downloaded.
