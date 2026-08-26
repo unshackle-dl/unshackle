@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Iterator, Optional, Sequence
 
 from unshackle.core.config import config
+from unshackle.core.console import console
 from unshackle.core.utilities import log_event
 from unshackle.core.utils.redact import redact_path, redact_text
 
@@ -231,7 +232,8 @@ def dispatch(event: str, mode: str, context: dict[str, str], overrides: Sequence
             log.warning("Post-script failed to start (%s): %s", e, redact_text(redact_path(argv[0])))
             continue
         if wait:
-            rc = proc.wait()
+            with console.status(f"Waiting for post-script ({redact_path(argv[0])})...", spinner="dots"):
+                rc = proc.wait()
             log.debug("Post-script exited %s: %s", rc, safe_command)
             log_event(
                 "post_script_exit",
