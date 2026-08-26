@@ -1222,6 +1222,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#decrypt_segments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        decrypt_segments
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2054,6 +2065,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#decrypt_segments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        decrypt_segments
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2308,6 +2330,26 @@ service tag case-insensitively and uses the <code>default</code> entry as the fa
 </div>
 </div>
 </div>
+<h2 id="decrypt_segments"><code>decrypt_segments</code><a class="headerlink" href="#decrypt_segments" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Type:</strong> <code>bool</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>false</code></li>
+</ul>
+<p>Decrypts each fragmented MP4 segment as it arrives, instead of decrypting the whole track
+after the download ends. The decryption runs during the download, so the wait after the last
+segment goes away. The output file is the same either way.</p>
+<p>This works with <code>mp4decrypt</code> only. Set <a href="#decryption"><code>decryption</code></a> to <code>mp4decrypt</code> for the
+service (or as the default); with <code>shaka</code> the option has no effect, because shaka-packager
+cannot decrypt a segment without its init segment. It applies to DASH tracks and to HLS
+tracks that use one init segment, one <code>EXT-X-KEY</code> and no <code>EXT-X-DISCONTINUITY</code>. Every other
+track keeps the whole-file decryption.</p>
+<div class="admonition note">
+<p class="admonition-title">No resume</p>
+<p>A track that decrypts segment by segment always downloads from the start.
+<a href="../download/#continue_downloads"><code>continue_downloads</code></a> cannot reuse its segments, because a reused segment
+is already decrypted.</p>
+</div>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">decrypt_segments</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span></code></pre></div>
 
 
 
