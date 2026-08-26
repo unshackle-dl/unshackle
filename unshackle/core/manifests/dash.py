@@ -25,6 +25,7 @@ from requests import Session
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
+from unshackle.core.drm.segment_decrypt import SegmentDecrypter, can_use
 from unshackle.core.events import events
 from unshackle.core.session import RnetSession
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video, resume
@@ -469,13 +470,18 @@ class DASH:
             len(init_data) if init_data is not None else None,
         )
 
+        use_segment_decrypt = not collapse_single_url and bool(init_data) and can_use(drm, config.decryption)
+
         if not collapse_single_url:
+            # per-segment decryption rewrites each segment in place, so a segment kept from an
+            # earlier run would either be decrypted twice or never at all
+            can_resume = config.continue_downloads and not use_segment_decrypt
             # reuse a prior run's segments only when the fingerprint proves the segmentation unchanged
             digest = resume.fingerprint(track.url, segments)
-            if not (config.continue_downloads and resume.reusable(save_dir, digest)):
+            if not (can_resume and resume.reusable(save_dir, digest)):
                 shutil.rmtree(save_dir, ignore_errors=True)
             save_dir.mkdir(parents=True, exist_ok=True)
-            if config.continue_downloads:
+            if can_resume:
                 resume.write_sidecar(save_dir, digest)
 
         if collapse_single_url:
@@ -524,15 +530,29 @@ class DASH:
             },
         )
 
-        for status_update in downloader(**downloader_args):
-            file_downloaded = status_update.get("file_downloaded")
-            if file_downloaded:
-                events.emit(events.Types.SEGMENT_DOWNLOADED, track=track, segment=file_downloaded)
-            else:
-                downloaded = status_update.get("downloaded")
-                if downloaded and downloaded.endswith("/s"):
-                    status_update["downloaded"] = f"DASH {downloaded}"
-                progress(**status_update)
+        decrypter: Optional[SegmentDecrypter] = None
+        if use_segment_decrypt and init_data:
+            decrypter = SegmentDecrypter(drm, init_data, save_dir.parent, max_workers)
+
+        try:
+            for status_update in downloader(**downloader_args):
+                file_downloaded = status_update.get("file_downloaded")
+                if file_downloaded:
+                    if decrypter:
+                        decrypter.submit(file_downloaded)
+                    events.emit(events.Types.SEGMENT_DOWNLOADED, track=track, segment=file_downloaded)
+                else:
+                    downloaded = status_update.get("downloaded")
+                    if downloaded and downloaded.endswith("/s"):
+                        status_update["downloaded"] = f"DASH {downloaded}"
+                    progress(**status_update)
+
+            if decrypter:
+                init_data = decrypter.finish()
+        except Exception:
+            if decrypter:
+                decrypter.close()
+            raise
 
         if collapse_single_url:
             with open(save_path, "r+b") as collapsed:
@@ -622,7 +642,8 @@ class DASH:
 
         if drm:
             progress(downloaded="Decrypting", completed=0, total=None)
-            drm.decrypt(save_path)
+            if not decrypter:
+                drm.decrypt(save_path)
             assert_fragments_decrypted(save_path)
             track.drm = None
             events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=drm, segment=None)

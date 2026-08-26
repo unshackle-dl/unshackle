@@ -156,3 +156,27 @@ unshackle decrypts HLS AES-128 ClearKey in-process and ignores this setting.
       default: shaka
       EXAMPLE1: mp4decrypt
     ```
+
+## `decrypt_segments`
+
+- **Type:** `bool` &nbsp;·&nbsp; **Default:** `false`
+
+Decrypts each fragmented MP4 segment as it arrives, instead of decrypting the whole track
+after the download ends. The decryption runs during the download, so the wait after the last
+segment goes away. The output file is the same either way.
+
+This works with `mp4decrypt` only. Set [`decryption`](#decryption) to `mp4decrypt` for the
+service (or as the default); with `shaka` the option has no effect, because shaka-packager
+cannot decrypt a segment without its init segment. It applies to DASH tracks and to HLS
+tracks that use one init segment, one `EXT-X-KEY` and no `EXT-X-DISCONTINUITY`. Every other
+track keeps the whole-file decryption.
+
+!!! note "No resume"
+
+    A track that decrypts segment by segment always downloads from the start.
+    [`continue_downloads`](download.md#continue_downloads) cannot reuse its segments, because a reused segment
+    is already decrypted.
+
+```yaml
+decrypt_segments: true
+```

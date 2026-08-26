@@ -347,13 +347,8 @@ class Widevine:
             output_size=path.stat().st_size if path.exists() else 0,
         )
 
-    def decrypt_with_mp4decrypt(self, path: Path) -> None:
-        """Decrypt using mp4decrypt"""
-        if not binaries.Mp4decrypt:
-            raise EnvironmentError("mp4decrypt executable not found but is required.")
-
-        output_path = path.with_stem(f"{path.stem}_decrypted")
-
+    def mp4decrypt_key_args(self) -> list[str]:
+        """Build the mp4decrypt --key arguments for every content key."""
         key_args = []
         for kid, key in self.content_keys.items():
             kid_hex = kid.hex if hasattr(kid, "hex") else str(kid).replace("-", "")
@@ -368,6 +363,16 @@ class Widevine:
             for key in self.content_keys.values():
                 key_hex = key if isinstance(key, str) else key.hex()
                 key_args.extend(["--key", f"{zero_kid}:{key_hex}"])
+        return key_args
+
+    def decrypt_with_mp4decrypt(self, path: Path) -> None:
+        """Decrypt using mp4decrypt"""
+        if not binaries.Mp4decrypt:
+            raise EnvironmentError("mp4decrypt executable not found but is required.")
+
+        output_path = path.with_stem(f"{path.stem}_decrypted")
+
+        key_args = self.mp4decrypt_key_args()
 
         cmd = [
             str(binaries.Mp4decrypt),
