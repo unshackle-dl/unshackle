@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
+import threading
 import time
 from functools import partial
 from pathlib import Path
@@ -692,7 +694,7 @@ class Tracks:
 
         if self.chapters:
             chapters_path = config.directories.temp / config.filenames.chapters.format(
-                title=sanitize_filename(title), random=self.chapters.id
+                title=sanitize_filename(title), random=f"{self.chapters.id}_{os.getpid()}_{threading.get_ident()}"
             )
             self.chapters.dump(chapters_path, fallback_name=config.chapter_fallback_name)
             cl.extend(["--chapter-charset", "UTF-8", "--chapters", str(chapters_path)])
