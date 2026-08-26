@@ -27,7 +27,7 @@
     
     
       
-        <title>Post-Download Scripts - unshackle</title>
+        <title>Post-Scripts - unshackle</title>
       
     
     
@@ -114,7 +114,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Post-Download Scripts
+              Post-Scripts
             
           </span>
         </div>
@@ -1202,7 +1202,7 @@
   <span class="md-ellipsis">
     
   
-    Post-Download Scripts
+    Post-Scripts
   
 
     
@@ -1220,7 +1220,7 @@
   <span class="md-ellipsis">
     
   
-    Post-Download Scripts
+    Post-Scripts
   
 
     
@@ -2296,7 +2296,7 @@
   
 
 
-<h1 id="post-scripts">Post-download scripts<a class="headerlink" href="#post-scripts" title="Permanent link">&para;</a></h1>
+<h1 id="post-scripts">Post-scripts<a class="headerlink" href="#post-scripts" title="Permanent link">&para;</a></h1>
 <p>Operate your own script when a download finishes, with unshackle's metadata passed in as
 <code>{variable}</code> placeholders. Use it to hand a finished file to an uploader, send a
 notification, or start a library scan.</p>
@@ -2396,7 +2396,7 @@ script, or use <code>mode: season</code>.</p>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nt">wait</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 <p>With <code>wait: true</code>, unshackle waits until the script exits, then writes the exit code to the
-debug log and carries on. Because the <code>file</code> hook runs between titles, unshackle runs one
+debug log and carries on. Because the <code>file</code> post-script runs between titles, unshackle runs one
 script at a time over a season pack instead of starting them all at once. unshackle only
 logs the exit code: a failing script does not fail the download or change unshackle's own
 exit code. <code>--postscript</code> entries never wait.</p>
@@ -2483,7 +2483,7 @@ string as absent. Write your script to accept an empty value for every variable.
   file, because SDR is the absence of an HDR tag in a filename rather than a tag that
   reads <code>SDR</code>. <code>{edition}</code>, <code>{atmos}</code>, <code>{multi}</code>, <code>{dual}</code> and <code>{hfr}</code> behave the same
   way. If your script needs the word <code>SDR</code>, derive it from an empty <code>{hdr}</code> yourself.</li>
-<li>The hook is a <code>failure</code> hook. A failed download has no output file to read metadata
+<li>The post-script is a <code>failure</code> one. A failed download has no output file to read metadata
   from, so everything that comes from the naming context is empty. See
   <a href="#events">Events</a>.</li>
 </ul>
@@ -2495,7 +2495,7 @@ disappearing.</p>
 padding and the separator belong to the filename template rather than to the data.</p>
 </div>
 <h3 id="music-variables">Music variables<a class="headerlink" href="#music-variables" title="Permanent link">&para;</a></h3>
-<p>A music download builds its variables from the music naming context, so a hook gets the
+<p>A music download builds its variables from the music naming context, so a post-script gets the
 release fields instead of the season and episode ones. <code>{season}</code>, <code>{episode}</code> and
 <code>{episode_name}</code> are always empty for music.</p>
 <table>
@@ -2540,16 +2540,16 @@ release fields instead of the season and episode ones. <code>{season}</code>, <c
 </tr>
 </tbody>
 </table>
-<p>In a <code>file</code> hook <code>{title}</code> is the track name. See <a href="#modes">Modes</a> for what an album hook
+<p>In a <code>file</code> post-script <code>{title}</code> is the track name. See <a href="#modes">Modes</a> for what an album post-script
 puts in <code>{title}</code>.</p>
 <p><code>{year}</code> is empty when the service gives the release no year. <code>{ext}</code> is the container the
 track arrived in, such as <code>.flac</code>, because a music download is not muxed.</p>
 <h3 id="tagging-ids">Tagging IDs<a class="headerlink" href="#tagging-ids" title="Permanent link">&para;</a></h3>
 <p><code>{tmdb}</code>, <code>{imdb}</code> and <code>{tvdb}</code> carry the IDs unshackle tags the file with. unshackle reads
-them at the moment it sends the hook, and not at the start of the run. The title search inside
-the download loop finds an episode's TMDB ID, so a hook fires with it already filled in.</p>
+them at the moment it dispatches the post-script, and not at the start of the run. The title search
+inside the download loop finds an episode's TMDB ID, so a post-script fires with it already filled in.</p>
 <p>They hold an ID you passed with <code>--tmdb</code>, <code>--imdb</code> or <code>--tvdb</code>, plus a TMDB ID the episode
-search resolved. No such search runs for a movie, so a movie hook gets them empty unless you
+search resolved. No such search runs for a movie, so a movie post-script gets them empty unless you
 passed one.</p>
 <h3 id="sidecar-files">Sidecar files<a class="headerlink" href="#sidecar-files" title="Permanent link">&para;</a></h3>
 <p><code>{sidecars}</code> holds the sidecar subtitle files written beside the output, which are the only
@@ -2598,18 +2598,18 @@ copy of the sidecar files, and each invocation lists the copies sitting beside i
 </table>
 <div class="admonition warning">
 <p class="admonition-title"><code>season</code> means everything this run asked for</p>
-<p>A <code>season</code> hook fires when the last title <strong>this run queued</strong> for that season finishes.
-With <code>-w S01-S02</code> the S01 hook runs while S02 is still downloading. It says nothing
-about whether the season is complete on disk. Downloading a single episode fires the
-hook for that season as soon as the episode lands.</p>
-<p>A title that fails stops the whole run. unshackle dispatches the <code>failure</code> hook for
+<p>A <code>season</code> post-script fires when the last title <strong>this run queued</strong> for that season
+finishes. With <code>-w S01-S02</code> the S01 post-script runs while S02 is still downloading. It says
+nothing about whether the season is complete on disk. Downloading a single episode fires
+the post-script for that season as soon as the episode lands.</p>
+<p>A title that fails stops the whole run. unshackle dispatches the <code>failure</code> post-script for
 that title and then returns. It downloads no further title, and no <code>season</code> or <code>run</code>
-hook fires after that point. This applies to every title type. If one episode of S01
-fails, the S01 hook does not fire at all.</p>
+post-script fires after that point. This applies to every title type. If one episode of S01
+fails, the S01 post-script does not fire at all.</p>
 </div>
-<p>unshackle attaches the hook to the folder, not to the season, so one season landing in several
-folders (<code>-q 1080,720</code> with a quality-dependent folder template) fires it once per folder,
-each with its own <code>{folder}</code>. A movie is a group of its own: a <code>season</code> hook fires for a
+<p>unshackle attaches the post-script to the folder, not to the season, so one season landing in
+several folders (<code>-q 1080,720</code> with a quality-dependent folder template) fires it once per
+folder, each with its own <code>{folder}</code>. A movie is a group of its own: a <code>season</code> post-script fires for a
 movie's folder as soon as the movie finishes.</p>
 <p>In <code>run</code> mode every variable except <code>{folder}</code> is empty, because one run can cover several
 shows. Only <code>{folder}</code> is meaningful, which makes it useful for starting a library scan
@@ -2638,24 +2638,24 @@ once.</p>
 </tr>
 </tbody>
 </table>
-<p>In a <code>file</code> hook <code>{title}</code> and <code>{title_raw}</code> are the track name. In an album hook they are
-the album name, and the per-track variables <code>{track_number}</code>, <code>{disc}</code> and <code>{isrc}</code> are
-empty, in the same way that <code>{episode}</code> is empty in a season hook.</p>
-<p>An album hook obeys the same rule as a season hook. It fires when the last track <strong>this run
-queued</strong> for that album lands. This does not mean that the album is complete on disk. A
-one-track download fires the album hook as soon as that track lands. If a track fails, the
-run stops there, so the album hook never fires, in the same way as an episode and its
+<p>In a <code>file</code> post-script <code>{title}</code> and <code>{title_raw}</code> are the track name. In an album post-script they
+are the album name, and the per-track variables <code>{track_number}</code>, <code>{disc}</code> and <code>{isrc}</code> are
+empty, in the same way that <code>{episode}</code> is empty in a season post-script.</p>
+<p>An album post-script obeys the same rule as a season post-script. It fires when the last track
+<strong>this run queued</strong> for that album lands. This does not mean that the album is complete on disk.
+A one-track download fires the album post-script as soon as that track lands. If a track fails,
+the run stops there, so the album post-script never fires, in the same way as an episode and its
 season.</p>
 <h2 id="events">Events<a class="headerlink" href="#events" title="Permanent link">&para;</a></h2>
 <p><code>success</code> runs after the file has moved to its final path. <code>failure</code> runs when the download
 fails, with <code>{filepath}</code> empty and <code>{error}</code> set. Each track of an album is its own title.
-A music <code>failure</code> hook therefore describes the track that failed, not the release.</p>
+A music <code>failure</code> post-script therefore describes the track that failed, not the release.</p>
 <div class="admonition warning">
 <p class="admonition-title"><code>failure</code> only fires in <code>file</code> mode</p>
 <p>A <code>failure</code> entry with <code>mode: season</code> or <code>mode: run</code> never runs. Leave <code>mode</code> at its
 default on a failure entry.</p>
 </div>
-<p>A <code>failure</code> hook has no output file to read metadata from, so it carries only what the
+<p>A <code>failure</code> post-script has no output file to read metadata from, so it carries only what the
 title object already knew: <code>{title}</code>, <code>{title_raw}</code>, <code>{title_id}</code>, <code>{year}</code>, <code>{season}</code>,
 <code>{episode}</code>, <code>{episode_name}</code>, <code>{service}</code>, the tagging IDs and <code>{error}</code>. Everything that
 comes from the naming context, such as <code>{quality}</code>, <code>{hdr}</code>, <code>{artist}</code> and <code>{album}</code>, is
@@ -2664,7 +2664,7 @@ empty.</p>
 sees your script's exit code only when that entry sets <code>wait: true</code>, and even then it only
 writes the code to the debug log. Nothing else reports a failing script. Your script owns
 its own error handling and logging.</p>
-<p>A <code>success</code> hook always names a file this run wrote. There is no skip-if-exists path in
+<p>A <code>success</code> post-script always names a file this run wrote. There is no skip-if-exists path in
 <code>dl</code> today, so nothing fires for a title that was not downloaded.</p>
 <h2 id="-postscript"><code>--postscript</code><a class="headerlink" href="#-postscript" title="Permanent link">&para;</a></h2>
 <p><code>dl</code> accepts <code>--postscript "&lt;command&gt;"</code>, repeatable. Every command given this way runs with
@@ -2687,7 +2687,7 @@ command itself may not cross the network.</p>
 <a href="../../../guide/troubleshooting/#the-structured-json-debug-log">structured JSON debug log</a>
 when that log is on.</p>
 <p>unshackle masks both the same way, and honours <a href="../misc/"><code>redact_paths</code></a>, which is on by default.
-Debug logs get shared in issue reports, and a hook command line is mostly paths. URL
+Debug logs get shared in issue reports, and a post-script command line is mostly paths. URL
 credentials and <code>token=</code> / <code>api_key=</code> query parameters are also masked.</p>
 <div class="admonition warning">
 <p class="admonition-title">Do not hardcode secrets in the command</p>
@@ -2697,9 +2697,9 @@ environment variable inside your script rather than putting it in the <code>comm
 </div>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
 <ul>
-<li>No <code>success</code> hook operates under <code>--no-mux</code> or <code>--skip-dl</code>, because neither writes a muxed
-  output. A <code>failure</code> hook still runs under <code>--no-mux</code> if the download itself fails.</li>
-<li><code>failure</code> hooks only operate in <code>file</code> mode.</li>
+<li>No <code>success</code> post-script operates under <code>--no-mux</code> or <code>--skip-dl</code>, because neither writes a
+  muxed output. A <code>failure</code> post-script still runs under <code>--no-mux</code> if the download itself fails.</li>
+<li><code>failure</code> post-scripts only operate in <code>file</code> mode.</li>
 <li>There is no webhook sender. Call <code>curl</code> from a script instead.</li>
 <li>Script output is not captured. Redirect it inside your own script if you want a log.</li>
 </ul>

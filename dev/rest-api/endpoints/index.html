@@ -1188,7 +1188,7 @@
   <span class="md-ellipsis">
     
   
-    Post-Download Scripts
+    Post-Scripts
   
 
     
@@ -3785,9 +3785,9 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <p class="admonition-title">Rejected parameters</p>
 <p><code>postscript</code>, <code>post_script</code> and <code>post_scripts</code> are never accepted. A body containing any
 of them gets <code>400 INVALID_PARAMETERS</code>, because a command string that arrives from
-an HTTP caller would be remote code execution. You configure post-download hooks only in
+an HTTP caller would be remote code execution. You configure post-scripts only in
 <code>unshackle.yaml</code>, where they still operate for API jobs. See
-<a href="../../../reference/configuration/post-scripts/">Post-download scripts</a>.</p>
+<a href="../../../reference/configuration/post-scripts/">Post-scripts</a>.</p>
 </div>
 <div class="admonition warning">
 <p class="admonition-title">Gated parameters (developer)</p>

@@ -1789,7 +1789,7 @@
   <span class="md-ellipsis">
     
   
-    Post-Download Scripts
+    Post-Scripts
   
 
     
@@ -3841,13 +3841,13 @@ Read <a href="../output-and-naming/#music-output-files">Music output files</a>.<
 <h3 id="after-the-download">After the download<a class="headerlink" href="#after-the-download" title="Permanent link">&para;</a></h3>
 <p><code>--postscript "&lt;command&gt;"</code> runs your own command once per output file, with unshackle's
 metadata substituted into <code>{variable}</code> placeholders. It is repeatable, and it replaces the
-<code>post_scripts</code> config for that run. No <code>success</code> hook operates under <code>--no-mux</code>, because
-that run writes no muxed output. A <code>failure</code> hook still operates if the download fails.</p>
+<code>post_scripts</code> config for that run. No <code>success</code> post-script operates under <code>--no-mux</code>, because
+that run writes no muxed output. A <code>failure</code> post-script still operates if the download fails.</p>
 <div class="language-shell highlight"><span class="filename">Hand each finished file to an uploader</span><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--postscript<span class="w"> </span><span class="s2">"python /opt/upload.py {filepath} --service={service}"</span><span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
-<p>For hooks that continue across runs, for the <code>season</code> and <code>run</code> modes, for <code>failure</code> hooks
-and for the full variable list, see
-<a href="../../reference/configuration/post-scripts/">Post-download scripts</a>.</p>
+<p>For post-scripts that continue across runs, for the <code>season</code> and <code>run</code> modes, for <code>failure</code>
+post-scripts and for the full variable list, see
+<a href="../../reference/configuration/post-scripts/">Post-scripts</a>.</p>
 <h3 id="naming-tags">Naming tags<a class="headerlink" href="#naming-tags" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>--tag</code>: set the release group tag (overrides the configured tag).</li>
