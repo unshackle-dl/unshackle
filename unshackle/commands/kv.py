@@ -2,15 +2,24 @@ import logging
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
+from uuid import UUID
 
 import click
 from rich.padding import Padding
+from rich.progress import (
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 from rich.text import Text
 from rich.tree import Tree
 
 from unshackle.core.config import config
-from unshackle.core.console import console
+from unshackle.core.console import GradientPulseBarColumn, console
 from unshackle.core.constants import context_settings
 from unshackle.core.services import Services
 from unshackle.core.vault import Vault
@@ -46,6 +55,34 @@ def process_service_keys(from_vault: Vault, service: str, log: logging.Logger) -
     return {kid: key for kid, key in content_keys if kid not in bad_keys}
 
 
+def add_keys_with_progress(vault: Vault, service: str, kid_keys: dict[str, str], log: logging.Logger) -> int:
+    """Add content keys to a vault in batches, with a progress bar of counts and time left."""
+    chunk = 1 if type(vault).__name__ == "HTTP" else 500
+    kids = list(kid_keys)
+    added = 0
+    console.print()
+    with Progress(
+        SpinnerColumn(finished_text=""),
+        TextColumn("[bold]{task.description}"),
+        GradientPulseBarColumn(),
+        MofNCompleteColumn(),
+        "•",
+        TextColumn("[green]{task.fields[added]} new"),
+        "•",
+        TimeElapsedColumn(),
+        "•",
+        TimeRemainingColumn(compact=True),
+        console=console,
+        transient=True,
+    ) as progress:
+        task = progress.add_task(f"{service} → {vault}", total=len(kids), added=0)
+        for i in range(0, len(kids), chunk):
+            batch: dict[Union[UUID, str], str] = {kid: kid_keys[kid] for kid in kids[i : i + chunk]}
+            added += vault.add_keys(service, batch)
+            progress.update(task, advance=len(batch), added=added)
+    return added
+
+
 def copy_service_data(to_vault: Vault, from_vault: Vault, service: str, log: logging.Logger) -> int:
     """Copy data for a single service between vaults."""
     try:
@@ -61,7 +98,7 @@ def copy_service_data(to_vault: Vault, from_vault: Vault, service: str, log: log
         return 0
 
     try:
-        added = to_vault.add_keys(service, content_keys)
+        added = add_keys_with_progress(to_vault, service, content_keys, log)
     except PermissionError:
         log.warning(f"{service}: No permission to create table in {to_vault}, skipped")
         return 0
@@ -249,7 +286,7 @@ def add(file: Path, service: str, vaults: list[str]) -> None:
 
     for vault in vaults_:
         log.info(f"Adding {total_count} Content Keys to {vault}")
-        added_count = vault.add_keys(service, kid_keys)
+        added_count = add_keys_with_progress(vault, service, kid_keys, log)
         existed_count = total_count - added_count
         log.info(f"{vault}: {added_count} newly added, {existed_count} already existed (skipped)")
 
