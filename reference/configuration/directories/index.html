@@ -2164,6 +2164,15 @@ network. Use it on unattended hosts where nobody edits the clones by hand.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">services_repo_force</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 </div>
+<div class="admonition info">
+<p class="admonition-title">Refresh inside <code>serve</code></p>
+<p>A running server does not restart to pick up a refresh. Both the periodic refresh
+(<code>serve.services_refresh_interval</code>, see <a href="../services/#serve">serve</a>) and the manual
+<code>POST /api/maintenance/refresh-services</code> endpoint hard-reset the clones and then re-import
+only the services that changed. A service with a running or queued download job keeps its
+current code until that job finishes, then swaps; <code>GET /api/services</code> marks it with
+<code>pending_update</code> in the meantime.</p>
+</div>
 <div class="admonition warning">
 <p class="admonition-title">Read-only installs and reinstalls</p>
 <p>If the services directory lives inside the installed package, a reinstall can delete the

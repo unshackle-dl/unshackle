@@ -3874,7 +3874,7 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 <h3 id="util-refresh-services"><code>util refresh-services</code><a class="headerlink" href="#util-refresh-services" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>unshackle util refresh-services
 </span></code></pre></div>
-<p>Force a refresh (git pull / hard reset) of all service repos configured under <code>directories.services</code>.</p>
+<p>Force a refresh (git pull / hard reset) of all service repos configured under <code>directories.services</code>. This updates the clones on disk. A server that is already running reloads the changed services through <code>POST /api/maintenance/refresh-services</code> or <code>serve.services_refresh_interval</code> instead.</p>
 <h3 id="util-crop-path-aspect"><code>util crop PATH ASPECT</code><a class="headerlink" href="#util-crop-path-aspect" title="Permanent link">&para;</a></h3>
 <p>Losslessly crop H.264/H.265 video at the bitstream level. <code>ASPECT</code> is a <code>W:H</code> target such as <code>2.39:1</code>.</p>
 <table>

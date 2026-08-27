@@ -2919,7 +2919,7 @@
 </tbody>
 </table>
 <h3 id="get-apiservices"><code>GET /api/services</code><a class="headerlink" href="#get-apiservices" title="Permanent link">&para;</a></h3>
-<p>Show the streaming services available on this server, filtered by your allowlist. Each entry gives the service's tag, matching rules, capability flags, and its CLI parameters (useful when you make a UI that accepts service-specific options).</p>
+<p>Show the streaming services available on this server, filtered by your allowlist. Each entry gives the service's tag, matching rules, capability flags, and its CLI parameters (useful when you make a UI that accepts service-specific options). <code>load_errors</code> lists the services the server skipped because they failed to import, at startup or after a service repository refresh; the server also writes each one to its log. An entry marked <code>pending_update</code> has newer code staged: it keeps its current code until its running or queued jobs finish.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Request</label><label for="__tabbed_2_2">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -2954,8 +2954,9 @@
 </span><span id="__span-3-25"><a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a><span class="w">      </span><span class="nt">"has_drm"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
 </span><span id="__span-3-26"><a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a><span class="w">      </span><span class="nt">"auth_methods"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"cookies"</span><span class="p">]</span>
 </span><span id="__span-3-27"><a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-3-28"><a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a><span class="w">  </span><span class="p">]</span>
-</span><span id="__span-3-29"><a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a><span class="p">}</span>
+</span><span id="__span-3-28"><a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a><span class="w">  </span><span class="p">],</span>
+</span><span id="__span-3-29"><a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a><span class="w">  </span><span class="nt">"load_errors"</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span>
+</span><span id="__span-3-30"><a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a><span class="p">}</span>
 </span></code></pre></div>
 </div>
 </div>
@@ -3008,6 +3009,10 @@
 <tr>
 <td><code>has_drm</code></td>
 <td>Whether the service overrides a Widevine or PlayReady license hook.</td>
+</tr>
+<tr>
+<td><code>pending_update</code></td>
+<td>Set to <code>true</code> while a service repository refresh waits for this service's jobs to finish before it swaps in the new code. Absent otherwise.</td>
 </tr>
 <tr>
 <td><code>auth_methods</code></td>
@@ -4384,16 +4389,22 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 </tbody>
 </table>
 <h3 id="post-apimaintenancerefresh-services"><code>POST /api/maintenance/refresh-services</code><a class="headerlink" href="#post-apimaintenancerefresh-services" title="Permanent link">&para;</a></h3>
-<p>git-pull every service repository configured under <code>directories.services</code>. <code>refreshed</code> becomes <code>true</code> when all repos updated successfully, or when you configure no repository.</p>
+<p>git-pull every service repository configured under <code>directories.services</code> and re-import the services that changed, without a restart. <code>refreshed</code> becomes <code>true</code> when all repos updated successfully, or when you configure no repository. <code>deferred</code> lists the services that have a running or queued job: they keep their current code until that job finishes, then swap. <code>load_errors</code> lists the services whose new code failed to import; the server drops them until the next successful refresh.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="16:1"><input checked="checked" id="__tabbed_16_1" name="__tabbed_16" type="radio" /><div class="tabbed-labels"><label for="__tabbed_16_1">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="language-json highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="p">{</span>
 </span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="w">  </span><span class="nt">"refreshed"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
 </span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="w">  </span><span class="nt">"repos"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nt">"spec"</span><span class="p">:</span><span class="w"> </span><span class="s2">"github.com/example/services"</span><span class="p">,</span><span class="w"> </span><span class="nt">"updated"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">"changes"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"~EXAMPLE"</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="w">  </span><span class="p">]</span>
-</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="p">}</span>
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="w">    </span><span class="p">{</span>
+</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="w">      </span><span class="nt">"spec"</span><span class="p">:</span><span class="w"> </span><span class="s2">"github.com/example/services"</span><span class="p">,</span>
+</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="w">      </span><span class="nt">"updated"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="w">      </span><span class="nt">"changes"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"~EXAMPLE"</span><span class="p">,</span><span class="w"> </span><span class="s2">"+EXAMPLE2"</span><span class="p">],</span>
+</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="w">      </span><span class="nt">"deferred"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"EXAMPLE"</span><span class="p">],</span>
+</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="w">      </span><span class="nt">"load_errors"</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span>
+</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a><span class="w">  </span><span class="p">]</span>
+</span><span id="__span-25-12"><a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a><span class="p">}</span>
 </span></code></pre></div>
 </div>
 </div>
