@@ -183,7 +183,7 @@ request and response in full.
 |---|---|---|
 | `POST` | `/api/maintenance/clear-cache` | Clear the cache directory. |
 | `POST` | `/api/maintenance/clear-temp` | Clear the temp directory. |
-| `POST` | `/api/maintenance/refresh-services` | `git pull` each configured service repository. |
+| `POST` | `/api/maintenance/refresh-services` | `git pull` each configured service repository and re-import the services that changed. |
 
 ### Remote-download sessions
 

@@ -76,6 +76,14 @@ directories:
     services_repo_force: true
     ```
 
+!!! info "Refresh inside `serve`"
+    A running server does not restart to pick up a refresh. Both the periodic refresh
+    (`serve.services_refresh_interval`, see [serve](services.md#serve)) and the manual
+    `POST /api/maintenance/refresh-services` endpoint hard-reset the clones and then re-import
+    only the services that changed. A service with a running or queued download job keeps its
+    current code until that job finishes, then swaps; `GET /api/services` marks it with
+    `pending_update` in the meantime.
+
 !!! warning "Read-only installs and reinstalls"
     If the services directory lives inside the installed package, a reinstall can delete the
     `_repos` clones. They are re-cloned on next use. On **read-only installs** you must

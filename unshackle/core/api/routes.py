@@ -9,6 +9,7 @@ from aiohttp import web
 from aiohttp_swagger3 import SwaggerDocs, SwaggerInfo, SwaggerUiSettings
 
 from unshackle.core import __code_hash__, __version__
+from unshackle.core import services as services_module
 from unshackle.core.api.errors import APIError, APIErrorCode, build_error_response, handle_api_exception
 from unshackle.core.api.handlers import (
     CORS_HEADERS,
@@ -150,6 +151,11 @@ async def services(request: web.Request) -> web.Response:
             schema:
               type: object
               properties:
+                load_errors:
+                  type: array
+                  description: Services skipped because they failed to import (startup or repo refresh)
+                  items:
+                    type: string
                 services:
                   type: array
                   items:
@@ -157,6 +163,9 @@ async def services(request: web.Request) -> web.Response:
                     properties:
                       tag:
                         type: string
+                      pending_update:
+                        type: boolean
+                        description: Present (true) while a repo refresh waits for this service's jobs to finish
                       aliases:
                         type: array
                         items:
@@ -221,6 +230,8 @@ async def services(request: web.Request) -> web.Response:
                 "url": None,
                 "help": None,
             }
+            if tag in services_module.PENDING:
+                service_data["pending_update"] = True
 
             try:
                 service_module = Services.load(tag)
@@ -322,7 +333,7 @@ async def services(request: web.Request) -> web.Response:
 
             services_info.append(service_data)
 
-        return web.json_response({"services": services_info})
+        return web.json_response({"services": services_info, "load_errors": list(services_module.LOAD_ERRORS)})
     except Exception as e:
         log.exception("Error listing services")
         debug_mode = request.app.get("debug_api", False)
@@ -1397,9 +1408,12 @@ async def maintenance_refresh_services(request: web.Request) -> web.Response:
     ---
     summary: Refresh service repos
     description: >
-      Force-sync (git pull) every service repo configured in directories.services.
-      `refreshed` is true when all repos synced, or when you configured no repos. The
-      `repos` field holds the per-repo results.
+      Force-sync (git pull) every service repo configured in directories.services and
+      re-import the services that changed, without a restart. `refreshed` is true when all
+      repos synced, or when you configured no repos. The `repos` field holds the per-repo
+      results: `deferred` names the services that keep their current code until their
+      running or queued jobs finish, and `load_errors` names the services whose new code
+      failed to import.
     responses:
       '200':
         description: Refresh results
@@ -1421,6 +1435,16 @@ async def maintenance_refresh_services(request: web.Request) -> web.Response:
                         type: boolean
                       changes:
                         type: array
+                        items:
+                          type: string
+                      deferred:
+                        type: array
+                        description: Services staged until their running or queued jobs finish
+                        items:
+                          type: string
+                      load_errors:
+                        type: array
+                        description: Services whose new code failed to import
                         items:
                           type: string
       '500':

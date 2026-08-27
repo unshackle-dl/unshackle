@@ -117,6 +117,7 @@ is the [REST API](../../dev/rest-api/index.md) section. These are the config key
 | `max_sessions` | int | `100` | Maximum concurrent sessions. |
 | `history_limit` | int | `100` | How many finished jobs to retain in history. |
 | `compression_level` | int | `1` | gzip level for responses. |
+| `services_refresh_interval` | int (s) | `0` | How often the server pulls the git-backed service repositories in `directories.services` and hot-reloads the services that changed. `0` turns it off. A service with a running or queued job swaps to the new code as soon as its last job finishes. |
 | `global_speed_limit` | str | *(unlimited)* | Server-wide download speed cap, e.g. `10M`, `1.5G` or plain bytes/sec (same format as `speed_limit`). One shared budget across all concurrent jobs; per-job speed limits are ignored while it is set. |
 | `cdm_overrides` | list or bool | *(unset)* | Allowed per-request CDM overrides: a list of permitted device names, or `true` for any. Unset rejects every override. |
 | `allow_job_credentials` | bool | `false` | Permit clients to supply credentials per job. |
@@ -141,11 +142,12 @@ serve:
   api_secret: change-me
   remote_only: true
   services: [EXAMPLE1, EXAMPLE2]
+  services_refresh_interval: 3600   # pull the service repositories hourly and reload what changed
   # server-wide download defaults (same keys as the `dl:` block)
   downloads: 3
   best_available: true
   users:
-    a1b2c3d4:                 # this user's API key
+    a1b2c3d4:                     # this user's API key
       services: [EXAMPLE1]        # may only use EXAMPLE1
     e5f6a7b8:
       server_cdm: true            # this key may have the server do the licensing

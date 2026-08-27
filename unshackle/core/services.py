@@ -3,48 +3,66 @@ from __future__ import annotations
 import inspect
 import logging
 import re
+import sys
+import threading
 from pathlib import Path
+from typing import Any, Iterable
 
 import click
 
 from unshackle.core.config import config
 from unshackle.core.service import Service
-from unshackle.core.service_repo import DirtyServiceRepo, is_repo_spec, resolve_service_repo
+from unshackle.core.service_repo import DirtyServiceRepo, is_repo_spec, refresh_repo, resolve_service_repo
 from unshackle.core.utilities import import_module_by_path
 from unshackle.core.utils.redact import redact_path
 
 log = logging.getLogger("services")
 
-raw = config.directories.services
-if not isinstance(raw, list):
-    raw = [raw]
-# resolve in config order - priority IS list order: the first source to define a tag is the source,
-# later sources (local or repo) with the same tag are shadowed. List local last to make it a fallback.
-service_dirs: list[Path] = []
 DIRTY_REPOS: list[str] = []
-for _entry in raw:
-    if isinstance(_entry, str) and is_repo_spec(_entry):
-        try:
-            _resolved = resolve_service_repo(_entry, force=config.services_repo_force)
-        except DirtyServiceRepo as e:
-            # local edits in the clone - record it and let check_load_errors() exit cleanly
-            DIRTY_REPOS.append(redact_path(str(e.path)))
-            _resolved = None
-        if _resolved:
-            service_dirs.append(_resolved)
-    else:
-        service_dirs.append(Path(_entry))
-
-seen: dict[str, Path] = {}
 SHADOWED: list[str] = []
-for _dir in service_dirs:
-    for _path in _dir.glob("*/__init__.py"):
-        tag = _path.parent.stem
-        if tag in seen:
-            SHADOWED.append(f"{tag}: using {redact_path(str(seen[tag]))}, ignoring duplicate {redact_path(str(_path))}")
+
+
+def discover_services() -> tuple[list[Path], list[str]]:
+    """Resolve the configured service dirs and glob every ``TAG/__init__.py``.
+
+    Priority IS list order: the first source to define a tag is the source, and discovery
+    shadows a later source (local or repo) with the same tag. List local last to make it a
+    fallback.
+    Returns the sorted service paths and the human-readable shadow lines.
+    """
+    raw = config.directories.services
+    if not isinstance(raw, list):
+        raw = [raw]
+    service_dirs: list[Path] = []
+    for entry in raw:
+        if isinstance(entry, str) and is_repo_spec(entry):
+            try:
+                resolved = resolve_service_repo(entry, force=config.services_repo_force)
+            except DirtyServiceRepo as e:
+                # local edits in the clone - record it and let check_load_errors() exit cleanly
+                if (dirty := redact_path(str(e.path))) not in DIRTY_REPOS:
+                    DIRTY_REPOS.append(dirty)
+                resolved = None
+            if resolved:
+                service_dirs.append(resolved)
         else:
-            seen[tag] = _path
-SERVICES = sorted(seen.values(), key=lambda x: x.parent.stem)
+            service_dirs.append(Path(entry))
+
+    seen: dict[str, Path] = {}
+    shadowed: list[str] = []
+    for service_dir in service_dirs:
+        for path in service_dir.glob("*/__init__.py"):
+            tag = path.parent.stem
+            if tag in seen:
+                shadowed.append(
+                    f"{tag}: using {redact_path(str(seen[tag]))}, ignoring duplicate {redact_path(str(path))}"
+                )
+            else:
+                seen[tag] = path
+    return sorted(seen.values(), key=lambda x: x.parent.stem), shadowed
+
+
+SERVICES, SHADOWED = discover_services()
 
 
 def load_service(path: Path) -> object:
@@ -88,8 +106,108 @@ MODULES, LOAD_ERRORS = load_services(SERVICES)
 
 ALIASES = {tag: getattr(module, "ALIASES", ()) for tag, module in MODULES.items()}
 
+PENDING: set[str] = set()
+RELOAD_LOCK = threading.Lock()
+
+
+def reload_services(tags: Iterable[str]) -> list[str]:
+    """Re-import the given service tags after a repo refresh; returns load errors.
+
+    Mutates every module global in place so importers that bound ``SERVICES``,
+    ``MODULES`` or ``ALIASES`` by name see the swap. Drops a tag that discovery no
+    longer finds instead of reloading it.
+    """
+    wanted = set(tags)
+    if not wanted:
+        return []
+    with RELOAD_LOCK:
+        for tag in wanted:
+            for name in [n for n in sys.modules if n == tag or n.startswith(f"{tag}.")]:
+                del sys.modules[name]
+            LOAD_ERRORS[:] = [err for err in LOAD_ERRORS if not err.startswith(f"{tag}: ")]
+
+        paths, shadowed = discover_services()
+        SERVICES[:] = paths
+        SHADOWED[:] = shadowed
+
+        errors: list[str] = []
+        found = {path.parent.stem: path for path in paths}
+        for tag in wanted:
+            if tag not in found:
+                MODULES.pop(tag, None)
+                ALIASES.pop(tag, None)
+                continue
+            try:
+                MODULES[tag] = load_service(found[tag])
+                ALIASES[tag] = getattr(MODULES[tag], "ALIASES", ())
+            except Exception as e:
+                errors.append(str(e))
+        LOAD_ERRORS.extend(errors)
+        PENDING.difference_update(wanted)
+        return errors
+
+
+def repo_specs() -> list[str]:
+    """The git repo specs configured under ``directories.services``."""
+    raw = config.directories.services
+    entries: list[Any] = raw if isinstance(raw, list) else [raw]
+    return [e for e in entries if isinstance(e, str) and is_repo_spec(e)]
+
+
+def refresh_and_reload(busy: set[str] | None = None) -> list[dict[str, Any]]:
+    """Force-sync every configured service repo and re-import the services that changed.
+
+    Tags in ``busy`` (services with a download job that has not finished) go to ``PENDING``
+    instead and appear as ``deferred``; ``apply_pending`` swaps them in later.
+    Blocking (git subprocess): callers wrap it in ``asyncio.to_thread``.
+    """
+    busy = busy or set()
+    repos: list[dict[str, Any]] = []
+    for spec in repo_specs():
+        dest, changes = refresh_repo(spec)
+        tags = {line[1:] for line in changes if line[:1] in "+~-!"}
+        if dest and "cloned (new)" in changes:
+            tags.update(p.parent.stem for p in dest.glob("*/__init__.py"))
+        deferred = sorted(tags & busy)
+        PENDING.update(deferred)
+        errors = reload_services(tags - busy)
+        repos.append(
+            {
+                "spec": spec,
+                "updated": dest is not None,
+                "changes": list(changes),
+                "deferred": deferred,
+                "load_errors": errors,
+            }
+        )
+    return repos
+
+
+def apply_pending(busy: set[str] | None = None) -> list[str]:
+    """Reload every staged tag whose service is no longer busy; returns the tags applied."""
+    ready = sorted(PENDING - (busy or set()))
+    if ready:
+        for err in reload_services(ready):
+            log.error("Service reload failed: %s", err)
+    return ready
+
 
 SUMMARY_LOGGED = False
+
+
+def log_load_issues() -> None:
+    """Log every service load problem without raising - for long-running hosts like serve.
+
+    The loader skips broken services (the rest keep working), so the admin needs the log
+    line the CLI would otherwise render as an error box.
+    """
+    log.info(f"Loaded {len(MODULES)} services" + (f" ({len(SHADOWED)} duplicate(s) ignored)" if SHADOWED else ""))
+    for shadow in SHADOWED:
+        log.debug("%s", shadow)
+    for path in DIRTY_REPOS:
+        log.warning(f"Service repo has local changes, not refreshed: {path}")
+    for err in LOAD_ERRORS:
+        log.error(f"Service skipped: {err}")
 
 
 def check_load_errors() -> None:

@@ -1796,20 +1796,13 @@ async def clear_temp_handler(request: Optional[web.Request] = None) -> web.Respo
 
 
 async def refresh_services_handler(request: Optional[web.Request] = None) -> web.Response:
-    """Answer the request to refresh the service repos configured in directories.services."""
-    from unshackle.core.service_repo import is_repo_spec, refresh_repo
+    """Refresh the service repos configured in directories.services and reload the changed services."""
+    from unshackle.core.api.download_manager import get_download_manager
+    from unshackle.core.services import refresh_and_reload
 
     try:
-        entries = config.directories.services
-        if not isinstance(entries, list):
-            entries = [entries]
-        specs = [e for e in entries if isinstance(e, str) and is_repo_spec(e)]
-
-        repos = []
-        for spec in specs:
-            dest, changes = await asyncio.to_thread(refresh_repo, spec)
-            repos.append({"spec": spec, "updated": dest is not None, "changes": list(changes or [])})
-
+        busy = get_download_manager().busy_services()
+        repos = await asyncio.to_thread(refresh_and_reload, busy)
         return web.json_response({"refreshed": all(r["updated"] for r in repos), "repos": repos})
 
     except APIError:

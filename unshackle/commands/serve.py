@@ -1,6 +1,8 @@
+import asyncio
 import hmac
 import logging
 import subprocess
+from contextlib import suppress
 
 import click
 from aiohttp import web
@@ -12,6 +14,51 @@ from unshackle.core.api.handlers import request_secret_key
 from unshackle.core.config import config
 from unshackle.core.constants import context_settings
 from unshackle.core.downloaders import format_speed, parse_speed_limit, set_speed_limit
+
+
+def _install_service_refresh(app: web.Application) -> None:
+    """Report service load issues, then periodically pull the service repos and hot-reload changed services."""
+    from unshackle.core import services
+
+    log = logging.getLogger("serve")
+    services.log_load_issues()
+    interval = int(config.serve.get("services_refresh_interval", 0) or 0)
+    if interval <= 0 or not services.repo_specs():
+        return
+
+    async def loop() -> None:
+        from unshackle.core.api.download_manager import get_download_manager
+
+        manager = get_download_manager()
+        while True:
+            await asyncio.sleep(interval)
+            try:
+                applied = await asyncio.to_thread(services.apply_pending, manager.busy_services())
+                if applied:
+                    log.info(f"Services reloaded: {', '.join(applied)}")
+                for r in await asyncio.to_thread(services.refresh_and_reload, manager.busy_services()):
+                    if r["changes"]:
+                        log.info(f"Services refreshed {r['spec']}: {', '.join(r['changes'])}")
+                    if r["deferred"]:
+                        log.info(f"Services staged until their jobs finish: {', '.join(r['deferred'])}")
+                    for err in r["load_errors"]:
+                        log.error(f"Service reload failed: {err}")
+            except Exception:
+                log.exception("Service refresh failed")
+
+    async def start(_app: web.Application) -> None:
+        _app["service_refresh_task"] = asyncio.create_task(loop())
+        log.info(f"Service repos refresh every {interval}s")
+
+    async def stop(_app: web.Application) -> None:
+        task = _app.get("service_refresh_task")
+        if task:
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+
+    app.on_startup.append(start)
+    app.on_cleanup.append(stop)
 
 
 @click.command(
@@ -196,6 +243,7 @@ def serve(
 
             app.on_startup.append(start_session_cleanup)
             app.on_cleanup.append(stop_session_cleanup)
+            _install_service_refresh(app)
 
             setup_routes(app, remote_only=remote_only)
             if not remote_only:
@@ -289,6 +337,7 @@ def serve(
 
             app.on_startup.append(start_session_cleanup)
             app.on_cleanup.append(stop_session_cleanup)
+            _install_service_refresh(app)
 
             if serve_widevine:
                 app.on_startup.append(pywidevine_serve._startup)

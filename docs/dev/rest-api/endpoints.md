@@ -62,7 +62,7 @@ If the update check fails (for example, no network), `update_available` and `lat
 
 ### `GET /api/services`
 
-Show the streaming services available on this server, filtered by your allowlist. Each entry gives the service's tag, matching rules, capability flags, and its CLI parameters (useful when you make a UI that accepts service-specific options).
+Show the streaming services available on this server, filtered by your allowlist. Each entry gives the service's tag, matching rules, capability flags, and its CLI parameters (useful when you make a UI that accepts service-specific options). `load_errors` lists the services the server skipped because they failed to import, at startup or after a service repository refresh; the server also writes each one to its log. An entry marked `pending_update` has newer code staged: it keeps its current code until its running or queued jobs finish.
 
 === "Request"
 
@@ -100,7 +100,8 @@ Show the streaming services available on this server, filtered by your allowlist
           "has_drm": true,
           "auth_methods": ["cookies"]
         }
-      ]
+      ],
+      "load_errors": []
     }
     ```
 
@@ -118,6 +119,7 @@ Field notes:
 | `needs_auth` | Whether the service overrides `authenticate()`. |
 | `has_search` | Whether the service supports `POST /api/search`. |
 | `has_drm` | Whether the service overrides a Widevine or PlayReady license hook. |
+| `pending_update` | Set to `true` while a service repository refresh waits for this service's jobs to finish before it swaps in the new code. Absent otherwise. |
 | `auth_methods` | Declared or inferred auth methods, e.g. `["cookies"]`, `["credentials"]`. |
 
 | Status | Meaning |
@@ -773,7 +775,7 @@ The `409` guard is about active file I/O, not an arbitrary lock. An in-flight jo
 
 ### `POST /api/maintenance/refresh-services`
 
-git-pull every service repository configured under `directories.services`. `refreshed` becomes `true` when all repos updated successfully, or when you configure no repository.
+git-pull every service repository configured under `directories.services` and re-import the services that changed, without a restart. `refreshed` becomes `true` when all repos updated successfully, or when you configure no repository. `deferred` lists the services that have a running or queued job: they keep their current code until that job finishes, then swap. `load_errors` lists the services whose new code failed to import; the server drops them until the next successful refresh.
 
 === "Response `200`"
 
@@ -781,7 +783,13 @@ git-pull every service repository configured under `directories.services`. `refr
     {
       "refreshed": true,
       "repos": [
-        { "spec": "github.com/example/services", "updated": true, "changes": ["~EXAMPLE"] }
+        {
+          "spec": "github.com/example/services",
+          "updated": true,
+          "changes": ["~EXAMPLE", "+EXAMPLE2"],
+          "deferred": ["EXAMPLE"],
+          "load_errors": []
+        }
       ]
     }
     ```

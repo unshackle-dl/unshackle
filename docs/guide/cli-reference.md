@@ -550,7 +550,7 @@ unshackle util COMMAND [ARGS]...
 unshackle util refresh-services
 ```
 
-Force a refresh (git pull / hard reset) of all service repos configured under `directories.services`.
+Force a refresh (git pull / hard reset) of all service repos configured under `directories.services`. This updates the clones on disk. A server that is already running reloads the changed services through `POST /api/maintenance/refresh-services` or `serve.services_refresh_interval` instead.
 
 ### `util crop PATH ASPECT`
 

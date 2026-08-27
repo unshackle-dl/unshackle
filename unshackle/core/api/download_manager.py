@@ -710,10 +710,32 @@ class DownloadQueueManager:
             self.put(queue, payload)
 
     def publish_terminal(self, job: DownloadJob) -> None:
-        """Publish a job's final state, then close every listener's event stream."""
+        """Publish a job's final state, close every listener's event stream, then apply staged service reloads."""
         self.publish(job, job.status.value)
         for queue in self._subscribers.pop(job.job_id, []):
             self.put(queue, None)
+        self.schedule_pending_reload()
+
+    def busy_services(self) -> set[str]:
+        """Tags with a job that has not reached a terminal status; queued jobs count so none starts on half-swapped code."""
+        return {job.service for job in self._jobs.values() if job.status not in TERMINAL_STATUSES}
+
+    def schedule_pending_reload(self) -> None:
+        """Swap in staged service updates whose last job has finished, off the event loop."""
+        from unshackle.core import services
+
+        if not services.PENDING:
+            return
+
+        async def run() -> None:
+            try:
+                applied = await asyncio.to_thread(services.apply_pending, self.busy_services())
+                if applied:
+                    log.info(f"Services reloaded after job completion: {', '.join(applied)}")
+            except Exception:
+                log.exception("Applying pending service reloads failed")
+
+        asyncio.get_running_loop().create_task(run())
 
     @staticmethod
     def put(queue: asyncio.Queue, item: Optional[Dict[str, Any]]) -> None:
