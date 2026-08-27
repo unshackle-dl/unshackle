@@ -25,7 +25,7 @@ DIRTY_REPOS: list[str] = []
 for _entry in raw:
     if isinstance(_entry, str) and is_repo_spec(_entry):
         try:
-            _resolved = resolve_service_repo(_entry)
+            _resolved = resolve_service_repo(_entry, force=config.services_repo_force)
         except DirtyServiceRepo as e:
             # local edits in the clone - record it and let check_load_errors() exit cleanly
             DIRTY_REPOS.append(redact_path(str(e.path)))

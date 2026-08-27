@@ -80,10 +80,11 @@ def repos_base() -> Path:
 def resolve_service_repo(spec: str, *, ttl: int = DEFAULT_TTL, force: bool = False) -> Optional[Path]:
     """Find the local clone dir of a repo spec.
 
-    First use clones it. ``force=True`` (manual ``refresh-services``) hard-resets the clone to
-    upstream, discarding local changes. Otherwise a TTL-stale clone is fast-forwarded, but a dirty
-    clone raises ``DirtyServiceRepo`` so the automated dl/search path can warn and exit instead of
-    clobbering in-progress edits.
+    First use clones it. Only a TTL-stale clone touches the network. With ``force=True``
+    (``services_repo_force``) the refresh hard-resets the clone to upstream and discards local
+    changes. Without it the refresh fast-forwards, and a dirty clone raises ``DirtyServiceRepo``
+    so the automated dl/search path can warn and exit instead of clobbering in-progress edits.
+    Manual ``refresh-services`` uses ``refresh_repo`` and ignores the TTL.
     """
     url, branch, dest_name = parse_spec(spec)
     dest = repos_base() / dest_name
@@ -91,10 +92,8 @@ def resolve_service_repo(spec: str, *, ttl: int = DEFAULT_TTL, force: bool = Fal
 
     if not dest.exists():
         return clone(url, branch, dest, stamp)
-    if force:
-        force_sync(dest, stamp)
-    elif is_stale(stamp, ttl):
-        pull(dest, stamp)
+    if is_stale(stamp, ttl):
+        force_sync(dest, stamp) if force else pull(dest, stamp)
     return dest
 
 
@@ -135,9 +134,9 @@ def pull(dest: Path, stamp: Path) -> None:
 def refresh_repo(spec: str) -> tuple[Optional[Path], list[str]]:
     """Force-sync a repo to upstream and return (clone dir, git-style per-service change lines).
 
-    Used by the manual ``refresh-services`` command. Change lines look like ``+ TAG (added)`` /
-    ``~ TAG (modified)`` / ``- TAG (removed)`` plus a shortstat. An empty list means the clone is
-    already up to date.
+    Used by the manual ``refresh-services`` command. Each line is one service tag with a status
+    prefix: ``+TAG`` added, ``~TAG`` modified, ``-TAG`` removed, ``!TAG`` local changes discarded.
+    An empty list means the clone is already up to date.
     """
     url, branch, dest_name = parse_spec(spec)
     dest = repos_base() / dest_name
@@ -149,7 +148,7 @@ def refresh_repo(spec: str) -> tuple[Optional[Path], list[str]]:
     old = head(dest)
     discarded = local_dirty_services(dest)
     force_sync(dest, stamp)
-    lines = [f"! {tag} (local changes discarded)" for tag in discarded]
+    lines = [f"!{tag}" for tag in discarded]  # ! = local changes discarded
     lines += changed_services(dest, old, head(dest))
     return dest, lines
 
@@ -168,7 +167,7 @@ def local_dirty_services(dest: Path) -> list[str]:
 
 
 def changed_services(dest: Path, old: Optional[str], new: Optional[str]) -> list[str]:
-    """Summarise a HEAD old->new diff grouped by top-level service dir, plus a line shortstat."""
+    """Summarise a HEAD old->new diff as one ``+TAG``/``~TAG``/``-TAG`` token per top-level service directory."""
     if not old or not new or old == new:
         return []
     git = str(binaries.Git)
@@ -185,15 +184,12 @@ def changed_services(dest: Path, old: Optional[str], new: Optional[str]) -> list
     for top in sorted(by_dir):
         codes = by_dir[top]
         kind = "added" if codes == {"A"} else "removed" if codes == {"D"} else "modified"
-        lines.append(f"{sym[kind]} {top} ({kind})")
-    short = subprocess.run([git, "-C", str(dest), "diff", "--shortstat", f"{old}..{new}"], capture_output=True)  # nosec B603
-    if short.returncode == 0 and short.stdout.strip():
-        lines.append(short.stdout.decode(errors="ignore").strip())
+        lines.append(f"{sym[kind]}{top}")
     return lines
 
 
 def force_sync(dest: Path, stamp: Path) -> None:
-    """Hard-reset the clone to its upstream, discarding local changes (manual refresh only)."""
+    """Hard-reset the clone to its upstream, discarding local changes."""
     if not binaries.Git:
         write_stamp(stamp)
         return

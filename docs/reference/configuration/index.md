@@ -29,7 +29,7 @@ Where the file lives, how unshackle discovers it, and how to edit it:
 
 | Area | Keys |
 |------|------|
-| [Directories](directories.md) | `directories`, `filenames` |
+| [Directories](directories.md) | `directories`, `filenames`, `services_repo_force` |
 | [Services & authentication](services.md) | `services`, `credentials`, `firefox_cookies`, `remote_services`, `serve` |
 | [Download & processing](download.md) | `dl`, `continue_downloads`, `subtitle`, `audio`, `muxing`, `language_tags`, `dual_multi_mode` |
 | [Output & naming](output.md) | `output_template`, `tag`, `tag_rules`, `tag_group_name`, `tag_imdb_tmdb`, `chapter_fallback_name`, `unicode_filenames` |

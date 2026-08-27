@@ -172,7 +172,7 @@ def test_auto_refresh_refuses_dirty_clone(monkeypatch, tmp_path):
 
 
 def test_manual_refresh_force_overwrites(monkeypatch, tmp_path):
-    """Manual path (force=True): hard-reset to upstream, never raises on a dirty clone."""
+    """Force path (services_repo_force): hard-resets a stale clone, never raises; leaves a fresh clone alone."""
     dest = tmp_path / "github.com__a__b"
     dest.mkdir(parents=True)
     monkeypatch.setattr(service_repo, "repos_base", lambda: tmp_path)
@@ -186,6 +186,10 @@ def test_manual_refresh_force_overwrites(monkeypatch, tmp_path):
     assert service_repo.resolve_service_repo("a/b", force=True) == dest
     assert "fetch" in calls and "reset" in calls  # force-sync ran
     assert "status" not in calls  # no dirty gate on the force path
+    calls.clear()
+    service_repo.write_stamp(service_repo.stamp_for(dest))  # fresh stamp, inside the TTL
+    assert service_repo.resolve_service_repo("a/b", force=True) == dest
+    assert calls == []  # no network before the TTL expires
 
 
 def test_changed_services_groups_by_top_dir(monkeypatch):
@@ -194,18 +198,13 @@ def test_changed_services_groups_by_top_dir(monkeypatch):
     def run(args, **kw):
         if "--name-status" in args:
             out = b"A\tNEW/__init__.py\nM\tOLD/__init__.py\nM\tOLD/config.yaml\nD\tGONE/__init__.py\n"
-        elif "--shortstat" in args:
-            out = b" 4 files changed, 10 insertions(+), 2 deletions(-)\n"
         else:
             out = b""
         return subprocess.CompletedProcess(args, 0, out, b"")
 
     monkeypatch.setattr(service_repo.subprocess, "run", run)
     lines = service_repo.changed_services(Path("/x"), "aaa", "bbb")
-    assert "+ NEW (added)" in lines
-    assert "~ OLD (modified)" in lines
-    assert "- GONE (removed)" in lines
-    assert any("4 files changed" in line for line in lines)
+    assert lines == ["-GONE", "+NEW", "~OLD"]
 
 
 def test_local_dirty_services_lists_edited_dirs(monkeypatch):
@@ -234,7 +233,7 @@ def test_refresh_reports_discarded_local_edits(monkeypatch, tmp_path):
 
     monkeypatch.setattr(service_repo.subprocess, "run", run)
     _, changes = service_repo.refresh_repo("a/b")
-    assert changes == ["! CR (local changes discarded)"]
+    assert changes == ["!CR"]
 
 
 def test_changed_services_up_to_date(monkeypatch):

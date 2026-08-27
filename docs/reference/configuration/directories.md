@@ -67,6 +67,15 @@ directories:
     `unshackle util refresh-services` command instead **hard-resets** the clone to upstream,
     discarding any local edits.
 
+    Set `services_repo_force: true` to make the automatic 24 h refresh behave like
+    `refresh-services`. When a refresh is due, the run fetches and hard-resets every clone,
+    and discards any local edits in `_repos/`. Runs between refreshes do not touch the
+    network. Use it on unattended hosts where nobody edits the clones by hand.
+
+    ```yaml
+    services_repo_force: true
+    ```
+
 !!! warning "Read-only installs and reinstalls"
     If the services directory lives inside the installed package, a reinstall can delete the
     `_repos` clones. They are re-cloned on next use. On **read-only installs** you must

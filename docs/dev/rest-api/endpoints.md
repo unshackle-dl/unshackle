@@ -781,7 +781,7 @@ git-pull every service repository configured under `directories.services`. `refr
     {
       "refreshed": true,
       "repos": [
-        { "spec": "github.com/example/services", "updated": true, "changes": ["a1b2c3d Update EXAMPLE"] }
+        { "spec": "github.com/example/services", "updated": true, "changes": ["~EXAMPLE"] }
       ]
     }
     ```

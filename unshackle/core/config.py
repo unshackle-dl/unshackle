@@ -128,6 +128,7 @@ class Config:
         self.decrypt_labs_api_key: str = kwargs.get("decrypt_labs_api_key") or ""
         self.ipinfo_api_key: str = kwargs.get("ipinfo_api_key") or ""
         self.update_checks: bool = kwargs.get("update_checks", True)
+        self.services_repo_force: bool = bool(kwargs.get("services_repo_force", False))
         self.update_check_interval: int = kwargs.get("update_check_interval", 24)
         # mask local base dirs (install root/venv/home) in logged paths; False shows full paths
         self.redact_paths: bool = kwargs.get("redact_paths", True)

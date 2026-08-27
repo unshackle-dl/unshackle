@@ -25,7 +25,6 @@ def refresh_services() -> None:
     """Force a refresh (git pull) of all service repos configured in directories.services."""
     from unshackle.core.config import config
     from unshackle.core.service_repo import is_repo_spec, refresh_repo
-    from unshackle.core.utils.redact import redact_path
 
     log = logging.getLogger("util")
 
@@ -43,11 +42,9 @@ def refresh_services() -> None:
             log.error(f"Failed to update {spec} (see log).")
             continue
         if changes:
-            log.info(f"Updated {spec} → {redact_path(str(dest))}")
-            for line in changes:
-                log.info(f"    {line}")
+            log.info(f"Updated {spec}: {' '.join(changes)}")
         else:
-            log.info(f"No changes {spec}")
+            log.info(f"Up to date: {spec}")
 
 
 @util.command()
