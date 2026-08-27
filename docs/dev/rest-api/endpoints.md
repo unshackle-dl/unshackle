@@ -138,7 +138,7 @@ Find titles in a service by query string. The service must have a `search()` met
 | `service` | string | yes | - | Service tag. |
 | `query` | string | yes | - | Search query. |
 | `profile` | string | no | `null` | Credential/cookie profile to use. |
-| `proxy` | string | no | `null` | Proxy URI or country code. |
+| `proxy` | string | no | `null` | Full proxy URI, or a country code when the API key has `server_proxy`. |
 | `no_proxy` | boolean | no | `false` | Force-disable all proxy use. |
 
 === "Request"
@@ -186,7 +186,7 @@ Get the list of titles behind a title ID, for example episodes or a movie, witho
 | `service` | string | yes | Service tag. |
 | `title_id` | string | yes | Title identifier. |
 | `profile` | string | no | Credential/cookie profile. |
-| `proxy` | string | no | Proxy URI or country code. |
+| `proxy` | string | no | Full proxy URI, or a country code when the API key has `server_proxy`. |
 | `no_proxy` | boolean | no | Force-disable proxy. |
 | `cdm_type` | string | no | Preferred CDM type. |
 
@@ -414,7 +414,7 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | `skip_dl` | boolean | `false` | Only fetch keys, do not download. |
 | `export` | boolean | `false` | Export manifest/keys/subs to JSON. |
 | `cdm_only` | boolean | `null` | Force CDM-only (`true`) or vault-only (`false`) key retrieval. |
-| `proxy` / `no_proxy` / `no_proxy_download` | string / bool / bool | `null` / `false` / `false` | Proxy controls. |
+| `proxy` / `no_proxy` / `no_proxy_download` | string / bool / bool | `null` / `false` / `false` | Proxy controls. `proxy` must be a full proxy URI unless the API key has `server_proxy`. |
 | `no_folder` / `no_source` / `no_mux` | boolean | `false` | Output/mux controls. |
 | `workers` | int | `null` | Threads per track. |
 | `adaptive_workers` | boolean | `false` | Scale segment workers to measured CDN throughput, up to the `workers` cap. |
@@ -833,6 +833,8 @@ DELETE /api/session/{id}        → tear down, harvest updated cache
 ### `POST /api/session/create`
 
 Make a remote session for a service and title. Authentication runs asynchronously in the background. This call returns immediately with `status: "authenticating"`, and you then poll the prompt endpoint. The body accepts `service` and `title_id` (both required). It also accepts a broad set of optional keys, because the body allows `additionalProperties`. These are `credentials` (`{username, password, extra?}`), `cookies` (base64 of zlib-compressed Netscape cookie file), `proxy`, `no_proxy`, `profile`, `cache` (map of forwarded cache files), `client_region`, `cdm_type`, `range_`, `vcodec`, `quality`, `best_available`, and any service CLI options.
+
+The `proxy` value must be a full proxy URI, unless the operator gives your API key `server_proxy` in the `serve.users` config. Without it, the server does not resolve country codes with its own proxy providers. It rejects the request with `INVALID_PROXY` when no `proxy` is set and the reported `client_region` differs from the server's region. A request that reports no `client_region` is not blocked. Pass `proxy` with your own proxy, or `no_proxy` to accept the server's own connection. With `server_proxy`, the server resolves a country code and picks a proxy for your `client_region` itself.
 
 === "Response `200`"
 

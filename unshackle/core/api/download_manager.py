@@ -472,6 +472,7 @@ def perform_download(
     dl_instance = dl(
         ctx=ctx,
         no_proxy=params.get("no_proxy", False),
+        proxy_providers=None if params.get("server_proxy") is True else [],
         profile=params.get("profile"),
         proxy=params.get("proxy"),
         repack=params.get("repack", False),

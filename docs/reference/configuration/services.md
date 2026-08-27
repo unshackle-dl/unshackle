@@ -142,6 +142,17 @@ client that asks anyway gets a `FORBIDDEN` error. Because a download job always 
 an API key without `server_cdm` for that service also cannot submit or retry `/api/download`
 jobs. Keys that have no `users` entry, such as `api_secret`, keep server CDM access.
 
+`server_proxy` decides whether that API key may use the proxy providers the server has
+configured. There is no implicit access: only the boolean `true` on the API key's `users` entry
+grants it, and an API key without a `users` entry has no access either. Without the opt-in the
+server never spends its own proxy subscriptions on a remote client: not to resolve a country code
+in `proxy`, not to match the client's region, and not for a service geofence. This applies to
+remote sessions, search, title lists, and `/api/download` jobs alike. Such a client must send a
+full proxy URI, or `no_proxy` to accept the server's own connection. Set `server_proxy: true`
+to let that API key send a country code or a `provider:country` value, and to let the server
+pick a proxy for the client's region and for a service geofence. The client reports its own
+region; a client that reports none is not blocked.
+
 ```yaml
 serve:
   api_secret: change-me
@@ -159,6 +170,7 @@ serve:
     c9d0e1f2:
       services: [EXAMPLE1, EXAMPLE2]
       server_cdm: [EXAMPLE1]      # the server licenses only EXAMPLE1; EXAMPLE2 needs a local CDM
+      server_proxy: true          # this key may also use the server's proxy providers
 ```
 
 !!! note "`dl` keys inside `serve`"

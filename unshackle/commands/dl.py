@@ -973,6 +973,7 @@ class dl:
         enrich: bool = False,
         daily: bool = False,
         output_dir: Optional[Path] = None,
+        proxy_providers: Optional[list[Any]] = None,
         *_: Any,
         **__: Any,
     ):
@@ -1314,28 +1315,31 @@ class dl:
         if no_proxy:
             ctx.params["proxy"] = None
         else:
-            with console.status("Loading Proxy Providers...", spinner="dots"):
-                if config.proxy_providers.get("basic"):
-                    self.proxy_providers.append(Basic(**config.proxy_providers["basic"]))
-                # ExpressVPN/ProtonVPN auto-load when their default cookie file exists (no yaml needed)
-                expressvpn = ExpressVPN(**(config.proxy_providers.get("expressvpn") or {}))
-                if config.proxy_providers.get("expressvpn") or expressvpn.cache_path.is_file():
-                    self.proxy_providers.append(expressvpn)
-                if config.proxy_providers.get("nordvpn"):
-                    self.proxy_providers.append(NordVPN(**config.proxy_providers["nordvpn"]))
-                proton = ProtonVPN(**(config.proxy_providers.get("protonvpn") or {}))
-                if config.proxy_providers.get("protonvpn") or proton.cookie_path.is_file():
-                    self.proxy_providers.append(proton)
-                if config.proxy_providers.get("surfsharkvpn"):
-                    self.proxy_providers.append(SurfsharkVPN(**config.proxy_providers["surfsharkvpn"]))
-                if config.proxy_providers.get("windscribevpn"):
-                    self.proxy_providers.append(WindscribeVPN(**config.proxy_providers["windscribevpn"]))
-                if config.proxy_providers.get("gluetun"):
-                    self.proxy_providers.append(Gluetun(**config.proxy_providers["gluetun"]))
-                if binaries.HolaProxy:
-                    self.proxy_providers.append(Hola())
-                for proxy_provider in self.proxy_providers:
-                    self.log.info(f"Loaded {proxy_provider.__class__.__name__}: {proxy_provider}")
+            if proxy_providers is not None:
+                self.proxy_providers = list(proxy_providers)
+            else:
+                with console.status("Loading Proxy Providers...", spinner="dots"):
+                    if config.proxy_providers.get("basic"):
+                        self.proxy_providers.append(Basic(**config.proxy_providers["basic"]))
+                    # ExpressVPN/ProtonVPN auto-load when their default cookie file exists (no yaml needed)
+                    expressvpn = ExpressVPN(**(config.proxy_providers.get("expressvpn") or {}))
+                    if config.proxy_providers.get("expressvpn") or expressvpn.cache_path.is_file():
+                        self.proxy_providers.append(expressvpn)
+                    if config.proxy_providers.get("nordvpn"):
+                        self.proxy_providers.append(NordVPN(**config.proxy_providers["nordvpn"]))
+                    proton = ProtonVPN(**(config.proxy_providers.get("protonvpn") or {}))
+                    if config.proxy_providers.get("protonvpn") or proton.cookie_path.is_file():
+                        self.proxy_providers.append(proton)
+                    if config.proxy_providers.get("surfsharkvpn"):
+                        self.proxy_providers.append(SurfsharkVPN(**config.proxy_providers["surfsharkvpn"]))
+                    if config.proxy_providers.get("windscribevpn"):
+                        self.proxy_providers.append(WindscribeVPN(**config.proxy_providers["windscribevpn"]))
+                    if config.proxy_providers.get("gluetun"):
+                        self.proxy_providers.append(Gluetun(**config.proxy_providers["gluetun"]))
+                    if binaries.HolaProxy:
+                        self.proxy_providers.append(Hola())
+                    for proxy_provider in self.proxy_providers:
+                        self.log.info(f"Loaded {proxy_provider.__class__.__name__}: {proxy_provider}")
 
             if proxy:
                 requested_provider = None

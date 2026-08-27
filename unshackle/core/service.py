@@ -284,6 +284,11 @@ class Service(metaclass=ABCMeta):
                                     if proxy:
                                         self.log.info(f"Got Proxy from {proxy_provider.__class__.__name__}")
                                         break
+                                if not proxy:
+                                    self.log.warning(
+                                        f"No proxy available for {requested_proxy}. "
+                                        f"Pass --proxy with a proxy in {requested_proxy}, or the request can fail."
+                                    )
                         except Exception as e:
                             self.log.warning(f"Failed to check geofence: {e}")
                             current_region = None

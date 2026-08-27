@@ -221,7 +221,13 @@ def instantiate_service(
     return parent_ctx.invoke(service_module.cli, title=title, **extras)
 
 
-def setup_list_service(data: Dict[str, Any], normalized_service: str, profile: Optional[str], title_id: str) -> Any:
+def setup_list_service(
+    data: Dict[str, Any],
+    normalized_service: str,
+    profile: Optional[str],
+    title_id: str,
+    request: Optional[web.Request] = None,
+) -> Any:
     """Assemble and authenticate a service instance for list_titles / list_tracks.
 
     Runs the shared preamble: load yaml → get proxy → load CDM → assemble ctx →
@@ -231,22 +237,8 @@ def setup_list_service(data: Dict[str, Any], normalized_service: str, profile: O
 
     service_config = load_service_yaml(normalized_service)
 
-    proxy_param = data.get("proxy")
     no_proxy = data.get("no_proxy", False)
-    proxy_providers = []
-
-    if not no_proxy:
-        proxy_providers = initialize_proxy_providers()
-
-    if proxy_param and not no_proxy:
-        try:
-            proxy_param = resolve_proxy(proxy_param, proxy_providers)
-        except ValueError as e:
-            raise APIError(
-                APIErrorCode.INVALID_PROXY,
-                f"Proxy error: {e}",
-                details={"proxy": proxy_param, "service": normalized_service},
-            )
+    proxy_param, proxy_providers = resolve_handler_proxy(data, normalized_service, request)
 
     cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"))
     parent_ctx = build_parent_ctx(profile, cdm, proxy_param, no_proxy, proxy_providers, service_config)
@@ -312,6 +304,24 @@ def server_cdm_allowed(request: Optional[web.Request] = None, service: Optional[
             Services.get_tag(s).upper() for s in allowed
         }
     return bool(allowed)
+
+
+def server_proxy_allowed(request: Optional[web.Request] = None) -> bool:
+    """Whether the calling API key may use the server's own configured proxy providers.
+
+    Configured API keys opt in with ``server_proxy: true``, a real yaml boolean, so a
+    quoted ``"true"`` or ``"no"`` does not count. It is a plain bool, not a per-service
+    list, because a proxy is not tied to a service. No API key has implicit access: an
+    API key absent from ``serve.users`` gets none, and neither does a call without a
+    request, so a handler that does not pass ``request`` through fails closed.
+    """
+    if not request:
+        return False
+    secret_key = request_secret_key(request)
+    user_config = (config.serve or {}).get("users", {}).get(secret_key)
+    if not isinstance(user_config, dict):
+        return False
+    return user_config.get("server_proxy") is True
 
 
 JOB_EVENTS_ROUTE = "/api/download/jobs/{job_id}/events"
@@ -785,25 +795,11 @@ async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = 
         )
 
     profile = data.get("profile")
-    proxy_param = data.get("proxy")
     no_proxy = data.get("no_proxy", False)
 
     service_config = load_service_yaml(normalized_service)
 
-    proxy_providers = []
-    if not no_proxy:
-        proxy_providers = initialize_proxy_providers()
-
-    if proxy_param and not no_proxy:
-        try:
-            resolved_proxy = resolve_proxy(proxy_param, proxy_providers)
-            proxy_param = resolved_proxy
-        except ValueError as e:
-            raise APIError(
-                APIErrorCode.INVALID_PROXY,
-                f"Proxy error: {e}",
-                details={"proxy": proxy_param, "service": normalized_service},
-            )
+    proxy_param, proxy_providers = await asyncio.to_thread(resolve_handler_proxy, data, normalized_service, request)
 
     cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"))
     parent_ctx = build_parent_ctx(profile, cdm, proxy_param, no_proxy, proxy_providers, service_config)
@@ -860,7 +856,9 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
         )
 
     try:
-        service_instance = setup_list_service(data, normalized_service, profile, title_id)
+        service_instance = await asyncio.to_thread(
+            setup_list_service, data, normalized_service, profile, title_id, request
+        )
         titles = service_instance.get_titles()
 
         if hasattr(titles, "__iter__") and not isinstance(titles, str):
@@ -898,7 +896,9 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
         )
 
     try:
-        service_instance = setup_list_service(data, normalized_service, profile, title_id)
+        service_instance = await asyncio.to_thread(
+            setup_list_service, data, normalized_service, profile, title_id, request
+        )
         titles = service_instance.get_titles()
 
         wanted_param = data.get("wanted")
@@ -1198,13 +1198,19 @@ def enforce_download_gates(params: Dict[str, Any], request: Optional[web.Request
     secrets instead of the server-side credentials. Gate it behind `serve.allow_job_credentials`
     (default off) so a default deployment stays locked to its own credentials. This mirrors the
     CDM gate. A download job licenses DRM in-process with the server's own CDM, so an API key without
-    ``server_cdm`` cannot submit or retry jobs.
+    ``server_cdm`` cannot submit or retry jobs. A job can also spend the server's proxy providers,
+    through an explicit ``proxy`` country code or through the geofence auto-proxy, so the
+    ``server_proxy`` policy from :func:`resolve_handler_proxy` applies here too: without the opt-in
+    the job must carry a full proxy URI or no proxy at all.
     """
     if not server_cdm_allowed(request, params.get("service")):
         raise APIError(
             APIErrorCode.FORBIDDEN,
             "Download jobs license with the server CDM, which is not enabled for this key on this service.",
         )
+
+    if not server_proxy_allowed(request):
+        resolve_handler_proxy(params, params.get("service") or "", request)
 
     requested_cdm = params.get("cdm")
     if requested_cdm:
@@ -1249,7 +1255,7 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
             details={"service": normalized_service, "title_id": title_id},
         )
 
-    enforce_download_gates(data, request)
+    await asyncio.to_thread(enforce_download_gates, data, request)
 
     try:
         service_module = Services.load(normalized_service)
@@ -1278,6 +1284,9 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
             **service_specific_defaults,
             **filtered_params,
         }
+        # The download worker reads this to decide whether dl may load the server's proxy
+        # providers. Always stamped server-side so a client-sent value cannot grant it.
+        params_with_defaults["server_proxy"] = server_proxy_allowed(request)
         job = manager.create_job(normalized_service, title_id, owner_key=caller_key(request), **params_with_defaults)
 
         return web.json_response(
@@ -1553,12 +1562,17 @@ async def retry_download_job_handler(job_id: str, request: Optional[web.Request]
                 f"Invalid or unavailable service: {job.service}",
                 details={"service": job.service},
             )
-        enforce_download_gates({**job.parameters, "service": job.service}, request)
+        await asyncio.to_thread(enforce_download_gates, {**job.parameters, "service": job.service}, request)
 
         await manager.start_workers()
 
         # Reuse the raw in-memory parameters; redaction only ever applies to serialized copies.
-        new_job = manager.create_job(job.service, job.title_id, owner_key=caller_key(request), **job.parameters)
+        new_job = manager.create_job(
+            job.service,
+            job.title_id,
+            owner_key=caller_key(request),
+            **{**job.parameters, "server_proxy": server_proxy_allowed(request)},
+        )
 
         return web.json_response(
             {
@@ -2020,7 +2034,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
         )
 
     try:
-        proxy_param, proxy_providers = resolve_handler_proxy(data, normalized_service)
+        proxy_param, proxy_providers = await asyncio.to_thread(resolve_handler_proxy, data, normalized_service, request)
 
         import hashlib
         import uuid as uuid_mod
@@ -2520,31 +2534,55 @@ async def get_validated_session(session_id: str, request: Optional[web.Request])
     return session
 
 
-def resolve_handler_proxy(data: Dict[str, Any], normalized_service: str) -> tuple[Optional[str], list]:
-    """Get the proxy and initialise the proxy providers from API request data.
+def resolve_handler_proxy(
+    data: Dict[str, Any], normalized_service: str, request: Optional[web.Request] = None
+) -> tuple[Optional[str], list]:
+    """Get the proxy and the proxy providers for an API request.
 
-    Handles explicit proxy param, the `provider:country` format, and
-    client_region-based auto-proxy when server region differs.
+    ``server_proxy`` on the calling API key decides whether the server spends its own proxy
+    subscriptions on this client. Without it the proxy-provider list stays empty, so the server
+    rejects a country code in ``proxy``, and a client in another region must send a full proxy
+    URI or ``no_proxy``. The returned list reaches ``ContextData.proxy_providers``, so the same gate
+    also governs the geofence auto-proxy in ``Service.__init__``.
+
+    The client region is the client-reported ``client_region`` field: an identifier, not a
+    security boundary, because the spend gate is ``server_proxy`` on the API key. A client that
+    reports no region, and an unknown region on either side, never blocks the request.
     """
     proxy_param = data.get("proxy")
     no_proxy = data.get("no_proxy", False)
     proxy_providers: list = []
+    allowed = server_proxy_allowed(request)
 
-    if not no_proxy:
+    if allowed and not no_proxy:
         proxy_providers = initialize_proxy_providers()
 
     if proxy_param and not no_proxy:
         try:
             proxy_param = resolve_proxy(proxy_param, proxy_providers)
         except ValueError as e:
+            if allowed:
+                raise APIError(
+                    APIErrorCode.INVALID_PROXY,
+                    f"Proxy error: {e}",
+                    details={"proxy": data.get("proxy"), "service": normalized_service},
+                )
             raise APIError(
                 APIErrorCode.INVALID_PROXY,
-                f"Proxy error: {e}",
-                details={"proxy": data.get("proxy"), "service": normalized_service},
+                "This server does not resolve country codes into proxies. "
+                "Pass --proxy with a full proxy URI (http://, https:// or socks5://).",
+                details={"service": normalized_service},
             )
 
     client_region = data.get("client_region")
-    if not proxy_param and not no_proxy and client_region and proxy_providers:
+    if client_region is not None and not isinstance(client_region, str):
+        raise APIError(
+            APIErrorCode.INVALID_INPUT,
+            "client_region must be a string country code.",
+            details={"service": normalized_service},
+        )
+
+    if not proxy_param and not no_proxy and client_region and (proxy_providers or not allowed):
         try:
             from unshackle.core.utils.ip_info import get_ip_info
 
@@ -2554,7 +2592,16 @@ def resolve_handler_proxy(data: Dict[str, Any], normalized_service: str) -> tupl
             log.debug(f"Server region lookup failed: {e!r}")
             server_region = None
 
-        if server_region and server_region == client_region.lower():
+        in_client_region = bool(server_region) and server_region == client_region.lower()
+        if not allowed:
+            if server_region and not in_client_region:
+                raise APIError(
+                    APIErrorCode.INVALID_PROXY,
+                    "This server is in a different region from yours. Pass --proxy with a proxy "
+                    "in the region you want, or pass --no-proxy to use the server's own connection.",
+                    details={"service": normalized_service},
+                )
+        elif in_client_region:
             log.info(f"Server already in client region '{sanitize_log(client_region)}', no proxy needed")
         else:
             try:
