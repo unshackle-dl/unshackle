@@ -541,7 +541,7 @@ def resolve_server(server_name: Optional[str]) -> tuple[str, str, dict]:
             available = ", ".join(remote_services.keys())
             raise click.ClickException(f"Remote service '{server_name}' not found. Available: {available}")
         services = svc.get("services", {})
-        services["_server_cdm"] = svc.get("server_cdm", False)
+        services["_server_cdm"] = svc.get("server_cdm")
         services["_auth_headers"] = resolve_auth_headers(svc, server_name)
         return svc["url"], svc.get("api_key", ""), services
 
@@ -549,7 +549,7 @@ def resolve_server(server_name: Optional[str]) -> tuple[str, str, dict]:
         name, svc = next(iter(remote_services.items()))
         log.info(f"Using remote service: {name}")
         services = svc.get("services", {})
-        services["_server_cdm"] = svc.get("server_cdm", False)
+        services["_server_cdm"] = svc.get("server_cdm")
         services["_auth_headers"] = resolve_auth_headers(svc, name)
         return svc["url"], svc.get("api_key", ""), services
 
@@ -647,7 +647,7 @@ class RemoteService:
         self._session.mount("http://", self._session.adapters["https://"])
 
         svc_config = services_config.get(service_tag, {})
-        self._server_cdm = services_config.get("_server_cdm", False)
+        self._server_cdm: bool | None = services_config.get("_server_cdm")
         self.apply_service_config(svc_config)
 
     def apply_service_config(self, svc_config: dict) -> None:
@@ -837,9 +837,15 @@ class RemoteService:
         resolve_manifest_data(tracks, result.get("manifests", []))
         apply_service_track_data(tracks, result)
 
-        if self._server_cdm and not result.get("server_cdm", True):
+        server_cdm = bool(result.get("server_cdm", False))
+        if self._server_cdm is None:
+            self._server_cdm = server_cdm
+        elif self._server_cdm and not server_cdm:
             self._server_cdm = False
-            self.log.warning("Server CDM licensing is not enabled for this key, using the local CDM")
+            self.log.warning(
+                f"{self.service_tag} is not available for server CDM licensing with this API key, "
+                "falling back to the local CDM"
+            )
         self._server_cdm_type = result.get("server_cdm_type", "widevine")
 
         self._tracks_by_title[title_id] = tracks

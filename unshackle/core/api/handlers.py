@@ -291,11 +291,12 @@ def get_allowed_services(request: Optional[web.Request] = None) -> Optional[List
     return list(result)
 
 
-def server_cdm_allowed(request: Optional[web.Request] = None) -> bool:
-    """Whether the calling API key may have the server operate the CDM licensing.
+def server_cdm_allowed(request: Optional[web.Request] = None, service: Optional[str] = None) -> bool:
+    """Whether the calling API key may have the server operate the CDM licensing for ``service``.
 
-    Configured API keys opt in with ``server_cdm: true``. An API key absent from
-    ``serve.users`` (the admin secret) keeps full access.
+    Configured API keys opt in with ``server_cdm: true`` for every service, or with a list of
+    service tags for only those. An API key absent from ``serve.users`` (the admin secret) keeps
+    full access.
     """
     if not request:
         return True
@@ -303,7 +304,14 @@ def server_cdm_allowed(request: Optional[web.Request] = None) -> bool:
     user_config = config.serve.get("users", {}).get(secret_key)
     if user_config is None:
         return True
-    return bool(user_config.get("server_cdm", False))
+    allowed = user_config.get("server_cdm", False)
+    if isinstance(allowed, str):
+        allowed = [allowed]
+    if isinstance(allowed, (list, tuple, set)):
+        return service is not None and Services.get_tag(service).upper() in {
+            Services.get_tag(s).upper() for s in allowed
+        }
+    return bool(allowed)
 
 
 JOB_EVENTS_ROUTE = "/api/download/jobs/{job_id}/events"
@@ -1192,10 +1200,10 @@ def enforce_download_gates(params: Dict[str, Any], request: Optional[web.Request
     CDM gate. A download job licenses DRM in-process with the server's own CDM, so an API key without
     ``server_cdm`` cannot submit or retry jobs.
     """
-    if not server_cdm_allowed(request):
+    if not server_cdm_allowed(request, params.get("service")):
         raise APIError(
             APIErrorCode.FORBIDDEN,
-            "Download jobs license with the server CDM, which is not enabled for this key.",
+            "Download jobs license with the server CDM, which is not enabled for this key on this service.",
         )
 
     requested_cdm = params.get("cdm")
@@ -1545,7 +1553,7 @@ async def retry_download_job_handler(job_id: str, request: Optional[web.Request]
                 f"Invalid or unavailable service: {job.service}",
                 details={"service": job.service},
             )
-        enforce_download_gates(job.parameters, request)
+        enforce_download_gates({**job.parameters, "service": job.service}, request)
 
         await manager.start_workers()
 
@@ -2249,7 +2257,7 @@ async def session_tracks_handler(
                 "manifests": manifests,
                 "session_headers": session_headers,
                 "session_cookies": session_cookies,
-                "server_cdm": server_cdm_allowed(request),
+                "server_cdm": server_cdm_allowed(request, service_tag),
                 "server_cdm_type": server_cdm_type,
             }
         )
@@ -2870,10 +2878,10 @@ async def session_license_handler(
     drm_type = data.get("drm_type", "widevine")
     mode = data.get("mode", "proxy")
 
-    if mode == "server_cdm" and not server_cdm_allowed(request):
+    if mode == "server_cdm" and not server_cdm_allowed(request, session.service_tag):
         raise APIError(
             APIErrorCode.FORBIDDEN,
-            "Server CDM licensing is not enabled for this key. Use a local CDM (proxy mode).",
+            "Server CDM licensing is not enabled for this key on this service. Use a local CDM (proxy mode).",
         )
 
     if mode == "server_cdm" and track_ids:

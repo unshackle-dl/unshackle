@@ -122,7 +122,7 @@ def test_resolve_server_multi_with_name(multi_remote_services) -> None:
     url, key, services = resolve_server("b")
     assert url == "https://b:8080"
     assert key == "kb"
-    assert services["_server_cdm"] is False
+    assert services["_server_cdm"] is None
 
 
 def test_resolve_proxy_none_returns_none() -> None:

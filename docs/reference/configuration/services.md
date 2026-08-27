@@ -86,6 +86,10 @@ the server's `url` (required), an optional `api_key`, an optional `auth_headers`
 optional `server_cdm` boolean, and an optional `services` sub-dict of per-service local
 overrides such as `title_map`.
 
+Leave `server_cdm` unset and the client follows the server: it uses the server CDM for each
+service the API key has it on, and the local CDM for the others. `true` asks for the server CDM
+and falls back to the local CDM when the server refuses; `false` always uses the local CDM.
+
 `auth_headers` lists extra header names to send the API key in, tried before the defaults
 `X-Secret-Key` and `X-Api-Key`, which are always appended as fallbacks. unshackle sends the
 first name. If the server answers `401`, it retries the same request with the next name, and
@@ -130,12 +134,13 @@ Each entry under `users` uses that user's API key as its name, and can set its o
 A user with no `playready_devices` config key gets no PlayReady access at all, not the global
 list.
 
-`server_cdm` decides whether the server runs the CDM licensing for that API key. It is `false`
-unless the entry sets it, so a remote client configured with `server_cdm: true` is told to
-license with its own local CDM instead, and a client that asks anyway gets a `FORBIDDEN`
-error. Because a download job always licenses with the server's CDM, an API key without
-`server_cdm` also cannot submit or retry `/api/download` jobs. Keys that have no `users`
-entry, such as `api_secret`, keep server CDM access.
+`server_cdm` decides whether the server runs the CDM licensing for that API key. Set it to
+`true` to enable every service, or to a list of service tags to enable only those. It is `false`
+unless the entry sets it. For a service the API key does not cover, the server tells a remote
+client configured with `server_cdm: true` to license with its own local CDM instead, and a
+client that asks anyway gets a `FORBIDDEN` error. Because a download job always licenses with the server's CDM,
+an API key without `server_cdm` for that service also cannot submit or retry `/api/download`
+jobs. Keys that have no `users` entry, such as `api_secret`, keep server CDM access.
 
 ```yaml
 serve:
@@ -151,6 +156,9 @@ serve:
       services: [EXAMPLE1]        # may only use EXAMPLE1
     e5f6a7b8:
       server_cdm: true            # this key may have the server do the licensing
+    c9d0e1f2:
+      services: [EXAMPLE1, EXAMPLE2]
+      server_cdm: [EXAMPLE1]      # the server licenses only EXAMPLE1; EXAMPLE2 needs a local CDM
 ```
 
 !!! note "`dl` keys inside `serve`"
