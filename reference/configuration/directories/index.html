@@ -2157,6 +2157,12 @@ uncommitted changes to tracked files or unpushed local commits. Untracked files 
 service folders, <code>__pycache__</code>) never block it. The <strong>manual</strong>
 <code>unshackle util refresh-services</code> command instead <strong>hard-resets</strong> the clone to upstream,
 discarding any local edits.</p>
+<p>Set <code>services_repo_force: true</code> to make the automatic 24 h refresh behave like
+<code>refresh-services</code>. When a refresh is due, the run fetches and hard-resets every clone,
+and discards any local edits in <code>_repos/</code>. Runs between refreshes do not touch the
+network. Use it on unattended hosts where nobody edits the clones by hand.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">services_repo_force</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span></code></pre></div>
 </div>
 <div class="admonition warning">
 <p class="admonition-title">Read-only installs and reinstalls</p>
