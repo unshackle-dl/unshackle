@@ -2476,6 +2476,12 @@ chosen title. The tracks come back with playback URLs, and the server ships
 DASH/ISM manifests as compressed XML so the client can re-parse them locally for
 downloading. Any <code>session_headers</code> / <code>session_cookies</code> the server used are
 merged into the client's local HTTP session.</p>
+<p>The tracks response repeats the title. A service can rewrite title fields inside
+<code>get_tracks</code>, so the client takes this copy in place of the one from the title
+list. Each track carries the full local field set. After the manifest re-parse the
+client overlays the JSON-safe part of the service-set <code>track.data</code>, so a service
+value wins over the parser's. An attachment that the service wrote to a file on the
+server travels as base64, and the client writes it to its own temp directory.</p>
 </div>
 <div class="tabbed-block">
 <p>For a DRM-protected title the client either <strong>proxies</strong> its CDM challenge through
