@@ -3123,7 +3123,10 @@ list. Without it, unshackle picks the <strong>best available</strong> resolution
 <p class="admonition-title">16:9 canvas matching</p>
 <p>Resolution matching is by track <strong>height</strong> first. If no track height matches exactly,
 unshackle falls back to a 16:9-canvas match, so <code>-q 1080</code> also selects an
-anamorphic <code>1920×804</code> track (computed as <code>int(width × 9 / 16)</code>).</p>
+anamorphic <code>1920×804</code> track (computed as <code>int(width × 9 / 16)</code>). unshackle applies the
+fallback to each range and codec on its own. A service that crops only its HDR10 tracks
+therefore keeps its <code>3840×1920</code> HDR10 track, even when another range has an exact
+<code>2160</code> height match.</p>
 </div>
 <h3 id="best-available-and-worst">Best-available and worst<a class="headerlink" href="#best-available-and-worst" title="Permanent link">&para;</a></h3>
 <p>By default a missing requested resolution is an error. Two flags change that:</p>
