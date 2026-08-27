@@ -3473,7 +3473,16 @@ class dl:
                                 temp_path.unlink(missing_ok=True)
                             except PermissionError:
                                 self.log.warning(f"Failed to delete temp file (in use?): {temp_path}")
-                        for leftover in ("HDR10-DV.hevc", "DV.hevc", "RPU.bin", "RPU_UNT.bin", "RPU_L6.bin"):
+                        for leftover in (
+                            "HDR10-DV.hevc",
+                            "HDR10.hevc",
+                            "DV.hevc",
+                            "RPU.bin",
+                            "RPU_UNT.bin",
+                            "RPU_L5.bin",
+                            "RPU_L6.bin",
+                            "L5.json",
+                        ):
                             leftover_path = config.directories.temp / leftover
                             try:
                                 leftover_path.unlink(missing_ok=True)

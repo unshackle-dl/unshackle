@@ -455,19 +455,18 @@ class Tracks:
         return select
 
     def by_resolutions(self, resolutions: list[int], per_resolution: int = 0) -> None:
-        # Note: Do not merge these list comprehensions. They must be done separately so the results
-        # from the 16:9 canvas check is only used if there's no exact height resolution match.
-        selected = []
+        groups: dict[tuple, list[Video]] = {}
+        for video in self.videos:
+            groups.setdefault((video.range, video.codec), []).append(video)
+
+        keep: set[int] = set()
         for resolution in resolutions:
-            matches = [  # exact matches
-                x for x in self.videos if x.height == resolution
-            ]
-            if not matches:
-                matches = [  # 16:9 canvas matches
-                    x for x in self.videos if x.width and int(x.width * (9 / 16)) == resolution
-                ]
-            selected.extend(matches[: per_resolution or None])
-        self.videos = selected
+            for group in groups.values():
+                matches = [x for x in group if x.height == resolution]
+                if not matches:
+                    matches = [x for x in group if x.width and int(x.width * (9 / 16)) == resolution]
+                keep.update(id(x) for x in matches[: per_resolution or None])
+        self.videos = [x for x in self.videos if id(x) in keep]
 
     @staticmethod
     def by_language(

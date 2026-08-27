@@ -3,7 +3,8 @@
 Cover the pure ``Tracks`` helpers behind the ``dl`` selection layer:
 
 - ``Tracks.by_resolutions``: the 16:9 canvas fallback must tolerate tracks with
-  no known width instead of crashing on ``int(None * 9 / 16)``.
+  no known width instead of crashing on ``int(None * 9 / 16)``, and it applies to
+  each range and codec on its own.
 - ``Tracks.sort_videos``: resolution outranks bitrate, and an unknown-bitrate
   track can still win on resolution.
 - ``Tracks.sort_audio``: descriptive-last, Atmos, codec_priority then bitrate;
@@ -22,13 +23,14 @@ def make_video(
     bitrate: int | None,
     width: int | None = None,
     codec: Video.Codec = Video.Codec.HEVC,
+    range_: Video.Range = Video.Range.SDR,
 ) -> Video:
     return Video(
         id_=track_id,
         url=f"https://example.test/{track_id}.m3u8",
         language="en",
         codec=codec,
-        range_=Video.Range.SDR,
+        range_=range_,
         width=width,
         height=height,
         bitrate=bitrate,
@@ -69,6 +71,21 @@ def test_by_resolutions_tolerates_width_none_track() -> None:
     tracks.by_resolutions([720])
 
     assert [t.id for t in tracks.videos] == ["canvas-720"]
+
+
+def test_by_resolutions_keeps_cropped_variants_of_other_ranges() -> None:
+    """A DV track with an exact height must not remove the cropped HDR10 and SDR tracks."""
+    tracks = Tracks()
+    tracks.videos = [
+        make_video("dv-2160", height=2160, width=3840, bitrate=20_000_000, range_=Video.Range.DV),
+        make_video("hdr10-2160", height=1920, width=3840, bitrate=20_000_000, range_=Video.Range.HDR10),
+        make_video("sdr-2160", height=1920, width=3840, bitrate=15_000_000, range_=Video.Range.SDR),
+        make_video("dv-1080", height=1080, width=1920, bitrate=5_000_000, range_=Video.Range.DV),
+    ]
+
+    tracks.by_resolutions([2160])
+
+    assert [t.id for t in tracks.videos] == ["dv-2160", "hdr10-2160", "sdr-2160"]
 
 
 # sort_videos: resolution before bitrate

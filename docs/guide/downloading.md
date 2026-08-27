@@ -86,7 +86,10 @@ unshackle dl -q 2160,1080,720 EXAMPLE 81234567
 !!! note "16:9 canvas matching"
     Resolution matching is by track **height** first. If no track height matches exactly,
     unshackle falls back to a 16:9-canvas match, so `-q 1080` also selects an
-    anamorphic `1920×804` track (computed as `int(width × 9 / 16)`).
+    anamorphic `1920×804` track (computed as `int(width × 9 / 16)`). unshackle applies the
+    fallback to each range and codec on its own. A service that crops only its HDR10 tracks
+    therefore keeps its `3840×1920` HDR10 track, even when another range has an exact
+    `2160` height match.
 
 ### Best-available and worst
 
