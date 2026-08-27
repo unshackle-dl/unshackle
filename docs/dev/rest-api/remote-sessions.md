@@ -141,6 +141,13 @@ hood the client walks a remote session through its lifecycle.
     downloading. Any `session_headers` / `session_cookies` the server used are
     merged into the client's local HTTP session.
 
+    The tracks response repeats the title. A service can rewrite title fields inside
+    `get_tracks`, so the client takes this copy in place of the one from the title
+    list. Each track carries the full local field set. After the manifest re-parse the
+    client overlays the JSON-safe part of the service-set `track.data`, so a service
+    value wins over the parser's. An attachment that the service wrote to a file on the
+    server travels as base64, and the client writes it to its own temp directory.
+
 === "4. Licensing"
 
     For a DRM-protected title the client either **proxies** its CDM challenge through

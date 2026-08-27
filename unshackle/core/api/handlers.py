@@ -1,5 +1,7 @@
 import asyncio
+import base64
 import enum
+import json
 import logging
 import re
 from datetime import date as date_
@@ -391,6 +393,7 @@ def serialize_title(title: Title_T) -> Dict[str, Any]:
     cover_url = _data.get("cover_url") if isinstance(_data, dict) else None
 
     is_episode = isinstance(title, Episode)
+    is_song = isinstance(title, Song)
     episode_part = title.part if isinstance(title, Episode) else None
     if is_episode:
         # no part suffix here: remote_service.build_title rebuilds the Episode from this dict, so a
@@ -400,7 +403,7 @@ def serialize_title(title: Title_T) -> Dict[str, Any]:
         name = str(title.name) if hasattr(title, "name") else str(title)
 
     result = {
-        "type": "episode" if is_episode else "movie" if isinstance(title, Movie) else "other",
+        "type": "episode" if is_episode else "movie" if isinstance(title, Movie) else "song" if is_song else "other",
         "name": name,
         "id": str(title.id) if hasattr(title, "id") else None,
         "language": title_language,
@@ -408,8 +411,8 @@ def serialize_title(title: Title_T) -> Dict[str, Any]:
         "date": date,
         "cover_url": cover_url,
     }
-    # "other" titles carry no year; only Episode/Movie do.
-    if isinstance(title, (Episode, Movie)):
+    # "other" titles carry no year; only Episode/Movie/Song do.
+    if isinstance(title, (Episode, Movie, Song)):
         result["year"] = title.year
     if isinstance(title, Episode):
         result["series_title"] = str(title.title)
@@ -426,6 +429,26 @@ def serialize_title(title: Title_T) -> Dict[str, Any]:
             result["absolute"] = title.absolute
         if getattr(title, "daily", None) is not None:
             result["daily"] = title.daily
+    if is_song:
+        for field in (
+            "artist",
+            "album",
+            "track",
+            "disc",
+            "album_artist",
+            "release_type",
+            "total_tracks",
+            "total_discs",
+            "genre",
+            "explicit",
+            "isrc",
+            "upc",
+            "copyright",
+            "label",
+            "lyrics",
+            "artwork_url",
+        ):
+            result[field] = getattr(title, field, None)
     if isinstance(title, (Episode, Movie)) and getattr(title, "anime", None) is not None:
         result["anime"] = title.anime
 
@@ -510,9 +533,11 @@ def serialize_drm(drm_list) -> Optional[List[Dict[str, Any]]]:
         drm_class = drm.__class__.__name__
         drm_info["type"] = drm_class.lower()
 
-        # PSSH: pywidevine exposes dumps(); pyplayready's PSSH has no base64 method
-        # here, so PlayReady omits the field (unchanged from prior behaviour).
+        # pywidevine exposes dumps(); pyplayready's PSSH does not, so PlayReady falls back
+        # to the base64 it was built from. Without it the client drops every PlayReady
+        # entry and licenses the title with the wrong CDM.
         pssh_obj = getattr(drm, "_pssh", None)
+        pssh_b64 = (getattr(drm, "data", None) or {}).get("pssh_b64")
         if pssh_obj is not None and hasattr(pssh_obj, "dumps"):
             try:
                 drm_info["pssh"] = pssh_obj.dumps()
@@ -523,6 +548,8 @@ def serialize_drm(drm_list) -> Optional[List[Dict[str, Any]]]:
                     type(pssh_obj).__name__,
                     exc_info=True,
                 )
+        if not drm_info.get("pssh") and pssh_b64:
+            drm_info["pssh"] = pssh_b64
 
         if hasattr(drm, "kids") and drm.kids:
             drm_info["kids"] = [str(kid) for kid in drm.kids]
@@ -560,6 +587,46 @@ def drm_preference_name(track: Any) -> Optional[str]:
     return {"wv": "widevine", "pr": "playready"}.get(preference, preference)
 
 
+MANIFEST_DATA_KEYS = ("hls", "dash", "ism")
+
+
+def serialize_track_data(track: Any) -> Optional[Dict[str, Any]]:
+    """The JSON-safe part of a service-set ``track.data``.
+
+    This drops the manifest parsers' own keys: the client rebuilds those from the
+    ``manifests`` payload, and they hold live lxml and m3u8 objects that JSON cannot carry.
+    """
+    data = getattr(track, "data", None)
+    if not isinstance(data, dict):
+        return None
+    safe: Dict[str, Any] = {}
+    for key, value in data.items():
+        if key in MANIFEST_DATA_KEYS:
+            continue
+        try:
+            json.dumps(value)
+        except (TypeError, ValueError):
+            continue
+        safe[key] = value
+    return safe or None
+
+
+def serialize_track_common(track: Any) -> Dict[str, Any]:
+    """The Track fields every track type shares, a superset of ``Track.to_dict()``."""
+    return {
+        "id": str(track.id),
+        "language": str(track.language) if track.language else None,
+        "is_original_lang": bool(getattr(track, "is_original_lang", False)),
+        "name": getattr(track, "name", None),
+        "needs_repack": bool(getattr(track, "needs_repack", False)),
+        "edition": list(getattr(track, "edition", None) or []),
+        "descriptor": descriptor_name(track),
+        "drm": serialize_drm(track.drm) if getattr(track, "drm", None) else None,
+        "drm_preference": getattr(track, "drm_preference", None),
+        "data": serialize_track_data(track),
+    }
+
+
 def serialize_video_track(track: Video, include_url: bool = False) -> Dict[str, Any]:
     """Convert video track to JSON-serializable dict."""
     codec_name = enum_name(track.codec)
@@ -570,17 +637,18 @@ def serialize_video_track(track: Video, include_url: bool = False) -> Dict[str, 
         "codec": codec_name,
         "codec_display": VIDEO_CODEC_MAP.get(codec_name, codec_name),
         "bitrate": int(track.bitrate / 1000) if track.bitrate else None,
+        "bitrate_bps": track.bitrate or None,
         "width": track.width,
         "height": track.height,
         "resolution": f"{track.width}x{track.height}" if track.width and track.height else None,
         "fps": track.fps if track.fps else None,
         "range": range_name,
         "range_display": DYNAMIC_RANGE_MAP.get(range_name, range_name),
-        "language": str(track.language) if track.language else None,
-        "drm": serialize_drm(track.drm) if hasattr(track, "drm") and track.drm else None,
-        "drm_preference": getattr(track, "drm_preference", None),
-        "descriptor": descriptor_name(track),
+        "scan_type": enum_name(track.scan_type) if track.scan_type else None,
+        "closed_captions": list(getattr(track, "closed_captions", None) or []),
+        "dv_compatible_bitstream": bool(getattr(track, "dv_compatible_bitstream", False)),
     }
+    result.update(serialize_track_common(track))
     if include_url and hasattr(track, "url") and track.url:
         result["url"] = str(track.url)
     return result
@@ -618,15 +686,14 @@ def serialize_audio_track(track: Audio, include_url: bool = False, is_original: 
         "codec": codec_name,
         "codec_display": AUDIO_CODEC_MAP.get(codec_name, codec_name),
         "bitrate": int(track.bitrate / 1000) if track.bitrate else None,
+        "bitrate_bps": track.bitrate or None,
         "channels": track.channels if track.channels else None,
-        "language": str(track.language) if track.language else None,
         "is_original": is_original,
         "atmos": track.atmos if hasattr(track, "atmos") else False,
+        "joc": getattr(track, "joc", 0),
         "descriptive": track.descriptive if hasattr(track, "descriptive") else False,
-        "drm": serialize_drm(track.drm) if hasattr(track, "drm") and track.drm else None,
-        "drm_preference": getattr(track, "drm_preference", None),
-        "descriptor": descriptor_name(track),
     }
+    result.update(serialize_track_common(track))
     if include_url and hasattr(track, "url") and track.url:
         result["url"] = str(track.url)
     return result
@@ -637,14 +704,53 @@ def serialize_subtitle_track(track: Subtitle, include_url: bool = False) -> Dict
     result = {
         "id": str(track.id),
         "codec": enum_name(track.codec),
-        "language": str(track.language) if track.language else None,
         "forced": track.forced if hasattr(track, "forced") else False,
         "sdh": track.sdh if hasattr(track, "sdh") else False,
         "cc": track.cc if hasattr(track, "cc") else False,
-        "descriptor": descriptor_name(track),
     }
+    result.update(serialize_track_common(track))
     if include_url and hasattr(track, "url") and track.url:
         result["url"] = str(track.url)
+    return result
+
+
+ATTACHMENT_INLINE_LIMIT = 20 * 1024 * 1024
+
+
+def serialize_attachment(attachment: Any) -> Optional[Dict[str, Any]]:
+    """One attachment as JSON, with a path-only attachment carried as base64 file bytes.
+
+    A service can attach a file it already wrote to disk (a font, a poster). The client
+    has no access to the server's filesystem, so those bytes travel inline.
+    """
+    result: Dict[str, Any] = {
+        "url": attachment.url,
+        "name": attachment.name,
+        "mime_type": attachment.mime_type,
+        "description": attachment.description,
+    }
+    if attachment.url:
+        return result
+
+    path = getattr(attachment, "path", None)
+    if not path:
+        return None
+    path = Path(path)
+    try:
+        size = path.stat().st_size
+        if size > ATTACHMENT_INLINE_LIMIT:
+            log.warning(
+                "Skipping attachment %s: %d bytes is over the %d byte inline limit",
+                sanitize_log(path.name),
+                size,
+                ATTACHMENT_INLINE_LIMIT,
+            )
+            return None
+        result["content"] = base64.b64encode(path.read_bytes()).decode("ascii")
+    except OSError as e:
+        log.warning("Skipping attachment %s: %s", sanitize_log(path.name), e)
+        return None
+    result["file_name"] = path.name
     return result
 
 
@@ -2136,7 +2242,7 @@ async def session_tracks_handler(
 
         return web.json_response(
             {
-                "title": serialize_title(title),
+                "title": stamp_service_flags(serialize_title(title), service_instance),
                 "video": [serialize_video_track(t, include_url=True) for t in video_tracks],
                 "audio": [
                     serialize_audio_track(t, include_url=True, is_original=t.id in original_ids) for t in audio_tracks
@@ -2146,11 +2252,7 @@ async def session_tracks_handler(
                     {"timestamp": ch.timestamp, "name": ch.name}
                     for ch in session.chapters_by_title.get(str(title_id), [])
                 ],
-                "attachments": [
-                    {"url": a.url, "name": a.name, "mime_type": a.mime_type, "description": a.description}
-                    for a in tracks.attachments
-                    if hasattr(a, "url") and a.url
-                ],
+                "attachments": [a for a in map(serialize_attachment, tracks.attachments) if a],
                 "manifests": manifests,
                 "session_headers": session_headers,
                 "session_cookies": session_cookies,

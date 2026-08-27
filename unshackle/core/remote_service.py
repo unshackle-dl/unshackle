@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import base64
 import logging
+import re
 import time
+from datetime import date as date_
 from enum import Enum
 from http.cookiejar import CookieJar
+from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 import click
@@ -28,6 +31,7 @@ from unshackle.core.credential import Credential
 from unshackle.core.titles import Title_T, Titles_T, remap_titles
 from unshackle.core.titles.episode import Episode, Series
 from unshackle.core.titles.movie import Movie, Movies
+from unshackle.core.titles.music import Album, Song
 from unshackle.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.track import Track
@@ -121,47 +125,66 @@ def enum_get(enum_cls: type[Enum], name: Optional[str], default: Any = None) -> 
         return default
 
 
+def base_track_kwargs(data: Dict[str, Any]) -> Dict[str, Any]:
+    """The shared Track constructor kwargs a serialized track carries.
+
+    An older server omits the newer keys, so each one falls back to the value a
+    locally-built track would have had.
+    """
+    return {
+        "url": data.get("url") or "https://placeholder",
+        "language": Language.get(data.get("language") or "und"),
+        "is_original_lang": bool(data.get("is_original_lang", data.get("is_original", False))),
+        "descriptor": enum_get(Track.Descriptor, data.get("descriptor"), Track.Descriptor.URL),
+        "needs_repack": bool(data.get("needs_repack", False)),
+        "name": data.get("name"),
+        "edition": data.get("edition") or None,
+        "id_": data.get("id"),
+    }
+
+
+def deserialize_bitrate(data: Dict[str, Any]) -> int:
+    """Exact bits/s when the server sent it, otherwise the kb/s figure scaled back up."""
+    exact = data.get("bitrate_bps")
+    if exact:
+        return int(exact)
+    return data["bitrate"] * 1000 if data.get("bitrate") else 0
+
+
 def deserialize_video(data: Dict[str, Any]) -> Video:
-    v = Video(
-        url=data.get("url") or "https://placeholder",
-        language=Language.get(data.get("language") or "und"),
-        descriptor=enum_get(Track.Descriptor, data.get("descriptor"), Track.Descriptor.URL),
+    return Video(
+        **base_track_kwargs(data),
         codec=enum_get(Video.Codec, data.get("codec")),
         range_=enum_get(Video.Range, data.get("range"), Video.Range.SDR),
-        bitrate=data["bitrate"] * 1000 if data.get("bitrate") else 0,
+        bitrate=deserialize_bitrate(data),
         width=data.get("width") or 0,
         height=data.get("height") or 0,
         fps=data.get("fps"),
-        id_=data.get("id"),
+        scan_type=enum_get(Video.ScanType, data.get("scan_type")),
+        closed_captions=data.get("closed_captions") or None,
+        dv_compatible_bitstream=bool(data.get("dv_compatible_bitstream", False)),
     )
-    return v
 
 
 def deserialize_audio(data: Dict[str, Any]) -> Audio:
-    a = Audio(
-        url=data.get("url") or "https://placeholder",
-        language=Language.get(data.get("language") or "und"),
-        descriptor=enum_get(Track.Descriptor, data.get("descriptor"), Track.Descriptor.URL),
+    joc = data.get("joc")
+    return Audio(
+        **base_track_kwargs(data),
         codec=enum_get(Audio.Codec, data.get("codec")),
-        bitrate=data["bitrate"] * 1000 if data.get("bitrate") else 0,
+        bitrate=deserialize_bitrate(data),
         channels=data.get("channels"),
-        joc=1 if data.get("atmos") else 0,
+        joc=joc if joc is not None else (1 if data.get("atmos") else 0),
         descriptive=data.get("descriptive", False),
-        id_=data.get("id"),
     )
-    return a
 
 
 def deserialize_subtitle(data: Dict[str, Any]) -> Subtitle:
     return Subtitle(
-        url=data.get("url") or "https://placeholder",
-        language=Language.get(data.get("language") or "und"),
-        descriptor=enum_get(Track.Descriptor, data.get("descriptor"), Track.Descriptor.URL),
+        **base_track_kwargs(data),
         codec=enum_get(Subtitle.Codec, data.get("codec")),
         cc=data.get("cc", False),
         sdh=data.get("sdh", False),
         forced=data.get("forced", False),
-        id_=data.get("id"),
     )
 
 
@@ -199,6 +222,30 @@ def reconstruct_drm(drm_list: Optional[list]) -> list:
     return result
 
 
+def build_attachment(data: Dict[str, Any]) -> Optional[Attachment]:
+    """Rebuild one attachment. A path-only attachment arrives as base64, which this writes to temp."""
+    kwargs = {
+        "name": data.get("name"),
+        "mime_type": data.get("mime_type"),
+        "description": data.get("description"),
+    }
+    if data.get("url"):
+        return Attachment(url=data["url"], **kwargs)
+
+    content = data.get("content")
+    if not content:
+        return None
+    try:
+        file_name = Path(str(data.get("file_name") or data.get("name") or "attachment")).name
+        target = config.directories.temp / "remote_attachments" / file_name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(base64.b64decode(content))
+        return Attachment(path=target, **kwargs)
+    except (OSError, ValueError) as e:
+        log.warning(f"Skipping attachment {data.get('name')!r} sent by the server: {e}")
+        return None
+
+
 def build_tracks(data: Dict[str, Any]) -> Tracks:
     tracks = Tracks()
     tracks.videos = [deserialize_video(v) for v in data.get("video", [])]
@@ -208,6 +255,7 @@ def build_tracks(data: Dict[str, Any]) -> Tracks:
     for track_data, track_obj in [
         *zip(data.get("video", []), tracks.videos),
         *zip(data.get("audio", []), tracks.audio),
+        *zip(data.get("subtitles", []), tracks.subtitles),
     ]:
         drm_objs = reconstruct_drm(track_data.get("drm"))
         if drm_objs:
@@ -218,11 +266,23 @@ def build_tracks(data: Dict[str, Any]) -> Tracks:
                 track_obj.drm_preference = preference
             except ValueError:
                 log.warning(f"Ignoring unknown drm_preference {preference!r} from the server for track {track_obj.id}")
-    tracks.attachments = [
-        Attachment(url=a["url"], name=a.get("name"), mime_type=a.get("mime_type"), description=a.get("description"))
-        for a in data.get("attachments", [])
-    ]
+    tracks.attachments = [a for a in map(build_attachment, data.get("attachments", [])) if a]
     return tracks
+
+
+def apply_service_track_data(tracks: Tracks, data: Dict[str, Any]) -> None:
+    """Overlay the service-set ``track.data`` the server sent.
+
+    Runs after the manifest re-parse so a service value wins over the parser's own for
+    the same key, as it does on the server.
+    """
+    by_id = {str(t.id): t for t in list(tracks.videos) + list(tracks.audio) + list(tracks.subtitles)}
+    for key in ("video", "audio", "subtitles"):
+        for entry in data.get(key, []):
+            track = by_id.get(str(entry.get("id")))
+            extra = entry.get("data")
+            if track is not None and isinstance(extra, dict):
+                track.data.update(extra)
 
 
 def resolve_manifest_data(tracks: Tracks, manifests: list) -> None:
@@ -288,6 +348,13 @@ def resolve_manifest_data(tracks: Tracks, manifests: list) -> None:
             log_m.warning("Failed to re-parse %s manifest from %s: %s", m_type, m_url, e)
 
 
+def same_bitrate(local: Optional[int], remote: Optional[int]) -> bool:
+    """Equal to the nearest kb/s. A server that predates ``bitrate_bps`` rounds to kb/s in transit."""
+    if not local or not remote:
+        return not local and not remote
+    return round(local / 1000) == round(remote / 1000)
+
+
 def match_track(remote_track: Track, local_tracks: list) -> Optional[Track]:
     """Find the locally-parsed track that matches a remote track by ID or by attributes."""
     remote_id = str(remote_track.id)
@@ -304,7 +371,7 @@ def match_track(remote_track: Track, local_tracks: list) -> Optional[Track]:
             if lt.width == remote_track.width and lt.height == remote_track.height:
                 return lt
         elif hasattr(lt, "channels") and hasattr(remote_track, "channels"):
-            if lt.bitrate == remote_track.bitrate:
+            if same_bitrate(lt.bitrate, remote_track.bitrate):
                 return lt
         elif hasattr(lt, "forced"):
             if lt.forced == remote_track.forced and lt.sdh == remote_track.sdh:
@@ -312,37 +379,124 @@ def match_track(remote_track: Track, local_tracks: list) -> Optional[Track]:
     return None
 
 
-def build_title(info: Dict[str, Any], service_tag: str, fallback_id: str) -> Union[Episode, Movie]:
+EPISODE_PLACEHOLDER_NAME = re.compile(r"Episode ?#?\d+", re.IGNORECASE)
+
+
+def episode_name(name: Optional[str], series_title: Optional[str]) -> Optional[str]:
+    """Drop a placeholder episode name the way ``Episode.__init__`` does.
+
+    The server sends "Episode 04" for an unnamed episode, so the same filter has to run
+    again here, or the placeholder reaches the output file name.
+    """
+    if not name:
+        return None
+    name = name.strip()
+    if EPISODE_PLACEHOLDER_NAME.match(name):
+        return None
+    if series_title and name.lower() == series_title.lower():
+        return None
+    return name
+
+
+def parse_air_date(value: Any) -> Any:
+    """ISO date string back to a date, as ``Episode.__init__`` does; anything else passes through."""
+    if isinstance(value, str):
+        try:
+            return date_.fromisoformat(value[:10])
+        except ValueError:
+            return value
+    return value
+
+
+def apply_title_fields(title: Title_T, info: Dict[str, Any]) -> None:
+    """Copy every serialized title field onto a local title.
+
+    A service can change its title inside ``get_tracks`` (a corrected original language,
+    a real episode name, an air date), so the client re-applies the server's view of the
+    title after every call that returns one.
+    """
+    if info.get("language"):
+        title.language = Language.get(info["language"])
+    if info.get("description") is not None and isinstance(title, (Episode, Movie)):
+        title.description = info["description"]
+    if info.get("year") is not None:
+        title.year = info["year"]
+
+    if isinstance(title, Episode):
+        if info.get("series_title"):
+            title.title = info["series_title"]
+        if "name" in info:
+            title.name = episode_name(info["name"], title.title)
+        for key in ("season", "number", "part", "absolute"):
+            if info.get(key) is not None:
+                setattr(title, key, info[key])
+        if info.get("air_date") is not None:
+            title.air_date = parse_air_date(info["air_date"])
+    elif info.get("name"):
+        title.name = info["name"]
+
+    for key in ("anime", "daily"):
+        if info.get(key) is not None:
+            setattr(title, key, info[key])
+
+    extra = {k: info[k] for k in ("date", "cover_url") if info.get(k) is not None}
+    if extra:
+        if isinstance(title.data, dict):
+            title.data.update(extra)
+        else:
+            title.data = extra
+
+
+def build_title(info: Dict[str, Any], service_tag: str, fallback_id: str) -> Title_T:
     svc_class = type(service_tag, (), {})
     lang = Language.get(info["language"]) if info.get("language") else None
-    title: Union[Episode, Movie]
-    if info.get("type") == "episode":
+    title_type = info.get("type")
+    title: Title_T
+    if title_type == "episode":
         title = Episode(
             id_=info.get("id", fallback_id),
             service=svc_class,
             title=info.get("series_title", "Unknown"),
             season=info.get("season", 0),
             number=info.get("number", 0),
-            name=info.get("name"),
-            year=info.get("year"),
             language=lang,
-            air_date=info.get("air_date"),
-            part=info.get("part"),
-            absolute=info.get("absolute"),
         )
-        if "daily" in info:
-            title.daily = info["daily"]
-    else:
+    elif title_type == "movie":
         title = Movie(
             id_=info.get("id", fallback_id),
             service=svc_class,
-            name=info.get("name", "Unknown"),
-            year=info.get("year"),
+            name=info.get("name") or "Unknown",
             language=lang,
         )
-    # the synthetic service class carries no ANIME/DAILY, so the flags only survive per title
-    if "anime" in info:
-        title.anime = info["anime"]
+    elif title_type == "song":
+        title = Song(
+            id_=info.get("id", fallback_id),
+            service=svc_class,
+            name=info.get("name") or "Unknown",
+            artist=info.get("artist") or "Unknown",
+            album=info.get("album") or "Unknown",
+            track=info.get("track") or 1,
+            disc=info.get("disc") or 1,
+            language=lang,
+            album_artist=info.get("album_artist"),
+            release_type=info.get("release_type") or "album",
+            total_tracks=info.get("total_tracks"),
+            total_discs=info.get("total_discs"),
+            genre=info.get("genre"),
+            explicit=info.get("explicit"),
+            isrc=info.get("isrc"),
+            upc=info.get("upc"),
+            copyright=info.get("copyright"),
+            label=info.get("label"),
+            lyrics=info.get("lyrics"),
+            artwork_url=info.get("artwork_url"),
+        )
+    else:
+        raise click.ClickException(
+            f"The remote server sent a title of type {title_type!r}, which this client does not support. "
+            "Update unshackle on both ends so they agree on the title types."
+        )
+    apply_title_fields(title, info)
     return title
 
 
@@ -645,9 +799,13 @@ class RemoteService:
             return self._titles
         result = self.client.get(f"/api/session/{self._session_id}/titles")
         titles_list = [build_title(t, self.service_tag, self.title_id) for t in result.get("titles", [])]
-        self._titles = (
-            Series(titles_list) if titles_list and isinstance(titles_list[0], Episode) else Movies(titles_list)
-        )
+        first = titles_list[0] if titles_list else None
+        if isinstance(first, Episode):
+            self._titles = Series(titles_list)
+        elif isinstance(first, Song):
+            self._titles = Album(titles_list)
+        else:
+            self._titles = Movies(titles_list)
         return self._titles
 
     def get_titles_cached(self, title_id: str = None) -> Titles_T:
@@ -666,6 +824,10 @@ class RemoteService:
         result = self.client.post(f"/api/session/{self._session_id}/tracks", {"title_id": title_id})
         tracks = build_tracks(result)
 
+        remote_title = result.get("title") or {}
+        if remote_title:
+            apply_title_fields(title, remote_title)
+
         for k, v in result.get("session_headers", {}).items():
             if k.lower() not in ("host", "content-length", "content-type"):
                 self._session.headers[k] = v
@@ -673,6 +835,7 @@ class RemoteService:
             self._session.cookies.set(k, v)
 
         resolve_manifest_data(tracks, result.get("manifests", []))
+        apply_service_track_data(tracks, result)
 
         if self._server_cdm and not result.get("server_cdm", True):
             self._server_cdm = False

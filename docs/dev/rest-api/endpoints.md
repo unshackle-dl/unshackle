@@ -284,21 +284,28 @@ When you give both `season` and `episode`, the server combines them into a `"{se
       "video": [
         {
           "id": "v-1", "codec": "H265", "codec_display": "HEVC",
-          "bitrate": 8000, "width": 3840, "height": 2160,
+          "bitrate": 8000, "bitrate_bps": 8000000, "width": 3840, "height": 2160,
           "resolution": "2160p", "fps": "24", "range": "HDR10",
-          "range_display": "HDR10", "language": "en", "drm": [], "descriptor": "DASH"
+          "range_display": "HDR10", "scan_type": null, "closed_captions": [],
+          "dv_compatible_bitstream": false, "language": "en", "is_original_lang": true,
+          "name": null, "needs_repack": false, "edition": [], "data": null,
+          "drm": [], "descriptor": "DASH"
         }
       ],
       "audio": [
         {
           "id": "a-1", "codec": "EC3", "codec_display": "DD+",
-          "bitrate": 640, "channels": "5.1", "language": "en", "is_original": true,
-          "atmos": false, "descriptive": false, "drm": [], "descriptor": "DASH"
+          "bitrate": 640, "bitrate_bps": 640000, "channels": "5.1", "language": "en",
+          "is_original": true, "is_original_lang": true, "atmos": false, "joc": 0,
+          "descriptive": false, "name": null, "needs_repack": false, "edition": [],
+          "data": null, "drm": [], "descriptor": "DASH"
         }
       ],
       "subtitles": [
         { "id": "s-1", "codec": "vtt", "language": "en",
-          "forced": false, "sdh": false, "cc": false, "descriptor": "DASH" }
+          "forced": false, "sdh": false, "cc": false, "is_original_lang": false,
+          "name": null, "needs_repack": false, "edition": [], "data": null,
+          "drm": [], "descriptor": "DASH" }
       ]
     }
     ```
@@ -324,6 +331,8 @@ When you give both `season` and `episode`, the server combines them into a `"{se
 The server sorts tracks by bitrate, descending. Episodes the server cannot get go into `unavailable_episodes`, rather than failing the whole request. Track objects here do **not** include a download `url`. Only the remote session endpoints give segment URLs.
 
 The `drm` array on a track is a list of `{type, pssh?, kids?, content_keys?, license_url?}` objects.
+
+Every track carries the same fields as a local track: `is_original_lang`, `name`, `needs_repack`, `edition`, and `data`. `bitrate` is in kb/s, and `bitrate_bps` gives the exact bits/s. `data` holds the part of the service-set `track.data` that fits in JSON, without the `hls`, `dash`, and `ism` parser keys. Audio keeps `is_original` and `atmos` for clients that read them, and adds the exact `joc` object count.
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
