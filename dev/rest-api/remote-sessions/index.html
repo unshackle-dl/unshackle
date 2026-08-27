@@ -2454,7 +2454,14 @@ server does not have to prompt:</p>
 <li>Local <strong>credentials</strong> for the service/profile (<code>{username, password, extra?}</code>)</li>
 <li>Local <strong>cookies</strong>, compressed and base64-encoded</li>
 <li>A resolved <strong>proxy</strong>, or, if you did not set one, your detected
-  <strong>client region</strong> so the server can auto-proxy to match it</li>
+  <strong>client region</strong>. A client that reports no region is not blocked. The
+  proxy must be a full proxy URI unless the operator gives your API key
+  <code>server_proxy</code>. Without <code>server_proxy</code> the server does not resolve country
+  codes with its own proxy providers, and it rejects the remote session when
+  it sits in a different region from the reported one, asking the client to
+  pass <code>--proxy</code> with its own proxy, or <code>--no-proxy</code> to accept the server's
+  own connection. With <code>server_proxy</code> the server picks a proxy that matches
+  the client region itself</li>
 <li>Track-selection hints (<code>range_</code>, <code>vcodec</code>, <code>quality</code>, <code>best_available</code>) so
   the server fetches the right manifests</li>
 <li>Your local per-service <strong>cache files</strong> (e.g. refreshed tokens)</li>

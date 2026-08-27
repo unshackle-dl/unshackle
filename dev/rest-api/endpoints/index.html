@@ -3078,7 +3078,7 @@
 <td>string</td>
 <td>no</td>
 <td><code>null</code></td>
-<td>Proxy URI or country code.</td>
+<td>Full proxy URI, or a country code when the API key has <code>server_proxy</code>.</td>
 </tr>
 <tr>
 <td><code>no_proxy</code></td>
@@ -3186,7 +3186,7 @@
 <td><code>proxy</code></td>
 <td>string</td>
 <td>no</td>
-<td>Proxy URI or country code.</td>
+<td>Full proxy URI, or a country code when the API key has <code>server_proxy</code>.</td>
 </tr>
 <tr>
 <td><code>no_proxy</code></td>
@@ -3699,7 +3699,7 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <td><code>proxy</code> / <code>no_proxy</code> / <code>no_proxy_download</code></td>
 <td>string / bool / bool</td>
 <td><code>null</code> / <code>false</code> / <code>false</code></td>
-<td>Proxy controls.</td>
+<td>Proxy controls. <code>proxy</code> must be a full proxy URI unless the API key has <code>server_proxy</code>.</td>
 </tr>
 <tr>
 <td><code>no_folder</code> / <code>no_source</code> / <code>no_mux</code></td>
@@ -4442,6 +4442,7 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 </span></code></pre></div>
 <h3 id="post-apisessioncreate"><code>POST /api/session/create</code><a class="headerlink" href="#post-apisessioncreate" title="Permanent link">&para;</a></h3>
 <p>Make a remote session for a service and title. Authentication runs asynchronously in the background. This call returns immediately with <code>status: "authenticating"</code>, and you then poll the prompt endpoint. The body accepts <code>service</code> and <code>title_id</code> (both required). It also accepts a broad set of optional keys, because the body allows <code>additionalProperties</code>. These are <code>credentials</code> (<code>{username, password, extra?}</code>), <code>cookies</code> (base64 of zlib-compressed Netscape cookie file), <code>proxy</code>, <code>no_proxy</code>, <code>profile</code>, <code>cache</code> (map of forwarded cache files), <code>client_region</code>, <code>cdm_type</code>, <code>range_</code>, <code>vcodec</code>, <code>quality</code>, <code>best_available</code>, and any service CLI options.</p>
+<p>The <code>proxy</code> value must be a full proxy URI, unless the operator gives your API key <code>server_proxy</code> in the <code>serve.users</code> config. Without it, the server does not resolve country codes with its own proxy providers. It rejects the request with <code>INVALID_PROXY</code> when no <code>proxy</code> is set and the reported <code>client_region</code> differs from the server's region. A request that reports no <code>client_region</code> is not blocked. Pass <code>proxy</code> with your own proxy, or <code>no_proxy</code> to accept the server's own connection. With <code>server_proxy</code>, the server resolves a country code and picks a proxy for your <code>client_region</code> itself.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="18:1"><input checked="checked" id="__tabbed_18_1" name="__tabbed_18" type="radio" /><div class="tabbed-labels"><label for="__tabbed_18_1">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">

@@ -2272,6 +2272,16 @@ client configured with <code>server_cdm: true</code> to license with its own loc
 client that asks anyway gets a <code>FORBIDDEN</code> error. Because a download job always licenses with the server's CDM,
 an API key without <code>server_cdm</code> for that service also cannot submit or retry <code>/api/download</code>
 jobs. Keys that have no <code>users</code> entry, such as <code>api_secret</code>, keep server CDM access.</p>
+<p><code>server_proxy</code> decides whether that API key may use the proxy providers the server has
+configured. There is no implicit access: only the boolean <code>true</code> on the API key's <code>users</code> entry
+grants it, and an API key without a <code>users</code> entry has no access either. Without the opt-in the
+server never spends its own proxy subscriptions on a remote client: not to resolve a country code
+in <code>proxy</code>, not to match the client's region, and not for a service geofence. This applies to
+remote sessions, search, title lists, and <code>/api/download</code> jobs alike. Such a client must send a
+full proxy URI, or <code>no_proxy</code> to accept the server's own connection. Set <code>server_proxy: true</code>
+to let that API key send a country code or a <code>provider:country</code> value, and to let the server
+pick a proxy for the client's region and for a service geofence. The client reports its own
+region; a client that reports none is not blocked.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">serve</span><span class="p">:</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">api_secret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">change-me</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">remote_only</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
@@ -2288,6 +2298,7 @@ jobs. Keys that have no <code>users</code> entry, such as <code>api_secret</code
 </span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">    </span><span class="nt">c9d0e1f2</span><span class="p">:</span>
 </span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">      </span><span class="nt">services</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">EXAMPLE2</span><span class="p p-Indicator">]</span>
 </span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">      </span><span class="nt">server_cdm</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">]</span><span class="w">      </span><span class="c1"># the server licenses only EXAMPLE1; EXAMPLE2 needs a local CDM</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">      </span><span class="nt">server_proxy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">          </span><span class="c1"># this key may also use the server's proxy providers</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title"><code>dl</code> keys inside <code>serve</code></p>
