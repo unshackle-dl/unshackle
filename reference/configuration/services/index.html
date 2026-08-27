@@ -2143,6 +2143,9 @@ named by you (pick it with <code>--server</code>, or do not write that flag when
 the server's <code>url</code> (required), an optional <code>api_key</code>, an optional <code>auth_headers</code> list, an
 optional <code>server_cdm</code> boolean, and an optional <code>services</code> sub-dict of per-service local
 overrides such as <code>title_map</code>.</p>
+<p>Leave <code>server_cdm</code> unset and the client follows the server: it uses the server CDM for each
+service the API key has it on, and the local CDM for the others. <code>true</code> asks for the server CDM
+and falls back to the local CDM when the server refuses; <code>false</code> always uses the local CDM.</p>
 <p><code>auth_headers</code> lists extra header names to send the API key in, tried before the defaults
 <code>X-Secret-Key</code> and <code>X-Api-Key</code>, which are always appended as fallbacks. unshackle sends the
 first name. If the server answers <code>401</code>, it retries the same request with the next name, and
@@ -2262,12 +2265,13 @@ is the <a href="../../../dev/rest-api/">REST API</a> section. These are the conf
 <code>username</code> used as the log label for that API key (defaults to a truncated form of the API key).
 A user with no <code>playready_devices</code> config key gets no PlayReady access at all, not the global
 list.</p>
-<p><code>server_cdm</code> decides whether the server runs the CDM licensing for that API key. It is <code>false</code>
-unless the entry sets it, so a remote client configured with <code>server_cdm: true</code> is told to
-license with its own local CDM instead, and a client that asks anyway gets a <code>FORBIDDEN</code>
-error. Because a download job always licenses with the server's CDM, an API key without
-<code>server_cdm</code> also cannot submit or retry <code>/api/download</code> jobs. Keys that have no <code>users</code>
-entry, such as <code>api_secret</code>, keep server CDM access.</p>
+<p><code>server_cdm</code> decides whether the server runs the CDM licensing for that API key. Set it to
+<code>true</code> to enable every service, or to a list of service tags to enable only those. It is <code>false</code>
+unless the entry sets it. For a service the API key does not cover, the server tells a remote
+client configured with <code>server_cdm: true</code> to license with its own local CDM instead, and a
+client that asks anyway gets a <code>FORBIDDEN</code> error. Because a download job always licenses with the server's CDM,
+an API key without <code>server_cdm</code> for that service also cannot submit or retry <code>/api/download</code>
+jobs. Keys that have no <code>users</code> entry, such as <code>api_secret</code>, keep server CDM access.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">serve</span><span class="p">:</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">api_secret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">change-me</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">remote_only</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
@@ -2281,6 +2285,9 @@ entry, such as <code>api_secret</code>, keep server CDM access.</p>
 </span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">      </span><span class="nt">services</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">]</span><span class="w">        </span><span class="c1"># may only use EXAMPLE1</span>
 </span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">    </span><span class="nt">e5f6a7b8</span><span class="p">:</span>
 </span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">      </span><span class="nt">server_cdm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">            </span><span class="c1"># this key may have the server do the licensing</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">    </span><span class="nt">c9d0e1f2</span><span class="p">:</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">      </span><span class="nt">services</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">EXAMPLE2</span><span class="p p-Indicator">]</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">      </span><span class="nt">server_cdm</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">]</span><span class="w">      </span><span class="c1"># the server licenses only EXAMPLE1; EXAMPLE2 needs a local CDM</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title"><code>dl</code> keys inside <code>serve</code></p>
