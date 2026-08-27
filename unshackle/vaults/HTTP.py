@@ -189,7 +189,7 @@ class HTTP(Vault):
 
             data = response.json()
 
-            if data.get("status_code") != 200 or not data.get("keys"):
+            if not data.get("keys"):
                 return None
 
             return data["keys"][0]["key"]
