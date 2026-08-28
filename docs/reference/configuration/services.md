@@ -101,7 +101,9 @@ In `--remote` mode unshackle turns the server's service list into synthetic CLI
 commands that operate against it, falling back to the tags in that `services` sub-dict when
 unshackle cannot fetch the list. Each synthetic command carries the server-side service's options and
 documentation, so `unshackle dl --remote <TAG> -h` shows the same help text as it does on the
-server. See [remote sessions](../../dev/rest-api/remote-sessions.md) for the
+server. Service names resolve against the server's tags and aliases, not your local services.
+If the server does not offer a name to your API key, unshackle rejects the name and lists the
+tags it does offer. See [remote sessions](../../dev/rest-api/remote-sessions.md) for the
 full setup.
 
 ## `serve`

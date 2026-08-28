@@ -300,7 +300,7 @@ class Services(click.Group):
 
         remote = ctx.params.get("remote") or (ctx.parent and ctx.parent.params.get("remote"))
         if remote:
-            return Services.make_remote_command(tag, ctx)
+            return Services.make_remote_command(name, ctx)
 
         try:
             service = Services.load(tag)
@@ -355,9 +355,33 @@ class Services(click.Group):
             return None
 
     @staticmethod
-    def make_remote_command(tag: str, ctx: click.Context) -> click.Command:
-        """Make a Click command for a remote service with server-provided options."""
-        svc_info = Services.fetch_remote_service_info(tag, ctx)
+    def make_remote_command(name: str, ctx: click.Context) -> click.Command:
+        """Make a Click command for a remote service, with the options the remote server gives."""
+        # A failed fetch (None) means the remote server was unreachable, not that the name is
+        # invalid - fall through to a bare stub so `-h` keeps working offline.
+        services = Services.fetch_remote_services(ctx)
+        if services is None:
+            svc_info = None
+            tag = Services.get_tag(name)
+        else:
+            # Resolve against the remote server's tags and aliases, not the local tables: the
+            # two drift apart as soon as either side's services change. Tags win over aliases,
+            # as in local get_tag.
+            lowered = name.lower()
+            svc_info = next((svc for svc in services if str(svc.get("tag", "")).lower() == lowered), None)
+            if svc_info is None:
+                svc_info = next(
+                    (svc for svc in services if lowered in (str(a).lower() for a in svc.get("aliases") or [])), None
+                )
+            if svc_info is None:
+                if services:
+                    available = ", ".join(sorted(svc["tag"] for svc in services))
+                    raise click.ClickException(
+                        f"The remote server does not offer a service named '{name}'. "
+                        f"It offers these services: {available}"
+                    )
+                raise click.ClickException("The remote server offers no services to your API key.")
+            tag = svc_info["tag"]
         short_help = svc_info.get("url") if svc_info else None
         help_text = svc_info.get("help") if svc_info else None
         if help_text:
@@ -409,19 +433,6 @@ class Services(click.Group):
             return ImportService(ctx, tag, title, import_file)
 
         return import_cli
-
-    @staticmethod
-    def fetch_remote_service_info(tag: str, ctx: click.Context) -> dict | None:
-        """Fetch service info for a specific service from the remote server."""
-        try:
-            services = Services.fetch_remote_services(ctx)
-            if services:
-                for svc in services:
-                    if svc.get("tag") == tag:
-                        return svc
-        except Exception as e:
-            log.debug(f"Remote service info lookup failed for {tag}: {e!r}")
-        return None
 
     @staticmethod
     def get_tags() -> list[str]:
