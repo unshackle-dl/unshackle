@@ -1964,6 +1964,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#post-apisessionsession_idsegment_filter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/session/{session_id}/segment_filter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#post-apisessionsession_idlicense" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2750,6 +2761,17 @@
     <span class="md-ellipsis">
       
         POST /api/session/{session_id}/segments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apisessionsession_idsegment_filter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/session/{session_id}/segment_filter
       
     </span>
   </a>
@@ -4437,8 +4459,9 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 </span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>GET  /api/session/{id}/titles   → list titles
 </span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>POST /api/session/{id}/tracks   → tracks + chapters (with URLs) for one title
 </span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>POST /api/session/{id}/segments → resolve segment URLs / DRM / headers per track
-</span><span id="__span-27-6"><a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a>POST /api/session/{id}/license  → proxy or server-CDM DRM licensing
-</span><span id="__span-27-7"><a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a>DELETE /api/session/{id}        → tear down, harvest updated cache
+</span><span id="__span-27-6"><a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a>POST /api/session/{id}/segment_filter → HLS segments the service drops (ads, bumpers)
+</span><span id="__span-27-7"><a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a>POST /api/session/{id}/license  → proxy or server-CDM DRM licensing
+</span><span id="__span-27-8"><a id="__codelineno-27-8" name="__codelineno-27-8" href="#__codelineno-27-8"></a>DELETE /api/session/{id}        → tear down, harvest updated cache
 </span></code></pre></div>
 <h3 id="post-apisessioncreate"><code>POST /api/session/create</code><a class="headerlink" href="#post-apisessioncreate" title="Permanent link">&para;</a></h3>
 <p>Make a remote session for a service and title. Authentication runs asynchronously in the background. This call returns immediately with <code>status: "authenticating"</code>, and you then poll the prompt endpoint. The body accepts <code>service</code> and <code>title_id</code> (both required). It also accepts a broad set of optional keys, because the body allows <code>additionalProperties</code>. These are <code>credentials</code> (<code>{username, password, extra?}</code>), <code>cookies</code> (base64 of zlib-compressed Netscape cookie file), <code>proxy</code>, <code>no_proxy</code>, <code>profile</code>, <code>cache</code> (map of forwarded cache files), <code>client_region</code>, <code>cdm_type</code>, <code>range_</code>, <code>vcodec</code>, <code>quality</code>, <code>best_available</code>, and any service CLI options.</p>
@@ -4666,30 +4689,71 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 </tr>
 </tbody>
 </table>
+<h3 id="post-apisessionsession_idsegment_filter"><code>POST /api/session/{session_id}/segment_filter</code><a class="headerlink" href="#post-apisessionsession_idsegment_filter" title="Permanent link">&para;</a></h3>
+<p>Get the HLS segments a service drops (ads, bumpers, dub cards). The server runs the service's own segment filter over the track's media playlist and returns only the URIs, so the client drops the same segments the service does. Body: <code>{ "track_id": "v-1" }</code> (required). <code>unwanted</code> is <code>null</code> when the track has no filter. The client keeps every segment when the server does not have this route.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="24:1"><input checked="checked" id="__tabbed_24_1" name="__tabbed_24" type="radio" /><div class="tabbed-labels"><label for="__tabbed_24_1">Response <code>200</code></label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="language-json highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"unwanted"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"https://cdn.example/hls/ad1.ts"</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+</div>
+</div>
+</div>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Error code</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>200</code></td>
+<td>-</td>
+<td>Unwanted segment URIs, or <code>null</code>.</td>
+</tr>
+<tr>
+<td><code>400</code></td>
+<td><code>INVALID_INPUT</code></td>
+<td>Missing <code>track_id</code>.</td>
+</tr>
+<tr>
+<td><code>404</code></td>
+<td><code>TRACK_NOT_FOUND</code></td>
+<td>An unknown track ID was requested.</td>
+</tr>
+<tr>
+<td><code>500</code></td>
+<td><code>SERVICE_ERROR</code></td>
+<td>The playlist request or the filter failed.</td>
+</tr>
+</tbody>
+</table>
 <h3 id="post-apisessionsession_idlicense"><code>POST /api/session/{session_id}/license</code><a class="headerlink" href="#post-apisessionsession_idlicense" title="Permanent link">&para;</a></h3>
 <p>Get the content keys for the DRM. The <code>mode</code> field selects one of two modes.</p>
 <p><strong>Proxy mode</strong> (<code>mode: "proxy"</code>, the default) forwards the client's CDM <code>challenge</code> to the service's license endpoint and returns the raw license bytes:</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="24:2"><input checked="checked" id="__tabbed_24_1" name="__tabbed_24" type="radio" /><input id="__tabbed_24_2" name="__tabbed_24" type="radio" /><div class="tabbed-labels"><label for="__tabbed_24_1">Request</label><label for="__tabbed_24_2">Response <code>200</code></label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="25:2"><input checked="checked" id="__tabbed_25_1" name="__tabbed_25" type="radio" /><input id="__tabbed_25_2" name="__tabbed_25" type="radio" /><div class="tabbed-labels"><label for="__tabbed_25_1">Request</label><label for="__tabbed_25_2">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-json highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"track_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"v-1"</span><span class="p">,</span><span class="w"> </span><span class="nt">"challenge"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;base64 CDM challenge&gt;"</span><span class="p">,</span><span class="w"> </span><span class="nt">"drm_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"widevine"</span><span class="w"> </span><span class="p">}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"track_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"v-1"</span><span class="p">,</span><span class="w"> </span><span class="nt">"challenge"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;base64 CDM challenge&gt;"</span><span class="p">,</span><span class="w"> </span><span class="nt">"drm_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"widevine"</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="language-json highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"license"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;base64 license bytes&gt;"</span><span class="w"> </span><span class="p">}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"license"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;base64 license bytes&gt;"</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 </div>
 </div>
 </div>
 <p><strong>Server-CDM mode</strong> (<code>mode: "server_cdm"</code>) runs the full CDM flow on the server using the device configured for your API key, returning content keys directly. Use <code>track_id</code> for a single track or <code>track_ids</code> for a batch:</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="25:2"><input checked="checked" id="__tabbed_25_1" name="__tabbed_25" type="radio" /><input id="__tabbed_25_2" name="__tabbed_25" type="radio" /><div class="tabbed-labels"><label for="__tabbed_25_1">Single: Response <code>200</code></label><label for="__tabbed_25_2">Batch: Response <code>200</code></label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="26:2"><input checked="checked" id="__tabbed_26_1" name="__tabbed_26" type="radio" /><input id="__tabbed_26_2" name="__tabbed_26" type="radio" /><div class="tabbed-labels"><label for="__tabbed_26_1">Single: Response <code>200</code></label><label for="__tabbed_26_2">Batch: Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-json highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"keys"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"&lt;kid_hex&gt;"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;key_hex&gt;"</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"keys"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"&lt;kid_hex&gt;"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;key_hex&gt;"</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="language-json highlight"><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"keys"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"v-1"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"&lt;kid_hex&gt;"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;key_hex&gt;"</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">},</span><span class="w"> </span><span class="nt">"drm_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"widevine"</span><span class="w"> </span><span class="p">}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"keys"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"v-1"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"&lt;kid_hex&gt;"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;key_hex&gt;"</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">},</span><span class="w"> </span><span class="nt">"drm_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"widevine"</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 </div>
 </div>
@@ -4767,17 +4831,17 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 </table>
 <h3 id="get-apisessionsession_id"><code>GET /api/session/{session_id}</code><a class="headerlink" href="#get-apisessionsession_id" title="Permanent link">&para;</a></h3>
 <p>Return remote session metadata and validity.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="26:1"><input checked="checked" id="__tabbed_26_1" name="__tabbed_26" type="radio" /><div class="tabbed-labels"><label for="__tabbed_26_1">Response <code>200</code></label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="27:1"><input checked="checked" id="__tabbed_27_1" name="__tabbed_27" type="radio" /><div class="tabbed-labels"><label for="__tabbed_27_1">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-json highlight"><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a><span class="p">{</span>
-</span><span id="__span-41-2"><a id="__codelineno-41-2" name="__codelineno-41-2" href="#__codelineno-41-2"></a><span class="w">  </span><span class="nt">"session_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"d4e5f6a7-..."</span><span class="p">,</span>
-</span><span id="__span-41-3"><a id="__codelineno-41-3" name="__codelineno-41-3" href="#__codelineno-41-3"></a><span class="w">  </span><span class="nt">"service"</span><span class="p">:</span><span class="w"> </span><span class="s2">"EXAMPLE"</span><span class="p">,</span>
-</span><span id="__span-41-4"><a id="__codelineno-41-4" name="__codelineno-41-4" href="#__codelineno-41-4"></a><span class="w">  </span><span class="nt">"valid"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-41-5"><a id="__codelineno-41-5" name="__codelineno-41-5" href="#__codelineno-41-5"></a><span class="w">  </span><span class="nt">"expires_in"</span><span class="p">:</span><span class="w"> </span><span class="mi">300</span><span class="p">,</span>
-</span><span id="__span-41-6"><a id="__codelineno-41-6" name="__codelineno-41-6" href="#__codelineno-41-6"></a><span class="w">  </span><span class="nt">"track_count"</span><span class="p">:</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span>
-</span><span id="__span-41-7"><a id="__codelineno-41-7" name="__codelineno-41-7" href="#__codelineno-41-7"></a><span class="w">  </span><span class="nt">"title_count"</span><span class="p">:</span><span class="w"> </span><span class="mi">10</span>
-</span><span id="__span-41-8"><a id="__codelineno-41-8" name="__codelineno-41-8" href="#__codelineno-41-8"></a><span class="p">}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="p">{</span>
+</span><span id="__span-42-2"><a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="w">  </span><span class="nt">"session_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"d4e5f6a7-..."</span><span class="p">,</span>
+</span><span id="__span-42-3"><a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a><span class="w">  </span><span class="nt">"service"</span><span class="p">:</span><span class="w"> </span><span class="s2">"EXAMPLE"</span><span class="p">,</span>
+</span><span id="__span-42-4"><a id="__codelineno-42-4" name="__codelineno-42-4" href="#__codelineno-42-4"></a><span class="w">  </span><span class="nt">"valid"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+</span><span id="__span-42-5"><a id="__codelineno-42-5" name="__codelineno-42-5" href="#__codelineno-42-5"></a><span class="w">  </span><span class="nt">"expires_in"</span><span class="p">:</span><span class="w"> </span><span class="mi">300</span><span class="p">,</span>
+</span><span id="__span-42-6"><a id="__codelineno-42-6" name="__codelineno-42-6" href="#__codelineno-42-6"></a><span class="w">  </span><span class="nt">"track_count"</span><span class="p">:</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span>
+</span><span id="__span-42-7"><a id="__codelineno-42-7" name="__codelineno-42-7" href="#__codelineno-42-7"></a><span class="w">  </span><span class="nt">"title_count"</span><span class="p">:</span><span class="w"> </span><span class="mi">10</span>
+</span><span id="__span-42-8"><a id="__codelineno-42-8" name="__codelineno-42-8" href="#__codelineno-42-8"></a><span class="p">}</span>
 </span></code></pre></div>
 </div>
 </div>
@@ -4785,13 +4849,13 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 <p><code>404 SESSION_NOT_FOUND</code> if the remote session does not exist or has expired.</p>
 <h3 id="delete-apisessionsession_id"><code>DELETE /api/session/{session_id}</code><a class="headerlink" href="#delete-apisessionsession_id" title="Permanent link">&para;</a></h3>
 <p>Tear down a remote session. The server cancels its input bridge, harvests any updated cache files, and deletes the remote session and its cache directory.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="27:1"><input checked="checked" id="__tabbed_27_1" name="__tabbed_27" type="radio" /><div class="tabbed-labels"><label for="__tabbed_27_1">Response <code>200</code></label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="28:1"><input checked="checked" id="__tabbed_28_1" name="__tabbed_28" type="radio" /><div class="tabbed-labels"><label for="__tabbed_28_1">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-json highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="p">{</span>
-</span><span id="__span-42-2"><a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="w">  </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"ok"</span><span class="p">,</span>
-</span><span id="__span-42-3"><a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a><span class="w">  </span><span class="nt">"cache"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"tokens.json"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;base64 zlib bytes&gt;"</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-42-4"><a id="__codelineno-42-4" name="__codelineno-42-4" href="#__codelineno-42-4"></a><span class="p">}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="p">{</span>
+</span><span id="__span-43-2"><a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a><span class="w">  </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"ok"</span><span class="p">,</span>
+</span><span id="__span-43-3"><a id="__codelineno-43-3" name="__codelineno-43-3" href="#__codelineno-43-3"></a><span class="w">  </span><span class="nt">"cache"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"tokens.json"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;base64 zlib bytes&gt;"</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-43-4"><a id="__codelineno-43-4" name="__codelineno-43-4" href="#__codelineno-43-4"></a><span class="p">}</span>
 </span></code></pre></div>
 </div>
 </div>
@@ -4800,15 +4864,15 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 <hr />
 <h2 id="error-responses">Error responses<a class="headerlink" href="#error-responses" title="Permanent link">&para;</a></h2>
 <p>The server serialises every structured error raised inside a handler to the same JSON envelope:</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="p">{</span>
-</span><span id="__span-43-2"><a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a><span class="w">  </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"error"</span><span class="p">,</span>
-</span><span id="__span-43-3"><a id="__codelineno-43-3" name="__codelineno-43-3" href="#__codelineno-43-3"></a><span class="w">  </span><span class="nt">"error_code"</span><span class="p">:</span><span class="w"> </span><span class="s2">"INVALID_PARAMETERS"</span><span class="p">,</span>
-</span><span id="__span-43-4"><a id="__codelineno-43-4" name="__codelineno-43-4" href="#__codelineno-43-4"></a><span class="w">  </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Invalid video codec: XYZ"</span><span class="p">,</span>
-</span><span id="__span-43-5"><a id="__codelineno-43-5" name="__codelineno-43-5" href="#__codelineno-43-5"></a><span class="w">  </span><span class="nt">"timestamp"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-07-03T12:00:00+00:00"</span><span class="p">,</span>
-</span><span id="__span-43-6"><a id="__codelineno-43-6" name="__codelineno-43-6" href="#__codelineno-43-6"></a><span class="w">  </span><span class="nt">"details"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"field"</span><span class="p">:</span><span class="w"> </span><span class="s2">"vcodec"</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-43-7"><a id="__codelineno-43-7" name="__codelineno-43-7" href="#__codelineno-43-7"></a><span class="w">  </span><span class="nt">"retryable"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-43-8"><a id="__codelineno-43-8" name="__codelineno-43-8" href="#__codelineno-43-8"></a><span class="w">  </span><span class="nt">"debug_info"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"exception_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"APIError"</span><span class="p">,</span><span class="w"> </span><span class="nt">"traceback"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-43-9"><a id="__codelineno-43-9" name="__codelineno-43-9" href="#__codelineno-43-9"></a><span class="p">}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a><span class="p">{</span>
+</span><span id="__span-44-2"><a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a><span class="w">  </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"error"</span><span class="p">,</span>
+</span><span id="__span-44-3"><a id="__codelineno-44-3" name="__codelineno-44-3" href="#__codelineno-44-3"></a><span class="w">  </span><span class="nt">"error_code"</span><span class="p">:</span><span class="w"> </span><span class="s2">"INVALID_PARAMETERS"</span><span class="p">,</span>
+</span><span id="__span-44-4"><a id="__codelineno-44-4" name="__codelineno-44-4" href="#__codelineno-44-4"></a><span class="w">  </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Invalid video codec: XYZ"</span><span class="p">,</span>
+</span><span id="__span-44-5"><a id="__codelineno-44-5" name="__codelineno-44-5" href="#__codelineno-44-5"></a><span class="w">  </span><span class="nt">"timestamp"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-07-03T12:00:00+00:00"</span><span class="p">,</span>
+</span><span id="__span-44-6"><a id="__codelineno-44-6" name="__codelineno-44-6" href="#__codelineno-44-6"></a><span class="w">  </span><span class="nt">"details"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"field"</span><span class="p">:</span><span class="w"> </span><span class="s2">"vcodec"</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-44-7"><a id="__codelineno-44-7" name="__codelineno-44-7" href="#__codelineno-44-7"></a><span class="w">  </span><span class="nt">"retryable"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+</span><span id="__span-44-8"><a id="__codelineno-44-8" name="__codelineno-44-8" href="#__codelineno-44-8"></a><span class="w">  </span><span class="nt">"debug_info"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"exception_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"APIError"</span><span class="p">,</span><span class="w"> </span><span class="nt">"traceback"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-44-9"><a id="__codelineno-44-9" name="__codelineno-44-9" href="#__codelineno-44-9"></a><span class="p">}</span>
 </span></code></pre></div>
 <ul>
 <li><code>details</code> appears only when non-empty.</li>
