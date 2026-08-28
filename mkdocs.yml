@@ -140,6 +140,7 @@ nav:
           - Authentication: dev/rest-api/authentication.md
           - Endpoints: dev/rest-api/endpoints.md
           - Job Lifecycle: dev/rest-api/job-lifecycle.md
+          - Dashboard: dev/rest-api/dashboard.md
           - Remote Sessions: dev/rest-api/remote-sessions.md
           - Error Responses: dev/rest-api/errors.md
   - API Reference:

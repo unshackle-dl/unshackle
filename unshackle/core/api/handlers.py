@@ -15,6 +15,7 @@ from unshackle.core.api.compression import safe_inflate
 from unshackle.core.api.errors import APIError, APIErrorCode, handle_api_exception
 from unshackle.core.api.input_bridge import AuthStatus, InputBridge
 from unshackle.core.api.sanitize import safe_cache_key, sanitize_log
+from unshackle.core.api.session_store import SessionStore
 from unshackle.core.config import config
 from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP
 from unshackle.core.providers.anilist import parse_anilist_ref
@@ -325,6 +326,9 @@ def server_proxy_allowed(request: Optional[web.Request] = None) -> bool:
 
 
 JOB_EVENTS_ROUTE = "/api/download/jobs/{job_id}/events"
+DASHBOARD_PREFIX = "/api/dashboard/"
+DASHBOARD_EVENTS_ROUTE = DASHBOARD_PREFIX + "events"
+SSE_QUERY_KEY_ROUTES = {JOB_EVENTS_ROUTE, DASHBOARD_EVENTS_ROUTE}
 
 CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
@@ -335,14 +339,40 @@ CORS_HEADERS = {
 
 
 def request_secret_key(request: web.Request) -> Optional[str]:
-    """The caller's API key: the X-Secret-Key header, or on the events route the secret_key
-    query param (EventSource cannot send headers)."""
+    """The caller's API key: the X-Secret-Key header, or on SSE routes the secret_key query param."""
     key = request.headers.get("X-Secret-Key")
     if not key:
         resource = request.match_info.route.resource
-        if resource is not None and resource.canonical == JOB_EVENTS_ROUTE:
+        if resource is not None and resource.canonical in SSE_QUERY_KEY_ROUTES:
             key = request.query.get("secret_key")
     return key
+
+
+def dashboard_key() -> Optional[str]:
+    """The developer dashboard key from serve.dashboard.key, or None when the dashboard is off."""
+    dashboard = (config.serve or {}).get("dashboard")
+    key = dashboard.get("key") if isinstance(dashboard, dict) else None
+    return str(key) if key else None
+
+
+@web.middleware
+async def dashboard_authentication(request: web.Request, handler: Any) -> web.StreamResponse:
+    """Gate /api/dashboard/ behind serve.dashboard.key only; user and tier keys never pass.
+
+    This middleware runs before the user-key middleware, so it answers the dashboard routes
+    first and no other route ever accepts the dashboard key.
+    """
+    import hmac
+
+    if not request.path.startswith(DASHBOARD_PREFIX):
+        return await handler(request)
+    expected = dashboard_key()
+    if not expected:
+        return await handler(request)  # routes are unregistered, so this 404s
+    provided = request_secret_key(request)
+    if not provided or not hmac.compare_digest(provided, expected):
+        return web.json_response({"status": 401, "message": "Dashboard key is invalid."}, status=401)
+    return await handler(request)
 
 
 def caller_key(request: Optional[web.Request] = None) -> str:
@@ -1422,7 +1452,7 @@ async def download_job_events_handler(job_id: str, request: web.Request) -> web.
     response = web.StreamResponse(
         headers={
             "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
             # Stops nginx from buffering the stream.
             "X-Accel-Buffering": "no",
             **CORS_HEADERS,
@@ -1464,6 +1494,124 @@ async def download_job_events_handler(job_id: str, request: web.Request) -> web.
             get_task.cancel()
         if queue is not None:
             manager.unsubscribe(job_id, queue)
+
+    return response
+
+
+async def dashboard_status_handler(request: web.Request) -> web.Response:
+    """Server-wide stats for the developer dashboard."""
+    from collections import Counter
+
+    from unshackle.core.api.download_manager import get_download_manager
+    from unshackle.core.api.session_store import get_session_store
+    from unshackle.core.api.stats import stats
+
+    store = get_session_store()
+    jobs = Counter(job.status.value for job in get_download_manager().list_jobs())
+    return web.json_response(
+        {
+            **stats.to_dict(),
+            "services": len(Services.get_tags()),
+            "sessions": store.session_count,
+            "max_sessions": store.max_sessions,
+            "session_ttl": store.ttl,
+            "jobs": dict(jobs),
+        }
+    )
+
+
+async def dashboard_sessions_handler(request: web.Request) -> web.Response:
+    """Every live remote session, not owner-scoped."""
+    from unshackle.core.api.session_store import get_session_store
+
+    return web.json_response([entry.summary() for entry in get_session_store().list()])
+
+
+async def dashboard_jobs_handler(request: web.Request) -> web.Response:
+    """Every download job, not owner-scoped."""
+    from unshackle.core.api.download_manager import get_download_manager
+
+    return web.json_response([job.to_dict(include_full_details=True) for job in get_download_manager().list_jobs()])
+
+
+async def dashboard_logs_handler(request: web.Request) -> web.Response:
+    """Recent log records; `since` (seq) and `level` filter the ring buffer."""
+    from unshackle.core.api.stats import ring
+
+    try:
+        since = int(request.query.get("since", 0))
+    except ValueError:
+        since = 0
+    records = ring.since(since, request.query.get("level"), request.query.get("logger"))
+    return web.json_response({"seq": ring.seq, "records": records})
+
+
+async def dashboard_events_handler(request: web.Request) -> web.StreamResponse:
+    """Server-wide SSE event stream: `log`, `session` and `job` events, plus `stats` every 5 s (also the keep-alive).
+
+    Every frame carries `id: <seq>`; a reconnecting EventSource sends Last-Event-ID, and the
+    server replays the missed events from the bus history. With `?since=<seq>` the same missed
+    events come back as one JSON burst instead of an event stream, for clients that poll.
+    """
+    from unshackle.core.api.events import bus
+
+    if "since" in request.query:
+        try:
+            since = int(request.query["since"])
+        except ValueError:
+            since = 0
+        status = await dashboard_status_handler(request)
+        return web.json_response({"seq": bus.seq, "stats": json.loads(status.text or "{}"), "events": bus.since(since)})
+
+    response = web.StreamResponse(
+        headers={
+            "Content-Type": "text/event-stream",
+            # no-transform stops a CDN from compressing or buffering the event stream.
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            **CORS_HEADERS,
+        }
+    )
+    await response.prepare(request)
+
+    async def send(event: str, data: Dict[str, Any], event_id: Optional[int] = None) -> None:
+        payload = json.dumps(data, separators=(",", ":"), default=str)
+        head = f"id: {event_id}\n" if event_id is not None else ""
+        await response.write(f"{head}event: {event}\ndata: {payload}\n\n".encode())
+
+    async def send_stats() -> None:
+        status = await dashboard_status_handler(request)
+        await send("stats", json.loads(status.text or "{}"))
+
+    queue = bus.subscribe()
+    get_task: Optional[asyncio.Task] = None
+    loop = asyncio.get_running_loop()
+    try:
+        await send_stats()
+        next_stats = loop.time() + 5
+        try:
+            last_id = int(request.headers.get("Last-Event-ID", 0))
+        except ValueError:
+            last_id = 0
+        for item in bus.since(last_id) if last_id else []:
+            await send(item["event"], item["data"], item["seq"])
+        while True:
+            if get_task is None:
+                get_task = asyncio.create_task(queue.get())
+            done, _ = await asyncio.wait({get_task}, timeout=max(0.0, next_stats - loop.time()))
+            if not done:
+                await send_stats()
+                next_stats = loop.time() + 5
+                continue
+            item = get_task.result()
+            get_task = None
+            await send(item["event"], item["data"], item["seq"])
+    except (ConnectionResetError, asyncio.CancelledError):
+        log.debug("SSE dashboard client disconnected")
+    finally:
+        if get_task is not None:
+            get_task.cancel()
+        bus.unsubscribe(queue)
 
     return response
 
@@ -2080,10 +2228,13 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
             normalized_service,
             service_instance,
             session_id=session_id,
+            owner_key=api_key,
+            creator_ip=request.remote if request else None,
         )
-        session.creator_ip = request.remote if request else None
-        session.owner_key = api_key
         session.cache_tag = session_cache_tag
+        # Echoed to every dashboard viewer, so cap what an arbitrary client can push into it.
+        if isinstance(data.get("client"), dict) and len(json.dumps(data["client"], default=str)) <= 4096:
+            session.client = data["client"]
         session.input_bridge = bridge
         session.auth_status = AuthStatus.AUTHENTICATING
 
@@ -2145,6 +2296,7 @@ async def session_titles_handler(session_id: str, request: Optional[web.Request]
             tid = str(t.id) if hasattr(t, "id") else str(id(t))
             session.title_map[tid] = t
             serialized_titles.append(stamp_service_flags(serialize_title(t), service_instance))
+        SessionStore.publish_update(session)
 
         return web.json_response(
             {
@@ -2202,6 +2354,7 @@ async def session_tracks_handler(
             title_tracks[str(track.id)] = track
             session.tracks[str(track.id)] = track
         session.tracks_by_title[str(title_id)] = title_tracks
+        SessionStore.publish_update(session)
 
         try:
             chapters = service_instance.get_chapters(title)

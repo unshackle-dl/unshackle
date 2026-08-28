@@ -119,6 +119,7 @@ is the [REST API](../../dev/rest-api/index.md) section. These are the config key
 | `users` | dict | `{}` | Per-user API keys and their allowlists (see below). |
 | `services` | list | *(unset)* | Global service allowlist. Omit to allow all. |
 | `remote_only` | bool | `false` | Expose only the remote service session endpoints (health, services, search, session) and disable the rest of the REST API. |
+| `dashboard` | dict | *(unset)* | Developer dashboard: `key` is the API key for the read-only `/api/dashboard/` endpoints (status, sessions, jobs, logs, SSE events). Unset leaves those routes unregistered. See [dashboard endpoints](../../dev/rest-api/dashboard.md). |
 | `session_ttl` | int (s) | `300` | Lifetime of an interactive auth session. |
 | `max_sessions` | int | `100` | Maximum concurrent sessions. |
 | `history_limit` | int | `100` | How many finished jobs to retain in history. |

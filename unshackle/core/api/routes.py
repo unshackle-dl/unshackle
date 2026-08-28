@@ -13,11 +13,18 @@ from unshackle.core import services as services_module
 from unshackle.core.api.errors import APIError, APIErrorCode, build_error_response, handle_api_exception
 from unshackle.core.api.handlers import (
     CORS_HEADERS,
+    DASHBOARD_EVENTS_ROUTE,
+    DASHBOARD_PREFIX,
     JOB_EVENTS_ROUTE,
     cancel_download_job_handler,
     clear_cache_handler,
     clear_finished_download_jobs_handler,
     clear_temp_handler,
+    dashboard_events_handler,
+    dashboard_jobs_handler,
+    dashboard_logs_handler,
+    dashboard_sessions_handler,
+    dashboard_status_handler,
     delete_history_handler,
     download_handler,
     download_history_handler,
@@ -1930,6 +1937,132 @@ async def session_prompt_submit(request: web.Request) -> web.Response:
         )
 
 
+@api_handler
+async def dashboard_status(request: web.Request) -> web.Response:
+    """
+    Dashboard: server status.
+    ---
+    summary: Dashboard server status
+    description: >
+      Version, uptime, bind address, mode, request counters per API key, and counts of
+      services, remote sessions and jobs. Every /api/dashboard/ route needs
+      `serve.dashboard.key` in X-Secret-Key; a user key never passes, and the routes do not
+      exist without a dashboard key.
+    tags: [Dashboard]
+    responses:
+      '200':
+        description: Server status
+      '401':
+        description: Dashboard key missing or invalid
+    """
+    return await dashboard_status_handler(request)
+
+
+@api_handler
+async def dashboard_sessions(request: web.Request) -> web.Response:
+    """
+    Dashboard: active remote sessions.
+    ---
+    summary: Dashboard remote sessions
+    description: Every live remote session on the server, with the owner key masked.
+    tags: [Dashboard]
+    responses:
+      '200':
+        description: Session list
+      '401':
+        description: Dashboard key missing or invalid
+    """
+    return await dashboard_sessions_handler(request)
+
+
+@api_handler
+async def dashboard_jobs(request: web.Request) -> web.Response:
+    """
+    Dashboard: download jobs.
+    ---
+    summary: Dashboard download jobs
+    description: Every download job on the server regardless of owner. Empty in --remote-only mode.
+    tags: [Dashboard]
+    responses:
+      '200':
+        description: Job list
+      '401':
+        description: Dashboard key missing or invalid
+    """
+    return await dashboard_jobs_handler(request)
+
+
+@api_handler
+async def dashboard_logs(request: web.Request) -> web.Response:
+    """
+    Dashboard: recent log records.
+    ---
+    summary: Dashboard log ring buffer
+    description: The last 1000 log records. Poll with `since` set to the `seq` of the last record seen.
+    tags: [Dashboard]
+    parameters:
+      - name: since
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: Return only records with seq greater than this value
+      - name: level
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Minimum level (DEBUG, INFO, WARNING, ERROR)
+      - name: logger
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Keep only this logger and its children, e.g. serve or aiohttp.access
+    responses:
+      '200':
+        description: Records plus the current seq
+      '401':
+        description: Dashboard key missing or invalid
+    """
+    return await dashboard_logs_handler(request)
+
+
+@api_handler
+async def dashboard_events(request: web.Request) -> web.StreamResponse:
+    """
+    Dashboard: server-wide event stream.
+    ---
+    summary: Dashboard SSE stream
+    description: >
+      Server-Sent Events: a `stats` event on connect and every 5 seconds (also the keep-alive),
+      plus `log`, `session` (action create/update/delete) and `job` events as they happen. A browser
+      EventSource can authenticate with the `secret_key` query parameter.
+    tags: [Dashboard]
+    parameters:
+      - name: secret_key
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Dashboard key, for clients that cannot send headers
+      - name: since
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: >
+          Poll mode. Return the events after this seq as one JSON burst
+          ({seq, stats, events}) instead of opening an event stream. Use seq 0 on first call.
+    responses:
+      '200':
+        description: text/event-stream, or JSON for a request that carries `since`
+      '401':
+        description: Dashboard key missing or invalid
+    """
+    return await dashboard_events_handler(request)
+
+
 # Single source of truth for all API routes. `remote` marks endpoints exposed in
 # --remote-only server mode; full mode registers every route. Both setup_routes and
 # setup_swagger derive from this table so the live routes and the docs cannot drift.
@@ -1967,21 +2100,30 @@ ROUTES: list[tuple[str, str, Handler, bool]] = [
     ("DELETE", "/api/session/{session_id}", session_delete, True),
 ]
 
+DASHBOARD_ROUTES: list[tuple[str, str, Handler, bool]] = [
+    ("GET", DASHBOARD_PREFIX + "status", dashboard_status, True),
+    ("GET", DASHBOARD_PREFIX + "sessions", dashboard_sessions, True),
+    ("GET", DASHBOARD_PREFIX + "jobs", dashboard_jobs, True),
+    ("GET", DASHBOARD_PREFIX + "logs", dashboard_logs, True),
+    ("GET", DASHBOARD_EVENTS_ROUTE, dashboard_events, True),
+]
 
-def setup_routes(app: web.Application, remote_only: bool = False) -> None:
-    """Setup API routes. When remote_only=True, only the remote session endpoints operate."""
+
+def setup_routes(app: web.Application, remote_only: bool = False, dashboard: bool = False) -> None:
+    """Setup API routes. When remote_only=True, only the remote session endpoints operate.
+    When dashboard=True, this also registers the /api/dashboard/ routes."""
     add: dict[str, Callable[..., Any]] = {
         "GET": app.router.add_get,
         "POST": app.router.add_post,
         "DELETE": app.router.add_delete,
     }
-    for method, path, handler, remote in ROUTES:
+    for method, path, handler, remote in ROUTES + (DASHBOARD_ROUTES if dashboard else []):
         if remote_only and not remote:
             continue
         add[method](path, handler)
 
 
-def setup_swagger(app: web.Application) -> None:
+def setup_swagger(app: web.Application, dashboard: bool = False) -> None:
     """Setup Swagger UI documentation."""
     swagger = SwaggerDocs(
         app,
@@ -1994,4 +2136,6 @@ def setup_swagger(app: web.Application) -> None:
     )
 
     route: dict[str, Callable[..., Any]] = {"GET": web.get, "POST": web.post, "DELETE": web.delete}
-    swagger.add_routes([route[method](path, handler) for method, path, handler, _ in ROUTES])
+    swagger.add_routes(
+        [route[method](path, handler) for method, path, handler, _ in ROUTES + (DASHBOARD_ROUTES if dashboard else [])]
+    )

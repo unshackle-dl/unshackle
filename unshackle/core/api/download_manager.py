@@ -15,6 +15,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from unshackle.core.api.events import bus
 from unshackle.core.api.sanitize import sanitize_log
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_text
 
@@ -675,6 +676,7 @@ class DownloadQueueManager:
         self._job_queue.put_nowait(job)
 
         log.info(f"Created download job {job_id} for {sanitize_log(service)}:{sanitize_log(title_id)}")
+        bus.publish("job", {"event": "queued", **job.to_dict(include_full_details=True)})
         return job
 
     def get_job(self, job_id: str) -> Optional[DownloadJob]:
@@ -703,6 +705,7 @@ class DownloadQueueManager:
 
     def publish(self, job: DownloadJob, event: str) -> None:
         """Fan an event carrying the job's full detail dict out to every listener."""
+        bus.publish("job", {"event": event, **job.to_dict(include_full_details=True)})
         queues = self._subscribers.get(job.job_id)
         if not queues:
             return

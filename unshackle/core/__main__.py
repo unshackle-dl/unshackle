@@ -1,5 +1,6 @@
 import atexit
 import logging
+import sys
 from datetime import datetime
 
 import click
@@ -51,6 +52,9 @@ def main(version: bool, debug: bool) -> None:
     urllib3.disable_warnings(InsecureRequestWarning)
 
     traceback.install(console=console, width=80, suppress=[click])
+
+    if "--quiet" in sys.argv[1:] or "-q" in sys.argv[1:]:
+        return
 
     console.print(
         Padding(

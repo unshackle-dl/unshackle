@@ -32,6 +32,7 @@ def test_serve_help_lists_documented_flags(runner: CliRunner) -> None:
         "--debug-api",
         "--debug",
         "--remote-only",
+        "--quiet",
     ):
         assert flag in out, f"missing flag in --help: {flag}"
 

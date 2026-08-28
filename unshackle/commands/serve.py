@@ -2,7 +2,9 @@ import asyncio
 import hmac
 import logging
 import subprocess
+import sys
 from contextlib import suppress
+from datetime import datetime
 
 import click
 from aiohttp import web
@@ -10,8 +12,15 @@ from aiohttp import web
 from unshackle.core import binaries
 from unshackle.core.api import cors_middleware, setup_routes, setup_swagger
 from unshackle.core.api.compression import compression_middleware
-from unshackle.core.api.handlers import request_secret_key
+from unshackle.core.api.handlers import (
+    DASHBOARD_PREFIX,
+    dashboard_authentication,
+    dashboard_key,
+    request_secret_key,
+)
+from unshackle.core.api.stats import ring, stats, stats_middleware
 from unshackle.core.config import config
+from unshackle.core.console import console
 from unshackle.core.constants import context_settings
 from unshackle.core.downloaders import format_speed, parse_speed_limit, set_speed_limit
 
@@ -92,6 +101,13 @@ def _install_service_refresh(app: web.Application) -> None:
     default=False,
     help="Only expose remote service session endpoints (health, services, search, session).",
 )
+@click.option(
+    "-q",
+    "--quiet",
+    is_flag=True,
+    default=False,
+    help="Headless mode: no banner and no Rich output, plain log lines on stderr.",
+)
 def serve(
     host: str,
     port: int,
@@ -103,6 +119,7 @@ def serve(
     debug_api: bool,
     debug: bool,
     remote_only: bool,
+    quiet: bool,
 ) -> None:
     """
     Serve your Local Widevine and PlayReady Devices and REST API for Remote Access.
@@ -136,12 +153,35 @@ def serve(
 
     log = logging.getLogger("serve")
 
+    if quiet:
+        logging.basicConfig(
+            force=True,
+            level=logging.DEBUG if debug else logging.INFO,
+            format="%(asctime)s %(name)s %(levelname)s %(message)s",
+            stream=sys.stderr,
+        )
+        console.quiet = True
+        if not debug:
+            for handler in logging.getLogger().handlers:
+                handler.addFilter(lambda record: record.name != "aiohttp.access")
+        if debug:
+            log_path = config.directories.logs / config.filenames.log.format(
+                name="serve", time=datetime.now().strftime("%Y%m%d-%H%M%S")
+            )
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            file_handler = logging.FileHandler(log_path, encoding="utf-8")
+            file_handler.setFormatter(logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s"))
+            logging.getLogger().addHandler(file_handler)
+            log.info(f"Writing log to {log_path}")
+    elif debug:
+        logging.getLogger().setLevel(logging.DEBUG)
     if debug:
-        logging.basicConfig(level=logging.DEBUG, format="%(name)s - %(levelname)s - %(message)s")
         log.info("Debug logging enabled for API operations")
-    else:
+    elif not quiet:
         logging.getLogger("api").setLevel(logging.WARNING)
         logging.getLogger("api.remote").setLevel(logging.WARNING)
+    ring.setFormatter(logging.Formatter("%(message)s"))
+    logging.getLogger().addHandler(ring)
 
     if not no_key:
         api_secret = config.serve.get("api_secret")
@@ -180,7 +220,7 @@ def serve(
         @web.middleware
         async def api_key_authentication(request: web.Request, handler) -> web.StreamResponse:
             """Authenticate API requests using X-Secret-Key header."""
-            if request.path == "/api/health":
+            if request.path == "/api/health" or request.path.startswith(DASHBOARD_PREFIX):
                 return await handler(request)
             secret_key = request_secret_key(request)
             if not secret_key:
@@ -194,6 +234,13 @@ def serve(
         remote_only = remote_only or config.serve.get("remote_only", False)
         if remote_only:
             api_only = True
+        stats.host, stats.port = host, port
+        stats.mode = "remote_only" if remote_only else "api_only" if api_only else "full"
+        dashboard = bool(dashboard_key())
+        if dashboard:
+            log.info(f"Developer dashboard endpoints available at http://{host}:{port}/api/dashboard/")
+        elif quiet:
+            log.info("Developer dashboard disabled: set serve.dashboard.key in unshackle.yaml to enable it")
 
         try:
             global_speed_limit = parse_speed_limit(config.serve.get("global_speed_limit"))
@@ -220,10 +267,20 @@ def serve(
         if api_only:
             log.info("Starting REST API server (pywidevine/pyplayready CDM disabled)")
             if no_key:
-                app = web.Application(middlewares=[cors_middleware, compression_middleware])
+                app = web.Application(
+                    middlewares=[cors_middleware, stats_middleware, dashboard_authentication, compression_middleware]
+                )
                 app["config"] = {"users": {}}
             else:
-                app = web.Application(middlewares=[cors_middleware, api_key_authentication, compression_middleware])
+                app = web.Application(
+                    middlewares=[
+                        cors_middleware,
+                        stats_middleware,
+                        dashboard_authentication,
+                        api_key_authentication,
+                        compression_middleware,
+                    ]
+                )
                 api_users: dict = {api_secret: {"devices": [], "username": "api_user"}}
                 if isinstance(users, dict):
                     api_users.update(users)
@@ -245,9 +302,9 @@ def serve(
             app.on_cleanup.append(stop_session_cleanup)
             _install_service_refresh(app)
 
-            setup_routes(app, remote_only=remote_only)
+            setup_routes(app, remote_only=remote_only, dashboard=dashboard)
             if not remote_only:
-                setup_swagger(app)
+                setup_swagger(app, dashboard=dashboard)
                 log.info(f"REST API endpoints available at http://{host}:{port}/api/")
                 log.info(f"Swagger UI available at http://{host}:{port}/api/docs/")
             else:
@@ -295,6 +352,8 @@ def serve(
                 @web.middleware
                 async def serve_authentication(request: web.Request, handler) -> web.StreamResponse:
                     secret_key = request_secret_key(request)
+                    if request.path.startswith(DASHBOARD_PREFIX):
+                        return await handler(request)
                     if serve_playready_flag and request.path in ("/playready", "/playready/"):
                         response = await handler(request)
                     elif secret_key and not request.headers.get("X-Secret-Key"):
@@ -316,10 +375,20 @@ def serve(
                 return serve_authentication
 
             if no_key:
-                app = web.Application(middlewares=[cors_middleware, compression_middleware])
+                app = web.Application(
+                    middlewares=[cors_middleware, stats_middleware, dashboard_authentication, compression_middleware]
+                )
             else:
                 serve_auth = create_serve_authentication(serve_playready and bool(prd_devices))
-                app = web.Application(middlewares=[cors_middleware, serve_auth, compression_middleware])
+                app = web.Application(
+                    middlewares=[
+                        cors_middleware,
+                        dashboard_authentication,
+                        serve_auth,
+                        stats_middleware,
+                        compression_middleware,
+                    ]
+                )
 
             app["config"] = serve_config
             app["debug_api"] = debug_api
@@ -382,14 +451,14 @@ def serve(
             elif serve_playready:
                 log.info("No PlayReady devices found, skipping PlayReady CDM endpoints")
 
-            setup_routes(app, remote_only=remote_only)
+            setup_routes(app, remote_only=remote_only, dashboard=dashboard)
 
             if serve_widevine:
                 log.info(f"Widevine CDM endpoints available at http://{host}:{port}/{{device}}/open")
             if remote_only:
                 log.info(f"Remote service endpoints available at http://{host}:{port}/api/session/")
             else:
-                setup_swagger(app)
+                setup_swagger(app, dashboard=dashboard)
                 log.info(f"REST API endpoints available at http://{host}:{port}/api/")
                 log.info(f"Swagger UI available at http://{host}:{port}/api/docs/")
             log.info("(Press CTRL+C to quit)")

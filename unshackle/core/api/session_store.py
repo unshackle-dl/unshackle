@@ -11,10 +11,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Deque, Dict, List, Optional
 
+from unshackle.core.api.events import bus
 from unshackle.core.api.input_bridge import AUTH_INPUT_TIMEOUT, AuthStatus, InputBridge
 from unshackle.core.api.sanitize import sanitize_log
 from unshackle.core.config import config
@@ -41,12 +43,47 @@ class SessionEntry:
     input_bridge: Optional[InputBridge] = None
     auth_status: AuthStatus = AuthStatus.AUTHENTICATED
     auth_error: Optional[str] = None
+    client: Dict[str, Any] = field(default_factory=dict)  # version/argv/platform the client reported
+    actions: Deque[Dict[str, Any]] = field(default_factory=lambda: deque(maxlen=500))
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     last_accessed: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def touch(self) -> None:
         """Update last_accessed timestamp."""
         self.last_accessed = datetime.now(timezone.utc)
+
+    def summary(self) -> Dict[str, Any]:
+        """Dashboard view of the session: no service instance, no raw owner key."""
+        from unshackle.core.api.stats import mask_key
+
+        now = datetime.now(timezone.utc)
+        return {
+            "id": self.session_id,
+            "owner": mask_key(self.owner_key),
+            "creator_ip": self.creator_ip,
+            "service": self.service_tag,
+            "title_id": next(iter(self.title_map), None),
+            "title": str(next(iter(self.title_map.values()), "")) or None,
+            "titles": len(self.title_map),
+            "tracks": len(self.tracks),
+            "auth_status": self.auth_status.value,
+            "auth_error": self.auth_error,
+            "client": self.client,
+            "actions": list(self.actions),
+            "created_at": self.created_at.isoformat(),
+            "last_accessed": self.last_accessed.isoformat(),
+            "created_ts": self.created_at.timestamp(),
+            "last_accessed_ts": self.last_accessed.timestamp(),
+            "age_seconds": int((now - self.created_at).total_seconds()),
+            "idle_seconds": int((now - self.last_accessed).total_seconds()),
+        }
+
+
+def _publish(action: str, entry: SessionEntry, reason: Optional[str] = None) -> None:
+    data = {"action": action, **entry.summary()}
+    if reason:
+        data["reason"] = reason
+    bus.publish("session", data)
 
 
 class SessionStore:
@@ -72,21 +109,26 @@ class SessionStore:
         service_tag: str,
         service_instance: Any,
         session_id: Optional[str] = None,
+        owner_key: Optional[str] = None,
+        creator_ip: Optional[str] = None,
     ) -> SessionEntry:
         """Make a new remote session with an authenticated service instance."""
         async with self._lock:
             if len(self._sessions) >= self.max_sessions:
                 oldest_id = min(self._sessions, key=lambda k: self._sessions[k].last_accessed)
                 log.warning(f"Max sessions reached ({self.max_sessions}), evicting oldest: {oldest_id}")
-                del self._sessions[oldest_id]
+                _publish("delete", self._sessions.pop(oldest_id), "evicted")
 
             session_id = session_id or str(uuid.uuid4())
             entry = SessionEntry(
                 session_id=session_id,
                 service_tag=service_tag,
                 service_instance=service_instance,
+                owner_key=owner_key,
+                creator_ip=creator_ip,
             )
             self._sessions[session_id] = entry
+            _publish("create", entry)
             log.info(f"Created session {sanitize_log(session_id)} for service {sanitize_log(service_tag)}")
             return entry
 
@@ -101,7 +143,7 @@ class SessionStore:
                 elapsed = (datetime.now(timezone.utc) - entry.last_accessed).total_seconds()
                 if elapsed > self.ttl:
                     log.info(f"Session {sanitize_log(session_id)} expired (elapsed={elapsed:.0f}s, ttl={self.ttl}s)")
-                    del self._sessions[session_id]
+                    _publish("delete", self._sessions.pop(session_id), "expired")
                     return None
 
             entry.touch()
@@ -115,6 +157,7 @@ class SessionStore:
                 if entry.input_bridge:
                     entry.input_bridge.cancel()
                 self.cleanup_cache_dir(entry.cache_tag)
+                _publish("delete", entry, "closed")
                 log.info(f"Deleted session {sanitize_log(session_id)}")
                 return True
             return False
@@ -136,6 +179,7 @@ class SessionStore:
                 if entry.input_bridge:
                     entry.input_bridge.cancel()
                 self.cleanup_cache_dir(entry.cache_tag)
+                _publish("delete", entry, "expired")
             if expired:
                 log.info(f"Cleaned up {len(expired)} expired sessions")
             return len(expired)
@@ -193,6 +237,23 @@ class SessionStore:
                     parent.rmdir()
             except OSError:
                 break
+
+    @staticmethod
+    def publish_update(entry: SessionEntry) -> None:
+        """Tell dashboard listeners that a session's summary changed (titles or tracks loaded, auth settled)."""
+        _publish("update", entry)
+
+    def record_action(self, session_id: str, action: Dict[str, Any]) -> None:
+        """Append one request to the session's action log and tell dashboard listeners."""
+        entry = self._sessions.get(session_id)
+        if entry is None:
+            return
+        entry.actions.append(action)
+        _publish("update", entry)
+
+    def list(self) -> List[SessionEntry]:
+        """Snapshot of every live session."""
+        return list(self._sessions.values())
 
     @property
     def session_count(self) -> int:
