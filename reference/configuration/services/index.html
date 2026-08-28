@@ -2156,7 +2156,9 @@ are not repeated in the fallbacks, so unshackle tries
 commands that operate against it, falling back to the tags in that <code>services</code> sub-dict when
 unshackle cannot fetch the list. Each synthetic command carries the server-side service's options and
 documentation, so <code>unshackle dl --remote &lt;TAG&gt; -h</code> shows the same help text as it does on the
-server. See <a href="../../../dev/rest-api/remote-sessions/">remote sessions</a> for the
+server. Service names resolve against the server's tags and aliases, not your local services.
+If the server does not offer a name to your API key, unshackle rejects the name and lists the
+tags it does offer. See <a href="../../../dev/rest-api/remote-sessions/">remote sessions</a> for the
 full setup.</p>
 <h2 id="serve"><code>serve</code><a class="headerlink" href="#serve" title="Permanent link">&para;</a></h2>
 <ul>
