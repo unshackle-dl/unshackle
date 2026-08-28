@@ -2496,6 +2496,16 @@ server does not have to prompt:</p>
   the server fetches the right manifests</li>
 <li>Your local per-service <strong>cache files</strong> (e.g. refreshed tokens)</li>
 </ul>
+<p>The server uses its own accounts only when the operator lists the service in
+<code>serve.server_accounts</code> and gives your API key <code>server_accounts</code> in <code>serve.users</code>.
+For any other service, a client that sends no credentials or cookies authenticates
+with nothing. For a listed service the client sends no credentials, cookies, or
+cache at all: the server picks one of its own accounts that works in your region and
+rotates through them. <code>--proxy ca</code> picks a <code>ca</code> account.</p>
+<p><code>GET /api/services</code> advertises the regions those accounts cover. When your own
+region is not one of them and you set no <code>--proxy</code>, the client resolves a proxy for
+the first advertised region itself, so both sides sit in a region the account
+works in.</p>
 <p>The server responds immediately with a session ID and a status. Authentication
 runs in the background on the server.</p>
 </div>
@@ -2631,7 +2641,9 @@ mid-prompt.</p>
 <li><strong>Namespaced, isolated cache.</strong> Each remote session gets its own cache directory,
   namespaced by a hash of the API key and the remote session ID, so remote sessions
   cannot read each other's cached tokens. The server deletes the directory when the
-  remote session ends.</li>
+  remote session ends. A remote session that uses a server account (<code>serve.server_accounts</code>)
+  gets a persistent per-account cache instead, so the account's tokens outlive the
+  remote session.</li>
 <li><strong>The server redacts secrets in logs.</strong> It redacts remote session IDs, service tags,
   and other user values before it writes them to the log.</li>
 </ul>
