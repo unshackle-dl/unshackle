@@ -93,7 +93,11 @@ class HTTP(Vault):
             return {"status": "not_found"}
 
         if not r.ok:
-            raise ValueError(f"API returned HTTP Error {r.status_code}: {r.reason.title()}")
+            try:
+                detail = r.json().get("message") or r.reason.title()
+            except (json.JSONDecodeError, AttributeError):
+                detail = r.reason.title()
+            raise ValueError(f"API returned HTTP Error {r.status_code}: {detail}")
 
         try:
             res = r.json()
@@ -286,9 +290,10 @@ class HTTP(Vault):
                     )
                     if response.get("status") != "not_found":
                         return int(response.get("inserted", 0))
-                    # only a 404 proves the server has no InsertKeys method; other
-                    # failures may be transient, so keep batching for the next call
                     self.batch_insert = False
+                except ValueError as e:
+                    if "unknown" in str(e).lower() and "method" in str(e).lower():
+                        self.batch_insert = False
                 except Exception:
                     pass
             for kid, key in processed_kid_keys.items():

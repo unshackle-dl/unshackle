@@ -57,7 +57,12 @@ def process_service_keys(from_vault: Vault, service: str, log: logging.Logger) -
 
 def add_keys_with_progress(vault: Vault, service: str, kid_keys: dict[str, str], log: logging.Logger) -> int:
     """Add content keys to a vault in batches, with a progress bar of counts and time left."""
-    chunk = 1 if type(vault).__name__ == "HTTP" and getattr(vault, "api_mode", None) != "json" else 500
+
+    def chunk(i: int) -> int:
+        if type(vault).__name__ != "HTTP":
+            return 500
+        return 500 if i and getattr(vault, "batch_insert", False) else 1
+
     kids = list(kid_keys)
     added = 0
     console.print()
@@ -76,9 +81,11 @@ def add_keys_with_progress(vault: Vault, service: str, kid_keys: dict[str, str],
         transient=True,
     ) as progress:
         task = progress.add_task(f"{service} → {vault}", total=len(kids), added=0)
-        for i in range(0, len(kids), chunk):
-            batch: dict[Union[UUID, str], str] = {kid: kid_keys[kid] for kid in kids[i : i + chunk]}
+        i = 0
+        while i < len(kids):
+            batch: dict[Union[UUID, str], str] = {kid: kid_keys[kid] for kid in kids[i : i + chunk(i)]}
             added += vault.add_keys(service, batch)
+            i += len(batch)
             progress.update(task, advance=len(batch), added=added)
     return added
 
