@@ -1513,6 +1513,8 @@
       
         
       
+        
+      
     
     
     
@@ -1666,6 +1668,34 @@
     
   
     Job Lifecycle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../dev/rest-api/dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard
   
 
     
@@ -2199,6 +2229,12 @@ is the <a href="../../../dev/rest-api/">REST API</a> section. These are the conf
 <td>bool</td>
 <td><code>false</code></td>
 <td>Expose only the remote service session endpoints (health, services, search, session) and disable the rest of the REST API.</td>
+</tr>
+<tr>
+<td><code>dashboard</code></td>
+<td>dict</td>
+<td><em>(unset)</em></td>
+<td>Developer dashboard: <code>key</code> is the API key for the read-only <code>/api/dashboard/</code> endpoints (status, sessions, jobs, logs, SSE events). Unset leaves those routes unregistered. See <a href="../../../dev/rest-api/dashboard/">dashboard endpoints</a>.</td>
 </tr>
 <tr>
 <td><code>session_ttl</code></td>
