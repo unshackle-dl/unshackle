@@ -2903,6 +2903,51 @@ def handle_proxy_license(
     return web.json_response({"license": base64.b64encode(license_response).decode("ascii")})
 
 
+async def session_segment_filter_handler(
+    data: Dict[str, Any], session_id: str, request: Optional[web.Request] = None
+) -> web.Response:
+    """Run the service's HLS ``OnSegmentFilter`` for one track and return the unwanted segment URIs.
+
+    The client fetches the same media playlist again. Only the URIs leave the server; the
+    filter and the data it reads stay on it.
+    """
+    session = await get_validated_session(session_id, request)
+
+    track_id = data.get("track_id")
+    if not track_id:
+        raise APIError(APIErrorCode.INVALID_INPUT, "Missing required parameter: track_id")
+
+    track = session.tracks.get(track_id)
+    if not track:
+        raise APIError(
+            APIErrorCode.TRACK_NOT_FOUND,
+            f"Track not found in session: {track_id}",
+            details={"track_id": track_id, "session_id": session_id},
+        )
+
+    segment_filter = getattr(track, "OnSegmentFilter", None)
+    if not callable(segment_filter) or not getattr(track, "url", None):
+        return web.json_response({"unwanted": None})
+
+    try:
+        import m3u8
+        import requests
+
+        response = session.service_instance.session.get(track.url)
+        if not getattr(response, "ok", True):
+            raise ValueError(f"playlist request failed: {response.status_code}")
+        if isinstance(response, requests.Response):
+            response.encoding = response.encoding or "utf-8"
+        playlist = m3u8.loads(response.text, uri=str(track.url))
+        unwanted = [segment.absolute_uri for segment in playlist.segments if segment_filter(segment)]
+    except (Exception, SystemExit):
+        # `from None`: a debug-mode traceback would otherwise carry the service's exception chain
+        log.exception(f"Error running the segment filter for track {sanitize_log(str(track_id))}")
+        raise APIError(APIErrorCode.SERVICE_ERROR, "Could not run the segment filter for this track") from None
+
+    return web.json_response({"unwanted": unwanted})
+
+
 async def session_license_handler(
     data: Dict[str, Any], session_id: str, request: Optional[web.Request] = None
 ) -> web.Response:

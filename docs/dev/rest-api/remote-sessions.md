@@ -278,6 +278,7 @@ The server mounts all these routes, even in `--remote-only` mode. Paths use the
 | `GET` | `/api/session/{id}/titles` | Fetch and cache the title list |
 | `POST` | `/api/session/{id}/tracks` | Resolve tracks, manifests, chapters, headers/cookies for a title |
 | `POST` | `/api/session/{id}/segments` | Resolve per-segment/track download descriptors |
+| `POST` | `/api/session/{id}/segment_filter` | Unwanted HLS segment URIs for one track (ads, bumpers) |
 | `POST` | `/api/session/{id}/license` | DRM licensing (proxy or server CDM) |
 | `GET` | `/api/session/{id}/prompt` | Poll interactive auth status / pending prompt |
 | `POST` | `/api/session/{id}/prompt` | Submit an answer to a pending prompt |

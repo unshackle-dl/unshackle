@@ -15,7 +15,7 @@ from datetime import date as date_
 from enum import Enum
 from http.cookiejar import CookieJar
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Callable, Dict, Optional, Union
 
 import click
 import requests
@@ -81,7 +81,9 @@ class RemoteClient:
         session.headers[self.auth_headers[self._auth_header_index]] = self.api_key
         return True
 
-    def request(self, method: str, endpoint: str, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def request(
+        self, method: str, endpoint: str, data: Optional[Dict[str, Any]] = None, optional: bool = False
+    ) -> Dict[str, Any]:
         url = f"{self.server_url}{endpoint}"
         while True:
             try:
@@ -97,16 +99,26 @@ class RemoteClient:
             if resp.status_code == 401 and self.next_auth_header():
                 continue
             break
-        result = resp.json()
         if resp.status_code >= 400:
-            error_msg = redact_secrets(str(result.get("message", resp.text)), data)
-            error_code = result.get("error_code", "UNKNOWN")
+            try:
+                detail = resp.json()
+            except ValueError:
+                detail = {}
+            error_msg = redact_secrets(str(detail.get("message", resp.text)), data)
+            error_code = detail.get("error_code", "UNKNOWN")
+            if optional:
+                log.debug(f"Optional endpoint {endpoint} unavailable [{error_code}]: {error_msg}")
+                return {}
             log.error(f"Server error [{error_code}]: {error_msg}")
             raise SystemExit(1)
-        return result
+        return resp.json()
 
     def post(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
         return self.request("post", endpoint, data)
+
+    def post_optional(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """POST to an endpoint that an older server may not have. Empty dict when the route is missing."""
+        return self.request("post", endpoint, data, optional=True)
 
     def get(self, endpoint: str) -> Dict[str, Any]:
         return self.request("get", endpoint)
@@ -633,6 +645,7 @@ class RemoteService:
         self._chapters_by_title: Dict[str, list] = {}
         self._session_id: Optional[str] = None
         self._server_cdm_type: str = "widevine"
+        self._segment_filters: Dict[str, tuple[set[str], set[str]]] = {}
 
         self._session = requests.Session()
         self._session.headers.update(config.headers)
@@ -848,10 +861,38 @@ class RemoteService:
             )
         self._server_cdm_type = result.get("server_cdm_type", "widevine")
 
+        for track in [*tracks.videos, *tracks.audio, *tracks.subtitles]:
+            if track.descriptor == Track.Descriptor.HLS:
+                track.OnSegmentFilter = self.remote_segment_filter(str(track.id))
+
         self._tracks_by_title[title_id] = tracks
         self._chapters_by_title[title_id] = result.get("chapters", [])
 
         return tracks
+
+    def remote_segment_filter(self, track_id: str) -> Callable[[Any], bool]:
+        """The server's ``OnSegmentFilter`` result for one HLS track, fetched on first use.
+
+        The service keeps its filter; the client gets only the segment URIs to skip.
+        A server without the route returns nothing, so the client keeps every segment.
+        """
+
+        def segment_filter(segment: Any) -> bool:
+            unwanted = self._segment_filters.get(track_id)
+            if unwanted is None:
+                result = self.client.post_optional(
+                    f"/api/session/{self._session_id}/segment_filter", {"track_id": track_id}
+                )
+                uris = [str(u) for u in (result.get("unwanted") or [])]
+                unwanted = (set(uris), {u.split("?")[0] for u in uris})
+                self._segment_filters[track_id] = unwanted
+            exact, paths = unwanted
+            if not exact:
+                return False
+            uri = str(getattr(segment, "absolute_uri", "") or "")
+            return uri in exact or uri.split("?")[0] in paths
+
+        return segment_filter
 
     def resolve_server_keys(self, title: Title_T) -> None:
         """Get the DRM content keys through the server CDM for all tracks on a title.

@@ -40,6 +40,7 @@ from unshackle.core.api.handlers import (
     session_license_handler,
     session_prompt_get_handler,
     session_prompt_post_handler,
+    session_segment_filter_handler,
     session_segments_handler,
     session_titles_handler,
     session_tracks_handler,
@@ -1676,6 +1677,57 @@ async def session_segments(request: web.Request) -> web.Response:
 
 
 @api_handler
+async def session_segment_filter(request: web.Request) -> web.Response:
+    """
+    Get the unwanted HLS segments for one track.
+    ---
+    summary: Get segment filter
+    description: >-
+      Run the service's HLS segment filter on the server and return the segment URIs the
+      client must skip. The client fetches the same media playlist itself.
+    parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - track_id
+            properties:
+              track_id:
+                type: string
+                description: Track ID to run the segment filter for
+    responses:
+      '200':
+        description: >-
+          Absolute URIs of the unwanted segments, or null when the track has no segment filter
+      '404':
+        description: Remote session or track not found
+    """
+    session_id = request.match_info["session_id"]
+    try:
+        data = await request.json()
+    except Exception as e:
+        return build_error_response(
+            APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}),
+            request.app.get("debug_api", False),
+        )
+    try:
+        return await session_segment_filter_handler(data, session_id, request)
+    except Exception as e:
+        log.exception("Error in session segment filter")
+        return handle_api_exception(
+            e, context={"operation": "session_segment_filter"}, debug_mode=request.app.get("debug_api", False)
+        )
+
+
+@api_handler
 async def session_license(request: web.Request) -> web.Response:
     """
     Proxy DRM license through authenticated service.
@@ -1907,6 +1959,7 @@ ROUTES: list[tuple[str, str, Handler, bool]] = [
     ("GET", "/api/session/{session_id}/titles", session_titles, True),
     ("POST", "/api/session/{session_id}/tracks", session_tracks, True),
     ("POST", "/api/session/{session_id}/segments", session_segments, True),
+    ("POST", "/api/session/{session_id}/segment_filter", session_segment_filter, True),
     ("POST", "/api/session/{session_id}/license", session_license, True),
     ("GET", "/api/session/{session_id}/prompt", session_prompt_get, True),
     ("POST", "/api/session/{session_id}/prompt", session_prompt_submit, True),

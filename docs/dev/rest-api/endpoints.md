@@ -826,6 +826,7 @@ GET  /api/session/{id}/prompt   → poll until authenticated (submit answers via
 GET  /api/session/{id}/titles   → list titles
 POST /api/session/{id}/tracks   → tracks + chapters (with URLs) for one title
 POST /api/session/{id}/segments → resolve segment URLs / DRM / headers per track
+POST /api/session/{id}/segment_filter → HLS segments the service drops (ads, bumpers)
 POST /api/session/{id}/license  → proxy or server-CDM DRM licensing
 DELETE /api/session/{id}        → tear down, harvest updated cache
 ```
@@ -963,6 +964,23 @@ Get the download URL, DRM info, headers, cookies, and raw track data for the sel
 | `200` | - | Segment info returned. |
 | `400` | `INVALID_INPUT` | Missing `track_ids`. |
 | `404` | `TRACK_NOT_FOUND` | An unknown track ID was requested. |
+
+### `POST /api/session/{session_id}/segment_filter`
+
+Get the HLS segments a service drops (ads, bumpers, dub cards). The server runs the service's own segment filter over the track's media playlist and returns only the URIs, so the client drops the same segments the service does. Body: `{ "track_id": "v-1" }` (required). `unwanted` is `null` when the track has no filter. The client keeps every segment when the server does not have this route.
+
+=== "Response `200`"
+
+    ```json
+    { "unwanted": ["https://cdn.example/hls/ad1.ts"] }
+    ```
+
+| Status | Error code | Meaning |
+| --- | --- | --- |
+| `200` | - | Unwanted segment URIs, or `null`. |
+| `400` | `INVALID_INPUT` | Missing `track_id`. |
+| `404` | `TRACK_NOT_FOUND` | An unknown track ID was requested. |
+| `500` | `SERVICE_ERROR` | The playlist request or the filter failed. |
 
 ### `POST /api/session/{session_id}/license`
 
