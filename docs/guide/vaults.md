@@ -167,7 +167,7 @@ A flexible HTTP vault that speaks one of three wire protocols, selected with `ap
         password: "your-api-token"
     ```
 
-    Requests are `POST`ed as `{"method": ..., "params": ..., "token": ...}` using methods like `GetKey`, `InsertKey`, and `GetServices`. This mode cannot list all keys in bulk, so a `kv copy` from a json vault relies on the remote server's own duplicate handling.
+    Requests are `POST`ed as `{"method": ..., "params": ..., "token": ...}` using methods like `GetKey`, `InsertKey`, and `GetServices`. Bulk writes (`kv copy`, `kv add`) first try `InsertKeys` with `params: {"keys": {kid: key, ...}, "service": ..., "title": ...}` (up to 500 content keys per call) and expect `{"inserted": <count>}` back. A server that answers HTTP 404 to `InsertKeys` gets one `InsertKey` call per content key for the rest of the run instead. This mode cannot list all keys in bulk, so a `kv copy` from a json vault relies on the remote server's own duplicate handling.
 
 === "decrypt_labs mode"
 

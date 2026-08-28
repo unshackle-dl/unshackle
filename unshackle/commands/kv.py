@@ -57,7 +57,7 @@ def process_service_keys(from_vault: Vault, service: str, log: logging.Logger) -
 
 def add_keys_with_progress(vault: Vault, service: str, kid_keys: dict[str, str], log: logging.Logger) -> int:
     """Add content keys to a vault in batches, with a progress bar of counts and time left."""
-    chunk = 1 if type(vault).__name__ == "HTTP" else 500
+    chunk = 1 if type(vault).__name__ == "HTTP" and getattr(vault, "api_mode", None) != "json" else 500
     kids = list(kid_keys)
     added = 0
     console.print()

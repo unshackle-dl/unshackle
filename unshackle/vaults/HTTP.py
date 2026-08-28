@@ -57,6 +57,7 @@ class HTTP(Vault):
 
         self.username = username
         self.api_mode = api_mode.lower()
+        self.batch_insert = True
         self.current_title = None
         self.session = Session()
         self.session.headers.update({"User-Agent": f"unshackle v{__version__}"})
@@ -278,6 +279,18 @@ class HTTP(Vault):
         title = getattr(self, "current_title", None)
 
         if self.api_mode == "json":
+            if self.batch_insert:
+                try:
+                    response = self.request(
+                        "InsertKeys", {"keys": processed_kid_keys, "service": service.lower(), "title": title}
+                    )
+                    if response.get("status") != "not_found":
+                        return int(response.get("inserted", 0))
+                    # only a 404 proves the server has no InsertKeys method; other
+                    # failures may be transient, so keep batching for the next call
+                    self.batch_insert = False
+                except Exception:
+                    pass
             for kid, key in processed_kid_keys.items():
                 try:
                     response = self.request(
