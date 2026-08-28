@@ -16,6 +16,7 @@ from unshackle.core.api.errors import APIError, APIErrorCode, handle_api_excepti
 from unshackle.core.api.input_bridge import AuthStatus, InputBridge
 from unshackle.core.api.sanitize import safe_cache_key, sanitize_log
 from unshackle.core.api.session_store import SessionStore
+from unshackle.core.cacher import Cacher
 from unshackle.core.config import config
 from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP
 from unshackle.core.providers.anilist import parse_anilist_ref
@@ -241,12 +242,20 @@ def setup_list_service(
     no_proxy = data.get("no_proxy", False)
     proxy_param, proxy_providers = resolve_handler_proxy(data, normalized_service, request)
 
+    account = resolve_server_account(request, normalized_service, data.get("client_region"))
+    if account:
+        profile = None if account == "default" else account
+
     cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"))
     parent_ctx = build_parent_ctx(profile, cdm, proxy_param, no_proxy, proxy_providers, service_config)
     service_module = Services.load(normalized_service)
     service_instance = instantiate_service(parent_ctx, service_module, title_id, data, LIST_HANDLER_TRANSPORT_KEYS)
 
-    cookies = dl.get_cookie_jar(normalized_service, profile)
+    if account:
+        service_instance.cache = Cacher(f"_accounts/{normalized_service}/{account}")
+        cookies = server_account_cookies(normalized_service, profile)
+    else:
+        cookies = dl.get_cookie_jar(normalized_service, profile)
     credential = dl.get_credentials(normalized_service, profile)
     service_instance.authenticate(cookies, credential)
     return service_instance
@@ -305,6 +314,159 @@ def server_cdm_allowed(request: Optional[web.Request] = None, service: Optional[
             Services.get_tag(s).upper() for s in allowed
         }
     return bool(allowed)
+
+
+_account_counters: Dict[str, int] = {}
+
+
+def validate_server_accounts() -> Dict[str, Any]:
+    """Check ``serve.server_accounts`` at startup; raise ValueError on a bad shape or unknown profile."""
+    accounts = config.serve.get("server_accounts") or {}
+    if not isinstance(accounts, dict):
+        raise ValueError("serve.server_accounts must be a mapping of service tag to accounts")
+    for tag, spec in accounts.items():
+        if spec is True:
+            continue
+        if not isinstance(spec, dict) or not spec:
+            raise ValueError(f"serve.server_accounts.{tag}: expected true or a mapping of profile to regions")
+        creds = config.credentials.get(Services.get_tag(str(tag)))
+        for profile, regions in spec.items():
+            members = [regions] if isinstance(regions, str) else regions if isinstance(regions, list) else []
+            if not members or not all(
+                isinstance(m, str) and (m.lower() == "global" or re.fullmatch(r"[A-Za-z]{2}", m)) for m in members
+            ):
+                raise ValueError(
+                    f"serve.server_accounts.{tag}.{profile}: expected a two-letter country code, a list of them, "
+                    "or global (quote codes like 'no')"
+                )
+            cookie_file = config.directories.cookies / Services.get_tag(str(tag)) / f"{profile}.txt"
+            if not (isinstance(creds, dict) and profile in creds) and not cookie_file.exists():
+                raise ValueError(
+                    f"serve.server_accounts.{tag}.{profile}: no such profile under credentials.{tag} "
+                    f"and no cookie file at {cookie_file}"
+                )
+    return accounts
+
+
+def server_account_spec(service: str) -> Any:
+    """The ``serve.server_accounts`` entry for ``service`` (``True`` or a profile->regions map), else None."""
+    accounts = config.serve.get("server_accounts") or {}
+    tag = Services.get_tag(service).upper()
+    spec = next((v for k, v in accounts.items() if Services.get_tag(str(k)).upper() == tag), None)
+    return spec if spec is True or (isinstance(spec, dict) and spec) else None
+
+
+def _regions(value: Any) -> set[str]:
+    values = [value] if isinstance(value, str) else list(value) if isinstance(value, (list, tuple)) else []
+    return {str(v).lower() for v in values}
+
+
+def server_account_cookies(service: str, profile: Optional[str]) -> Any:
+    """Cookies for a server account: the profile's own file only, so a bare ``cookies/{service}.txt`` cannot shadow it."""
+    from unshackle.commands.dl import dl
+
+    if profile is None:
+        return dl.get_cookie_jar(service, None)
+    path = config.directories.cookies / service / f"{profile}.txt"
+    return dl.load_cookie_file(path) if path.exists() else None
+
+
+def server_account_regions(service: str) -> Optional[Dict[str, Any]]:
+    """What ``GET /api/services`` advertises: the union of regions the server's accounts cover."""
+    spec = server_account_spec(service)
+    if not spec:
+        return None
+    if spec is True:
+        return {"regions": [], "global": True}
+    union: set[str] = set()
+    for value in spec.values():
+        union |= _regions(value)
+    return {"regions": sorted(union - {"global"}), "global": "global" in union}
+
+
+def server_region() -> Optional[str]:
+    """The server's own country code, from the cached IP lookup; None when unknown."""
+    try:
+        from unshackle.core.utils.ip_info import get_ip_info
+
+        info = get_ip_info(None, cached=True)
+        return (info.get("country") or "").lower() or None if info else None
+    except Exception:
+        return None
+
+
+def server_account_pool(service: str, region: Optional[str]) -> Optional[list[Optional[str]]]:
+    """Profiles of the server's own accounts usable in ``region``; None when the service is client-managed."""
+    spec = server_account_spec(service)
+    if not spec:
+        return None
+    creds = config.credentials.get(service)
+    if spec is True:
+        return sorted(creds) if isinstance(creds, dict) else [None]
+    region = (region or "").lower()
+    return sorted(p for p, v in spec.items() if {"global", region} & _regions(v))
+
+
+def next_server_profile(service: str, region: Optional[str]) -> Optional[str]:
+    """Round-robin the next server account profile for ``region``."""
+    pool = server_account_pool(service, region) or []
+    if not pool:
+        covered = server_account_regions(service) or {}
+        regions = ", ".join(covered.get("regions") or []) or "none"
+        raise APIError(
+            APIErrorCode.INVALID_INPUT,
+            f"No server account for {service} in region '{region or 'unknown'}'. "
+            f"Its accounts cover: {regions}. Pass --proxy with one of those country codes.",
+            details={"service": service, "region": region, "regions": covered.get("regions") or []},
+        )
+    key = f"{service}:{','.join(p or '' for p in pool)}"
+    n = _account_counters.get(key, 0)
+    _account_counters[key] = n + 1
+    return pool[n % len(pool)]
+
+
+def server_accounts_allowed(request: Optional[web.Request] = None, service: Optional[str] = None) -> bool:
+    """Whether the calling API key may authenticate ``service`` with one of the server's own accounts.
+
+    Same shape as ``server_cdm``: ``server_accounts: true`` on the ``serve.users`` entry for every
+    service, or a list of service tags. Off unless set. The admin secret (no ``users`` entry) keeps
+    full access. Combine with ``server_account_spec``: the server treats an API key without the
+    opt-in as a client-managed remote session for that service.
+    """
+    if not request:
+        return True
+    user_config = config.serve.get("users", {}).get(request_secret_key(request))
+    if user_config is None:
+        return True
+    allowed = user_config.get("server_accounts", False)
+    if isinstance(allowed, str):
+        allowed = [allowed]
+    if isinstance(allowed, (list, tuple, set)):
+        return service is not None and Services.get_tag(service).upper() in {
+            Services.get_tag(s).upper() for s in allowed
+        }
+    return bool(allowed)
+
+
+def resolve_server_account(request: Optional[web.Request], service: str, region: Any) -> Optional[str]:
+    """Profile of the server account a search or list call runs on; None when the service is client-managed.
+
+    Raises FORBIDDEN for an API key without the ``server_accounts`` opt-in.
+    """
+    if server_account_spec(service) is None:
+        return None
+    if not server_accounts_allowed(request, service):
+        raise APIError(
+            APIErrorCode.FORBIDDEN,
+            f"Your API key may not use the server's accounts for {service}.",
+            details={"service": service},
+        )
+    return next_server_profile(service, region if isinstance(region, str) else None) or "default"
+
+
+def server_account_for(request: Optional[web.Request], service: str) -> bool:
+    """True when this request's remote session for ``service`` should run on a server account."""
+    return server_account_spec(service) is not None and server_accounts_allowed(request, service)
 
 
 def server_proxy_allowed(request: Optional[web.Request] = None) -> bool:
@@ -831,6 +993,10 @@ async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = 
 
     proxy_param, proxy_providers = await asyncio.to_thread(resolve_handler_proxy, data, normalized_service, request)
 
+    account = resolve_server_account(request, normalized_service, data.get("client_region"))
+    if account:
+        profile = None if account == "default" else account
+
     cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"))
     parent_ctx = build_parent_ctx(profile, cdm, proxy_param, no_proxy, proxy_providers, service_config)
     service_module = Services.load(normalized_service)
@@ -844,7 +1010,11 @@ async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = 
             details={"service": normalized_service},
         )
 
-    cookies = dl.get_cookie_jar(normalized_service, profile)
+    if account:
+        service_instance.cache = Cacher(f"_accounts/{normalized_service}/{account}")
+        cookies = server_account_cookies(normalized_service, profile)
+    else:
+        cookies = dl.get_cookie_jar(normalized_service, profile)
     credential = dl.get_credentials(normalized_service, profile)
     service_instance.authenticate(cookies, credential)
 
@@ -1846,6 +2016,12 @@ async def server_config_handler(request: Optional[web.Request] = None) -> web.Re
                 "remote_only": bool(serve_cfg.get("remote_only", False)),
                 "cdm_overrides": redact_config(serve_cfg.get("cdm_overrides")),
                 "allow_job_credentials": bool(serve_cfg.get("allow_job_credentials", False)),
+                "server_accounts": {
+                    tag: server_account_regions(tag)
+                    for tag in (serve_cfg.get("server_accounts") or {})
+                    if server_accounts_allowed(request, tag)
+                }
+                or None,
             },
             "directories": {
                 "downloads": str(config.directories.downloads),
@@ -2046,6 +2222,7 @@ SESSION_TRANSPORT_KEYS = {
     "cookies",
     "cache",
     "client_region",
+    "proxy_region",
     "cdm_type",
     "range_",
     "vcodec",
@@ -2061,11 +2238,14 @@ def create_service_instance(
     proxy_param: Optional[str],
     proxy_providers: list,
     profile: Optional[str],
+    server_account: bool = False,
 ) -> Any:
-    """Make and authenticate a service instance.
+    """Make a service instance and resolve its credentials and cookies.
 
-    Supports client-sent credentials/cookies (for remote-dl) with fallback
-    to server-local config (for backward compatibility).
+    With ``server_account`` the service takes the server's own credential and cookie file for
+    ``profile`` and drops anything the client sent. Otherwise only client-sent data counts: a
+    client that sends nothing authenticates with nothing, because the server never lends its
+    own accounts.
     """
     from unshackle.commands.dl import dl
     from unshackle.core.credential import Credential
@@ -2118,7 +2298,14 @@ def create_service_instance(
     service_module = Services.load(normalized_service)
     service_instance = instantiate_service(parent_ctx, service_module, title_id, data, SESSION_TRANSPORT_KEYS)
 
-    # Resolve credentials: client-sent > server-local
+    if server_account:
+        return (
+            service_instance,
+            server_account_cookies(normalized_service, profile),
+            dl.get_credentials(normalized_service, profile),
+        )
+
+    credential = None
     cred_data = data.get("credentials")
     if cred_data and isinstance(cred_data, dict):
         credential = Credential(
@@ -2126,10 +2313,8 @@ def create_service_instance(
             password=cred_data["password"],
             extra=cred_data.get("extra"),
         )
-    else:
-        credential = dl.get_credentials(normalized_service, profile)
 
-    # Resolve cookies: client-sent > server-local
+    cookies = None
     cookie_text = data.get("cookies")
     if cookie_text and isinstance(cookie_text, str):
         import base64
@@ -2149,8 +2334,6 @@ def create_service_instance(
 
             with suppress(OSError):
                 os.unlink(tmp_path)
-    else:
-        cookies = dl.get_cookie_jar(normalized_service, profile)
 
     return service_instance, cookies, credential
 
@@ -2187,13 +2370,23 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
         import hashlib
         import uuid as uuid_mod
 
-        from unshackle.core.cacher import Cacher
         from unshackle.core.config import config as app_config
 
         session_id = str(uuid_mod.uuid4())
         api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
         api_key_hash = hashlib.pbkdf2_hmac("sha256", api_key.encode(), b"unshackle-session-ns", 100_000).hex()[:12]
-        session_cache_tag = f"_sessions/{api_key_hash}/{session_id}/{normalized_service}"
+        session_cache_dir = f"_sessions/{api_key_hash}/{session_id}/{normalized_service}"
+        session_cache_tag: Optional[str] = session_cache_dir
+
+        server_account = server_account_for(request, normalized_service)
+        if server_account:
+            region = data.get("proxy_region") or data.get("client_region")
+            if region is not None and not (isinstance(region, str) and re.fullmatch(r"[A-Za-z]{2}", region)):
+                raise APIError(APIErrorCode.INVALID_INPUT, "proxy_region must be a two-letter country code.")
+            if region is None and data.get("no_proxy"):
+                region = server_region()
+            profile = next_server_profile(normalized_service, region)
+            log.info(f"Using server account '{sanitize_log(profile or 'default')}' for {normalized_service}")
 
         service_instance, cookies, credential = create_service_instance(
             normalized_service,
@@ -2202,12 +2395,17 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
             proxy_param,
             proxy_providers,
             profile,
+            server_account=server_account,
         )
 
-        service_instance.cache = Cacher(session_cache_tag)
+        if server_account:
+            session_cache_tag = None
+            service_instance.cache = Cacher(f"_accounts/{normalized_service}/{profile or 'default'}")
+        else:
+            service_instance.cache = Cacher(session_cache_dir)
 
         cache_data = data.get("cache", {})
-        if cache_data:
+        if cache_data and session_cache_tag:
             import base64
 
             cache_dir = app_config.directories.cache / session_cache_tag
@@ -2230,6 +2428,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
             session_id=session_id,
             owner_key=api_key,
             creator_ip=request.remote if request else None,
+            server_account=(profile or "default") if server_account else None,
         )
         session.cache_tag = session_cache_tag
         # Echoed to every dashboard viewer, so cap what an arbitrary client can push into it.
@@ -2256,6 +2455,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
                 "session_id": session.session_id,
                 "service": normalized_service,
                 "status": "authenticating",
+                "server_account": server_account,
             }
         )
 

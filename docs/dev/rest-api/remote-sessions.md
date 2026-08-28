@@ -126,6 +126,18 @@ hood the client walks a remote session through its lifecycle.
       the server fetches the right manifests
     - Your local per-service **cache files** (e.g. refreshed tokens)
 
+    The server uses its own accounts only when the operator lists the service in
+    `serve.server_accounts` and gives your API key `server_accounts` in `serve.users`.
+    For any other service, a client that sends no credentials or cookies authenticates
+    with nothing. For a listed service the client sends no credentials, cookies, or
+    cache at all: the server picks one of its own accounts that works in your region and
+    rotates through them. `--proxy ca` picks a `ca` account.
+
+    `GET /api/services` advertises the regions those accounts cover. When your own
+    region is not one of them and you set no `--proxy`, the client resolves a proxy for
+    the first advertised region itself, so both sides sit in a region the account
+    works in.
+
     The server responds immediately with a session ID and a status. Authentication
     runs in the background on the server.
 
@@ -247,7 +259,9 @@ serve:
 - **Namespaced, isolated cache.** Each remote session gets its own cache directory,
   namespaced by a hash of the API key and the remote session ID, so remote sessions
   cannot read each other's cached tokens. The server deletes the directory when the
-  remote session ends.
+  remote session ends. A remote session that uses a server account (`serve.server_accounts`)
+  gets a persistent per-account cache instead, so the account's tokens outlive the
+  remote session.
 - **The server redacts secrets in logs.** It redacts remote session IDs, service tags,
   and other user values before it writes them to the log.
 

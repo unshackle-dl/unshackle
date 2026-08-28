@@ -120,6 +120,7 @@ Field notes:
 | `has_search` | Whether the service supports `POST /api/search`. |
 | `has_drm` | Whether the service overrides a Widevine or PlayReady license hook. |
 | `pending_update` | Set to `true` while a service repository refresh waits for this service's jobs to finish before it swaps in the new code. Absent otherwise. |
+| `server_accounts` | Present when the server lends its own accounts for this service: `{regions: ["ca", "gb"], global: bool}`, the regions those accounts cover. A client sends no credentials, cookies, or cache for such a service. |
 | `auth_methods` | Declared or inferred auth methods, e.g. `["cookies"]`, `["credentials"]`. |
 
 | Status | Meaning |
@@ -833,7 +834,7 @@ DELETE /api/session/{id}        → tear down, harvest updated cache
 
 ### `POST /api/session/create`
 
-Make a remote session for a service and title. Authentication runs asynchronously in the background. This call returns immediately with `status: "authenticating"`, and you then poll the prompt endpoint. The body accepts `service` and `title_id` (both required). It also accepts a broad set of optional keys, because the body allows `additionalProperties`. These are `credentials` (`{username, password, extra?}`), `cookies` (base64 of zlib-compressed Netscape cookie file), `proxy`, `no_proxy`, `profile`, `cache` (map of forwarded cache files), `client_region`, `cdm_type`, `range_`, `vcodec`, `quality`, `best_available`, and any service CLI options.
+Make a remote session for a service and title. Authentication runs asynchronously in the background. This call returns immediately with `status: "authenticating"`, and you then poll the prompt endpoint. The body accepts `service` and `title_id` (both required). It also accepts a broad set of optional keys, because the body allows `additionalProperties`. These are `credentials` (`{username, password, extra?}`), `cookies` (base64 of zlib-compressed Netscape cookie file), `proxy`, `no_proxy`, `profile`, `cache` (map of forwarded cache files), `client_region`, `proxy_region`, `cdm_type`, `range_`, `vcodec`, `quality`, `best_available`, and any service CLI options. `proxy_region` is the country code the client resolved `proxy` from; the server matches it against its own accounts.
 
 The `proxy` value must be a full proxy URI, unless the operator gives your API key `server_proxy` in the `serve.users` config. Without it, the server does not resolve country codes with its own proxy providers. It rejects the request with `INVALID_PROXY` when no `proxy` is set and the reported `client_region` differs from the server's region. A request that reports no `client_region` is not blocked. Pass `proxy` with your own proxy, or `no_proxy` to accept the server's own connection. With `server_proxy`, the server resolves a country code and picks a proxy for your `client_region` itself.
 
@@ -843,9 +844,12 @@ The `proxy` value must be a full proxy URI, unless the operator gives your API k
     {
       "session_id": "d4e5f6a7-...",
       "service": "EXAMPLE",
-      "status": "authenticating"
+      "status": "authenticating",
+      "server_account": false
     }
     ```
+
+`server_account` is `true` when the server authenticated with one of its own accounts (`serve.server_accounts`). Otherwise the server uses only what the client sent, and never falls back to its own credentials.
 
 | Status | Error code | Meaning |
 | --- | --- | --- |

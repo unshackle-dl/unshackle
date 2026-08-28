@@ -4654,22 +4654,24 @@ class dl:
 
         cookie_file = dl.get_cookie_path(service, profile)
         if cookie_file:
-            cookie_jar = MozillaCookieJar(cookie_file)
-            cookie_data = html.unescape(cookie_file.read_text("utf8")).splitlines(keepends=False)
-            for i, line in enumerate(cookie_data):
-                if line and not line.startswith("#"):
-                    line_data = line.lstrip().split("\t")
-                    # Disable client-side expiry checks completely across everywhere
-                    # Even though the cookies are loaded under ignore_expires=True, stuff
-                    # like python-requests may not use them if they are expired
-                    line_data[4] = ""
-                    cookie_data[i] = "\t".join(line_data)
-            cookie_data = "\n".join(cookie_data)
-            cookie_file.write_text(cookie_data, "utf8")
-            cookie_jar.load(ignore_discard=True, ignore_expires=True)
-            return cookie_jar
+            return dl.load_cookie_file(cookie_file)
 
         return None
+
+    @staticmethod
+    def load_cookie_file(cookie_file: Path) -> MozillaCookieJar:
+        """Load a Netscape cookie file with every expiry blanked, so no layer drops an expired cookie."""
+        cookie_jar = MozillaCookieJar(cookie_file)
+        cookie_data = html.unescape(cookie_file.read_text("utf8")).splitlines(keepends=False)
+        for i, line in enumerate(cookie_data):
+            if line and not line.startswith("#"):
+                line_data = line.lstrip().split("\t")
+                # Even under ignore_expires=True, requests may still skip an expired cookie
+                line_data[4] = ""
+                cookie_data[i] = "\t".join(line_data)
+        cookie_file.write_text("\n".join(cookie_data), "utf8")
+        cookie_jar.load(ignore_discard=True, ignore_expires=True)
+        return cookie_jar
 
     @staticmethod
     def save_cookies(path: Path, cookies: CookieJar):

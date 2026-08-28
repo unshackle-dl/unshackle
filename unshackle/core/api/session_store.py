@@ -40,6 +40,7 @@ class SessionEntry:
     creator_ip: Optional[str] = None
     owner_key: Optional[str] = None  # X-Secret-Key that owns this session
     cache_tag: Optional[str] = None
+    server_account: Optional[str] = None  # profile name when the server lent its own account
     input_bridge: Optional[InputBridge] = None
     auth_status: AuthStatus = AuthStatus.AUTHENTICATED
     auth_error: Optional[str] = None
@@ -68,6 +69,7 @@ class SessionEntry:
             "tracks": len(self.tracks),
             "auth_status": self.auth_status.value,
             "auth_error": self.auth_error,
+            "server_account": self.server_account,
             "client": self.client,
             "actions": list(self.actions),
             "created_at": self.created_at.isoformat(),
@@ -111,6 +113,7 @@ class SessionStore:
         session_id: Optional[str] = None,
         owner_key: Optional[str] = None,
         creator_ip: Optional[str] = None,
+        server_account: Optional[str] = None,
     ) -> SessionEntry:
         """Make a new remote session with an authenticated service instance."""
         async with self._lock:
@@ -126,6 +129,7 @@ class SessionStore:
                 service_instance=service_instance,
                 owner_key=owner_key,
                 creator_ip=creator_ip,
+                server_account=server_account,
             )
             self._sessions[session_id] = entry
             _publish("create", entry)

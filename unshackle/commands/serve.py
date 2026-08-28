@@ -17,6 +17,8 @@ from unshackle.core.api.handlers import (
     dashboard_authentication,
     dashboard_key,
     request_secret_key,
+    server_account_regions,
+    validate_server_accounts,
 )
 from unshackle.core.api.stats import ring, stats, stats_middleware
 from unshackle.core.config import config
@@ -253,6 +255,14 @@ def serve(
         global_services = config.serve.get("services")
         if global_services:
             log.info(f"Global service allowlist: {', '.join(global_services)}")
+        try:
+            server_accounts = validate_server_accounts()
+        except ValueError as e:
+            raise click.ClickException(str(e))
+        for tag in server_accounts:
+            regions = server_account_regions(tag) or {}
+            covered = list(regions.get("regions") or []) + (["global"] if regions.get("global") else [])
+            log.info(f"Server accounts for {tag}: {', '.join(covered)}")
         users = config.serve.get("users", {})
         if isinstance(users, dict):
             # yaml keys can parse as int; hmac.compare_digest and allowlist lookups need str

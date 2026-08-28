@@ -128,6 +128,7 @@ is the [REST API](../../dev/rest-api/index.md) section. These are the config key
 | `global_speed_limit` | str | *(unlimited)* | Server-wide download speed cap, e.g. `10M`, `1.5G` or plain bytes/sec (same format as `speed_limit`). One shared budget across all concurrent jobs; per-job speed limits are ignored while it is set. |
 | `cdm_overrides` | list or bool | *(unset)* | Allowed per-request CDM overrides: a list of permitted device names, or `true` for any. Unset rejects every override. |
 | `allow_job_credentials` | bool | `false` | Permit clients to supply credentials per job. |
+| `server_accounts` | dict | `{}` | Services whose remote sessions use the server's own `credentials` and cookie files instead of the client's (see below). |
 | `devices` | list | *(auto)* | Widevine devices offered; auto-filled from `directories.wvds`. |
 | `playready_devices` | list | *(auto)* | PlayReady devices; auto-filled from `directories.prds`. |
 
@@ -144,6 +145,54 @@ client configured with `server_cdm: true` to license with its own local CDM inst
 client that asks anyway gets a `FORBIDDEN` error. Because a download job always licenses with the server's CDM,
 an API key without `server_cdm` for that service also cannot submit or retry `/api/download`
 jobs. Keys that have no `users` entry, such as `api_secret`, keep server CDM access.
+
+`server_accounts` lists, per service, the accounts the server lends to remote sessions. A remote
+session for a listed service ignores the credentials, cookies, and cache the client sends and
+uses one of the server's own profiles from `credentials`. For a service that is not listed the
+server never uses its own accounts: a client that sends nothing authenticates with nothing.
+
+```yaml
+credentials:
+  EXAMPLE1:
+    ca_main: user1@example.com:pw1
+    eu_box: user2@example.com:pw2
+    shared: user3@example.com:pw3
+
+serve:
+  server_accounts:
+    EXAMPLE1:
+      ca_main: ca             # one country
+      eu_box: [gb, fr, de]    # a list of countries
+      shared: global          # any region
+    EXAMPLE2: true            # every profile (or the single credential), any region
+```
+
+Each entry under a service names a profile from `credentials`, or a cookie file
+`cookies/<TAG>/<profile>.txt` for a service that has no credentials. Its value is the region or
+regions that account works in: a two-letter country code, a list of them, or `global`. Quote
+`no` (Norway), because YAML reads the bare word as `false`.
+
+The region of a remote session is the country the client asked for with `--proxy` (`ca`, `ca1`,
+`provider:ca`), the server's own region with `--no-proxy`, or the client's own region otherwise.
+A full proxy URI carries no country, so with one only a `global` account matches. The server
+picks the profiles that cover that region (or are `global`) and rotates through them
+round-robin, one account per remote session. With no matching account it rejects the remote
+session. These services ignore the client's `-p/--profile`.
+
+Cookies come only from the profile's own file (`cookies/EXAMPLE1/ca_main.txt`; the server does
+not read a bare `cookies/EXAMPLE1.txt`), and each account keeps its own persistent cache under
+`cache/_accounts/EXAMPLE1/<profile>/`, so refreshed tokens survive the remote session but never
+cross accounts. `serve` refuses to start when a listed profile has neither an entry under
+`credentials` nor a cookie file.
+`/api/search`, `/api/list-titles` and `/api/list-tracks` use the same pool, matched on the
+client's reported region, and return `FORBIDDEN` to an API key without the opt-in. Rotation is
+per process and does not track which accounts are in use, so concurrent remote sessions can
+share one account.
+
+A `users` entry opts in to those accounts with `server_accounts: true` (every listed service)
+or a list of service tags. It is off unless set: an API key without it authenticates with the
+credentials the client sends, as for any other service, and `/api/services` does not advertise
+the server's accounts to it. API keys with no `users` entry, such as `api_secret`, keep access.
 
 `server_proxy` decides whether that API key may use the proxy providers the server has
 configured. There is no implicit access: only the boolean `true` on the API key's `users` entry
@@ -173,6 +222,7 @@ serve:
     c9d0e1f2:
       services: [EXAMPLE1, EXAMPLE2]
       server_cdm: [EXAMPLE1]      # the server licenses only EXAMPLE1; EXAMPLE2 needs a local CDM
+      server_accounts: [EXAMPLE1] # may authenticate EXAMPLE1 with one of the server's own accounts
       server_proxy: true          # this key may also use the server's proxy providers
 ```
 

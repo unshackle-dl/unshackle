@@ -40,6 +40,8 @@ from unshackle.core.api.handlers import (
     refresh_services_handler,
     retry_download_job_handler,
     search_handler,
+    server_account_regions,
+    server_accounts_allowed,
     server_config_handler,
     session_create_handler,
     session_delete_handler,
@@ -174,6 +176,16 @@ async def services(request: web.Request) -> web.Response:
                       pending_update:
                         type: boolean
                         description: Present (true) while a repo refresh waits for this service's jobs to finish
+                      server_accounts:
+                        type: object
+                        description: Present when the server lends its own accounts for this service (serve.server_accounts)
+                        properties:
+                          regions:
+                            type: array
+                            items:
+                              type: string
+                          global:
+                            type: boolean
                       aliases:
                         type: array
                         items:
@@ -240,6 +252,8 @@ async def services(request: web.Request) -> web.Response:
             }
             if tag in services_module.PENDING:
                 service_data["pending_update"] = True
+            if server_accounts_allowed(request, tag) and (server_accounts := server_account_regions(tag)) is not None:
+                service_data["server_accounts"] = server_accounts
 
             try:
                 service_module = Services.load(tag)
@@ -1532,9 +1546,29 @@ async def session_create(request: web.Request) -> web.Response:
               cache:
                 type: object
                 additionalProperties: true
+              client_region:
+                type: string
+                description: Two-letter country the client sits in
+              proxy_region:
+                type: string
+                description: Two-letter country the client resolved its proxy for; picks a server account
     responses:
       '200':
-        description: Remote session created with titles, tracks, and chapters
+        description: Remote session created; authentication continues in the background
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                session_id:
+                  type: string
+                service:
+                  type: string
+                status:
+                  type: string
+                server_account:
+                  type: boolean
+                  description: True when the server authenticated with one of its own accounts
       '400':
         description: Invalid request
       '401':

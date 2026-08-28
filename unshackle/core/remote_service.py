@@ -661,6 +661,7 @@ class RemoteService:
 
         svc_config = services_config.get(service_tag, {})
         self._server_cdm: bool | None = services_config.get("_server_cdm")
+        self._server_accounts: Optional[dict] = services_config.get("_server_accounts")
         self.apply_service_config(svc_config)
 
     def apply_service_config(self, svc_config: dict) -> None:
@@ -707,28 +708,56 @@ class RemoteService:
 
         create_data: Dict[str, Any] = {"service": self.service_tag, "title_id": self.title_id}
 
-        credentials = load_credentials_for_transport(self.service_tag, profile)
-        if credentials:
-            create_data["credentials"] = credentials
+        if self._server_accounts is None:
+            credentials = load_credentials_for_transport(self.service_tag, profile)
+            if credentials:
+                create_data["credentials"] = credentials
 
-        cookies_text = load_cookies_for_transport(self.service_tag, profile)
-        if cookies_text:
-            create_data["cookies"] = cookies_text
+            cookies_text = load_cookies_for_transport(self.service_tag, profile)
+            if cookies_text:
+                create_data["cookies"] = cookies_text
+        else:
+            self.credential = None
+            self.log.info(
+                "The server manages the account for this service" + (" and ignores --profile" if profile else "")
+            )
 
-        if not no_proxy and proxy:
-            resolved_proxy = resolve_proxy_arg(proxy)
-            if resolved_proxy:
-                create_data["proxy"] = resolved_proxy
-
-        if not no_proxy and not proxy:
+        client_region = None
+        if not no_proxy:
             try:
                 from unshackle.core.utils.ip_info import get_ip_info
 
                 ip_info = get_ip_info(self._session, cached=True)
                 if ip_info and ip_info.get("country"):
-                    create_data["client_region"] = ip_info["country"].lower()
+                    client_region = ip_info["country"].lower()
             except Exception:
                 pass
+
+        if not no_proxy and not proxy and self._server_accounts and not self._server_accounts.get("global"):
+            regions = [str(r).lower() for r in self._server_accounts.get("regions") or []]
+            if regions and client_region and client_region not in regions:
+                try:
+                    create_data["proxy"] = resolve_proxy_arg(regions[0])
+                    create_data["proxy_region"] = regions[0]
+                    self.log.info(f"Using a '{regions[0]}' proxy to match a server account ({', '.join(regions)})")
+                except click.ClickException:
+                    self.log.warning(
+                        f"The server's accounts work in {', '.join(regions)} and you are in {client_region}. "
+                        "There is no local proxy for that region. Pass --proxy yourself if the server "
+                        "rejects the remote session"
+                    )
+        elif not no_proxy and proxy:
+            resolved_proxy = resolve_proxy_arg(proxy)
+            if resolved_proxy:
+                create_data["proxy"] = resolved_proxy
+                query = (self.ctx.parent.params.get("proxy_query") if self.ctx.parent else None) or proxy
+                country = re.match(r"^(?:[a-z]+:)?([a-z]{2})\d*$", query, re.IGNORECASE)
+                if country:
+                    create_data["proxy_region"] = country.group(1).lower()
+        if not no_proxy and not proxy and client_region:
+            create_data["client_region"] = client_region
+        elif not no_proxy and not proxy and self._server_accounts and not self._server_accounts.get("global"):
+            self.log.warning("Could not detect your region; pass --proxy <country> so the server can pick an account")
 
         if profile:
             create_data["profile"] = profile
@@ -757,7 +786,7 @@ class RemoteService:
 
             create_data["cdm_type"] = "playready" if is_playready_cdm(cdm) else "widevine"
 
-        cache_data = self.load_cache_files()
+        cache_data = self.load_cache_files() if self._server_accounts is None else None
         if cache_data:
             create_data["cache"] = cache_data
 
