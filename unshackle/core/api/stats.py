@@ -65,7 +65,7 @@ async def stats_middleware(request: web.Request, handler: Any) -> web.StreamResp
     else:
         stats.requests_by_key[mask_key(request_secret_key(request))] += 1
     session_id = request.match_info.get("session_id")
-    if session_id and request.method != "OPTIONS":
+    if session_id and request.method != "OPTIONS" and not request.path.endswith("/logs"):
         from unshackle.core.api.session_store import get_session_store
 
         get_session_store().record_action(

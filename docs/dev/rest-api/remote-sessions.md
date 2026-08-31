@@ -152,6 +152,18 @@ hood the client walks a remote session through its lifecycle.
     Enter the 6-digit code sent to your email: 483920
     ```
 
+    A client older than the `service_params` change sends service options as
+    flat body keys only. A flat key that shares a name with a transport field
+    (such as `profile`, which at the top level always means the credentials
+    profile) no longer reaches the service; the server logs a warning naming
+    the dropped key. Update the client to send service options under
+    `service_params`.
+
+    The server also mirrors the service's own log output (`self.log`) into a
+    per-session buffer. The client drains it through
+    `GET /api/session/{id}/logs` after each step and prints the records
+    locally, so you see the server-side reason when a step fails.
+
 === "3. Titles + tracks"
 
     Once authenticated, the client fetches the title list, then the tracks for the
@@ -294,6 +306,7 @@ The server mounts all these routes, even in `--remote-only` mode. Paths use the
 | `POST` | `/api/session/{id}/segments` | Resolve per-segment/track download descriptors |
 | `POST` | `/api/session/{id}/segment_filter` | Unwanted HLS segment URIs for one track (ads, bumpers) |
 | `POST` | `/api/session/{id}/license` | DRM licensing (proxy or server CDM) |
+| `GET` | `/api/session/{id}/logs` | Drain the service's server-side log output |
 | `GET` | `/api/session/{id}/prompt` | Poll interactive auth status / pending prompt |
 | `POST` | `/api/session/{id}/prompt` | Submit an answer to a pending prompt |
 | `GET` | `/api/session/{id}` | Session info (validity, TTL, counts) |

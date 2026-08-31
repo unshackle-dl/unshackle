@@ -195,7 +195,9 @@ request and response in full.
 | `GET` | `/api/session/{session_id}/titles` | Titles for the session's title ID. |
 | `POST` | `/api/session/{session_id}/tracks` | Tracks (with URLs) for a chosen title. |
 | `POST` | `/api/session/{session_id}/segments` | Per-track segment/download details. |
+| `POST` | `/api/session/{session_id}/segment_filter` | Server-side HLS segment filter results for one track. |
 | `POST` | `/api/session/{session_id}/license` | Proxy or server-side DRM licensing. |
+| `GET` | `/api/session/{session_id}/logs` | Drain the service's server-side log output. |
 | `GET` | `/api/session/{session_id}/prompt` | Poll for interactive auth status/prompt. |
 | `POST` | `/api/session/{session_id}/prompt` | Submit an answer to an auth prompt. |
 

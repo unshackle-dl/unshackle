@@ -47,6 +47,7 @@ from unshackle.core.api.handlers import (
     session_delete_handler,
     session_info_handler,
     session_license_handler,
+    session_logs_handler,
     session_prompt_get_handler,
     session_prompt_post_handler,
     session_segment_filter_handler,
@@ -1914,6 +1915,66 @@ async def session_prompt_get(request: web.Request) -> web.Response:
 
 
 @api_handler
+async def session_logs(request: web.Request) -> web.Response:
+    """
+    Drain the remote session's service log records.
+    ---
+    summary: Get session logs
+    description: The service's server-side log output for this remote session, newer than the given sequence number
+    parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: since
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+        description: Return only records with a sequence number greater than this
+    responses:
+      '200':
+        description: Log records, oldest first
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                logs:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      seq:
+                        type: integer
+                      level:
+                        type: string
+                      message:
+                        type: string
+                      ts:
+                        type: number
+                last_seq:
+                  type: integer
+      '404':
+        description: Remote session not found
+    """
+    session_id = request.match_info["session_id"]
+    try:
+        since = int(request.query.get("since", 0))
+    except ValueError:
+        since = 0
+    try:
+        return await session_logs_handler(session_id, since, request)
+    except Exception as e:
+        log.exception("Error in session logs")
+        return handle_api_exception(
+            e, context={"operation": "session_logs"}, debug_mode=request.app.get("debug_api", False)
+        )
+
+
+@api_handler
 async def session_prompt_submit(request: web.Request) -> web.Response:
     """
     Submit a response to a pending interactive prompt.
@@ -2128,6 +2189,7 @@ ROUTES: list[tuple[str, str, Handler, bool]] = [
     ("POST", "/api/session/{session_id}/segments", session_segments, True),
     ("POST", "/api/session/{session_id}/segment_filter", session_segment_filter, True),
     ("POST", "/api/session/{session_id}/license", session_license, True),
+    ("GET", "/api/session/{session_id}/logs", session_logs, True),
     ("GET", "/api/session/{session_id}/prompt", session_prompt_get, True),
     ("POST", "/api/session/{session_id}/prompt", session_prompt_submit, True),
     ("GET", "/api/session/{session_id}", session_info, True),

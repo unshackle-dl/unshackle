@@ -15,6 +15,7 @@ from datetime import date as date_
 from enum import Enum
 from http.cookiejar import CookieJar
 from pathlib import Path
+from threading import Lock
 from typing import Any, Callable, Dict, Optional, Union
 
 import click
@@ -122,6 +123,10 @@ class RemoteClient:
 
     def get(self, endpoint: str) -> Dict[str, Any]:
         return self.request("get", endpoint)
+
+    def get_optional(self, endpoint: str) -> Dict[str, Any]:
+        """GET an endpoint that an older server may not have. Empty dict when the route is missing."""
+        return self.request("get", endpoint, optional=True)
 
     def delete(self, endpoint: str) -> Dict[str, Any]:
         return self.request("delete", endpoint)
@@ -646,6 +651,8 @@ class RemoteService:
         self._session_id: Optional[str] = None
         self._server_cdm_type: str = "widevine"
         self._segment_filters: Dict[str, tuple[set[str], set[str]]] = {}
+        self._log_seq = 0
+        self._log_drain_lock = Lock()
 
         self._session = requests.Session()
         self._session.headers.update(config.headers)
@@ -779,6 +786,7 @@ class RemoteService:
 
         if self._service_params:
             create_data.update(self._service_params)
+            create_data["service_params"] = self._service_params
 
         cdm = self.ctx.obj.cdm if self.ctx.obj else None
         if cdm is not None:
@@ -796,6 +804,30 @@ class RemoteService:
         status = result.get("status", "authenticated")
         if status == "authenticating":
             self.poll_auth_completion()
+        self.drain_server_logs()
+
+    def drain_server_logs(self) -> None:
+        """Fetch the service's server-side log records for this remote session and re-emit them locally.
+
+        The server mirrors every ``self.log`` call the service makes into a
+        per-session buffer. Draining after each remote call shows the client
+        why a step failed. A relay failure must never break the operation
+        itself, so this method swallows every error.
+        """
+        if not self._session_id:
+            return
+        with self._log_drain_lock:
+            try:
+                resp = self.client.get_optional(f"/api/session/{self._session_id}/logs?since={self._log_seq}")
+            except (Exception, SystemExit):
+                return
+            if not resp:
+                return
+            level_names = logging.getLevelNamesMapping()
+            for record in resp.get("logs", []):
+                level = level_names.get(str(record.get("level", "INFO")), logging.INFO)
+                self.log.log(level, str(record.get("message", "")))
+            self._log_seq = int(resp.get("last_seq", self._log_seq))
 
     def poll_auth_completion(self, poll_interval: float = 2.0, timeout: float = 600.0) -> None:
         """Poll the server until authentication completes, handling interactive prompts.
@@ -809,6 +841,7 @@ class RemoteService:
         while time.monotonic() < deadline:
             resp = self.client.get(f"/api/session/{self._session_id}/prompt")
             status = resp.get("status")
+            self.drain_server_logs()
 
             if status == "authenticated":
                 return
@@ -839,7 +872,10 @@ class RemoteService:
     def get_titles(self) -> Titles_T:
         if self._titles is not None:
             return self._titles
-        result = self.client.get(f"/api/session/{self._session_id}/titles")
+        try:
+            result = self.client.get(f"/api/session/{self._session_id}/titles")
+        finally:
+            self.drain_server_logs()
         titles_list = [build_title(t, self.service_tag, self.title_id) for t in result.get("titles", [])]
         first = titles_list[0] if titles_list else None
         if isinstance(first, Episode):
@@ -863,7 +899,10 @@ class RemoteService:
         title_id = str(title.id)
         if title_id in self._tracks_by_title:
             return self._tracks_by_title[title_id]
-        result = self.client.post(f"/api/session/{self._session_id}/tracks", {"title_id": title_id})
+        try:
+            result = self.client.post(f"/api/session/{self._session_id}/tracks", {"title_id": title_id})
+        finally:
+            self.drain_server_logs()
         tracks = build_tracks(result)
 
         remote_title = result.get("title") or {}
@@ -953,6 +992,7 @@ class RemoteService:
                         "drm_type": drm_type,
                     },
                 )
+            self.drain_server_logs()
             keys_by_track = resp.get("keys", {})
             server_drm_type = resp.get("drm_type", drm_type)
             drm_types_by_track = resp.get("drm_types", {})
@@ -1116,7 +1156,10 @@ class RemoteService:
         if pssh_b64:
             payload["pssh"] = pssh_b64
 
-        resp = self.client.post(f"/api/session/{self._session_id}/license", payload)
+        try:
+            resp = self.client.post(f"/api/session/{self._session_id}/license", payload)
+        finally:
+            self.drain_server_logs()
         return base64.b64decode(resp["license"])
 
     def on_segment_downloaded(self, track: AnyTrack, segment: Any) -> None:

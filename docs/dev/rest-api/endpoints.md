@@ -836,6 +836,8 @@ DELETE /api/session/{id}        → tear down, harvest updated cache
 
 Make a remote session for a service and title. Authentication runs asynchronously in the background. This call returns immediately with `status: "authenticating"`, and you then poll the prompt endpoint. The body accepts `service` and `title_id` (both required). It also accepts a broad set of optional keys, because the body allows `additionalProperties`. These are `credentials` (`{username, password, extra?}`), `cookies` (base64 of zlib-compressed Netscape cookie file), `proxy`, `no_proxy`, `profile`, `cache` (map of forwarded cache files), `client_region`, `proxy_region`, `cdm_type`, `range_`, `vcodec`, `quality`, `best_available`, and any service CLI options. `proxy_region` is the country code the client resolved `proxy` from; the server matches it against its own accounts.
 
+Service CLI options also travel in a nested `service_params` object, which wins over a flat key with the same name. `profile` at the top level always means the credentials profile, never a service's own `--profile` option.
+
 The `proxy` value must be a full proxy URI, unless the operator gives your API key `server_proxy` in the `serve.users` config. Without it, the server does not resolve country codes with its own proxy providers. It rejects the request with `INVALID_PROXY` when no `proxy` is set and the reported `client_region` differs from the server's region. A request that reports no `client_region` is not blocked. Pass `proxy` with your own proxy, or `no_proxy` to accept the server's own connection. With `server_proxy`, the server resolves a country code and picks a proxy for your `client_region` itself.
 
 === "Response `200`"
@@ -906,6 +908,30 @@ Submit a response to a pending prompt. Body: `{ "response": "..." }` (required).
 | `200` | - | Response accepted. |
 | `400` | `INVALID_INPUT` | Missing `response`, or no prompt is pending. |
 | `404` | `SESSION_NOT_FOUND` | No such session. |
+
+### `GET /api/session/{session_id}/logs`
+
+Drain the service's server-side log output for this remote session. The server mirrors every log call the service makes (`self.log.info`, warnings, errors) into a bounded per-session buffer, so a remote client can see why an auth, title, or license step failed. Pass `since=<seq>` to get only records newer than the last drained sequence number. Works in every auth state, including `failed`.
+
+=== "Response `200`"
+
+    ```json
+    {
+      "session_id": "a1b2c3",
+      "logs": [
+        { "seq": 1, "level": "INFO", "message": "Signed in as profile 'Main'", "ts": 1724990000.1 },
+        { "seq": 2, "level": "WARNING", "message": " - ThePlatform returned no streams", "ts": 1724990002.7 }
+      ],
+      "last_seq": 2
+    }
+    ```
+
+| Status | Error code | Meaning |
+| --- | --- | --- |
+| `200` | - | Records returned (empty list when nothing new). |
+| `404` | `SESSION_NOT_FOUND` | No such session. |
+
+The buffer keeps the newest 500 records. Only the service instance's own logger is mirrored; core pipeline loggers stay on the server. A server-account session gets no log relay at all - auth-time service output can carry the operator account's identity, so it stays server-side.
 
 ### `GET /api/session/{session_id}/titles`
 

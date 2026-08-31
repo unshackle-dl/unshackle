@@ -42,6 +42,7 @@ class SessionEntry:
     cache_tag: Optional[str] = None
     server_account: Optional[str] = None  # profile name when the server lent its own account
     input_bridge: Optional[InputBridge] = None
+    log_buffer: Optional[Any] = None  # SessionLogBuffer mirroring the service's self.log
     auth_status: AuthStatus = AuthStatus.AUTHENTICATED
     auth_error: Optional[str] = None
     client: Dict[str, Any] = field(default_factory=dict)  # version/argv/platform the client reported

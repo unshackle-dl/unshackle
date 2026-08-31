@@ -178,8 +178,17 @@ def categorize_exception(
         APIError with appropriate error code and details
     """
     context = context or {}
-    exc_str = str(exc).lower()
-    exc_type = type(exc).__name__
+    root = exc.__cause__ or exc
+    exc_str = f"{exc} {root}".lower()
+    exc_type = type(root).__name__
+
+    if "proxy" in str(root).lower():
+        return APIError(
+            error_code=APIErrorCode.INVALID_PROXY,
+            message=f"The proxy for this session failed: {root}",
+            details={**context, "reason": "proxy_error"},
+            retryable=False,
+        )
 
     if any(keyword in exc_str for keyword in ["auth", "login", "credential", "unauthorized", "forbidden", "token"]):
         return APIError(

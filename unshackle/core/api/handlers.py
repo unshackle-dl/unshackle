@@ -15,6 +15,7 @@ from unshackle.core.api.compression import safe_inflate
 from unshackle.core.api.errors import APIError, APIErrorCode, handle_api_exception
 from unshackle.core.api.input_bridge import AuthStatus, InputBridge
 from unshackle.core.api.sanitize import safe_cache_key, sanitize_log
+from unshackle.core.api.session_log import SessionLogBuffer, SessionLogMirror, capture_service_logs
 from unshackle.core.api.session_store import SessionStore
 from unshackle.core.cacher import Cacher
 from unshackle.core.config import config
@@ -111,6 +112,7 @@ LIST_HANDLER_TRANSPORT_KEYS = {
     "proxy",
     "no_proxy",
     "query",
+    "service_params",
 }
 
 
@@ -220,6 +222,18 @@ def instantiate_service(
         for k, v in data.items():
             if k in cli_param_names and k not in transport_keys and k != "title":
                 extras[k] = v
+        service_params = data.get("service_params")
+        if isinstance(service_params, dict):
+            for k, v in service_params.items():
+                if k in cli_param_names and k != "title":
+                    extras[k] = v
+        elif service_params is None:
+            for k in cli_param_names & transport_keys & set(data):
+                if k not in ("service", "title_id", "proxy", "no_proxy") and data.get(k) is not None:
+                    log.warning(
+                        f"Ignoring flat '{sanitize_log(k)}' as a service option (it names a transport field); "
+                        "update the client to send service options under 'service_params'"
+                    )
     return parent_ctx.invoke(service_module.cli, title=title, **extras)
 
 
@@ -2212,6 +2226,8 @@ async def env_check_handler(request: Optional[web.Request] = None) -> web.Respon
 SESSION_TRANSPORT_KEYS = {
     "service",
     "title_id",
+    "profile",
+    "service_params",
     "season",
     "episode",
     "part",
@@ -2388,15 +2404,20 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
             profile = next_server_profile(normalized_service, region)
             log.info(f"Using server account '{sanitize_log(profile or 'default')}' for {normalized_service}")
 
-        service_instance, cookies, credential = create_service_instance(
-            normalized_service,
-            title_id,
-            data,
-            proxy_param,
-            proxy_providers,
-            profile,
-            server_account=server_account,
-        )
+        log_buffer = None if server_account else SessionLogBuffer()
+        service_class_name = getattr(Services.load(normalized_service), "__name__", normalized_service)
+        with capture_service_logs(service_class_name, log_buffer):
+            service_instance, cookies, credential = create_service_instance(
+                normalized_service,
+                title_id,
+                data,
+                proxy_param,
+                proxy_providers,
+                profile,
+                server_account=server_account,
+            )
+        if log_buffer:
+            service_instance.log = SessionLogMirror(service_instance.log, log_buffer)
 
         if server_account:
             session_cache_tag = None
@@ -2435,6 +2456,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
         if isinstance(data.get("client"), dict) and len(json.dumps(data["client"], default=str)) <= 4096:
             session.client = data["client"]
         session.input_bridge = bridge
+        session.log_buffer = log_buffer
         session.auth_status = AuthStatus.AUTHENTICATING
 
         async def run_auth() -> None:
@@ -2851,6 +2873,26 @@ async def session_prompt_post_handler(
 
     bridge.submit_response(str(response_text))
     return web.json_response({"status": "accepted"})
+
+
+async def session_logs_handler(session_id: str, since: int = 0, request: Optional[web.Request] = None) -> web.Response:
+    """Drain the remote session's service log records newer than *since*.
+
+    Gives a remote client the service's server-side ``self.log`` output for
+    its own remote session - the reason an auth, title, or manifest step
+    failed. Works in every auth state, because a failed session is exactly
+    when the client needs the logs.
+    """
+    session = await get_validated_session(session_id, request)
+    buffer = session.log_buffer
+    logs = buffer.since(since) if buffer else []
+    return web.json_response(
+        {
+            "session_id": session_id,
+            "logs": logs,
+            "last_seq": logs[-1]["seq"] if logs else since,
+        }
+    )
 
 
 async def get_validated_session(session_id: str, request: Optional[web.Request]) -> Any:

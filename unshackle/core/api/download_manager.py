@@ -514,8 +514,13 @@ def perform_download(
             service_kwargs["title"] = title_id
 
         for key, value in params.items():
-            if key in service_init_params and key not in ["service", "title_id"]:
+            if key in service_init_params and key not in ["service", "title_id", "profile", "service_params"]:
                 service_kwargs[key] = value
+        service_params = params.get("service_params")
+        if isinstance(service_params, dict):
+            for key, value in service_params.items():
+                if key in service_init_params and key != "title":
+                    service_kwargs[key] = value
 
         for param_name, param_info in service_init_params.items():
             if param_name not in service_kwargs and param_name not in ["self", "ctx"]:
