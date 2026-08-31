@@ -89,7 +89,7 @@ class RemoteClient:
         url = f"{self.server_url}{endpoint}"
         while True:
             try:
-                resp = getattr(self.session, method)(url, json=data, timeout=120 if method == "post" else 30)
+                resp = getattr(self.session, method)(url, json=data, timeout=120)
             except requests.ConnectionError:
                 server_url = safe_display_url(self.server_url)
                 log.error(f"Could not connect to remote server at {server_url}. Is it running? (unshackle serve)")
