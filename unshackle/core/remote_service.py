@@ -8,6 +8,7 @@ Everything else (track selection, download, decrypt, mux) runs locally.
 from __future__ import annotations
 
 import base64
+import hashlib
 import logging
 import re
 import time
@@ -610,6 +611,53 @@ def resolve_proxy_arg(proxy_arg: Optional[str]) -> Optional[str]:
         raise click.ClickException(str(e))
 
 
+_CACHE_HEX_ID_RE = re.compile(r"[0-9a-f]{32,}", re.IGNORECASE)
+
+
+def credential_cache_digests(credential: Credential) -> set[str]:
+    """Hex digests a service may embed in cache filenames for this credential."""
+    digests = set()
+    for text in (credential.dumps(), credential.username, credential.password):
+        for algo in ("md5", "sha1", "sha256"):
+            digests.add(hashlib.new(algo, text.encode()).hexdigest())
+    return digests
+
+
+def _contains_name(stem: str, name: str) -> bool:
+    """True when the stem contains the profile name as a separator-delimited run.
+
+    Both sides casefold and normalise separators, so a profile named "us-east"
+    matches "tokens_us-east" and "tokens_US_EAST".
+    """
+    norm = re.sub(r"[._-]", "_", stem.casefold())
+    return f"_{re.sub(r'[._-]', '_', name.casefold())}_" in f"_{norm}_"
+
+
+def cache_stem_is_relevant(
+    stem: str, allowed_digests: set[str], active_profile: str, foreign_profiles: set[str]
+) -> bool:
+    """True when a cache filename provably belongs to the active remote session.
+
+    A stem fails the check when it embeds a hex digest that the active credential
+    does not produce, or another configured profile's name. A digest or profile
+    name that matches the active credential takes priority over a foreign profile
+    name, because region codes in cache filenames can collide with profile names.
+    The exception is a longer foreign name that also matches, since the active
+    name is then likely a prefix of it. A stem with no identity marker at all holds
+    service-global state, so it passes. The check does not detect a digest cut
+    to fewer than 32 characters.
+    """
+    digests = [d.lower() for d in _CACHE_HEX_ID_RE.findall(stem)]
+    if any(d not in allowed_digests for d in digests):
+        return False
+    if digests:
+        return True
+    matched_foreign = [n for n in foreign_profiles if _contains_name(stem, n)]
+    if _contains_name(stem, active_profile):
+        return not any(len(n) > len(active_profile) for n in matched_foreign)
+    return not matched_foreign
+
+
 class RemoteService:
     """Service adapter that proxies to a remote unshackle server.
 
@@ -794,7 +842,7 @@ class RemoteService:
 
             create_data["cdm_type"] = "playready" if is_playready_cdm(cdm) else "widevine"
 
-        cache_data = self.load_cache_files() if self._server_accounts is None else None
+        cache_data = self.load_cache_files(profile) if self._server_accounts is None else None
         if cache_data:
             create_data["cache"] = cache_data
 
@@ -1215,17 +1263,38 @@ class RemoteService:
 
         self.log.info(f"Saved {len(cache_data)} cache file(s) from server")
 
-    def load_cache_files(self) -> Dict[str, str]:
+    def load_cache_files(self, profile: Optional[str] = None) -> Dict[str, str]:
+        """Collect the cache files to forward, and withhold other profiles' files.
+
+        The client cannot rely on the server to filter, so it sends only the files
+        it can tie to the active credential or profile, plus service-global state.
+        At worst, a withheld file makes the server authenticate again.
+        """
         import zlib
+
+        from unshackle.commands.dl import dl
 
         cache_dir = config.directories.cache / self.service_tag
         if not cache_dir.is_dir():
             return {}
-        return {
-            f.stem: base64.b64encode(zlib.compress(f.read_bytes())).decode("ascii")
-            for f in cache_dir.glob("*.json")
-            if not f.stem.startswith("titles_")
-        }
+
+        credential = dl.get_credentials(self.service_tag, profile)
+        allowed = credential_cache_digests(credential) if credential else set()
+        active = profile or "default"
+        profiles = config.credentials.get(self.service_tag)
+        if isinstance(profiles, dict) and profile and profile not in profiles:
+            active = "default"
+        foreign = set(profiles) - {active} if isinstance(profiles, dict) else set()
+
+        files: Dict[str, str] = {}
+        for f in cache_dir.glob("*.json"):
+            if f.stem.startswith("titles_"):
+                continue
+            if not cache_stem_is_relevant(f.stem, allowed, active, foreign):
+                self.log.debug(f"Withholding cache file from the remote server: {f.stem}")
+                continue
+            files[f.stem] = base64.b64encode(zlib.compress(f.read_bytes())).decode("ascii")
+        return files
 
 
 __all__ = ("RemoteClient", "RemoteService", "resolve_server")

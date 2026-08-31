@@ -124,7 +124,11 @@ hood the client walks a remote session through its lifecycle.
       the client region itself
     - Track-selection hints (`range_`, `vcodec`, `quality`, `best_available`) so
       the server fetches the right manifests
-    - Your local per-service **cache files** (e.g. refreshed tokens)
+    - Your local per-service **cache files** (e.g. refreshed tokens), but only the
+      files for the active profile. The client withholds a file whose name embeds
+      a hash of another credential, or the name of another profile. One profile's
+      tokens therefore never reach the server while you use a different profile.
+      At worst, a withheld file makes the server authenticate again
 
     The server uses its own accounts only when the operator lists the service in
     `serve.server_accounts` and gives your API key `server_accounts` in `serve.users`.

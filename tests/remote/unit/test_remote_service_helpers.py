@@ -172,3 +172,110 @@ def test_build_title_episode() -> None:
 def test_build_title_falls_back_to_id_when_missing() -> None:
     title = build_title({"type": "movie", "name": "x"}, "ATV", "fallback-id")
     assert title.id == "fallback-id"
+
+
+def test_credential_cache_digests_cover_common_key_schemes() -> None:
+    import hashlib
+
+    from unshackle.core.credential import Credential
+    from unshackle.core.remote_service import credential_cache_digests
+
+    cred = Credential("user@example.com", "hunter2")
+    digests = credential_cache_digests(cred)
+    assert cred.sha1 in digests
+    assert hashlib.sha1(cred.username.encode()).hexdigest() in digests
+    assert hashlib.md5(cred.username.encode()).hexdigest() in digests
+
+
+def test_cache_stem_relevance_filters_foreign_digests_and_profiles() -> None:
+    import hashlib
+
+    from unshackle.core.credential import Credential
+    from unshackle.core.remote_service import cache_stem_is_relevant, credential_cache_digests
+
+    active = Credential("us@example.com", "pw1")
+    other = Credential("uk@example.com", "pw2")
+    allowed = credential_cache_digests(active)
+    foreign = {"uk"}
+
+    assert cache_stem_is_relevant(f"tokens_{active.sha1}", allowed, "us", foreign)
+    assert not cache_stem_is_relevant(f"tokens_{other.sha1}", allowed, "us", foreign)
+    username_hash = hashlib.sha1(active.username.encode()).hexdigest()
+    assert cache_stem_is_relevant(f"device_id_{username_hash}", allowed, "us", foreign)
+    # Service-global state carries no identity marker, so the client sends it
+    assert cache_stem_is_relevant("session_guid", allowed, "us", foreign)
+    assert cache_stem_is_relevant("tokens", allowed, "us", foreign)
+    # Files keyed by profile name: only the active profile's file goes
+    assert cache_stem_is_relevant("tokens_us", allowed, "us", foreign)
+    assert not cache_stem_is_relevant("tokens_uk", allowed, "us", foreign)
+    # Region prefix plus a matching digest (the region is not a profile name here)
+    assert cache_stem_is_relevant(f"tokens_intl_{active.sha1}", allowed, "us", foreign)
+    # An active-credential digest takes priority over a colliding foreign-profile token
+    assert cache_stem_is_relevant(f"tokens_uk_{active.sha1}", allowed, "us", foreign)
+
+
+def test_cache_stem_relevance_active_profile_beats_region_collision() -> None:
+    from unshackle.core.remote_service import cache_stem_is_relevant
+
+    # tokens_{profile}_{region}_{device}_{6hex} style key, where the region "us"
+    # collides with a foreign profile named "us"
+    assert cache_stem_is_relevant("tokens_default_us_androidtv_abc123", set(), "default", {"us", "de"})
+    assert not cache_stem_is_relevant("tokens_us_us_androidtv_abc123", set(), "default", {"us", "de"})
+    assert cache_stem_is_relevant("web_device_id_default_us", set(), "default", {"us"})
+
+
+def test_cache_stem_relevance_without_credential_withholds_hex_stems() -> None:
+    from unshackle.core.credential import Credential
+    from unshackle.core.remote_service import cache_stem_is_relevant
+
+    stray = Credential("someone@example.com", "pw")
+    assert not cache_stem_is_relevant(f"tokens_{stray.sha1}", set(), "default", set())
+    assert cache_stem_is_relevant("tokens_guest", set(), "default", set())
+
+
+def test_cache_stem_relevance_separator_and_case_profile_names() -> None:
+    from unshackle.core.remote_service import cache_stem_is_relevant
+
+    # A foreign profile name with separators still matches
+    assert not cache_stem_is_relevant("tokens_us-east", set(), "eu", {"us-east"})
+    assert not cache_stem_is_relevant("tokens_us_east", set(), "eu", {"us-east"})
+    # Case variants of a foreign profile name still match
+    assert not cache_stem_is_relevant("tokens_UK", set(), "us", {"uk"})
+    # The active profile matches through case and separator variants too
+    assert cache_stem_is_relevant("tokens_US-EAST", set(), "us-east", {"eu"})
+    # A longer matching foreign name beats an active name that is its prefix
+    assert not cache_stem_is_relevant("tokens_us-east", set(), "us", {"us-east"})
+    # ...but a shorter foreign match does not override the active name
+    assert cache_stem_is_relevant("tokens_default_us_androidtv_abc123", set(), "default", {"us"})
+
+
+def test_load_cache_files_wiring(tmp_path, monkeypatch) -> None:
+    import json
+    import logging
+    from types import SimpleNamespace
+
+    from unshackle.core.config import config
+    from unshackle.core.credential import Credential
+    from unshackle.core.remote_service import RemoteService
+
+    tag = "TESTSVC"
+    cache_dir = tmp_path / tag
+    cache_dir.mkdir()
+    other = Credential("other@example.com", "pw2")
+    for stem in ("tokens_us", "tokens_uk", "tokens_default", "session_guid", f"tokens_{other.sha1}", "titles_abc"):
+        (cache_dir / f"{stem}.json").write_text(json.dumps({"k": stem}))
+
+    monkeypatch.setattr(config.directories, "cache", tmp_path)
+    monkeypatch.setattr(
+        config,
+        "credentials",
+        {tag: {"default": "a@example.com:pw", "us": "b@example.com:pw", "uk": "c@example.com:pw"}},
+    )
+    stub = SimpleNamespace(service_tag=tag, log=logging.getLogger("test"))
+
+    sent = RemoteService.load_cache_files(stub, "us")
+    assert set(sent) == {"tokens_us", "session_guid"}
+
+    # A profile with no credentials entry falls back to the default credential
+    sent = RemoteService.load_cache_files(stub, "missing")
+    assert set(sent) == {"tokens_default", "session_guid"}
