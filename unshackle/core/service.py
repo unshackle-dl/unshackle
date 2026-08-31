@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 from http.cookiejar import CookieJar
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Union
-from urllib.parse import urlparse, urlunparse
 
 if TYPE_CHECKING:
     from unshackle.core.api.input_bridge import InputBridge
@@ -23,6 +22,7 @@ from unshackle.core.console import console, prompt_user
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.drm import DRM_T
+from unshackle.core.proxies.basic import Basic
 from unshackle.core.search_result import SearchResult
 from unshackle.core.session import (
     BACKOFF_FACTOR,
@@ -39,6 +39,7 @@ from unshackle.core.titles import Title_T, Titles_T, remap_titles
 from unshackle.core.tracks import Chapters, Tracks
 from unshackle.core.tracks.video import Video
 from unshackle.core.utils.ip_info import get_ip_info
+from unshackle.core.utils.redact import mask_proxy
 
 # Default (connect, read) timeout for the requests path, mirroring RnetSession's
 # connect_timeout / read_timeout construction defaults. A per-request timeout= wins.
@@ -123,43 +124,19 @@ class TrackRequest:
     best_available: bool = False
 
 
-def sanitize_proxy_for_log(uri: Optional[str]) -> Optional[str]:
+def sanitize_proxy_for_log(uri: Optional[str], mask_host: bool = False) -> Optional[str]:
     """
-    Sanitise a proxy URI for logs by redacting any embedded userinfo (username/password).
+    Sanitise a proxy URI for logs by masking any embedded userinfo (username/password).
 
-    Examples:
-      - http://user:pass@host:8080 -> http://REDACTED@host:8080
-      - socks5h://user@host:1080   -> socks5h://REDACTED@host:1080
+    ``serve`` sends these log lines to the client of a remote session, so the mask is
+    unconditional and debug mode never lifts it. ``mask_host`` hides the hostname as
+    well, for a proxy that came from the user-supplied ``Basic`` proxy provider.
     """
     if uri is None:
         return None
     if not isinstance(uri, str):
         return str(uri)
-    if not uri:
-        return uri
-
-    try:
-        parsed = urlparse(uri)
-
-        # Handle schemeless proxies like "user:pass@host:port"
-        if not parsed.scheme and not parsed.netloc and "@" in uri and "://" not in uri:
-            # Parse as netloc using a dummy scheme, then strip scheme back out.
-            dummy = urlparse(f"http://{uri}")
-            netloc = dummy.netloc
-            if "@" in netloc:
-                netloc = f"REDACTED@{netloc.split('@', 1)[1]}"
-            # urlparse("http://...") sets path to "" for typical netloc-only strings; keep it just in case.
-            return f"{netloc}{dummy.path}"
-
-        netloc = parsed.netloc
-        if "@" in netloc:
-            netloc = f"REDACTED@{netloc.split('@', 1)[1]}"
-
-        return urlunparse(parsed._replace(netloc=netloc))
-    except ValueError:
-        if "@" in uri:
-            return f"REDACTED@{uri.split('@', 1)[1]}"
-        return uri
+    return mask_proxy(uri, mask_host=mask_host, allow_debug=False)
 
 
 class Service(metaclass=ABCMeta):
@@ -244,7 +221,8 @@ class Service(metaclass=ABCMeta):
                             if mapped_proxy_uri:
                                 proxy = mapped_proxy_uri
                                 self.log.info(
-                                    f"Using mapped proxy from {proxy_provider.__class__.__name__}: {sanitize_proxy_for_log(proxy)}"
+                                    f"Using mapped proxy from {proxy_provider.__class__.__name__}: "
+                                    f"{sanitize_proxy_for_log(proxy, mask_host=isinstance(proxy_provider, Basic))}"
                                 )
                             else:
                                 self.log.warning(
@@ -258,7 +236,8 @@ class Service(metaclass=ABCMeta):
                             if mapped_proxy_uri:
                                 proxy = mapped_proxy_uri
                                 self.log.info(
-                                    f"Using mapped proxy from {proxy_provider.__class__.__name__}: {sanitize_proxy_for_log(proxy)}"
+                                    f"Using mapped proxy from {proxy_provider.__class__.__name__}: "
+                                    f"{sanitize_proxy_for_log(proxy, mask_host=isinstance(proxy_provider, Basic))}"
                                 )
                                 break
                         else:

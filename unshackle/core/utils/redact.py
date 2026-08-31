@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import sys
 from pathlib import Path
@@ -30,6 +31,31 @@ def redact_text(text: Optional[str], secrets: Iterable[str] = ()) -> Optional[st
     for secret in sorted({s for s in secrets if isinstance(s, str) and s}, key=len, reverse=True):
         text = text.replace(secret, REDACTED)
     return text
+
+
+PROXY_USERINFO_RE = re.compile(r"(^|://)[^:/@]+(?::[^/@]*)?@")
+PROXY_HOST_RE = re.compile(r"(://(?:[^/@]*@)?)(\[[^\]]+\]|[^:/?#]+)")
+
+
+def mask_proxy(uri: str, mask_host: bool = False, allow_debug: bool = True) -> str:
+    """Replace proxy userinfo with ``xxxxx:xxxxx@host`` for console display.
+
+    ``mask_host`` also replaces the hostname and keeps the scheme and the port, for
+    a user-supplied proxy whose hostname identifies the account on its own.
+    The full URI passes through while DEBUG logging is active (``-d``), so a debug
+    run keeps the complete proxy URI and a normal run never shows the credentials.
+    Pass ``allow_debug=False`` where the output can reach more than the operator's
+    own terminal, such as ``serve`` logs and the dashboard, so that debug mode does
+    not widen the exposure.
+    """
+    if not isinstance(uri, str) or not uri:
+        return uri
+    if allow_debug and logging.getLogger().getEffectiveLevel() <= logging.DEBUG:
+        return uri
+    uri = PROXY_USERINFO_RE.sub(r"\1xxxxx:xxxxx@", uri)
+    if mask_host:
+        uri = PROXY_HOST_RE.sub(r"\1xxxxx", uri)
+    return uri
 
 
 def safe_display_url(url: str) -> str:

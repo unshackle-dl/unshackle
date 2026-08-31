@@ -97,6 +97,7 @@ from unshackle.core.utils.click_types import (
 )
 from unshackle.core.utils.collections import ci_get, merge_dict
 from unshackle.core.utils.post_scripts import build_context, dispatch, season_context
+from unshackle.core.utils.redact import mask_proxy
 from unshackle.core.utils.selector import select_multiple
 from unshackle.core.utils.subprocess import ffprobe
 from unshackle.core.vaults import Vaults
@@ -1342,6 +1343,12 @@ class dl:
                         self.log.info(f"Loaded {proxy_provider.__class__.__name__}: {proxy_provider}")
 
             if proxy:
+
+                def log_proxy_used(provider: object, uri: str) -> None:
+                    self.log.info(
+                        f"Using {provider.__class__.__name__} Proxy: {mask_proxy(uri, isinstance(provider, Basic))}"
+                    )
+
                 requested_provider = None
                 if re.match(r"^[a-z]+:.+$", proxy, re.IGNORECASE):
                     # requesting proxy from a specific proxy provider
@@ -1386,7 +1393,7 @@ class dl:
                                     location = ", ".join(p for p in location_parts if p)
                                     self.log.info(f"VPN Connected: {conn_info['public_ip']} ({location})")
                                 else:
-                                    self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+                                    log_proxy_used(proxy_provider, proxy)
                             else:
                                 display = None
                                 if hasattr(proxy_provider, "last_connection_display"):
@@ -1394,7 +1401,7 @@ class dl:
                                 if display:
                                     self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy {display}")
                                 else:
-                                    self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+                                    log_proxy_used(proxy_provider, proxy)
                         else:
                             for proxy_provider in self.proxy_providers:
                                 proxy_uri = proxy_provider.get_proxy(proxy)
@@ -1408,7 +1415,7 @@ class dl:
                                             location = ", ".join(p for p in location_parts if p)
                                             self.log.info(f"VPN Connected: {conn_info['public_ip']} ({location})")
                                         else:
-                                            self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+                                            log_proxy_used(proxy_provider, proxy)
                                     else:
                                         display = None
                                         if hasattr(proxy_provider, "last_connection_display"):
@@ -1416,13 +1423,13 @@ class dl:
                                         if display:
                                             self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy {display}")
                                         else:
-                                            self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+                                            log_proxy_used(proxy_provider, proxy)
                                     break
                     # Store proxy query info for service-specific overrides
                     ctx.params["proxy_query"] = proxy_query
                     ctx.params["proxy_provider"] = requested_provider
                 else:
-                    self.log.info(f"Using explicit Proxy: {proxy}")
+                    self.log.info(f"Using explicit Proxy: {mask_proxy(ctx.params['proxy'])}")
                     # For explicit proxies, store None for query/provider
                     ctx.params["proxy_query"] = None
                     ctx.params["proxy_provider"] = None

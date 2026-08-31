@@ -9,6 +9,8 @@ import logging
 import re
 from typing import Any, List, Optional
 
+from unshackle.core.utils.redact import mask_proxy
+
 log = logging.getLogger("proxies")
 
 
@@ -85,13 +87,19 @@ def resolve_proxy(proxy: str, proxy_providers: List[Any]) -> Optional[str]:
         proxy_uri = provider.get_proxy(query)
         if not proxy_uri:
             raise ValueError(f"Proxy provider {requested_provider} had no proxy for {query}")
-        log.info(f"Using {provider.__class__.__name__} Proxy: {proxy_uri}")
+        log.info(
+            f"Using {provider.__class__.__name__} Proxy: "
+            f"{mask_proxy(proxy_uri, provider.__class__.__name__ == 'Basic', allow_debug=False)}"
+        )
         return proxy_uri
 
     for provider in proxy_providers:
         proxy_uri = provider.get_proxy(query)
         if proxy_uri:
-            log.info(f"Using {provider.__class__.__name__} Proxy: {proxy_uri}")
+            log.info(
+                f"Using {provider.__class__.__name__} Proxy: "
+                f"{mask_proxy(proxy_uri, provider.__class__.__name__ == 'Basic', allow_debug=False)}"
+            )
             return proxy_uri
 
     raise ValueError(f"No proxy provider had a proxy for {proxy}")

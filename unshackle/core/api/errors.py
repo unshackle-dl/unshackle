@@ -14,6 +14,8 @@ from typing import Any
 
 from aiohttp import web
 
+from unshackle.core.utils.redact import redact_text
+
 
 class APIErrorCode(str, Enum):
     """Standard API error codes for programmatic error handling."""
@@ -185,7 +187,7 @@ def categorize_exception(
     if "proxy" in str(root).lower():
         return APIError(
             error_code=APIErrorCode.INVALID_PROXY,
-            message=f"The proxy for this session failed: {root}",
+            message=f"The proxy for this session failed: {redact_text(str(root))}",
             details={**context, "reason": "proxy_error"},
             retryable=False,
         )

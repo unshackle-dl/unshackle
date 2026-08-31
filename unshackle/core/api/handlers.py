@@ -26,7 +26,7 @@ from unshackle.core.services import Services
 from unshackle.core.titles import Episode, Movie, Song, Title_T
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.utils.collections import ci_get
-from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE
+from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_text
 
 log = logging.getLogger("api")
 
@@ -2959,8 +2959,8 @@ def resolve_handler_proxy(
             if allowed:
                 raise APIError(
                     APIErrorCode.INVALID_PROXY,
-                    f"Proxy error: {e}",
-                    details={"proxy": data.get("proxy"), "service": normalized_service},
+                    f"Proxy error: {redact_text(str(e))}",
+                    details={"proxy": redact_text(data.get("proxy")), "service": normalized_service},
                 )
             raise APIError(
                 APIErrorCode.INVALID_PROXY,

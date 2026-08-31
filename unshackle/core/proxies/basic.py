@@ -6,6 +6,7 @@ from requests.utils import prepend_scheme_if_needed
 from urllib3.util import parse_url
 
 from unshackle.core.proxies.proxy import Proxy
+from unshackle.core.utils.redact import mask_proxy
 
 
 class Basic(Proxy):
@@ -49,6 +50,9 @@ class Basic(Proxy):
         proxy = prepend_scheme_if_needed(proxy, "http")
         parsed_proxy = parse_url(proxy)
         if not parsed_proxy.host:
-            raise ValueError(f"The proxy '{proxy}' is not a valid proxy URI supported by Python-Requests.")
+            raise ValueError(
+                f"The proxy '{mask_proxy(proxy, mask_host=True, allow_debug=False)}' "
+                "is not a valid proxy URI supported by Python-Requests."
+            )
 
         return proxy

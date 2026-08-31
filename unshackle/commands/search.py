@@ -21,6 +21,7 @@ from unshackle.core.service import Service
 from unshackle.core.services import Services
 from unshackle.core.utils.click_types import ContextData
 from unshackle.core.utils.collections import merge_dict
+from unshackle.core.utils.redact import mask_proxy
 
 
 @click.command(
@@ -113,7 +114,10 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
                         if display:
                             log.info(f"Using {proxy_provider.__class__.__name__} Proxy {display}")
                         else:
-                            log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+                            log.info(
+                                f"Using {proxy_provider.__class__.__name__} Proxy: "
+                                f"{mask_proxy(proxy, isinstance(proxy_provider, Basic))}"
+                            )
                     else:
                         for proxy_provider in proxy_providers:
                             proxy_uri = proxy_provider.get_proxy(proxy)
@@ -125,10 +129,13 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
                                 if display:
                                     log.info(f"Using {proxy_provider.__class__.__name__} Proxy {display}")
                                 else:
-                                    log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+                                    log.info(
+                                        f"Using {proxy_provider.__class__.__name__} Proxy: "
+                                        f"{mask_proxy(proxy, isinstance(proxy_provider, Basic))}"
+                                    )
                                 break
             else:
-                log.info(f"Using explicit Proxy: {proxy}")
+                log.info(f"Using explicit Proxy: {mask_proxy(ctx.params['proxy'])}")
 
     ctx.obj = ContextData(config=service_config, cdm=None, proxy_providers=proxy_providers, profile=profile)
 
