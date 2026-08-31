@@ -2494,7 +2494,11 @@ server does not have to prompt:</p>
   the client region itself</li>
 <li>Track-selection hints (<code>range_</code>, <code>vcodec</code>, <code>quality</code>, <code>best_available</code>) so
   the server fetches the right manifests</li>
-<li>Your local per-service <strong>cache files</strong> (e.g. refreshed tokens)</li>
+<li>Your local per-service <strong>cache files</strong> (e.g. refreshed tokens), but only the
+  files for the active profile. The client withholds a file whose name embeds
+  a hash of another credential, or the name of another profile. One profile's
+  tokens therefore never reach the server while you use a different profile.
+  At worst, a withheld file makes the server authenticate again</li>
 </ul>
 <p>The server uses its own accounts only when the operator lists the service in
 <code>serve.server_accounts</code> and gives your API key <code>server_accounts</code> in <code>serve.users</code>.
@@ -2516,6 +2520,16 @@ client polls, displays the prompt to you locally, collects your answer, and
 sends it back. The server's auth thread resumes with your response.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Enter the 6-digit code sent to your email: 483920
 </span></code></pre></div>
+<p>A client older than the <code>service_params</code> change sends service options as
+flat body keys only. A flat key that shares a name with a transport field
+(such as <code>profile</code>, which at the top level always means the credentials
+profile) no longer reaches the service; the server logs a warning naming
+the dropped key. Update the client to send service options under
+<code>service_params</code>.</p>
+<p>The server also mirrors the service's own log output (<code>self.log</code>) into a
+per-session buffer. The client drains it through
+<code>GET /api/session/{id}/logs</code> after each step and prints the records
+locally, so you see the server-side reason when a step fails.</p>
 </div>
 <div class="tabbed-block">
 <p>Once authenticated, the client fetches the title list, then the tracks for the
@@ -2704,6 +2718,11 @@ from a browser origin, not when you want only the local HTTP API.</p>
 <td><code>POST</code></td>
 <td><code>/api/session/{id}/license</code></td>
 <td>DRM licensing (proxy or server CDM)</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/session/{id}/logs</code></td>
+<td>Drain the service's server-side log output</td>
 </tr>
 <tr>
 <td><code>GET</code></td>
