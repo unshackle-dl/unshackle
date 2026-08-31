@@ -3214,13 +3214,8 @@ def handle_single_server_cdm(
         pr_pssh = PlayReadyPSSH(base64.b64decode(pssh_b64))
         pr_drm = PlayReady(pssh=pr_pssh, pssh_b64=pssh_b64)
 
-        # Gate on the caller's CDM device first so a caller with no device cannot
-        # harvest server-side keys from the vault fallback below.
+        # Gate on the caller's CDM device first: no device, no keys from the vault or CDM.
         device_name = resolve_device_name(user_config, drm_type, service.__class__.__name__)
-
-        vault_keys = check_vaults(pr_drm.kids, service.__class__.__name__)
-        if vault_keys:
-            return vault_keys
 
         cdm = load_cdm(device_name, service_name=service.__class__.__name__)
         pr_drm.get_content_keys(
@@ -3385,7 +3380,8 @@ async def session_license_handler(
 
         all_keys: Dict[str, Dict[str, str]] = {}
         drm_types: Dict[str, str] = {}
-        seen_pssh: set[str] = set()
+        keys_by_pssh: Dict[str, Dict[str, str]] = {}
+        drm_type_by_pssh: Dict[str, str] = {}
         actual_drm_type: Optional[str] = None
 
         for tid in track_ids:
@@ -3432,22 +3428,21 @@ async def session_license_handler(
             if not pssh_str or not track_drm_type:
                 continue
 
-            if pssh_str in seen_pssh:
-                for prev_tid, prev_keys in all_keys.items():
-                    if prev_keys:
-                        all_keys[tid] = prev_keys
-                        if prev_tid in drm_types:
-                            drm_types[tid] = drm_types[prev_tid]
-                        break
+            if pssh_str in keys_by_pssh:
+                all_keys[tid] = keys_by_pssh[pssh_str]
+                if pssh_str in drm_type_by_pssh:
+                    drm_types[tid] = drm_type_by_pssh[pssh_str]
                 continue
-            seen_pssh.add(pssh_str)
 
+            keys_by_pssh[pssh_str] = {}
             try:
                 keys = handle_single_server_cdm(service, title, track, pssh_str, track_drm_type, request)
                 if keys:
+                    keys_by_pssh[pssh_str] = keys
                     all_keys[tid] = keys
                     if track_drm_type:
                         drm_types[tid] = track_drm_type
+                        drm_type_by_pssh[pssh_str] = track_drm_type
                         actual_drm_type = track_drm_type
             except SystemExit:
                 log.warning(f"Service exited while resolving keys for track {sanitize_log(tid[:12])}, skipping")
