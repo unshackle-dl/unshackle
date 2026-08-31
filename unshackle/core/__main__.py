@@ -53,8 +53,10 @@ def main(version: bool, debug: bool) -> None:
 
     traceback.install(console=console, width=80, suppress=[click])
 
-    if "--quiet" in sys.argv[1:] or "-q" in sys.argv[1:]:
-        return
+    if "serve" in sys.argv[1:]:
+        serve_args = sys.argv[sys.argv.index("serve") + 1 :]
+        if "--quiet" in serve_args or "-q" in serve_args:
+            return
 
     console.print(
         Padding(
