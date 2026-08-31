@@ -44,6 +44,8 @@ class SSLCiphers(HTTPAdapter):
         than 15360 bits and ECC keys shorter than 512 bits are prohibited.
     """
 
+    __attrs__ = [*HTTPAdapter.__attrs__, "_ssl_context"]
+
     def __init__(self, cipher_list: Optional[str] = None, security_level: int = 0, *args, **kwargs):
         if cipher_list:
             if not isinstance(cipher_list, str):
