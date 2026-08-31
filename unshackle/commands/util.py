@@ -42,7 +42,7 @@ def refresh_services() -> None:
             log.error(f"Failed to update {spec} (see log).")
             continue
         if changes:
-            log.info(f"Updated {spec}: {' '.join(changes)}")
+            log.info(f"Updated {spec} {' '.join(changes)}")
         else:
             log.info(f"Up to date: {spec}")
 
