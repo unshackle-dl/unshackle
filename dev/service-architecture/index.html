@@ -3066,7 +3066,9 @@ because HLS variants carry no language.</p>
   the media-sequence-number IV for AES-128 keys that have no explicit IV.</li>
 <li><strong>ISM</strong> has no list of segments and no init segments: the parser synthesizes segment URLs
   from the <code>&lt;c&gt;</code> fragment timeline, and rebuilds a <code>moov</code>/<code>ftyp</code> init box from <code>CodecPrivateData</code>
-  (supported for AVC, HEVC, DV-over-HEVC, AAC, EC-3, and TTML).</li>
+  (supported for AVC, HEVC, DV-over-HEVC, AAC, EC-3, and TTML). A track id covers the manifest
+  URL, so a title you build from one ISM manifest per codec or range keeps every variant:
+  <code>Tracks.add</code> no longer reads the second manifest's tracks as duplicates of the first.</li>
 </ul>
 <h2 id="drm-hooks">DRM hooks<a class="headerlink" href="#drm-hooks" title="Permanent link">&para;</a></h2>
 <p>If a track carries DRM, the framework licenses and decrypts it, but it needs your
