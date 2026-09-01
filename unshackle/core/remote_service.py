@@ -331,23 +331,22 @@ def resolve_manifest_data(tracks: Tracks, manifests: list) -> None:
         try:
             raw = safe_inflate(b64.b64decode(m_data))
 
+            fallback_lang = next(
+                (t.language for t in all_tracks if t.language and str(t.language) != "und"),
+                None,
+            )
             if m_type == "dash":
                 from lxml import etree
 
                 from unshackle.core.manifests import DASH
 
-                xml_tree = etree.fromstring(raw)
-                fallback_lang = next(
-                    (t.language for t in all_tracks if t.language and str(t.language) != "und"),
-                    None,
-                )
-                local_tracks = DASH(xml_tree, m_url).to_tracks(language=fallback_lang)
+                local_tracks = DASH(etree.fromstring(raw), m_url).to_tracks(language=fallback_lang)
             elif m_type == "ism":
                 from lxml import etree
 
                 from unshackle.core.manifests import ISM
 
-                local_tracks = ISM(etree.fromstring(raw), m_url).to_tracks()
+                local_tracks = ISM(etree.fromstring(raw), m_url).to_tracks(language=fallback_lang)
             else:
                 continue
 
@@ -538,6 +537,9 @@ def resolve_auth_headers(svc: dict, server_name: str) -> list[str]:
     return resolved
 
 
+ANNOUNCED_SERVERS: set[str] = set()
+
+
 def resolve_server(server_name: Optional[str]) -> tuple[str, str, dict]:
     """Find the server URL, the API key, and the per-service config in remote_services.
 
@@ -565,7 +567,9 @@ def resolve_server(server_name: Optional[str]) -> tuple[str, str, dict]:
 
     if len(remote_services) == 1:
         name, svc = next(iter(remote_services.items()))
-        log.info(f"Using remote service: {name}")
+        if name not in ANNOUNCED_SERVERS:
+            ANNOUNCED_SERVERS.add(name)
+            log.info(f"Using remote service: {name}")
         services = svc.get("services", {})
         services["_server_cdm"] = svc.get("server_cdm")
         services["_auth_headers"] = resolve_auth_headers(svc, name)
