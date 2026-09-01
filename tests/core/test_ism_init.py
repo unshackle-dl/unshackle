@@ -18,6 +18,7 @@ from unshackle.core.manifests.ism_init import (
     box,
     build_avcc,
     build_dec3,
+    build_dvcc,
     build_hvcc,
     build_init_segment,
     full_box,
@@ -147,6 +148,13 @@ def find_stsd(init: bytes) -> int:
         else:
             raise AssertionError(f"{name} not found")
     return offset - 8
+
+
+def sample_entry_bounds(init: bytes) -> tuple[int, int]:
+    """(start, end) byte range of the first stsd sample entry."""
+    stsd = find_stsd(init)
+    entry_size = struct.unpack_from(">I", init, stsd + 16)[0]
+    return stsd + 16, stsd + 16 + entry_size
 
 
 # The two-entry stsd is unconditional, so every stream type and codec the builder
@@ -816,3 +824,154 @@ def test_encrypted_hev1_frma_carries_the_same_fourcc():
     )
     assert b"encv" in init
     assert init[init.index(b"frma") + 4 : init.index(b"frma") + 8] == b"hev1"
+
+
+def test_dolby_vision_sample_entry_carries_dvcc():
+    # a dvh1 sample entry without dvcC describes itself as plain HEVC, so every reader
+    # downstream loses the Dolby Vision signalling even though the RPU NAL units are in
+    # the elementary stream.
+    init = build_init_segment(
+        stream_type="video", fourcc="dvhe", codec_private_data=VIDEO_HEVC_CPD, width=3840, height=2160
+    )
+    offset = find_stsd(init)
+    assert init[offset + 20 : offset + 24] == b"dvh1"
+
+    # readers cannot reach a dvcC outside the sample entry, so byte presence alone
+    # proves nothing.
+    entry_start, entry_end = sample_entry_bounds(init)
+    assert entry_start <= init.index(b"dvcC") < entry_end
+
+    payload = init[init.index(b"dvcC") + 4 :][:24]
+    assert payload[0] == 1 and payload[1] == 0
+    flags = struct.unpack(">H", payload[2:4])[0]
+    assert flags >> 9 == 5  # profile 5: base layer carries no usable colour description
+    assert (flags >> 3) & 0x3F == 6  # level 6: 3840x2160 at 24 fps
+    assert flags & 0b111 == 0b101  # RPU present, no enhancement layer, base layer present
+
+
+@pytest.mark.parametrize(
+    "cpd,expected_box,expected_profile,expected_compat,expected_entry",
+    [
+        (VIDEO_HEVC_DV_CPD, b"dvcC", 5, 0, b"dvh1"),
+        (VIDEO_HEVC_PQ_CPD, b"dvvC", 8, 1, b"hvc1"),
+        (VIDEO_HEVC_HLG_CPD, b"dvvC", 8, 4, b"hvc1"),
+    ],
+)
+def test_dolby_vision_profile_follows_the_base_layer_colour(
+    cpd, expected_box, expected_profile, expected_compat, expected_entry
+):
+    # a base layer with no usable colour description is profile 5; one that stays readable as
+    # HDR10 or HLG is a cross-compatible profile, which readers expect under dvvC, not dvcC.
+    # The sample entry follows base-layer decodability: hvc1 for a compliant base, dvh1 otherwise.
+    init = build_init_segment(stream_type="video", fourcc="DVH1", codec_private_data=cpd, width=3840, height=2160)
+    assert expected_box in init
+    entry_start, entry_end = sample_entry_bounds(init)
+    assert entry_start <= init.index(expected_box) < entry_end
+    payload = init[init.index(expected_box) + 4 :][:24]
+    assert struct.unpack(">H", payload[2:4])[0] >> 9 == expected_profile
+    assert struct.unpack(">I", payload[4:8])[0] >> 28 == expected_compat
+    offset = find_stsd(init)
+    assert init[offset + 20 : offset + 24] == expected_entry
+
+
+def test_dolby_vision_profile_8_dvhe_takes_hev1_and_frma_follows():
+    # DVHE maps to the in-band-parameter-set entry (hev1) when the base layer is
+    # HEVC-decodable, and the frma inside sinf must carry the same fourcc.
+    init = build_init_segment(
+        stream_type="video", fourcc="dvhe", codec_private_data=VIDEO_HEVC_PQ_CPD, width=3840, height=2160
+    )
+    offset = find_stsd(init)
+    assert init[offset + 20 : offset + 24] == b"hev1"
+    assert b"dvvC" in init
+
+    init = build_init_segment(
+        stream_type="video", fourcc="dvhe", codec_private_data=VIDEO_HEVC_PQ_CPD, width=3840, height=2160, kid=KID
+    )
+    assert b"encv" in init and b"dvvC" in init
+    assert init[init.index(b"frma") + 4 : init.index(b"frma") + 8] == b"hev1"
+    entry_start, entry_end = sample_entry_bounds(init)
+    assert entry_start <= init.index(b"dvvC") < entry_end
+
+
+def test_encrypted_dolby_vision_wraps_encv_with_dvcc_before_sinf():
+    # the encrypted entry must keep the dvcC inside the encv wrapper and ahead of the
+    # sinf, or tooling that decrypts and remuxes drops the Dolby Vision config with the
+    # wrapper.
+    init = build_init_segment(
+        stream_type="video", fourcc="DVH1", codec_private_data=VIDEO_HEVC_DV_CPD, width=3840, height=2160, kid=KID
+    )
+    assert b"encv" in init and b"tenc" in init
+    assert init[init.index(b"frma") + 4 : init.index(b"frma") + 8] == b"dvh1"
+    entry_start, entry_end = sample_entry_bounds(init)
+    dvcc_at = init.index(b"dvcC")
+    assert entry_start <= dvcc_at < entry_end
+    assert dvcc_at < init.index(b"sinf") < entry_end
+
+
+@pytest.mark.parametrize(
+    "fps,expected_level",
+    [
+        (24.0, 6),
+        (30.0, 7),
+        (48.0, 8),
+        (60.0, 9),  # same 4K frame, higher rate: the pixel-rate limit must move the level
+        (120.0, 10),
+        (None, 7),  # no VUI timing: the 25 fps assumption sits one level above 2160p24
+    ],
+)
+def test_dolby_vision_level_scales_with_frame_rate(fps, expected_level):
+    payload = build_dvcc(3840, 2160, fps, (2, 2, 2))[8:]
+    flags = struct.unpack(">H", payload[2:4])[0]
+    assert (flags >> 3) & 0x3F == expected_level
+
+
+def test_dolby_vision_ftyp_carries_dby1_brand():
+    # Dolby ISOBMFF requires the dby1 compatible brand on files with a Dolby Vision
+    # config box; plain HEVC must not claim it.
+    dv_init = build_init_segment(
+        stream_type="video", fourcc="DVH1", codec_private_data=VIDEO_HEVC_DV_CPD, width=3840, height=2160
+    )
+    ftyp_size = struct.unpack(">I", dv_init[:4])[0]
+    assert b"dby1" in dv_init[:ftyp_size]
+
+    hevc_init = build_init_segment(
+        stream_type="video", fourcc="HVC1", codec_private_data=VIDEO_HEVC_CPD, width=3840, height=2160
+    )
+    assert b"dby1" not in hevc_init
+
+
+def test_hevc_cpd_without_vps_builds_init():
+    # MS-SSTR HEVC CodecPrivateData is SPS+PPS only (no VPS); the hvcC must build
+    # from what is there, and the encrypted path must still produce sinf/tenc.
+    nals = split_nal_units(bytes.fromhex(VIDEO_HEVC_PQ_CPD))
+    cpd = b"".join(b"\x00\x00\x00\x01" + n for n in nals if (n[0] >> 1) & 0x3F != 32).hex()
+
+    init = build_init_segment(stream_type="video", fourcc="HVC1", codec_private_data=cpd, width=1920, height=1080)
+    assert b"hvcC" in init
+
+    init = build_init_segment(
+        stream_type="video", fourcc="HVC1", codec_private_data=cpd, width=1920, height=1080, kid=KID
+    )
+    assert b"sinf" in init and b"tenc" in init
+
+    # SPS and PPS stay mandatory: dropping the SPS must still raise.
+    no_sps = b"".join(b"\x00\x00\x00\x01" + n for n in nals if (n[0] >> 1) & 0x3F not in (32, 33)).hex()
+    with pytest.raises(ValueError):
+        build_init_segment(stream_type="video", fourcc="HVC1", codec_private_data=no_sps, width=1920, height=1080)
+
+
+@pytest.mark.parametrize(
+    "width,height,expected_level",
+    [
+        (1920, 1080, 3),  # 1080p24
+        (3840, 2160, 6),  # 2160p24
+        (7680, 4320, 11),  # 8K24 falls in the level that shares 4K120's pixel rate
+        (3840, 600, 5),  # a pixel rate that fits level 4, a width that does not
+    ],
+)
+def test_dolby_vision_level_needs_both_pixel_rate_and_width(width, height, expected_level):
+    init = build_init_segment(
+        stream_type="video", fourcc="DVH1", codec_private_data=VIDEO_HEVC_DV_CPD, width=width, height=height
+    )
+    payload = init[init.index(b"dvcC") + 4 :][:24]
+    assert (struct.unpack(">H", payload[2:4])[0] >> 3) & 0x3F == expected_level

@@ -434,6 +434,26 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 
 **Validation.** Invalid values return `400 INVALID_PARAMETERS`. `vcodec` must be one of H264/H265/H.264/H.265/AVC/HEVC/VC1/VC-1/VP8/VP9/AV1. `acodec` must be one of AAC/AC3/EC3/EAC3/DD/DD+/AC4/OPUS/FLAC/ALAC/VORBIS/OGG/DTS. `range` must be one of SDR/HDR10/HDR10P/DV/HLG/HYBRID, and `HDR10+` is also valid. The bitrate, download worker, and download counts must be positive integers. You may set at most one of the `*_only` flags. You cannot combine `no_subs` with `subs_only`, or `no_audio` with `audio_only`.
 
+**Service options.** A service's own CLI options travel in the same body. Send them in a nested
+`service_params` object, or as flat top-level keys. `service_params` wins over a flat key of the
+same name. An option you leave out takes the default declared on the service's `cli` command, so
+the job matches the equivalent `dl` run. `profile` at the top level always means the credential
+profile, never a service's own `--profile` option.
+
+=== "Request"
+
+    ```bash
+    curl -X POST http://127.0.0.1:8786/api/download \
+      -H "X-Secret-Key: $KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "service": "EXAMPLE",
+        "title_id": "12345",
+        "quality": [2160],
+        "service_params": {"device": "chrome", "movie": true}
+      }'
+    ```
+
 !!! danger "Rejected parameters"
     `postscript`, `post_script` and `post_scripts` are never accepted. A body containing any
     of them gets `400 INVALID_PARAMETERS`, because a command string that arrives from

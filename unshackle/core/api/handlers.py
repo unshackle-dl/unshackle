@@ -717,7 +717,7 @@ def extract_manifests(tracks) -> List[Dict[str, Any]]:
         if not manifest_url or manifest_url in seen:
             continue
 
-        if track.data.get("dash") and track.data["dash"].get("manifest"):
+        if track.data.get("dash") and track.data["dash"].get("manifest") is not None:
             seen.add(manifest_url)
             xml_bytes = etree.tostring(track.data["dash"]["manifest"], xml_declaration=True, encoding="UTF-8")
             compressed = zlib.compress(xml_bytes, compression_level) if compression_level else xml_bytes
@@ -728,7 +728,7 @@ def extract_manifests(tracks) -> List[Dict[str, Any]]:
                     "data": base64.b64encode(compressed).decode("ascii"),
                 }
             )
-        elif track.data.get("ism") and track.data["ism"].get("manifest"):
+        elif track.data.get("ism") and track.data["ism"].get("manifest") is not None:
             seen.add(manifest_url)
             xml_bytes = etree.tostring(track.data["ism"]["manifest"], xml_declaration=True, encoding="UTF-8")
             compressed = zlib.compress(xml_bytes, compression_level) if compression_level else xml_bytes

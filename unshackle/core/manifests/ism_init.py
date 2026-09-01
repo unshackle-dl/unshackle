@@ -522,9 +522,65 @@ def build_avcc(codec_private_data: bytes, nal_length_size: int = 4) -> bytes:
     return box(b"avcC", payload)
 
 
+DV_LEVELS = (
+    (1280 * 720 * 24, 1280, 1),
+    (1280 * 720 * 30, 1280, 2),
+    (1920 * 1080 * 24, 1920, 3),
+    (1920 * 1080 * 30, 2560, 4),
+    (1920 * 1080 * 60, 3840, 5),
+    (3840 * 2160 * 24, 3840, 6),
+    (3840 * 2160 * 30, 3840, 7),
+    (3840 * 2160 * 48, 3840, 8),
+    (3840 * 2160 * 60, 3840, 9),
+    (3840 * 2160 * 120, 3840, 10),
+    (3840 * 2160 * 120, 7680, 11),
+    (7680 * 4320 * 60, 7680, 12),
+    (7680 * 4320 * 120, 7680, 13),
+)
+
+
+def infer_dv_profile(cicp: Optional[tuple[int, int, int]]) -> tuple[int, int]:
+    """Derive (dv_profile, dv_bl_signal_compatibility_id) from the base layer's colour description.
+
+    Profile 5 carries no usable description, while profile 8 stays backward compatible
+    with HDR10 (PQ) or HLG and says so.
+    """
+    transfer = cicp[1] if cicp else 0
+    if transfer == 16:
+        return 8, 1
+    if transfer == 18:
+        return 8, 4
+    return 5, 0
+
+
+def build_dvcc(width: int, height: int, fps: Optional[float], cicp: Optional[tuple[int, int, int]]) -> bytes:
+    """
+    Assemble the Dolby Vision decoder config box for a single-layer Dolby Vision track:
+    dvcC, or dvvC when the profile is cross-compatible.
+
+    A dvh1/dvhe sample entry without this box describes itself as plain HEVC, so every
+    reader downstream (muxers, players, MediaInfo) loses the Dolby Vision signalling even
+    though the RPU NAL units are present in the elementary stream.
+
+    The base layer's colour description separates the two single-layer profiles: profile 5
+    carries no usable description, while profile 8 stays backward compatible with HDR10 (PQ)
+    or HLG and says so (see infer_dv_profile). Level is the first entry in the Dolby table
+    that allows both the pixel rate and the width.
+    """
+    profile, compatibility_id = infer_dv_profile(cicp)
+
+    pixel_rate = width * height * (fps or 25.0)
+    level = next((lvl for pps, max_width, lvl in DV_LEVELS if pixel_rate <= pps and width <= max_width), 13)
+
+    flags = (profile << 9) | (level << 3) | (1 << 2) | (0 << 1) | 1
+    payload = u8.pack(1) + u8.pack(0) + u16.pack(flags) + u32.pack(compatibility_id << 28) + b"\x00" * 16
+    return box(b"dvvC" if profile > 7 else b"dvcC", payload)
+
+
 def build_hvcc(codec_private_data: bytes, nal_length_size: int = 4) -> bytes:
     """
-    Assemble an hvcC (HEVC decoder config) box from VPS+SPS+PPS CodecPrivateData.
+    Assemble an hvcC (HEVC decoder config) box from SPS+PPS CodecPrivateData, and
+    include the VPS when the CodecPrivateData carries one.
 
     The profile/tier/level bytes come from the SPS profile_tier_level. This
     function reads the chroma format and the bit depths from the SPS, so 10-bit
@@ -532,8 +588,6 @@ def build_hvcc(codec_private_data: bytes, nal_length_size: int = 4) -> bytes:
     8-bit 4:2:0.
     """
     nals = split_nal_units(codec_private_data)
-    if len(nals) < 3:
-        raise ValueError("HEVC CodecPrivateData must contain VPS, SPS and PPS NAL units")
 
     # Group NAL units by type (HEVC NAL type = (first byte >> 1) & 0x3F).
     by_type: dict[int, list[bytes]] = {}
@@ -541,7 +595,10 @@ def build_hvcc(codec_private_data: bytes, nal_length_size: int = 4) -> bytes:
         nal_type = (nal[0] >> 1) & 0x3F
         by_type.setdefault(nal_type, []).append(nal)
 
-    sps = by_type.get(33, [b""])[0]
+    if not by_type.get(33) or not by_type.get(34):
+        raise ValueError("HEVC CodecPrivateData must contain SPS and PPS NAL units")
+
+    sps = by_type[33][0]
     # profile_tier_level must be read from the de-emulated SPS RBSP, after the
     # 2-byte NAL header + 1 byte (sps_video_parameter_set_id(4) +
     # sps_max_sub_layers_minus1(3) + sps_temporal_id_nesting_flag(1)). PTL is 12
@@ -715,7 +772,10 @@ def build_init_segment(
     if len(lang) != 3 or not all("a" <= c <= "z" for c in lang):
         lang = "und"
 
-    ftyp = box(b"ftyp", b"isml" + u32.pack(1) + b"iso5" + b"iso6" + b"piff" + b"msdh")
+    brands = b"iso5" + b"iso6" + b"piff" + b"msdh"
+    if stream_type == "video" and fourcc in ("DVHE", "DVH1"):
+        brands += b"dby1"
+    ftyp = box(b"ftyp", b"isml" + u32.pack(1) + brands)
 
     # version 1: at the 10 MHz ISM timescale a 32-bit duration overflows after ~429s.
     mvhd = full_box(
@@ -805,9 +865,14 @@ def build_init_segment(
             # (and the frma inside sinf).
             codec_fourcc = b"hev1" if fourcc == "HEV1" else b"hvc1"
         elif fourcc in ("DVHE", "DVH1"):
-            # Dolby Vision over HEVC: same hvcC config, dvh1 sample entry.
-            config_box = build_hvcc(cpd, nal_length_size)
-            codec_fourcc = b"dvh1"
+            # Dolby Vision over HEVC: same hvcC config plus the dvcC/dvvC that tells
+            # readers the RPU NAL units in the elementary stream are Dolby Vision.
+            cicp, fps = parse_codec_private_data_vui(fourcc, cpd)
+            config_box = build_hvcc(cpd, nal_length_size) + build_dvcc(width, height, fps, cicp)
+            if infer_dv_profile(cicp)[0] > 7:
+                codec_fourcc = b"hev1" if fourcc == "DVHE" else b"hvc1"
+            else:
+                codec_fourcc = b"dvh1"
         else:
             raise NotImplementedError(f"Unsupported video FourCC: {fourcc}")
         sample_entry_payload += config_box

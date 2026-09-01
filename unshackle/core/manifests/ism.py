@@ -193,8 +193,10 @@ class ISM:
                     timescale=timescale,
                     duration=duration,
                     language=language,
-                    width=int(quality_level.get("MaxWidth") or stream_index.get("MaxWidth") or 0),
-                    height=int(quality_level.get("MaxHeight") or stream_index.get("MaxHeight") or 0),
+                    width=int(quality_level.get("MaxWidth") or quality_level.get("Width") or 0)
+                    or int(stream_index.get("MaxWidth") or stream_index.get("Width") or 0),
+                    height=int(quality_level.get("MaxHeight") or quality_level.get("Height") or 0)
+                    or int(stream_index.get("MaxHeight") or stream_index.get("Height") or 0),
                     track_id=track_id,
                     nal_length_size=nal_length_size,
                     kid=kid,
@@ -289,13 +291,14 @@ class ISM:
                         fragment_time += duration_frag
 
                 track_id = hashlib.md5(
-                    "{codec}-{lang}-{bitrate}-{index}-{name}-{url}".format(
+                    "{codec}-{lang}-{bitrate}-{index}-{name}-{url}-{manifest}".format(
                         codec=codec,
                         lang=track_lang,
                         bitrate=ql.get("Bitrate") or 0,
                         index=ql.get("Index") or 0,
                         name=stream_index.get("Name") or "",
                         url=stream_index.get("Url") or "",
+                        manifest=(self.url or "").split("?")[0],
                     ).encode()
                 ).hexdigest()
 
@@ -348,6 +351,7 @@ class ISM:
                             is_original_lang=bool(language and track_lang and str(track_lang) == str(language)),
                             bitrate=ql.get("Bitrate"),
                             channels=ql.get("Channels"),
+                            extra={"atmos": True} if (ql.get("HasAtmos") or "").lower() == "true" else None,
                             descriptor=Track.Descriptor.ISM,
                             drm=drm,
                             data=data,

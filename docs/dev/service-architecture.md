@@ -365,7 +365,9 @@ A typical `get_tracks` therefore looks like fetching the manifest text with
   the media-sequence-number IV for AES-128 keys that have no explicit IV.
 - **ISM** has no list of segments and no init segments: the parser synthesizes segment URLs
   from the `<c>` fragment timeline, and rebuilds a `moov`/`ftyp` init box from `CodecPrivateData`
-  (supported for AVC, HEVC, DV-over-HEVC, AAC, EC-3, and TTML).
+  (supported for AVC, HEVC, DV-over-HEVC, AAC, EC-3, and TTML). A track id covers the manifest
+  URL, so a title you build from one ISM manifest per codec or range keeps every variant:
+  `Tracks.add` no longer reads the second manifest's tracks as duplicates of the first.
 
 ## DRM hooks
 

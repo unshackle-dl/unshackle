@@ -191,7 +191,8 @@ def deserialize_audio(data: Dict[str, Any]) -> Audio:
         codec=enum_get(Audio.Codec, data.get("codec")),
         bitrate=deserialize_bitrate(data),
         channels=data.get("channels"),
-        joc=joc if joc is not None else (1 if data.get("atmos") else 0),
+        joc=joc,
+        extra={"atmos": True} if joc is None and data.get("atmos") else None,
         descriptive=data.get("descriptive", False),
     )
 

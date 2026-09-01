@@ -56,17 +56,25 @@ def test_deserialize_video_unknown_codec_falls_back_to_none() -> None:
     assert v.codec is None
 
 
-def test_deserialize_audio_atmos_flag_sets_joc() -> None:
+def test_deserialize_audio_atmos_flag_without_a_count() -> None:
     a = deserialize_audio({"id": "a1", "codec": "AAC", "atmos": True, "channels": 6, "bitrate": 256})
     assert isinstance(a, Audio)
-    assert a.joc == 1
+    assert a.atmos is True
+    assert a.joc is None
     assert a.channels == 6
     assert a.bitrate == 256_000
 
 
+def test_deserialize_audio_atmos_keeps_a_real_joc_count() -> None:
+    a = deserialize_audio({"id": "a3", "codec": "EC3", "atmos": True, "joc": 16, "channels": 6})
+    assert a.atmos is True
+    assert a.joc == 16
+
+
 def test_deserialize_audio_no_atmos() -> None:
     a = deserialize_audio({"id": "a2", "codec": "AAC", "channels": 2})
-    assert a.joc == 0
+    assert a.atmos is False
+    assert not a.joc
 
 
 def test_deserialize_subtitle_forced_flag() -> None:
