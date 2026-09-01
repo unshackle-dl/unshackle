@@ -497,6 +497,8 @@ class Video(Track):
                     "-hide_banner",
                     "-loglevel",
                     "error",
+                    # ffmpeg exits 0 after dropping packets the bsf cannot parse
+                    "-xerror",
                     "-i",
                     str(original_path),
                     "-codec",

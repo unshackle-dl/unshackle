@@ -321,6 +321,7 @@ def resolve_manifest_data(tracks: Tracks, manifests: list) -> None:
 
     log_m = logging.getLogger("remote_service")
     all_tracks = list(tracks.videos) + list(tracks.audio) + list(tracks.subtitles)
+    local_all: list = []
 
     for manifest_info in manifests:
         m_type = manifest_info.get("type")
@@ -351,19 +352,19 @@ def resolve_manifest_data(tracks: Tracks, manifests: list) -> None:
             else:
                 continue
 
-            local_all = list(local_tracks.videos) + list(local_tracks.audio) + list(local_tracks.subtitles)
-            for remote_track in all_tracks:
-                if remote_track.data.get(m_type):
-                    continue
-                matched = match_track(remote_track, local_all)
-                if matched and matched.data.get(m_type):
-                    remote_track.data.update(matched.data)
-                    remote_track.descriptor = matched.descriptor
-                    if matched.drm and not remote_track.drm:
-                        remote_track.drm = matched.drm
-
+            local_all += list(local_tracks.videos) + list(local_tracks.audio) + list(local_tracks.subtitles)
         except Exception as e:
             log_m.warning("Failed to re-parse %s manifest from %s: %s", m_type, m_url, e)
+
+    for remote_track in all_tracks:
+        if any(remote_track.data.get(key) for key in ("dash", "ism")):
+            continue
+        matched = match_track(remote_track, local_all)
+        if matched and any(matched.data.get(key) for key in ("dash", "ism")):
+            remote_track.data.update(matched.data)
+            remote_track.descriptor = matched.descriptor
+            if matched.drm and not remote_track.drm:
+                remote_track.drm = matched.drm
 
 
 def same_bitrate(local: Optional[int], remote: Optional[int]) -> bool:
@@ -386,7 +387,12 @@ def match_track(remote_track: Track, local_tracks: list) -> Optional[Track]:
         if lt.codec != remote_track.codec or str(lt.language) != str(remote_track.language):
             continue
         if hasattr(lt, "width") and hasattr(remote_track, "width"):
-            if lt.width == remote_track.width and lt.height == remote_track.height:
+            if (
+                lt.width == remote_track.width
+                and lt.height == remote_track.height
+                and lt.range == remote_track.range
+                and same_bitrate(lt.bitrate, remote_track.bitrate)
+            ):
                 return lt
         elif hasattr(lt, "channels") and hasattr(remote_track, "channels"):
             if same_bitrate(lt.bitrate, remote_track.bitrate):

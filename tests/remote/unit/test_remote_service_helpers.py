@@ -146,6 +146,35 @@ def test_match_track_by_attributes_when_id_missing() -> None:
     assert match_track(remote, [local]) is local
 
 
+def test_match_track_by_attributes_keeps_range_and_bitrate_apart() -> None:
+    sdr = deserialize_video(
+        {"id": "a", "codec": "HEVC", "width": 1920, "height": 960, "language": "en", "range": "SDR", "bitrate": 8000000}
+    )
+    hdr = deserialize_video(
+        {
+            "id": "b",
+            "codec": "HEVC",
+            "width": 1920,
+            "height": 960,
+            "language": "en",
+            "range": "HDR10",
+            "bitrate": 5000000,
+        }
+    )
+    remote = deserialize_video(
+        {
+            "id": "z",
+            "codec": "HEVC",
+            "width": 1920,
+            "height": 960,
+            "language": "en",
+            "range": "HDR10",
+            "bitrate": 5000000,
+        }
+    )
+    assert match_track(remote, [sdr, hdr]) is hdr
+
+
 def test_match_track_no_candidates_returns_none() -> None:
     remote = deserialize_video({"id": "X", "codec": "AVC", "width": 1, "height": 1})
     assert match_track(remote, []) is None
@@ -287,3 +316,42 @@ def test_load_cache_files_wiring(tmp_path, monkeypatch) -> None:
     # A profile with no credentials entry falls back to the default credential
     sent = RemoteService.load_cache_files(stub, "missing")
     assert set(sent) == {"tokens_default", "session_guid"}
+
+
+def test_resolve_manifest_data_matches_across_per_range_manifests() -> None:
+    """One ISM manifest per range. The HDR10 track must take the quality level from its
+    own manifest, not the same-sized one in the SDR manifest, in any manifest order."""
+    import base64
+    import zlib
+
+    from tests.core.test_ism_init import VIDEO_HEVC_PQ_CPD, VIDEO_HEVC_SDR_CPD
+    from tests.core.test_ism_range import manifest_xml
+    from unshackle.core.manifests import ISM
+    from unshackle.core.remote_service import resolve_manifest_data
+
+    urls = {"sdr": "https://x/sdr/manifest", "hdr": "https://x/hdr/manifest"}
+    xml = {"sdr": manifest_xml(VIDEO_HEVC_SDR_CPD), "hdr": manifest_xml(VIDEO_HEVC_PQ_CPD)}
+    local = {k: ISM.from_text(xml[k], url=urls[k]).to_tracks(language="en").videos[0] for k in xml}
+    assert local["sdr"].range == Video.Range.SDR and local["hdr"].range == Video.Range.HDR10
+
+    remote_hdr = deserialize_video(
+        {
+            "id": str(local["hdr"].id),
+            "codec": "HEVC",
+            "width": 3840,
+            "height": 2160,
+            "language": "en",
+            "range": "HDR10",
+            "bitrate_bps": 15000000,
+        }
+    )
+    tracks = build_tracks({"video": [], "audio": [], "subtitles": []})
+    tracks.videos.append(remote_hdr)
+    manifests = [
+        {"type": "ism", "url": urls[k], "data": base64.b64encode(zlib.compress(xml[k].encode())).decode()}
+        for k in ("sdr", "hdr")
+    ]
+
+    resolve_manifest_data(tracks, manifests)
+
+    assert remote_hdr.data["ism"]["quality_level"].get("CodecPrivateData") == VIDEO_HEVC_PQ_CPD

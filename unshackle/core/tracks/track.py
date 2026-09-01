@@ -1016,7 +1016,8 @@ class Track:
                 ]
             )
             if bsf:
-                args.extend(["-bsf:v", bsf])
+                # ffmpeg exits 0 after dropping packets the bsf cannot parse
+                args.extend(["-bsf:v", bsf, "-xerror"])
             args.append(str(output_path))
 
             subprocess.run(
