@@ -211,7 +211,10 @@ class Widevine:
                     cdm.set_service_certificate(session_id, cert)
 
                 if hasattr(cdm, "set_required_kids"):
-                    cdm.set_required_kids(self.kids)
+                    try:
+                        cdm.set_required_kids(self.kids, session_id=session_id)
+                    except TypeError:  # CDM predating the per-session signature
+                        cdm.set_required_kids(self.kids)
 
                 challenge = cdm.get_license_challenge(session_id, self.pssh)
 
@@ -280,12 +283,19 @@ class Widevine:
                     cdm.set_service_certificate(session_id, cert)
 
                 if hasattr(cdm, "set_required_kids"):
-                    cdm.set_required_kids(self.kids)
+                    try:
+                        cdm.set_required_kids(self.kids, session_id=session_id)
+                    except TypeError:  # CDM predating the per-session signature
+                        cdm.set_required_kids(self.kids)
 
                 challenge = cdm.get_license_challenge(session_id, self.pssh)
 
                 if hasattr(cdm, "has_cached_keys") and cdm.has_cached_keys(session_id):
                     pass
+                elif not challenge:
+                    raise Widevine.Exceptions.EmptyLicense(
+                        "The CDM returned an empty license challenge and has no cached keys"
+                    )
                 else:
                     cdm.parse_license(
                         session_id,

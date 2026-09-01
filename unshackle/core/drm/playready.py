@@ -301,10 +301,16 @@ class PlayReady:
         session_id = cdm.open()
         try:
             if hasattr(cdm, "set_pssh_b64") and self.pssh_b64:
-                cdm.set_pssh_b64(self.pssh_b64)
+                try:
+                    cdm.set_pssh_b64(self.pssh_b64, session_id=session_id)
+                except TypeError:  # CDM predating the per-session signature
+                    cdm.set_pssh_b64(self.pssh_b64)
 
             if hasattr(cdm, "set_required_kids"):
-                cdm.set_required_kids(self.kids)
+                try:
+                    cdm.set_required_kids(self.kids, session_id=session_id)
+                except TypeError:  # CDM predating the per-session signature
+                    cdm.set_required_kids(self.kids)
 
             challenge = cdm.get_license_challenge(session_id, self.pssh.wrm_headers[0])
 

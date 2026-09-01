@@ -241,7 +241,7 @@ class CustomRemoteCDM:
         """Store base64-encoded PSSH data for PlayReady compatibility."""
         self._pssh_b64 = pssh_b64
 
-    def set_required_kids(self, kids: List[Union[str, UUID]]) -> None:
+    def set_required_kids(self, kids: List[Union[str, UUID]], session_id: Optional[bytes] = None) -> None:
         """
         Set the required Key IDs for intelligent caching decisions.
 
@@ -257,12 +257,10 @@ class CustomRemoteCDM:
             Call this method from the DRM classes (PlayReady/Widevine) before a
             license challenge request, to enable optimal caching behaviour.
         """
-        self._required_kids = []
-        for kid in kids:
-            if isinstance(kid, UUID):
-                self._required_kids.append(str(kid).replace("-", "").lower())
-            else:
-                self._required_kids.append(str(kid).replace("-", "").lower())
+        required = [str(kid).replace("-", "").lower() for kid in kids]
+        if session_id is not None and session_id in self._sessions:
+            self._sessions[session_id]["required_kids"] = required
+        self._required_kids = required
 
     def generate_session_id(self) -> bytes:
         """Make a unique session ID."""
@@ -785,9 +783,11 @@ class CustomRemoteCDM:
         session["pssh"] = pssh_or_wrm
         init_data = self.get_init_data_from_pssh(pssh_or_wrm)
 
-        if self.use_vaults and self._required_kids:
+        required_kids_list = session.get("required_kids") or self._required_kids
+
+        if self.use_vaults and required_kids_list:
             vault_keys = []
-            for kid_str in self._required_kids:
+            for kid_str in required_kids_list:
                 try:
                     clean_kid = kid_str.replace("-", "")
                     if len(clean_kid) == 32:
@@ -802,7 +802,7 @@ class CustomRemoteCDM:
 
             if vault_keys:
                 vault_kids = set(k["kid"] for k in vault_keys)
-                required_kids = set(self._required_kids)
+                required_kids = set(required_kids_list)
 
                 if required_kids.issubset(vault_kids):
                     session["keys"] = vault_keys
@@ -852,13 +852,13 @@ class CustomRemoteCDM:
 
             session["tried_cache"] = True
 
-            if self._required_kids:
+            if required_kids_list:
                 available_kids = set()
                 for key in all_available_keys:
                     if isinstance(key, dict) and "kid" in key:
                         available_kids.add(key["kid"].replace("-", "").lower())
 
-                required_kids = set(self._required_kids)
+                required_kids = set(required_kids_list)
                 missing_kids = required_kids - available_kids
 
                 if missing_kids:

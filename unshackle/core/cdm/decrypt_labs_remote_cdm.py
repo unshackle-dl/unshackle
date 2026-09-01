@@ -177,11 +177,13 @@ class DecryptLabsRemoteCDM:
         """Mock certificate chain for PlayReady compatibility."""
         return MockCertificateChain(f"{self.device_name}_Remote")
 
-    def set_pssh_b64(self, pssh_b64: str) -> None:
+    def set_pssh_b64(self, pssh_b64: str, session_id: Optional[bytes] = None) -> None:
         """Store base64-encoded PSSH data for PlayReady compatibility."""
+        if session_id is not None and session_id in self._sessions:
+            self._sessions[session_id]["pssh_b64"] = pssh_b64
         self._pssh_b64 = pssh_b64
 
-    def set_required_kids(self, kids: List[Union[str, UUID]]) -> None:
+    def set_required_kids(self, kids: List[Union[str, UUID]], session_id: Optional[bytes] = None) -> None:
         """
         Set the required Key IDs for intelligent caching decisions.
 
@@ -197,21 +199,20 @@ class DecryptLabsRemoteCDM:
             Call this method from the DRM classes (PlayReady/Widevine) before a
             license challenge request, to enable optimal caching behaviour.
         """
-        self._required_kids = []
-        for kid in kids:
-            if isinstance(kid, UUID):
-                self._required_kids.append(str(kid).replace("-", "").lower())
-            else:
-                self._required_kids.append(str(kid).replace("-", "").lower())
+        required = [str(kid).replace("-", "").lower() for kid in kids]
+        if session_id is not None and session_id in self._sessions:
+            self._sessions[session_id]["required_kids"] = required
+        self._required_kids = required
 
     def generate_session_id(self) -> bytes:
         """Make a unique session ID."""
         return secrets.token_bytes(16)
 
-    def get_init_data_from_pssh(self, pssh: Any) -> str:
+    def get_init_data_from_pssh(self, pssh: Any, pssh_b64: Optional[str] = None) -> str:
         """Extract init data from various PSSH formats."""
-        if self.is_playready and self._pssh_b64:
-            return self._pssh_b64
+        effective_pssh_b64 = pssh_b64 or self._pssh_b64
+        if self.is_playready and effective_pssh_b64:
+            return effective_pssh_b64
 
         if hasattr(pssh, "dumps"):
             dumps_result = pssh.dumps()
@@ -258,6 +259,7 @@ class DecryptLabsRemoteCDM:
             "decrypt_labs_session_id": None,
             "tried_cache": False,
             "cached_keys": None,
+            "pssh_b64": None,
         }
         return session_id
 
@@ -314,10 +316,10 @@ class DecryptLabsRemoteCDM:
             raise DecryptLabsRemoteCDMExceptions.InvalidSession(f"Invalid session ID: {session_id.hex()}")
 
         if certificate is None:
-            if not self._is_playready and self.device_name == "L1":
+            if not self._is_playready and self.device_name in ("L1", "L2"):
                 certificate = WidevineCdm.common_privacy_cert
                 self._sessions[session_id]["service_certificate"] = base64.b64decode(certificate)
-                return "Using default Widevine common privacy certificate for L1"
+                return f"Using default Widevine common privacy certificate for {self.device_name}"
             else:
                 self._sessions[session_id]["service_certificate"] = None
                 return "No certificate set (not required for this device type)"
@@ -395,12 +397,14 @@ class DecryptLabsRemoteCDM:
         session = self._sessions[session_id]
 
         session["pssh"] = pssh_or_wrm
-        init_data = self.get_init_data_from_pssh(pssh_or_wrm)
+        init_data = self.get_init_data_from_pssh(pssh_or_wrm, session.get("pssh_b64"))
         already_tried_cache = session.get("tried_cache", False)
 
-        if self.vaults and self._required_kids:
+        required_kids_list = session.get("required_kids") or self._required_kids
+
+        if self.vaults and required_kids_list:
             vault_keys = []
-            for kid_str in self._required_kids:
+            for kid_str in required_kids_list:
                 try:
                     clean_kid = kid_str.replace("-", "")
                     if len(clean_kid) == 32:
@@ -415,7 +419,7 @@ class DecryptLabsRemoteCDM:
 
             if vault_keys:
                 vault_kids = set(k["kid"] for k in vault_keys)
-                required_kids = set(self._required_kids)
+                required_kids = set(required_kids_list)
 
                 if required_kids.issubset(vault_kids):
                     session["keys"] = vault_keys
@@ -478,13 +482,13 @@ class DecryptLabsRemoteCDM:
 
             session["tried_cache"] = True
 
-            if self._required_kids:
+            if required_kids_list:
                 available_kids = set()
                 for key in all_available_keys:
                     if isinstance(key, dict) and "kid" in key:
                         available_kids.add(key["kid"].replace("-", "").lower())
 
-                required_kids = set(self._required_kids)
+                required_kids = set(required_kids_list)
                 missing_kids = required_kids - available_kids
 
                 if missing_kids:
@@ -517,6 +521,7 @@ class DecryptLabsRemoteCDM:
                             session["decrypt_labs_session_id"] = data["session_id"]
                             return challenge
 
+                    session["keys"] = all_available_keys
                     return b""
                 else:
                     session["keys"] = all_available_keys
@@ -589,7 +594,7 @@ class DecryptLabsRemoteCDM:
                     license_message = license_message.encode("utf-8")
 
         pssh = session["pssh"]
-        init_data = self.get_init_data_from_pssh(pssh)
+        init_data = self.get_init_data_from_pssh(pssh, session.get("pssh_b64"))
 
         license_request_b64 = base64.b64encode(session["challenge"]).decode("utf-8")
         license_response_b64 = base64.b64encode(license_message).decode("utf-8")

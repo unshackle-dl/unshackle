@@ -4691,10 +4691,12 @@ class dl:
             cookies = cookies.jar
 
         cookie_jar = MozillaCookieJar(path)
-        cookie_jar.load()
+        cookie_jar.load(ignore_discard=True, ignore_expires=True)
         for cookie in cookies:
+            if not cookie.name or not cookie.domain:
+                continue
             cookie_jar.set_cookie(cookie)
-        cookie_jar.save(ignore_discard=True)
+        cookie_jar.save(ignore_discard=True, ignore_expires=True)
 
     @staticmethod
     def get_credentials(service: str, profile: Optional[str]) -> Optional[Credential]:
