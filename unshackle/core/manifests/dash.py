@@ -830,9 +830,6 @@ class DASH:
                         current_time += int(s.get("d"))
 
                 if not end_number:
-                    end_number = len(segment_durations)
-                # Handle high startNumber in DVR/catch-up manifests where startNumber > segment count
-                if start_number > end_number:
                     end_number = start_number + len(segment_durations) - 1
 
                 for t, n in zip(segment_durations, range(start_number, end_number + 1)):
