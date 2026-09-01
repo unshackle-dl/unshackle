@@ -41,7 +41,7 @@ from rich.tree import Tree
 
 from unshackle.core import binaries, providers
 from unshackle.core.cdm import DecryptLabsRemoteCDM
-from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
+from unshackle.core.cdm.detect import cdm_type_stub, is_playready_cdm, is_widevine_cdm
 from unshackle.core.config import config, resolve_cdm_name, resolve_decryption
 from unshackle.core.console import GradientPulseBarColumn, SyncLive, console, listing_panel
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack, context_settings
@@ -2842,6 +2842,11 @@ class dl:
 
             download_table = Table.grid()
             download_table.add_row(selected_tracks)
+
+            if getattr(self._remote_service, "_server_cdm", False) and self.cdm is None:
+                cdm_type = getattr(self._remote_service, "_server_cdm_type", "widevine")
+                self.cdm = cdm_type_stub(cdm_type)
+                self.log.info(f"Using server CDM ({cdm_type.title()}); no local CDM required")
 
             video_tracks = title.tracks.videos
             if video_tracks:

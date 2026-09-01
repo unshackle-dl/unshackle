@@ -1,6 +1,14 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
+
+
+def cdm_type_stub(cdm_type: str) -> SimpleNamespace:
+    """Type-only CDM stand-in so is_widevine_cdm()/is_playready_cdm() (and thus
+    get_drm_for_cdm) route correctly without loading a real device. Used for
+    server_cdm mode, where the server holds the device and returns the keys."""
+    return SimpleNamespace(is_playready=cdm_type == "playready")
 
 
 def is_remote_cdm(cdm: Any) -> bool:

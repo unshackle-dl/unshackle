@@ -6,7 +6,6 @@ import logging
 import re
 from datetime import date as date_
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
 from aiohttp import web
@@ -18,6 +17,7 @@ from unshackle.core.api.sanitize import safe_cache_key, sanitize_log
 from unshackle.core.api.session_log import SessionLogBuffer, SessionLogMirror, capture_service_logs
 from unshackle.core.api.session_store import SessionStore
 from unshackle.core.cacher import Cacher
+from unshackle.core.cdm.detect import cdm_type_stub
 from unshackle.core.config import config
 from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP
 from unshackle.core.providers.anilist import parse_anilist_ref
@@ -2737,12 +2737,6 @@ async def session_segments_handler(
             context={"operation": "session_segments", "session_id": session_id},
             debug_mode=debug_mode,
         )
-
-
-def cdm_type_stub(cdm_type: str) -> SimpleNamespace:
-    """Lightweight CDM stand-in so ``is_playready_cdm()`` (reads ``.is_playready``)
-    can detect the type without loading a full CDM."""
-    return SimpleNamespace(is_playready=cdm_type == "playready")
 
 
 def resolve_server_cdm(service: str, profile: Optional[str], cdm_type: Optional[str]) -> Optional[Any]:
