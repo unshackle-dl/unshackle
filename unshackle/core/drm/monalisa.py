@@ -1,22 +1,20 @@
 """
 MonaLisa DRM System.
 
-A WASM-based DRM system that uses local content key extraction and two-stage
-segment decryption (ML-Worker binary + AES-ECB).
+A WASM-based DRM system that uses local content key extraction from ticket data.
 """
 
 from __future__ import annotations
 
+import base64
 import logging
-import os
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Optional, Union
 from uuid import UUID
 
-from Cryptodome.Cipher import AES
-from Cryptodome.Util.Padding import unpad
+from unshackle.core.cdm.monalisa import MonaLisaCDM
 
 log = logging.getLogger(__name__)
 
@@ -28,10 +26,6 @@ class MonaLisa:
     Unlike Widevine/PlayReady, MonaLisa does not use a challenge/response flow
     with a license server. Instead, the service API gives the PSSH value (ticket)
     directly, and a WASM module extracts the content keys locally.
-
-    Decryption has two stages:
-    1. ML-Worker binary: Removes MonaLisa encryption layer (bbts -> ents)
-    2. AES-ECB decryption: Final decryption with the service-supplied content key
     """
 
     class Exceptions:
@@ -41,17 +35,11 @@ class MonaLisa:
         class KeyExtractionFailed(Exception):
             """Raised when content key extraction from the ticket fails."""
 
-        class WorkerNotFound(Exception):
-            """Raised when the ML-Worker binary is not found."""
-
-        class DecryptionFailed(Exception):
-            """Raised when segment decryption fails."""
-
     def __init__(
         self,
         ticket: Union[str, bytes],
-        aes_key: Union[str, bytes],
         device_path: Path,
+        tool_path: Optional[Path] = None,
         **kwargs: Any,
     ):
         """
@@ -59,8 +47,8 @@ class MonaLisa:
 
         Args:
             ticket: PSSH value from service API (base64 string or raw bytes).
-            aes_key: AES-ECB content key for second-stage decryption (hex string or bytes).
             device_path: Path to the CDM device file (.mld).
+            tool_path: Optional path to an external decryption binary.
             **kwargs: Additional metadata stored in self.data.
 
         Raises:
@@ -71,13 +59,9 @@ class MonaLisa:
             raise MonaLisa.Exceptions.TicketNotFound("No PSSH/ticket data provided.")
 
         self._ticket = ticket
-
-        if isinstance(aes_key, str):
-            self._aes_key = bytes.fromhex(aes_key)
-        else:
-            self._aes_key = aes_key
-
         self._device_path = device_path
+        self._tool_path = tool_path
+        self._decrypted_segments: int = 0
         self._kid: Optional[UUID] = None
         self._key: Optional[str] = None
         self.data: dict = kwargs or {}
@@ -86,8 +70,6 @@ class MonaLisa:
 
     def extract_keys(self) -> None:
         """Extract keys from the ticket using the MonaLisa CDM."""
-        # Import here to avoid circular import
-        from unshackle.core.cdm.monalisa import MonaLisaCDM
 
         try:
             cdm = MonaLisaCDM(device_path=self._device_path)
@@ -108,21 +90,25 @@ class MonaLisa:
     def from_ticket(
         cls,
         ticket: Union[str, bytes],
-        aes_key: Union[str, bytes],
         device_path: Path,
+        tool_path: Optional[Path] = None,
     ) -> MonaLisa:
         """
         Make a MonaLisa DRM instance from a PSSH/ticket.
 
         Args:
             ticket: PSSH value from service API.
-            aes_key: AES-ECB content key for second-stage decryption.
             device_path: Path to the CDM device file (.mld).
+            tool_path: Optional path to an external decryption binary.
 
         Returns:
             MonaLisa DRM instance with extracted keys.
         """
-        return cls(ticket=ticket, aes_key=aes_key, device_path=device_path)
+        return cls(
+            ticket=ticket,
+            device_path=device_path,
+            tool_path=tool_path,
+        )
 
     @property
     def kid(self) -> Optional[UUID]:
@@ -166,8 +152,6 @@ class MonaLisa:
         Returns:
             The Content ID string if extractable, None otherwise.
         """
-        import base64
-
         try:
             if isinstance(self._ticket, bytes):
                 data = self._ticket
@@ -196,47 +180,80 @@ class MonaLisa:
             return {self._kid: self._key}
         return {}
 
-    def decrypt_segment(self, segment_path: Path) -> None:
-        """
-        Decrypt a single segment using two-stage decryption.
+    @property
+    def key_pair(self) -> str:
+        """Get formatted KID:KEY pair for CLI decryptors (32hex:32hex)."""
+        if self._kid and self._key:
+            return f"{self._kid.hex}:{self._key}"
+        return ""
 
-        Stage 1: ML-Worker binary (bbts -> ents)
-        Stage 2: AES-ECB decryption (ents -> ts)
+    def decrypt_segment(self, segment_path: Path, output_path: Optional[Path] = None) -> None:
+        """
+        Decrypt an individual segment file using the configured CLI tool via subprocess.
 
         Args:
-            segment_path: Path to the encrypted segment file.
-
-        Raises:
-            WorkerNotFound: If ML-Worker binary is not available.
-            DecryptionFailed: If decryption fails at any stage.
+            segment_path: Path to the segment file to decrypt.
+            output_path: Optional path for the decrypted output segment.
         """
-        if not self._key:
+        self._execute_decrypt(segment_path, output_path)
+        self._decrypted_segments += 1
+
+    def decrypt(self, path: Path, output_path: Optional[Path] = None, *, is_segment: bool = False) -> None:
+        """
+        Decrypt a media file (segment or track) using the configured CLI tool via subprocess.
+
+        Args:
+            path: Path to the target file to decrypt.
+            output_path: Optional path for the decrypted output file.
+            is_segment: Set True if this is an individual segment rather than a full track.
+        """
+        if is_segment:
+            return self.decrypt_segment(path, output_path)
+
+        # If segments were already decrypted during chunk downloads, skip reprocessing on final track.
+        if self._decrypted_segments > 0:
+            log.debug(
+                "MonaLisa: Track already decrypted during segment downloads (%s segments)", self._decrypted_segments
+            )
             return
 
-        # Import here to avoid circular import
-        from unshackle.core.cdm.monalisa import MonaLisaCDM
+        self._execute_decrypt(path, output_path)
 
-        worker_path = MonaLisaCDM.get_worker_path()
-        if not worker_path or not worker_path.exists():
-            raise MonaLisa.Exceptions.WorkerNotFound("ML-Worker not found.")
+    def _execute_decrypt(self, path: Path, output_path: Optional[Path] = None) -> None:
+        """Execute external CLI tool via subprocess to decrypt the target file."""
+        if not path or not path.exists():
+            raise ValueError(f"Target file does not exist: {path}")
 
-        bbts_path = segment_path.with_suffix(".bbts")
-        ents_path = segment_path.with_suffix(".ents")
+        if not self._tool_path or not self._tool_path.exists():
+            return
+
+        if not self.key or not self.kid:
+            raise MonaLisa.Exceptions.KeyExtractionFailed("Missing content key for decryption.")
+
+        target_output = output_path or path
+        temp_enc = path.with_name(f"{path.name}.temp_enc")
 
         try:
-            if segment_path.exists():
-                segment_path.replace(bbts_path)
+            if path.exists():
+                path.replace(temp_enc)
             else:
-                raise MonaLisa.Exceptions.DecryptionFailed(f"Segment file does not exist: {segment_path}")
+                raise FileNotFoundError(f"Target file disappeared: {path}")
 
-            cmd = [str(worker_path), str(self._key), str(bbts_path), str(ents_path)]
+            cmd = [
+                str(self._tool_path),
+                "-i",
+                str(temp_enc),
+                "-o",
+                str(target_output),
+                "-k",
+                self.key_pair,
+            ]
 
             startupinfo = None
             if sys.platform == "win32":
                 startupinfo = subprocess.STARTUPINFO()
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
-            worker_timeout_s = 60
             process = subprocess.run(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -245,50 +262,15 @@ class MonaLisa:
                 encoding="utf-8",
                 errors="replace",
                 startupinfo=startupinfo,
-                timeout=worker_timeout_s,
+                timeout=60,
             )
 
-            if process.returncode != 0:
-                raise MonaLisa.Exceptions.DecryptionFailed(
-                    f"ML-Worker failed for {segment_path.name}: {process.stderr}"
-                )
+            if process.returncode != 0 or not target_output.exists():
+                raise RuntimeError(f"MonaLisa decryption failed for {path.name}: {process.stderr or 'unknown error'}")
 
-            if not ents_path.exists():
-                raise MonaLisa.Exceptions.DecryptionFailed(
-                    f"Decrypted .ents file was not created for {segment_path.name}"
-                )
-
-            with open(ents_path, "rb") as f:
-                ents_data = f.read()
-
-            crypto = AES.new(self._aes_key, AES.MODE_ECB)
-            decrypted_data = unpad(crypto.decrypt(ents_data), AES.block_size)
-
-            with open(segment_path, "wb") as f:
-                f.write(decrypted_data)
-
-        except MonaLisa.Exceptions.DecryptionFailed:
-            raise
-        except subprocess.TimeoutExpired as e:
-            log.error("ML-Worker timed out after %ss for %s", worker_timeout_s, segment_path.name)
-            raise MonaLisa.Exceptions.DecryptionFailed(
-                f"ML-Worker timed out after {worker_timeout_s}s for {segment_path.name}"
-            ) from e
-        except Exception as e:
-            raise MonaLisa.Exceptions.DecryptionFailed(f"Failed to decrypt segment {segment_path.name}: {e}")
         finally:
-            if ents_path.exists():
-                os.remove(ents_path)
-            if bbts_path != segment_path and bbts_path.exists():
-                os.remove(bbts_path)
-
-    def decrypt(self, _path: Path) -> None:
-        """
-        MonaLisa uses per-segment decryption during download, through the
-        on_segment_downloaded callback. When the caller calls this method,
-        unshackle has already decrypted the media and muxed it into a container.
-
-        Args:
-            _path: Path to the file (ignored).
-        """
-        pass
+            if temp_enc.exists():
+                try:
+                    temp_enc.unlink()
+                except Exception:
+                    pass

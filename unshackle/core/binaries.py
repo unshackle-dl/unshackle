@@ -72,7 +72,6 @@ __binaries = {
     "HDR10PlusTool": ("hdr10plus_tool", "HDR10Plus_tool"),
     "Mp4decrypt": ("mp4decrypt",),
     "Docker": ("docker",),
-    "ML_Worker": ("ML-Worker",),
     "Git": ("git",),
 }
 
@@ -142,7 +141,6 @@ __all__ = (
     "HDR10PlusTool",
     "Mp4decrypt",
     "Docker",
-    "ML_Worker",
     "Git",
     "find",
     "register",
