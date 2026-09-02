@@ -6,18 +6,31 @@ from typing import Optional
 __shaka_platform = {"win32": "win", "darwin": "osx"}.get(sys.platform, sys.platform)
 
 
-def find(*names: str) -> Optional[Path]:
+def find(*names: str, search_dirs: Optional[list[Path]] = None) -> Optional[Path]:
     """Find the path of the first found binary name."""
     current_dir = Path(__file__).resolve().parent.parent
     local_binaries_dir = current_dir / "binaries"
+    services_dir = current_dir / "services"
+
+    dirs_to_check: list[Path] = [local_binaries_dir]
+    if services_dir.exists():
+        for s_dir in services_dir.iterdir():
+            s_bin = s_dir / "binaries"
+            if s_bin.is_dir():
+                dirs_to_check.append(s_bin)
+
+    if search_dirs:
+        dirs_to_check.extend(search_dirs)
 
     ext = ".exe" if sys.platform == "win32" else ""
 
     for name in names:
-        if local_binaries_dir.exists():
-            candidate_paths = [local_binaries_dir / f"{name}{ext}", local_binaries_dir / name / f"{name}{ext}"]
+        for base_dir in dirs_to_check:
+            if not base_dir.exists():
+                continue
+            candidate_paths = [base_dir / f"{name}{ext}", base_dir / name / f"{name}{ext}"]
 
-            for subdir in local_binaries_dir.iterdir():
+            for subdir in base_dir.iterdir():
                 if subdir.is_dir():
                     candidate_paths.append(subdir / f"{name}{ext}")
 
@@ -63,11 +76,50 @@ __binaries = {
     "Git": ("git",),
 }
 
+_registered_binaries: dict[str, dict] = {}
+
+
+def register(
+    attr_name: str,
+    *candidates: str,
+    desc: str = "Custom tool",
+) -> None:
+    """Register a custom binary dynamically."""
+    file_candidates = candidates if candidates else (attr_name.lower(),)
+    __binaries[attr_name] = file_candidates
+    _registered_binaries[attr_name] = {
+        "name": attr_name,
+        "attr": attr_name,
+        "desc": desc,
+    }
+
+
+def get_registered_dependencies() -> list[dict]:
+    """Return all registered custom binary dependencies for env check."""
+    return list(_registered_binaries.values())
+
+
+_services_loaded = False
+
 
 def __getattr__(name: str) -> Optional[Path]:
+    global _services_loaded
     candidates = __binaries.get(name)
+    if candidates is None and not _services_loaded:
+        _services_loaded = True
+        try:
+            candidates = __binaries.get(name)
+        except Exception:
+            pass
+
     if candidates is None:
+        # Fallback to direct name and lowercase candidate
+        resolved = find(name, name.lower())
+        if resolved is not None:
+            globals()[name] = resolved
+            return resolved
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
     # Cache the result (including None for an absent binary) so later access is a plain attr hit.
     resolved = find(*candidates)
     globals()[name] = resolved
@@ -93,4 +145,6 @@ __all__ = (
     "ML_Worker",
     "Git",
     "find",
+    "register",
+    "get_registered_dependencies",
 )
