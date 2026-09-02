@@ -972,6 +972,8 @@ Requires an authenticated remote session. Otherwise it returns `404 SESSION_NOT_
 
 Get tracks and chapters for a specific title within the remote session. Body: `{ "title_id": "..." }` (required). Unlike `list-tracks`, track objects here **include** download URLs, along with session headers/cookies and manifest data the client needs to download directly.
 
+`manifests` holds each served DASH/ISM manifest once. A service can build an AdaptationSet of its own that the served manifest does not contain. `track_manifests` holds a one-AdaptationSet MPD for each such track, and the client re-parses that in place of the whole manifest.
+
 === "Response `200`"
 
     ```json
@@ -983,6 +985,7 @@ Get tracks and chapters for a specific title within the remote session. Body: `{
       "chapters": [ { "timestamp": "00:00:00.000", "name": "Intro" } ],
       "attachments": [ { "url": "https://...", "name": "font.ttf", "mime_type": "font/ttf", "description": "" } ],
       "manifests": [ { "type": "dash", "url": "https://...", "data": "<base64 zlib xml>" } ],
+      "track_manifests": [ { "track_id": "s-1", "type": "dash", "url": "https://...", "data": "<base64 zlib xml>" } ],
       "session_headers": { "User-Agent": "..." },
       "session_cookies": { "sid": "..." },
       "server_cdm_type": "widevine"

@@ -173,8 +173,11 @@ hood the client walks a remote session through its lifecycle.
     Once authenticated, the client fetches the title list, then the tracks for the
     chosen title. The tracks come back with playback URLs, and the server ships
     DASH/ISM manifests as compressed XML so the client can re-parse them locally for
-    downloading. Any `session_headers` / `session_cookies` the server used are
-    merged into the client's local HTTP session.
+    downloading. A service can build an AdaptationSet of its own that the served
+    manifest does not contain. Each such track gets a one-AdaptationSet MPD in
+    `track_manifests`, and the client re-parses that instead. Any
+    `session_headers` / `session_cookies` the server used are merged into the
+    client's local HTTP session.
 
     The tracks response repeats the title. A service can rewrite title fields inside
     `get_tracks`, so the client takes this copy in place of the one from the title

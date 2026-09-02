@@ -743,6 +743,66 @@ def extract_manifests(tracks) -> List[Dict[str, Any]]:
     return manifests
 
 
+def extract_track_manifests(tracks) -> List[Dict[str, Any]]:
+    """Build a one-AdaptationSet MPD for each track whose AdaptationSet the served manifest does not contain.
+
+    A service can build an AdaptationSet of its own, out of merged segment timelines or
+    copied nodes, that never joins the manifest tree the server serialises. The client's
+    re-parse of that manifest cannot find it, so each of those tracks gets its own MPD.
+    """
+    import base64
+    import zlib
+    from copy import deepcopy
+
+    from lxml import etree
+
+    from unshackle.core.config import config as app_config
+
+    compression_level = app_config.serve.get("compression_level", 1)
+    fragments: List[Dict[str, Any]] = []
+
+    for track in list(tracks.videos) + list(tracks.audio) + list(tracks.subtitles):
+        dash = (getattr(track, "data", None) or {}).get("dash") or {}
+        manifest = dash.get("manifest")
+        adaptation_set = dash.get("adaptation_set")
+        if manifest is None or adaptation_set is None:
+            continue
+        if adaptation_set.getroottree().getroot() is manifest:
+            continue
+
+        root = etree.Element("MPD", dict(manifest.attrib))
+        for child in manifest:
+            if child.tag != "Period":
+                root.append(deepcopy(child))
+
+        period = dash.get("period")
+        new_period = etree.SubElement(root, "Period", dict(period.attrib) if period is not None else {})
+        for child in period if period is not None else []:
+            if child.tag != "AdaptationSet":
+                new_period.append(deepcopy(child))
+        new_adaptation_set = deepcopy(adaptation_set)
+        new_period.append(new_adaptation_set)
+
+        representation = dash.get("representation")
+        if representation is not None:
+            for sibling in new_adaptation_set.findall("Representation"):
+                new_adaptation_set.remove(sibling)
+            new_adaptation_set.append(deepcopy(representation))
+
+        xml_bytes = etree.tostring(root, xml_declaration=True, encoding="UTF-8")
+        compressed = zlib.compress(xml_bytes, compression_level) if compression_level else xml_bytes
+        fragments.append(
+            {
+                "track_id": str(track.id),
+                "type": "dash",
+                "url": str(track.url) if track.url else None,
+                "data": base64.b64encode(compressed).decode("ascii"),
+            }
+        )
+
+    return fragments
+
+
 def serialize_drm(drm_list) -> Optional[List[Dict[str, Any]]]:
     """Serialise DRM objects to JSON-serializable list."""
     if not drm_list:
@@ -2588,6 +2648,7 @@ async def session_tracks_handler(
         audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
 
         manifests = extract_manifests(tracks)
+        track_manifests = extract_track_manifests(tracks)
 
         svc_session = session.service_instance.session
         session_headers = dict(svc_session.headers) if hasattr(svc_session, "headers") else {}
@@ -2644,6 +2705,7 @@ async def session_tracks_handler(
                 ],
                 "attachments": [a for a in map(serialize_attachment, tracks.attachments) if a],
                 "manifests": manifests,
+                "track_manifests": track_manifests,
                 "session_headers": session_headers,
                 "session_cookies": session_cookies,
                 "server_cdm": server_cdm_allowed(request, service_tag),

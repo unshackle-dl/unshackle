@@ -304,6 +304,51 @@ def apply_service_track_data(tracks: Tracks, data: Dict[str, Any]) -> None:
                 track.data.update(extra)
 
 
+def resolve_track_manifests(tracks: Tracks, track_manifests: list) -> None:
+    """Fill track.data from the per-track MPD fragments the server sent.
+
+    A service can build an AdaptationSet the served manifest does not contain, so the
+    client's re-parse of that manifest cannot find it. The server sends a one-AdaptationSet
+    MPD for each of those tracks instead. This runs first, and the whole-manifest re-parse
+    then skips every track whose ``data`` already holds a ``dash`` entry.
+    """
+    import base64 as b64
+
+    from lxml import etree
+
+    from unshackle.core.api.compression import safe_inflate
+
+    if not track_manifests:
+        return
+
+    log_m = logging.getLogger("remote_service")
+    by_id = {str(t.id): t for t in list(tracks.videos) + list(tracks.audio) + list(tracks.subtitles)}
+
+    for entry in track_manifests:
+        track = by_id.get(str(entry.get("track_id")))
+        if track is None or entry.get("type") != "dash" or not entry.get("data"):
+            continue
+        try:
+            manifest = etree.fromstring(safe_inflate(b64.b64decode(entry["data"])))
+            period = manifest.find("Period")
+            adaptation_set = period.find("AdaptationSet")
+            representation = adaptation_set.find("Representation")
+            if representation is None:
+                raise ValueError("fragment has no Representation")
+        except Exception as e:
+            log_m.warning("Failed to re-parse the track fragment for track %s: %s", track.id, e)
+            continue
+
+        track.data["dash"] = {
+            "manifest": manifest,
+            "period": period,
+            "adaptation_set": adaptation_set,
+            "representation": representation,
+            "representation_id": representation.get("id"),
+        }
+        track.descriptor = Track.Descriptor.DASH
+
+
 def resolve_manifest_data(tracks: Tracks, manifests: list) -> None:
     """Re-parse serialized manifests and fill track.data for downloading.
 
@@ -974,6 +1019,7 @@ class RemoteService:
         for k, v in result.get("session_cookies", {}).items():
             self._session.cookies.set(k, v)
 
+        resolve_track_manifests(tracks, result.get("track_manifests", []))
         resolve_manifest_data(tracks, result.get("manifests", []))
         apply_service_track_data(tracks, result)
 
