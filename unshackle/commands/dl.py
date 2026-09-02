@@ -4620,7 +4620,7 @@ class dl:
                     cek_tree = pre_existing_tree
 
                 for kid_, key in drm.content_keys.items():
-                    label = f"[text2]{kid_.hex}:{key}"
+                    label = f"[text2]{kid_.hex}:{key}*"
                     if not any(f"{kid_.hex}:{key}" in x.label for x in cek_tree.children):
                         cek_tree.add(label)
 

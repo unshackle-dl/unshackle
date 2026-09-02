@@ -405,6 +405,14 @@ class Service(metaclass=ABCMeta):
         session.mount("http://", session.adapters["https://"])
         return session
 
+    @staticmethod
+    def get_binaries() -> list[dict]:
+        """
+        Declare custom binary dependencies required by this service.
+        :returns: List of dicts specifying name, candidates, desc, etc.
+        """
+        return []
+
     def authenticate(self, cookies: Optional[CookieJar] = None, credential: Optional[Credential] = None) -> None:
         """
         Authenticate the Service with Cookies and/or Credentials (Email/Username and Password).

@@ -10,6 +10,7 @@ from typing import Any, Iterable
 
 import click
 
+from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.service import Service
 from unshackle.core.service_repo import DirtyServiceRepo, is_repo_spec, refresh_repo, resolve_service_repo
@@ -102,7 +103,26 @@ def load_services(paths: list[Path]) -> tuple[dict[str, object], list[str]]:
     return modules, errors
 
 
+def register_service_binaries(modules: dict[str, object]) -> None:
+    """Register custom binary dependencies declared by services via get_binaries()."""
+
+    for tag, service_cls in modules.items():
+        get_binaries_fn = getattr(service_cls, "get_binaries", None)
+        if callable(get_binaries_fn):
+            try:
+                for dep in get_binaries_fn():
+                    name = dep.get("name")
+                    if not name:
+                        continue
+                    candidates = dep.get("candidates") or (name.lower(),)
+                    desc = dep.get("desc", f"{tag} dependency")
+                    binaries.register(name, *candidates, desc=desc)
+            except Exception as e:
+                log.warning(f"Failed to register custom binaries for service {tag}: {e}")
+
+
 MODULES, LOAD_ERRORS = load_services(SERVICES)
+register_service_binaries(MODULES)
 
 ALIASES = {tag: getattr(module, "ALIASES", ()) for tag, module in MODULES.items()}
 
@@ -143,6 +163,7 @@ def reload_services(tags: Iterable[str]) -> list[str]:
             except Exception as e:
                 errors.append(str(e))
         LOAD_ERRORS.extend(errors)
+        register_service_binaries(MODULES)
         PENDING.difference_update(wanted)
         return errors
 

@@ -14,11 +14,9 @@ import re
 import sys
 import uuid
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, Union
 
 import wasmtime
-
-from unshackle.core import binaries
 
 logger = logging.getLogger(__name__)
 
@@ -92,13 +90,6 @@ class MonaLisaCDM:
         self.instance = None
         self.exports = {}
         self.ctx = None
-
-    @staticmethod
-    def get_worker_path() -> Optional[Path]:
-        """Get ML-Worker binary path from the unshackle binaries system."""
-        if binaries.ML_Worker:
-            return Path(binaries.ML_Worker)
-        return None
 
     def open(self) -> int:
         """

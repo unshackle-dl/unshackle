@@ -19,10 +19,28 @@ from unshackle.core.temp import TASK_PREFIX, is_stale
 
 def get_dependencies() -> list[dict]:
     """Binary dependency inventory shared by `env check` and the API env check."""
-    return [
-        {"name": "FFmpeg", "binary": binaries.FFMPEG, "required": True, "desc": "Media processing", "cat": "Core"},
-        {"name": "FFprobe", "binary": binaries.FFProbe, "required": True, "desc": "Media analysis", "cat": "Core"},
-        {"name": "MKVToolNix", "binary": binaries.MKVToolNix, "required": True, "desc": "MKV muxing", "cat": "Core"},
+    deps = [
+        {
+            "name": "FFmpeg",
+            "binary": binaries.FFMPEG,
+            "required": True,
+            "desc": "Media processing",
+            "cat": "Core",
+        },
+        {
+            "name": "FFprobe",
+            "binary": binaries.FFProbe,
+            "required": True,
+            "desc": "Media analysis",
+            "cat": "Core",
+        },
+        {
+            "name": "MKVToolNix",
+            "binary": binaries.MKVToolNix,
+            "required": True,
+            "desc": "MKV muxing",
+            "cat": "Core",
+        },
         {
             "name": "mkvpropedit",
             "binary": binaries.Mkvpropedit,
@@ -44,7 +62,13 @@ def get_dependencies() -> list[dict]:
             "desc": "DRM decryption",
             "cat": "DRM",
         },
-        {"name": "dovi_tool", "binary": binaries.DoviTool, "required": False, "desc": "Dolby Vision", "cat": "HDR"},
+        {
+            "name": "dovi_tool",
+            "binary": binaries.DoviTool,
+            "required": False,
+            "desc": "Dolby Vision",
+            "cat": "HDR",
+        },
         {
             "name": "HDR10Plus_tool",
             "binary": binaries.HDR10PlusTool,
@@ -66,8 +90,20 @@ def get_dependencies() -> list[dict]:
             "desc": "CC extraction",
             "cat": "Subtitle",
         },
-        {"name": "FFplay", "binary": binaries.FFPlay, "required": False, "desc": "Simple player", "cat": "Player"},
-        {"name": "MPV", "binary": binaries.MPV, "required": False, "desc": "Advanced player", "cat": "Player"},
+        {
+            "name": "FFplay",
+            "binary": binaries.FFPlay,
+            "required": False,
+            "desc": "Simple player",
+            "cat": "Player",
+        },
+        {
+            "name": "MPV",
+            "binary": binaries.MPV,
+            "required": False,
+            "desc": "Advanced player",
+            "cat": "Player",
+        },
         {
             "name": "HolaProxy",
             "binary": binaries.HolaProxy,
@@ -75,10 +111,41 @@ def get_dependencies() -> list[dict]:
             "desc": "Proxy service",
             "cat": "Network",
         },
-        {"name": "Caddy", "binary": binaries.Caddy, "required": False, "desc": "Web server", "cat": "Network"},
-        {"name": "Docker", "binary": binaries.Docker, "required": False, "desc": "Gluetun VPN", "cat": "Network"},
-        {"name": "git", "binary": binaries.Git, "required": False, "desc": "Service repos", "cat": "Network"},
+        {
+            "name": "Caddy",
+            "binary": binaries.Caddy,
+            "required": False,
+            "desc": "Web server",
+            "cat": "Network",
+        },
+        {
+            "name": "Docker",
+            "binary": binaries.Docker,
+            "required": False,
+            "desc": "Gluetun VPN",
+            "cat": "Network",
+        },
+        {
+            "name": "git",
+            "binary": binaries.Git,
+            "required": False,
+            "desc": "Service repos",
+            "cat": "Network",
+        },
     ]
+
+    for reg in binaries.get_registered_dependencies():
+        deps.append(
+            {
+                "name": reg["name"],
+                "binary": getattr(binaries, reg["attr"], None),
+                "required": False,
+                "desc": reg["desc"],
+                "cat": "Service",
+            }
+        )
+
+    return deps
 
 
 def clear_directory(path: Path) -> tuple[int, int]:
