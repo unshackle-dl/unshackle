@@ -2202,6 +2202,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.drm.MonaLisa.key_pair" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;key_pair
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.drm.MonaLisa.Exceptions" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2229,28 +2240,6 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;KeyExtractionFailed
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.drm.MonaLisa.Exceptions.WorkerNotFound" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;WorkerNotFound
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.drm.MonaLisa.Exceptions.DecryptionFailed" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;DecryptionFailed
       
     </span>
   </a>
@@ -2963,6 +2952,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.drm.MonaLisa.key_pair" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;key_pair
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.drm.MonaLisa.Exceptions" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2990,28 +2990,6 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;KeyExtractionFailed
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.drm.MonaLisa.Exceptions.WorkerNotFound" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;WorkerNotFound
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.drm.MonaLisa.Exceptions.DecryptionFailed" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;DecryptionFailed
       
     </span>
   </a>
@@ -3984,7 +3962,7 @@ Raises:
 
 
 <a href="#unshackle.core.drm.MonaLisa" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">MonaLisa</span><span class="p">(</span><span class="n">ticket</span><span class="p">,</span> <span class="n">aes_key</span><span class="p">,</span> <span class="n">device_path</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">MonaLisa</span><span class="p">(</span><span class="n">ticket</span><span class="p">,</span> <span class="n">device_path</span><span class="p">,</span> <span class="n">tool_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -3995,9 +3973,6 @@ Raises:
 <p>Unlike Widevine/PlayReady, MonaLisa does not use a challenge/response flow
 with a license server. Instead, the service API gives the PSSH value (ticket)
 directly, and a WASM module extracts the content keys locally.</p>
-<p>Decryption has two stages:
-1. ML-Worker binary: Removes MonaLisa encryption layer (bbts -&gt; ents)
-2. AES-ECB decryption: Final decryption with the service-supplied content key</p>
 
         <p>Initialise MonaLisa DRM.</p>
 
@@ -4031,22 +4006,6 @@ directly, and a WASM module extracts the content keys locally.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>aes_key</code>
-            </td>
-            <td>
-                  <code><span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="bytes">bytes</span>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>AES-ECB content key for second-stage decryption (hex string or bytes).</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
                 <code>device_path</code>
             </td>
             <td>
@@ -4059,6 +4018,22 @@ directly, and a WASM module extracts the content keys locally.</p>
             </td>
             <td>
                 <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>tool_path</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="pathlib.Path">Path</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional path to an external decryption binary.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -4322,6 +4297,30 @@ H5DCID-V3-P1-YYYYMMDD-HHMMSS-MEDIAID-TIMESTAMP-SUFFIX</p>
 
 </div>
 
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="unshackle.core.drm.MonaLisa.key_pair" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <span class="doc doc-object-name doc-attribute-name">key_pair</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#unshackle.core.drm.MonaLisa.key_pair" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">key_pair</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Get formatted KID:KEY pair for CLI decryptors (32hex:32hex).</p>
+
+    </div>
+
+</div>
+
 
 
 <div class="doc doc-object doc-class">
@@ -4421,68 +4420,6 @@ H5DCID-V3-P1-YYYYMMDD-HHMMSS-MEDIAID-TIMESTAMP-SUFFIX</p>
 
 </div>
 
-<div class="doc doc-object doc-class">
-
-
-
-<h4 id="unshackle.core.drm.MonaLisa.Exceptions.WorkerNotFound" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">WorkerNotFound</span>
-
-
-<a href="#unshackle.core.drm.MonaLisa.Exceptions.WorkerNotFound" class="headerlink" title="Permanent link">&para;</a></h4>
-
-
-    <div class="doc doc-contents ">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="Exception">Exception</span></code></p>
-
-
-
-        <p>Raised when the ML-Worker binary is not found.</p>
-
-
-
-
-
-
-
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-class">
-
-
-
-<h4 id="unshackle.core.drm.MonaLisa.Exceptions.DecryptionFailed" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">DecryptionFailed</span>
-
-
-<a href="#unshackle.core.drm.MonaLisa.Exceptions.DecryptionFailed" class="headerlink" title="Permanent link">&para;</a></h4>
-
-
-    <div class="doc doc-contents ">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="Exception">Exception</span></code></p>
-
-
-
-        <p>Raised when segment decryption fails.</p>
-
-
-
-
-
-
-
-
-
-    </div>
-
-</div>
-
 
 
 
@@ -4525,7 +4462,7 @@ H5DCID-V3-P1-YYYYMMDD-HHMMSS-MEDIAID-TIMESTAMP-SUFFIX</p>
   </span>
 
 <a href="#unshackle.core.drm.MonaLisa.from_ticket" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">from_ticket</span><span class="p">(</span><span class="n">ticket</span><span class="p">,</span> <span class="n">aes_key</span><span class="p">,</span> <span class="n">device_path</span><span class="p">)</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">from_ticket</span><span class="p">(</span><span class="n">ticket</span><span class="p">,</span> <span class="n">device_path</span><span class="p">,</span> <span class="n">tool_path</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -4562,22 +4499,6 @@ H5DCID-V3-P1-YYYYMMDD-HHMMSS-MEDIAID-TIMESTAMP-SUFFIX</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>aes_key</code>
-            </td>
-            <td>
-                  <code><span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="bytes">bytes</span>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>AES-ECB content key for second-stage decryption.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
                 <code>device_path</code>
             </td>
             <td>
@@ -4590,6 +4511,22 @@ H5DCID-V3-P1-YYYYMMDD-HHMMSS-MEDIAID-TIMESTAMP-SUFFIX</p>
             </td>
             <td>
                 <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>tool_path</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="pathlib.Path">Path</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional path to an external decryption binary.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
             </td>
           </tr>
       </tbody>
@@ -4631,14 +4568,12 @@ H5DCID-V3-P1-YYYYMMDD-HHMMSS-MEDIAID-TIMESTAMP-SUFFIX</p>
 
 
 <a href="#unshackle.core.drm.MonaLisa.decrypt_segment" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">decrypt_segment</span><span class="p">(</span><span class="n">segment_path</span><span class="p">)</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">decrypt_segment</span><span class="p">(</span><span class="n">segment_path</span><span class="p">,</span> <span class="n">output_path</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
 
-        <p>Decrypt a single segment using two-stage decryption.</p>
-<p>Stage 1: ML-Worker binary (bbts -&gt; ents)
-Stage 2: AES-ECB decryption (ents -&gt; ts)</p>
+        <p>Decrypt an individual segment file using the configured CLI tool via subprocess.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -4661,44 +4596,27 @@ Stage 2: AES-ECB decryption (ents -&gt; ts)</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Path to the encrypted segment file.</p>
+                <p>Path to the segment file to decrypt.</p>
               </div>
             </td>
             <td>
                 <em>required</em>
             </td>
           </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="WorkerNotFound">WorkerNotFound</span></code>
+                <code>output_path</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="pathlib.Path">Path</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>If ML-Worker binary is not available.</p>
+                <p>Optional path for the decrypted output segment.</p>
               </div>
             </td>
-          </tr>
-          <tr class="doc-section-item">
             <td>
-                  <code><span title="DecryptionFailed">DecryptionFailed</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If decryption fails at any stage.</p>
-              </div>
+                  <code>None</code>
             </td>
           </tr>
       </tbody>
@@ -4717,14 +4635,12 @@ Stage 2: AES-ECB decryption (ents -&gt; ts)</p>
 
 
 <a href="#unshackle.core.drm.MonaLisa.decrypt" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">decrypt</span><span class="p">(</span><span class="n">_path</span><span class="p">)</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">decrypt</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">output_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">is_segment</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
 
-        <p>MonaLisa uses per-segment decryption during download, through the
-on_segment_downloaded callback. When the caller calls this method,
-unshackle has already decrypted the media and muxed it into a container.</p>
+        <p>Decrypt a media file (segment or track) using the configured CLI tool via subprocess.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -4740,18 +4656,50 @@ unshackle has already decrypted the media and muxed it into a container.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                <code>_path</code>
+                <code>path</code>
             </td>
             <td>
                   <code><span title="pathlib.Path">Path</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Path to the file (ignored).</p>
+                <p>Path to the target file to decrypt.</p>
               </div>
             </td>
             <td>
                 <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>output_path</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="pathlib.Path">Path</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional path for the decrypted output file.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>is_segment</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Set True if this is an individual segment rather than a full track.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
             </td>
           </tr>
       </tbody>

@@ -2535,8 +2535,11 @@ locally, so you see the server-side reason when a step fails.</p>
 <p>Once authenticated, the client fetches the title list, then the tracks for the
 chosen title. The tracks come back with playback URLs, and the server ships
 DASH/ISM manifests as compressed XML so the client can re-parse them locally for
-downloading. Any <code>session_headers</code> / <code>session_cookies</code> the server used are
-merged into the client's local HTTP session.</p>
+downloading. A service can build an AdaptationSet of its own that the served
+manifest does not contain. Each such track gets a one-AdaptationSet MPD in
+<code>track_manifests</code>, and the client re-parses that instead. Any
+<code>session_headers</code> / <code>session_cookies</code> the server used are merged into the
+client's local HTTP session.</p>
 <p>The tracks response repeats the title. A service can rewrite title fields inside
 <code>get_tracks</code>, so the client takes this copy in place of the one from the title
 list. Each track carries the full local field set. After the manifest re-parse the
