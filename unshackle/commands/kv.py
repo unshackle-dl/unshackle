@@ -2,7 +2,7 @@ import logging
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Union, cast
 from uuid import UUID
 
 import click
@@ -64,19 +64,20 @@ class _PaddedProgress(Progress):
 
 
 def add_keys_with_progress(vault: Vault, service: str, kid_keys: dict[str, str], log: logging.Logger) -> int:
-    """Add content keys to a vault in batches, with a progress bar of counts and time left."""
+    """Add content keys to a vault. Network vaults write in batches behind a progress bar."""
+    if type(vault).__name__ in ("MySQL", "SQLite"):
+        return vault.add_keys(service, cast(dict[Union[UUID, str], str], kid_keys))
 
     def chunk(i: int) -> int:
-        if type(vault).__name__ != "HTTP":
-            return 500
-        return 500 if i and getattr(vault, "batch_insert", False) else 1
+        # Probe with one key so a server that rejects batches costs one row, not 500.
+        return 500 if i and getattr(vault, "batch_insert", True) else 1
 
     kids = list(kid_keys)
     added = 0
     with _PaddedProgress(
         SpinnerColumn(finished_text=""),
         TextColumn("[bold]{task.description}"),
-        GradientPulseBarColumn(),
+        GradientPulseBarColumn(bar_width=None),
         MofNCompleteColumn(),
         "•",
         TextColumn("[green]{task.fields[added]} new"),
@@ -86,6 +87,7 @@ def add_keys_with_progress(vault: Vault, service: str, kid_keys: dict[str, str],
         TimeRemainingColumn(compact=True),
         console=console,
         transient=True,
+        expand=True,
     ) as progress:
         task = progress.add_task(f"{service} → {vault}", total=len(kids), added=0)
         i = 0
@@ -196,7 +198,7 @@ def copy(
             try:
                 services_to_copy = list(from_vault.get_services())
             except Exception as e:
-                log.warning(f"{from_vault.name}: cannot list services ({e}), skipped")
+                log.debug(f"{from_vault.name}: cannot list services ({e}), skipped")
                 continue
 
         if installed is not None:

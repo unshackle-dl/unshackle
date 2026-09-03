@@ -138,9 +138,13 @@ class MySQL(Vault):
         cursor = conn.cursor()
 
         try:
-            placeholders = ",".join(["%s"] * len(kid_keys))
-            cursor.execute(f"SELECT kid FROM `{service}` WHERE kid IN ({placeholders})", list(kid_keys.keys()))
-            existing_kids = {row["kid"] for row in cursor.fetchall()}
+            existing_kids: set[str] = set()
+            kid_list = list(kid_keys)
+            for i in range(0, len(kid_list), 10000):
+                batch = kid_list[i : i + 10000]
+                placeholders = ",".join(["%s"] * len(batch))
+                cursor.execute(f"SELECT kid FROM `{service}` WHERE kid IN ({placeholders})", batch)
+                existing_kids.update(row["kid"] for row in cursor.fetchall())
 
             new_keys = {kid: key for kid, key in kid_keys.items() if kid not in existing_kids}
 
