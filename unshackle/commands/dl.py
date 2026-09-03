@@ -19,6 +19,7 @@ from copy import deepcopy
 from datetime import date, timedelta
 from functools import partial
 from http.cookiejar import CookieJar, MozillaCookieJar
+from io import StringIO
 from itertools import product
 from pathlib import Path
 from threading import Lock
@@ -4674,15 +4675,28 @@ class dl:
     def load_cookie_file(cookie_file: Path) -> MozillaCookieJar:
         """Load a Netscape cookie file with every expiry blanked, so no layer drops an expired cookie."""
         cookie_jar = MozillaCookieJar(cookie_file)
-        cookie_data = html.unescape(cookie_file.read_text("utf8")).splitlines(keepends=False)
+        cookie_data = html.unescape(cookie_file.read_text("utf-8-sig")).splitlines(keepends=False)
+        head = next((line.lstrip() for line in cookie_data if line.strip()), "")
+        if head[:1] in ("[", "{"):
+            raise ValueError(f"{cookie_file} is a JSON export; export it again in Netscape format")
         for i, line in enumerate(cookie_data):
-            if line and not line.startswith("#"):
-                line_data = line.lstrip().split("\t")
-                # Even under ignore_expires=True, requests may still skip an expired cookie
-                line_data[4] = ""
-                cookie_data[i] = "\t".join(line_data)
-        cookie_file.write_text("\n".join(cookie_data), "utf8")
-        cookie_jar.load(ignore_discard=True, ignore_expires=True)
+            body = line.lstrip()
+            prefix = "#HttpOnly_" if body.startswith("#HttpOnly_") else ""
+            body = body[len(prefix) :]
+            if not body or body.startswith("#"):
+                continue
+            line_data = body.split("\t") if "\t" in body else body.split(None, 6)
+            if len(line_data) == 6:
+                line_data.append("")
+            if len(line_data) != 7:
+                raise ValueError(f"{cookie_file} line {i + 1} is not a Netscape cookie row: {line!r}")
+            line_data[4] = ""
+            line_data[1] = str(line_data[0].startswith(".")).upper()
+            cookie_data[i] = prefix + "\t".join(line_data)
+        cookie_data.insert(0, "# Netscape HTTP Cookie File")
+        cookie_jar._really_load(StringIO("\n".join(cookie_data)), str(cookie_file), True, True)  # type: ignore[attr-defined]
+        if not len(cookie_jar):
+            raise ValueError(f"{cookie_file} holds no cookies; export it again in Netscape format")
         return cookie_jar
 
     @staticmethod
@@ -4690,8 +4704,7 @@ class dl:
         if hasattr(cookies, "jar"):
             cookies = cookies.jar
 
-        cookie_jar = MozillaCookieJar(path)
-        cookie_jar.load(ignore_discard=True, ignore_expires=True)
+        cookie_jar = dl.load_cookie_file(path) if path.exists() else MozillaCookieJar(path)
         for cookie in cookies:
             if not cookie.name or not cookie.domain:
                 continue

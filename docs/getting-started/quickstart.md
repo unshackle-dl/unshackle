@@ -132,6 +132,11 @@ Services that require a login read either **cookies** or **credentials**.
   `cookies/{SERVICE}/default.txt`. So unshackle finds a file at `cookies/EXAMPLE.txt`
   automatically for the `EXAMPLE` service.
 
+    unshackle repairs the usual export damage in memory and does not change your
+    file: a missing header line, a byte-order mark, spaces in place of tabs, and
+    rows a text editor broke. unshackle refuses a JSON export. Export the cookies
+    again in Netscape format.
+
 - **Credentials**: store a username and password per service in your config:
 
     ```yaml title="unshackle.yaml"
