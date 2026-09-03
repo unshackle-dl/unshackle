@@ -27,7 +27,7 @@ from unshackle.core.utils.redact import mask_proxy
 @click.command(
     short_help="Search for titles from a Service.",
     cls=Services,
-    context_settings=dict(**context_settings, token_normalize_func=Services.get_tag),
+    context_settings=context_settings,
 )
 @click.option(
     "-p", "--profile", type=str, default=None, help="Profile to use for Credentials and Cookies (if available)."

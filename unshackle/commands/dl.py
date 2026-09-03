@@ -506,9 +506,7 @@ class dl:
     @click.command(
         short_help="Download, Decrypt, and Mux tracks for titles from a Service.",
         cls=Services,
-        context_settings=dict(
-            **context_settings, default_map=normalize_dl_config(config.dl), token_normalize_func=Services.get_tag
-        ),
+        context_settings=dict(**context_settings, default_map=normalize_dl_config(config.dl)),
     )
     @click.option(
         "-p", "--profile", type=str, default=None, help="Profile to use for Credentials and Cookies (if available)."
