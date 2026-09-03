@@ -2177,7 +2177,7 @@ overrides such as <code>title_map</code>.</p>
 service the API key has it on, and the local CDM for the others. <code>true</code> asks for the server CDM
 and falls back to the local CDM when the server refuses; <code>false</code> always uses the local CDM.</p>
 <p><code>auth_headers</code> lists extra header names to send the API key in, tried before the defaults
-<code>X-Secret-Key</code> and <code>X-Api-Key</code>, which are always appended as fallbacks. unshackle sends the
+<code>X-Secret-Key</code> and <code>X-Api-Key</code>, which unshackle always appends as fallbacks. It sends the
 first name. If the server answers <code>401</code>, it retries the same request with the next name, and
 keeps the one that works for the rest of the HTTP session. Names you give keep your spelling and
 are not repeated in the fallbacks, so unshackle tries
@@ -2210,13 +2210,19 @@ is the <a href="../../../dev/rest-api/">REST API</a> section. These are the conf
 <td><code>api_secret</code></td>
 <td>str</td>
 <td><em>(unset)</em></td>
-<td>Master secret accepted in the <code>X-Secret-Key</code> header. Required unless the server is started with <code>--no-key</code>.</td>
+<td>Master secret the server accepts in the <code>X-Secret-Key</code> header. Required unless you start the server with <code>--no-key</code>.</td>
 </tr>
 <tr>
 <td><code>users</code></td>
 <td>dict</td>
 <td><code>{}</code></td>
 <td>Per-user API keys and their allowlists (see below).</td>
+</tr>
+<tr>
+<td><code>tiers</code></td>
+<td>dict</td>
+<td><code>{}</code></td>
+<td>Named settings that <code>users</code> entries reference by name (see below).</td>
 </tr>
 <tr>
 <td><code>services</code></td>
@@ -2234,7 +2240,7 @@ is the <a href="../../../dev/rest-api/">REST API</a> section. These are the conf
 <td><code>dashboard</code></td>
 <td>dict</td>
 <td><em>(unset)</em></td>
-<td>Developer dashboard: <code>key</code> is the API key for the read-only <code>/api/dashboard/</code> endpoints (status, sessions, jobs, logs, SSE events). Unset leaves those routes unregistered. See <a href="../../../dev/rest-api/dashboard/">dashboard endpoints</a>.</td>
+<td>Developer dashboard: <code>key</code> is the API key for the read-only <code>/api/dashboard/</code> endpoints (status, remote sessions, remote session logs, jobs, keys, services, health, logs, SSE events). Unset leaves those routes unregistered. See <a href="../../../dev/rest-api/dashboard/">dashboard endpoints</a>.</td>
 </tr>
 <tr>
 <td><code>session_ttl</code></td>
@@ -2244,9 +2250,9 @@ is the <a href="../../../dev/rest-api/">REST API</a> section. These are the conf
 </tr>
 <tr>
 <td><code>max_sessions</code></td>
-<td>int</td>
+<td>int or null</td>
 <td><code>100</code></td>
-<td>Maximum concurrent sessions.</td>
+<td>Maximum concurrent remote sessions; at the cap the server evicts the oldest. Set it to <code>null</code> or <code>0</code> for no limit, which is also what <code>/api/dashboard/status</code> then reports, so a dashboard can tell "no cap" from a cap that happens to sit at the default.</td>
 </tr>
 <tr>
 <td><code>history_limit</code></td>
@@ -2270,7 +2276,7 @@ is the <a href="../../../dev/rest-api/">REST API</a> section. These are the conf
 <td><code>global_speed_limit</code></td>
 <td>str</td>
 <td><em>(unlimited)</em></td>
-<td>Server-wide download speed cap, e.g. <code>10M</code>, <code>1.5G</code> or plain bytes/sec (same format as <code>speed_limit</code>). One shared budget across all concurrent jobs; per-job speed limits are ignored while it is set.</td>
+<td>Server-wide download speed cap, e.g. <code>10M</code>, <code>1.5G</code> or plain bytes/sec (same format as <code>speed_limit</code>). One shared budget across all concurrent jobs; the server ignores per-job speed limits while it is set.</td>
 </tr>
 <tr>
 <td><code>cdm_overrides</code></td>
@@ -2316,6 +2322,15 @@ client configured with <code>server_cdm: true</code> to license with its own loc
 client that asks anyway gets a <code>FORBIDDEN</code> error. Because a download job always licenses with the server's CDM,
 an API key without <code>server_cdm</code> for that service also cannot submit or retry <code>/api/download</code>
 jobs. Keys that have no <code>users</code> entry, such as <code>api_secret</code>, keep server CDM access.</p>
+<p>A <code>tier</code> names an entry under <code>serve.tiers</code>, which holds the settings that several API keys
+share. Today a tier carries <code>rate_limit</code>, the requests per hour that API key may make; an API
+key can also set its own <code>rate_limit</code>, which wins over its tier's. An API key with neither has
+no limit. Going over the limit answers <code>429</code> with a <code>Retry-After</code> header. The server keeps a
+fixed window rather than a sliding one: it opens on the first request and resets an hour
+later. A <code>tier</code> that names no entry under <code>serve.tiers</code>, or a <code>rate_limit</code> that is not a
+positive whole number, stops the server at startup, because the alternative is an API key that
+silently gets no limit. The rate limit never applies to the dashboard key, and never to
+<code>/api/health</code>.</p>
 <p><code>server_accounts</code> lists, per service, the accounts the server lends to remote sessions. A remote
 session for a listed service ignores the credentials, cookies, and cache the client sends and
 uses one of the server's own profiles from <code>credentials</code>. For a service that is not listed the
@@ -2375,16 +2390,19 @@ region; a client that reports none is not blocked.</p>
 </span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span><span class="c1"># server-wide download defaults (same keys as the `dl:` block)</span>
 </span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span><span class="nt">downloads</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
 </span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span><span class="nt">best_available</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">  </span><span class="nt">users</span><span class="p">:</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span><span class="nt">a1b2c3d4</span><span class="p">:</span><span class="w">                     </span><span class="c1"># this user's API key</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">      </span><span class="nt">services</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">]</span><span class="w">        </span><span class="c1"># may only use EXAMPLE1</span>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">    </span><span class="nt">e5f6a7b8</span><span class="p">:</span>
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">      </span><span class="nt">server_cdm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">            </span><span class="c1"># this key may have the server do the licensing</span>
-</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">    </span><span class="nt">c9d0e1f2</span><span class="p">:</span>
-</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">      </span><span class="nt">services</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">EXAMPLE2</span><span class="p p-Indicator">]</span>
-</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">      </span><span class="nt">server_cdm</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">]</span><span class="w">      </span><span class="c1"># the server licenses only EXAMPLE1; EXAMPLE2 needs a local CDM</span>
-</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">      </span><span class="nt">server_accounts</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="c1"># may authenticate EXAMPLE1 with one of the server's own accounts</span>
-</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">      </span><span class="nt">server_proxy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">          </span><span class="c1"># this key may also use the server's proxy providers</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">  </span><span class="nt">tiers</span><span class="p">:</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span><span class="nt">bot</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> rate_limit</span><span class="p">:</span><span class="w"> </span><span class="nv">600</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">      </span><span class="c1"># requests per hour, for every key on this tier</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">  </span><span class="nt">users</span><span class="p">:</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">    </span><span class="nt">a1b2c3d4</span><span class="p">:</span><span class="w">                     </span><span class="c1"># this user's API key</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">      </span><span class="nt">services</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">]</span><span class="w">        </span><span class="c1"># may only use EXAMPLE1</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">      </span><span class="nt">tier</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bot</span><span class="w">                   </span><span class="c1"># 600 requests/hour; 429 with Retry-After once over</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">    </span><span class="nt">e5f6a7b8</span><span class="p">:</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">      </span><span class="nt">server_cdm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">            </span><span class="c1"># this key may have the server do the licensing</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">    </span><span class="nt">c9d0e1f2</span><span class="p">:</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">      </span><span class="nt">services</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">EXAMPLE2</span><span class="p p-Indicator">]</span>
+</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">      </span><span class="nt">server_cdm</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">]</span><span class="w">      </span><span class="c1"># the server licenses only EXAMPLE1; EXAMPLE2 needs a local CDM</span>
+</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="w">      </span><span class="nt">server_accounts</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="c1"># may authenticate EXAMPLE1 with one of the server's own accounts</span>
+</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="w">      </span><span class="nt">server_proxy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">          </span><span class="c1"># this key may also use the server's proxy providers</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title"><code>dl</code> keys inside <code>serve</code></p>

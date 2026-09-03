@@ -2948,7 +2948,7 @@
 </ul>
 <div class="admonition warning">
 <p class="admonition-title">Error responses have two shapes</p>
-<p>Structured application errors (raised inside a handler) return <code>{"status": "error", "error_code": "...", "message": "...", "timestamp": "..."}</code>. The authentication middleware, however, returns a <strong>different</strong> shape: <code>{"status": 401, "message": "..."}</code> with an integer <code>status</code> and no <code>error_code</code>. Clients must accept both shapes. The <a href="#error-responses">Error responses</a> section at the bottom of this page gives the full error model.</p>
+<p>Structured application errors (raised inside a handler) return <code>{"status": "error", "error_code": "...", "message": "...", "timestamp": "..."}</code>. The authentication middleware, however, returns a <strong>different</strong> shape: <code>{"status": 401, "message": "..."}</code> with an integer <code>status</code> and no <code>error_code</code>. The same middleware answers <code>429</code> in that shape when an API key goes over its rate limit. Clients must accept both shapes. The <a href="#error-responses">Error responses</a> section at the bottom of this page gives the full error model.</p>
 </div>
 <hr />
 <h2 id="general-endpoints">General endpoints<a class="headerlink" href="#general-endpoints" title="Permanent link">&para;</a></h2>
@@ -5002,7 +5002,7 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 </ul>
 <div class="admonition warning">
 <p class="admonition-title">Authentication errors differ</p>
-<p>Errors raised by the API-key middleware use a distinct shape (<code>{"status": 401, "message": "Secret Key is Empty."}</code> or <code>{"status": 401, "message": "Secret Key is Invalid."}</code>) with an integer <code>status</code> and no <code>error_code</code>, <code>timestamp</code>, or <code>details</code>. A malformed JSON body on any POST, by contrast, returns the standard envelope with <code>error_code: "INVALID_INPUT"</code>.</p>
+<p>Errors raised by the API-key middleware use a distinct shape (<code>{"status": 401, "message": "Secret Key is Empty."}</code>, <code>{"status": 401, "message": "Secret Key is Invalid."}</code>, or <code>{"status": 429, "message": "Rate limit exceeded."}</code> with a <code>Retry-After</code> header) with an integer <code>status</code> and no <code>error_code</code>, <code>timestamp</code>, or <code>details</code>. A <code>429</code> from the middleware therefore carries no <code>error_code</code>, unlike the <code>RATE_LIMITED</code> code below, which a handler raises for a rate limit the <em>service</em> imposed. A malformed JSON body on any POST, by contrast, returns the standard envelope with <code>error_code: "INVALID_INPUT"</code>.</p>
 </div>
 <h3 id="error-codes-and-default-status">Error codes and default status<a class="headerlink" href="#error-codes-and-default-status" title="Permanent link">&para;</a></h3>
 <table>

@@ -1683,6 +1683,78 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#remote-session-logs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remote session logs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keys
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Keys">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rate-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate limits
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#services" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Services
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Health
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#counters-reset-on-restart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Counters reset on restart
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2033,6 +2105,78 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#remote-session-logs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remote session logs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keys
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Keys">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rate-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate limits
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#services" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Services
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Health
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#counters-reset-on-restart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Counters reset on restart
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2093,11 +2237,11 @@ dashboard UI that wants history must keep its own copy.</p>
 <tbody>
 <tr>
 <td><code>/api/dashboard/status</code></td>
-<td>Version, <code>code_hash</code>, bind host and port, <code>mode</code> (<code>full</code>, <code>api_only</code>, <code>remote_only</code>), uptime, <code>requests_total</code>, <code>requests_rejected</code> (401s), <code>requests_by_key</code> (label → count), loaded service count, session count, <code>max_sessions</code>, <code>session_ttl</code>, job counts by status.</td>
+<td>Version, <code>code_hash</code>, bind host and port, <code>mode</code> (<code>full</code>, <code>api_only</code>, <code>remote_only</code>), uptime, <code>requests_total</code>, <code>requests_rejected</code> (401s), <code>requests_by_key</code> (label → count), loaded service count, session count, <code>max_sessions</code> (<code>null</code> when the operator configured no limit), <code>session_ttl</code>, job counts by status. The service count includes services that failed to import - use <code>/api/dashboard/services</code> for the number that loaded.</td>
 </tr>
 <tr>
 <td><code>/api/dashboard/sessions</code></td>
-<td>Every live remote session: <code>id</code>, <code>owner</code> (username or masked key), <code>creator_ip</code>, <code>service</code>, <code>title_id</code>, <code>titles</code>, <code>tracks</code>, <code>title</code> (the first resolved title's display name), <code>auth_status</code>, <code>auth_error</code>, <code>server_account</code> (the server profile lent to the remote session, else <code>null</code>), <code>client</code>, <code>actions</code>, <code>created_at</code> and <code>last_accessed</code> (ISO 8601) with <code>created_ts</code> and <code>last_accessed_ts</code> (Unix epoch, the same clock as log <code>ts</code>), <code>age_seconds</code>, <code>idle_seconds</code>. <code>client</code> is whatever the remote client sent as <code>client</code> in its session create request (the current CLI sends nothing, so it is <code>{}</code>). <code>actions</code> is the session's request log, newest last, capped at 500: <code>ts</code>, <code>method</code>, <code>action</code> (<code>titles</code>, <code>tracks</code>, <code>segments</code>, <code>license</code>, <code>prompt</code>, …), <code>query</code>, <code>status</code>, <code>ms</code>, <code>bytes_in</code>, <code>bytes_out</code>.</td>
+<td>Every live remote session: <code>id</code>, <code>owner</code> (username or masked key), <code>creator_ip</code>, <code>service</code>, <code>title_id</code>, <code>titles</code>, <code>tracks</code>, <code>title</code> (the first resolved title's display name), <code>auth_status</code>, <code>auth_error</code>, <code>server_account</code> (the server profile lent to the remote session, else <code>null</code>), <code>client</code>, <code>actions</code>, <code>created_at</code> and <code>last_accessed</code> (ISO 8601) with <code>created_ts</code> and <code>last_accessed_ts</code> (Unix epoch, the same clock as log <code>ts</code>), <code>age_seconds</code>, <code>idle_seconds</code>, <code>log_seq</code>. <code>client</code> is whatever the remote client sent as <code>client</code> in its session create request: the CLI sends <code>version</code> and <code>platform</code>, an older client sends nothing and the field is <code>{}</code>. <code>log_seq</code> is the last sequence number in the remote session's service log - poll <code>/api/dashboard/sessions/{id}/logs</code> when it changes. <code>actions</code> is the session's request log, newest last, capped at 500: <code>ts</code>, <code>method</code>, <code>action</code> (<code>titles</code>, <code>tracks</code>, <code>segments</code>, <code>license</code>, <code>prompt</code>, …), <code>query</code>, <code>status</code>, <code>ms</code>, <code>bytes_in</code>, <code>bytes_out</code>.</td>
 </tr>
 <tr>
 <td><code>/api/dashboard/jobs</code></td>
@@ -2106,6 +2250,22 @@ dashboard UI that wants history must keep its own copy.</p>
 <tr>
 <td><code>/api/dashboard/logs</code></td>
 <td><code>{"seq": N, "records": [...]}</code>: the last 1000 log records. <code>?since=&lt;seq&gt;</code> returns only newer records; <code>?level=WARNING</code> sets the minimum level; <code>?logger=serve</code> keeps one logger and its children (<code>aiohttp.access</code> is the noisiest). <code>ts</code> is a Unix epoch in seconds.</td>
+</tr>
+<tr>
+<td><code>/api/dashboard/sessions/{id}/logs</code></td>
+<td>One remote session's service log: <code>{"session_id", "last_seq", "records": [...]}</code>. Each record has <code>seq</code>, <code>ts</code>, <code>level</code>, <code>message</code>. <code>?since=&lt;seq&gt;</code> returns only newer records. 404 when the remote session is unknown.</td>
+</tr>
+<tr>
+<td><code>/api/dashboard/keys</code></td>
+<td>Every configured API key: what it may do and what it has done. One row per key in <code>serve.users</code>, plus <code>serve.api_secret</code> when it is set.</td>
+</tr>
+<tr>
+<td><code>/api/dashboard/services</code></td>
+<td>Every discovered service and its load state, including the ones that failed to import. Not filtered by any allowlist.</td>
+</tr>
+<tr>
+<td><code>/api/dashboard/health</code></td>
+<td>Preflight: whether this instance could finish a download. Cached 30 seconds.</td>
 </tr>
 <tr>
 <td><code>/api/dashboard/events</code></td>
@@ -2140,6 +2300,10 @@ those it sends:</p>
 <td><code>job</code></td>
 <td><code>event</code> (<code>queued</code>, <code>progress</code>, <code>status</code>, or the terminal status) plus the full job object.</td>
 </tr>
+<tr>
+<td><code>service</code></td>
+<td><code>action</code> (<code>staged</code>, <code>applied</code> or <code>failed</code>) and <code>tags</code>, the services it applies to. A <code>failed</code> action carries <code>errors</code> and an empty <code>tags</code>. Refetch <code>/api/dashboard/services</code> when one arrives, instead of polling for a reload.</td>
+</tr>
 </tbody>
 </table>
 <p>Every frame carries an <code>id:</code> (the event seq). After a dropped connection an <code>EventSource</code>
@@ -2153,6 +2317,167 @@ use the query parameter only for <code>/events</code> and send the header everyw
 </span></code></pre></div>
 <p>CORS is open (<code>Access-Control-Allow-Origin: *</code>), so a dashboard page served from another
 origin works without a proxy.</p>
+<h2 id="remote-session-logs">Remote session logs<a class="headerlink" href="#remote-session-logs" title="Permanent link">&para;</a></h2>
+<p>A remote session mirrors the service's own <code>self.log</code> into a 500-record buffer at <code>INFO</code>,
+whatever level the server prints at. The remote session summary carries only a truncated
+<code>auth_error</code>; the buffer holds the real reason a login failed.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>GET /api/dashboard/sessions/{session_id}/logs?since=12
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>{"session_id": "...", "last_seq": 14,
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a> "records": [{"seq": 13, "ts": 1756909254.1, "level": "ERROR", "message": "login rejected: MFA required"}]}
+</span></code></pre></div>
+<p>The field name is <code>records</code>, the same one <code>/api/dashboard/logs</code> uses, so one dashboard reads
+both logs the same way. Each record has the shape the client route <code>/api/session/{id}/logs</code>
+returns. <code>last_seq</code> is the buffer's own last sequence number, so an empty page still reports
+the true value.</p>
+<p>Reading is a cursor read, not a drain: the client draining the same buffer still gets every
+record. It also does not refresh the remote session's idle timer, so polling a remote session here
+never keeps it alive or makes it look active.</p>
+<div class="admonition note">
+<p class="admonition-title"><code>log_seq</code> is a poll trigger, not a push</p>
+<p>A remote session summary reaches the dashboard only when something publishes a <code>session</code>
+event - a request the remote session makes, or an auth transition. A log line on its own
+publishes nothing. Poll this route when <code>log_seq</code> changes, and on a timer while a drawer
+is open.</p>
+</div>
+<h2 id="keys">Keys<a class="headerlink" href="#keys" title="Permanent link">&para;</a></h2>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>GET /api/dashboard/keys
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>[{"id": "3ed054be9371", "role": "user", "label": "tier1", "services": ["ATV", "DSNP"],
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>  "server_cdm": false, "server_accounts": false, "server_proxy": false,
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>  "tier": "bot", "rate_limit": 600, "window_used": 412,
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>  "requests": 41300, "rejected": 4, "bytes_out": 103079215104, "last_seen": 1756909188.2},
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a> {"id": "7c1d0f52a884", "role": "dashboard", "label": "dash…", "services": [],
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>  "server_cdm": false, "server_accounts": false, "server_proxy": false,
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>  "tier": null, "rate_limit": null, "window_used": 0,
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>  "requests": 8140, "rejected": 0, "bytes_out": 41200311, "last_seen": 1756909350.9}]
+</span></code></pre></div>
+<p><code>id</code> is a hash of the API key, so it stays stable across restarts and carries no key material.
+Two API keys with no <code>username</code> merge into one label in <code>requests_by_key</code> but stay separate
+here, so use <code>id</code> as the identity and <code>label</code> only for display.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>role</code></td>
+<td>Which key this is: <code>user</code> (a <code>serve.users</code> entry), <code>admin</code> (<code>serve.api_secret</code>) or <code>dashboard</code> (<code>serve.dashboard.key</code>). Identity, not capability - read the grant fields for what the API key may do.</td>
+</tr>
+<tr>
+<td><code>services</code></td>
+<td>The effective allowlist, the global list intersected with the API key's. <code>null</code> means unrestricted; <code>[]</code> means the API key reaches no service route at all.</td>
+</tr>
+<tr>
+<td><code>server_cdm</code>, <code>server_accounts</code></td>
+<td><code>false</code>, <code>true</code>, or the list of service tags the grant covers.</td>
+</tr>
+<tr>
+<td><code>server_proxy</code></td>
+<td>Boolean. Only a literal <code>true</code> grants it, and an API key with no <code>users</code> entry does not get it.</td>
+</tr>
+<tr>
+<td><code>rate_limit</code></td>
+<td>Requests per hour, from the API key's own value or its tier's. <code>null</code> means no limit.</td>
+</tr>
+<tr>
+<td><code>window_used</code></td>
+<td>Requests counted in the current hourly window.</td>
+</tr>
+<tr>
+<td><code>rejected</code></td>
+<td>Responses of 400 or worse that the server attributes to this API key, 429s included. The global <code>requests_rejected</code> stays 401-only.</td>
+</tr>
+<tr>
+<td><code>bytes_out</code></td>
+<td>Response bodies only. An event stream reports no body length, so it counts as zero.</td>
+</tr>
+<tr>
+<td><code>last_seen</code></td>
+<td><code>null</code> until the API key makes its first request.</td>
+</tr>
+</tbody>
+</table>
+<p>Only a configured API key gets a row of counters. A request on an open route such as <code>/api/health</code> with an unknown key counts as <code>anonymous</code>, so an unauthenticated caller cannot grow the table.</p>
+<p>Every API key the server counts has a row here, the dashboard key included, so a
+<code>requests_by_key</code> bucket other than <code>anonymous</code> always matches one. A "traffic by key" panel
+reads the rows here, which are unambiguous, and takes <code>anonymous</code> from <code>requests_by_key</code>. Read
+<code>role</code> before you draw the bars: the <code>dashboard</code> row is the panel measuring its own polling.</p>
+<p>The dashboard key gets <code>services: []</code> and no grants unless the operator also gave it a
+<code>serve.users</code> entry, because it reaches nothing outside <code>/api/dashboard/</code>. An API key listed
+in more than one place still gets exactly one row.</p>
+<h3 id="rate-limits">Rate limits<a class="headerlink" href="#rate-limits" title="Permanent link">&para;</a></h3>
+<p>An API key over its limit gets <code>429</code> with a <code>Retry-After</code> header:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">serve</span><span class="p">:</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">tiers</span><span class="p">:</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="nt">bot</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> rate_limit</span><span class="p">:</span><span class="w"> </span><span class="nv">600</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">   </span><span class="c1"># requests per hour</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span><span class="nt">users</span><span class="p">:</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="s">"&lt;api</span><span class="nv"> </span><span class="s">key&gt;"</span><span class="p p-Indicator">:</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">      </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bot-relay</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">      </span><span class="nt">tier</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bot</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">      </span><span class="c1"># rate_limit: 900        # optional, wins over the tier</span>
+</span></code></pre></div>
+<p>The server keeps a fixed window, not a sliding one: it opens on the first request and resets
+an hour later. An API key with no tier and no override has no limit. A <code>tier</code> that names no
+entry under <code>serve.tiers</code>, or a <code>rate_limit</code> that is not a positive whole number, stops the
+server at startup, because the alternative is an API key that silently gets no limit. The rate
+limit never applies to the dashboard key, and never to <code>/api/health</code>.</p>
+<h2 id="services">Services<a class="headerlink" href="#services" title="Permanent link">&para;</a></h2>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>GET /api/dashboard/services
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>[{"tag": "MAX", "state": "staged", "error": null,
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>  "commit": "9cc230c98f13b83f6c6fe831595b9702d3ba2786", "staged_commit": "5f0aa17...",
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>  "staged_since": 1756908900.0, "sessions": 1, "jobs": 1,
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>  "aliases": ["HBO"], "geofence": ["US"]}]
+</span></code></pre></div>
+<p><code>state</code> is <code>loaded</code>, <code>staged</code> or <code>failed</code>. A service that failed to import keeps its error
+here instead of disappearing, and <code>/status</code> still counts it in the service total - count the
+<code>state</code> values here for the number that loaded.</p>
+<p>A <code>staged</code> service has an update on disk that a busy service blocks from the import: the repo
+pull already happened, so <code>commit</code> (what runs now) and <code>staged_commit</code> (what waits) differ. It swaps in when the last job for that tag finishes. Both commits are <code>null</code>
+for a service from a plain local directory rather than a git repo.</p>
+<p>Watch the <code>service</code> event rather than polling for the swap.</p>
+<h2 id="health">Health<a class="headerlink" href="#health" title="Permanent link">&para;</a></h2>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>GET /api/dashboard/health
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>{"generated_at": 1756909350.4, "status": "ok",
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a> "checks": [{"id": "ffmpeg", "label": "ffmpeg", "status": "ok",
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>             "detail": "7.1 · /usr/bin/ffmpeg", "ms": 4.1}]}
+</span></code></pre></div>
+<p>An instance can answer every request and still fail every download, because <code>mp4decrypt</code> is
+missing or a vault's credentials expired. This finds that before a job does.</p>
+<p><code>status</code> is <code>ok</code>, <code>degraded</code> (an optional dependency is missing) or <code>failing</code> (a required one
+is). Player binaries are not checked: a headless server never has one and it plays nothing.
+Each check is <code>ok</code>, <code>warn</code> or <code>fail</code>. Check ids are the binary names, <code>cdm</code>,
+<code>vault:&lt;name&gt;</code> (the vault's configured <code>name</code>, so two vaults of the same type stay apart), and
+<code>proxies</code>.</p>
+<p>The server caches the result for 30 seconds and keeps every probe shallow: a vault answers one
+lookup that should miss, and no probe allocates anything. A failing probe's <code>detail</code> has the
+vault's password or token masked. This is a panel, not a liveness probe - do not poll it faster
+than the cache: every refresh that the cache does not answer costs one real lookup against each
+configured vault, which a vault that meters or rate limits its callers will count.</p>
+<div class="admonition warning">
+<p class="admonition-title">An unreachable vault costs a slow, partial answer</p>
+<p>The probes run one after another, so a cold read takes as long as the probes that finish
+inside the deadline. The endpoint gives up after 15 seconds and answers with the checks that
+did complete, plus one <code>probe</code> check with the status <code>fail</code> naming how many finished. A
+database vault that accepts the connection and then stalls is what this deadline is for: its
+driver applies no timeout of its own, so without one the request would never answer.</p>
+<p>The probe that timed out keeps running in its thread until its driver returns, and the
+server caches the partial answer for the full 30 seconds, so callers cannot stack up more
+of them. A second caller waits behind the first, because the server shares one refresh
+rather than running it twice.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Proxy providers are only checked at construction</p>
+<p>The proxy check builds each proxy provider but never asks it for a proxy, because for some
+proxy providers that allocates a connection. A proxy provider that only fails on its first
+real use still reads <code>ok</code>.</p>
+</div>
+<h2 id="counters-reset-on-restart">Counters reset on restart<a class="headerlink" href="#counters-reset-on-restart" title="Permanent link">&para;</a></h2>
+<p>Stats, the log ring and the event history are all in memory. A restart drops every number to
+zero. <code>started_at</code> in the <code>stats</code> frame (with <code>version</code> and <code>code_hash</code>) is the signal: it
+arrives in the first frame after a reconnect, so a dashboard can tell a restart from a bug
+without any extra field.</p>
 
 
 

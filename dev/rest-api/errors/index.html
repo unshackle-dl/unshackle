@@ -2461,6 +2461,16 @@ but the defaults hold for the overwhelming majority of responses.</p>
 </tr>
 </tbody>
 </table>
+<div class="admonition warning">
+<p class="admonition-title">Not every <code>429</code> is <code>RATE_LIMITED</code></p>
+<p>The server has a rate limit of its own. An API key over <code>serve.tiers.&lt;name&gt;.rate_limit</code>
+or <code>serve.users.&lt;key&gt;.rate_limit</code> gets a <code>429</code> from the authentication middleware, before
+any handler runs, so it carries no <code>error_code</code> and is not the <code>RATE_LIMITED</code> code above.
+It is the shape <code>{"status": 429, "message": "Rate limit exceeded."}</code> with a <code>Retry-After</code>
+header. Read <code>Retry-After</code> and wait it out rather than retrying on a backoff of your own:
+the window is fixed, so an early retry only spends the next window. See
+<a href="../authentication/#rate-limit-rejections">Authentication</a>.</p>
+</div>
 <h3 id="server-errors-5xx">Server errors (5xx)<a class="headerlink" href="#server-errors-5xx" title="Permanent link">&para;</a></h3>
 <table>
 <thead>

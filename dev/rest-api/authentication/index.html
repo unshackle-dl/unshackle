@@ -1678,6 +1678,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#rate-limit-rejections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate limit rejections
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#access-controls-on-top-of-the-api-key" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2312,6 +2323,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#rate-limit-rejections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate limit rejections
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#access-controls-on-top-of-the-api-key" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2632,6 +2654,27 @@
 <p>The rest of the API reports errors with a structured body containing <code>error_code</code>, <code>message</code>, <code>timestamp</code>, and other fields (see <a href="../errors/">Errors</a>). The authentication middleware is different: it returns <code>{"status": 401, "message": "..."}</code>, where <code>status</code> is an <strong>integer</strong>, and there is no <code>error_code</code> or <code>timestamp</code>.</p>
 <p>In your client, treat any <code>401</code> as an authentication problem and parse <em>both</em> shapes, because the standard error body is not always present.</p>
 </div>
+<h2 id="rate-limit-rejections">Rate limit rejections<a class="headerlink" href="#rate-limit-rejections" title="Permanent link">&para;</a></h2>
+<p>An API key that carries a rate limit gets <code>429 Too Many Requests</code> once it goes over, from the
+same middleware and in the same shape as the <code>401</code> bodies above, with a <code>Retry-After</code> header in
+seconds:</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="p">{</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="mi">429</span><span class="p">,</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Rate limit exceeded."</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="p">}</span>
+</span></code></pre></div>
+<p>A limit comes from <code>serve.tiers.&lt;name&gt;.rate_limit</code> or from the API key's own
+<code>serve.users.&lt;key&gt;.rate_limit</code>, in requests per hour. An API key with neither has no limit, and
+<code>GET /api/health</code> is never limited. See
+<a href="../dashboard/#rate-limits">dashboard rate limits</a> for the config and the counters, and
+<a href="../../../reference/configuration/services/">services configuration</a> for the keys themselves.</p>
+<div class="admonition warning">
+<p class="admonition-title"><code>429</code> is not the <code>RATE_LIMITED</code> error body</p>
+<p><code>RATE_LIMITED</code> in <a href="../errors/">Errors</a> is a <em>service</em> rate limit that a handler raises, and it
+arrives in the standard envelope with an <code>error_code</code>. The <code>429</code> here comes from the
+middleware before any handler runs, and has the integer-<code>status</code> shape shown above. A client
+that reads <code>error_code</code> to classify a <code>429</code> must cope with it being absent.</p>
+</div>
 <h2 id="access-controls-on-top-of-the-api-key">Access controls on top of the API key<a class="headerlink" href="#access-controls-on-top-of-the-api-key" title="Permanent link">&para;</a></h2>
 <p>After the server authenticates a request, several additional controls decide what that specific API key can do.</p>
 <h3 id="per-key-service-allowlists">Per-key service allowlists<a class="headerlink" href="#per-key-service-allowlists" title="Permanent link">&para;</a></h3>
@@ -2672,13 +2715,13 @@
 </tr>
 </tbody>
 </table>
-<div class="language-yaml highlight"><span class="filename">Restricting services</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">serve</span><span class="p">:</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">api_secret</span><span class="p">:</span><span class="w"> </span><span class="s">"admin-key"</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span><span class="nt">services</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"EXAMPLE1"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"EXAMPLE2"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"EXAMPLE3"</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># global ceiling for all keys</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">  </span><span class="nt">users</span><span class="p">:</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">    </span><span class="nt">limited-key</span><span class="p">:</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">      </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">limited</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">      </span><span class="nt">services</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"EXAMPLE1"</span><span class="p p-Indicator">]</span><span class="w">          </span><span class="c1"># this key ends up allowed only EXAMPLE1</span>
+<div class="language-yaml highlight"><span class="filename">Restricting services</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nt">serve</span><span class="p">:</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="nt">api_secret</span><span class="p">:</span><span class="w"> </span><span class="s">"admin-key"</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span><span class="nt">services</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"EXAMPLE1"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"EXAMPLE2"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"EXAMPLE3"</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># global ceiling for all keys</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">  </span><span class="nt">users</span><span class="p">:</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">    </span><span class="nt">limited-key</span><span class="p">:</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">      </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">limited</span>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="w">      </span><span class="nt">services</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"EXAMPLE1"</span><span class="p p-Indicator">]</span><span class="w">          </span><span class="c1"># this key ends up allowed only EXAMPLE1</span>
 </span></code></pre></div>
 <p>Endpoints that name a service (listing services, searching, listing titles/tracks, downloading, profiles, history, and remote sessions) all filter against this allowlist. The server rejects a request for a service outside the API key's allowlist as an invalid service. The server matches service tags after normalisation, so casing and aliases give the same result.</p>
 <h3 id="cdm-overrides-and-per-job-credentials">CDM overrides and per-job credentials<a class="headerlink" href="#cdm-overrides-and-per-job-credentials" title="Permanent link">&para;</a></h3>
@@ -2704,10 +2747,10 @@
 </tr>
 </tbody>
 </table>
-<div class="language-yaml highlight"><span class="filename">Opting in to per-request CDM and credentials</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nt">serve</span><span class="p">:</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="nt">api_secret</span><span class="p">:</span><span class="w"> </span><span class="s">"admin-key"</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span><span class="nt">cdm_overrides</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"my_widevine_device"</span><span class="p p-Indicator">]</span><span class="w">  </span><span class="c1"># or true to allow any configured device</span>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">  </span><span class="nt">allow_job_credentials</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<div class="language-yaml highlight"><span class="filename">Opting in to per-request CDM and credentials</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">serve</span><span class="p">:</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">api_secret</span><span class="p">:</span><span class="w"> </span><span class="s">"admin-key"</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span><span class="nt">cdm_overrides</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"my_widevine_device"</span><span class="p p-Indicator">]</span><span class="w">  </span><span class="c1"># or true to allow any configured device</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">  </span><span class="nt">allow_job_credentials</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">When to enable these gates</p>
@@ -2722,7 +2765,7 @@
 <p>The remote-download session endpoints (<code>/api/session/*</code>) add an extra check on top of the API key. When the server creates a remote session, it records the client's IP address. Any later request for that remote session must come from the <strong>same</strong> IP, or the server rejects it with <code>403 Forbidden</code>. Thus the server binds a remote session both to the API key that created it and to the address it came from.</p>
 <h2 id="transport-security-https">Transport security (HTTPS)<a class="headerlink" href="#transport-security-https" title="Permanent link">&para;</a></h2>
 <p>The API server speaks plain HTTP. Because the client sends your API key on every request, do not use it over an unencrypted connection on an untrusted network. To serve over HTTPS, operate a reverse proxy in front of unshackle. The <code>serve</code> command can launch Caddy for you:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>unshackle<span class="w"> </span>serve<span class="w"> </span>--caddy
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>unshackle<span class="w"> </span>serve<span class="w"> </span>--caddy
 </span></code></pre></div>
 <p>With <code>--caddy</code>, unshackle also starts <code>caddy run</code> using the <code>Caddyfile</code> located next to your unshackle config, letting Caddy end the TLS connection and reverse-proxy to the API. Configuring Caddy itself (certificates, domains, upstream) is done in that <code>Caddyfile</code>.</p>
 <h2 id="quick-reference">Quick reference<a class="headerlink" href="#quick-reference" title="Permanent link">&para;</a></h2>
@@ -2752,7 +2795,7 @@
 </tr>
 <tr>
 <td>Failure status</td>
-<td><code>401 Unauthorized</code></td>
+<td><code>401 Unauthorized</code>, or <code>429 Too Many Requests</code> for a key over its rate limit</td>
 </tr>
 <tr>
 <td>Missing-header body</td>
@@ -2761,6 +2804,14 @@
 <tr>
 <td>Invalid-key body</td>
 <td><code>{"status": 401, "message": "Secret Key is Invalid."}</code></td>
+</tr>
+<tr>
+<td>Over-limit body</td>
+<td><code>{"status": 429, "message": "Rate limit exceeded."}</code>, plus a <code>Retry-After</code> header</td>
+</tr>
+<tr>
+<td>Rate limit config</td>
+<td><code>serve.tiers.&lt;name&gt;.rate_limit</code>, overridden by <code>serve.users.&lt;key&gt;.rate_limit</code></td>
 </tr>
 <tr>
 <td>Disable auth</td>
@@ -2791,10 +2842,10 @@
 <p>Both middlewares read the caller's API key through the shared <code>request_secret_key()</code> helper in <code>unshackle/core/api/handlers.py</code>. That helper returns the <code>X-Secret-Key</code> header, and falls back to the <code>secret_key</code> query parameter only when the matched route is the job event stream. The integrated server needs one extra branch for this. pywidevine's <code>authentication</code> is header-only. So <code>serve_authentication</code> compares the API key from the query parameter itself when the header is absent, and delegates to pywidevine in every other case. That is why both modes reject a present-but-wrong header.</p>
 <h3 id="cors-and-the-authorization-header">CORS and the <code>Authorization</code> header<a class="headerlink" href="#cors-and-the-authorization-header" title="Permanent link">&para;</a></h3>
 <p>A <code>cors_middleware</code> runs on every response in both modes (and answers <code>OPTIONS</code> preflight requests with an empty response). It emits:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>Access-Control-Allow-Origin: *
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>Access-Control-Allow-Headers: Content-Type, X-Secret-Key, Authorization
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>Access-Control-Max-Age: 3600
+<div class="language-text highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>Access-Control-Allow-Origin: *
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>Access-Control-Allow-Headers: Content-Type, X-Secret-Key, Authorization
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>Access-Control-Max-Age: 3600
 </span></code></pre></div>
 <p>The REST API authenticates with <code>X-Secret-Key</code>. The middleware advertises <code>Authorization</code> because the co-hosted pywidevine / pyplayready CDM endpoints use it. <code>PUT</code> appears in the allowed-methods list, but no REST route uses it. Only <code>GET</code>, <code>POST</code>, and <code>DELETE</code> have routes.</p>
 <h3 id="where-device-access-is-read">Where device access is read<a class="headerlink" href="#where-device-access-is-read" title="Permanent link">&para;</a></h3>
