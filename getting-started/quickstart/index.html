@@ -2359,6 +2359,10 @@ and contents, and <code>unshackle env info</code> to show where unshackle stores
   <code>cookies/{SERVICE}.txt</code>, then <code>cookies/{SERVICE}/{profile}.txt</code>, then
   <code>cookies/{SERVICE}/default.txt</code>. So unshackle finds a file at <code>cookies/EXAMPLE.txt</code>
   automatically for the <code>EXAMPLE</code> service.</p>
+<p>unshackle repairs the usual export damage in memory and does not change your
+file: a missing header line, a byte-order mark, spaces in place of tabs, and
+rows a text editor broke. unshackle refuses a JSON export. Export the cookies
+again in Netscape format.</p>
 </li>
 <li>
 <p><strong>Credentials</strong>: store a username and password per service in your config:</p>
