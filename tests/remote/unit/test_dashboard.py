@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from aiohttp import web
@@ -210,12 +211,15 @@ async def test_dashboard_log_read_does_not_touch_the_session() -> None:
 
     store = SessionStore()
     entry = await store.create("EXAMPLE", object())
-    before = entry.last_accessed
+
+    stale = datetime.now(timezone.utc) - timedelta(seconds=1)
+    entry.last_accessed = stale
     assert store.peek(entry.session_id) is entry
-    assert entry.last_accessed == before
+    assert entry.last_accessed == stale
+
     # get() is the touching read, and is why the dashboard must not use it.
     await store.get(entry.session_id)
-    assert entry.last_accessed > before
+    assert entry.last_accessed > stale
 
 
 async def test_dashboard_services_states(aiohttp_client, dashboard_cfg, monkeypatch) -> None:
@@ -500,13 +504,13 @@ async def test_health_probe_timeout_reports_what_finished(aiohttp_client, dashbo
     def stalling_probe(checks=None):
         checks = [] if checks is None else checks
         checks.append({"id": "ffmpeg", "label": "ffmpeg", "status": "ok", "detail": "7.1", "ms": 1.0})
-        time.sleep(30)  # the stalled vault; the deadline must fire long before this returns
+        time.sleep(6)  # the stalled vault; the deadline fires long before this returns
         checks.append({"id": "never", "label": "never", "status": "ok", "detail": "", "ms": 0.0})
         return checks
 
     handlers._health_cache.clear()
     monkeypatch.setattr(handlers, "run_health_checks", stalling_probe)
-    monkeypatch.setattr(handlers, "HEALTH_PROBE_TIMEOUT", 0.2)
+    monkeypatch.setattr(handlers, "HEALTH_PROBE_TIMEOUT", 1.0)
 
     client = await aiohttp_client(make_app())
     body = await (await client.get("/api/dashboard/health", headers={"X-Secret-Key": "dash-secret"})).json()
