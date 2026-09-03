@@ -12,15 +12,18 @@ from aiohttp import web
 from unshackle.core import binaries
 from unshackle.core.api import cors_middleware, setup_routes, setup_swagger
 from unshackle.core.api.compression import compression_middleware
+from unshackle.core.api.events import publish_refresh_events, publish_service_event
 from unshackle.core.api.handlers import (
     DASHBOARD_PREFIX,
+    api_key_authentication,
     dashboard_authentication,
     dashboard_key,
+    rate_limit_response,
     request_secret_key,
     server_account_regions,
     validate_server_accounts,
 )
-from unshackle.core.api.stats import ring, stats, stats_middleware
+from unshackle.core.api.stats import key_rate_limit, rate_limit_error, ring, stats, stats_middleware
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import context_settings
@@ -33,6 +36,7 @@ def _install_service_refresh(app: web.Application) -> None:
 
     log = logging.getLogger("serve")
     services.log_load_issues()
+    services.record_loaded_commits()
     interval = int(config.serve.get("services_refresh_interval", 0) or 0)
     if interval <= 0 or not services.repo_specs():
         return
@@ -47,13 +51,16 @@ def _install_service_refresh(app: web.Application) -> None:
                 applied = await asyncio.to_thread(services.apply_pending, manager.busy_services())
                 if applied:
                     log.info(f"Services reloaded: {', '.join(applied)}")
-                for r in await asyncio.to_thread(services.refresh_and_reload, manager.busy_services()):
+                    publish_service_event("applied", applied)
+                repos = await asyncio.to_thread(services.refresh_and_reload, manager.busy_services())
+                for r in repos:
                     if r["changes"]:
                         log.info(f"Services refreshed {r['spec']}: {', '.join(r['changes'])}")
                     if r["deferred"]:
                         log.info(f"Services staged until their jobs finish: {', '.join(r['deferred'])}")
                     for err in r["load_errors"]:
                         log.error(f"Service reload failed: {err}")
+                publish_refresh_events(repos)
             except Exception:
                 log.exception("Service refresh failed")
 
@@ -219,20 +226,6 @@ def serve(
             config.serve["playready_devices"] = []
         config.serve["playready_devices"].extend(list(config.directories.prds.glob("*.prd")))
 
-        @web.middleware
-        async def api_key_authentication(request: web.Request, handler) -> web.StreamResponse:
-            """Authenticate API requests using X-Secret-Key header."""
-            if request.path == "/api/health" or request.path.startswith(DASHBOARD_PREFIX):
-                return await handler(request)
-            secret_key = request_secret_key(request)
-            if not secret_key:
-                return web.json_response({"status": 401, "message": "Secret Key is Empty."}, status=401)
-            # Constant-time compare against every configured key so a valid key can't be
-            # recovered byte-by-byte from response timing.
-            if not any(hmac.compare_digest(secret_key, k) for k in request.app["config"]["users"]):
-                return web.json_response({"status": 401, "message": "Secret Key is Invalid."}, status=401)
-            return await handler(request)
-
         remote_only = remote_only or config.serve.get("remote_only", False)
         if remote_only:
             api_only = True
@@ -268,11 +261,28 @@ def serve(
             # yaml keys can parse as int; hmac.compare_digest and allowlist lookups need str
             users = {str(k): v for k, v in users.items()}
             config.serve["users"] = users
+        tiers = config.serve.get("tiers") or {}
+        if not isinstance(tiers, dict):
+            raise click.ClickException("serve.tiers must be a mapping of tier name to settings")
+        for tier_name, tier_cfg in tiers.items():
+            if not isinstance(tier_cfg, dict):
+                raise click.ClickException(f"serve.tiers.{tier_name} must be a mapping of setting to value")
+            if problem := rate_limit_error(f"serve.tiers.{tier_name}", tier_cfg.get("rate_limit")):
+                raise click.ClickException(problem)
         for user_key, user_cfg in users.items() if isinstance(users, dict) else []:
             user_services = user_cfg.get("services") if isinstance(user_cfg, dict) else None
+            username = user_cfg.get("username", user_key[:8] + "...") if isinstance(user_cfg, dict) else user_key[:8]
             if user_services:
-                username = user_cfg.get("username", user_key[:8] + "...")
                 log.info(f"User '{username}' restricted to services: {', '.join(user_services)}")
+            tier = user_cfg.get("tier") if isinstance(user_cfg, dict) else None
+            if tier and tier not in tiers:
+                raise click.ClickException(f"serve.users.{username}.tier: no such tier '{tier}' under serve.tiers")
+            if isinstance(user_cfg, dict):
+                if problem := rate_limit_error(f"serve.users.{username}", user_cfg.get("rate_limit")):
+                    raise click.ClickException(problem)
+            limit = key_rate_limit(user_key)
+            if limit:
+                log.info(f"User '{username}' rate limited to {limit} requests/hour")
 
         if api_only:
             log.info("Starting REST API server (pywidevine/pyplayready CDM disabled)")
@@ -364,6 +374,14 @@ def serve(
                     secret_key = request_secret_key(request)
                     if request.path.startswith(DASHBOARD_PREFIX):
                         return await handler(request)
+                    if (
+                        request.path != "/api/health"
+                        and secret_key
+                        and any(hmac.compare_digest(secret_key, k) for k in request.app["config"]["users"])
+                    ):
+                        limited = rate_limit_response(secret_key)
+                        if limited is not None:
+                            return limited
                     if serve_playready_flag and request.path in ("/playready", "/playready/"):
                         response = await handler(request)
                     elif secret_key and not request.headers.get("X-Secret-Key"):
@@ -393,9 +411,9 @@ def serve(
                 app = web.Application(
                     middlewares=[
                         cors_middleware,
+                        stats_middleware,
                         dashboard_authentication,
                         serve_auth,
-                        stats_middleware,
                         compression_middleware,
                     ]
                 )

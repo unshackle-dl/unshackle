@@ -71,6 +71,7 @@ class SessionEntry:
             "auth_status": self.auth_status.value,
             "auth_error": self.auth_error,
             "server_account": self.server_account,
+            "log_seq": self.log_buffer.last_seq if self.log_buffer else 0,
             "client": self.client,
             "actions": list(self.actions),
             "created_at": self.created_at.isoformat(),
@@ -103,9 +104,14 @@ class SessionStore:
         return config.serve.get("session_ttl", 300)
 
     @property
-    def max_sessions(self) -> int:
-        """Max concurrent sessions from config."""
-        return config.serve.get("max_sessions", 100)
+    def max_sessions(self) -> Optional[int]:
+        """Max concurrent sessions from config; None when the operator set no limit.
+
+        ``max_sessions: null`` or ``0`` means unlimited, so a dashboard can tell "no cap" from
+        a cap that happens to sit at the default.
+        """
+        limit = config.serve.get("max_sessions", 100)
+        return limit if isinstance(limit, int) and limit > 0 else None
 
     async def create(
         self,
@@ -118,9 +124,10 @@ class SessionStore:
     ) -> SessionEntry:
         """Make a new remote session with an authenticated service instance."""
         async with self._lock:
-            if len(self._sessions) >= self.max_sessions:
+            max_sessions = self.max_sessions
+            if max_sessions is not None and len(self._sessions) >= max_sessions:
                 oldest_id = min(self._sessions, key=lambda k: self._sessions[k].last_accessed)
-                log.warning(f"Max sessions reached ({self.max_sessions}), evicting oldest: {oldest_id}")
+                log.warning(f"Max sessions reached ({max_sessions}), evicting oldest: {oldest_id}")
                 _publish("delete", self._sessions.pop(oldest_id), "evicted")
 
             session_id = session_id or str(uuid.uuid4())
@@ -153,6 +160,14 @@ class SessionStore:
 
             entry.touch()
             return entry
+
+    def peek(self, session_id: str) -> Optional[SessionEntry]:
+        """A session entry without touching it, for read-only observers.
+
+        ``get`` refreshes ``last_accessed`` and expires stale entries, so an observer polling
+        through it would keep an idle session alive and always report it as active.
+        """
+        return self._sessions.get(session_id)
 
     async def delete(self, session_id: str) -> bool:
         """Delete a remote session. Returns True if it existed."""

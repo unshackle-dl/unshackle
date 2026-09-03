@@ -109,6 +109,15 @@ but the defaults hold for the overwhelming majority of responses.
 | `CONFLICT` | 409 | The target resource is in a state that disallows the action (retrying a running job, prioritising a non-queued job, clearing cache during an active download). |
 | `RATE_LIMITED` | 429 | The streaming service is rate-limiting requests. Retryable. |
 
+!!! warning "Not every `429` is `RATE_LIMITED`"
+    The server has a rate limit of its own. An API key over `serve.tiers.<name>.rate_limit`
+    or `serve.users.<key>.rate_limit` gets a `429` from the authentication middleware, before
+    any handler runs, so it carries no `error_code` and is not the `RATE_LIMITED` code above.
+    It is the shape `{"status": 429, "message": "Rate limit exceeded."}` with a `Retry-After`
+    header. Read `Retry-After` and wait it out rather than retrying on a backoff of your own:
+    the window is fixed, so an early retry only spends the next window. See
+    [Authentication](authentication.md#rate-limit-rejections).
+
 ### Server errors (5xx)
 
 | Code | Status | Meaning |

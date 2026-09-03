@@ -137,3 +137,47 @@ def test_serve_without_no_key_requires_api_secret(runner: CliRunner, monkeypatch
     result = runner.invoke(serve, ["--api-only"])
     assert result.exit_code != 0
     assert "api_secret" in (result.output or "").lower() or "api_secret" in str(result.exception).lower()
+
+
+def start_serve(runner: CliRunner, monkeypatch: pytest.MonkeyPatch, serve_cfg: dict) -> tuple[bool, str]:
+    """Start the command far enough to run the config checks.
+
+    Returns whether it reached ``web.run_app`` and its plain-text output.
+    """
+    from aiohttp import web
+
+    from unshackle.core.config import config as cfg
+
+    started = []
+    monkeypatch.setattr(web, "run_app", lambda *a, **kw: started.append(True))
+    monkeypatch.setattr(cfg, "serve", dict(serve_cfg))
+    result = runner.invoke(serve, ["--api-only", "--no-key"])
+    return bool(started), re.sub(r"\x1b\[[0-9;]*m", "", result.output or str(result.exception))
+
+
+@pytest.mark.parametrize(
+    "serve_cfg, expected",
+    [
+        ({"tiers": ["bot"]}, "serve.tiers must be a mapping"),
+        ({"tiers": {"bot": 600}}, "serve.tiers.bot must be a mapping"),
+        ({"tiers": {"bot": {"rate_limit": 0}}}, "serve.tiers.bot.rate_limit"),
+        ({"tiers": {"bot": {"rate_limit": True}}}, "serve.tiers.bot.rate_limit"),
+        ({"users": {"k": {"username": "bot", "rate_limit": -1}}}, "serve.users.bot.rate_limit"),
+        ({"users": {"k": {"username": "bot", "tier": "gone"}}}, "no such tier 'gone'"),
+    ],
+)
+def test_bad_rate_limit_config_stops_the_server(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch, serve_cfg: dict, expected: str
+) -> None:
+    """A tier or rate limit the reader would silently treat as "no limit" must fail at startup."""
+    started, output = start_serve(runner, monkeypatch, serve_cfg)
+    assert not started and expected in output
+
+
+def test_good_rate_limit_config_starts(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
+    started, output = start_serve(
+        runner,
+        monkeypatch,
+        {"tiers": {"bot": {"rate_limit": 600}}, "users": {"k": {"username": "bot", "tier": "bot"}}},
+    )
+    assert started, output

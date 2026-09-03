@@ -54,3 +54,34 @@ def _put_drop(queue: asyncio.Queue, item: Dict[str, Any]) -> None:
 
 
 bus = EventBus()
+
+
+def publish_service_event(action: str, tags: List[str], errors: Optional[List[str]] = None) -> None:
+    """Tell dashboard listeners that services were staged, applied, or failed to reload.
+
+    Lives here rather than in ``core.services`` so the service loader never imports the API layer.
+    """
+    data: Dict[str, Any] = {"action": action, "tags": list(tags)}
+    if errors:
+        data["errors"] = list(errors)
+    bus.publish("service", data)
+
+
+def publish_refresh_events(repos: List[Dict[str, Any]]) -> None:
+    """Publish the ``service`` events one ``refresh_and_reload`` result implies.
+
+    A tag counts as applied only when it changed, was not deferred, and did not fail to
+    import - a failed re-import keeps the old module, so calling it applied would be a lie.
+    """
+    from unshackle.core.services import failed_tags
+
+    for repo in repos:
+        failed = failed_tags(repo["load_errors"])
+        changed = {line[1:] for line in repo["changes"] if line and line[0] in "+~-!"}
+        applied = sorted(changed - set(repo["deferred"]) - failed)
+        if applied:
+            publish_service_event("applied", applied)
+        if repo["deferred"]:
+            publish_service_event("staged", repo["deferred"])
+        if repo["load_errors"]:
+            publish_service_event("failed", [], errors=repo["load_errors"])

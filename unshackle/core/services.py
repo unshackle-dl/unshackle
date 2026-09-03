@@ -5,6 +5,7 @@ import logging
 import re
 import sys
 import threading
+import time
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -13,7 +14,7 @@ import click
 from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.service import Service
-from unshackle.core.service_repo import DirtyServiceRepo, is_repo_spec, refresh_repo, resolve_service_repo
+from unshackle.core.service_repo import DirtyServiceRepo, head, is_repo_spec, refresh_repo, resolve_service_repo
 from unshackle.core.utilities import import_module_by_path
 from unshackle.core.utils.redact import redact_path
 
@@ -127,7 +128,40 @@ register_service_binaries(MODULES)
 ALIASES = {tag: getattr(module, "ALIASES", ()) for tag, module in MODULES.items()}
 
 PENDING: set[str] = set()
+PENDING_SINCE: dict[str, float] = {}
+LOADED_COMMITS: dict[str, str] = {}
 RELOAD_LOCK = threading.Lock()
+
+
+def record_loaded_commits(tags: Iterable[str] | None = None) -> None:
+    """Stamp the repo HEAD each tag was imported from, so a staged update is visibly different.
+
+    ``refresh_and_reload`` pulls before it defers a reload, so the working tree already holds
+    the new commit while the import is still the old one; without this the two are the same
+    hash and the staged state cannot be told apart.
+    """
+    wanted = set(tags) if tags is not None else None
+    by_dir: dict[Path, str | None] = {}
+    for path in SERVICES:
+        tag = path.parent.stem
+        if wanted is not None and tag not in wanted:
+            continue
+        source = path.parent.parent
+        if source not in by_dir:
+            by_dir[source] = head(source) if (source / ".git").exists() else None
+        commit = by_dir[source]
+        if commit:
+            LOADED_COMMITS[tag] = commit
+        else:
+            LOADED_COMMITS.pop(tag, None)
+
+
+def service_source_dir(tag: str) -> Path | None:
+    """The directory a tag was discovered in: its repo clone, or a local services dir."""
+    for path in SERVICES:
+        if path.parent.stem == tag:
+            return path.parent.parent
+    return None
 
 
 def reload_services(tags: Iterable[str]) -> list[str]:
@@ -151,6 +185,7 @@ def reload_services(tags: Iterable[str]) -> list[str]:
         SHADOWED[:] = shadowed
 
         errors: list[str] = []
+        imported: list[str] = []
         found = {path.parent.stem: path for path in paths}
         for tag in wanted:
             if tag not in found:
@@ -160,11 +195,17 @@ def reload_services(tags: Iterable[str]) -> list[str]:
             try:
                 MODULES[tag] = load_service(found[tag])
                 ALIASES[tag] = getattr(MODULES[tag], "ALIASES", ())
+                imported.append(tag)
             except Exception as e:
                 errors.append(str(e))
         LOAD_ERRORS.extend(errors)
         register_service_binaries(MODULES)
         PENDING.difference_update(wanted)
+        for tag in wanted:
+            PENDING_SINCE.pop(tag, None)
+        # Only the tags that imported: a failed re-import keeps the old module running, so
+        # stamping it with the new HEAD would name code that is not running.
+        record_loaded_commits(imported)
         return errors
 
 
@@ -191,6 +232,9 @@ def refresh_and_reload(busy: set[str] | None = None) -> list[dict[str, Any]]:
             tags.update(p.parent.stem for p in dest.glob("*/__init__.py"))
         deferred = sorted(tags & busy)
         PENDING.update(deferred)
+        now = time.time()
+        for tag in deferred:
+            PENDING_SINCE.setdefault(tag, now)
         errors = reload_services(tags - busy)
         repos.append(
             {
@@ -204,13 +248,25 @@ def refresh_and_reload(busy: set[str] | None = None) -> list[dict[str, Any]]:
     return repos
 
 
+def failed_tags(errors: Iterable[str]) -> set[str]:
+    """The tags named by a list of load errors, which are all formatted ``TAG: reason``."""
+    return {err.split(":", 1)[0] for err in errors if ":" in err}
+
+
 def apply_pending(busy: set[str] | None = None) -> list[str]:
-    """Reload every staged tag whose service is no longer busy; returns the tags applied."""
+    """Reload every staged tag whose service is no longer busy; returns the tags now running.
+
+    A tag whose re-import failed is not one of them: the old module keeps serving, so calling
+    it applied would tell the dashboard that code is live when it is not.
+    """
     ready = sorted(PENDING - (busy or set()))
-    if ready:
-        for err in reload_services(ready):
-            log.error("Service reload failed: %s", err)
-    return ready
+    if not ready:
+        return []
+    errors = reload_services(ready)
+    for err in errors:
+        log.error("Service reload failed: %s", err)
+    failed = failed_tags(errors)
+    return [tag for tag in ready if tag not in failed]
 
 
 SUMMARY_LOGGED = False

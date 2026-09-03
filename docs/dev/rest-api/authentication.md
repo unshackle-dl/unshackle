@@ -205,6 +205,31 @@ When the server rejects a request for authentication reasons, the response has a
 
     In your client, treat any `401` as an authentication problem and parse *both* shapes, because the standard error body is not always present.
 
+## Rate limit rejections
+
+An API key that carries a rate limit gets `429 Too Many Requests` once it goes over, from the
+same middleware and in the same shape as the `401` bodies above, with a `Retry-After` header in
+seconds:
+
+```json
+{
+  "status": 429,
+  "message": "Rate limit exceeded."
+}
+```
+
+A limit comes from `serve.tiers.<name>.rate_limit` or from the API key's own
+`serve.users.<key>.rate_limit`, in requests per hour. An API key with neither has no limit, and
+`GET /api/health` is never limited. See
+[dashboard rate limits](dashboard.md#rate-limits) for the config and the counters, and
+[services configuration](../../reference/configuration/services.md) for the keys themselves.
+
+!!! warning "`429` is not the `RATE_LIMITED` error body"
+    `RATE_LIMITED` in [Errors](errors.md) is a *service* rate limit that a handler raises, and it
+    arrives in the standard envelope with an `error_code`. The `429` here comes from the
+    middleware before any handler runs, and has the integer-`status` shape shown above. A client
+    that reads `error_code` to classify a `429` must cope with it being absent.
+
 ## Access controls on top of the API key
 
 After the server authenticates a request, several additional controls decide what that specific API key can do.
@@ -283,9 +308,11 @@ With `--caddy`, unshackle also starts `caddy run` using the `Caddyfile` located 
 | Query-parameter alternative | `?secret_key=` on `GET /api/download/jobs/{job_id}/events` only |
 | Default bind address | `127.0.0.1:8786` |
 | Exempt endpoint | `GET /api/health` |
-| Failure status | `401 Unauthorized` |
+| Failure status | `401 Unauthorized`, or `429 Too Many Requests` for a key over its rate limit |
 | Missing-header body | `{"status": 401, "message": "Secret Key is Empty."}` |
 | Invalid-key body | `{"status": 401, "message": "Secret Key is Invalid."}` |
+| Over-limit body | `{"status": 429, "message": "Rate limit exceeded."}`, plus a `Retry-After` header |
+| Rate limit config | `serve.tiers.<name>.rate_limit`, overridden by `serve.users.<key>.rate_limit` |
 | Disable auth | `--no-key` (all requests allowed) |
 | Config location | `serve.api_secret` and `serve.users` in `unshackle.yaml` |
 

@@ -21,8 +21,12 @@ from unshackle.core.api.handlers import (
     clear_finished_download_jobs_handler,
     clear_temp_handler,
     dashboard_events_handler,
+    dashboard_health_handler,
     dashboard_jobs_handler,
+    dashboard_keys_handler,
     dashboard_logs_handler,
+    dashboard_services_handler,
+    dashboard_session_logs_handler,
     dashboard_sessions_handler,
     dashboard_status_handler,
     delete_history_handler,
@@ -2124,6 +2128,249 @@ async def dashboard_logs(request: web.Request) -> web.Response:
 
 
 @api_handler
+async def dashboard_session_logs(request: web.Request) -> web.Response:
+    """
+    Dashboard: one remote session's service log.
+    ---
+    summary: Dashboard remote session log
+    description: >
+      The service's own log output for a remote session, mirrored at INFO regardless of the
+      server's log level. This is where the real reason for a failed authentication sits, in
+      full, while the session summary carries only a truncated `auth_error`.
+      Reading this does not refresh the session's idle timer and does not take records from
+      the client draining the same buffer through `/api/session/{session_id}/logs`.
+      Poll when the session summary's `log_seq` changes.
+    tags: [Dashboard]
+    parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: since
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: Return only records with seq greater than this value
+    responses:
+      '200':
+        description: Log records plus the buffer's current last_seq
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                session_id:
+                  type: string
+                last_seq:
+                  type: integer
+                records:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      seq:
+                        type: integer
+                      ts:
+                        type: number
+                      level:
+                        type: string
+                      message:
+                        type: string
+      '401':
+        description: Dashboard key missing or invalid
+      '404':
+        description: Remote session not found
+    """
+    return await dashboard_session_logs_handler(request)
+
+
+@api_handler
+async def dashboard_keys(request: web.Request) -> web.Response:
+    """
+    Dashboard: configured API keys, their grants and their usage.
+    ---
+    summary: Dashboard API keys
+    description: >
+      Every key in `serve.users`, plus `serve.api_secret` and the dashboard key when they are
+      configured, with the grants that decide what it may do and the counters for what it has
+      done. A key listed in more than one of those places still gets exactly one row.
+      `id` is a hash prefix, stable across restarts and carrying no key material, so two
+      unnamed keys never merge the way they do in the `requests_by_key` labels.
+      Every key the server counts has a row here, so a `requests_by_key` bucket other than
+      `anonymous` always matches one.
+      `bytes_out` counts response bodies only: an SSE stream reports no content length and
+      contributes nothing.
+    tags: [Dashboard]
+    responses:
+      '200':
+        description: One row per configured key
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  role:
+                    type: string
+                    enum: [user, admin, dashboard]
+                    description: >
+                      Which key this is, not what it may do: `admin` is `serve.api_secret`,
+                      `dashboard` is `serve.dashboard.key`. The grant fields carry capability.
+                  label:
+                    type: string
+                  services:
+                    type: array
+                    nullable: true
+                    items:
+                      type: string
+                    description: >
+                      Effective allowlist; null when nothing restricts the key, and an empty
+                      list when the key reaches no service route at all, as a dashboard key
+                      with no `serve.users` entry does
+                  server_cdm:
+                    description: false, true, or the list of service tags it covers
+                  server_accounts:
+                    description: false, true, or the list of service tags it covers
+                  server_proxy:
+                    type: boolean
+                  tier:
+                    type: string
+                    nullable: true
+                  rate_limit:
+                    type: integer
+                    nullable: true
+                    description: Requests per hour; null means unlimited
+                  window_used:
+                    type: integer
+                  requests:
+                    type: integer
+                  rejected:
+                    type: integer
+                  bytes_out:
+                    type: integer
+                  last_seen:
+                    type: number
+                    nullable: true
+      '401':
+        description: Dashboard key missing or invalid
+    """
+    return await dashboard_keys_handler(request)
+
+
+@api_handler
+async def dashboard_services(request: web.Request) -> web.Response:
+    """
+    Dashboard: every discovered service and its load state.
+    ---
+    summary: Dashboard services
+    description: >
+      Unlike `/api/services` this is not filtered by any allowlist and it keeps the services
+      that failed to import, with their error. `state` is `loaded`, `staged` (an update is on
+      disk but a busy service blocks the re-import) or `failed`.
+      A staged service applies when its last job finishes; watch the `service` event on
+      `/api/dashboard/events` instead of polling for it.
+    tags: [Dashboard]
+    responses:
+      '200':
+        description: One row per discovered service
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  tag:
+                    type: string
+                  state:
+                    type: string
+                    enum: [loaded, staged, failed]
+                  error:
+                    type: string
+                    nullable: true
+                  commit:
+                    type: string
+                    nullable: true
+                    description: Repo HEAD the loaded code was imported from
+                  staged_commit:
+                    type: string
+                    nullable: true
+                    description: Repo HEAD waiting to be imported; only set while staged
+                  staged_since:
+                    type: number
+                    nullable: true
+                  sessions:
+                    type: integer
+                  jobs:
+                    type: integer
+                  aliases:
+                    type: array
+                    items:
+                      type: string
+                  geofence:
+                    type: array
+                    items:
+                      type: string
+      '401':
+        description: Dashboard key missing or invalid
+    """
+    return await dashboard_services_handler(request)
+
+
+@api_handler
+async def dashboard_health(request: web.Request) -> web.Response:
+    """
+    Dashboard: preflight checks.
+    ---
+    summary: Dashboard health preflight
+    description: >
+      Whether this instance could actually finish a download: the binaries on PATH, the CDM
+      device files, each configured key vault and the proxy providers.
+      A panel, not a liveness probe. The result is cached for 30 seconds and every probe is
+      shallow, so reading it never spends a proxy session or a licence. A provider that only
+      fails on first use is therefore not caught here.
+    tags: [Dashboard]
+    responses:
+      '200':
+        description: Roll-up status plus one entry per check
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                generated_at:
+                  type: number
+                status:
+                  type: string
+                  enum: [ok, degraded, failing]
+                checks:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      label:
+                        type: string
+                      status:
+                        type: string
+                        enum: [ok, warn, fail]
+                      detail:
+                        type: string
+                      ms:
+                        type: number
+      '401':
+        description: Dashboard key missing or invalid
+    """
+    return await dashboard_health_handler(request)
+
+
+@api_handler
 async def dashboard_events(request: web.Request) -> web.StreamResponse:
     """
     Dashboard: server-wide event stream.
@@ -2201,6 +2448,10 @@ DASHBOARD_ROUTES: list[tuple[str, str, Handler, bool]] = [
     ("GET", DASHBOARD_PREFIX + "sessions", dashboard_sessions, True),
     ("GET", DASHBOARD_PREFIX + "jobs", dashboard_jobs, True),
     ("GET", DASHBOARD_PREFIX + "logs", dashboard_logs, True),
+    ("GET", DASHBOARD_PREFIX + "keys", dashboard_keys, True),
+    ("GET", DASHBOARD_PREFIX + "services", dashboard_services, True),
+    ("GET", DASHBOARD_PREFIX + "health", dashboard_health, True),
+    ("GET", DASHBOARD_PREFIX + "sessions/{session_id}/logs", dashboard_session_logs, True),
     ("GET", DASHBOARD_EVENTS_ROUTE, dashboard_events, True),
 ]
 

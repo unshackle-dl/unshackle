@@ -91,7 +91,7 @@ service the API key has it on, and the local CDM for the others. `true` asks for
 and falls back to the local CDM when the server refuses; `false` always uses the local CDM.
 
 `auth_headers` lists extra header names to send the API key in, tried before the defaults
-`X-Secret-Key` and `X-Api-Key`, which are always appended as fallbacks. unshackle sends the
+`X-Secret-Key` and `X-Api-Key`, which unshackle always appends as fallbacks. It sends the
 first name. If the server answers `401`, it retries the same request with the next name, and
 keeps the one that works for the rest of the HTTP session. Names you give keep your spelling and
 are not repeated in the fallbacks, so unshackle tries
@@ -115,17 +115,18 @@ is the [REST API](../../dev/rest-api/index.md) section. These are the config key
 
 | Sub-key | Type | Default | Description |
 |---------|------|---------|-------------|
-| `api_secret` | str | *(unset)* | Master secret accepted in the `X-Secret-Key` header. Required unless the server is started with `--no-key`. |
+| `api_secret` | str | *(unset)* | Master secret the server accepts in the `X-Secret-Key` header. Required unless you start the server with `--no-key`. |
 | `users` | dict | `{}` | Per-user API keys and their allowlists (see below). |
+| `tiers` | dict | `{}` | Named settings that `users` entries reference by name (see below). |
 | `services` | list | *(unset)* | Global service allowlist. Omit to allow all. |
 | `remote_only` | bool | `false` | Expose only the remote service session endpoints (health, services, search, session) and disable the rest of the REST API. |
-| `dashboard` | dict | *(unset)* | Developer dashboard: `key` is the API key for the read-only `/api/dashboard/` endpoints (status, sessions, jobs, logs, SSE events). Unset leaves those routes unregistered. See [dashboard endpoints](../../dev/rest-api/dashboard.md). |
+| `dashboard` | dict | *(unset)* | Developer dashboard: `key` is the API key for the read-only `/api/dashboard/` endpoints (status, remote sessions, remote session logs, jobs, keys, services, health, logs, SSE events). Unset leaves those routes unregistered. See [dashboard endpoints](../../dev/rest-api/dashboard.md). |
 | `session_ttl` | int (s) | `300` | Lifetime of an interactive auth session. |
-| `max_sessions` | int | `100` | Maximum concurrent sessions. |
+| `max_sessions` | int or null | `100` | Maximum concurrent remote sessions; at the cap the server evicts the oldest. Set it to `null` or `0` for no limit, which is also what `/api/dashboard/status` then reports, so a dashboard can tell "no cap" from a cap that happens to sit at the default. |
 | `history_limit` | int | `100` | How many finished jobs to retain in history. |
 | `compression_level` | int | `1` | gzip level for responses. |
 | `services_refresh_interval` | int (s) | `0` | How often the server pulls the git-backed service repositories in `directories.services` and hot-reloads the services that changed. `0` turns it off. A service with a running or queued job swaps to the new code as soon as its last job finishes. |
-| `global_speed_limit` | str | *(unlimited)* | Server-wide download speed cap, e.g. `10M`, `1.5G` or plain bytes/sec (same format as `speed_limit`). One shared budget across all concurrent jobs; per-job speed limits are ignored while it is set. |
+| `global_speed_limit` | str | *(unlimited)* | Server-wide download speed cap, e.g. `10M`, `1.5G` or plain bytes/sec (same format as `speed_limit`). One shared budget across all concurrent jobs; the server ignores per-job speed limits while it is set. |
 | `cdm_overrides` | list or bool | *(unset)* | Allowed per-request CDM overrides: a list of permitted device names, or `true` for any. Unset rejects every override. |
 | `allow_job_credentials` | bool | `false` | Permit clients to supply credentials per job. |
 | `server_accounts` | dict | `{}` | Services whose remote sessions use the server's own `credentials` and cookie files instead of the client's (see below). |
@@ -145,6 +146,16 @@ client configured with `server_cdm: true` to license with its own local CDM inst
 client that asks anyway gets a `FORBIDDEN` error. Because a download job always licenses with the server's CDM,
 an API key without `server_cdm` for that service also cannot submit or retry `/api/download`
 jobs. Keys that have no `users` entry, such as `api_secret`, keep server CDM access.
+
+A `tier` names an entry under `serve.tiers`, which holds the settings that several API keys
+share. Today a tier carries `rate_limit`, the requests per hour that API key may make; an API
+key can also set its own `rate_limit`, which wins over its tier's. An API key with neither has
+no limit. Going over the limit answers `429` with a `Retry-After` header. The server keeps a
+fixed window rather than a sliding one: it opens on the first request and resets an hour
+later. A `tier` that names no entry under `serve.tiers`, or a `rate_limit` that is not a
+positive whole number, stops the server at startup, because the alternative is an API key that
+silently gets no limit. The rate limit never applies to the dashboard key, and never to
+`/api/health`.
 
 `server_accounts` lists, per service, the accounts the server lends to remote sessions. A remote
 session for a listed service ignores the credentials, cookies, and cache the client sends and
@@ -214,9 +225,12 @@ serve:
   # server-wide download defaults (same keys as the `dl:` block)
   downloads: 3
   best_available: true
+  tiers:
+    bot: { rate_limit: 600 }      # requests per hour, for every key on this tier
   users:
     a1b2c3d4:                     # this user's API key
       services: [EXAMPLE1]        # may only use EXAMPLE1
+      tier: bot                   # 600 requests/hour; 429 with Retry-After once over
     e5f6a7b8:
       server_cdm: true            # this key may have the server do the licensing
     c9d0e1f2:

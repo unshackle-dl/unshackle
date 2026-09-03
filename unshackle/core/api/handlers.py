@@ -4,9 +4,11 @@ import enum
 import json
 import logging
 import re
+import time
+from collections import Counter
 from datetime import date as date_
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from aiohttp import web
 
@@ -275,10 +277,10 @@ def setup_list_service(
     return service_instance
 
 
-def get_allowed_services(request: Optional[web.Request] = None) -> Optional[List[str]]:
-    """Get effective service allowlist considering global + per-key config.
+def allowed_services_for_key(secret_key: Optional[str]) -> Optional[List[str]]:
+    """Effective service allowlist for an API key: the global list intersected with the key's.
 
-    Returns None if no allowlist restricts the services.
+    Returns None when nothing restricts the services.
     """
     global_allowed = config.serve.get("services")
     global_set: Optional[set[str]] = None
@@ -286,14 +288,11 @@ def get_allowed_services(request: Optional[web.Request] = None) -> Optional[List
         global_set = {Services.get_tag(s) for s in global_allowed}
 
     key_set: Optional[set[str]] = None
-    if request:
-        secret_key = request_secret_key(request)
-        if secret_key:
-            users = config.serve.get("users", {})
-            user_config = users.get(secret_key, {})
-            user_services = user_config.get("services")
-            if user_services:
-                key_set = {Services.get_tag(s) for s in user_services}
+    if secret_key:
+        users = config.serve.get("users", {})
+        user_config = users.get(secret_key, {})
+        if isinstance(user_config, dict) and user_config.get("services"):
+            key_set = {Services.get_tag(s) for s in user_config["services"]}
 
     if global_set and key_set:
         result = global_set & key_set
@@ -305,6 +304,11 @@ def get_allowed_services(request: Optional[web.Request] = None) -> Optional[List
         return None
 
     return list(result)
+
+
+def get_allowed_services(request: Optional[web.Request] = None) -> Optional[List[str]]:
+    """The effective service allowlist for a request's API key, or None when unrestricted."""
+    return allowed_services_for_key(request_secret_key(request) if request else None)
 
 
 def server_cdm_allowed(request: Optional[web.Request] = None, service: Optional[str] = None) -> bool:
@@ -549,6 +553,45 @@ async def dashboard_authentication(request: web.Request, handler: Any) -> web.St
     if not provided or not hmac.compare_digest(provided, expected):
         return web.json_response({"status": 401, "message": "Dashboard key is invalid."}, status=401)
     return await handler(request)
+
+
+def rate_limit_response(secret_key: str) -> Optional[web.Response]:
+    """A 429 when *secret_key* is over its hourly limit, else None after counting the request.
+
+    Call only once the key is known to be valid, so an invalid key cannot burn someone else's
+    window. Both auth middlewares go through here: the limit has to hold in every server mode.
+    """
+    from unshackle.core.api.stats import stats
+
+    retry_after = stats.check_rate_limit(secret_key)
+    if retry_after is None:
+        return None
+    return web.json_response(
+        {"status": 429, "message": "Rate limit exceeded."},
+        status=429,
+        headers={"Retry-After": str(retry_after)},
+    )
+
+
+@web.middleware
+async def api_key_authentication(request: web.Request, handler: Any) -> web.StreamResponse:
+    """Gate every non-dashboard route behind a key in ``app["config"]["users"]``, then rate limit it.
+
+    Runs after :func:`dashboard_authentication`, which has already answered the dashboard
+    routes, so the dashboard key never reaches the limiter.
+    """
+    import hmac
+
+    if request.path == "/api/health" or request.path.startswith(DASHBOARD_PREFIX):
+        return await handler(request)
+    secret_key = request_secret_key(request)
+    if not secret_key:
+        return web.json_response({"status": 401, "message": "Secret Key is Empty."}, status=401)
+    # Constant-time compare against every configured key so a valid key can't be
+    # recovered byte-by-byte from response timing.
+    if not any(hmac.compare_digest(secret_key, k) for k in request.app["config"]["users"]):
+        return web.json_response({"status": 401, "message": "Secret Key is Invalid."}, status=401)
+    return rate_limit_response(secret_key) or await handler(request)
 
 
 def caller_key(request: Optional[web.Request] = None) -> str:
@@ -1744,8 +1787,6 @@ async def download_job_events_handler(job_id: str, request: web.Request) -> web.
 
 async def dashboard_status_handler(request: web.Request) -> web.Response:
     """Server-wide stats for the developer dashboard."""
-    from collections import Counter
-
     from unshackle.core.api.download_manager import get_download_manager
     from unshackle.core.api.session_store import get_session_store
     from unshackle.core.api.stats import stats
@@ -1788,6 +1829,296 @@ async def dashboard_logs_handler(request: web.Request) -> web.Response:
         since = 0
     records = ring.since(since, request.query.get("level"), request.query.get("logger"))
     return web.json_response({"seq": ring.seq, "records": records})
+
+
+async def dashboard_session_logs_handler(request: web.Request) -> web.Response:
+    """One remote session's mirrored service log, for an operator watching a failing auth.
+
+    Reads through ``peek``: a dashboard poll must not refresh the session's idle timer, and
+    ``SessionLogBuffer.since`` is a cursor read, so this never takes records from the client
+    draining the same buffer through ``/api/session/{id}/logs``.
+    """
+    from unshackle.core.api.session_store import get_session_store
+
+    session_id = request.match_info["session_id"]
+    session = get_session_store().peek(session_id)
+    if session is None:
+        raise APIError(APIErrorCode.SESSION_NOT_FOUND, f"Remote session not found: {session_id}")
+    try:
+        since = int(request.query.get("since", 0))
+    except ValueError:
+        since = 0
+    buffer = session.log_buffer
+    return web.json_response(
+        {
+            "session_id": session_id,
+            "records": buffer.since(since) if buffer else [],
+            "last_seq": buffer.last_seq if buffer else 0,
+        }
+    )
+
+
+async def dashboard_keys_handler(request: web.Request) -> web.Response:
+    """Every configured API key: which key it is, what it may do, and what it has done.
+
+    Every key that ``configured_key`` counts gets a row here, so each ``requests_by_key``
+    bucket except ``anonymous`` has a row to attribute it to. Without the dashboard key's own
+    row, a dashboard would render its own polling as traffic from an unknown caller.
+    """
+    from unshackle.core.api.stats import key_id, key_rate_limit, key_tier, mask_key, stats
+
+    users = config.serve.get("users") or {}
+    api_secret = str(config.serve.get("api_secret") or "")
+    dashboard = dashboard_key() or ""
+
+    def row(secret_key: str, role: str) -> Dict[str, Any]:
+        entry = stats.keys.get(key_id(secret_key))
+        api_access = role != "dashboard" or secret_key in users
+        return {
+            "id": key_id(secret_key),
+            "role": role,
+            "label": mask_key(secret_key),
+            "services": allowed_services_for_key(secret_key) if api_access else [],
+            "server_cdm": user_grant(secret_key, "server_cdm") if api_access else False,
+            "server_accounts": user_grant(secret_key, "server_accounts") if api_access else False,
+            "server_proxy": user_grant(secret_key, "server_proxy") is True if api_access else False,
+            "tier": key_tier(secret_key),
+            "rate_limit": key_rate_limit(secret_key),
+            "window_used": entry.window_used if entry else 0,
+            "requests": entry.requests if entry else 0,
+            "rejected": entry.rejected if entry else 0,
+            "bytes_out": entry.bytes_out if entry else 0,
+            "last_seen": entry.last_seen if entry else None,
+        }
+
+    def role_of(secret_key: str) -> str:
+        """Which key this is. Identity, not capability: the grant fields carry that."""
+        if dashboard and secret_key == dashboard:
+            return "dashboard"
+        return "admin" if secret_key == api_secret else "user"
+
+    keys = [str(k) for k in users]
+    for extra in (api_secret, dashboard):
+        if extra and extra not in keys:
+            keys.append(extra)
+    return web.json_response([row(k, role_of(k)) for k in keys])
+
+
+def user_grant(secret_key: str, name: str) -> Any:
+    """A per-key grant as configured: False, True, or the list of service tags it covers.
+
+    A key with no ``serve.users`` entry keeps implicit access, matching the resolvers.
+    """
+    user_config = (config.serve.get("users") or {}).get(secret_key)
+    if not isinstance(user_config, dict):
+        return name != "server_proxy"
+    return user_config.get(name, False)
+
+
+async def dashboard_services_handler(request: web.Request) -> web.Response:
+    """Every discovered service and its load state, including the ones that failed to import.
+
+    Not allowlist-filtered: an operator needs to see the services their keys cannot reach.
+    """
+    from unshackle.core import services as services_module
+    from unshackle.core.api.download_manager import TERMINAL_STATUSES, get_download_manager
+    from unshackle.core.api.session_store import get_session_store
+    from unshackle.core.service_repo import head
+
+    sessions = Counter(entry.service_tag for entry in get_session_store().list())
+    jobs = Counter(job.service for job in get_download_manager().list_jobs() if job.status not in TERMINAL_STATUSES)
+    errors = {err.split(":", 1)[0]: err for err in services_module.LOAD_ERRORS if ":" in err}
+    staged_commits: Dict[Any, Optional[str]] = {}
+
+    rows = []
+    for tag in Services.get_tags():
+        error = errors.get(tag)
+        staged = tag in services_module.PENDING
+        row: Dict[str, Any] = {
+            "tag": tag,
+            "state": "failed" if error else "staged" if staged else "loaded",
+            "error": error,
+            "commit": services_module.LOADED_COMMITS.get(tag),
+            "staged_commit": None,
+            "staged_since": services_module.PENDING_SINCE.get(tag),
+            "sessions": sessions.get(tag, 0),
+            "jobs": jobs.get(tag, 0),
+            "aliases": list(services_module.ALIASES.get(tag, ())),
+            "geofence": [],
+        }
+        if staged:
+            # Only staged tags need a git call; the working tree already holds the new commit.
+            source = services_module.service_source_dir(tag)
+            if source is not None and source not in staged_commits:
+                staged_commits[source] = head(source) if (source / ".git").exists() else None
+            row["staged_commit"] = staged_commits.get(source)
+        module = services_module.MODULES.get(tag)
+        if module is not None:
+            row["geofence"] = list(getattr(module, "GEOFENCE", ()) or ())
+        rows.append(row)
+    return web.json_response(rows)
+
+
+HEALTH_CACHE_TTL = 30.0
+HEALTH_PROBE_KID = "00000000000000000000000000000000"
+HEALTH_DETAIL_MAX = 256
+HEALTH_PROBE_TIMEOUT = 15.0
+HEALTH_SECRET_MIN = 4
+SECRET_KEYS = ("password", "passwd", "pwd", "token", "api_key", "apikey", "secret", "auth", "ssl_key_password")
+_health_cache: Dict[str, Any] = {}
+_health_lock: Optional[asyncio.Lock] = None
+
+
+async def dashboard_health_handler(request: web.Request) -> web.Response:
+    """Preflight: can this instance actually finish a download?
+
+    A panel, not a liveness probe - the result is cached for 30 s and every probe is shallow,
+    so reading it never costs the operator a proxy session or a licence.
+    """
+    global _health_lock
+    if _health_lock is None:
+        _health_lock = asyncio.Lock()
+    async with _health_lock:
+        now = time.time()
+        cached = _health_cache.get("payload")
+        if cached and now - _health_cache.get("at", 0.0) < HEALTH_CACHE_TTL:
+            return web.json_response(cached)
+
+        checks: List[Dict[str, Any]] = []
+        try:
+            await asyncio.wait_for(asyncio.to_thread(run_health_checks, checks), HEALTH_PROBE_TIMEOUT)
+        except asyncio.TimeoutError:
+            checks = list(checks)
+            checks.append(
+                {
+                    "id": "probe",
+                    "label": "health probe",
+                    "status": "fail",
+                    "detail": f"timed out after {HEALTH_PROBE_TIMEOUT:.0f}s with {len(checks)} checks done",
+                    "ms": round(HEALTH_PROBE_TIMEOUT * 1000, 1),
+                }
+            )
+        statuses = {c["status"] for c in checks}
+        payload = {
+            "generated_at": now,
+            "status": "failing" if "fail" in statuses else "degraded" if "warn" in statuses else "ok",
+            "checks": checks,
+        }
+        _health_cache.update(at=now, payload=payload)
+        return web.json_response(payload)
+
+
+def config_secrets(section: Any, nested: bool = False) -> List[str]:
+    """Values in a vault or proxy config that must never reach a health detail.
+
+    Name-based at the top level, and every scalar below it: a nested mapping is driver
+    arguments unshackle cannot name in advance (an API vault's ``headers``, a MySQL vault's
+    ``ssl``, a proxy provider's own block), so it over-collects there on purpose. Short values
+    are skipped, because masking them would garble the detail without hiding anything.
+    """
+    if isinstance(section, dict):
+        items: Iterable[tuple[Any, Any]] = section.items()
+    elif isinstance(section, (list, tuple)):
+        items = [(None, value) for value in section]
+    else:
+        return [str(section)] if nested and section is not None else []
+
+    found: List[str] = []
+    for key, value in items:
+        if isinstance(value, (dict, list, tuple)):
+            found += config_secrets(value, nested=True)
+        elif value is not None and (nested or (isinstance(key, str) and key.lower() in SECRET_KEYS)):
+            found.append(str(value))
+    return [secret for secret in found if len(secret) >= HEALTH_SECRET_MIN]
+
+
+def health_check(check_id: str, label: str, probe: Any, secrets: Iterable[str] = ()) -> Dict[str, Any]:
+    """Time one health probe and turn any exception into a failed check.
+
+    *secrets* are masked out of the detail: a driver's error string can echo the DSN or URL
+    it was given. The detail is then capped, because redaction only hides what it recognises
+    and a driver can raise with a whole response body inside it. Cap after masking, never
+    before: a cut through a secret would leave the tail of it unreplaced.
+    """
+    started = time.perf_counter()
+    try:
+        status, detail = probe()
+    except Exception as e:
+        status, detail = "fail", f"{type(e).__name__}: {e}"
+    masked = redact_text(detail, secrets) or ""
+    if len(masked) > HEALTH_DETAIL_MAX:
+        masked = masked[:HEALTH_DETAIL_MAX] + "…"
+    return {
+        "id": check_id,
+        "label": label,
+        "status": status,
+        "detail": masked,
+        "ms": round((time.perf_counter() - started) * 1000, 1),
+    }
+
+
+def run_health_checks(checks: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+    """Probe binaries, CDM devices, key vaults and proxy providers. Blocking; run in a thread.
+
+    Appends to *checks* as each probe finishes rather than returning only at the end, so a
+    caller that gives up on the deadline still has the results that did complete.
+    """
+    from unshackle.commands.env import get_dependencies
+    from unshackle.core.proxies.resolve import initialize_proxy_providers
+
+    if checks is None:
+        checks = []
+
+    for dep in (d for d in get_dependencies() if d["cat"] != "Player"):
+        binary = dep["binary"]
+
+        def probe(binary: Any = binary, dep: Any = dep) -> tuple[str, str]:
+            if not binary:
+                return ("fail" if dep["required"] else "warn", "not found on PATH")
+            version = binary_version(binary) or "unknown version"
+            return "ok", f"{version} · {binary}"
+
+        checks.append(health_check(dep["name"].lower(), dep["name"], probe))
+
+    def cdm_probe() -> tuple[str, str]:
+        wvds = list(config.directories.wvds.glob("*.wvd"))
+        prds = list(config.directories.prds.glob("*.prd"))
+        if not wvds and not prds:
+            return ("fail" if config.cdm else "warn", "no .wvd or .prd device files found")
+        return "ok", f"{len(wvds)} Widevine, {len(prds)} PlayReady"
+
+    checks.append(health_check("cdm", "CDM devices", cdm_probe))
+
+    probe_service = next(iter(Services.get_tags()), "health")
+    for vault_config in config.key_vaults or []:
+        name = vault_config.get("name") or vault_config.get("type", "vault")
+
+        def vault_probe(vault_config: Any = vault_config) -> tuple[str, str]:
+            from unshackle.core.vaults import Vaults
+
+            cfg = dict(vault_config)
+            vaults = Vaults(probe_service)
+            vaults.load_critical(cfg.pop("type"), **cfg)
+            vault = vaults.vaults[0]
+            try:
+                vault.get_key(HEALTH_PROBE_KID, probe_service)
+            except Exception as e:
+                if type(e).__name__ not in ("KeyIdInvalid", "ServiceTagInvalid"):
+                    raise
+            return "ok", str(vault)
+
+        checks.append(health_check(f"vault:{name}", f"vault {name}", vault_probe, config_secrets(vault_config)))
+
+    def proxy_probe() -> tuple[str, str]:
+        providers = initialize_proxy_providers(raise_errors=True, quiet=True)
+        if not providers:
+            return "ok", "none configured"
+        return "ok", ", ".join(type(p).__name__ for p in providers)
+
+    if config.proxy_providers:
+        checks.append(health_check("proxies", "proxy providers", proxy_probe, config_secrets(config.proxy_providers)))
+
+    return checks
 
 
 async def dashboard_events_handler(request: web.Request) -> web.StreamResponse:
@@ -2218,11 +2549,13 @@ async def clear_temp_handler(request: Optional[web.Request] = None) -> web.Respo
 async def refresh_services_handler(request: Optional[web.Request] = None) -> web.Response:
     """Refresh the service repos configured in directories.services and reload the changed services."""
     from unshackle.core.api.download_manager import get_download_manager
+    from unshackle.core.api.events import publish_refresh_events
     from unshackle.core.services import refresh_and_reload
 
     try:
         busy = get_download_manager().busy_services()
         repos = await asyncio.to_thread(refresh_and_reload, busy)
+        publish_refresh_events(repos)
         return web.json_response({"refreshed": all(r["updated"] for r in repos), "repos": repos})
 
     except APIError:

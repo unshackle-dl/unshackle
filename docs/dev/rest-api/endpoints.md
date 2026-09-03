@@ -19,7 +19,7 @@ Start the server with [`unshackle serve`](../../guide/cli-reference.md). By defa
 - **Service allowlist.** The effective allowlist for your API key filters the service-facing endpoints (the intersection of the global `serve.services` list and your per-key list). The server treats services you cannot use as unknown.
 
 !!! warning "Error responses have two shapes"
-    Structured application errors (raised inside a handler) return `{"status": "error", "error_code": "...", "message": "...", "timestamp": "..."}`. The authentication middleware, however, returns a **different** shape: `{"status": 401, "message": "..."}` with an integer `status` and no `error_code`. Clients must accept both shapes. The [Error responses](#error-responses) section at the bottom of this page gives the full error model.
+    Structured application errors (raised inside a handler) return `{"status": "error", "error_code": "...", "message": "...", "timestamp": "..."}`. The authentication middleware, however, returns a **different** shape: `{"status": 401, "message": "..."}` with an integer `status` and no `error_code`. The same middleware answers `429` in that shape when an API key goes over its rate limit. Clients must accept both shapes. The [Error responses](#error-responses) section at the bottom of this page gives the full error model.
 
 ---
 
@@ -1141,7 +1141,7 @@ The server serialises every structured error raised inside a handler to the same
 - `debug_info` appears only when you start the server with `--debug-api`.
 
 !!! warning "Authentication errors differ"
-    Errors raised by the API-key middleware use a distinct shape (`{"status": 401, "message": "Secret Key is Empty."}` or `{"status": 401, "message": "Secret Key is Invalid."}`) with an integer `status` and no `error_code`, `timestamp`, or `details`. A malformed JSON body on any POST, by contrast, returns the standard envelope with `error_code: "INVALID_INPUT"`.
+    Errors raised by the API-key middleware use a distinct shape (`{"status": 401, "message": "Secret Key is Empty."}`, `{"status": 401, "message": "Secret Key is Invalid."}`, or `{"status": 429, "message": "Rate limit exceeded."}` with a `Retry-After` header) with an integer `status` and no `error_code`, `timestamp`, or `details`. A `429` from the middleware therefore carries no `error_code`, unlike the `RATE_LIMITED` code below, which a handler raises for a rate limit the *service* imposed. A malformed JSON body on any POST, by contrast, returns the standard envelope with `error_code: "INVALID_INPUT"`.
 
 ### Error codes and default status
 

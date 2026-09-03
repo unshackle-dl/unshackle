@@ -15,7 +15,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from unshackle.core.api.events import bus
+from unshackle.core.api.events import bus, publish_service_event
 from unshackle.core.api.sanitize import sanitize_log
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_text
 
@@ -741,6 +741,7 @@ class DownloadQueueManager:
                 applied = await asyncio.to_thread(services.apply_pending, self.busy_services())
                 if applied:
                     log.info(f"Services reloaded after job completion: {', '.join(applied)}")
+                    publish_service_event("applied", applied)
             except Exception:
                 log.exception("Applying pending service reloads failed")
 

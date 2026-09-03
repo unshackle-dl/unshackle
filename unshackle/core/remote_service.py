@@ -11,6 +11,7 @@ import base64
 import hashlib
 import logging
 import re
+import sys
 import time
 from datetime import date as date_
 from enum import Enum
@@ -901,6 +902,10 @@ class RemoteService:
         cache_data = self.load_cache_files(profile) if self._server_accounts is None else None
         if cache_data:
             create_data["cache"] = cache_data
+
+        from unshackle.core import __version__
+
+        create_data["client"] = {"version": __version__, "platform": sys.platform}
 
         result = self.client.post("/api/session/create", create_data)
         self._session_id = result["session_id"]

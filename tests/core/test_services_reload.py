@@ -72,3 +72,36 @@ def test_busy_service_is_staged_then_applied(service_dir: Path, monkeypatch: pyt
     assert services.apply_pending(busy=set()) == ["FOO"]
     assert services.MODULES["FOO"].VERSION == 2
     assert services.PENDING == set()
+
+
+def write_broken_service(root: Path, version: int) -> None:
+    init = root / "FOO" / "__init__.py"
+    init.write_text(f"raise ImportError('boom {version}')\n")
+    os.utime(init, (time.time() + version, time.time() + version))
+
+
+def test_apply_pending_never_reports_a_failed_reimport_as_applied(
+    service_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed re-import keeps the old module serving, so the tag is not applied."""
+    monkeypatch.setattr(services, "PENDING_SINCE", {})
+    monkeypatch.setattr(services, "LOADED_COMMITS", {"FOO": "old-head"})
+    monkeypatch.setattr(services, "head", lambda dest: "new-head")
+    (service_dir / ".git").mkdir()
+
+    write_broken_service(service_dir, 2)
+    monkeypatch.setattr(services, "repo_specs", lambda: ["example/repo"])
+    monkeypatch.setattr(services, "refresh_repo", lambda spec: (service_dir, ["~FOO"]))
+    services.refresh_and_reload(busy={"FOO"})
+    assert services.PENDING == {"FOO"}
+
+    assert services.apply_pending(busy=set()) == []
+    assert services.MODULES["FOO"].VERSION == 1
+    assert services.LOAD_ERRORS and services.LOAD_ERRORS[0].startswith("FOO: ")
+    # The commit must still name the code that is running, not the one that failed to import.
+    assert services.LOADED_COMMITS["FOO"] == "old-head"
+
+    write_service(service_dir, 3)
+    services.PENDING.add("FOO")
+    assert services.apply_pending(busy=set()) == ["FOO"]
+    assert services.LOADED_COMMITS["FOO"] == "new-head"

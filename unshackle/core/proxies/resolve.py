@@ -14,8 +14,13 @@ from unshackle.core.utils.redact import mask_proxy
 log = logging.getLogger("proxies")
 
 
-def initialize_proxy_providers() -> List[Any]:
-    """Initialise and return available proxy providers from config."""
+def initialize_proxy_providers(raise_errors: bool = False, quiet: bool = False) -> List[Any]:
+    """Initialise and return available proxy providers from config.
+
+    A provider that fails to build is logged and skipped, unless *raise_errors* is set.
+    *quiet* drops the per-provider summary lines: rendering a provider asks some of them for
+    their server catalog over the network, which a repeated caller must not pay for.
+    """
     proxy_providers: list = []
     try:
         from unshackle.core import binaries
@@ -45,13 +50,16 @@ def initialize_proxy_providers() -> List[Any]:
         if hasattr(binaries, "HolaProxy") and binaries.HolaProxy:
             proxy_providers.append(Hola())
 
-        for provider in proxy_providers:
-            log.info(f"Loaded {provider.__class__.__name__}: {provider}")
+        if not quiet:
+            for provider in proxy_providers:
+                log.info(f"Loaded {provider.__class__.__name__}: {provider}")
 
-        if not proxy_providers:
-            log.warning("No proxy providers were loaded. Check your proxy provider configuration in unshackle.yaml")
+            if not proxy_providers:
+                log.warning("No proxy providers were loaded. Check your proxy provider configuration in unshackle.yaml")
 
     except Exception as e:
+        if raise_errors:
+            raise
         log.warning(f"Failed to initialize some proxy providers: {e}")
 
     return proxy_providers
