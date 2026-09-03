@@ -1,9 +1,12 @@
 import sys
+from typing import Any
 
 import click
 from rich.console import Group
 from rich.live import Live
-from rich.padding import Padding
+from rich.padding import Padding, PaddingDimensions
+from rich.prompt import Confirm, Prompt
+from rich.rule import Rule
 from rich.table import Table
 from rich.text import Text
 
@@ -12,6 +15,31 @@ from unshackle.core.console import console
 IS_WINDOWS = sys.platform == "win32"
 if IS_WINDOWS:
     import msvcrt
+
+CONTENT_INDENT = 5
+RULE_PAD = (1, 2)
+
+
+def tui_header(text: str, pad: PaddingDimensions = RULE_PAD) -> None:
+    console.print(Padding(Rule(f"[rule.text]{text}"), pad))
+
+
+def tui_body(renderable: Any, pad: PaddingDimensions = (0, CONTENT_INDENT)) -> None:
+    console.print(Padding(renderable, pad))
+
+
+def _indent(label: str) -> str:
+    body = label.lstrip("\n")
+    leading = "\n" * (len(label) - len(body))
+    return leading + (" " * CONTENT_INDENT) + body
+
+
+def tui_prompt(label: str, **kwargs: Any) -> str:
+    return Prompt.ask(_indent(label), **kwargs)
+
+
+def tui_confirm(label: str, **kwargs: Any) -> bool:
+    return Confirm.ask(_indent(label), **kwargs)
 
 
 class Selector:
@@ -29,6 +57,7 @@ class Selector:
         minimal_count: int = 0,
         dependencies: dict[int, list[int]] = None,
         collapse_on_start: bool = False,
+        single_select: bool = False,
     ):
         """
         Initialise the Selector.
@@ -47,6 +76,7 @@ class Selector:
         self.text_style = text_style
         self.page_size = page_size
         self.minimal_count = minimal_count
+        self.single_select = single_select
         self.dependencies = dependencies or {}
 
         self.child_to_parent = {}
@@ -112,7 +142,10 @@ class Selector:
             is_cursor = idx == self.cursor_index
             is_selected = idx in self.selected_indices
 
-            symbol = "[X]" if is_selected else "[ ]"
+            if self.single_select:
+                symbol = "❯" if is_cursor else " "
+            else:
+                symbol = "[X]" if is_selected else "[ ]"
             style = self.cursor_style if is_cursor else self.text_style
             indicator_text = Text(f"{symbol}", style=style)
 
@@ -131,7 +164,12 @@ class Selector:
             total_pages = 1
         current_page = (self.scroll_offset // self.page_size) + 1
 
-        if self.dependencies:
+        if self.single_select:
+            info_text = Text(
+                f"\n[↑/↓]: Move  [←/→]: Page  [Enter]: Select  (Page {current_page}/{total_pages})",
+                style="gray",
+            )
+        elif self.dependencies:
             info_text = Text(
                 f"\n[Space]: Toggle  [a]: All  [e]: Fold/Unfold  [E]: All Fold/Unfold\n[Enter]: Confirm  [↑/↓]: Move  [←/→]: Page  (Page {current_page}/{total_pages})",
                 style="gray",
@@ -142,7 +180,7 @@ class Selector:
                 style="gray",
             )
 
-        return Padding(Group(table, info_text), (0, 5))
+        return Padding(Group(table, info_text), (0, CONTENT_INDENT))
 
     def move_cursor(self, delta: int):
         """
@@ -378,10 +416,15 @@ class Selector:
                     elif action == "EXPAND_ALL":
                         self.toggle_expand_all()
                     elif action == "SPACE":
+                        if self.single_select:
+                            return [self.cursor_index]
                         self.toggle_selection()
                     elif action == "ALL":
-                        self.toggle_all()
+                        if not self.single_select:
+                            self.toggle_all()
                     elif action in ("ENTER", "QUIT"):
+                        if self.single_select:
+                            return [self.cursor_index]
                         if len(self.selected_indices) >= self.minimal_count:
                             return sorted(list(self.selected_indices))
                     elif action == "CANCEL":
