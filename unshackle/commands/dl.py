@@ -4016,6 +4016,18 @@ class dl:
         server_cdm = getattr(svc_for_cdm, "_server_cdm", getattr(self, "server_cdm", False))
 
         if server_cdm:
+            if not cdm_only:
+                vault_kids = list(getattr(drm, "kids", None) or [])
+                if track_kid and track_kid not in vault_kids:
+                    vault_kids.append(track_kid)
+                for kid in vault_kids:
+                    if kid in drm.content_keys:
+                        continue
+                    content_key = self.LICENSE_KEY_CACHE.get(kid) or self.vaults.get_key(kid)[0]
+                    if content_key:
+                        drm.content_keys[kid] = content_key
+                        self.LICENSE_KEY_CACHE[kid] = content_key
+
             if not drm.content_keys:
                 self.log.warning("Server CDM did not resolve any keys for this track")
                 return
