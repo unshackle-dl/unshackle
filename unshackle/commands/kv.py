@@ -6,6 +6,7 @@ from typing import Optional, Union
 from uuid import UUID
 
 import click
+from rich.console import RenderableType
 from rich.padding import Padding
 from rich.progress import (
     MofNCompleteColumn,
@@ -55,6 +56,13 @@ def process_service_keys(from_vault: Vault, service: str, log: logging.Logger) -
     return {kid: key for kid, key in content_keys if kid not in bad_keys}
 
 
+class _PaddedProgress(Progress):
+    """Progress bar with a blank line above it and a left indent matching log rows."""
+
+    def get_renderable(self) -> RenderableType:
+        return Padding(super().get_renderable(), (1, 0, 0, 5))
+
+
 def add_keys_with_progress(vault: Vault, service: str, kid_keys: dict[str, str], log: logging.Logger) -> int:
     """Add content keys to a vault in batches, with a progress bar of counts and time left."""
 
@@ -65,8 +73,7 @@ def add_keys_with_progress(vault: Vault, service: str, kid_keys: dict[str, str],
 
     kids = list(kid_keys)
     added = 0
-    console.print()
-    with Progress(
+    with _PaddedProgress(
         SpinnerColumn(finished_text=""),
         TextColumn("[bold]{task.description}"),
         GradientPulseBarColumn(),
