@@ -3009,6 +3009,8 @@ class dl:
                 self.wait_vault_writes()
                 return
 
+            self.wait_vault_writes()
+
             if skip_dl:
                 console.log("Skipped downloads as --skip-dl was used...")
             else:
