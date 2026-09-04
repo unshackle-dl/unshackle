@@ -2466,6 +2466,11 @@ download. For example, <code>dovi_tool</code> only matters if you download Dolby
 <td>Alternative DRM decryptor to shaka-packager</td>
 </tr>
 <tr>
+<td>MP4Box (GPAC)</td>
+<td><code>MP4Box</code></td>
+<td>Muxing DTS:X Profile 2 (DTS-UHD) audio</td>
+</tr>
+<tr>
 <td>dovi_tool</td>
 <td><code>dovi_tool</code></td>
 <td>Dolby Vision metadata handling</td>
@@ -2517,6 +2522,11 @@ download. For example, <code>dovi_tool</code> only matters if you download Dolby
 </tr>
 </tbody>
 </table>
+<div class="admonition info">
+<p class="admonition-title">MP4Box is only used for DTS:X Profile 2</p>
+<p>Titles with DTS:X Profile 2 (DTS-UHD) audio mux to MP4; everything else muxes to MKV
+with <code>mkvmerge</code>. Install with <code>apt install gpac</code>.</p>
+</div>
 <div class="admonition tip">
 <p class="admonition-title">SubtitleEdit specifics</p>
 <p>unshackle looks for <code>seconv</code> first, the batch CLI shipped with
