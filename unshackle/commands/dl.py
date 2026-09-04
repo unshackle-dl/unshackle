@@ -1211,6 +1211,7 @@ class dl:
 
         self.cdm_override = ctx.params.get("cdm_name")
         cdm_only = ctx.params.get("cdm_only")
+        self.vault_cache_tally: Optional[tuple[int, int]] = None
 
         if cdm_only:
             self.vaults = Vaults(self.vault_service)
@@ -3955,15 +3956,19 @@ class dl:
             self.log.error(f"Vault write failed: {exc!r}")
 
     def wait_vault_writes(self) -> None:
-        """Block until every queued vault write has run."""
+        """Block until every queued vault write has run, then log the total once."""
         self.VAULT_WRITER.submit(lambda: None).result()
+        if not (self.vault_cache_tally and self.vault_cache_tally[0]):
+            self.vault_cache_tally = None
+            return
+        keys, successful_caches = self.vault_cache_tally
+        self.vault_cache_tally = None
+        self.log.info(f"Cached {keys} Key{'' if keys == 1 else 's'} to {successful_caches}/{len(self.vaults)} Vaults")
 
     def cache_keys_to_vaults(self, content_keys: dict[UUID, str]) -> None:
         successful_caches = self.vaults.add_keys(content_keys)
-        self.log.info(
-            f"Cached {len(content_keys)} Key{'' if len(content_keys) == 1 else 's'} to "
-            f"{successful_caches}/{len(self.vaults)} Vaults"
-        )
+        keys, caches = self.vault_cache_tally or (0, successful_caches)
+        self.vault_cache_tally = (keys + len(content_keys), min(caches, successful_caches))
 
     @classmethod
     def drm_lock(cls, drm: DRM_T) -> Lock:

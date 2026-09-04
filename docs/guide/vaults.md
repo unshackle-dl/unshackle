@@ -63,7 +63,9 @@ Network-backed vaults (`HTTP` and `API`) accept an optional per-vault `timeout` 
 vault_timeout: 10.0   # default, in seconds
 ```
 
-A `timeout` set inline on an individual vault always wins over this global value. The `SQLite` and `MySQL` backends do not take a `timeout` field.
+A `timeout` set inline on an individual vault always wins over this global value. The `SQLite` and `MySQL` backends do not take a `timeout` field. `MySQL` uses `vault_timeout` as its `connect_timeout` instead, and falls back to the pymysql default of 10 seconds when `vault_timeout` is `0`. To use a different connect timeout, set `connect_timeout` on the vault.
+
+unshackle pushes content keys to all vaults at the same time, so one slow or unreachable vault costs only its own timeout and does not delay the others.
 
 ---
 

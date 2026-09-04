@@ -115,42 +115,58 @@ class Vaults:
         return key if found else None
 
     def add_key(self, kid: Union[UUID, str], key: str, excluding: Optional[Vault] = None) -> int:
-        """Add a KID:KEY to all Vaults, optionally with an exclusion."""
+        """Add a KID:KEY to all Vaults, optionally with an exclusion.
+
+        This method pushes to all Vaults at the same time, so one unreachable Vault costs only its
+        own timeout and does not delay the others.
+        """
+        vaults = [vault for vault in self.vaults if vault != excluding and not vault.no_push]
+        if not vaults:
+            return 0
+        with ThreadPoolExecutor(len(vaults), thread_name_prefix="vault-push") as pool:
+            return sum(pool.map(lambda vault: self.push_key(vault, kid, key), vaults))
+
+    def push_key(self, vault: Vault, kid: Union[UUID, str], key: str) -> int:
+        """Push one Content Key to one Vault. Returns 1 if the Vault stored it, 0 otherwise."""
         dl = get_debug_logger()
-        success = 0
-        for vault in self.vaults:
-            if vault != excluding and not vault.no_push:
-                try:
-                    added = vault.add_key(self.service, kid, key)
-                    success += added
-                    if dl:
-                        dl.log_vault_query(vault.name, "add_key", kid=str(kid), success=bool(added))
-                except (PermissionError, NotImplementedError):
-                    pass
-                except Exception as e:
-                    log.warning(f"Failed to add key to Vault '{vault.name}': {e}")
-                    if dl:
-                        dl.log_vault_query(vault.name, "add_key", kid=str(kid), success=False, error=e)
-        return success
+        try:
+            added = vault.add_key(self.service, kid, key)
+            if dl:
+                dl.log_vault_query(vault.name, "add_key", kid=str(kid), success=bool(added))
+            return int(added)
+        except (PermissionError, NotImplementedError):
+            return 0
+        except Exception as e:
+            log.warning(f"Failed to add key to Vault '{vault.name}': {e}")
+            if dl:
+                dl.log_vault_query(vault.name, "add_key", kid=str(kid), success=False, error=e)
+            return 0
 
     def add_keys(self, kid_keys: dict[Union[UUID, str], str]) -> int:
         """
         Add multiple KID:KEYs to all Vaults. The Vaults skip duplicate Content Keys.
         This method absorbs and ignores the PermissionError a Vault raises when it cannot make Tables.
         This method also skips Vaults with no_push=True.
+
+        This method pushes to all Vaults at the same time, so one unreachable Vault costs only its
+        own timeout and does not delay the others.
         """
-        success = 0
-        for vault in self.vaults:
-            if not vault.no_push:
-                try:
-                    # Count each vault that successfully processes the keys (whether new or existing)
-                    vault.add_keys(self.service, kid_keys)
-                    success += 1
-                except (PermissionError, NotImplementedError):
-                    pass
-                except Exception as e:
-                    log.warning(f"Failed to add keys to Vault '{vault.name}': {e}")
-        return success
+        vaults = [vault for vault in self.vaults if not vault.no_push]
+        if not vaults:
+            return 0
+        with ThreadPoolExecutor(len(vaults), thread_name_prefix="vault-push") as pool:
+            return sum(pool.map(lambda vault: self.push_keys(vault, kid_keys), vaults))
+
+    def push_keys(self, vault: Vault, kid_keys: dict[Union[UUID, str], str]) -> int:
+        """Push Content Keys to one Vault. Returns 1 if the Vault accepted them, 0 on any failure."""
+        try:
+            vault.add_keys(self.service, kid_keys)
+            return 1
+        except (PermissionError, NotImplementedError):
+            return 0
+        except Exception as e:
+            log.warning(f"Failed to add keys to Vault '{vault.name}': {e}")
+            return 0
 
 
 __all__ = ("Vaults",)

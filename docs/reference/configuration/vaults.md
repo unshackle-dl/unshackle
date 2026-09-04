@@ -13,7 +13,7 @@ name) and a `name`, plus backend-specific keys.
 | `type` | Purpose | Required keys | Notes |
 |--------|---------|--------------|-------|
 | `SQLite` | Local SQLite database | `name`, `path` | Loaded **critically**; a failure aborts the run. |
-| `MySQL` | Remote MySQL database | `name`, `host`, `database`, `username` | Extra keys (e.g. `password`, `port`) forwarded to pymysql. |
+| `MySQL` | Remote MySQL database | `name`, `host`, `database`, `username` | Extra keys (e.g. `password`, `port`) forwarded to pymysql. `connect_timeout` defaults to `vault_timeout`. |
 | `API` | RESTful JSON API | `name`, `uri`, `token` | Optional `headers` map is sent with every request. Honours `vault_timeout`. |
 | `HTTP` | HTTP API with modes | `name`, `host`, one of `password`/`api_key`, and `username` in query mode | `api_mode`: `query` (default), `json`, `decrypt_labs`. Honours `vault_timeout`. |
 
@@ -44,4 +44,5 @@ key_vaults:
 - **Type:** `float` &nbsp;·&nbsp; **Default:** `10.0`
 
 Timeout in seconds for vault operations. Injected automatically into any backend whose
-constructor accepts a `timeout` parameter (a per-vault `timeout` still wins).
+constructor accepts a `timeout` parameter (a per-vault `timeout` still wins). The `MySQL` backend
+uses it as the default `connect_timeout`.

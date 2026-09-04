@@ -5,6 +5,7 @@ from uuid import UUID
 import pymysql
 from pymysql.cursors import DictCursor
 
+from unshackle.core.config import config
 from unshackle.core.vault import Vault
 
 
@@ -18,6 +19,7 @@ class MySQL(Vault):
         """
         super().__init__(name, no_push)
         self.slug = f"{host}:{database}:{username}"
+        kwargs.setdefault("connect_timeout", config.vault_timeout or 10)
         self.conn_factory = ConnectionFactory(
             dict(host=host, db=database, user=username, cursorclass=DictCursor, **kwargs)
         )

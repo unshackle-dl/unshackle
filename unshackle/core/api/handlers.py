@@ -3566,7 +3566,7 @@ def cache_to_vaults(keys: Dict[str, str], service_name: str) -> None:
         key_map = {UUID(hex=kid): key for kid, key in keys.items()}
         cached = vaults.add_keys(key_map)
         if cached:
-            log.info(f"Cached {cached} key(s) to {cached} server vault(s)")
+            log.info(f"Cached {len(key_map)} key(s) to {cached}/{len(vaults)} server vault(s)")
     except (Exception, SystemExit) as e:
         log.warning(f"Failed to cache keys to vaults: {e}")
 
