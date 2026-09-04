@@ -12,7 +12,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Any, Optional, Union
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 from uuid import UUID
 from zlib import crc32
 
@@ -140,6 +140,42 @@ class HLS:
                     break
         return out
 
+    @staticmethod
+    def select_audio_codec(
+        candidates: Optional[list[tuple[str, Audio.Codec]]], uri: Optional[str]
+    ) -> Optional[Audio.Codec]:
+        """
+        Choose the Audio Codec of one rendition from the codecs its variant declares.
+
+        EXT-X-STREAM-INF lists every codec of the variant, so a GROUP-ID holding
+        renditions of more than one codec gives no per-rendition answer. Packagers that do
+        this name the codec in the rendition URI, so match on that first.
+
+        The codec must sit between delimiters: a plain substring test reads "ec-3" out of
+        a hex UUID, and "ac-3" out of the "eac-3" that names an E-AC-3 rendition. Longer
+        codecs match first so one cannot take the place of another it contains, and the
+        match reads the path only, so a query string cannot decide a codec.
+
+        A rendition that names no codec falls back to the first codec its group declares.
+        The caller collects those highest-bandwidth variant first, so the fallback is the
+        top rung's codec, which keeps a premium rendition reachable rather than hiding it
+        behind a lossy label.
+        """
+        if not candidates:
+            return None
+        if len(candidates) > 1:
+            path = urlparse(uri or "").path.lower()
+            for mime, codec in sorted(candidates, key=lambda c: len(c[0]), reverse=True):
+                if re.search(rf"(?<![a-z0-9]){re.escape(mime)}(?![a-z0-9])", path):
+                    return codec
+            log_event(
+                "manifest_hls_audio_codec_guess",
+                level="DEBUG",
+                message=f"No codec named in the rendition path, assuming {candidates[0][1].value}",
+                context={"declared": [mime for mime, _ in candidates], "uri": safe_display_url(uri or "")},
+            )
+        return candidates[0][1]
+
     def to_tracks(self, language: Union[str, Language]) -> Tracks:
         """
         Convert a Variant Playlist M3U(8) document to Video, Audio and Subtitle Track objects.
@@ -156,7 +192,23 @@ class HLS:
 
         session_drm = HLS.get_all_drm(session_keys)
 
-        audio_codecs_by_group_id: dict[str, Audio.Codec] = {}
+        audio_codecs_by_group_id: dict[str, list[tuple[str, Audio.Codec]]] = {}
+        for playlist in sorted(self.manifest.playlists, key=lambda p: p.stream_info.bandwidth or 0, reverse=True):
+            audio_group = playlist.stream_info.audio
+            if not (audio_group and playlist.stream_info.codecs):
+                continue
+            known = audio_codecs_by_group_id.setdefault(audio_group, [])
+            seen = {mime for mime, _ in known}
+            for token in playlist.stream_info.codecs.split(","):
+                mime = token.strip().split(".")[0].lower()
+                if mime in seen:
+                    continue
+                try:
+                    known.append((mime, Audio.Codec.from_mime(mime)))
+                except ValueError:
+                    continue
+                seen.add(mime)
+
         cc_by_group_id: dict[str, list[dict[str, Any]]] = {}
         for media in self.manifest.media:
             if media.type == "CLOSED-CAPTIONS":
@@ -174,16 +226,6 @@ class HLS:
         dv_supp_prefixes = ("dva1", "dvav", "dvhe", "dvh1")
 
         for playlist in self.manifest.playlists:
-            audio_group = playlist.stream_info.audio
-            audio_codec: Optional[Audio.Codec] = None
-            if audio_group and playlist.stream_info.codecs:
-                try:
-                    audio_codec = Audio.Codec.from_codecs(playlist.stream_info.codecs)
-                except ValueError:
-                    audio_codec = None
-                if audio_codec:
-                    audio_codecs_by_group_id[audio_group] = audio_codec
-
             try:
                 # TODO: Any better way to figure out the primary track type?
                 if playlist.stream_info.codecs:
@@ -252,7 +294,7 @@ class HLS:
             joc = 0
             if media.type == "AUDIO":
                 track_type = Audio
-                codec = audio_codecs_by_group_id.get(media.group_id)
+                codec = HLS.select_audio_codec(audio_codecs_by_group_id.get(media.group_id), media.uri)
                 if media.channels and media.channels.endswith("/JOC"):
                     joc = int(media.channels.split("/JOC")[0])
                     media.channels = "5.1"
@@ -1108,9 +1150,9 @@ class HLS:
         if len(segments_to_merge) == 1:
             shutil.move(segments_to_merge[0], save_path)
         else:
-            progress(downloaded="Merging", completed=0, total=None)
+            progress(downloaded="Merging", completed=0, total=len(segments_to_merge))
             if isinstance(track, (Video, Audio)):
-                HLS.merge_segments(segments=segments_to_merge, save_path=save_path)
+                HLS.merge_segments(segments=segments_to_merge, save_path=save_path, progress=progress)
             else:
                 with open(save_path, "wb") as f:
                     for discontinuity_file in segments_to_merge:
@@ -1136,17 +1178,22 @@ class HLS:
         events.emit(events.Types.TRACK_DOWNLOADED, track=track)
 
     @staticmethod
-    def merge_segments(segments: list[Path], save_path: Path) -> int:
+    def merge_segments(segments: list[Path], save_path: Path, progress: Optional[Any] = None) -> int:
         """
         Concatenate Segments using FFmpeg concat with binary fallback.
+
+        FFmpeg concat reports nothing per segment, so progress only advances on the binary
+        fallback, which copies one segment at a time.
 
         Returns the file size of the merged file.
         """
         segment_dirs = set()
         for segment in segments:
             current_dir = segment.parent
-            while current_dir.name and "_segments" in str(current_dir):
-                segment_dirs.add(current_dir)
+            while current_dir.name:
+                if current_dir.name.endswith("_segments"):
+                    segment_dirs.add(current_dir)
+                    break
                 current_dir = current_dir.parent
 
         def cleanup_segments_and_dirs():
@@ -1166,7 +1213,7 @@ class HLS:
                 demuxer_file.write_text("\n".join([f"file '{segment.absolute()}'" for segment in segments]))
 
                 concat_start = time.monotonic()
-                subprocess.check_call(
+                subprocess.run(
                     [
                         binaries.FFMPEG,
                         "-nostdin",
@@ -1185,9 +1232,16 @@ class HLS:
                         "copy",
                         save_path,
                     ],
-                    timeout=300,  # 5 minute timeout
+                    check=True,
+                    timeout=300,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
                 )
                 demuxer_file.unlink(missing_ok=True)
+                if progress:
+                    progress(completed=len(segments))
                 cleanup_segments_and_dirs()
                 log_tool_run(
                     "ffmpeg concat segments",
@@ -1200,7 +1254,13 @@ class HLS:
                 return save_path.stat().st_size
 
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
-                logging.getLogger("HLS").debug(f"FFmpeg concat failed ({e}), falling back to binary concatenation")
+                stderr = getattr(e, "stderr", None) or ""
+                if isinstance(stderr, bytes):
+                    stderr = stderr.decode("utf-8", "replace")
+                logging.getLogger("HLS").debug(
+                    f"FFmpeg concat failed ({e}), falling back to binary concatenation"
+                    + (f": {stderr.strip()}" if stderr.strip() else "")
+                )
                 demuxer_file.unlink(missing_ok=True)
                 save_path.unlink(missing_ok=True)
 
@@ -1209,6 +1269,8 @@ class HLS:
             for segment in segments:
                 with open(segment, "rb") as segment_file:
                     shutil.copyfileobj(segment_file, output_file, 1024 * 1024)
+                if progress:
+                    progress(advance=1)
 
         cleanup_segments_and_dirs()
         return save_path.stat().st_size

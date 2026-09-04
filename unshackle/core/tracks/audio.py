@@ -17,7 +17,8 @@ class Audio(Track):
         AC4 = "AC-4"  # https://wikipedia.org/wiki/Dolby_AC-4
         OPUS = "OPUS"  # https://wikipedia.org/wiki/Opus_(audio_format)
         OGG = "VORB"  # https://wikipedia.org/wiki/Vorbis
-        DTS = "DTS"  # https://en.wikipedia.org/wiki/DTS_(company)#DTS_Digital_Surround
+        DTS = "DTS"  # https://en.wikipedia.org/wiki/DTS,_Inc.#DTS_Digital_Surround
+        DTSX = "DTS-X"  # https://en.wikipedia.org/wiki/DTS,_Inc.#DTS:X
         ALAC = "ALAC"  # https://en.wikipedia.org/wiki/Apple_Lossless_Audio_Codec
         FLAC = "FLAC"  # https://en.wikipedia.org/wiki/FLAC
 
@@ -38,6 +39,8 @@ class Audio(Track):
                 return Audio.Codec.AC4
             if mime == "opus":
                 return Audio.Codec.OPUS
+            if mime in ("dtsx", "dtsy"):
+                return Audio.Codec.DTSX
             if mime == "dtsc":
                 return Audio.Codec.DTS
             if mime == "alac":

@@ -32,6 +32,9 @@ def apply_tags(path: Path, tags: dict[str, str]) -> None:
     if not binaries.Mkvpropedit:
         log.debug("mkvpropedit not found on PATH; skipping tags")
         return
+    if Path(path).suffix.lower() not in (".mkv", ".mka", ".mks", ".webm"):
+        log.debug("Not a Matroska file; skipping tags for %s", path)
+        return
     log.debug("Applying tags to %s: %s", path, tags)
     xml_lines = ['<?xml version="1.0" encoding="UTF-8"?>', "<Tags>", "  <Tag>", "    <Targets/>"]
     for name, value in tags.items():

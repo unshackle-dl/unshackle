@@ -1370,7 +1370,23 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
 
 
 VALID_VCODECS = ["H264", "H265", "H.264", "H.265", "AVC", "HEVC", "VC1", "VC-1", "VP8", "VP9", "AV1"]
-VALID_ACODECS = ["AAC", "AC3", "EC3", "EAC3", "DD", "DD+", "AC4", "OPUS", "FLAC", "ALAC", "VORBIS", "OGG", "DTS"]
+VALID_ACODECS = [
+    "AAC",
+    "AC3",
+    "EC3",
+    "EAC3",
+    "DD",
+    "DD+",
+    "AC4",
+    "OPUS",
+    "FLAC",
+    "ALAC",
+    "VORBIS",
+    "OGG",
+    "DTS",
+    "DTSX",
+    "DTS-X",
+]
 
 
 def check_codec(value: Any, allowed: List[str], name: str) -> Optional[str]:

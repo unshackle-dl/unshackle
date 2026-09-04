@@ -15,7 +15,9 @@ DYNAMIC_RANGE_MAP = {
     "HDR10 / HDR10+": "HDR10P",
     "HDR10 / HDR10": "HDR",
 }
-AUDIO_CODEC_MAP = {"E-AC-3": "DDP", "AC-3": "DD"}
+AUDIO_CODEC_MAP = {"E-AC-3": "DDP", "AC-3": "DD", "DTS-UHD": "DTS-X"}
+
+SPACED_AUDIO_CODECS = {"DTS-X"}
 
 context_settings = dict(
     help_option_names=["-?", "-h", "--help"],  # default only has --help

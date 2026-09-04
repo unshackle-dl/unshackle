@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import subprocess
 import threading
 import time
@@ -23,10 +24,13 @@ from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.audio import Audio
 from unshackle.core.tracks.chapters import Chapter, Chapters
 from unshackle.core.tracks.subtitle import Subtitle
-from unshackle.core.tracks.track import Track
+from unshackle.core.tracks.track import Track, has_dts_uhd_sample_entry, strip_duplicate_init_boxes
 from unshackle.core.tracks.video import Video
 from unshackle.core.utilities import is_close_match, log_event, matching_languages, sanitize_filename
 from unshackle.core.utils.collections import as_list, flatten
+
+MP4BOX_PROGRESS = re.compile(r"\((\d{1,3})/100\)")
+MP4BOX_OPEN_FAILED = re.compile(r"error while opening|Error opening file|Invalid IsoMedia File", re.I)
 
 
 class Tracks:
@@ -485,6 +489,173 @@ class Tracks:
                     selected.append(track)
         return selected
 
+    def _mux_mp4(
+        self,
+        title: str,
+        delete: bool = True,
+        progress: Optional[partial] = None,
+        skip_subtitles: bool = False,
+        output_path: Optional[Path] = None,
+    ) -> tuple[Path, int, list[str]]:
+        """
+        Multiplex the Tracks into an MP4 Container with MP4Box.
+
+        Only used for a codec Matroska cannot name, currently DTS-UHD, because MP4 carries
+        far less: it drops the forced, hearing-impaired and original flags, holds no
+        attachments at all, and leaves out a subtitle it has no format for rather than
+        mangling it. Losing those beats shipping audio no player can name.
+
+        Returns the same (path, returncode, errors) shape as the Matroska mux.
+        """
+        mp4box = getattr(binaries, "MP4Box", None)
+        if not mp4box:
+            raise RuntimeError(
+                "MP4Box (GPAC) is required to mux DTS-UHD (DTS:X Profile 2) audio but was not found. "
+                "Install it with your package manager (e.g. `apt install gpac`), then check it with "
+                "`unshackle env check`."
+            )
+
+        progress = progress or partial(lambda **kwargs: None)
+
+        cl = [str(mp4box)]
+        names: list[str] = []
+        cleaned: list[Path] = []
+        track_id = 0
+
+        for track in [*self.videos, *self.audio, *([] if skip_subtitles else self.subtitles)]:
+            if not track.path or not track.path.exists():
+                raise ValueError(f"{track.__class__.__name__} Track must be downloaded before muxing...")
+            if isinstance(track, Subtitle) and track.path.suffix.lower() in (".ass", ".ssa"):
+                log_event(
+                    "mux_mp4_subtitle_skipped",
+                    level="WARNING",
+                    message=f"MP4 cannot store {track.path.suffix.lstrip('.').upper()} subtitles, leaving out {track.language}",
+                    context={"track_id": track.id, "language": str(track.language), "suffix": track.path.suffix},
+                )
+                continue
+            events.emit(events.Types.TRACK_MULTIPLEX, track=track)
+            track_id += 1
+
+            source = track.path
+            candidate = config.directories.temp / f"mp4mux_{track.id}_{os.getpid()}_{threading.get_ident()}.mp4"
+            dropped = strip_duplicate_init_boxes(source, candidate)
+            if dropped:
+                cleaned.append(candidate)
+                source = candidate
+                log_event(
+                    "mux_mp4_init_deduplicated",
+                    level="DEBUG",
+                    message=f"Dropped {dropped} repeated init box(es) from {track.path.name} for MP4Box",
+                    context={"track_id": track.id, "dropped": dropped},
+                )
+            elif candidate.exists():
+                candidate.unlink()
+
+            cl.extend(["-add", f"{source}:lang={track.language}"])
+            name = "" if isinstance(track, Video) else (track.get_track_name() or "")
+            if name:
+                names.extend(["-name", f"{track_id}={name}"])
+
+        if not track_id:
+            raise ValueError("No tracks provided, at least one track must be provided.")
+
+        cl.extend(names)
+
+        chapters_path = None
+        if self.chapters:
+            chapters_path = config.directories.temp / config.filenames.chapters.format(
+                title=sanitize_filename(title), random=f"{self.chapters.id}_{os.getpid()}_{threading.get_ident()}"
+            )
+            self.chapters.dump(chapters_path, fallback_name=config.chapter_fallback_name)
+            cl.extend(["-chap", str(chapters_path)])
+
+        if self.attachments:
+            log_event(
+                "mux_mp4_attachments_skipped",
+                level="WARNING",
+                message=f"MP4 cannot store attachments, leaving out {len(self.attachments)} file(s)",
+                context={"count": len(self.attachments)},
+            )
+
+        if output_path is None:
+            first = self.videos[0].path if self.videos else self.audio[0].path if self.audio else None
+            if first is None:
+                raise ValueError("No tracks provided, at least one track must be provided.")
+            output_path = first.with_suffix(".muxed.mp4")
+        else:
+            output_path = output_path.with_suffix(".mp4")
+
+        full_command = [*cl, "-new", str(output_path)]
+
+        log_event(
+            "mux_start",
+            level="INFO",
+            message=f"Muxing {len(self.videos)}V/{len(self.audio)}A/{len(self.subtitles)}S -> {output_path.name}",
+            context={
+                "title": title,
+                "output_path": str(output_path),
+                "muxer": str(mp4box),
+                "command": full_command,
+                "container": "mp4",
+                "reason": "DTS-UHD audio has no Matroska CodecID",
+            },
+        )
+
+        try:
+            errors = []
+            mux_start_time = time.monotonic()
+            p = subprocess.Popen(
+                full_command,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            assert p.stdout is not None
+            for line in iter(p.stdout.readline, ""):
+                line = line.strip()
+                if not line:
+                    continue
+                percent = MP4BOX_PROGRESS.search(line)
+                if percent:
+                    progress(total=100, completed=int(percent.group(1)))
+                elif "error" in line.lower() or "not supported" in line.lower():
+                    errors.append(line)
+
+            returncode = p.wait()
+            if returncode < 2 and any(MP4BOX_OPEN_FAILED.search(line) for line in errors):
+                returncode = 2
+            mux_duration_ms = round((time.monotonic() - mux_start_time) * 1000, 1)
+            output_size = output_path.stat().st_size if output_path.exists() else 0
+
+            log_event(
+                "mux_failed" if returncode != 0 else "mux_complete",
+                level="ERROR" if returncode != 0 else "INFO",
+                message=(
+                    f"MP4Box exited with code {returncode}"
+                    if returncode != 0
+                    else f"Muxed {output_path.name} ({output_size} bytes) in {mux_duration_ms}ms"
+                ),
+                context={
+                    "output_path": str(output_path),
+                    "output_size": output_size,
+                    "duration_ms": mux_duration_ms,
+                    "returncode": returncode,
+                    "errors": errors,
+                },
+            )
+
+            return output_path, returncode, errors
+        finally:
+            if chapters_path:
+                chapters_path.unlink()
+            for path in cleaned:
+                path.unlink(missing_ok=True)
+            if delete:
+                for track in self:
+                    track.delete()
+
     def mux(
         self,
         title: str,
@@ -534,6 +705,15 @@ class Tracks:
                     video.needs_repack = True
                     video.data["audio_language"] = lang_code
                     video.data["audio_language_name"] = lang_name
+
+        if any(at.path and at.path.exists() and has_dts_uhd_sample_entry(at.path) for at in self.audio):
+            return self._mux_mp4(
+                title=title,
+                delete=delete,
+                progress=progress,
+                skip_subtitles=skip_subtitles,
+                output_path=output_path,
+            )
 
         if not binaries.MKVToolNix:
             raise RuntimeError("MKVToolNix (mkvmerge) is required for muxing but was not found")

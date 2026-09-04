@@ -215,6 +215,7 @@ bitrate for the top renditions, overriding the manifest value:
 | `OPUS` | `OPUS` | Opus |
 | `OGG` | `VORB` | Vorbis |
 | `DTS` | `DTS` | DTS |
+| `DTSX` | `DTS-X` | DTS:X Profile 2 (DTS-UHD) |
 | `ALAC` | `ALAC` | Apple Lossless |
 | `FLAC` | `FLAC` | FLAC |
 

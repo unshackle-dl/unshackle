@@ -7,7 +7,12 @@ from langcodes import Language
 from pymediainfo import MediaInfo
 
 from unshackle.core.config import config
-from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP
+from unshackle.core.constants import (
+    AUDIO_CODEC_MAP,
+    DYNAMIC_RANGE_MAP,
+    SPACED_AUDIO_CODECS,
+    VIDEO_CODEC_MAP,
+)
 from unshackle.core.tracks import Tracks
 
 
@@ -170,19 +175,30 @@ class Title:
             codec = primary_audio_track.format
             channel_layout = primary_audio_track.channel_layout or primary_audio_track.channellayout_original
 
+            positions = channel_layout.split(" ") if channel_layout else []
+            heights = sum(1 for position in positions if position.upper().startswith("T"))
+            lfe = sum(1 for position in positions if position.upper().startswith("LFE"))
+
             if channel_layout:
-                channels = float(sum({"LFE": 0.1}.get(position.upper(), 1) for position in channel_layout.split(" ")))
+                channels = float(sum(0.1 if p.upper().startswith("LFE") else 1 for p in positions))
             else:
                 channel_count = primary_audio_track.channel_s or primary_audio_track.channels or 0
                 channels = float(channel_count)
 
             has_atmos = any("JOC" in (t.format_additionalfeatures or "") or t.joc for t in media_info.audio_tracks)
 
+            if heights:
+                channels_str = f"{len(positions) - heights - lfe}.{lfe}.{heights}"
+            else:
+                channels_str = f"{channels:.1f}"
+            audio = AUDIO_CODEC_MAP.get(codec, codec)
+            spacer = " " if audio in SPACED_AUDIO_CODECS else ""
+
             context.update(
                 {
-                    "audio": AUDIO_CODEC_MAP.get(codec, codec),
-                    "audio_channels": f"{channels:.1f}",
-                    "audio_full": f"{AUDIO_CODEC_MAP.get(codec, codec)}{channels:.1f}",
+                    "audio": audio,
+                    "audio_channels": channels_str,
+                    "audio_full": f"{audio}{spacer}{channels_str}",
                     "atmos": "Atmos" if has_atmos else "",
                 }
             )

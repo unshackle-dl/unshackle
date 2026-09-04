@@ -282,7 +282,7 @@ closed-caption descriptors. The relevant enums:
 
 `Audio` adds `bitrate`, `channels`, `joc` (Joint Object Coding, the Atmos indicator),
 and `descriptive`. `Audio.Codec` covers `AAC`, `AC3` (`DD`), `EC3` (`DD+`), `AC4`,
-`OPUS`, `OGG` (Vorbis), `DTS`, `ALAC`, and `FLAC`. The `atmos` property is `True` when
+`OPUS`, `OGG` (Vorbis), `DTS`, `DTSX`, `ALAC`, and `FLAC`. The `atmos` property is `True` when
 `joc` is set (or when `extra` flags it).
 
 ### `Subtitle`

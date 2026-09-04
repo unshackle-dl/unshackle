@@ -98,6 +98,123 @@ def read_top_level_box(path: Path, box_type: bytes) -> Optional[bytes]:
     return None
 
 
+def iter_top_level_boxes(path: Path) -> Iterable[tuple[bytes, int, int]]:
+    """Yield (box_type, offset, size) for each top-level box, stopping at the first bad header."""
+    file_size = path.stat().st_size
+    with path.open("rb") as f:
+        offset = 0
+        while offset + 8 <= file_size:
+            f.seek(offset)
+            header = f.read(8)
+            if len(header) < 8:
+                return
+            size = int.from_bytes(header[:4], "big")
+            if size == 1:
+                large = f.read(8)
+                if len(large) < 8:
+                    return
+                size = int.from_bytes(large, "big")
+            elif size == 0:
+                size = file_size - offset
+            if size < 8:
+                return
+            yield header[4:8], offset, size
+            offset += size
+
+
+def find_child_box(buf: bytes, box_type: bytes) -> Optional[bytes]:
+    """Return the first box of the given type nested anywhere in buf, header included."""
+    i = buf.find(box_type, 4)
+    while i != -1:
+        size = int.from_bytes(buf[i - 4 : i], "big")
+        if 8 <= size <= len(buf) - (i - 4):
+            return buf[i - 4 : i - 4 + size]
+        i = buf.find(box_type, i + 1)
+    return None
+
+
+def strip_duplicate_init_boxes(src: Path, dst: Path) -> int:
+    """Write src to dst without its repeated ftyp/moov pairs, returning how many it dropped.
+
+    An HLS track whose playlist carries a discontinuity gets a fresh EXT-X-MAP init for each
+    period, so the merged file holds one ftyp+moov per period. That plays, and mkvmerge takes
+    it, but MP4Box rejects the whole file with "Duplicate 'ftyp' detected!".
+
+    A packager stamps each init with the fetch time, so copies that describe the same format
+    still differ byte for byte. Only the stsd decides how samples decode, so this compares only
+    the stsd: a later moov with a different stsd is a real format change, and dropping it would
+    corrupt the output. In that case, and when there is no duplicate at all, this writes nothing,
+    returns 0, and leaves the caller with the original file.
+    """
+    boxes = list(iter_top_level_boxes(src))
+    duplicates = [(t, o, s) for t, o, s in boxes if t in (b"ftyp", b"moov")]
+    if len(duplicates) <= 2:
+        return 0
+
+    with src.open("rb") as f:
+        stsds = set()
+        for box_type, offset, size in duplicates:
+            if box_type != b"moov":
+                continue
+            f.seek(offset)
+            stsd = find_child_box(f.read(size), b"stsd")
+            if stsd is None:
+                return 0
+            stsds.add(stsd)
+    if len(stsds) > 1:
+        return 0
+
+    dropped = 0
+    seen: set[bytes] = set()
+    with src.open("rb") as f, dst.open("wb") as out:
+        for box_type, offset, size in boxes:
+            if box_type in (b"ftyp", b"moov"):
+                if box_type in seen:
+                    dropped += 1
+                    continue
+                seen.add(box_type)
+            f.seek(offset)
+            remaining = size
+            while remaining:
+                chunk = f.read(min(remaining, 8 * 1024 * 1024))
+                if not chunk:
+                    break
+                out.write(chunk)
+                remaining -= len(chunk)
+    return dropped
+
+
+def has_dts_uhd_sample_entry(path: Path) -> bool:
+    """True if the MP4 holds a DTS-UHD (DTS:X Profile 2) audio sample entry.
+
+    Matroska has no CodecID for DTS-UHD, so mkvmerge stores it as an A_QUICKTIME
+    passthrough and every reader reports the container fallback instead of the codec. A
+    file this returns True for has to go into MP4 to keep its codec readable.
+
+    Only "dtsx"/"dtsy" mean DTS-UHD. DTS:X Profile 1 rides inside DTS-HD Master Audio as
+    "dtsc"/"dtse"/"dtsh"/"dtsl", which Matroska maps to A_DTS and stores properly, so it
+    must not match here. Reading the entry rather than trusting the manifest keeps a
+    mislabelled codec from moving a Profile 1 track out of Matroska.
+
+    A 4CC scan scoped to the moov box, not a structural parse; the scoping avoids chance
+    byte collisions in mdat. Any read error -> False.
+    """
+    try:
+        moov = read_top_level_box(path, b"moov")
+    except OSError:
+        return False
+    if not moov:
+        return False
+    for tok in (b"dtsx", b"dtsy"):
+        i = moov.find(tok, 4)
+        while i != -1:
+            size = int.from_bytes(moov[i - 4 : i], "big")
+            if 16 <= size <= len(moov) - (i - 4):
+                return True
+            i = moov.find(tok, i + 1)
+    return False
+
+
 def has_encrypted_sample_entry(path: Path) -> bool:
     """True if the MP4's moov still carries an encrypted sample entry (encv/enca).
 

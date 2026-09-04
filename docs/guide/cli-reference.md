@@ -70,7 +70,7 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 | `-p`, `--profile` | - | Profile for credentials and cookies. |
 | `-q`, `--quality` | best | Resolution(s), comma-separated, e.g. `1080,720`. `-q 1080` also matches anamorphic tracks by 16:9 canvas. |
 | `-v`, `--vcodec` | any | Video codec(s). Accepts names or values: `AVC`/`H.264`, `HEVC`/`H.265`, `VC1`, `VP8`, `VP9`, `AV1`. |
-| `-a`, `--acodec` | any | Audio codec(s), comma-separated. Accepts `AAC`, `AC3`/`DD`, `EC3`/`DD+`/`eac3`/`ddp`, `AC4`, `OPUS`, `OGG`/`vorbis`, `DTS`, `ALAC`, `FLAC`. |
+| `-a`, `--acodec` | any | Audio codec(s), comma-separated. Accepts `AAC`, `AC3`/`DD`, `EC3`/`DD+`/`eac3`/`ddp`, `AC4`, `OPUS`, `OGG`/`vorbis`, `DTS`, `DTSX`/`DTS-X`, `ALAC`, `FLAC`. |
 | `-vb`, `--vbitrate` | highest | Exact video bitrate in kbps. |
 | `-ab`, `--abitrate` | highest | Exact audio bitrate in kbps. |
 | `-vb-range`, `--vbitrate-range` | - | Video bitrate range in kbps, e.g. `6000-7000`; picks highest within. Mutually exclusive with `--vbitrate`. |

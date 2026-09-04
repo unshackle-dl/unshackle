@@ -38,7 +38,7 @@ at a title and it will:
 | Manifests | DASH, HLS, and Smooth Streaming (ISM) |
 | DRM | Widevine and PlayReady, with ClearKey support |
 | Video | AVC, HEVC, VC-1, VP8, VP9, AV1; SDR, HLG, HDR10, HDR10+, Dolby Vision, and Dolby Vision **hybrid** merging |
-| Audio | AAC, AC-3, E-AC-3, AC-4, Opus, Vorbis, DTS, ALAC, FLAC; Dolby Atmos handling; per-channel-layout selection |
+| Audio | AAC, AC-3, E-AC-3, AC-4, Opus, Vorbis, DTS, DTS-X, ALAC, FLAC; Dolby Atmos handling; per-channel-layout selection |
 | Subtitles | SRT, WebVTT, ASS/SSA, TTML and more, with optional SDH stripping and format conversion |
 | Key vaults | SQLite, MySQL, and HTTP/API vaults to store and share content keys |
 | Proxies | Basic proxies plus NordVPN, ProtonVPN, Surfshark, Windscribe, ExpressVPN, Gluetun, and Hola providers |

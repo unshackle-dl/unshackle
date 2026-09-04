@@ -132,7 +132,8 @@ def test_dolby_digital_plus_falls_back_to_the_mp4_muxer(tmp_path: Path) -> None:
 
 def test_a_failed_remux_keeps_the_source_and_removes_its_partial_file(tmp_path: Path) -> None:
     """FFmpeg creates the output before it fails, and nothing else sweeps the temp directory."""
-    source = encode(tmp_path / "track.mp4", "pcm_s16le", "-f", "mov")  # no MP4 muxer takes PCM
+    # FFmpeg 9.0 writes PCM to MP4 as ipcm, so PCM no longer fails the remux.
+    source = encode(tmp_path / "track.mp4", "adpcm_ms", "-f", "mov")  # no MP4 muxer takes ADPCM
 
     track = Audio(id_="a1", url="https://example.test/a1.mp4", language="en", codec=None)
     track.path = source
