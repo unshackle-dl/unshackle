@@ -465,8 +465,12 @@ class Services(click.Group):
             help_text = Services.docstring_help(help_text)
         cli_params = svc_info.get("cli_params") if svc_info else None
 
+        title_arg = next(
+            (p for p in cli_params or [] if p.get("kind") == "argument" and p.get("name") == "title"), None
+        )
+
         @click.command(name=tag, short_help=short_help, help=help_text)
-        @click.argument("title", type=str)
+        @click.argument("title", type=str, required=bool(title_arg.get("required", True)) if title_arg else True)
         @click.pass_context
         def remote_cli(ctx: click.Context, title: str, **kwargs: object) -> object:
             from unshackle.core.remote_service import RemoteService, resolve_server
@@ -487,7 +491,10 @@ class Services(click.Group):
                         kwargs["default"] = param.get("default", False)
                     else:
                         kwargs["default"] = param.get("default")
-                        kwargs["type"] = str
+                        choices = param.get("choices")
+                        kwargs["type"] = click.Choice(choices, case_sensitive=False) if choices else str
+                        if param.get("multiple"):
+                            kwargs["multiple"] = True
                     if param.get("help"):
                         kwargs["help"] = param["help"]
                     remote_cli = click.option(*opts, **kwargs)(remote_cli)
