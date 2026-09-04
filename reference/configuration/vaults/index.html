@@ -2055,7 +2055,7 @@ name) and a <code>name</code>, plus backend-specific keys.</p>
 <td><code>MySQL</code></td>
 <td>Remote MySQL database</td>
 <td><code>name</code>, <code>host</code>, <code>database</code>, <code>username</code></td>
-<td>Extra keys (e.g. <code>password</code>, <code>port</code>) forwarded to pymysql.</td>
+<td>Extra keys (e.g. <code>password</code>, <code>port</code>) forwarded to pymysql. <code>connect_timeout</code> defaults to <code>vault_timeout</code>.</td>
 </tr>
 <tr>
 <td><code>API</code></td>
@@ -2099,7 +2099,8 @@ name) and a <code>name</code>, plus backend-specific keys.</p>
 <li><strong>Type:</strong> <code>float</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>10.0</code></li>
 </ul>
 <p>Timeout in seconds for vault operations. Injected automatically into any backend whose
-constructor accepts a <code>timeout</code> parameter (a per-vault <code>timeout</code> still wins).</p>
+constructor accepts a <code>timeout</code> parameter (a per-vault <code>timeout</code> still wins). The <code>MySQL</code> backend
+uses it as the default <code>connect_timeout</code>.</p>
 
 
 
