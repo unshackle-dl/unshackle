@@ -2655,7 +2655,7 @@ class dl:
                                         )
                                     )
                             else:
-                                self.log.error(missing_str + " not found in tracks")
+                                self.log.error(missing_str + " not found in subtitle tracks")
                                 sys.exit(1)
 
                         if s_lang and title.tracks.subtitles:
