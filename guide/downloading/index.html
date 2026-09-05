@@ -3407,7 +3407,8 @@ and <code>vorbis</code> gives <code>OGG</code>.</p>
 <h3 id="channels-and-atmos">Channels and Atmos<a class="headerlink" href="#channels-and-atmos" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>-c</code> / <code>--channels</code>: desired channel layout, for example <code>5.1</code> or <code>2.0</code>. Matching is by
-  ceiling, so <code>5.1</code> implicitly matches a <code>6.0</code>-reported layout.</li>
+  ceiling, so <code>5.1</code> implicitly matches a <code>6.0</code>-reported layout. An immersive layout such as
+  <code>5.1.4</code> matches on its total number of channels, so <code>-c 10</code> selects it.</li>
 <li><code>-naa</code> / <code>--noatmos</code>: exclude Atmos audio tracks from selection.</li>
 </ul>
 <div class="language-shell highlight"><span class="filename">5.1 audio, no Atmos</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-c<span class="w"> </span><span class="m">5</span>.1<span class="w"> </span>--noatmos<span class="w"> </span>EXAMPLE<span class="w"> </span>0ABC123
