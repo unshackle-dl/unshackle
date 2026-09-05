@@ -16,6 +16,7 @@ import pytest
 import pywidevine.pssh as wv_pssh_mod
 
 import unshackle.core.cdm as cdm_mod
+import unshackle.core.cdm.detect as detect_mod
 import unshackle.core.drm as drm_mod
 from unshackle.core.api import handlers
 
@@ -50,7 +51,8 @@ def playready_env(monkeypatch):
     monkeypatch.setattr(pr_pssh_mod, "PSSH", _FakePRPSSH)
     monkeypatch.setattr(drm_mod, "PlayReady", _FakePlayReady)
     monkeypatch.setattr(cdm_mod, "load_cdm", lambda *a, **k: object())
-    monkeypatch.setattr(handlers, "ensure_track_drm", lambda track: None)
+    monkeypatch.setattr(detect_mod, "is_playready_cdm", lambda cdm: True)
+    monkeypatch.setattr(handlers, "ensure_track_drm", lambda track, session=None, init_data=None: None)
     monkeypatch.setattr(handlers, "resolve_device_name", lambda *a, **k: "dev")
     monkeypatch.setattr(handlers.config, "serve", {"users": {}}, raising=False)
 
@@ -94,7 +96,7 @@ def test_widevine_still_uses_vault_shortcut(monkeypatch):
 
     monkeypatch.setattr(wv_pssh_mod, "PSSH", _FakeWvPSSH)
     monkeypatch.setattr(drm_mod, "Widevine", _FakeWidevine)
-    monkeypatch.setattr(handlers, "ensure_track_drm", lambda track: None)
+    monkeypatch.setattr(handlers, "ensure_track_drm", lambda track, session=None, init_data=None: None)
     monkeypatch.setattr(handlers, "resolve_device_name", lambda *a, **k: "dev")
     monkeypatch.setattr(handlers, "check_vaults", lambda kids, name: {kid.hex: "vaultkey"})
     monkeypatch.setattr(handlers.config, "serve", {"users": {}}, raising=False)
@@ -132,7 +134,7 @@ async def test_batch_shares_full_bundle_per_pssh(monkeypatch):
 
     monkeypatch.setattr(handlers, "get_validated_session", fake_get_session)
     monkeypatch.setattr(handlers, "server_cdm_allowed", lambda request, tag: True)
-    monkeypatch.setattr(handlers, "ensure_track_drm", lambda track: None)
+    monkeypatch.setattr(handlers, "ensure_track_drm", lambda track, session=None, init_data=None: None)
     monkeypatch.setattr(handlers, "find_title_for_track", lambda tid, session: SimpleNamespace())
     monkeypatch.setattr(handlers, "detect_cdm_type_for_service", lambda tag, cfg: "playready")
     monkeypatch.setattr(handlers, "drm_preference_name", lambda track: None)

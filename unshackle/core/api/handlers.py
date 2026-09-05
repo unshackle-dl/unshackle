@@ -3424,30 +3424,74 @@ def find_title_for_track(track_id: str, session: Any) -> Any:
 
 
 def extract_pssh_from_track(track: Any, drm_type: str) -> Optional[str]:
-    """Extract PSSH base64 string from a track's DRM objects."""
-    if not track.drm:
-        return None
-    pssh_b64 = None
-    for drm_obj in track.drm:
+    """The base64 PSSH of the track's DRM object for `drm_type`; None when the track has none of that system."""
+    for drm_obj in track.drm or []:
         drm_class = drm_obj.__class__.__name__
-        if drm_class == "Widevine" and hasattr(drm_obj, "_pssh") and drm_obj._pssh:
-            if hasattr(drm_obj._pssh, "dumps"):
-                pssh_b64 = drm_obj._pssh.dumps()
-                if drm_type == "widevine":
-                    break
-        elif drm_class == "PlayReady":
-            if hasattr(drm_obj, "data") and drm_obj.data.get("pssh_b64"):
-                pssh_b64 = drm_obj.data["pssh_b64"]
-                if drm_type == "playready":
-                    break
-    return pssh_b64
+        if drm_type == "widevine" and drm_class == "Widevine":
+            pssh = getattr(drm_obj, "_pssh", None)
+            if pssh and hasattr(pssh, "dumps"):
+                return pssh.dumps()
+        elif drm_type == "playready" and drm_class == "PlayReady":
+            pssh_b64 = getattr(drm_obj, "data", {}).get("pssh_b64")
+            if pssh_b64:
+                return pssh_b64
+    return None
 
 
-def ensure_track_drm(track: Any) -> None:
+def fetch_init_segment(track: Any, session: Any = None) -> Optional[bytes]:
+    """The init segment of a DASH track; None for a track that is not DASH, or when the fetch fails."""
+    from unshackle.core.manifests import DASH as DASHManifest
+
+    dash = (getattr(track, "data", None) or {}).get("dash") or {}
+    if not all(dash.get(k) is not None for k in ("period", "adaptation_set", "representation", "manifest")):
+        return None
+
+    session = getattr(track, "session", None) or session
+    if session is None:
+        return None
+
+    try:
+        return DASHManifest.get_period_segments(
+            period=dash["period"],
+            adaptation_set=dash["adaptation_set"],
+            representation=dash["representation"],
+            manifest=dash["manifest"],
+            track=track,
+            track_url=track.url,
+            session=session,
+        )[0]
+    except Exception as e:
+        log.warning(f"Init segment fetch failed for {track.id}: {e!r}")
+        return None
+
+
+def drm_from_init_segment(track: Any, session: Any = None, init_data: Optional[bytes] = None) -> list:
+    """Read the DRM headers out of a DASH track's init segment.
+
+    Some manifests carry no ContentProtection PSSH; the real header reaches the player only
+    in the init segment, so the server must read it there too.
+    """
+    from unshackle.core.drm import PlayReady, Widevine
+
+    if init_data is None:
+        init_data = fetch_init_segment(track, session)
+    if not init_data:
+        return []
+
+    drms = []
+    for drm_cls in (Widevine, PlayReady):
+        try:
+            drms.append(drm_cls.from_init_data(init_data))
+        except Exception as e:
+            log.debug(f"No usable {drm_cls.__name__} PSSH in the init segment of {track.id}: {e!r}")
+    return drms
+
+
+def ensure_track_drm(track: Any, session: Any = None, init_data: Optional[bytes] = None) -> None:
     """Extract DRM from manifest data if track has none.
 
-    Supports DASH (ContentProtection elements), HLS (EXT-X-KEY from
-    playlist fetch), and ISM (ProtectionHeader elements).
+    Supports DASH (ContentProtection elements, then the init segment), HLS
+    (EXT-X-KEY from playlist fetch), and ISM (ProtectionHeader elements).
     """
     if track.drm:
         return
@@ -3462,6 +3506,10 @@ def ensure_track_drm(track: Any) -> None:
             if track.drm:
                 return
 
+        track.drm = drm_from_init_segment(track, session, init_data) or None
+        if track.drm:
+            return
+
     if track.data.get("hls") and track.url:
         try:
             import m3u8
@@ -3469,7 +3517,8 @@ def ensure_track_drm(track: Any) -> None:
             from unshackle.core.drm import PlayReady, Widevine
             from unshackle.core.manifests import HLS
 
-            playlist = m3u8.load(track.url)
+            http = getattr(track, "session", None) or session
+            playlist = m3u8.loads(http.get(track.url).text, uri=track.url) if http else m3u8.load(track.url)
             keys = [k for k in (playlist.keys or []) + (playlist.session_keys or []) if k is not None]
             for key in keys:
                 try:
@@ -3599,9 +3648,10 @@ def handle_single_server_cdm(
     import base64
 
     from unshackle.core.cdm import load_cdm
+    from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
     from unshackle.core.config import config as app_config
 
-    ensure_track_drm(track)
+    ensure_track_drm(track, getattr(service, "session", None))
 
     if not pssh_b64:
         pssh_b64 = extract_pssh_from_track(track, drm_type)
@@ -3623,6 +3673,8 @@ def handle_single_server_cdm(
         device_name = resolve_device_name(user_config, drm_type, service.__class__.__name__)
 
         cdm = load_cdm(device_name, service_name=service.__class__.__name__)
+        if not is_playready_cdm(cdm):
+            raise APIError(APIErrorCode.INVALID_INPUT, f"CDM device '{device_name}' is not a PlayReady device")
         pr_drm.get_content_keys(
             cdm=cdm,
             certificate=lambda challenge, **_: None,
@@ -3646,6 +3698,8 @@ def handle_single_server_cdm(
             return vault_keys
 
         cdm = load_cdm(device_name, service_name=service.__class__.__name__)
+        if not is_widevine_cdm(cdm):
+            raise APIError(APIErrorCode.INVALID_INPUT, f"CDM device '{device_name}' is not a Widevine device")
         wv_drm.get_content_keys(
             cdm=cdm,
             certificate=lambda challenge, **_: service.get_widevine_service_certificate(
@@ -3789,12 +3843,46 @@ async def session_license_handler(
         drm_type_by_pssh: Dict[str, str] = {}
         actual_drm_type: Optional[str] = None
 
+        def license_track(
+            track: Any, title: Any, candidates: list
+        ) -> tuple[Dict[str, str], Optional[str], Optional[str]]:
+            """`(keys, drm_type, pssh)` for the track's current DRM, licensing once per unique PSSH."""
+            for candidate in candidates:
+                pssh_str = extract_pssh_from_track(track, candidate)
+                if not pssh_str and candidate == "widevine":
+                    pssh_str = extract_pssh_from_track(track, "playready")
+                    if pssh_str:
+                        log.info(
+                            f"Track {sanitize_log(str(track.id)[:12])} has only a PlayReady PSSH, licensing it with the Widevine device"
+                        )
+                if pssh_str:
+                    break
+            else:
+                return {}, None, None
+
+            if pssh_str not in keys_by_pssh:
+                keys_by_pssh[pssh_str] = {}
+                try:
+                    keys = handle_single_server_cdm(service, title, track, pssh_str, candidate, request)
+                    if keys:
+                        keys_by_pssh[pssh_str] = keys
+                        drm_type_by_pssh[pssh_str] = candidate
+                except SystemExit:
+                    log.warning(
+                        f"Service exited while resolving keys for track {sanitize_log(str(track.id)[:12])}, skipping"
+                    )
+                except (Exception, SystemExit) as e:
+                    log.warning(f"Failed to resolve keys for track {sanitize_log(str(track.id)[:12])}: {e}")
+            return keys_by_pssh[pssh_str], drm_type_by_pssh.get(pssh_str), pssh_str
+
         for tid in track_ids:
             track = session.tracks.get(tid)
             if not track:
                 continue
 
-            ensure_track_drm(track)
+            svc_session = getattr(service, "session", None)
+            init_data = fetch_init_segment(track, svc_session)
+            ensure_track_drm(track, svc_session, init_data)
             if not track.drm:
                 continue
 
@@ -3822,37 +3910,34 @@ async def session_license_handler(
                         "but the server has no device for it, using the configured DRM instead"
                     )
 
-            track_drm_type = None
-            pssh_str = None
-            for candidate in candidates:
-                pssh_str = extract_pssh_from_track(track, candidate)
-                if pssh_str:
-                    track_drm_type = candidate
-                    break
+            keys, track_drm_type, pssh_str = license_track(track, title, candidates)
 
-            if not pssh_str or not track_drm_type:
-                continue
+            track_kid = None
+            if init_data:
+                try:
+                    track_kid = track.get_key_id(init_data)
+                except Exception as e:
+                    log.debug(f"KID probe failed for {sanitize_log(tid[:12])}: {e!r}")
+            if track_kid and track_kid.hex not in keys:
+                manifest_drm = track.drm
+                track.drm = drm_from_init_segment(track, init_data=init_data) or manifest_drm
+                init_keys, init_drm_type, init_pssh = license_track(track, title, candidates)
+                if init_pssh != pssh_str:
+                    log.info(
+                        f"The manifest PSSH gave no content key for KID {track_kid.hex} of track "
+                        f"{sanitize_log(tid[:12])}, tried the init segment PSSH"
+                    )
+                if track_kid.hex in init_keys:
+                    keys, track_drm_type = init_keys, init_drm_type
+                else:
+                    track.drm = manifest_drm
+                    log.warning(f"No content key for KID {track_kid.hex} of track {sanitize_log(tid[:12])}")
 
-            if pssh_str in keys_by_pssh:
-                all_keys[tid] = keys_by_pssh[pssh_str]
-                if pssh_str in drm_type_by_pssh:
-                    drm_types[tid] = drm_type_by_pssh[pssh_str]
-                continue
-
-            keys_by_pssh[pssh_str] = {}
-            try:
-                keys = handle_single_server_cdm(service, title, track, pssh_str, track_drm_type, request)
-                if keys:
-                    keys_by_pssh[pssh_str] = keys
-                    all_keys[tid] = keys
-                    if track_drm_type:
-                        drm_types[tid] = track_drm_type
-                        drm_type_by_pssh[pssh_str] = track_drm_type
-                        actual_drm_type = track_drm_type
-            except SystemExit:
-                log.warning(f"Service exited while resolving keys for track {sanitize_log(tid[:12])}, skipping")
-            except (Exception, SystemExit) as e:
-                log.warning(f"Failed to resolve keys for track {sanitize_log(tid[:12])}: {e}")
+            if keys:
+                all_keys[tid] = keys
+            if keys and track_drm_type:
+                drm_types[tid] = track_drm_type
+                actual_drm_type = track_drm_type
 
         response: Dict[str, Any] = {"keys": all_keys}
         if actual_drm_type:
@@ -3878,8 +3963,8 @@ async def session_license_handler(
 
         pssh_b64 = data.get("pssh")
         if pssh_b64:
-            if not track.drm:
-                track.drm = []
+            cls_name = {"playready": "PlayReady", "widevine": "Widevine"}.get(drm_type)
+            track.drm = [d for d in (track.drm or []) if d.__class__.__name__ != cls_name]
             if drm_type == "playready":
                 track.pr_pssh = pssh_b64
                 from pyplayready.system.pssh import PSSH as PlayReadyPSSH

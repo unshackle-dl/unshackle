@@ -1112,6 +1112,8 @@ class RemoteService:
             for track in title.tracks:
                 track_keys = keys_by_track.get(str(track.id), {})
                 if not track_keys:
+                    if str(track.id) in track_ids:
+                        self.log.warning(f"Server CDM returned no content keys for track {track.id}")
                     continue
 
                 kid_list = list(track_keys.keys())
@@ -1256,6 +1258,8 @@ class RemoteService:
                         return challenge
                 except Exception as e:
                     self.log.warning("server_cdm license failed: %s", e)
+            else:
+                self.log.warning(f"Track {track.id} has no {drm_type} PSSH to send to the server CDM")
             return challenge
 
         payload = {

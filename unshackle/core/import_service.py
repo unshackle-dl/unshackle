@@ -355,7 +355,7 @@ class ImportService:
         kid_hexes = [kid.hex for kid in pool]
 
         for track in title.tracks:
-            if not isinstance(track, (Video, Audio)) or not self.track_is_encrypted(track):
+            if not isinstance(track, (Video, Audio)) or not self.track_is_encrypted(track, self.session):
                 continue
             drm_obj = track.drm[0] if track.drm else RemoteService.create_drm_stub(system, kid_hexes)
             for kid, key in pool.items():
@@ -364,13 +364,14 @@ class ImportService:
             self._server_cdm_type = drm_obj.__class__.__name__.lower()
 
     @staticmethod
-    def track_is_encrypted(track: Any) -> bool:
-        """True if the track carries DRM or its manifest declares protection.
+    def track_is_encrypted(track: Any, session: Optional[requests.Session] = None) -> bool:
+        """True if the track carries DRM, its manifest declares protection, or its init segment does.
 
         This method examines ISM as well as DASH, because ISM.download_track reads only
         ``track.drm``. A rung that misses content key injection here downloads encrypted and
-        muxes without error. DASH re-derives
-        its DRM from the manifest elements, so it survives the same omission.
+        muxes without error. A DASH manifest with no ContentProtection can still describe an
+        encrypted track, with the PSSH only in the init segment, so that case probes the init
+        segment with `session`.
         """
         if track.drm:
             return True
@@ -380,6 +381,10 @@ class ImportService:
             for element in (dash.get("representation"), dash.get("adaptation_set")):
                 if element is not None and element.findall("ContentProtection"):
                     return True
+            from unshackle.core.api.handlers import drm_from_init_segment
+
+            if drm_from_init_segment(track, session):
+                return True
         ism = data.get("ism")
         if ism:
             manifest = ism.get("manifest")

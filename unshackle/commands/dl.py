@@ -4035,9 +4035,26 @@ class dl:
                         drm.content_keys[kid] = content_key
                         self.LICENSE_KEY_CACHE[kid] = content_key
 
+            def missing_track_key() -> bool:
+                return not drm.content_keys or bool(track_kid and track_kid not in drm.content_keys)
+
+            if missing_track_key():
+                try:
+                    licence(
+                        drm_system="playready" if drm.__class__.__name__ == "PlayReady" else "widevine",
+                        challenge=b"",
+                    )
+                except Exception as e:
+                    self.log.debug(f"Server CDM licence with an empty challenge failed: {e!r}")
+
             if not drm.content_keys:
                 self.log.warning("Server CDM did not resolve any keys for this track")
                 return
+            if track_kid and track_kid not in drm.content_keys:
+                msg = f"No Content Key for KID {track_kid.hex} was returned by the server CDM"
+                if isinstance(drm, PlayReady):
+                    raise PlayReady.Exceptions.CEKNotFound(msg)
+                raise Widevine.Exceptions.CEKNotFound(msg)
             svc = getattr(self, "_remote_service", None)
             server_drm_type = getattr(svc, "_server_cdm_type", None) if svc else None
             drm_name = {"widevine": "Widevine", "playready": "PlayReady"}.get(
