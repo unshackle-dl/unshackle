@@ -2632,6 +2632,14 @@ container is torn down automatically.</p>
 VPN subscription, through a single uniform interface, with no per-provider integration
 in unshackle itself.</p>
 <div class="admonition warning">
+<p class="admonition-title">Not available with <code>--remote</code></p>
+<p>Gluetun listens on your machine, so a server on another machine cannot reach it. With
+<code>--remote</code>, unshackle stops with an error for <code>--proxy gluetun:...</code>, and for any proxy that
+resolves to <code>localhost</code> or a loopback address, such as a region query that Gluetun answers.
+Give <code>--remote</code> a proxy the server can reach, or run the service locally. A server on this
+machine (a <code>remote_services</code> URL on <code>127.0.0.1</code>) can reach a local proxy, so it is exempt.</p>
+</div>
+<div class="admonition warning">
 <p class="admonition-title">Docker is required</p>
 <p>Gluetun needs a working <a href="https://docs.docker.com/get-docker/">Docker</a> installation on
 your <code>PATH</code>. If Docker is not found, the proxy provider fails to load with an error linking
