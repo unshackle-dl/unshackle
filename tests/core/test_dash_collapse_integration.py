@@ -9,7 +9,10 @@ localhost server, asserting that:
 - a SegmentList whose ranges collapse fetches the parent resource whole in one direct
   (Range-less) request and writes a byte-correct file at ``save_path``, leaving no
   segment dir or ``.!dev`` artifacts, and
-- a track with mixed segment URLs still takes the per-segment download-and-merge path.
+- a track with mixed segment URLs still takes the per-segment download-and-merge path, and
+- that same segmented path raises ``DownloadCancelled`` when a sibling track's failure has
+  already set ``DOWNLOAD_CANCELLED``, instead of treating the segments the cancel left
+  behind as a fault of its own.
 """
 
 from __future__ import annotations
@@ -21,7 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from unshackle.core.constants import DOWNLOAD_CANCELLED
+from unshackle.core.constants import DOWNLOAD_CANCELLED, DownloadCancelled
 from unshackle.core.manifests import DASH
 from unshackle.core.tracks.track import DownloadContext
 
@@ -215,3 +218,20 @@ def test_non_collapse_takes_segmented_merge_path(server, tmp_path):
     assert {"/part0.bin", "/part1.bin"} <= fetched
     # segment files are consumed and the segment dir is cleaned up after merge
     assert not list(ctx.save_dir.glob("*")) if ctx.save_dir.exists() else True
+
+
+def test_cancelled_sibling_does_not_report_missing_segments(server, tmp_path):
+    server.routes["/init.bin"] = INIT2
+    server.routes["/part0.bin"] = PART0
+    server.routes["/part1.bin"] = PART1
+    track = make_track(mixed_mpd(server), server)
+    ctx = make_ctx(tmp_path, "cancelled.mp4")
+
+    DOWNLOAD_CANCELLED.set()
+    with pytest.raises(DownloadCancelled):
+        DASH.download_track(track, ctx)
+
+    # the workers returned early, so there is nothing to merge; a FileNotFoundError about the
+    # missing segments here would mask the sibling failure that set the flag
+    assert track.path is None
+    assert not ctx.save_path.exists()

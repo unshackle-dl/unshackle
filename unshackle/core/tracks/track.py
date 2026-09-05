@@ -21,7 +21,7 @@ from requests.adapters import HTTPAdapter, Retry
 from unshackle.core import binaries
 from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 from unshackle.core.config import config
-from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY
+from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, DownloadCancelled
 from unshackle.core.downloaders import requests
 from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.events import events
@@ -743,10 +743,19 @@ class Track:
                     DOWNLOAD_CANCELLED.set()
                     progress(downloaded="[yellow]CANCELLED")
                     raise
+                except DownloadCancelled:
+                    raise
                 except Exception:
                     DOWNLOAD_CANCELLED.set()
                     progress(downloaded="[red]FAILED")
                     raise
+        except DownloadCancelled:
+            try:
+                cleanup()
+            except OSError:
+                pass
+            progress(downloaded="[yellow]SKIPPED")
+            return
         except (Exception, KeyboardInterrupt):
             if not DOWNLOAD_LICENCE_ONLY.is_set():
                 cleanup()

@@ -19,7 +19,7 @@ from typing import Any, Iterator
 
 import pytest
 
-from unshackle.core.constants import DOWNLOAD_CANCELLED
+from unshackle.core.constants import DOWNLOAD_CANCELLED, DownloadCancelled
 from unshackle.core.downloaders.requests import requests as download_batch
 
 dl_mod = importlib.import_module("unshackle.core.downloaders.requests")
@@ -122,14 +122,15 @@ def test_failed_batch_frees_handles_even_after_flag_clear(server: _Server, tmp_p
 
 def test_external_cancel_frees_handles(server: _Server, tmp_path: Path) -> None:
     """DOWNLOAD_CANCELLED set mid-stream (sibling-track failure / SIGINT path): the batch
-    must wind down without leaving locked handles or live workers."""
+    must raise DownloadCancelled and wind down without leaving locked handles or live workers."""
     baseline = pool_threads()
     host, port = str(server.server_address[0]), int(server.server_address[1])
     urls = [f"http://{host}:{port}/slow/{i}" for i in range(4)]
 
-    for event in download_batch(urls=urls, output_dir=tmp_path, filename="seg_{i}.bin", max_workers=4):
-        if "advance" in event or "written" in event:
-            DOWNLOAD_CANCELLED.set()
+    with pytest.raises(DownloadCancelled):
+        for event in download_batch(urls=urls, output_dir=tmp_path, filename="seg_{i}.bin", max_workers=4):
+            if "advance" in event or "written" in event:
+                DOWNLOAD_CANCELLED.set()
 
     DOWNLOAD_CANCELLED.clear()
     assert_drained_and_unlocked(tmp_path, baseline)

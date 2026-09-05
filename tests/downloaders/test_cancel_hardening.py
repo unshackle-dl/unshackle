@@ -1,6 +1,6 @@
 """Cancel/abort hardening for the downloader.
 
-Pins two teardown-safety invariants:
+Pins three teardown-safety invariants:
 
 - ``dispatch_parts`` must NOT finalize when the process-global ``DOWNLOAD_CANCELLED``
   fires mid-download: part workers return silently keeping partials, so every future
@@ -9,6 +9,10 @@ Pins two teardown-safety invariants:
 - A worker parked in the retry backoff wait (which can reach MAX_BACKOFF) must wake and
   exit as soon as the batch abort is set, instead of sleeping out the full delay and
   stalling shutdown or the merge.
+- A segment batch that starts with a cross-track cancel set, or meets one mid-flight, must
+  end by raising ``DownloadCancelled`` in adaptive mode as well as fixed. Adaptive's tail
+  window holds back boost candidates, and the cancel keeps ``seg_done`` short, so without
+  the raise it busy-loops forever on a batch it will never finish.
 """
 
 import importlib
@@ -18,6 +22,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 from requests import Session
+
+from unshackle.core.constants import DownloadCancelled
 
 dl = importlib.import_module("unshackle.core.downloaders.requests")
 
@@ -143,3 +149,27 @@ def test_backoff_wait_exits_promptly_on_batch_abort(server, tmp_path, monkeypatc
     assert not worker.is_alive()
     # generous bound: far below the 30s nap, so the wait was interrupted, not slept out
     assert time.monotonic() - start < 10
+
+
+@pytest.mark.parametrize("adaptive", [False, True])
+def test_cancelled_batch_raises_instead_of_finishing_or_hanging(server, tmp_path, adaptive):
+    dl.DOWNLOAD_CANCELLED.set()
+    urls = [f"{url(server)}?i={i}" for i in range(40)]
+    result: list = []
+
+    def run() -> None:
+        try:
+            for _ in dl.requests(urls, tmp_path, "{i}.mp4", max_workers=16, adaptive=adaptive):
+                pass
+            result.append(None)
+        except BaseException as exc:  # noqa: BLE001 (the type is the assertion)
+            result.append(exc)
+
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    worker.join(timeout=15)
+
+    assert not worker.is_alive(), "requests() never returned on a cancelled batch"
+    assert isinstance(result[0], DownloadCancelled)
+    # returning short here would hand the caller an empty segment dir to merge
+    assert not list(tmp_path.iterdir())

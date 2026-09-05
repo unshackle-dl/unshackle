@@ -25,7 +25,7 @@ from requests import Session
 from requests.adapters import HTTPAdapter, Retry
 from rich import filesize
 
-from unshackle.core.constants import DOWNLOAD_CANCELLED
+from unshackle.core.constants import DOWNLOAD_CANCELLED, DownloadCancelled
 from unshackle.core.utilities import get_debug_logger, get_extension
 
 MAX_ATTEMPTS = 5
@@ -1507,6 +1507,8 @@ def requests(
                 processes=processes,
                 debug_logger=debug_logger,
             )
+            if DOWNLOAD_CANCELLED.is_set():
+                raise DownloadCancelled()
             return
         if debug_logger:
             debug_logger.log(
@@ -1903,6 +1905,9 @@ def requests(
                     yield dict(advance=pending_advance)
                     pending_advance = 0
 
+                if DOWNLOAD_CANCELLED.is_set():
+                    remaining.clear()
+
                 now = time.time()
 
                 target = max_workers
@@ -2031,6 +2036,9 @@ def requests(
         if elapsed > 0 and total_bytes > 0:
             download_speed = math.ceil(total_bytes / elapsed)
             yield dict(downloaded=f"{filesize.decimal(download_speed)}/s")
+
+    if DOWNLOAD_CANCELLED.is_set():
+        raise DownloadCancelled()
 
     if debug_logger:
         debug_logger.log(

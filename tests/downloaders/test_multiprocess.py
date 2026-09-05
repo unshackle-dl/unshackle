@@ -26,6 +26,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
+from unshackle.core.constants import DownloadCancelled
+
 dl = importlib.import_module("unshackle.core.downloaders.requests")
 
 SEG_REPEAT = 32  # 8-digit index * 32 = 256-byte body, distinct per index
@@ -139,11 +141,12 @@ def test_multiprocess_cancel_terminates_children(server, tmp_path):
     baseline = len(multiprocessing.active_children())
     start = time.time()
     progressed = 0
-    for event in dl.requests(urls, output_dir=tmp_path, filename="seg_{i:04}.bin", max_workers=4, processes=2):
-        if event.get("advance") or event.get("written"):
-            progressed += 1
-            if progressed >= 2:
-                dl.DOWNLOAD_CANCELLED.set()  # sibling-track cancel: parent must tear the children down
+    with pytest.raises(DownloadCancelled):
+        for event in dl.requests(urls, output_dir=tmp_path, filename="seg_{i:04}.bin", max_workers=4, processes=2):
+            if event.get("advance") or event.get("written"):
+                progressed += 1
+                if progressed >= 2:
+                    dl.DOWNLOAD_CANCELLED.set()  # sibling-track cancel: parent must tear the children down
     elapsed = time.time() - start
 
     # cancel stopped the work: nowhere near all segments finished, and no hang

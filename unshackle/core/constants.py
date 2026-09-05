@@ -4,6 +4,16 @@ from typing import TypeVar, Union
 DOWNLOAD_CANCELLED = Event()
 DOWNLOAD_LICENCE_ONLY = Event()
 
+
+class DownloadCancelled(Exception):
+    """A track stopped because ``DOWNLOAD_CANCELLED`` was set, not because it itself failed.
+
+    The downloader raises this instead of returning short. A short return sends the track on
+    to its merge or decrypt step, which then fails on the segments the cancel left behind.
+    That fault hides the sibling failure that is the real error.
+    """
+
+
 DRM_SORT_MAP = ["ClearKey", "Widevine"]
 LANGUAGE_MAX_DISTANCE = 5  # this is max to be considered "same", e.g., en, en-US, en-AU
 LANGUAGE_EXACT_DISTANCE = 0  # exact match only, no variants
