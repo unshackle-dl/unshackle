@@ -5,9 +5,11 @@ Used by both the REST API handlers and the remote service client.
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import re
 from typing import Any, List, Optional
+from urllib.parse import urlparse
 
 from unshackle.core.utils.redact import mask_proxy
 
@@ -111,3 +113,15 @@ def resolve_proxy(proxy: str, proxy_providers: List[Any]) -> Optional[str]:
             return proxy_uri
 
     raise ValueError(f"No proxy provider had a proxy for {proxy}")
+
+
+def is_loopback(uri: str) -> bool:
+    """Whether a proxy or server URI points at this machine."""
+    parsed = urlparse(uri if "//" in uri else f"//{uri}")
+    host = parsed.hostname or ""
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False

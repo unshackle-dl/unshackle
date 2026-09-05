@@ -173,6 +173,13 @@ This means you get access to the **50+ VPN providers** that Gluetun supports, us
 VPN subscription, through a single uniform interface, with no per-provider integration
 in unshackle itself.
 
+!!! warning "Not available with `--remote`"
+    Gluetun listens on your machine, so a server on another machine cannot reach it. With
+    `--remote`, unshackle stops with an error for `--proxy gluetun:...`, and for any proxy that
+    resolves to `localhost` or a loopback address, such as a region query that Gluetun answers.
+    Give `--remote` a proxy the server can reach, or run the service locally. A server on this
+    machine (a `remote_services` URL on `127.0.0.1`) can reach a local proxy, so it is exempt.
+
 !!! warning "Docker is required"
     Gluetun needs a working [Docker](https://docs.docker.com/get-docker/) installation on
     your `PATH`. If Docker is not found, the proxy provider fails to load with an error linking

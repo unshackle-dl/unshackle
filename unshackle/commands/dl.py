@@ -53,6 +53,7 @@ from unshackle.core.events import events
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.providers.tvdb import SEASON_TYPES, parse_int
 from unshackle.core.proxies import Basic, ExpressVPN, Gluetun, Hola, NordVPN, ProtonVPN, SurfsharkVPN, WindscribeVPN
+from unshackle.core.proxies.resolve import is_loopback
 from unshackle.core.service import Service, grow_session_pool
 from unshackle.core.services import Services
 from unshackle.core.temp import with_task_temp
@@ -201,6 +202,16 @@ def title_wanted(candidate: Any, wanted: Collection[str]) -> bool:
     if not wanted or not isinstance(candidate, (Episode, Song)):
         return True
     return bool(candidate.matches_wanted(wanted))
+
+
+def server_url(server_name: Optional[str]) -> str:
+    """The configured URL of a remote server, or an empty string when the config cannot be read."""
+    from unshackle.core.remote_service import resolve_server
+
+    try:
+        return resolve_server(server_name)[0]
+    except Exception:
+        return ""
 
 
 def post_script_group(candidate: Any) -> Any:
@@ -1312,10 +1323,15 @@ class dl:
                 if cdm_info:
                     log_event("load_cdm", level="INFO", service=self.service, context={"cdm": cdm_info})
 
+        # A server on this machine can reach a local proxy, so only a server elsewhere is guarded
+        self.remote_needs_public_proxy = self.is_remote and not is_loopback(server_url(ctx.params.get("server")))
+
         self.proxy_providers = []
         if no_proxy:
             ctx.params["proxy"] = None
         else:
+            if self.remote_needs_public_proxy and proxy and proxy.lower().startswith("gluetun:"):
+                raise click.UsageError("Gluetun runs on your machine, so --remote cannot use it.")
             if proxy_providers is not None:
                 self.proxy_providers = list(proxy_providers)
             else:
@@ -1433,6 +1449,9 @@ class dl:
                     # For explicit proxies, store None for query/provider
                     ctx.params["proxy_query"] = None
                     ctx.params["proxy_provider"] = None
+
+            if self.remote_needs_public_proxy and ctx.params.get("proxy") and is_loopback(ctx.params["proxy"]):
+                raise click.UsageError("That proxy is on your machine, so --remote cannot use it.")
 
         ctx.obj = ContextData(
             config=self.service_config, cdm=self.cdm, proxy_providers=self.proxy_providers, profile=self.profile
