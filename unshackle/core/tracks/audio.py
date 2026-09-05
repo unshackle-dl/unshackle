@@ -191,14 +191,17 @@ class Audio(Track):
         )
 
     @staticmethod
-    def parse_channels(channels: Union[str, int, float]) -> float:
+    def parse_channels(channels: Union[str, int, float]) -> Union[float, str]:
         """
         Converts a Channel string to a float representing the audio channel layout.
         E.g. "3" -> "3.0", "2.1" -> "2.1", ".1" -> "0.1".
 
+        An immersive layout names its height channels in a third figure, e.g. "5.1.4",
+        which no float can hold, so it stays the string it came as. Use channel_total for
+        arithmetic on either form.
+
         This does not validate channel strings as genuine channel counts or valid layouts.
         It does not convert the value to assume a sub speaker channel layout, e.g. 5.1->6.0.
-        It also cannot read expanded surround sound channel layout strings like 7.1.2.
         """
         if isinstance(channels, str):
             # TODO: Support all possible DASH channel configurations (https://datatracker.ietf.org/doc/html/rfc8216)
@@ -206,11 +209,26 @@ class Audio(Track):
                 return 2.0
             elif channels.upper() == "F801":
                 return 5.1
-            elif channels.replace("ch", "").replace(".", "", 1).isdigit():
-                # e.g., '2ch', '2', '2.0', '5.1ch', '5.1'
-                return float(channels.replace("ch", ""))
+            layout = channels.replace("ch", "")
+            if layout.count(".") == 2 and all(part.isdigit() for part in layout.split(".")):
+                return layout
+            elif layout.replace(".", "", 1).isdigit():
+                return float(layout)
             raise NotImplementedError(f"Unsupported Channels string value, '{channels}'")
 
+        return float(channels)
+
+    @staticmethod
+    def channel_total(channels: Union[str, int, float]) -> float:
+        """
+        Total number of channels in either channel form, so a caller can compare both.
+
+        A float layout keeps its own value, because a caller compares those by rounding
+        the sub channel up, e.g. 5.1 and 6.0 both match. An immersive layout has no such
+        float, so this adds its figures: "5.1.4" -> 10.0.
+        """
+        if isinstance(channels, str) and channels.count(".") == 2:
+            return float(sum(int(part) for part in channels.split(".")))
         return float(channels)
 
     def to_music_container(self) -> bool:

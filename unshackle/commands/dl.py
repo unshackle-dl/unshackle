@@ -2703,7 +2703,9 @@ class dl:
                             sys.exit(1)
                     if channels:
                         title.tracks.select_audio(
-                            lambda x: bool(x.channels and math.ceil(x.channels) == math.ceil(channels))
+                            lambda x: bool(
+                                x.channels and math.ceil(Audio.channel_total(x.channels)) == math.ceil(channels)
+                            )
                         )
                         if not title.tracks.audio:
                             self.log.error(f"There's no {channels} Audio Track...")

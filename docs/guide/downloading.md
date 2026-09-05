@@ -229,7 +229,8 @@ unshackle dl -a EC3,AAC EXAMPLE 81234567
 ### Channels and Atmos
 
 - `-c` / `--channels`: desired channel layout, for example `5.1` or `2.0`. Matching is by
-  ceiling, so `5.1` implicitly matches a `6.0`-reported layout.
+  ceiling, so `5.1` implicitly matches a `6.0`-reported layout. An immersive layout such as
+  `5.1.4` matches on its total number of channels, so `-c 10` selects it.
 - `-naa` / `--noatmos`: exclude Atmos audio tracks from selection.
 
 ```shell title="5.1 audio, no Atmos"
