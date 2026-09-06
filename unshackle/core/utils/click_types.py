@@ -454,8 +454,8 @@ class SlowDelayRange(click.ParamType):
             self.fail(f"'{value}' is not a valid range. Use format: MIN-MAX (e.g., 20-40)", param, ctx)
 
         low, high = int(match.group(1)), int(match.group(2))
-        if low < 20:
-            self.fail(f"Minimum delay must be at least 20 seconds, got {low}", param, ctx)
+        if low < 5:
+            self.fail(f"Minimum delay must be at least 5 seconds, got {low}", param, ctx)
         if low > high:
             self.fail(f"Min ({low}) cannot be greater than max ({high})", param, ctx)
 
