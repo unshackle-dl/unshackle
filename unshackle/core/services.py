@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import inspect
 import logging
+import platform
 import re
 import sys
 import threading
 import time
+from importlib.machinery import EXTENSION_SUFFIXES
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -67,6 +69,22 @@ def discover_services() -> tuple[list[Path], list[str]]:
 SERVICES, SHADOWED = discover_services()
 
 
+def compiled_import_hint(missing: str, path: Path) -> str:
+    """Say why a compiled service submodule did not import.
+
+    Python loads a compiled service only from a file named for the exact interpreter
+    and platform that runs it, so name the build the service does not ship.
+    """
+    stem = missing.rsplit(".", 1)[-1]
+    present = [f.name for f in path.parent.glob(f"{stem}.*") if f.suffix in (".so", ".pyd")]
+    if not present or any(f"{stem}{suffix}" in present for suffix in EXTENSION_SUFFIXES):
+        return ""
+    return (
+        f" - this service ships no build for Python {platform.python_version()}"
+        f" on {platform.system()}, which needs {stem}{EXTENSION_SUFFIXES[0]}"
+    )
+
+
 def load_service(path: Path) -> object:
     """Load one Service module, returning its tag-named class.
 
@@ -77,7 +95,8 @@ def load_service(path: Path) -> object:
     try:
         module = import_module_by_path(path)
     except Exception as e:
-        raise RuntimeError(f"{tag}: failed to import - {type(e).__name__}: {e} ({path})") from e
+        hint = compiled_import_hint(e.name, path) if isinstance(e, ModuleNotFoundError) and e.name else ""
+        raise RuntimeError(f"{tag}: failed to import - {type(e).__name__}: {e}{hint} ({path})") from e
     try:
         return getattr(module, tag)
     except AttributeError as e:
