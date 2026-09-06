@@ -67,6 +67,7 @@ from unshackle.core.tracks.hybrid import Hybrid
 from unshackle.core.tracks.track import assert_fragments_decrypted, has_encrypted_sample_entry
 from unshackle.core.utilities import (
     as_requested,
+    declared_kwargs,
     embedded_audio_langs,
     excluded_language_tags,
     find_font_with_fallbacks,
@@ -4007,14 +4008,16 @@ class dl:
     def service_licence(self, service: Service, drm_system: Optional[str] = None, **kwargs: Any) -> Any:
         """Call the service's licence function for the track's DRM system.
 
+        Arguments go through declared_kwargs, so a service receives only the ones its own
+        licence function declares.
+
         prepare_drm passes drm_system so the choice follows the track, not the loaded CDM:
         a track downloading at the same time can swap self.cdm.
         """
         if drm_system is None:
             drm_system = "playready" if is_playready_cdm(self.cdm) else "widevine"
-        if drm_system == "playready":
-            return service.get_playready_license(**kwargs)
-        return service.get_widevine_license(**kwargs)
+        fn = service.get_playready_license if drm_system == "playready" else service.get_widevine_license
+        return fn(**declared_kwargs(fn, kwargs))
 
     def prepare_drm(
         self,
@@ -4281,10 +4284,7 @@ class dl:
                     )
 
                     try:
-                        if self.service == "NF":
-                            drm.get_NF_content_keys(cdm=track_cdm, licence=licence, certificate=certificate)
-                        else:
-                            drm.get_content_keys(cdm=track_cdm, licence=licence, certificate=certificate)
+                        drm.get_content_keys(cdm=track_cdm, licence=licence, certificate=certificate)
                     except Exception as e:
                         if drm.content_keys:
                             self.log.debug(f"License call failed but keys already in content_keys: {e}")

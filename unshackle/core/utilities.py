@@ -2,6 +2,7 @@ import ast
 import contextlib
 import gzip
 import importlib.util
+import inspect
 import json
 import logging
 import os
@@ -16,7 +17,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Optional, Sequence, Union
+from typing import Any, Callable, Optional, Sequence, Union
 from urllib.parse import ParseResult, urlparse
 from uuid import uuid4
 
@@ -1252,6 +1253,23 @@ def close_debug_logger():
     if debug_logger:
         debug_logger.close()
         debug_logger = None
+
+
+def declared_kwargs(fn: Callable[..., Any], kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Keep only the arguments ``fn`` declares, so an extra one never raises TypeError.
+
+    A service licence function that never asked for ``pssh`` or ``session_id`` must not fail
+    on them. Filter only against a signature this function can read and call by keyword.
+    Anything else, such as the licence function of a compiled service, gets every argument,
+    and the caller handles the TypeError.
+    """
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return kwargs
+    if "challenge" not in params or any(p.kind is p.VAR_KEYWORD for p in params.values()):
+        return kwargs
+    return {k: v for k, v in kwargs.items() if k in params}
 
 
 __all__ = (

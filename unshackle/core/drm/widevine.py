@@ -220,6 +220,10 @@ class Widevine:
 
                 if hasattr(cdm, "has_cached_keys") and cdm.has_cached_keys(session_id):
                     pass
+                elif not challenge:
+                    raise Widevine.Exceptions.EmptyLicense(
+                        "The CDM returned an empty licence challenge and has no cached keys"
+                    )
                 else:
                     log_event(
                         "drm_license_request",
@@ -231,7 +235,7 @@ class Widevine:
                         kid_count=len(self.kids),
                     )
                     try:
-                        license_res = licence(challenge=challenge, pssh=self.pssh)
+                        license_res = licence(challenge=challenge, pssh=self.pssh, session_id=session_id)
                     except TypeError:
                         license_res = licence(challenge=challenge)
                     cdm.parse_license(session_id, license_res)
@@ -257,52 +261,6 @@ class Widevine:
                         keys=[{"kid": k.hex, "key": v} for k, v in self.content_keys.items()],
                     )
 
-                if not self.content_keys:
-                    raise Widevine.Exceptions.EmptyLicense("No Content Keys were within the License")
-
-                if kid not in self.content_keys:
-                    raise Widevine.Exceptions.CEKNotFound(f"No Content Key for KID {kid.hex} within the License")
-            finally:
-                cdm.close(session_id)
-
-    def get_NF_content_keys(self, cdm: WidevineCdm, certificate: Callable, licence: Callable) -> None:
-        """
-        Make a CDM Session and get Content Keys for this DRM Instance.
-        The certificate and license params are functions. unshackle gives them
-        the challenge and the session ID.
-        """
-        for kid in self.kids:
-            if kid in self.content_keys:
-                continue
-
-            session_id = cdm.open()
-
-            try:
-                cert = certificate(challenge=cdm.service_certificate_challenge)
-                if cert and hasattr(cdm, "set_service_certificate"):
-                    cdm.set_service_certificate(session_id, cert)
-
-                if hasattr(cdm, "set_required_kids"):
-                    try:
-                        cdm.set_required_kids(self.kids, session_id=session_id)
-                    except TypeError:  # CDM predating the per-session signature
-                        cdm.set_required_kids(self.kids)
-
-                challenge = cdm.get_license_challenge(session_id, self.pssh)
-
-                if hasattr(cdm, "has_cached_keys") and cdm.has_cached_keys(session_id):
-                    pass
-                elif not challenge:
-                    raise Widevine.Exceptions.EmptyLicense(
-                        "The CDM returned an empty license challenge and has no cached keys"
-                    )
-                else:
-                    cdm.parse_license(
-                        session_id,
-                        licence(session_id=session_id, challenge=challenge),
-                    )
-
-                self.content_keys = {key.kid: key.key.hex() for key in cdm.get_keys(session_id, "CONTENT")}
                 if not self.content_keys:
                     raise Widevine.Exceptions.EmptyLicense("No Content Keys were within the License")
 

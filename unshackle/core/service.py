@@ -38,6 +38,7 @@ from unshackle.core.title_cacher import TitleCacher, get_account_hash, get_regio
 from unshackle.core.titles import Title_T, Titles_T, remap_titles
 from unshackle.core.tracks import Chapters, Tracks
 from unshackle.core.tracks.video import Video
+from unshackle.core.utilities import declared_kwargs
 from unshackle.core.utils.ip_info import get_ip_info
 from unshackle.core.utils.redact import mask_proxy
 
@@ -512,8 +513,11 @@ class Service(metaclass=ABCMeta):
         :return: The License response as Bytes or a Base64 string. Do not Base64 Encode or
             Decode the data, return as is to reduce unnecessary computations.
         """
-        # Delegates license handling to the Widevine license method by default if a service-specific PlayReady implementation is not provided.
-        return self.get_widevine_license(challenge=challenge, title=title, track=track)
+        # A service that implements Widevine licensing only still gets PlayReady, with the
+        # arguments its own signature declares.
+        return self.get_widevine_license(
+            **declared_kwargs(self.get_widevine_license, {"challenge": challenge, "title": title, "track": track})
+        )
 
     def get_clearkey_license(
         self, *, challenge: bytes, title: Title_T, track: AnyTrack

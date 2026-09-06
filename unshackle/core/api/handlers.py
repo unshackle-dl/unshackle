@@ -27,6 +27,7 @@ from unshackle.core.proxies.resolve import initialize_proxy_providers, resolve_p
 from unshackle.core.services import Services
 from unshackle.core.titles import Episode, Movie, Song, Title_T
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
+from unshackle.core.utilities import declared_kwargs
 from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_text
 
@@ -3678,7 +3679,9 @@ def handle_single_server_cdm(
         pr_drm.get_content_keys(
             cdm=cdm,
             certificate=lambda challenge, **_: None,
-            licence=lambda challenge, **_: service.get_playready_license(challenge=challenge, title=title, track=track),
+            licence=lambda **kw: service.get_playready_license(
+                **declared_kwargs(service.get_playready_license, {**kw, "title": title, "track": track})
+            ),
         )
         keys = {kid.hex: key for kid, key in pr_drm.content_keys.items()}
     elif drm_type == "widevine":
@@ -3705,7 +3708,9 @@ def handle_single_server_cdm(
             certificate=lambda challenge, **_: service.get_widevine_service_certificate(
                 challenge=challenge, title=title, track=track
             ),
-            licence=lambda challenge, **_: service.get_widevine_license(challenge=challenge, title=title, track=track),
+            licence=lambda **kw: service.get_widevine_license(
+                **declared_kwargs(service.get_widevine_license, {**kw, "title": title, "track": track})
+            ),
         )
         keys = {kid.hex: key for kid, key in wv_drm.content_keys.items()}
     else:
@@ -3736,9 +3741,17 @@ def handle_proxy_license(
     challenge_bytes = base64.b64decode(challenge_b64)
 
     if drm_type == "widevine":
-        license_response = service.get_widevine_license(challenge=challenge_bytes, title=title, track=track)
+        license_response = service.get_widevine_license(
+            **declared_kwargs(
+                service.get_widevine_license, {"challenge": challenge_bytes, "title": title, "track": track}
+            )
+        )
     elif drm_type == "playready":
-        license_response = service.get_playready_license(challenge=challenge_bytes, title=title, track=track)
+        license_response = service.get_playready_license(
+            **declared_kwargs(
+                service.get_playready_license, {"challenge": challenge_bytes, "title": title, "track": track}
+            )
+        )
     else:
         raise APIError(
             APIErrorCode.INVALID_PARAMETERS,
