@@ -2341,7 +2341,7 @@ is open.</p>
 </div>
 <h2 id="keys">Keys<a class="headerlink" href="#keys" title="Permanent link">&para;</a></h2>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>GET /api/dashboard/keys
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>[{"id": "3ed054be9371", "role": "user", "label": "tier1", "services": ["ATV", "DSNP"],
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>[{"id": "3ed054be9371", "role": "user", "label": "tier1", "services": ["EXAMPLE", "DEMO"],
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>  "server_cdm": false, "server_accounts": false, "server_proxy": false,
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>  "tier": "bot", "rate_limit": 600, "window_used": 412,
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>  "requests": 41300, "rejected": 4, "bytes_out": 103079215104, "last_seen": 1756909188.2},
@@ -2425,10 +2425,10 @@ server at startup, because the alternative is an API key that silently gets no l
 limit never applies to the dashboard key, and never to <code>/api/health</code>.</p>
 <h2 id="services">Services<a class="headerlink" href="#services" title="Permanent link">&para;</a></h2>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>GET /api/dashboard/services
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>[{"tag": "MAX", "state": "staged", "error": null,
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>[{"tag": "EXAMPLE", "state": "staged", "error": null,
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>  "commit": "9cc230c98f13b83f6c6fe831595b9702d3ba2786", "staged_commit": "5f0aa17...",
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>  "staged_since": 1756908900.0, "sessions": 1, "jobs": 1,
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>  "aliases": ["HBO"], "geofence": ["US"]}]
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>  "aliases": ["EXMPL"], "geofence": ["US"]}]
 </span></code></pre></div>
 <p><code>state</code> is <code>loaded</code>, <code>staged</code> or <code>failed</code>. A service that failed to import keeps its error
 here instead of disappearing, and <code>/status</code> still counts it in the service total - count the
