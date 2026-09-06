@@ -212,9 +212,11 @@ def test_local_dirty_services_lists_edited_dirs(monkeypatch):
     monkeypatch.setattr(
         service_repo.subprocess,
         "run",
-        lambda *a, **k: subprocess.CompletedProcess(a, 0, b"CR/__init__.py\nCR/config.yaml\nNF/__init__.py\n", b""),
+        lambda *a, **k: subprocess.CompletedProcess(
+            a, 0, b"EXAMPLE/__init__.py\nEXAMPLE/config.yaml\nDEMO/__init__.py\n", b""
+        ),
     )
-    assert service_repo.local_dirty_services(Path("/x")) == ["CR", "NF"]
+    assert service_repo.local_dirty_services(Path("/x")) == ["DEMO", "EXAMPLE"]
 
 
 def test_refresh_reports_discarded_local_edits(monkeypatch, tmp_path):

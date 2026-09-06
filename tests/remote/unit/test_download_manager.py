@@ -23,17 +23,17 @@ def manager() -> DownloadQueueManager:
 
 
 def test_create_job_returns_queued_job(manager: DownloadQueueManager) -> None:
-    job = manager.create_job("ATV", "movie-123", profile="default")
+    job = manager.create_job("EXAMPLE", "movie-123", profile="default")
     assert isinstance(job, DownloadJob)
     assert job.status is JobStatus.QUEUED
-    assert job.service == "ATV"
+    assert job.service == "EXAMPLE"
     assert job.title_id == "movie-123"
     assert job.parameters == {"profile": "default"}
 
 
 def test_get_and_list_jobs(manager: DownloadQueueManager) -> None:
-    a = manager.create_job("ATV", "a")
-    b = manager.create_job("NF", "b")
+    a = manager.create_job("EXAMPLE", "a")
+    b = manager.create_job("DEMO", "b")
     assert manager.get_job(a.job_id) is a
     assert manager.get_job("missing") is None
     listed = manager.list_jobs()
@@ -41,11 +41,11 @@ def test_get_and_list_jobs(manager: DownloadQueueManager) -> None:
 
 
 def test_to_dict_short_vs_full(manager: DownloadQueueManager) -> None:
-    job = manager.create_job("ATV", "t", profile="p")
+    job = manager.create_job("EXAMPLE", "t", profile="p")
     short = job.to_dict()
     assert "parameters" not in short
     assert short["status"] == "queued"
-    assert short["service"] == "ATV"
+    assert short["service"] == "EXAMPLE"
     full = job.to_dict(include_full_details=True)
     assert full["parameters"] == {"profile": "p"}
     assert "error_message" in full
@@ -53,7 +53,7 @@ def test_to_dict_short_vs_full(manager: DownloadQueueManager) -> None:
 
 
 def test_cancel_queued_job_sets_cancelled_and_signals_event(manager: DownloadQueueManager) -> None:
-    job = manager.create_job("ATV", "t")
+    job = manager.create_job("EXAMPLE", "t")
     assert manager.cancel_job(job.job_id) is True
     assert job.status is JobStatus.CANCELLED
     assert job.cancel_event.is_set()
@@ -64,13 +64,13 @@ def test_cancel_unknown_job_returns_false(manager: DownloadQueueManager) -> None
 
 
 def test_cancel_completed_job_returns_false(manager: DownloadQueueManager) -> None:
-    job = manager.create_job("ATV", "t")
+    job = manager.create_job("EXAMPLE", "t")
     job.status = JobStatus.COMPLETED
     assert manager.cancel_job(job.job_id) is False
 
 
 def test_cancel_downloading_job_signals(manager: DownloadQueueManager) -> None:
-    job = manager.create_job("ATV", "t")
+    job = manager.create_job("EXAMPLE", "t")
     job.status = JobStatus.DOWNLOADING
     assert manager.cancel_job(job.job_id) is True
     assert job.status is JobStatus.CANCELLED
@@ -80,10 +80,10 @@ def test_cancel_downloading_job_signals(manager: DownloadQueueManager) -> None:
 def test_cleanup_old_jobs_drops_old_terminal_states(manager: DownloadQueueManager) -> None:
     now = datetime.now()
     old = now - timedelta(hours=48)
-    keep_recent = manager.create_job("ATV", "recent")
-    drop_old_done = manager.create_job("ATV", "old-done")
-    drop_old_failed = manager.create_job("ATV", "old-failed")
-    keep_running = manager.create_job("ATV", "running")
+    keep_recent = manager.create_job("EXAMPLE", "recent")
+    drop_old_done = manager.create_job("EXAMPLE", "old-done")
+    drop_old_failed = manager.create_job("EXAMPLE", "old-failed")
+    keep_running = manager.create_job("EXAMPLE", "running")
 
     keep_recent.status = JobStatus.COMPLETED
     keep_recent.completed_time = now

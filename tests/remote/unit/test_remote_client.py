@@ -55,9 +55,9 @@ def test_post_sends_json_body(client: RemoteClient) -> None:
     responses.add_callback(
         responses.POST, "http://srv:8786/api/session/create", callback=cb, content_type="application/json"
     )
-    result = client.post("/api/session/create", {"service": "ATV"})
+    result = client.post("/api/session/create", {"service": "EXAMPLE"})
     assert result == {"session_id": "abc"}
-    assert captured["body"] == {"service": "ATV"}
+    assert captured["body"] == {"service": "EXAMPLE"}
 
 
 @responses.activate

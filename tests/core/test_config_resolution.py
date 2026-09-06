@@ -16,29 +16,29 @@ pytestmark = pytest.mark.unit
 
 
 def test_ci_get_exact_and_case_insensitive():
-    m = {"NF": "a", "Default": "b"}
-    assert ci_get(m, "NF") == "a"
-    assert ci_get(m, "nf") == "a"
+    m = {"DEMO": "a", "Default": "b"}
+    assert ci_get(m, "DEMO") == "a"
+    assert ci_get(m, "demo") == "a"
     assert ci_get(m, "default") == "b"
     assert ci_get(m, "missing") is None
     assert ci_get(m, "missing", "fallback") == "fallback"
-    assert ci_get({}, "NF", "fallback") == "fallback"
+    assert ci_get({}, "DEMO", "fallback") == "fallback"
 
 
 def test_decryption_map_keys_upper_cased_on_build():
-    c = Config(decryption={"cr": "mp4decrypt", "default": "shaka"})
-    assert c.decryption_map == {"CR": "mp4decrypt", "DEFAULT": "shaka"}
+    c = Config(decryption={"example": "mp4decrypt", "default": "shaka"})
+    assert c.decryption_map == {"EXAMPLE": "mp4decrypt", "DEFAULT": "shaka"}
     assert c.decryption == "shaka"
 
 
 def test_resolve_decryption_per_service_and_default():
-    c = Config(decryption={"CR": "mp4decrypt", "default": "shaka"})
-    assert resolve_decryption(c.decryption_map, c.decryption, "CR") == "mp4decrypt"
+    c = Config(decryption={"EXAMPLE": "mp4decrypt", "default": "shaka"})
+    assert resolve_decryption(c.decryption_map, c.decryption, "EXAMPLE") == "mp4decrypt"
     # service not mapped -> default
-    assert resolve_decryption(c.decryption_map, c.decryption, "NF") == "shaka"
+    assert resolve_decryption(c.decryption_map, c.decryption, "DEMO") == "shaka"
     # case-insensitive both ways (lowercase yaml key, mixed-case lookup)
-    c2 = Config(decryption={"cr": "mp4decrypt", "default": "shaka"})
-    assert resolve_decryption(c2.decryption_map, c2.decryption, "Cr") == "mp4decrypt"
+    c2 = Config(decryption={"example": "mp4decrypt", "default": "shaka"})
+    assert resolve_decryption(c2.decryption_map, c2.decryption, "Example") == "mp4decrypt"
 
 
 def test_decryption_scalar_form():
@@ -48,26 +48,26 @@ def test_decryption_scalar_form():
 
 
 def test_cdm_keys_preserved_on_build():
-    c = Config(cdm={"nf": "dev_a", "default": "dev_b"})
-    assert c.cdm == {"nf": "dev_a", "default": "dev_b"}
+    c = Config(cdm={"demo": "dev_a", "default": "dev_b"})
+    assert c.cdm == {"demo": "dev_a", "default": "dev_b"}
 
 
 def test_resolve_cdm_name_case_insensitive():
     # lowercase yaml key must resolve for an uppercase service tag (the bug being fixed)
-    c = Config(cdm={"nf": "dev_a", "default": "dev_b"})
-    assert resolve_cdm_name(c.cdm, "NF") == "dev_a"
+    c = Config(cdm={"demo": "dev_a", "default": "dev_b"})
+    assert resolve_cdm_name(c.cdm, "DEMO") == "dev_a"
     # unmapped service -> default
-    assert resolve_cdm_name(c.cdm, "ATV") == "dev_b"
+    assert resolve_cdm_name(c.cdm, "EXAMPLE") == "dev_b"
     # uppercase yaml key, lowercase lookup
-    c2 = Config(cdm={"NF": "dev_a", "default": "dev_b"})
-    assert resolve_cdm_name(c2.cdm, "nf") == "dev_a"
+    c2 = Config(cdm={"DEMO": "dev_a", "default": "dev_b"})
+    assert resolve_cdm_name(c2.cdm, "demo") == "dev_a"
 
 
 def test_resolve_cdm_name_override_wins():
-    c = Config(cdm={"NF": "dev_a", "default": "dev_b"})
-    assert resolve_cdm_name(c.cdm, "NF", override="dev_override") == "dev_override"
+    c = Config(cdm={"DEMO": "dev_a", "default": "dev_b"})
+    assert resolve_cdm_name(c.cdm, "DEMO", override="dev_override") == "dev_override"
 
 
 def test_resolve_cdm_name_no_match_no_default():
-    c = Config(cdm={"NF": "dev_a"})
-    assert resolve_cdm_name(c.cdm, "ATV") is None
+    c = Config(cdm={"DEMO": "dev_a"})
+    assert resolve_cdm_name(c.cdm, "EXAMPLE") is None

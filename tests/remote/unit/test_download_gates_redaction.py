@@ -23,7 +23,7 @@ pytestmark = pytest.mark.unit
 
 def test_redact_parameters_masks_secrets_and_proxy_userinfo():
     params = {
-        "service": "ATV",
+        "service": "EXAMPLE",
         "credential": "user:hunter2",
         "password": "pw",
         "token": "tok",
@@ -70,7 +70,7 @@ def test_to_dict_full_details_redacts_error_fields_and_parameters():
         job_id="j1",
         status=JobStatus.FAILED,
         created_time=datetime(2026, 1, 1),
-        service="ATV",
+        service="EXAMPLE",
         title_id="t",
         parameters={"credential": "user:hunter2"},
     )
@@ -102,35 +102,37 @@ def stub_handler(monkeypatch):
 async def test_cdm_override_forbidden_by_default(stub_handler):
     stub_handler.setattr(handlers.config, "serve", {})
     with pytest.raises(APIError) as ei:
-        await handlers.download_handler({"service": "ATV", "title_id": "t", "cdm": "dev"})
+        await handlers.download_handler({"service": "EXAMPLE", "title_id": "t", "cdm": "dev"})
     assert ei.value.error_code == APIErrorCode.FORBIDDEN
 
 
 async def test_cdm_override_allowed_when_enabled(stub_handler):
     stub_handler.setattr(handlers.config, "serve", {"cdm_overrides": True})
     # passing the gate reaches the stubbed Services.load, whose error is caught and returned as a response
-    resp = await handlers.download_handler({"service": "ATV", "title_id": "t", "cdm": "dev"})
+    resp = await handlers.download_handler({"service": "EXAMPLE", "title_id": "t", "cdm": "dev"})
     assert isinstance(resp, web.Response)
 
 
 async def test_cdm_override_allowlist_permits_only_named_device(stub_handler):
     stub_handler.setattr(handlers.config, "serve", {"cdm_overrides": ["good"]})
-    assert isinstance(await handlers.download_handler({"service": "ATV", "title_id": "t", "cdm": "good"}), web.Response)
+    assert isinstance(
+        await handlers.download_handler({"service": "EXAMPLE", "title_id": "t", "cdm": "good"}), web.Response
+    )
     with pytest.raises(APIError) as ei:
-        await handlers.download_handler({"service": "ATV", "title_id": "t", "cdm": "other"})
+        await handlers.download_handler({"service": "EXAMPLE", "title_id": "t", "cdm": "other"})
     assert ei.value.error_code == APIErrorCode.FORBIDDEN
 
 
 async def test_credential_forbidden_by_default(stub_handler):
     stub_handler.setattr(handlers.config, "serve", {})
     with pytest.raises(APIError) as ei:
-        await handlers.download_handler({"service": "ATV", "title_id": "t", "credential": "u:p"})
+        await handlers.download_handler({"service": "EXAMPLE", "title_id": "t", "credential": "u:p"})
     assert ei.value.error_code == APIErrorCode.FORBIDDEN
 
 
 async def test_credential_allowed_when_enabled(stub_handler):
     stub_handler.setattr(handlers.config, "serve", {"allow_job_credentials": True})
-    resp = await handlers.download_handler({"service": "ATV", "title_id": "t", "credential": "u:p"})
+    resp = await handlers.download_handler({"service": "EXAMPLE", "title_id": "t", "credential": "u:p"})
     assert isinstance(resp, web.Response)
 
 

@@ -182,7 +182,7 @@ def test_match_track_no_candidates_returns_none() -> None:
 
 def test_build_title_movie() -> None:
     info = {"type": "movie", "id": "movie-0001", "name": "Foo", "year": 2024, "language": "en"}
-    title = build_title(info, "ATV", "fallback")
+    title = build_title(info, "EXAMPLE", "fallback")
     assert isinstance(title, Movie)
     assert title.id == "movie-0001"
     assert title.name == "Foo"
@@ -199,7 +199,7 @@ def test_build_title_episode() -> None:
         "year": 2024,
         "language": "en",
     }
-    title = build_title(info, "ATV", "fallback")
+    title = build_title(info, "EXAMPLE", "fallback")
     assert isinstance(title, Episode)
     assert title.season == 1
     assert title.number == 2
@@ -207,7 +207,7 @@ def test_build_title_episode() -> None:
 
 
 def test_build_title_falls_back_to_id_when_missing() -> None:
-    title = build_title({"type": "movie", "name": "x"}, "ATV", "fallback-id")
+    title = build_title({"type": "movie", "name": "x"}, "EXAMPLE", "fallback-id")
     assert title.id == "fallback-id"
 
 

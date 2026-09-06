@@ -25,15 +25,15 @@ def store() -> SessionStore:
 
 
 async def test_create_returns_entry_with_uuid(store: SessionStore) -> None:
-    entry = await store.create("ATV", _FakeService())
+    entry = await store.create("EXAMPLE", _FakeService())
     assert isinstance(entry, SessionEntry)
-    assert entry.service_tag == "ATV"
+    assert entry.service_tag == "EXAMPLE"
     assert entry.session_id and len(entry.session_id) >= 32
     assert store.session_count == 1
 
 
 async def test_create_with_explicit_session_id(store: SessionStore) -> None:
-    entry = await store.create("NF", _FakeService(), session_id="fixed-id")
+    entry = await store.create("DEMO", _FakeService(), session_id="fixed-id")
     assert entry.session_id == "fixed-id"
 
 
@@ -42,7 +42,7 @@ async def test_get_returns_none_for_missing(store: SessionStore) -> None:
 
 
 async def test_get_touches_last_accessed(store: SessionStore) -> None:
-    entry = await store.create("DSNP", _FakeService())
+    entry = await store.create("DEMO", _FakeService())
     before = entry.last_accessed
     await asyncio.sleep(0.01)
     fetched = await store.get(entry.session_id)
@@ -68,7 +68,7 @@ async def test_delete_returns_false_when_missing(store: SessionStore) -> None:
 async def test_cleanup_expired_drops_old_authenticated(store: SessionStore, monkeypatch: pytest.MonkeyPatch) -> None:
     from datetime import datetime, timedelta, timezone
 
-    entry = await store.create("ATV", _FakeService())
+    entry = await store.create("EXAMPLE", _FakeService())
     entry.last_accessed = datetime.now(timezone.utc) - timedelta(seconds=store.ttl + 100)
     removed = await store.cleanup_expired()
     assert removed == 1
@@ -77,7 +77,7 @@ async def test_cleanup_expired_drops_old_authenticated(store: SessionStore, monk
 
 async def test_cleanup_expired_keeps_pending_input_under_grace(store: SessionStore) -> None:
     """Sessions awaiting user input get a longer grace period (10 min) than authenticated TTL."""
-    entry = await store.create("ATV", _FakeService())
+    entry = await store.create("EXAMPLE", _FakeService())
     entry.input_bridge = InputBridge()
     entry.auth_status = AuthStatus.PENDING_INPUT
     removed = await store.cleanup_expired()
@@ -91,7 +91,7 @@ async def test_cleanup_expired_drops_pending_input_past_grace(store: SessionStor
 
     from unshackle.core.api.input_bridge import AUTH_INPUT_TIMEOUT
 
-    entry = await store.create("ATV", _FakeService())
+    entry = await store.create("EXAMPLE", _FakeService())
     entry.input_bridge = InputBridge()
     entry.auth_status = AuthStatus.PENDING_INPUT
     entry.last_accessed = datetime.now(timezone.utc) - timedelta(seconds=AUTH_INPUT_TIMEOUT + 1)
@@ -101,8 +101,8 @@ async def test_cleanup_expired_drops_pending_input_past_grace(store: SessionStor
 
 
 async def test_cancel_all_bridges(store: SessionStore) -> None:
-    a = await store.create("ATV", _FakeService())
-    b = await store.create("NF", _FakeService())
+    a = await store.create("EXAMPLE", _FakeService())
+    b = await store.create("DEMO", _FakeService())
     a.input_bridge = InputBridge()
     b.input_bridge = InputBridge()
 

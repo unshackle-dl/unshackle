@@ -117,7 +117,7 @@ never keeps it alive or makes it look active.
 
 ```
 GET /api/dashboard/keys
-[{"id": "3ed054be9371", "role": "user", "label": "tier1", "services": ["ATV", "DSNP"],
+[{"id": "3ed054be9371", "role": "user", "label": "tier1", "services": ["EXAMPLE", "DEMO"],
   "server_cdm": false, "server_accounts": false, "server_proxy": false,
   "tier": "bot", "rate_limit": 600, "window_used": 412,
   "requests": 41300, "rejected": 4, "bytes_out": 103079215104, "last_seen": 1756909188.2},
@@ -179,10 +179,10 @@ limit never applies to the dashboard key, and never to `/api/health`.
 
 ```
 GET /api/dashboard/services
-[{"tag": "MAX", "state": "staged", "error": null,
+[{"tag": "EXAMPLE", "state": "staged", "error": null,
   "commit": "9cc230c98f13b83f6c6fe831595b9702d3ba2786", "staged_commit": "5f0aa17...",
   "staged_since": 1756908900.0, "sessions": 1, "jobs": 1,
-  "aliases": ["HBO"], "geofence": ["US"]}]
+  "aliases": ["EXMPL"], "geofence": ["US"]}]
 ```
 
 `state` is `loaded`, `staged` or `failed`. A service that failed to import keeps its error

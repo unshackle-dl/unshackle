@@ -28,7 +28,7 @@ def single_remote_service(monkeypatch: pytest.MonkeyPatch) -> None:
             "primary": {
                 "url": "https://primary:8080",
                 "api_key": "key-abc",
-                "services": {"ATV": True, "NF": True},
+                "services": {"EXAMPLE": True, "DEMO": True},
                 "server_cdm": True,
             }
         },
@@ -97,7 +97,7 @@ def test_resolve_server_single_picks_only_entry(single_remote_service) -> None:
     assert url == "https://primary:8080"
     assert key == "key-abc"
     assert services["_server_cdm"] is True
-    assert services.get("ATV") is True
+    assert services.get("EXAMPLE") is True
 
 
 def test_resolve_server_explicit_name(single_remote_service) -> None:

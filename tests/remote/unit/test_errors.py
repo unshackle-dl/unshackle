@@ -118,9 +118,9 @@ def test_build_error_response_debug_mode_includes_traceback() -> None:
     ],
 )
 def test_categorize_exception(exc: Exception, expected_code: APIErrorCode) -> None:
-    api_err = categorize_exception(exc, context={"service": "ATV"})
+    api_err = categorize_exception(exc, context={"service": "EXAMPLE"})
     assert api_err.error_code == expected_code
-    assert api_err.details.get("service") == "ATV"
+    assert api_err.details.get("service") == "EXAMPLE"
 
 
 def test_categorize_preserves_context() -> None:

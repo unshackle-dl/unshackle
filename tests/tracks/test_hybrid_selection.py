@@ -14,7 +14,7 @@ Covers the selection primitives that back `-r ...,DV,HYBRID` downloads:
 
 The remaining ``dl`` glue (the Cartesian deliverable product and the mux loop)
 is orchestration inside the Click command; these tests lock down the pure
-units it relies on plus the documented end-state of a realistic ATV-style ladder.
+units it relies on plus the documented end-state of a realistic streaming ladder.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def make_video(track_id: str, *, range_: Video.Range, height: int, bitrate: int,
 
 @pytest.fixture
 def ladder() -> list[Video]:
-    """Mirrors the reported ATV ladder: HDR10+, DV and SDR at multiple resolutions."""
+    """Mirrors the ladder from the reported fault: HDR10+, DV and SDR at multiple resolutions."""
     H = Video.Codec.HEVC
     A = Video.Codec.AVC
     return [

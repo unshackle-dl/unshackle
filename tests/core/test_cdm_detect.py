@@ -2,9 +2,9 @@
 
 Covers the predicates in ``unshackle.core.cdm.detect`` (playready/widevine, local/remote,
 and the remote combinations) and the loader stamping that sets a remote CDM's DRM type at
-load time instead of guessing it on each call. Services such as AMZN route to a device
-profile off that type, so a wrong classification here is what produces a Downgrade.Hd
-license denial.
+load time instead of guessing it on each call. Services such as EXAMPLE choose a device
+profile from that type, so a wrong classification here is what produces a licence denial
+for the requested resolution.
 """
 
 from __future__ import annotations
@@ -143,7 +143,7 @@ def test_stamp_remote_is_best_effort_on_unsettable_object():
 
 def test_load_remote_decryptlabs_playready_is_stamped():
     cdm_api = {"name": "dl-pr", "type": "decrypt_labs", "secret": "x", "device_name": "SL3000"}
-    cdm = loader_mod.load_remote_cdm(dict(cdm_api), "dl-pr", "AMZN", None)
+    cdm = loader_mod.load_remote_cdm(dict(cdm_api), "dl-pr", "EXAMPLE", None)
     assert cdm.drm == "playready"
     assert cdm.is_remote_cdm is True
     assert is_remote_playready_cdm(cdm)
@@ -151,7 +151,7 @@ def test_load_remote_decryptlabs_playready_is_stamped():
 
 def test_load_remote_decryptlabs_widevine_is_stamped():
     cdm_api = {"name": "dl-wv", "type": "decrypt_labs", "secret": "x", "device_name": "ChromeCDM"}
-    cdm = loader_mod.load_remote_cdm(dict(cdm_api), "dl-wv", "AMZN", None)
+    cdm = loader_mod.load_remote_cdm(dict(cdm_api), "dl-wv", "EXAMPLE", None)
     assert cdm.drm == "widevine"
     assert is_remote_widevine_cdm(cdm)
 
@@ -165,7 +165,7 @@ def test_load_remote_native_playready_is_stamped(monkeypatch):
 
     monkeypatch.setattr(prmod, "RemoteCdm", FakePlayReadyRemote)
     cdm_api = {"name": "pr", "Device Type": "PLAYREADY", "host": "h", "secret": "s", "device_name": "d"}
-    cdm = loader_mod.load_remote_cdm(dict(cdm_api), "pr", "AMZN", None)
+    cdm = loader_mod.load_remote_cdm(dict(cdm_api), "pr", "EXAMPLE", None)
     assert isinstance(cdm, FakePlayReadyRemote)
     assert cdm.drm == "playready"
     assert cdm.is_remote_cdm is True
@@ -181,7 +181,7 @@ def test_load_remote_native_widevine_is_stamped(monkeypatch):
 
     monkeypatch.setattr(wvmod, "RemoteCdm", FakeWidevineRemote)
     cdm_api = {"name": "wv", "Device Type": "ANDROID", "host": "h", "secret": "s", "device_name": "d"}
-    cdm = loader_mod.load_remote_cdm(dict(cdm_api), "wv", "AMZN", None)
+    cdm = loader_mod.load_remote_cdm(dict(cdm_api), "wv", "EXAMPLE", None)
     assert isinstance(cdm, FakeWidevineRemote)
     assert cdm.drm == "widevine"
     assert is_remote_widevine_cdm(cdm)
