@@ -14,8 +14,11 @@ REDACTED = "***"
 # user:pass@ userinfo embedded in any URL (proxy URLs, remote server URLs)
 URL_USERINFO_RE = re.compile(r"(?<=://)[^/@]+@")
 
-# secret-bearing query parameters in URLs that end up in free text
-SENSITIVE_QUERY_PARAM_RE = re.compile(r"(?i)\b(password|passwd|pwd|token|api_key|apikey|secret|auth)=([^&#\s\"']+)")
+# secret-bearing query parameters in URLs that end up in free text; the affixes catch
+# access_token=, client_secret=, api-key= - "_" is a word character, so \b alone misses them
+SENSITIVE_QUERY_PARAM_RE = re.compile(
+    r"(?i)(?<![\w-])([\w-]*(?:password|passwd|pwd|token|api[_-]?key|secret)[\w-]*|auth)=([^&#\s\"']+)"
+)
 
 
 def redact_text(text: Optional[str], secrets: Iterable[str] = ()) -> Optional[str]:

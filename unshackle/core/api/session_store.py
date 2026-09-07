@@ -34,6 +34,7 @@ class SessionEntry:
     service_instance: Any
     titles: Any = None  # Titles_T from get_titles()
     title_map: Dict[str, Any] = field(default_factory=dict)
+    current_title_id: Optional[str] = None  # title the client last asked tracks for
     tracks: Dict[str, Track] = field(default_factory=dict)
     tracks_by_title: Dict[str, Dict[str, Track]] = field(default_factory=dict)
     chapters_by_title: Dict[str, List[Any]] = field(default_factory=dict)
@@ -60,13 +61,17 @@ class SessionEntry:
         from unshackle.core.api.stats import mask_key
 
         now = datetime.now(timezone.utc)
+        title_id = (
+            self.current_title_id if self.current_title_id in self.title_map else next(iter(self.title_map), None)
+        )
+        title = self.title_map.get(title_id) if title_id else None
         return {
             "id": self.session_id,
             "owner": mask_key(self.owner_key),
             "creator_ip": self.creator_ip,
             "service": self.service_tag,
-            "title_id": next(iter(self.title_map), None),
-            "title": str(next(iter(self.title_map.values()), "")) or None,
+            "title_id": title_id,
+            "title": str(title) if title else None,
             "titles": len(self.title_map),
             "tracks": len(self.tracks),
             "auth_status": self.auth_status.value,

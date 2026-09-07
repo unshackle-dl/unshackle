@@ -3023,6 +3023,9 @@ async def session_tracks_handler(
             details={"available_titles": list(session.title_map.keys())},
         )
 
+    session.current_title_id = str(title_id)
+    SessionStore.publish_update(session)
+
     try:
         service_instance = session.service_instance
         async with session.lock:
@@ -3473,7 +3476,7 @@ def find_title_for_track(track_id: str, session: Any) -> Any:
         if track_id in tracks_dict:
             return session.title_map.get(t_id)
     if session.title_map:
-        return next(iter(session.title_map.values()))
+        return session.title_map.get(session.current_title_id) or next(iter(session.title_map.values()))
     return None
 
 

@@ -1557,6 +1557,13 @@ async def session_create(request: web.Request) -> web.Response:
               proxy_region:
                 type: string
                 description: Two-letter country the client resolved its proxy for; picks a server account
+              client:
+                type: object
+                additionalProperties: true
+                description: |
+                  Freeform client identity, shown to dashboard viewers as sent. The CLI sends
+                  `version`, `code_hash`, `platform` and a redacted `argv`. Ignored above 4096
+                  bytes of JSON.
     responses:
       '200':
         description: Remote session created; authentication continues in the background

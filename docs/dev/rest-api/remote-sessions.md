@@ -324,7 +324,8 @@ The server mounts all these routes, even in `--remote-only` mode. Paths use the
 `POST /api/session/create` requires `service` and `title_id`. It also accepts
 `credentials`, `cookies` (base64 of zlib-compressed Netscape cookie file), `proxy`,
 `no_proxy`, `profile`, `cache` (a map of `filename → base64(zlib(bytes))`),
-`client_region`, `cdm_type`, and the track-selection hints `range_`, `vcodec`,
+`client_region`, `cdm_type`, `client` (a freeform identity object the dashboard
+shows as sent), and the track-selection hints `range_`, `vcodec`,
 `quality`, `best_available`, plus arbitrary service CLI options
 (`additionalProperties: true`).
 

@@ -11,6 +11,7 @@ import base64
 import hashlib
 import logging
 import re
+import shlex
 import sys
 import time
 from datetime import date as date_
@@ -39,7 +40,7 @@ from unshackle.core.titles.music import Album, Song
 from unshackle.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.track import Track
-from unshackle.core.utils.redact import redact_text, safe_display_url
+from unshackle.core.utils.redact import redact_path, redact_text, safe_display_url
 
 log = logging.getLogger("remote_service")
 
@@ -908,9 +909,16 @@ class RemoteService:
         if cache_data:
             create_data["cache"] = cache_data
 
-        from unshackle.core import __version__
+        from unshackle.core import __code_hash__, __version__
 
-        create_data["client"] = {"version": __version__, "platform": sys.platform}
+        secrets = [v for v in (create_data.get("credentials") or {}).values() if isinstance(v, str) and len(v) >= 4]
+        argv = (redact_path(redact_text(shlex.join(sys.argv[1:]), secrets)) or "")[:3000]
+        create_data["client"] = {
+            "version": __version__,
+            "code_hash": __code_hash__ or None,
+            "platform": sys.platform,
+            "argv": argv,
+        }
 
         result = self.client.post("/api/session/create", create_data)
         self._session_id = result["session_id"]
