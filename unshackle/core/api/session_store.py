@@ -37,6 +37,7 @@ class SessionEntry:
     tracks: Dict[str, Track] = field(default_factory=dict)
     tracks_by_title: Dict[str, Dict[str, Track]] = field(default_factory=dict)
     chapters_by_title: Dict[str, List[Any]] = field(default_factory=dict)
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
     creator_ip: Optional[str] = None
     owner_key: Optional[str] = None  # X-Secret-Key that owns this session
     cache_tag: Optional[str] = None
@@ -162,10 +163,10 @@ class SessionStore:
             return entry
 
     def peek(self, session_id: str) -> Optional[SessionEntry]:
-        """A session entry without touching it, for read-only observers.
+        """A remote session entry without touching it, for read-only observers.
 
         ``get`` refreshes ``last_accessed`` and expires stale entries, so an observer polling
-        through it would keep an idle session alive and always report it as active.
+        through it would keep an idle remote session alive and always report it as active.
         """
         return self._sessions.get(session_id)
 

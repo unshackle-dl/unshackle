@@ -6,10 +6,12 @@ import json
 import logging
 import os
 import sys
+import threading
 import time
 import traceback
 from pathlib import Path
 from typing import Any, Dict
+from uuid import uuid4
 
 from .download_manager import perform_download
 
@@ -24,18 +26,25 @@ def read_payload(path: Path) -> Dict[str, Any]:
 def write_result(path: Path, payload: Dict[str, Any]) -> None:
     """Write the payload with an atomic replace, because the parent polls this file during the write.
 
+    Each call gets its own temp name, so two threads writing this destination cannot replace away
+    the temp file the other is about to move.
+
     Windows denies the replace while the parent holds the destination open, so retry with a backoff.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(payload), encoding="utf-8")
-    for attempt in range(5):
-        try:
-            os.replace(tmp, path)
-            return
-        except PermissionError:
-            time.sleep(0.02 * (attempt + 1))
-    os.replace(tmp, path)
+    tmp = path.with_name(f"{path.name}.{uuid4().hex}.tmp")
+    try:
+        tmp.write_text(json.dumps(payload), encoding="utf-8")
+        for attempt in range(5):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                time.sleep(0.02 * (attempt + 1))
+        os.replace(tmp, path)
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def main(argv: list[str]) -> int:
@@ -64,14 +73,16 @@ def main(argv: list[str]) -> int:
 
         # Merged so sparse keys (current_title, output_files) survive later writes.
         progress_state: Dict[str, Any] = {}
+        progress_lock = threading.Lock()
 
         def progress_callback(progress_data: Dict[str, Any]) -> None:
             """Write progress updates to file for main process to read."""
             if progress_path:
                 try:
-                    progress_state.update(progress_data)
-                    log.info(f"Writing progress update: {progress_data}")
-                    write_result(progress_path, progress_state)
+                    with progress_lock:
+                        progress_state.update(progress_data)
+                        log.info(f"Writing progress update: {progress_data}")
+                        write_result(progress_path, progress_state)
                     log.info(f"Progress update written to {progress_path}")
                 except Exception as e:
                     log.error(f"Failed to write progress update: {e}")

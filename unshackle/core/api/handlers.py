@@ -278,6 +278,72 @@ def setup_list_service(
     return service_instance
 
 
+def run_service_search(
+    data: Dict[str, Any],
+    normalized_service: str,
+    query: str,
+    request: Optional[web.Request] = None,
+) -> List[Dict[str, Any]]:
+    """Assemble and authenticate a service instance, then run its search.
+
+    The same preamble as :func:`setup_list_service`, without the service option extras,
+    plus the search itself. Every step blocks on disk or network, so the caller runs the
+    whole function in one worker thread and keeps the event loop free for other clients.
+    """
+    from unshackle.commands.dl import dl
+
+    profile = data.get("profile")
+    no_proxy = data.get("no_proxy", False)
+
+    service_config = load_service_yaml(normalized_service)
+    proxy_param, proxy_providers = resolve_handler_proxy(data, normalized_service, request)
+
+    account = resolve_server_account(request, normalized_service, data.get("client_region"))
+    if account:
+        profile = None if account == "default" else account
+
+    cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"))
+    parent_ctx = build_parent_ctx(profile, cdm, proxy_param, no_proxy, proxy_providers, service_config)
+    service_module = Services.load(normalized_service)
+
+    try:
+        service_instance = instantiate_service(parent_ctx, service_module, query)
+    except Exception as exc:
+        raise APIError(
+            APIErrorCode.SERVICE_ERROR,
+            f"Failed to initialize service: {exc}",
+            details={"service": normalized_service},
+        )
+
+    if account:
+        service_instance.cache = Cacher(f"_accounts/{normalized_service}/{account}")
+        cookies = server_account_cookies(normalized_service, profile)
+    else:
+        cookies = dl.get_cookie_jar(normalized_service, profile)
+    credential = dl.get_credentials(normalized_service, profile)
+    service_instance.authenticate(cookies, credential)
+
+    results: List[Dict[str, Any]] = []
+    try:
+        for result in service_instance.search():
+            results.append(
+                {
+                    "id": result.id,
+                    "title": result.title,
+                    "description": result.description,
+                    "label": result.label,
+                    "url": result.url,
+                }
+            )
+    except NotImplementedError:
+        raise APIError(
+            APIErrorCode.SERVICE_ERROR,
+            f"Search is not supported by {normalized_service}",
+            details={"service": normalized_service},
+        )
+    return results
+
+
 def allowed_services_for_key(secret_key: Optional[str]) -> Optional[List[str]]:
     """Effective service allowlist for an API key: the global list intersected with the key's.
 
@@ -559,7 +625,7 @@ async def dashboard_authentication(request: web.Request, handler: Any) -> web.St
 def rate_limit_response(secret_key: str) -> Optional[web.Response]:
     """A 429 when *secret_key* is over its hourly limit, else None after counting the request.
 
-    Call only once the key is known to be valid, so an invalid key cannot burn someone else's
+    Call only once the API key is known to be valid, so an invalid API key cannot burn someone else's
     window. Both auth middlewares go through here: the limit has to hold in every server mode.
     """
     from unshackle.core.api.stats import stats
@@ -576,7 +642,7 @@ def rate_limit_response(secret_key: str) -> Optional[web.Response]:
 
 @web.middleware
 async def api_key_authentication(request: web.Request, handler: Any) -> web.StreamResponse:
-    """Gate every non-dashboard route behind a key in ``app["config"]["users"]``, then rate limit it.
+    """Gate every non-dashboard route behind an API key in ``app["config"]["users"]``, then rate limit it.
 
     Runs after :func:`dashboard_authentication`, which has already answered the dashboard
     routes, so the dashboard key never reaches the limiter.
@@ -1084,8 +1150,6 @@ def serialize_attachment(attachment: Any) -> Optional[Dict[str, Any]]:
 
 async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
     """Answer the request to find titles."""
-    from unshackle.commands.dl import dl
-
     service_tag = data.get("service")
     query = data.get("query")
 
@@ -1104,56 +1168,7 @@ async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = 
             details={"service": service_tag},
         )
 
-    profile = data.get("profile")
-    no_proxy = data.get("no_proxy", False)
-
-    service_config = load_service_yaml(normalized_service)
-
-    proxy_param, proxy_providers = await asyncio.to_thread(resolve_handler_proxy, data, normalized_service, request)
-
-    account = resolve_server_account(request, normalized_service, data.get("client_region"))
-    if account:
-        profile = None if account == "default" else account
-
-    cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"))
-    parent_ctx = build_parent_ctx(profile, cdm, proxy_param, no_proxy, proxy_providers, service_config)
-    service_module = Services.load(normalized_service)
-
-    try:
-        service_instance = instantiate_service(parent_ctx, service_module, query)
-    except Exception as exc:
-        raise APIError(
-            APIErrorCode.SERVICE_ERROR,
-            f"Failed to initialize service: {exc}",
-            details={"service": normalized_service},
-        )
-
-    if account:
-        service_instance.cache = Cacher(f"_accounts/{normalized_service}/{account}")
-        cookies = server_account_cookies(normalized_service, profile)
-    else:
-        cookies = dl.get_cookie_jar(normalized_service, profile)
-    credential = dl.get_credentials(normalized_service, profile)
-    service_instance.authenticate(cookies, credential)
-
-    results = []
-    try:
-        for result in service_instance.search():
-            results.append(
-                {
-                    "id": result.id,
-                    "title": result.title,
-                    "description": result.description,
-                    "label": result.label,
-                    "url": result.url,
-                }
-            )
-    except NotImplementedError:
-        raise APIError(
-            APIErrorCode.SERVICE_ERROR,
-            f"Search is not supported by {normalized_service}",
-            details={"service": normalized_service},
-        )
+    results = await asyncio.to_thread(run_service_search, data, normalized_service, query, request)
 
     return web.json_response({"results": results, "count": len(results)})
 
@@ -1177,7 +1192,7 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
         service_instance = await asyncio.to_thread(
             setup_list_service, data, normalized_service, profile, title_id, request
         )
-        titles = service_instance.get_titles()
+        titles = await asyncio.to_thread(service_instance.get_titles)
 
         if hasattr(titles, "__iter__") and not isinstance(titles, str):
             title_list = [stamp_service_flags(serialize_title(t), service_instance) for t in titles]
@@ -1217,7 +1232,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
         service_instance = await asyncio.to_thread(
             setup_list_service, data, normalized_service, profile, title_id, request
         )
-        titles = service_instance.get_titles()
+        titles = await asyncio.to_thread(service_instance.get_titles)
 
         wanted_param = data.get("wanted")
         season = data.get("season")
@@ -1296,7 +1311,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
 
                     for title in sorted_titles:
                         try:
-                            tracks = service_instance.get_tracks(title)
+                            tracks = await asyncio.to_thread(service_instance.get_tracks, title)
                             video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
                             audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
 
@@ -1343,7 +1358,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
         else:
             first_title = titles
 
-        tracks = service_instance.get_tracks(first_title)
+        tracks = await asyncio.to_thread(service_instance.get_tracks, first_title)
 
         video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
         audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
@@ -1878,7 +1893,7 @@ async def dashboard_session_logs_handler(request: web.Request) -> web.Response:
 async def dashboard_keys_handler(request: web.Request) -> web.Response:
     """Every configured API key: which key it is, what it may do, and what it has done.
 
-    Every key that ``configured_key`` counts gets a row here, so each ``requests_by_key``
+    Every API key that ``configured_key`` counts gets a row here, so each ``requests_by_key``
     bucket except ``anonymous`` has a row to attribute it to. Without the dashboard key's own
     row, a dashboard would render its own polling as traffic from an unknown caller.
     """
@@ -1924,7 +1939,7 @@ async def dashboard_keys_handler(request: web.Request) -> web.Response:
 def user_grant(secret_key: str, name: str) -> Any:
     """A per-key grant as configured: False, True, or the list of service tags it covers.
 
-    A key with no ``serve.users`` entry keeps implicit access, matching the resolvers.
+    An API key with no ``serve.users`` entry keeps implicit access, matching the resolvers.
     """
     user_config = (config.serve.get("users") or {}).get(secret_key)
     if not isinstance(user_config, dict):
@@ -1987,7 +2002,7 @@ _health_lock: Optional[asyncio.Lock] = None
 
 
 async def dashboard_health_handler(request: web.Request) -> web.Response:
-    """Preflight: can this instance actually finish a download?
+    """Preflight: can this instance finish a download?
 
     A panel, not a liveness probe - the result is cached for 30 s and every probe is shallow,
     so reading it never costs the operator a proxy session or a licence.
@@ -2915,7 +2930,8 @@ async def session_titles_handler(session_id: str, request: Optional[web.Request]
 
     try:
         service_instance = session.service_instance
-        titles = service_instance.get_titles()
+        async with session.lock:
+            titles = await asyncio.to_thread(service_instance.get_titles)
         session.titles = titles
 
         if hasattr(titles, "__iter__") and not isinstance(titles, str):
@@ -2973,40 +2989,41 @@ async def session_tracks_handler(
 
     try:
         service_instance = session.service_instance
-        tracks = service_instance.get_tracks(title)
+        async with session.lock:
+            tracks = await asyncio.to_thread(service_instance.get_tracks, title)
 
-        title_tracks: Dict[str, Any] = {}
-        for track in tracks.videos:
-            title_tracks[str(track.id)] = track
-            session.tracks[str(track.id)] = track
-        for track in tracks.audio:
-            title_tracks[str(track.id)] = track
-            session.tracks[str(track.id)] = track
-        for track in tracks.subtitles:
-            title_tracks[str(track.id)] = track
-            session.tracks[str(track.id)] = track
-        session.tracks_by_title[str(title_id)] = title_tracks
-        SessionStore.publish_update(session)
+            title_tracks: Dict[str, Any] = {}
+            for track in tracks.videos:
+                title_tracks[str(track.id)] = track
+                session.tracks[str(track.id)] = track
+            for track in tracks.audio:
+                title_tracks[str(track.id)] = track
+                session.tracks[str(track.id)] = track
+            for track in tracks.subtitles:
+                title_tracks[str(track.id)] = track
+                session.tracks[str(track.id)] = track
+            session.tracks_by_title[str(title_id)] = title_tracks
+            SessionStore.publish_update(session)
 
-        try:
-            chapters = service_instance.get_chapters(title)
-            session.chapters_by_title[str(title_id)] = chapters if chapters else []
-        except (NotImplementedError, Exception):
-            session.chapters_by_title[str(title_id)] = []
+            try:
+                chapters = await asyncio.to_thread(service_instance.get_chapters, title)
+                session.chapters_by_title[str(title_id)] = chapters if chapters else []
+            except (NotImplementedError, Exception):
+                session.chapters_by_title[str(title_id)] = []
 
-        video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
-        audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
+            video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
+            audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
 
-        manifests = extract_manifests(tracks)
-        track_manifests = extract_track_manifests(tracks)
+            manifests = extract_manifests(tracks)
+            track_manifests = extract_track_manifests(tracks)
 
-        svc_session = session.service_instance.session
-        session_headers = dict(svc_session.headers) if hasattr(svc_session, "headers") else {}
-        session_cookies = {}
-        if hasattr(svc_session, "cookies"):
-            for cookie in svc_session.cookies:
-                if hasattr(cookie, "name") and hasattr(cookie, "value"):
-                    session_cookies[cookie.name] = cookie.value
+            svc_session = session.service_instance.session
+            session_headers = dict(svc_session.headers) if hasattr(svc_session, "headers") else {}
+            session_cookies = {}
+            if hasattr(svc_session, "cookies"):
+                for cookie in svc_session.cookies:
+                    if hasattr(cookie, "name") and hasattr(cookie, "value"):
+                        session_cookies[cookie.name] = cookie.value
 
         from unshackle.core.config import config as app_config
 

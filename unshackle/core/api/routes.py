@@ -2136,10 +2136,10 @@ async def dashboard_session_logs(request: web.Request) -> web.Response:
     description: >
       The service's own log output for a remote session, mirrored at INFO regardless of the
       server's log level. This is where the real reason for a failed authentication sits, in
-      full, while the session summary carries only a truncated `auth_error`.
-      Reading this does not refresh the session's idle timer and does not take records from
-      the client draining the same buffer through `/api/session/{session_id}/logs`.
-      Poll when the session summary's `log_seq` changes.
+      full, while the remote session summary carries only a truncated `auth_error`.
+      Reading this does not refresh the remote session's idle timer and does not take records
+      from the client draining the same buffer through `/api/session/{session_id}/logs`.
+      Poll when the remote session summary's `log_seq` changes.
     tags: [Dashboard]
     parameters:
       - name: session_id
@@ -2193,14 +2193,14 @@ async def dashboard_keys(request: web.Request) -> web.Response:
     ---
     summary: Dashboard API keys
     description: >
-      Every key in `serve.users`, plus `serve.api_secret` and the dashboard key when they are
-      configured, with the grants that decide what it may do and the counters for what it has
-      done. A key listed in more than one of those places still gets exactly one row.
-      `id` is a hash prefix, stable across restarts and carrying no key material, so two
-      unnamed keys never merge the way they do in the `requests_by_key` labels.
-      Every key the server counts has a row here, so a `requests_by_key` bucket other than
+      Every API key in `serve.users`, plus `serve.api_secret` and the dashboard API key when
+      they are configured, with the grants that decide what it may do and the counters for what
+      it has done. An API key listed in more than one of those places still gets exactly one row.
+      `id` is a hash prefix, stable across restarts and carrying no API key material, so two
+      unnamed API keys never merge the way they do in the `requests_by_key` labels.
+      Every API key the server counts has a row here, so a `requests_by_key` bucket other than
       `anonymous` always matches one.
-      `bytes_out` counts response bodies only: an SSE stream reports no content length and
+      `bytes_out` counts response bodies only: an SSE stream reports no `Content-Length` and
       contributes nothing.
     tags: [Dashboard]
     responses:
@@ -2229,9 +2229,9 @@ async def dashboard_keys(request: web.Request) -> web.Response:
                     items:
                       type: string
                     description: >
-                      Effective allowlist; null when nothing restricts the key, and an empty
-                      list when the key reaches no service route at all, as a dashboard key
-                      with no `serve.users` entry does
+                      Effective allowlist; null when nothing restricts the API key, and an
+                      empty list when the API key reaches no service route at all, as a
+                      dashboard API key with no `serve.users` entry does
                   server_cdm:
                     description: false, true, or the list of service tags it covers
                   server_accounts:
@@ -2329,10 +2329,10 @@ async def dashboard_health(request: web.Request) -> web.Response:
     ---
     summary: Dashboard health preflight
     description: >
-      Whether this instance could actually finish a download: the binaries on PATH, the CDM
-      device files, each configured key vault and the proxy providers.
+      Whether this instance could finish a download: the binaries on PATH, the CDM device
+      files, each configured key vault and the proxy providers.
       A panel, not a liveness probe. The result is cached for 30 seconds and every probe is
-      shallow, so reading it never spends a proxy session or a licence. A provider that only
+      shallow, so reading it never spends a proxy session or a licence. A dependency that only
       fails on first use is therefore not caught here.
     tags: [Dashboard]
     responses:

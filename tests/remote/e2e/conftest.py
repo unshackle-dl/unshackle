@@ -18,7 +18,7 @@ def load_scenarios(config: pytest.Config) -> dict:
     import yaml
 
     path = Path(__file__).parent / "fixtures" / "fixtures.yaml"
-    data = yaml.safe_load(path.read_text()) if path.exists() else {}
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else {}
     selected = (config.getoption("--services") or "").strip()
     services = (data or {}).get("services", {}) or {}
     if selected:

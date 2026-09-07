@@ -6,11 +6,13 @@ a bitrate-weighted percentage, track counts, and the labels of the tracks downlo
 
 from __future__ import annotations
 
+import time
 from typing import Any, Callable, Optional
 
 from unshackle.core.constants import AnyTrack
 
 JOB_PROGRESS_TERMINAL_STATES = {"Downloaded", "Decrypted", "[yellow]SKIPPED"}
+PROGRESS_EMIT_INTERVAL = 0.25
 
 # Weight for a track with no bitrate (subtitles); small vs media bitrates so subs barely move the bar.
 SUBTITLE_PROGRESS_WEIGHT = 50_000.0
@@ -62,6 +64,10 @@ def build_job_progress_callables(
     The sink gets a bitrate-weighted mean completion across all tracks, ``completed_tracks`` /
     ``total_tracks`` counts, and ``active_tracks`` labels. Each track's fraction is monotonic, so
     the percentage only climbs. The original ``inner`` callable is always invoked.
+
+    A tick that only moves the numbers reaches the sink once per ``PROGRESS_EMIT_INTERVAL``.
+    A tick that changes the phase, the started or finished tracks, or fills a track goes to the
+    sink at once, because dropping one leaves the job looking stuck.
     """
     total = len(inner_callables)
     weights = [track_progress_weight(t) for t in tracks]
@@ -73,8 +79,11 @@ def build_job_progress_callables(
     seg_done = [0.0] * total
     seg_total = [0.0] * total
     speeds: list[Optional[str]] = [None] * total
+    last_emit = 0.0
+    last_shape: Optional[tuple[Any, ...]] = None
 
     def emit() -> None:
+        nonlocal last_emit, last_shape
         completed = sum(done)
         # Downloads fill 0..DOWNLOAD_PROGRESS_CEILING; dl.result drives muxing up to 100.
         progress = sum(w * f for w, f in zip(weights, fractions)) * DOWNLOAD_PROGRESS_CEILING / total_weight
@@ -86,6 +95,12 @@ def build_job_progress_callables(
         else:
             phase = f"downloading {completed}/{total} tracks"
         active_i = next((i for i in range(total) if started[i] and not done[i]), None)
+        shape = (phase, tuple(started), tuple(done), tuple(f >= 1.0 for f in fractions))
+        now = time.monotonic()
+        if shape == last_shape and now - last_emit < PROGRESS_EMIT_INTERVAL:
+            return
+        last_emit = now
+        last_shape = shape
         sink(
             {
                 "progress": progress,

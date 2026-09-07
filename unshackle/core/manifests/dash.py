@@ -390,6 +390,7 @@ class DASH:
                 track=track,
                 track_url=track.url,
                 session=session,
+                probe_kid=period_idx == 0,
             )
 
             if period_idx == 0:
@@ -397,9 +398,6 @@ class DASH:
                 init_data = p_init
                 track_kid = p_kid
                 segment_timescale = p_timescale
-            else:
-                if p_kid and track_kid and p_kid != track_kid:
-                    log.debug(f"Period {content_period.get('id', period_idx)} has different KID: {p_kid}")
 
             for seg in p_segments:
                 if seg not in seen_segments:
@@ -749,6 +747,7 @@ class DASH:
         track: AnyTrack,
         track_url: str,
         session: Union[Session, RnetSession],
+        probe_kid: bool = True,
     ) -> tuple[
         Optional[bytes],
         list[tuple[str, Optional[str]]],
@@ -758,6 +757,12 @@ class DASH:
     ]:
         """
         Extract segments from a single period's representation.
+
+        Parameters:
+            probe_kid: Probe the initialization segment for the Key ID. Set it to False when
+                the caller needs neither the init data nor the Key ID of this period. False
+                drops the FFprobe call, and also the init request where the rest of the parse
+                does not need those bytes.
 
         Returns:
             A tuple of (init_data, segments, segment_timescale, segment_durations, track_kid).
@@ -810,7 +815,7 @@ class DASH:
                 segment_template.set(item, value)
 
             init_url = segment_template.get("initialization")
-            if init_url:
+            if init_url and probe_kid:
                 res = session.get(
                     DASH.replace_fields(
                         init_url, Bandwidth=representation.get("bandwidth"), RepresentationID=representation.get("id")
@@ -875,7 +880,7 @@ class DASH:
 
             init_data = None
             initialization = segment_list.find("Initialization")
-            if initialization is not None:
+            if initialization is not None and probe_kid:
                 source_url = initialization.get("sourceURL")
                 if not source_url:
                     source_url = rep_base_url
@@ -915,7 +920,8 @@ class DASH:
                 res = session.get(url=rep_base_url, headers=init_range_header)
                 res.raise_for_status()
                 init_data = res.content
-                track_kid = track.get_key_id(init_data)
+                if probe_kid:
+                    track_kid = track.get_key_id(init_data)
                 total_size = res.headers.get("Content-Range", "").split("/")[-1]
                 if total_size:
                     media_range = f"{len(init_data)}-{total_size}"

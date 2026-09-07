@@ -19,9 +19,9 @@ log = logging.getLogger("proxies")
 def initialize_proxy_providers(raise_errors: bool = False, quiet: bool = False) -> List[Any]:
     """Initialise and return available proxy providers from config.
 
-    A provider that fails to build is logged and skipped, unless *raise_errors* is set.
-    *quiet* drops the per-provider summary lines: rendering a provider asks some of them for
-    their server catalog over the network, which a repeated caller must not pay for.
+    A proxy provider that fails to build is logged and skipped, unless *raise_errors* is set.
+    *quiet* drops the per-provider summary lines: rendering a proxy provider asks some of them
+    for their server catalogue over the network, which a repeated caller must not pay for.
     """
     proxy_providers: list = []
     try:

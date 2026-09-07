@@ -237,8 +237,10 @@ class CustomRemoteCDM:
         """Mock certificate chain for PlayReady compatibility."""
         return MockCertificateChain(f"{self.device_name}_Custom_Remote")
 
-    def set_pssh_b64(self, pssh_b64: str) -> None:
+    def set_pssh_b64(self, pssh_b64: str, session_id: Optional[bytes] = None) -> None:
         """Store base64-encoded PSSH data for PlayReady compatibility."""
+        if session_id is not None and session_id in self._sessions:
+            self._sessions[session_id]["pssh_b64"] = pssh_b64
         self._pssh_b64 = pssh_b64
 
     def set_required_kids(self, kids: List[Union[str, UUID]], session_id: Optional[bytes] = None) -> None:
@@ -266,10 +268,11 @@ class CustomRemoteCDM:
         """Make a unique session ID."""
         return secrets.token_bytes(16)
 
-    def get_init_data_from_pssh(self, pssh: Any) -> str:
+    def get_init_data_from_pssh(self, pssh: Any, pssh_b64: Optional[str] = None) -> str:
         """Extract init data from various PSSH formats."""
-        if self.is_playready and self._pssh_b64:
-            return self._pssh_b64
+        effective_pssh_b64 = pssh_b64 or self._pssh_b64
+        if self.is_playready and effective_pssh_b64:
+            return effective_pssh_b64
 
         if hasattr(pssh, "dumps"):
             dumps_result = pssh.dumps()
@@ -653,10 +656,12 @@ class CustomRemoteCDM:
             Session identifier as bytes
         """
         session_id = self.generate_session_id()
+        self._pssh_b64 = None
         self._sessions[session_id] = {
             "service_certificate": None,
             "keys": [],
             "pssh": None,
+            "pssh_b64": None,
             "challenge": None,
             "remote_session_id": None,
             "tried_cache": False,
@@ -781,7 +786,7 @@ class CustomRemoteCDM:
 
         session = self._sessions[session_id]
         session["pssh"] = pssh_or_wrm
-        init_data = self.get_init_data_from_pssh(pssh_or_wrm)
+        init_data = self.get_init_data_from_pssh(pssh_or_wrm, session.get("pssh_b64"))
 
         required_kids_list = session.get("required_kids") or self._required_kids
 
@@ -930,7 +935,7 @@ class CustomRemoteCDM:
                     license_message = license_message.encode("utf-8")
 
         pssh = session["pssh"]
-        init_data = self.get_init_data_from_pssh(pssh)
+        init_data = self.get_init_data_from_pssh(pssh, session.get("pssh_b64"))
         license_request_b64 = base64.b64encode(session["challenge"]).decode("utf-8")
         license_response_b64 = base64.b64encode(license_message).decode("utf-8")
 

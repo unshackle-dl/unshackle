@@ -4879,4 +4879,13 @@ class dl:
 
         from unshackle.core.cdm import load_cdm
 
-        return load_cdm(cdm_name, service_name=service, vaults=self.vaults)
+        if not isinstance(cdm_name, str):
+            return load_cdm(cdm_name, service_name=service, vaults=self.vaults)
+
+        cdm_cache: dict[tuple[str, Optional[str], str], Any] = getattr(self, "_cdm_cache", {})
+        self._cdm_cache = cdm_cache
+
+        cache_key = (service, profile, cdm_name)
+        if cache_key not in cdm_cache:
+            cdm_cache[cache_key] = load_cdm(cdm_name, service_name=service, vaults=self.vaults)
+        return cdm_cache[cache_key]

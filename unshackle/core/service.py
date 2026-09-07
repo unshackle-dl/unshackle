@@ -74,13 +74,15 @@ class TimeoutHTTPAdapter(HTTPAdapter):
     cannot distinguish the two, and rnet has no unbounded mode either.
     """
 
+    __attrs__ = [*HTTPAdapter.__attrs__, "default_timeout"]
+
     def __init__(self, *args: Any, timeout: Any = DEFAULT_TIMEOUT, **kwargs: Any) -> None:
         self.default_timeout = timeout
         super().__init__(*args, **kwargs)
 
     def send(self, request: Any, **kwargs: Any) -> Any:
         if kwargs.get("timeout") is None:
-            kwargs["timeout"] = self.default_timeout
+            kwargs["timeout"] = getattr(self, "default_timeout", DEFAULT_TIMEOUT)
         return super().send(request, **kwargs)
 
 
@@ -90,23 +92,20 @@ def grow_session_pool(session: Any, size: int) -> None:
     The worker threads of every track draw on this one pool, because the downloader never
     remounts an HTTP session the caller passes in (see downloaders/requests.py). The pool must hold
     ``downloads * workers`` connections, or threads queue for a slot instead of reading.
-    Call this before any download thread exists: a remount races with other threads that call
+    Call this before any download thread exists: the rebuild races with other threads that call
     ``get_adapter``. RnetSession does not block on its idle-pool cap, so this function skips it.
+
+    Every mounted adapter grows in place, through its own ``init_poolmanager``. A service can
+    mount an :class:`HTTPAdapter` subclass, such as ``SSLCiphers``, on any prefix. Mounting a new
+    adapter over it would drop that subclass state, and its TLS context with it.
     """
     if not isinstance(session, requests.Session):
         return
-    adapter = session.get_adapter("https://")
-    if not isinstance(adapter, HTTPAdapter) or getattr(adapter, "_pool_maxsize", 0) >= size:
-        return
-    grown = TimeoutHTTPAdapter(
-        max_retries=adapter.max_retries,
-        pool_connections=size,
-        pool_maxsize=size,
-        pool_block=True,
-        timeout=getattr(adapter, "default_timeout", DEFAULT_TIMEOUT),
-    )
-    session.mount("https://", grown)
-    session.mount("http://", grown)
+    for adapter in {id(a): a for a in session.adapters.values()}.values():
+        if not isinstance(adapter, HTTPAdapter) or getattr(adapter, "_pool_maxsize", 0) >= size:
+            continue
+        adapter.init_poolmanager(size, size, block=True)
+        adapter.proxy_manager.clear()
 
 
 @dataclass
@@ -410,7 +409,7 @@ class Service(metaclass=ABCMeta):
     def get_binaries() -> list[dict]:
         """
         Declare custom binary dependencies required by this service.
-        :returns: List of dicts specifying name, candidates, desc, etc.
+        :returns: List of dicts, each with a ``name`` and optional ``candidates`` and ``desc``.
         """
         return []
 

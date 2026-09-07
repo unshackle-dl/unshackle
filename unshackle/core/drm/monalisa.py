@@ -182,7 +182,7 @@ class MonaLisa:
 
     @property
     def key_pair(self) -> str:
-        """Get formatted KID:KEY pair for CLI decryptors (32hex:32hex)."""
+        """The formatted ``KID:KEY`` for CLI decryptors (32hex:32hex)."""
         if self._kid and self._key:
             return f"{self._kid.hex}:{self._key}"
         return ""
