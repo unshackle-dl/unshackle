@@ -2365,6 +2365,7 @@
 <li>unshackle skips keys that already exist in a vault (it never overwrites or deletes existing data).</li>
 <li>A vault marked <code>no_push: true</code> receives lookups, but unshackle never writes to it. This is useful for read-only or shared upstream vaults you do not own.</li>
 </ul>
+<p>unshackle pushes keys from every source, not only a local CDM. A run against a remote server that licenses with its own CDM (<code>--remote</code>) writes the keys the server returns, and <code>unshackle import</code> writes the keys it reads from an export file.</p>
 <div class="admonition tip">
 <p class="admonition-title">A good two-vault setup</p>
 <p>A common arrangement is a fast local <strong>SQLite</strong> vault plus a shared remote vault (<strong>MySQL</strong>, <strong>HTTP</strong>, or <strong>API</strong>). The local vault answers instantly and works offline; the remote vault lets you share keys across machines or with a group.</p>
