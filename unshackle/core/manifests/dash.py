@@ -22,6 +22,7 @@ from pywidevine.cdm import Cdm as WidevineCdm
 from pywidevine.pssh import PSSH
 from requests import Session
 
+from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
@@ -414,7 +415,9 @@ class DASH:
         track.data["dash"]["timescale"] = int(segment_timescale)
         track.data["dash"]["segment_durations"] = segment_durations
 
-        if not track.drm and init_data and isinstance(track, (Video, Audio)):
+        if not track.drm and init_data and isinstance(track, (Video, Audio)) and not binaries.FFProbe:
+            log.warning("FFprobe was not found, so the init segment was not probed for a PSSH.")
+        elif not track.drm and init_data and isinstance(track, (Video, Audio)):
             prefers_playready = track.prefers_playready(cdm)
             if prefers_playready:
                 try:
