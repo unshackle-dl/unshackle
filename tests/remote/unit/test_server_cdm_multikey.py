@@ -50,7 +50,7 @@ class _FakePlayReady:
 def playready_env(monkeypatch):
     monkeypatch.setattr(pr_pssh_mod, "PSSH", _FakePRPSSH)
     monkeypatch.setattr(drm_mod, "PlayReady", _FakePlayReady)
-    monkeypatch.setattr(cdm_mod, "load_cdm", lambda *a, **k: object())
+    monkeypatch.setitem(cdm_mod.__dict__, "load_cdm", lambda *a, **k: object())
     monkeypatch.setattr(detect_mod, "is_playready_cdm", lambda cdm: True)
     monkeypatch.setattr(handlers, "ensure_track_drm", lambda track, session=None, init_data=None: None)
     monkeypatch.setattr(handlers, "resolve_device_name", lambda *a, **k: "dev")

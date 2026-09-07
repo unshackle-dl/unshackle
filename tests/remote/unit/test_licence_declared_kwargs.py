@@ -33,9 +33,6 @@ PSSH_B64 = base64.b64encode(b"pssh").decode()
 SESSION_ID = b"sid-bytes"
 
 
-# --- fake services, one per licence signature shape -------------------------------------
-
-
 class _Recorder:
     """Base for the fake services; every licence call lands in `calls`."""
 
@@ -84,9 +81,6 @@ class VarKwService(_Recorder):
     def get_playready_license(self, *, challenge: bytes, **kwargs: Any) -> str:
         self.calls.append({"challenge": challenge, **kwargs})
         return "<License>ok</License>"
-
-
-# --- stub DRM objects that keep the real get_content_keys call shape ---------------------
 
 
 class StubWidevine(Widevine):
@@ -153,14 +147,11 @@ class FakePlayReadyCdm:
         return None
 
 
-# --- fixtures ---------------------------------------------------------------------------
-
-
 @pytest.fixture
 def widevine_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(wv_pssh_mod, "PSSH", lambda b64: SimpleNamespace(b64=b64))
     monkeypatch.setattr(drm_mod, "Widevine", StubWidevine)
-    monkeypatch.setattr(cdm_mod, "load_cdm", lambda *a, **k: FakeWidevineCdm())
+    monkeypatch.setitem(cdm_mod.__dict__, "load_cdm", lambda *a, **k: FakeWidevineCdm())
     monkeypatch.setattr(detect_mod, "is_widevine_cdm", lambda cdm: True)
     monkeypatch.setattr(handlers, "ensure_track_drm", lambda track, session=None, init_data=None: None)
     monkeypatch.setattr(handlers, "resolve_device_name", lambda *a, **k: "dev")
@@ -173,7 +164,7 @@ def widevine_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def playready_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(pr_pssh_mod, "PSSH", lambda data: SimpleNamespace(data=data))
     monkeypatch.setattr(drm_mod, "PlayReady", StubPlayReady)
-    monkeypatch.setattr(cdm_mod, "load_cdm", lambda *a, **k: FakePlayReadyCdm())
+    monkeypatch.setitem(cdm_mod.__dict__, "load_cdm", lambda *a, **k: FakePlayReadyCdm())
     monkeypatch.setattr(detect_mod, "is_playready_cdm", lambda cdm: True)
     monkeypatch.setattr(handlers, "ensure_track_drm", lambda track, session=None, init_data=None: None)
     monkeypatch.setattr(handlers, "resolve_device_name", lambda *a, **k: "dev")
@@ -190,9 +181,6 @@ def _server_cdm(service: Any, drm_type: str) -> dict[str, str]:
         drm_type=drm_type,
         request=None,
     )
-
-
-# --- server_cdm, Widevine ---------------------------------------------------------------
 
 
 def test_server_cdm_widevine_classic_signature_gets_three_arguments(widevine_env: None) -> None:
@@ -252,9 +240,6 @@ def test_server_cdm_widevine_lambda_is_never_itself_filtered(widevine_env: None)
     assert "session_id" not in service.calls[0]
 
 
-# --- server_cdm, PlayReady --------------------------------------------------------------
-
-
 def test_server_cdm_playready_classic_signature_gets_three_arguments(playready_env: None) -> None:
     service = ClassicService()
     keys = _server_cdm(service, "playready")
@@ -279,9 +264,6 @@ def test_server_cdm_playready_session_service_is_not_passed_session_id(playready
 
     assert set(service.calls[0]) == {"challenge", "title", "track", "session_id"}
     assert service.calls[0]["session_id"] is None  # the signature default, never an offered value
-
-
-# --- proxy license ----------------------------------------------------------------------
 
 
 def _proxy(service: Any, drm_type: str) -> Any:
@@ -331,9 +313,6 @@ def test_proxy_license_rejects_an_unknown_drm_type() -> None:
 
     with pytest.raises(APIError):
         _proxy(ClassicService(), "monalisa")
-
-
-# --- the base-class PlayReady delegate --------------------------------------------------
 
 
 class _DelegatingService(Service):

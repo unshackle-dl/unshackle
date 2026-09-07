@@ -13,7 +13,9 @@ Pins the byte-range fan-out that splits one large file across parts:
   or a content-encoded 206;
 - the public single-URL path falls back to a sequential download only when the
   server does not really support ranges, and re-raises a 4xx instead of paying
-  MAX_ATTEMPTS a second time from byte 0.
+  MAX_ATTEMPTS a second time from byte 0;
+- the split plan is worker-driven: every worker gets a part, down to a 4 MiB floor
+  that stops a large worker count cutting a file into slivers.
 
 Tests 2/3 exercise ``dispatch_parts`` directly: the public path swallows a
 range-support failure and falls back, so the raise that the invariant guarantees
@@ -118,7 +120,7 @@ def run(srv, tmp_path, urls, **kwargs):
 def test_ranged_parallel_merges_byte_identical(server, tmp_path, monkeypatch):
     # shrink the thresholds so a 32 KiB payload splits into several parts
     monkeypatch.setattr(dl, "RANGE_PARALLEL_MIN_SIZE", 8 * 1024)
-    monkeypatch.setattr(dl, "RANGE_PARALLEL_PART_SIZE", 2 * 1024)
+    monkeypatch.setattr(dl, "RANGE_PARALLEL_MIN_PART_SIZE", 2 * 1024)
     files = run(server, tmp_path, [{"url": url(server)}], max_workers=4)
     assert len(files) == 1
     assert files[0].read_bytes() == PAYLOAD
@@ -182,7 +184,7 @@ def test_permanent_part_failure_is_not_retried_sequentially(server, tmp_path, mo
     server.mode = "deny_parts"
     monkeypatch.setattr(dl, "RETRY_WAIT", 0.01)
     monkeypatch.setattr(dl, "RANGE_PARALLEL_MIN_SIZE", 8 * 1024)
-    monkeypatch.setattr(dl, "RANGE_PARALLEL_PART_SIZE", 8 * 1024)
+    monkeypatch.setattr(dl, "RANGE_PARALLEL_MIN_PART_SIZE", 8 * 1024)
     with pytest.raises(HTTPError):
         run(server, tmp_path, [{"url": url(server)}], max_workers=4)
     # a sequential fallback would issue a plain unranged GET; only the probe and the
@@ -198,7 +200,7 @@ def test_range_unsupported_falls_back_to_sequential(server, tmp_path, monkeypatc
     server.mode = "probe_only_206"
     monkeypatch.setattr(dl, "RETRY_WAIT", 0.01)
     monkeypatch.setattr(dl, "RANGE_PARALLEL_MIN_SIZE", 8 * 1024)
-    monkeypatch.setattr(dl, "RANGE_PARALLEL_PART_SIZE", 8 * 1024)
+    monkeypatch.setattr(dl, "RANGE_PARALLEL_MIN_PART_SIZE", 8 * 1024)
     files = run(server, tmp_path, [{"url": url(server)}], max_workers=4)
     assert len(files) == 1
     assert files[0].read_bytes() == PAYLOAD
@@ -214,3 +216,107 @@ def test_permanent_status_unwraps_causes():
     wrapped = RuntimeError("max retries")
     wrapped.__cause__ = HTTPError(response=_Resp(404))
     assert dl.permanent_status(wrapped) == 404
+
+
+BIG = bytes((i * 13 + 7) % 256 for i in range(8 * 1024 * 1024))
+
+
+class _BigHandler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def do_GET(self):
+        srv = self.server
+        rng = self.headers.get("Range")
+        with srv.lock:
+            srv.requests.append(rng)
+        if not rng:
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(BIG)))
+            self.end_headers()
+            self.wfile.write(BIG)
+            return
+        start_s, _, end_s = rng.removeprefix("bytes=").partition("-")
+        start = int(start_s)
+        end = int(end_s) if end_s else len(BIG) - 1
+        body = BIG[start : end + 1]
+        self.send_response(206)
+        self.send_header("Content-Range", f"bytes {start}-{end}/{len(BIG)}")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args):
+        pass
+
+
+@pytest.fixture
+def big_server():
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), _BigHandler)
+    srv.lock = threading.Lock()
+    srv.requests = []
+    thread = threading.Thread(target=srv.serve_forever, daemon=True)
+    thread.start()
+    yield srv
+    srv.shutdown()
+    thread.join(timeout=5)
+
+
+_REAL_SPLIT = dl.split_ranges
+
+
+class _SplitStop(Exception):
+    """Ends dispatch_parts once the split plan is known, before any request is made."""
+
+
+def plan_split(monkeypatch, tmp_path, total_size, max_workers):
+    """The (size, max_parts, part_target, parts) that dispatch_parts asks split_ranges for."""
+    record: list = []
+
+    def spy(size, max_parts, part_target):
+        # _REAL_SPLIT, not dl.split_ranges: a second call in one test would otherwise
+        # chain through the previous spy and raise before recording
+        record.append((size, max_parts, part_target, _REAL_SPLIT(size, max_parts, part_target)))
+        raise _SplitStop
+
+    monkeypatch.setattr(dl, "split_ranges", spy)
+    gen = dl.dispatch_parts(
+        url="http://127.0.0.1:1/unreachable",
+        save_path=tmp_path / "planned.bin",
+        session=Session(),
+        total_size=total_size,
+        max_workers=max_workers,
+    )
+    with pytest.raises(_SplitStop):
+        next(gen)
+    return record[0]
+
+
+def test_part_count_matches_worker_count(tmp_path, monkeypatch):
+    _, _, _, parts = plan_split(monkeypatch, tmp_path, 64 * 1024 * 1024, 16)
+    assert len(parts) == 16
+
+    _, _, _, parts = plan_split(monkeypatch, tmp_path, 16 * 1024 * 1024, 4)
+    assert len(parts) == 4
+
+
+def test_part_floor_caps_sliver_count(tmp_path, monkeypatch):
+    # below the 4 MiB floor a part's handshake costs more than its transfer
+    _, _, target, parts = plan_split(monkeypatch, tmp_path, 16 * 1024 * 1024, 64)
+    assert target == 4 * 1024 * 1024
+    assert len(parts) == 4
+
+
+def test_worker_driven_parts_merge_byte_identical(big_server, tmp_path):
+    save_path = tmp_path / "big.bin"
+    for _ in dl.dispatch_parts(
+        url=url(big_server, "/big.bin"),
+        save_path=save_path,
+        session=Session(),
+        total_size=len(BIG),
+        max_workers=2,
+    ):
+        pass
+
+    assert save_path.read_bytes() == BIG
+    assert len({r for r in big_server.requests if r}) == 2
+    assert not save_path.with_name(save_path.name + ".!dev").exists()

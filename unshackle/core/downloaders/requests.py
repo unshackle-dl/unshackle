@@ -1,6 +1,7 @@
 import math
 import multiprocessing
 import os
+import pickle
 import random
 import re
 import socket
@@ -48,6 +49,9 @@ PROGRESS_WINDOW = 2
 CONNECT_TIMEOUT = 10
 READ_TIMEOUT = 30
 
+# a probe asks for one byte, so a larger body is a host that ignored the range
+PROBE_DRAIN_LIMIT = 4096
+
 # re-request a tail segment stuck past max(HEDGE_FACTOR * median segment time, HEDGE_MIN_WAIT)
 HEDGE_FACTOR = 3
 HEDGE_MIN_WAIT = 5.0
@@ -58,7 +62,7 @@ DEFAULT_CHUNK = 524_288
 SPEED_ROLLING_WINDOW = 10  # seconds of history to keep for speed calculation
 
 RANGE_PARALLEL_MIN_SIZE = 64 * 1024 * 1024
-RANGE_PARALLEL_PART_SIZE = 16 * 1024 * 1024
+RANGE_PARALLEL_MIN_PART_SIZE = 4 * 1024 * 1024
 
 # One CPython interpreter caps sustained segment throughput (GIL in the ssl read path);
 # fan a big segment batch across spawned children to reach line rate. Below this count the
@@ -193,7 +197,8 @@ class AdaptiveWorkerController:
     of throughput samples exists. The target starts at ``start`` (the cap by default) and
     follows AIMD from there: an error burst halves it and takes a one-tick cooldown, the
     controller reverts a probe upward that plateaus, and otherwise it climbs by
-    ``ADAPTIVE_STEP``. Target is
+    ``ADAPTIVE_STEP``. It judges a probe on the trailing tick before and after the change, so
+    both sides of the ``ADAPTIVE_PLATEAU_GAIN`` comparison measure the same span. Target is
     always clamped to ``[ADAPTIVE_MIN, cap]``.
     """
 
@@ -228,15 +233,18 @@ class AdaptiveWorkerController:
     def record_error(self, now: float) -> None:
         self._errors += 1
 
-    def speed(self, now: float) -> float:
-        """Rolling bytes/sec over the window."""
+    def speed(self, now: float, span: Optional[float] = None) -> float:
+        """Rolling bytes/sec over the window, or over the trailing ``span`` seconds when given."""
         self.prune(now)
         if not self._samples:
             return 0.0
-        span = now - self._samples[0][0]
-        if span <= 0:
+        if span is not None and span > 0:
+            cutoff = now - span
+            return sum(n for t, n in self._samples if t > cutoff) / span
+        elapsed = now - self._samples[0][0]
+        if elapsed <= 0:
             return 0.0
-        return sum(n for _, n in self._samples) / span
+        return sum(n for _, n in self._samples) / elapsed
 
     def warmed_up(self, now: float) -> bool:
         # half a tick of samples gives enough of a baseline to probe against; waiting for
@@ -267,6 +275,7 @@ class AdaptiveWorkerController:
         errors = self._errors
         self._errors = 0
         speed_now = self.speed(now)
+        probe_speed = self.speed(now, min(self.tick, self.window))
         old = self.target
 
         if self._cooldown:
@@ -284,13 +293,13 @@ class AdaptiveWorkerController:
             # tail guard: too little work to saturate the target, so a low measured speed
             # here reflects starvation rather than a plateau, so hold and skip the probe/revert this tick
             pass
-        elif self._last_action == "increase" and speed_now < ADAPTIVE_PLATEAU_GAIN * self._speed_before_increase:
+        elif self._last_action == "increase" and probe_speed < ADAPTIVE_PLATEAU_GAIN * self._speed_before_increase:
             # last probe upward did not pay off: revert it and hold
             self.target = max(ADAPTIVE_MIN, self._target_before_increase)
             self._last_action = None
             reason = "plateau"
         elif self.target < self.cap:
-            self._speed_before_increase = speed_now
+            self._speed_before_increase = probe_speed
             self._target_before_increase = self.target
             self.target = min(self.cap, self.target + ADAPTIVE_STEP)
             self._last_action = "increase"
@@ -326,6 +335,18 @@ def permanent_status(exc: BaseException) -> Optional[int]:
     if isinstance(status, int) and 400 <= status < 500 and status not in (408, 429):
         return status
     return None
+
+
+class TailPartFailed(Exception):
+    """A tail-boost range part failed. ``index`` names the segment it was split from.
+
+    The batch loop needs the index to put that segment back on the normal single-worker
+    path; the failure itself stays reachable as ``__cause__`` for ``permanent_status``.
+    """
+
+    def __init__(self, index: int) -> None:
+        super().__init__(f"tail-boost part failed for segment {index}")
+        self.index = index
 
 
 def retry_sleep(exc: Exception, attempts: int) -> float:
@@ -376,14 +397,16 @@ def no_retry_session(session: Session) -> Session:
     download() owns segment retries, so a mounted urllib3 ``Retry`` nests inside a single
     attempt: one 429 carrying ``Retry-After: 60`` costs five one-minute sleeps before
     download() even sees the failure. requests takes no per-call retry override, and track
-    threads share the caller's session, so remounting it is not an option. A shallow adapter
-    copy keeps the poolmanager object, so TLS and pooling behaviour does not change.
+    threads share the caller's session, so remounting it is not an option.
     """
     view = copy(session)
     view.adapters = OrderedDict()
     for prefix, adapter in session.adapters.items():
         twin = copy(adapter)
         twin.max_retries = Retry(0, read=False)
+        if isinstance(adapter, HTTPAdapter) and isinstance(twin, HTTPAdapter):
+            twin.poolmanager = adapter.poolmanager
+            twin.proxy_manager = adapter.proxy_manager
         view.adapters[prefix] = twin
     return view
 
@@ -409,6 +432,8 @@ def is_content_encoded(value: Optional[str]) -> bool:
 
 def probe_ranged(url: str, session: Any, **kwargs: Any) -> tuple[int, bool]:
     headers = {**(kwargs.get("headers") or {}), "Range": "bytes=0-0"}
+    if not any(str(k).lower() == "accept-encoding" for k in headers):
+        headers["Accept-Encoding"] = "identity"
     rest = {k: v for k, v in kwargs.items() if k != "headers"}
     if is_rnet_session(session):
         rest.setdefault("read_timeout", READ_TIMEOUT)
@@ -430,6 +455,12 @@ def probe_ranged(url: str, session: Any, **kwargs: Any) -> tuple[int, bool]:
         total = content_range.rsplit("/", 1)[-1].strip()
         return (int(total), True) if total.isdigit() else (0, False)
     finally:
+        try:
+            declared = int(resp.headers.get("Content-Length") or resp.headers.get("content-length") or 0)
+            if resp.status_code == 206 and 0 < declared <= PROBE_DRAIN_LIMIT:
+                _ = resp.content
+        except Exception:
+            pass
         try:
             resp.close()
         except Exception:
@@ -474,6 +505,17 @@ def parse_content_range(value: Any) -> Optional[tuple[int, int, Optional[int]]]:
     if not match:
         return None
     return int(match.group(1)), int(match.group(2)), None if match.group(3) == "*" else int(match.group(3))
+
+
+def parse_content_range_unsatisfied(value: Any) -> Optional[int]:
+    """Parse a 416's ``Content-Range`` into the complete length. Gives None when absent or unknown.
+
+    A 416 answers with ``bytes */N`` (or ``bytes */*``), which the 206 form does not cover.
+    """
+    if isinstance(value, bytes):
+        value = value.decode("latin1", "replace")
+    match = re.fullmatch(r"bytes\s+\*/(\d+)", str(value or "").strip(), re.IGNORECASE)
+    return int(match.group(1)) if match else None
 
 
 def range_clamped_to_end(content_range: tuple[int, int, Optional[int]], slice_end: int) -> bool:
@@ -541,6 +583,18 @@ def plan_tail_parts(size: int, spare: int) -> list[tuple[int, int]]:
     return split_ranges(size, spare, TAIL_BOOST_PART_SIZE)
 
 
+def submission_window(target: int) -> int:
+    """Futures to keep queued for ``target`` download workers.
+
+    Submitting every segment up front convoys on the pool's global lock and starves the event
+    drain, so the drain loop meters submission through a window it tops up. The window is
+    twice the worker target: a worker that finishes a segment finds its next one already staged
+    instead of idling until the next drain cycle stages it. A pure function, so the ratio is
+    unit-testable and fixed mode and adaptive mode cannot drift apart.
+    """
+    return target * 2
+
+
 def tail_boost_engages(remaining: int, pending: int, target: int) -> bool:
     """True when idle workers outnumber the remaining whole segments.
 
@@ -564,7 +618,8 @@ def dispatch_parts(
     save_path.parent.mkdir(parents=True, exist_ok=True)
     control_file = save_path.with_name(f"{save_path.name}.!dev")
 
-    parts = split_ranges(total_size, max_workers, RANGE_PARALLEL_PART_SIZE)
+    part_target = max(RANGE_PARALLEL_MIN_PART_SIZE, math.ceil(total_size / max_workers))
+    parts = split_ranges(total_size, max_workers, part_target)
 
     control_file.write_bytes(b"")
     with open(save_path, "wb") as f:
@@ -755,29 +810,24 @@ def download(
 
     _time = time.time
     use_raw = is_requests_session(session)
-    # item carries its own Range (DASH SegmentBase / HLS EXT-X-BYTERANGE slice): never
-    # overwrite it with a resume Range (that would fetch the parent's tail, not the slice);
-    # retries rewrite the whole slice in "wb" mode instead
     item_range = has_range_header(kwargs)
 
     attempts = 1
     written = 0
     resumes = 0
-    # None until a cut proves the host bounds one request; the sequential path also needs a
-    # known complete length, or a short body could not be told apart from a finished download
     request_limit: Optional[int] = None
     known_total: Optional[int] = None
+    high_water = 0
     progress_seeded = False
     while True:
         if claimed is not None and claimed():
             return
         if DOWNLOAD_CANCELLED.is_set() or (abort is not None and abort.is_set()):
-            # a worker waking from a retry nap after cancel/batch-abort must exit here,
-            # before opening a new request or the .!dev handle mid-teardown
             return
         if not part_mode:
             written = 0
         secured = written if part_mode else resume_offset
+        resume_start = resume_offset
         last_speed_refresh = _time()
 
         try:
@@ -818,16 +868,26 @@ def download(
             stream = session.get(url, stream=True, **request_kwargs)
 
             if (not part_mode) and (not item_range) and resume_offset > 0 and stream.status_code == 416:
-                # our Range started past the end (a stale or oversized .!dev from a prior run).
-                # discard it and restart clean rather than raise_for_status → burn retries.
+                complete = parse_content_range_unsatisfied(
+                    stream.headers.get("Content-Range") or stream.headers.get("content-range")
+                )
                 try:
                     stream.close()
                 except Exception:
                     pass
+                if complete == resume_offset and known_total in (None, resume_offset):
+                    if not segmented and not progress_seeded:
+                        # nothing is read on this path, so the bar has to be seeded here
+                        progress_seeded = True
+                        yield dict(total=resume_offset)
+                        yield dict(advance=resume_offset)
+                    os.replace(tmp_file, save_path)
+                    yield dict(file_downloaded=save_path, written=resume_offset)
+                    if segmented:
+                        yield dict(advance=1)
+                    break
                 tmp_file.unlink(missing_ok=True)
-                resume_offset = 0
-                written = 0
-                continue
+                raise IOError(f"resume from byte {resume_offset} got a 416, complete length {complete}")
 
             stream.raise_for_status()
 
@@ -848,14 +908,8 @@ def download(
                         resumed = False
                         resume_offset = 0
                     else:
-                        try:
-                            stream.close()
-                        except Exception:
-                            pass
                         tmp_file.unlink(missing_ok=True)
-                        resume_offset = 0
-                        written = 0
-                        continue
+                        raise IOError(f"resume from byte {resume_offset} got Content-Range {content_range!r}")
                 elif content_range[2] is not None:
                     known_total = content_range[2]
             if (not part_mode) and resume_offset > 0 and not resumed:
@@ -895,6 +949,15 @@ def download(
                 # a 200 carries the whole resource, so its length is the complete length
                 known_total = content_length or None
 
+            if known_total is None and not part_mode and not item_range and stream.status_code == 206:
+                fresh_range = parse_content_range(
+                    stream.headers.get("Content-Range") or stream.headers.get("content-range")
+                )
+                if fresh_range is not None:
+                    if fresh_range[0] != resume_offset:
+                        raise IOError(f"206 body starts at byte {fresh_range[0]}, expected {resume_offset}")
+                    known_total = fresh_range[2]
+
             if item_range and not part_mode and stream.status_code != 206:
                 # server ignored the slice's Range and sent the whole parent (RFC 9110 allows
                 # a 200 here); writing that as the segment would silently corrupt the merge, so
@@ -926,15 +989,12 @@ def download(
                             f"byte-range segment got Content-Range {content_range!r}, "
                             f"expected {slice_start}-{slice_end if slice_end is not None else ''}"
                         )
+                    if not content_encoded:
+                        content_length = content_range[1] - content_range[0] + 1
 
             if resumed and content_encoded:
-                try:
-                    stream.close()
-                except Exception:
-                    pass
                 tmp_file.unlink(missing_ok=True)
-                resume_offset = 0
-                continue
+                raise IOError(f"resume from byte {resume_offset} came back content-encoded")
 
             limiter = speed_limiter
             chunk_size = adaptive_chunk_size(content_length)
@@ -1055,9 +1115,17 @@ def download(
                 raise IOError(f"Failed to read {content_length} bytes from the track URI.")
 
             if not part_mode:
-                if chunk_end is not None and known_total is not None and resume_offset + written < known_total:
+                if known_total is not None:
+                    incomplete = resume_offset + written < known_total
+                else:
+                    incomplete = written == 0 or (stream.status_code == 206 and not item_range)
+                if incomplete:
+                    if resume_offset + written <= resume_start:
+                        raise IOError(f"range from byte {resume_start} returned no bytes past it")
                     resume_offset += written
-                    attempts = 1
+                    if resume_offset > high_water:
+                        high_water = resume_offset
+                        attempts = 1
                     continue
                 os.replace(tmp_file, save_path)
                 yield dict(file_downloaded=save_path, written=resume_offset + written)
@@ -1114,22 +1182,49 @@ def download(
             attempts += 1
 
 
+def rebuildable_adapter(adapter: Any) -> bool:
+    """Whether a child can remount ``adapter`` with the same transport behaviour.
+
+    A child mounts a plain HTTPAdapter. TimeoutHTTPAdapter counts as the same transport here:
+    its one override supplies a default timeout when the caller passes none, and every request
+    this module sends carries an explicit timeout. Any other subclass changes the transport
+    itself, which a spec cannot carry: SSLCiphers swaps the SSL context, so a child would
+    negotiate a different cipher list and the host would reject it.
+    """
+    from unshackle.core.service import TimeoutHTTPAdapter
+
+    return type(adapter) in (HTTPAdapter, TimeoutHTTPAdapter)
+
+
 def build_session_spec(session: Optional[Any]) -> Optional[dict[str, Any]]:
     """Picklable spec to rebuild ``session`` in a child process. Gives None when it is not cheaply rebuildable.
 
     Live sessions (sockets, TLS state, threads) cannot cross a process boundary, so each child
-    reconstructs its own from cheap state. RnetSession needs a resolvable impersonate preset.
-    Without one it is not cheaply rebuildable, and the caller falls back to a single process.
+    reconstructs its own from cheap state. State a child cannot reproduce gives None, and the
+    caller falls back to a single process: a slower correct download beats a broken one.
+    RnetSession needs a resolvable impersonate preset. A requests session needs every mounted
+    adapter to be one a child can remount, and a spec spawn can pickle.
     """
     if session is None:
         return {"kind": "none"}
     if is_requests_session(session):
-        return {
+        if not all(rebuildable_adapter(adapter) for adapter in session.adapters.values()):
+            return None
+        spec: dict[str, Any] = {
             "kind": "requests",
             "headers": dict(session.headers),
             "cookies": session.cookies,  # RequestsCookieJar pickles cleanly
             "proxies": dict(session.proxies),
+            "params": copy(session.params),
+            "verify": session.verify,
+            "cert": session.cert,
+            "auth": session.auth,
         }
+        try:
+            pickle.dumps(spec)
+        except Exception:
+            return None
+        return spec
     if is_rnet_session(session):
         name = session.impersonate_name
         if not name:
@@ -1139,6 +1234,7 @@ def build_session_spec(session: Optional[Any]) -> Optional[dict[str, Any]]:
             "impersonate": name,
             "headers": dict(session.headers),
             "cookies": session.cookies.get_dict_by_domain(),
+            "origin_cookies": session.export_origin_cookies(),
             "proxy": session.proxies.get("all") or session.proxies.get("https") or session.proxies.get("http"),
         }
     return None
@@ -1164,6 +1260,11 @@ def rebuild_session(spec: dict[str, Any], max_workers: int) -> Optional[Any]:
             rs.cookies.update(spec["cookies"])
         if spec.get("proxies"):
             rs.proxies.update(spec["proxies"])
+        if spec.get("params"):
+            rs.params = spec["params"]
+        rs.verify = spec.get("verify", True)
+        rs.cert = spec.get("cert")
+        rs.auth = spec.get("auth")
         adapter = HTTPAdapter(pool_connections=max_workers, pool_maxsize=max_workers, pool_block=True)
         rs.mount("https://", adapter)
         rs.mount("http://", adapter)
@@ -1183,6 +1284,7 @@ def rebuild_session(spec: dict[str, Any], max_workers: int) -> Optional[Any]:
                 ns.cookies.update(jar)
         if spec.get("proxy"):
             ns.proxies.update({"all": spec["proxy"]})
+        ns.import_origin_cookies(spec.get("origin_cookies") or {})
         return ns
     return None  # "none": child builds its own Session from the passed headers/cookies/proxy
 
@@ -1209,8 +1311,9 @@ def mp_worker(queue: Any, kwargs: dict[str, Any]) -> None:
         kwargs["session"] = rebuild_session(spec, int(kwargs.get("max_workers") or 1))
         for event in requests(**kwargs):
             queue.put(event)
-    except Exception:
-        queue.put({"__mp_error__": traceback.format_exc()})
+    except Exception as exc:
+        summary = " ".join(f"{type(exc).__name__}: {exc}".split())
+        queue.put({"__mp_error__": f"{summary}\n{traceback.format_exc()}"})
     finally:
         queue.put({"__mp_done__": True})
 
@@ -1326,7 +1429,7 @@ def download_multiprocess(
                 if "__mp_error__" in event:
                     for p in procs:
                         p.terminate()
-                    raise RuntimeError(f"segment download child failed:\n{event['__mp_error__']}")
+                    raise RuntimeError(f"segment download child failed: {event['__mp_error__']}")
                 if "total" in event:
                     continue
                 if "downloaded" in event:
@@ -1581,7 +1684,8 @@ def requests(
                 and not has_range_header(url_item)
                 and not url_item["save_path"].exists()
             ):
-                total_size, supports_ranges = probe_ranged(url_item["url"], session)
+                probe_kwargs = {k: v for k, v in url_item.items() if k not in ("url", "save_path")}
+                total_size, supports_ranges = probe_ranged(url_item["url"], session, **probe_kwargs)
                 if supports_ranges and total_size >= RANGE_PARALLEL_MIN_SIZE:
                     try:
                         yield from dispatch_parts(
@@ -1730,6 +1834,7 @@ def requests(
         # indices probed and left for the normal single-worker path, each decided once
         tail_boosted: set[int] = set()
         tail_skipped: set[int] = set()
+        part_aborts: list[threading.Event] = []
 
         def submit(count: int, only: Optional[set[int]] = None) -> None:
             # only=<set> submits just those indices (used in the tail window to release
@@ -1762,6 +1867,7 @@ def requests(
             part_lock: threading.Lock,
             req_kwargs: dict[str, Any],
         ) -> None:
+            failure: Optional[Exception] = None
             try:
                 # part_mode download writes [start, end] into the pre-truncated target and
                 # emits only byte-`advance`; swallow those, since tail segments report at segment
@@ -1777,16 +1883,24 @@ def requests(
                     **req_kwargs,
                 ):
                     pass
-            except BaseException:
-                abort.set()  # stop sibling parts of this segment; a real failure fails the batch
-                raise
+            except BaseException as exc:
+                abort.set()  # stop the sibling parts of this segment, and only those
+                if not isinstance(exc, Exception):
+                    raise  # KeyboardInterrupt and friends still end the batch
+                failure = exc
             with part_lock:
                 parts_left[0] -= 1
-                finalize = parts_left[0] == 0
-            if not finalize:
+                last = parts_left[0] == 0
+            if DOWNLOAD_CANCELLED.is_set():
+                return  # cancelled: keep the partial target for the stray sweep, don't finalize
+            if failure is not None or abort.is_set():
+                if last:
+                    part_target.unlink(missing_ok=True)
+                if failure is not None:
+                    raise TailPartFailed(index) from failure
+                return  # a sibling part failed; that one reports the segment
+            if not last:
                 return
-            if DOWNLOAD_CANCELLED.is_set() or abort.is_set():
-                return  # cancelled/aborted: keep the partial target for the stray sweep, don't finalize
             with seg_lock:
                 if index in seg_done:
                     part_target.unlink(missing_ok=True)
@@ -1849,8 +1963,8 @@ def requests(
                     f.truncate(size)
                 seg_start[index] = time.time()
                 tail_boosted.add(index)
-                # a failed part fails the whole batch anyway, so parts share batch_abort
-                abort = batch_abort
+                abort = threading.Event()
+                part_aborts.append(abort)
                 parts_left = [len(parts)]
                 part_lock = threading.Lock()
                 for start, end in parts:
@@ -1872,12 +1986,10 @@ def requests(
                     )
                 boosted += 1
 
-        # submitting every segment up front convoys on the pool's global lock and starves the
-        # event drain, so fixed mode meters submission through a window the loop tops up
-        queue_depth = max_workers * 2
+        queue_depth = submission_window(max_workers)
 
         if controller:
-            submit(controller.update(time.time()))
+            submit(controller.update(time.time(), len(remaining)))
         else:
             submit(queue_depth)
 
@@ -1914,15 +2026,12 @@ def requests(
                 if controller:
                     target = controller.update(now, len(pending) + len(remaining))
                     maybe_tail_boost(target)
-                    if len(pending) < target:
-                        # In the final stride (unstarted segments <= one worker target), hold back
-                        # boost candidates so idle workers accumulate for a range-split; only
-                        # release segments the boost already declined (too small / no range) so
-                        # nothing stalls. Otherwise top up in FIFO order as usual.
+                    queue_target = submission_window(target)
+                    if len(pending) < queue_target:
                         if remaining and len(remaining) <= target:
                             submit(target - len(pending), only=tail_skipped)
                         else:
-                            submit(target - len(pending))
+                            submit(queue_target - len(pending))
                 elif len(pending) < queue_depth:
                     submit(queue_depth - len(pending))
 
@@ -1975,6 +2084,12 @@ def requests(
                     exc = future.exception()
                     if isinstance(exc, KeyboardInterrupt):
                         raise KeyboardInterrupt()
+                    elif isinstance(exc, TailPartFailed) and permanent_status(exc) is None:
+                        if exc.index not in tail_skipped:
+                            tail_boosted.discard(exc.index)
+                            tail_skipped.add(exc.index)
+                            remaining.appendleft((exc.index, urls[exc.index]))
+                        continue
                     elif exc:
                         DOWNLOAD_CANCELLED.set()
                         yield dict(downloaded="[red]FAILING")
@@ -2006,6 +2121,8 @@ def requests(
             # batch_abort outlives the shutdown so a leaked worker exits at its next
             # arrival/timeout instead of retrying after the global flag is cleared
             batch_abort.set()
+            for part_abort in part_aborts:
+                part_abort.set()
             # batch_abort is set, so a loser whose read we unblock here sees it and exits without
             # retrying; unblock only on the success path (the wait below still guarantees handles
             # are released before merge sweeps). rnet streams have no reachable socket -> no-op.

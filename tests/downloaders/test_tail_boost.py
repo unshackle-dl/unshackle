@@ -11,7 +11,9 @@ target, finalized by the last part worker via os.replace. The invariants:
 - finalize is last-part-wins: on success save_path exists and the ``.tp.!dev`` target
   is gone;
 - a permanently failing part fails the batch and the boosted segment is never
-  os.replace'd into place (no corrupt finalized segment).
+  os.replace'd into place (no corrupt finalized segment);
+- a part that fails for a reason a retry could fix puts its segment back on the normal
+  single-worker path, without aborting the sibling segments or the track.
 
 Determinism: with ``max_workers`` < segment count <= 2*max_workers and adaptive=True,
 the leading ``max_workers`` segments submit upfront and the trailing few stay in
@@ -50,9 +52,16 @@ class _Handler(BaseHTTPRequestHandler):
             start_s, _, end_s = rng[len("bytes=") :].partition("-")
             start = int(start_s)
             end = int(end_s) if end_s else len(BODY) - 1
+            if server.deny_offset_ranges and start > 0:
+                # every non-leading window is refused for good (expired token, geo block)
+                self.send_response(403)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
             if server.break_offset_ranges and start > 0:
-                # misbehave for every non-leading window: send the whole body as 200 so
-                # part-mode's 206 check fails permanently for that part
+                # every non-leading window answers 200 with the whole body: part-mode's 206
+                # check fails, but 200 is not permanent, so the segment goes back on the
+                # normal single-worker path
                 self.send_response(200)
                 self.send_header("Content-Length", str(len(BODY)))
                 self.end_headers()
@@ -80,6 +89,7 @@ def server():
     srv.lock = threading.Lock()
     srv.requests = []
     srv.break_offset_ranges = False
+    srv.deny_offset_ranges = False
     thread = threading.Thread(target=srv.serve_forever, daemon=True)
     thread.start()
     yield srv
@@ -160,15 +170,52 @@ def test_tail_boost_finalize_last_part_wins(server, tmp_path):
         assert not save_path.with_name(f"{save_path.name}.tp.!dev").exists()
 
 
-def test_tail_boost_part_failure_fails_batch_but_keeps_siblings_files_clean(server, tmp_path, monkeypatch):
-    server.break_offset_ranges = True  # every non-leading part window 200s -> permanent 206 failure
+def test_tail_boost_part_failure_falls_back_to_normal_path(server, tmp_path, monkeypatch):
+    server.break_offset_ranges = True  # every part window past the first fails, but not for good
+    monkeypatch.setattr(dl, "RETRY_WAIT", 0.01)
+
+    files, advances = run(server, tmp_path, seg_urls(server))
+
+    assert boost_engaged(server), "tail boost never engaged; the fallback path is untested"
+    # a transient part failure returns the segment to the normal path instead of killing the track
+    assert len(files) == SEG_COUNT
+    assert all(f.read_bytes() == BODY for f in files)
+    # one advance per segment: a requeued segment must not be counted twice
+    assert advances == SEG_COUNT
+    assert not dl.DOWNLOAD_CANCELLED.is_set()
+    assert not list(tmp_path.glob("*.!dev"))
+    assert not list(tmp_path.glob("*.tp.!dev"))
+
+
+def test_tail_boost_failure_does_not_abort_sibling_segments(server, tmp_path, monkeypatch):
+    server.break_offset_ranges = True
+    monkeypatch.setattr(dl, "RETRY_WAIT", 0.01)
+
+    files, _ = run(server, tmp_path, seg_urls(server))
+
+    assert boost_engaged(server), "tail boost never engaged; the fallback path is untested"
+    # the parts of one segment share an abort of their own: setting the batch-wide one would
+    # strand every other in-flight worker and end the batch with segments missing
+    assert len(files) == SEG_COUNT
+    with server.lock:
+        reqs = list(server.requests)
+    boosted_paths = {path for path, rng in reqs if rng and rng != "bytes=0-0"}
+    assert boosted_paths
+    # each boosted segment went back on the normal path: a plain unranged GET for it
+    plain = {path for path, rng in reqs if rng is None}
+    assert boosted_paths <= plain
+
+
+def test_tail_boost_permanent_part_failure_still_fails_the_batch(server, tmp_path, monkeypatch):
+    server.deny_offset_ranges = True  # every part window past the first is a 403
     monkeypatch.setattr(dl, "RETRY_WAIT", 0.01)
 
     with pytest.raises(Exception):
         run(server, tmp_path, seg_urls(server))
 
-    # the boosted tail segments (6, 7) hit the failing windows: no part run reaches parts_left==0
-    # cleanly, so neither is finalized. sibling leaders that did finalize must be uncorrupted.
+    assert boost_engaged(server), "tail boost never engaged; the permanent-failure rule is untested"
+    # a 4xx will not get better on the normal path either, so the boosted tail segments
+    # (6, 7) are never finalized and the batch fails instead of paying a second full attempt
     for i in (6, 7):
         assert not (tmp_path / f"seg_{i:04}.bin").exists()
     for f in tmp_path.glob("seg_*.bin"):
