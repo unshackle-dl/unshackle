@@ -698,6 +698,13 @@ that run writes no muxed output. A `failure` post-script still operates if the d
 unshackle dl --postscript "python /opt/upload.py {filepath} --service={service}" EXAMPLE 81234567
 ```
 
+`--no-postscript` operates the run with no post-script at all. It silences the `post_scripts`
+config and `--postscript` together, for every event and mode.
+
+```shell title="Skip the uploader for one run"
+unshackle dl --no-postscript EXAMPLE 81234567
+```
+
 For post-scripts that continue across runs, for the `season` and `run` modes, for `failure`
 post-scripts and for the full variable list, see
 [Post-scripts](../reference/configuration/post-scripts.md).
@@ -946,7 +953,7 @@ authoritative list.
 | `--best-available` | | Degrade gracefully instead of failing. |
 | `--output` | `-o` | Output directory for this run. |
 | `--split-audio` / `--merge-video` / `--no-mux` | | Muxing behaviour. |
-| `--postscript` | | Run a command after each output file. Repeatable. |
+| `--postscript` / `--no-postscript` | | Run a command after each output file, or run none. |
 | `--proxy` / `--no-proxy` / `--no-proxy-download` | | Proxy control. |
 | `--workers` / `--downloads` / `--slow` | | Concurrency and pacing. |
 | `--list` / `--list-titles` / `--skip-dl` | | Dry runs. |

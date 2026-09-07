@@ -35,6 +35,8 @@ EVENTS = ("success", "failure")
 MODES = ("file", "season", "run")
 
 SIDECAR_SEPARATOR = "\n"
+NO_POST_SCRIPTS: tuple[str, ...] = ("",)
+"""``dl --no-postscript``: an override list that replaces the config and holds no command to run."""
 
 _warned_entries: set[str] = set()
 

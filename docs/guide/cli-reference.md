@@ -149,6 +149,7 @@ Keep only certain track types, or skip certain track types.
 | `--tag` | Group tag override. |
 | `--repack` | Add a `REPACK` tag to the filename. |
 | `--postscript` | Run a command after each output file, with `{variable}` placeholders substituted. Repeatable. Replaces the `post_scripts` config for this run. See [Post-scripts](../reference/configuration/post-scripts.md). |
+| `--no-postscript` | Run no post-script for this run, neither the configured ones nor `--postscript`. |
 
 ### Metadata & tagging
 

@@ -7,8 +7,12 @@ from types import SimpleNamespace
 
 import pytest
 
+import unshackle.core.utils.post_scripts as ps
 from unshackle.core.config import config
 from unshackle.core.utils.post_scripts import (
+    EVENTS,
+    MODES,
+    NO_POST_SCRIPTS,
     SIDECAR_SEPARATOR,
     _entries,
     build_context,
@@ -217,3 +221,14 @@ def test_wait_true_waits_for_the_script_and_logs_the_exit_code(monkeypatch, capl
 def test_wait_defaults_to_fire_and_forget(monkeypatch):
     slow = 'python -c "import time; time.sleep(0.3)"'
     assert _dispatch_seconds(monkeypatch, {"command": slow}) < 0.3
+
+
+def test_no_postscript_override_silences_every_event_and_mode(monkeypatch):
+    """``dl --no-postscript`` passes NO_POST_SCRIPTS as the override list. Nothing may spawn."""
+    monkeypatch.setattr(config, "post_scripts", [{"command": "should_not_run.py", "mode": mode} for mode in MODES])
+    spawned: list[list[str]] = []
+    monkeypatch.setattr(ps.subprocess, "Popen", lambda argv, **kw: spawned.append(argv))
+    for event in EVENTS:
+        for mode in MODES:
+            dispatch(event, mode, {"filepath": "/x/y.mkv"}, NO_POST_SCRIPTS)
+    assert spawned == []

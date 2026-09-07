@@ -99,7 +99,7 @@ from unshackle.core.utils.click_types import (
     SubtitleCodecChoice,
 )
 from unshackle.core.utils.collections import ci_get, merge_dict
-from unshackle.core.utils.post_scripts import build_context, dispatch, season_context
+from unshackle.core.utils.post_scripts import NO_POST_SCRIPTS, build_context, dispatch, season_context
 from unshackle.core.utils.redact import mask_proxy
 from unshackle.core.utils.selector import select_multiple
 from unshackle.core.utils.subprocess import ffprobe
@@ -876,6 +876,12 @@ class dl:
         ),
     )
     @click.option(
+        "--no-postscript",
+        is_flag=True,
+        default=False,
+        help="Do not run any post-script for this run, configured or --postscript.",
+    )
+    @click.option(
         "--workers",
         type=int,
         default=None,
@@ -1533,9 +1539,12 @@ class dl:
         real_audio_bitrate: bool = False,
         progress_sink: Optional[Callable[[dict[str, Any]], None]] = None,
         postscript: Sequence[str] = (),
+        no_postscript: bool = False,
         *_: Any,
         **__: Any,
     ) -> None:
+        if no_postscript:
+            postscript = NO_POST_SCRIPTS
         if continue_downloads:
             config.continue_downloads = True
         self.tmdb_searched = False

@@ -282,6 +282,16 @@ It replaces the `post_scripts` config for that run rather than adding to it, so 
 configured entry runs while it is in use. That includes your `season`, `run` and `failure`
 entries, which have no `--postscript` equivalent.
 
+## `--no-postscript`
+
+`dl --no-postscript` operates the run with no post-script. It silences every configured entry
+and every `--postscript` command, for each event and mode. Use it to skip an uploader or a
+notifier for one run without an edit to `unshackle.yaml`.
+
+```console
+$ unshackle dl --no-postscript SERVICE TITLE_ID
+```
+
 ## The REST API
 
 The API never accepts a post-script command. `postscript`, `post_script` and `post_scripts`
