@@ -2075,6 +2075,107 @@ async def dashboard_sessions(request: web.Request) -> web.Response:
     responses:
       '200':
         description: Session list
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    description: 'Remote session id'
+                  owner:
+                    type: string
+                    description: 'Username, else the masked API key'
+                  creator_ip:
+                    type: string
+                    nullable: true
+                  service:
+                    type: string
+                    description: 'Service tag'
+                  title_id:
+                    type: string
+                    nullable: true
+                    description: 'The title the client last asked tracks for, else the first resolved title'
+                  title:
+                    type: string
+                    nullable: true
+                    description: 'Display name of that title'
+                  titles:
+                    type: integer
+                    description: 'How many titles the remote session resolved'
+                  tracks:
+                    type: integer
+                  auth_status:
+                    type: string
+                    enum: [authenticated, authenticating, pending_input, failed]
+                  auth_error:
+                    type: string
+                    nullable: true
+                  server_account:
+                    type: string
+                    nullable: true
+                    description: 'Server profile lent to the remote session'
+                  log_seq:
+                    type: integer
+                    description: 'Last sequence number in the remote session service log'
+                  client:
+                    type: object
+                    description: |
+                      What the client reported when it opened the remote session. The CLI sends `version`,
+                      `code_hash`, `platform` and `argv`. `argv` is the command line the user
+                      ran, redacted by the client: proxy and URL userinfo, secret query
+                      parameters and credential values become `***`, home and install paths
+                      shorten as in the logs, and the line is cut at 3000 characters. Empty
+                      for a client too old to report anything.
+                    properties:
+                      version:
+                        type: string
+                      code_hash:
+                        type: string
+                        nullable: true
+                        description: 'Commit the client runs, null when its source cannot be read'
+                      platform:
+                        type: string
+                      argv:
+                        type: string
+                        description: 'Redacted command line the user ran'
+                  actions:
+                    type: array
+                    description: 'Request log for the remote session, newest last, capped at 500'
+                    items:
+                      type: object
+                      properties:
+                        ts:
+                          type: number
+                        method:
+                          type: string
+                        action:
+                          type: string
+                        query:
+                          type: string
+                        status:
+                          type: integer
+                        ms:
+                          type: number
+                        bytes_in:
+                          type: integer
+                        bytes_out:
+                          type: integer
+                  created_at:
+                    type: string
+                  last_accessed:
+                    type: string
+                  created_ts:
+                    type: number
+                    description: 'Unix epoch, the same clock as log ts'
+                  last_accessed_ts:
+                    type: number
+                  age_seconds:
+                    type: integer
+                  idle_seconds:
+                    type: integer
       '401':
         description: Dashboard key missing or invalid
     """
