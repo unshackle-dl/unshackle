@@ -18,6 +18,7 @@ from unshackle.core.downloaders.requests import (
     plan_tail_parts,
     requests,
     split_ranges,
+    submission_window,
     tail_boost_engages,
 )
 from unshackle.core.tracks.track import DownloadContext
@@ -174,6 +175,75 @@ def test_tail_guard_still_halves_on_error_burst() -> None:
     for _ in range(3):
         c.record_error(now)
     assert c.update(now, 2) == 3  # guard active (2 < 6) but 3 errors -> 6 // 2
+
+
+PER_WORKER = 1_000_000.0  # bytes/sec each worker adds, so throughput scales with the target
+
+
+def run_scaling(c: AdaptiveWorkerController, now: float, seconds: float, work: int = 10_000) -> float:
+    """Advance ``seconds`` of a download whose throughput scales with the live target.
+
+    Records samples on the 0.5s grid at ``target * PER_WORKER`` bytes/sec and calls ``update``
+    on every step, so the speed window mixes old and new rates the way a real run does. ``work``
+    stands for the segments in flight or not yet started, kept high to hold the tail guard off.
+    """
+    end = now + seconds
+    while now < end - 1e-9:
+        now += DT
+        c.record_bytes(int(c.target * PER_WORKER * DT), now)
+        c.update(now, work)
+    return now
+
+
+def test_probe_kept_when_the_true_gain_clears_the_bar() -> None:
+    c = AdaptiveWorkerController(cap=16, start=10, tick=TICK, window=WINDOW)
+    now = 0.0
+    c.update(now)
+    rate = 1_000_000.0
+    now = fill_window(c, rate, now)
+    assert c.update(now) == 12  # first evaluation probes 10 -> 12
+    target, now = run_tick(c, rate * 1.2, now)
+    assert target == 14  # probe held, and the controller climbs again
+
+
+def test_recovers_to_the_cap_after_an_error_burst() -> None:
+    c = AdaptiveWorkerController(cap=16, start=16, tick=TICK, window=WINDOW)
+    now = 0.0
+    c.update(now)
+    now = run_scaling(c, now, WINDOW)
+    for _ in range(3):
+        c.record_error(now)
+    now = run_scaling(c, now, TICK)
+    assert c.target == 8, "error burst must halve the target 16 -> 8"
+
+    now = run_scaling(c, now, 60.0)
+    assert c.target == 16, "controller never returned to its cap after backing off"
+    now = run_scaling(c, now, 40.0)
+    assert c.target == 16, "controller left the cap on a link where every worker still pays"
+
+
+def test_reverts_when_the_probe_stops_paying_on_a_saturated_link() -> None:
+    c = AdaptiveWorkerController(cap=16, start=8, tick=TICK, window=WINDOW)
+    now = 0.0
+    c.update(now)
+    rate = 8 * PER_WORKER
+    now = fill_window(c, rate, now)
+    seen = [c.update(now, 10_000)]
+    for _ in range(8):
+        rate = min(c.target, 10) * PER_WORKER
+        end = now + TICK
+        while now < end - 1e-9:
+            now += DT
+            c.record_bytes(int(rate * DT), now)
+        seen.append(c.update(now, 10_000))
+    assert max(seen) <= 12  # one probe past the knee is the most it may hold
+    assert seen[-1] <= 12
+
+
+def test_submission_window_stages_a_spare_segment_for_every_worker() -> None:
+    assert submission_window(16) == 32
+    for target in (2, 4, 6, 16):
+        assert submission_window(target) == 2 * target
 
 
 def test_plan_tail_parts_full_coverage_no_gaps() -> None:
