@@ -3392,7 +3392,7 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 <tr>
 <td><code>--download-processes</code></td>
 <td><code>1</code></td>
-<td>Split large segment batches (24+) across this many download processes to exceed the single-process throughput cap on multi-gigabit connections. Ignored while a speed limit is set: the cap is one shared budget, which extra processes cannot share, so the download stays in a single process.</td>
+<td>Split large segment batches (24+) across this many download processes to exceed the single-process throughput cap on multi-gigabit connections. Ignored while a speed limit is set: the cap is one shared budget, which extra processes cannot share, so the download stays in a single process. Also ignored when the service HTTP session carries state a child process cannot rebuild, such as a custom TLS adapter.</td>
 </tr>
 <tr>
 <td><code>--continue-downloads</code></td>
