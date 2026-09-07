@@ -30,6 +30,8 @@ When unshackle recovers new keys from a license, it pushes them to **all** confi
 - unshackle skips keys that already exist in a vault (it never overwrites or deletes existing data).
 - A vault marked `no_push: true` receives lookups, but unshackle never writes to it. This is useful for read-only or shared upstream vaults you do not own.
 
+unshackle pushes keys from every source, not only a local CDM. A run against a remote server that licenses with its own CDM (`--remote`) writes the keys the server returns, and `unshackle import` writes the keys it reads from an export file.
+
 !!! tip "A good two-vault setup"
     A common arrangement is a fast local **SQLite** vault plus a shared remote vault (**MySQL**, **HTTP**, or **API**). The local vault answers instantly and works offline; the remote vault lets you share keys across machines or with a group.
 

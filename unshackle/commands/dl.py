@@ -2904,6 +2904,7 @@ class dl:
 
             if hasattr(service, "resolve_server_keys"):
                 service.resolve_server_keys(title)
+                self.cache_resolved_keys(title)
 
             dl_start_time = time.time()
 
@@ -3996,6 +3997,23 @@ class dl:
         self.vault_cache_tally = None
         self.log.info(f"Cached {keys} Key{'' if keys == 1 else 's'} to {successful_caches}/{len(self.vaults)} Vaults")
 
+    def cache_resolved_keys(self, title: Title_T) -> None:
+        """Cache the keys a batch licence or an import put on the tracks.
+
+        Both fill track.drm before any prepare_drm call, so this is the only point where those
+        keys can still reach the local vaults.
+        """
+        keys = {
+            kid: key
+            for track in title.tracks
+            for drm in (getattr(track, "drm", None) or [])
+            for kid, key in getattr(drm, "content_keys", {}).items()
+            if kid not in self.LICENSE_KEY_CACHE
+        }
+        if keys:
+            self.LICENSE_KEY_CACHE.update(keys)
+            self.flush_vault_writes([partial(self.cache_keys_to_vaults, keys)])
+
     def cache_keys_to_vaults(self, content_keys: dict[UUID, str]) -> None:
         successful_caches = self.vaults.add_keys(content_keys)
         keys, caches = self.vault_cache_tally or (0, successful_caches)
@@ -4054,29 +4072,44 @@ class dl:
         server_cdm = getattr(svc_for_cdm, "_server_cdm", getattr(self, "server_cdm", False))
 
         if server_cdm:
-            if not cdm_only:
+            with self.drm_lock(drm):
+                pending_vault_writes: list[Callable[[], Any]] = []
                 vault_kids = list(getattr(drm, "kids", None) or [])
                 if track_kid and track_kid not in vault_kids:
                     vault_kids.append(track_kid)
                 for kid in vault_kids:
                     if kid in drm.content_keys:
                         continue
-                    content_key = self.LICENSE_KEY_CACHE.get(kid) or self.vaults.get_key(kid)[0]
+                    content_key = self.LICENSE_KEY_CACHE.get(kid)
+                    if not content_key and not cdm_only:
+                        content_key, vault_used = self.vaults.get_key(kid)
+                        if content_key:
+                            pending_vault_writes.append(
+                                partial(self.vaults.add_key, kid, content_key, excluding=vault_used)
+                            )
                     if content_key:
                         drm.content_keys[kid] = content_key
                         self.LICENSE_KEY_CACHE[kid] = content_key
 
-            def missing_track_key() -> bool:
-                return not drm.content_keys or bool(track_kid and track_kid not in drm.content_keys)
+                known_keys = set(drm.content_keys)
 
-            if missing_track_key():
-                try:
-                    licence(
-                        drm_system="playready" if drm.__class__.__name__ == "PlayReady" else "widevine",
-                        challenge=b"",
-                    )
-                except Exception as e:
-                    self.log.debug(f"Server CDM licence with an empty challenge failed: {e!r}")
+                def missing_track_key() -> bool:
+                    return not drm.content_keys or bool(track_kid and track_kid not in drm.content_keys)
+
+                if missing_track_key():
+                    try:
+                        licence(
+                            drm_system="playready" if drm.__class__.__name__ == "PlayReady" else "widevine",
+                            challenge=b"",
+                        )
+                    except Exception as e:
+                        self.log.debug(f"Server CDM licence with an empty challenge failed: {e!r}")
+
+                new_keys = {kid: key for kid, key in drm.content_keys.items() if kid not in known_keys}
+                if new_keys:
+                    self.LICENSE_KEY_CACHE.update(new_keys)
+                    pending_vault_writes.append(partial(self.cache_keys_to_vaults, new_keys))
+                self.flush_vault_writes(pending_vault_writes)
 
             if not drm.content_keys:
                 self.log.warning("Server CDM did not resolve any keys for this track")
