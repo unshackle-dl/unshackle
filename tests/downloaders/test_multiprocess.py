@@ -25,8 +25,10 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
+from requests import Session
 
 from unshackle.core.constants import DownloadCancelled
+from unshackle.core.utils.sslciphers import SSLCiphers
 
 dl = importlib.import_module("unshackle.core.downloaders.requests")
 
@@ -44,8 +46,15 @@ class _Handler(BaseHTTPRequestHandler):
         delay = getattr(server, "delay", 0.0)
         if delay:
             time.sleep(delay)
+        path, _, query = self.path.partition("?")
+        required = getattr(server, "require_query", "")
+        if required and query != required:
+            self.send_response(403)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         try:
-            index = int(self.path.rsplit("/", 1)[1].split(".")[0])
+            index = int(path.rsplit("/", 1)[1].split(".")[0])
         except ValueError:
             self.send_response(404)
             self.send_header("Content-Length", "0")
@@ -72,6 +81,7 @@ class _Server(ThreadingHTTPServer):
 def server():
     srv = _Server(("127.0.0.1", 0), _Handler)
     srv.delay = 0.0
+    srv.require_query = ""
     thread = threading.Thread(target=srv.serve_forever, daemon=True)
     thread.start()
     yield srv
@@ -180,3 +190,42 @@ def test_speed_limit_forces_single_process(server, tmp_path, monkeypatch):
     assert len(files) == n
     for f in files:
         assert f.read_bytes() == seg_body(int(f.stem.split("_")[1]))
+
+
+def test_children_carry_session_params(server, tmp_path):
+    """Services keep their access token in session.params. A child that loses it gets a 403 per segment."""
+    server.require_query = "at=auth-token"
+    session = Session()
+    session.params = {"at": "auth-token"}
+    n = dl.MP_MIN_SEGMENTS
+    urls = [{"url": url(server, f"/seg/{i}.bin")} for i in range(n)]
+
+    for _ in dl.requests(
+        urls, output_dir=tmp_path, filename="seg_{i:04}.bin", session=session, max_workers=4, processes=2
+    ):
+        pass
+
+    files = sorted(tmp_path.glob("seg_*.bin"))
+    assert len(files) == n
+    for f in files:
+        assert f.read_bytes() == seg_body(int(f.stem.split("_")[1]))
+
+
+def test_service_mounted_adapter_forces_single_process(server, tmp_path, monkeypatch):
+    """A child mounts a plain adapter, so a session carrying SSLCiphers has to stay in this process."""
+
+    def no_mp(**kwargs):
+        raise AssertionError("multiprocess fan-out engaged for a session with a service-mounted adapter")
+
+    monkeypatch.setattr(dl, "download_multiprocess", no_mp)
+    session = Session()
+    session.mount("https://", SSLCiphers(security_level=2))
+    n = dl.MP_MIN_SEGMENTS
+    urls = [{"url": url(server, f"/seg/{i}.bin")} for i in range(n)]
+
+    for _ in dl.requests(
+        urls, output_dir=tmp_path, filename="seg_{i:04}.bin", session=session, max_workers=4, processes=2
+    ):
+        pass
+
+    assert len(list(tmp_path.glob("seg_*.bin"))) == n
