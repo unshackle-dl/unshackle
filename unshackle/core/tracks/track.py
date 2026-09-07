@@ -877,9 +877,10 @@ class Track:
                 if isinstance(drm, Widevine):
                     return drm
         elif is_playready_cdm(cdm):
-            for drm in self.drm:
-                if isinstance(drm, PlayReady):
-                    return drm
+            playready = [drm for drm in self.drm if isinstance(drm, PlayReady)]
+            if playready:
+                playready[0].absorb(*playready[1:])
+                return playready[0]
 
         return self.drm[0]
 

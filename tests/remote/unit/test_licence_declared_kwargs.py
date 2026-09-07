@@ -108,6 +108,8 @@ class StubPlayReady(PlayReady):
         self.pssh = SimpleNamespace(wrm_headers=["<WRMHEADER/>"])
         self.pssh_b64 = pssh_b64
         self.kids = [KID]
+        self._extra_headers: list[Any] = []
+        self._refused_headers: set[str] = set()
         self.content_keys: dict[UUID, str] = {}
 
     def extract_keys_from_cdm(self, cdm: Any, session_id: Any) -> dict[UUID, str]:

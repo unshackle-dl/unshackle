@@ -4026,6 +4026,13 @@ class dl:
         Tracks that share KIDs still take turns, so the second one finds the content keys in
         LICENSE_KEY_CACHE and skips the challenge. Tracks with different KIDs send a challenge
         and query the key vaults at the same time.
+
+        Callers take the lock after get_drm_for_cdm(), which folds a track's sibling PlayReady
+        objects into the returned one, so the KID set is complete for that track's DRM list
+        before the lock is chosen. This holds because every manifest parser gives the tracks
+        that share a PlayReady object the same DRM list (ISM attaches one list to all tracks;
+        DASH and HLS build a list per track). Two tracks that share one object but list
+        different siblings would get different locks.
         """
         kids = getattr(drm, "kids", None) or []
         key = ",".join(sorted(getattr(k, "hex", str(k)) for k in kids)) or getattr(drm, "content_id", None)
