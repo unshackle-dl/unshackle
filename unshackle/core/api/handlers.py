@@ -3685,10 +3685,10 @@ def handle_single_server_cdm(
         from unshackle.core.drm import PlayReady
 
         pr_pssh = PlayReadyPSSH(base64.b64decode(pssh_b64))
-        pr_drm = PlayReady(pssh=pr_pssh, pssh_b64=pssh_b64)
-
         siblings = [d for d in (getattr(track, "drm", None) or []) if isinstance(d, PlayReady)]
-        if len(siblings) > 1:
+        manifest_kid = next((getattr(d, "kid", None) for d in siblings if getattr(d, "kid", None)), None)
+        pr_drm = PlayReady(pssh=pr_pssh, pssh_b64=pssh_b64, kid=manifest_kid)
+        if siblings:
             pr_drm.absorb(*siblings)
 
         # Gate on the caller's CDM device first: no device, no keys from the vault or CDM.
@@ -3843,7 +3843,6 @@ async def session_license_handler(
     the challenge, get the license, and extract `KID:KEY` pairs. Supports
     batch (track_ids list) and single-track requests.
     """
-    import base64
 
     session = await get_validated_session(session_id, request)
 
@@ -3873,9 +3872,22 @@ async def session_license_handler(
 
         all_keys: Dict[str, Dict[str, str]] = {}
         drm_types: Dict[str, str] = {}
-        keys_by_pssh: Dict[str, Dict[str, str]] = {}
-        drm_type_by_pssh: Dict[str, str] = {}
+        keys_by_pssh: Dict[tuple, Dict[str, str]] = {}
+        drm_type_by_pssh: Dict[tuple, str] = {}
         actual_drm_type: Optional[str] = None
+
+        def pssh_set(track: Any) -> tuple:
+            """Every PSSH and KID the track carries, as the rest of the cache key.
+
+            Two tracks can share their first PSSH and still need different licences,
+            because the server licenses every header the track holds and asks for every
+            KID the manifest named on it.
+            """
+            drms = getattr(track, "drm", None) or []
+            return (
+                tuple(sorted(str(getattr(d, "pssh_b64", "") or "") for d in drms)),
+                tuple(sorted(str(kid) for d in drms for kid in (getattr(d, "kids", None) or []))),
+            )
 
         def warn(message: str) -> None:
             """Log on the server and copy into the remote session buffer the client drains.
@@ -3902,20 +3914,22 @@ async def session_license_handler(
                 if pssh_str:
                     break
             else:
+                warn(f"No PSSH on track {sanitize_log(str(track.id)[:12])} for {', '.join(candidates) or 'any CDM'}")
                 return {}, None, None
 
-            if pssh_str not in keys_by_pssh:
-                keys_by_pssh[pssh_str] = {}
+            cache_key = (pssh_str, pssh_set(track))
+            if cache_key not in keys_by_pssh:
+                keys_by_pssh[cache_key] = {}
                 try:
                     keys = handle_single_server_cdm(service, title, track, pssh_str, candidate, request)
                     if keys:
-                        keys_by_pssh[pssh_str] = keys
-                        drm_type_by_pssh[pssh_str] = candidate
+                        keys_by_pssh[cache_key] = keys
+                        drm_type_by_pssh[cache_key] = candidate
                 except SystemExit:
                     warn(f"Service exited while resolving keys for track {sanitize_log(str(track.id)[:12])}, skipping")
                 except (Exception, SystemExit) as e:
                     warn(f"Failed to resolve keys for track {sanitize_log(str(track.id)[:12])}: {e}")
-            return keys_by_pssh[pssh_str], drm_type_by_pssh.get(pssh_str), pssh_str
+            return keys_by_pssh[cache_key], drm_type_by_pssh.get(cache_key), pssh_str
 
         for tid in track_ids:
             track = session.tracks.get(tid)
@@ -3926,6 +3940,7 @@ async def session_license_handler(
             init_data = fetch_init_segment(track, svc_session)
             ensure_track_drm(track, svc_session, init_data)
             if not track.drm:
+                warn(f"Track {sanitize_log(tid[:12])} carries no DRM, so it has no keys to resolve")
                 continue
 
             title = find_title_for_track(tid, session)
@@ -3947,7 +3962,7 @@ async def session_license_handler(
                     candidates.remove(preferred)
                     candidates.insert(0, preferred)
                 else:
-                    log.warning(
+                    warn(
                         f"Track {sanitize_log(tid[:12])} wants {preferred} DRM "
                         "but the server has no device for it, using the configured DRM instead"
                     )
@@ -3973,7 +3988,7 @@ async def session_license_handler(
                     keys, track_drm_type = init_keys, init_drm_type
                 else:
                     track.drm = manifest_drm
-                    log.warning(f"No content key for KID {track_kid.hex} of track {sanitize_log(tid[:12])}")
+                    warn(f"No content key for KID {track_kid.hex} of track {sanitize_log(tid[:12])}")
 
             if keys:
                 all_keys[tid] = keys
@@ -4005,25 +4020,8 @@ async def session_license_handler(
 
         pssh_b64 = data.get("pssh")
         if pssh_b64:
-            cls_name = {"playready": "PlayReady", "widevine": "Widevine"}.get(drm_type)
-            track.drm = [d for d in (track.drm or []) if d.__class__.__name__ != cls_name]
             if drm_type == "playready":
                 track.pr_pssh = pssh_b64
-                from pyplayready.system.pssh import PSSH as PlayReadyPSSH
-
-                from unshackle.core.drm import PlayReady
-
-                pr_pssh = PlayReadyPSSH(base64.b64decode(pssh_b64))
-                pr_drm = PlayReady(pssh=pr_pssh, pssh_b64=pssh_b64)
-                track.drm.append(pr_drm)
-            elif drm_type == "widevine":
-                from pywidevine.pssh import PSSH as WidevinePSSH
-
-                from unshackle.core.drm import Widevine
-
-                wv_pssh = WidevinePSSH(pssh_b64)
-                wv_drm = Widevine(pssh=wv_pssh)
-                track.drm.append(wv_drm)
 
         if mode == "server_cdm":
             keys = handle_single_server_cdm(service, title, track, pssh_b64, drm_type, request)
