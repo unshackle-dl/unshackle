@@ -3,10 +3,15 @@ import base64
 import enum
 import json
 import logging
+import os
 import re
+import tempfile
 import time
+import zlib
 from collections import Counter
+from contextlib import suppress
 from datetime import date as date_
+from http.cookiejar import CookieJar, MozillaCookieJar
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -184,6 +189,11 @@ def build_parent_ctx(
 
     The service's CLI callback uses ``ctx.parent.params`` (proxy, range_, vcodec, and the
     other dl options) and ``ctx.obj`` (ContextData). Both flow through Click's parent chain.
+
+    ``extra_params`` carries ``cookies_supplied``: True when a cookie jar goes to
+    ``authenticate()`` later in this request. A service that picks an authentication path in
+    ``__init__`` must read that flag, because a client-sent jar is in the request body, not in
+    the server's ``cookies/`` directory, so a file check answers False for it.
     """
     import click
 
@@ -264,16 +274,27 @@ def setup_list_service(
         profile = None if account == "default" else account
 
     cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"))
-    parent_ctx = build_parent_ctx(profile, cdm, proxy_param, no_proxy, proxy_providers, service_config)
+    cookies = (
+        server_account_cookies(normalized_service, profile)
+        if account
+        else dl.get_cookie_jar(normalized_service, profile)
+    )
+    credential = dl.get_credentials(normalized_service, profile)
+
+    parent_ctx = build_parent_ctx(
+        profile,
+        cdm,
+        proxy_param,
+        no_proxy,
+        proxy_providers,
+        service_config,
+        extra_params={"cookies_supplied": cookies is not None},
+    )
     service_module = Services.load(normalized_service)
     service_instance = instantiate_service(parent_ctx, service_module, title_id, data, LIST_HANDLER_TRANSPORT_KEYS)
 
     if account:
         service_instance.cache = Cacher(f"_accounts/{normalized_service}/{account}")
-        cookies = server_account_cookies(normalized_service, profile)
-    else:
-        cookies = dl.get_cookie_jar(normalized_service, profile)
-    credential = dl.get_credentials(normalized_service, profile)
     service_instance.authenticate(cookies, credential)
     return service_instance
 
@@ -303,7 +324,22 @@ def run_service_search(
         profile = None if account == "default" else account
 
     cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"))
-    parent_ctx = build_parent_ctx(profile, cdm, proxy_param, no_proxy, proxy_providers, service_config)
+    cookies = (
+        server_account_cookies(normalized_service, profile)
+        if account
+        else dl.get_cookie_jar(normalized_service, profile)
+    )
+    credential = dl.get_credentials(normalized_service, profile)
+
+    parent_ctx = build_parent_ctx(
+        profile,
+        cdm,
+        proxy_param,
+        no_proxy,
+        proxy_providers,
+        service_config,
+        extra_params={"cookies_supplied": cookies is not None},
+    )
     service_module = Services.load(normalized_service)
 
     try:
@@ -317,10 +353,6 @@ def run_service_search(
 
     if account:
         service_instance.cache = Cacher(f"_accounts/{normalized_service}/{account}")
-        cookies = server_account_cookies(normalized_service, profile)
-    else:
-        cookies = dl.get_cookie_jar(normalized_service, profile)
-    credential = dl.get_credentials(normalized_service, profile)
     service_instance.authenticate(cookies, credential)
 
     results: List[Dict[str, Any]] = []
@@ -454,6 +486,31 @@ def server_account_cookies(service: str, profile: Optional[str]) -> Any:
         return dl.get_cookie_jar(service, None)
     path = config.directories.cookies / service / f"{profile}.txt"
     return dl.load_cookie_file(path) if path.exists() else None
+
+
+def load_client_cookies(cookie_text: Any) -> Optional[CookieJar]:
+    """Read the cookie jar a client sent with its request, or None when it sent none.
+
+    The client sends a Netscape cookie file compressed and base64 encoded, and
+    ``MozillaCookieJar`` reads from a path only, so the text goes through a temp file.
+    """
+    if not cookie_text or not isinstance(cookie_text, str):
+        return None
+
+    try:
+        cookie_str = safe_inflate(base64.b64decode(cookie_text)).decode("utf-8")
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as f:
+            f.write(cookie_str)
+            tmp_path = f.name
+        try:
+            jar = MozillaCookieJar(tmp_path)
+            jar.load(ignore_discard=True, ignore_expires=True)
+            return jar
+        finally:
+            with suppress(OSError):
+                os.unlink(tmp_path)
+    except (ValueError, zlib.error, OSError) as e:
+        raise APIError(APIErrorCode.INVALID_INPUT, f"cookies is not a compressed Netscape cookie file: {e}")
 
 
 def server_account_regions(service: str) -> Optional[Dict[str, Any]]:
@@ -2726,6 +2783,22 @@ def create_service_instance(
         "best_available": data.get("best_available", False),
     }
 
+    if server_account:
+        cookies = server_account_cookies(normalized_service, profile)
+        credential = dl.get_credentials(normalized_service, profile)
+    else:
+        credential = None
+        cred_data = data.get("credentials")
+        if cred_data and isinstance(cred_data, dict):
+            credential = Credential(
+                username=cred_data["username"],
+                password=cred_data["password"],
+                extra=cred_data.get("extra"),
+            )
+        cookies = load_client_cookies(data.get("cookies"))
+
+    extra_params["cookies_supplied"] = cookies is not None
+
     parent_ctx = build_parent_ctx(
         profile,
         cdm,
@@ -2738,43 +2811,6 @@ def create_service_instance(
 
     service_module = Services.load(normalized_service)
     service_instance = instantiate_service(parent_ctx, service_module, title_id, data, SESSION_TRANSPORT_KEYS)
-
-    if server_account:
-        return (
-            service_instance,
-            server_account_cookies(normalized_service, profile),
-            dl.get_credentials(normalized_service, profile),
-        )
-
-    credential = None
-    cred_data = data.get("credentials")
-    if cred_data and isinstance(cred_data, dict):
-        credential = Credential(
-            username=cred_data["username"],
-            password=cred_data["password"],
-            extra=cred_data.get("extra"),
-        )
-
-    cookies = None
-    cookie_text = data.get("cookies")
-    if cookie_text and isinstance(cookie_text, str):
-        import base64
-        import tempfile
-        from http.cookiejar import MozillaCookieJar
-
-        cookie_str = safe_inflate(base64.b64decode(cookie_text)).decode("utf-8")
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as f:
-            f.write(cookie_str)
-            tmp_path = f.name
-        try:
-            cookies = MozillaCookieJar(tmp_path)
-            cookies.load(ignore_discard=True, ignore_expires=True)
-        finally:
-            import os
-            from contextlib import suppress
-
-            with suppress(OSError):
-                os.unlink(tmp_path)
 
     return service_instance, cookies, credential
 

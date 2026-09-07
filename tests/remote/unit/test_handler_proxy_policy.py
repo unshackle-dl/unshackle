@@ -167,7 +167,7 @@ def test_setup_list_service_threads_request(monkeypatch):
     monkeypatch.setattr(handlers, "load_service_yaml", lambda service: {})
     monkeypatch.setattr(handlers, "resolve_handler_proxy", fake_resolve)
     monkeypatch.setattr(handlers, "load_full_cdm", lambda *args: None)
-    monkeypatch.setattr(handlers, "build_parent_ctx", lambda *args: None)
+    monkeypatch.setattr(handlers, "build_parent_ctx", lambda *args, **kwargs: None)
     monkeypatch.setattr(handlers.Services, "load", lambda service: None)
     monkeypatch.setattr(handlers, "instantiate_service", lambda *args: FakeService())
     monkeypatch.setattr("unshackle.commands.dl.dl.get_cookie_jar", staticmethod(lambda service, profile: None))
