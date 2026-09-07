@@ -3687,6 +3687,10 @@ def handle_single_server_cdm(
         pr_pssh = PlayReadyPSSH(base64.b64decode(pssh_b64))
         pr_drm = PlayReady(pssh=pr_pssh, pssh_b64=pssh_b64)
 
+        siblings = [d for d in (getattr(track, "drm", None) or []) if isinstance(d, PlayReady)]
+        if len(siblings) > 1:
+            pr_drm.absorb(*siblings)
+
         # Gate on the caller's CDM device first: no device, no keys from the vault or CDM.
         device_name = resolve_device_name(user_config, drm_type, service.__class__.__name__)
 
@@ -3873,6 +3877,16 @@ async def session_license_handler(
         drm_type_by_pssh: Dict[str, str] = {}
         actual_drm_type: Optional[str] = None
 
+        def warn(message: str) -> None:
+            """Log on the server and copy into the remote session buffer the client drains.
+
+            The buffer takes only ``service.log``, so a licensing failure raised
+            here would otherwise reach the client as a bare "no content keys".
+            """
+            log.warning(message)
+            if session.log_buffer:
+                session.log_buffer.append(logging.WARNING, message)
+
         def license_track(
             track: Any, title: Any, candidates: list
         ) -> tuple[Dict[str, str], Optional[str], Optional[str]]:
@@ -3898,11 +3912,9 @@ async def session_license_handler(
                         keys_by_pssh[pssh_str] = keys
                         drm_type_by_pssh[pssh_str] = candidate
                 except SystemExit:
-                    log.warning(
-                        f"Service exited while resolving keys for track {sanitize_log(str(track.id)[:12])}, skipping"
-                    )
+                    warn(f"Service exited while resolving keys for track {sanitize_log(str(track.id)[:12])}, skipping")
                 except (Exception, SystemExit) as e:
-                    log.warning(f"Failed to resolve keys for track {sanitize_log(str(track.id)[:12])}: {e}")
+                    warn(f"Failed to resolve keys for track {sanitize_log(str(track.id)[:12])}: {e}")
             return keys_by_pssh[pssh_str], drm_type_by_pssh.get(pssh_str), pssh_str
 
         for tid in track_ids:
