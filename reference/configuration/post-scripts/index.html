@@ -1385,6 +1385,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#-no-postscript" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --no-postscript
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-rest-api" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2274,6 +2285,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#-no-postscript" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --no-postscript
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-rest-api" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2704,6 +2726,12 @@ its own error handling and logging.</p>
 <p>It replaces the <code>post_scripts</code> config for that run rather than adding to it, so no
 configured entry runs while it is in use. That includes your <code>season</code>, <code>run</code> and <code>failure</code>
 entries, which have no <code>--postscript</code> equivalent.</p>
+<h2 id="-no-postscript"><code>--no-postscript</code><a class="headerlink" href="#-no-postscript" title="Permanent link">&para;</a></h2>
+<p><code>dl --no-postscript</code> operates the run with no post-script. It silences every configured entry
+and every <code>--postscript</code> command, for each event and mode. Use it to skip an uploader or a
+notifier for one run without an edit to <code>unshackle.yaml</code>.</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>dl<span class="w"> </span>--no-postscript<span class="w"> </span>SERVICE<span class="w"> </span>TITLE_ID
+</span></code></pre></div>
 <h2 id="the-rest-api">The REST API<a class="headerlink" href="#the-rest-api" title="Permanent link">&para;</a></h2>
 <p>The API never accepts a post-script command. <code>postscript</code>, <code>post_script</code> and <code>post_scripts</code>
 in a <code>POST /api/download</code> body get <code>400 INVALID_PARAMETERS</code>. A command that arrives from an
