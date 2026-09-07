@@ -3528,7 +3528,7 @@ def ensure_track_drm(track: Any, session: Any = None, init_data: Optional[bytes]
         if track.drm:
             return
 
-    if track.data.get("hls") and track.url:
+    if (track.data.get("hls") or descriptor_name(track) == "HLS") and track.url:
         try:
             import m3u8
 
@@ -3654,6 +3654,36 @@ def cache_to_vaults(keys: Dict[str, str], service_name: str) -> None:
         log.warning(f"Failed to cache keys to vaults: {e}")
 
 
+def track_injected_keys(track: Any, drm_class: str) -> Dict[str, str]:
+    """`KID:KEY` pairs a service wrote onto the track's own DRM objects of `drm_class`.
+
+    Some services skip the CDM exchange: the licence callback fetches the keys itself,
+    writes them into ``track.drm[0].content_keys`` and returns a value the CDM cannot
+    parse. ``dl.py`` accepts that failed parse because the object it licensed holds the
+    keys. The server licenses a rebuilt object, so it reads the track's objects instead.
+    """
+    keys: Dict[str, str] = {}
+    for drm in getattr(track, "drm", None) or []:
+        if drm.__class__.__name__ != drm_class:
+            continue
+        for kid, key in (getattr(drm, "content_keys", None) or {}).items():
+            keys[kid.hex if hasattr(kid, "hex") else str(kid).replace("-", "")] = key
+    return keys
+
+
+def license_with_track_fallback(drm: Any, track: Any, **kwargs: Any) -> Dict[str, str]:
+    """Run `drm.get_content_keys` and merge in the keys the service put on the track itself."""
+    try:
+        drm.get_content_keys(**kwargs)
+    except Exception:
+        if not track_injected_keys(track, drm.__class__.__name__):
+            raise
+    return {
+        **track_injected_keys(track, drm.__class__.__name__),
+        **{kid.hex: key for kid, key in drm.content_keys.items()},
+    }
+
+
 def handle_single_server_cdm(
     service: Any,
     title: Any,
@@ -3697,14 +3727,15 @@ def handle_single_server_cdm(
         cdm = load_cdm(device_name, service_name=service.__class__.__name__)
         if not is_playready_cdm(cdm):
             raise APIError(APIErrorCode.INVALID_INPUT, f"CDM device '{device_name}' is not a PlayReady device")
-        pr_drm.get_content_keys(
+        keys = license_with_track_fallback(
+            pr_drm,
+            track,
             cdm=cdm,
             certificate=lambda challenge, **_: None,
             licence=lambda **kw: service.get_playready_license(
                 **declared_kwargs(service.get_playready_license, {**kw, "title": title, "track": track})
             ),
         )
-        keys = {kid.hex: key for kid, key in pr_drm.content_keys.items()}
     elif drm_type == "widevine":
         from pywidevine.pssh import PSSH as WvPSSH
 
@@ -3724,7 +3755,9 @@ def handle_single_server_cdm(
         cdm = load_cdm(device_name, service_name=service.__class__.__name__)
         if not is_widevine_cdm(cdm):
             raise APIError(APIErrorCode.INVALID_INPUT, f"CDM device '{device_name}' is not a Widevine device")
-        wv_drm.get_content_keys(
+        keys = license_with_track_fallback(
+            wv_drm,
+            track,
             cdm=cdm,
             certificate=lambda challenge, **_: service.get_widevine_service_certificate(
                 challenge=challenge, title=title, track=track
@@ -3733,7 +3766,6 @@ def handle_single_server_cdm(
                 **declared_kwargs(service.get_widevine_license, {**kw, "title": title, "track": track})
             ),
         )
-        keys = {kid.hex: key for kid, key in wv_drm.content_keys.items()}
     else:
         raise APIError(
             APIErrorCode.INVALID_PARAMETERS,
