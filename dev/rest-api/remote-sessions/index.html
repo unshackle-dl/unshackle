@@ -2753,7 +2753,8 @@ from a browser origin, not when you want only the local HTTP API.</p>
 <p><code>POST /api/session/create</code> requires <code>service</code> and <code>title_id</code>. It also accepts
 <code>credentials</code>, <code>cookies</code> (base64 of zlib-compressed Netscape cookie file), <code>proxy</code>,
 <code>no_proxy</code>, <code>profile</code>, <code>cache</code> (a map of <code>filename → base64(zlib(bytes))</code>),
-<code>client_region</code>, <code>cdm_type</code>, and the track-selection hints <code>range_</code>, <code>vcodec</code>,
+<code>client_region</code>, <code>cdm_type</code>, <code>client</code> (a freeform identity object the dashboard
+shows as sent), and the track-selection hints <code>range_</code>, <code>vcodec</code>,
 <code>quality</code>, <code>best_available</code>, plus arbitrary service CLI options
 (<code>additionalProperties: true</code>).</p>
 <p>The response returns <strong>before</strong> authentication finishes:</p>
