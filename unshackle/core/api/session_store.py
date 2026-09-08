@@ -43,6 +43,7 @@ class SessionEntry:
     owner_key: Optional[str] = None  # X-Secret-Key that owns this session
     cache_tag: Optional[str] = None
     server_account: Optional[str] = None  # profile name when the server lent its own account
+    client_auth: bool = False  # the client sent its own cookies or credentials
     input_bridge: Optional[InputBridge] = None
     log_buffer: Optional[Any] = None  # SessionLogBuffer mirroring the service's self.log
     auth_status: AuthStatus = AuthStatus.AUTHENTICATED
@@ -134,7 +135,11 @@ class SessionStore:
             if max_sessions is not None and len(self._sessions) >= max_sessions:
                 oldest_id = min(self._sessions, key=lambda k: self._sessions[k].last_accessed)
                 log.warning(f"Max sessions reached ({max_sessions}), evicting oldest: {oldest_id}")
-                _publish("delete", self._sessions.pop(oldest_id), "evicted")
+                evicted = self._sessions.pop(oldest_id)
+                if evicted.input_bridge:
+                    evicted.input_bridge.cancel()
+                self.cleanup_cache_dir(evicted.cache_tag)
+                _publish("delete", evicted, "evicted")
 
             session_id = session_id or str(uuid.uuid4())
             entry = SessionEntry(

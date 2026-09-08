@@ -61,6 +61,7 @@ from unshackle.core.api.handlers import (
 )
 from unshackle.core.services import Services
 from unshackle.core.update_checker import UpdateChecker
+from unshackle.core.utils.redact import redact_path
 
 
 @web.middleware
@@ -360,7 +361,8 @@ async def services(request: web.Request) -> web.Response:
 
             services_info.append(service_data)
 
-        return web.json_response({"services": services_info, "load_errors": list(services_module.LOAD_ERRORS)})
+        load_errors = [redact_path(re.sub(r" \([^()]*\)$", "", err)) for err in services_module.LOAD_ERRORS]
+        return web.json_response({"services": services_info, "load_errors": load_errors})
     except Exception as e:
         log.exception("Error listing services")
         debug_mode = request.app.get("debug_api", False)
@@ -869,7 +871,9 @@ async def download(request: web.Request) -> web.Response:
                 description: Renumber episodes to a TVDB season order (default - the tvdb_order config option)
               output_dir:
                 type: string
-                description: Override the output directory for this download (default - None)
+                description: >
+                  Output directory for this download, relative to the server's downloads
+                  directory. A path resolving outside it is rejected (default - None).
               no_cache:
                 type: boolean
                 description: Bypass title cache for this download (default - false)

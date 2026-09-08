@@ -107,8 +107,11 @@ class SessionLogHandler(logging.Handler):
     def __init__(self, buffer: SessionLogBuffer) -> None:
         super().__init__()
         self.buffer = buffer
+        self.thread = threading.get_ident()
 
     def emit(self, record: logging.LogRecord) -> None:
+        if record.thread != self.thread:
+            return
         try:
             self.buffer.append(record.levelno, record.getMessage())
         except Exception:
@@ -123,10 +126,9 @@ class capture_service_logs:
     The context manager lowers the logger's level to INFO for the window so a
     quiet server still fills the buffer; a no-op when *buffer* is None.
 
-    The logger is process-global, but the capture window only wraps the
-    synchronous ``create_service_instance`` call on the event loop thread, so
-    two session creates cannot interleave inside it. If an ``await`` ever moves
-    inside the window, add a thread/context filter or records cross tenants.
+    The logger is process-global and another session's ``authenticate`` thread can log to
+    it while this window is open, so the handler keeps only records from the thread that
+    opened the window.
     """
 
     def __init__(self, logger_name: str, buffer: Optional[SessionLogBuffer]) -> None:

@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -17,7 +18,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from unshackle.core.api.events import bus, publish_service_event
 from unshackle.core.api.sanitize import sanitize_log
-from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_text
+from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_path, redact_text
 
 log = logging.getLogger("download_manager")
 
@@ -61,6 +62,13 @@ def secret_values(parameters: Dict[str, Any]) -> List[str]:
     elif isinstance(creds, str) and creds:
         secrets.append(creds)
     return sorted(set(secrets), key=len, reverse=True)  # longest first so substrings don't survive
+
+
+def owner_id(api_key: Optional[str]) -> Optional[str]:
+    """A short digest of an API key for the on-disk history, so the key itself never lands in a file."""
+    if api_key is None:
+        return None
+    return hashlib.sha256(api_key.encode()).hexdigest()[:16]
 
 
 def _redact_text(text: Optional[str], parameters: Dict[str, Any]) -> Optional[str]:
@@ -157,11 +165,11 @@ class DownloadJob:
                     "started_time": self.started_time.isoformat() if self.started_time else None,
                     "completed_time": self.completed_time.isoformat() if self.completed_time else None,
                     "output_files": self.output_files,
-                    "error_message": _redact_text(self.error_message, self.parameters),
-                    "error_details": _redact_text(self.error_details, self.parameters),
+                    "error_message": redact_path(_redact_text(self.error_message, self.parameters)),
+                    "error_details": redact_path(_redact_text(self.error_details, self.parameters)),
                     "error_code": self.error_code,
-                    "error_traceback": _redact_text(self.error_traceback, self.parameters),
-                    "worker_stderr": _redact_text(self.worker_stderr, self.parameters),
+                    "error_traceback": redact_path(_redact_text(self.error_traceback, self.parameters)),
+                    "worker_stderr": redact_path(_redact_text(self.worker_stderr, self.parameters)),
                 }
             )
 
@@ -196,6 +204,7 @@ def record_job_history(job: DownloadJob) -> None:
     job.history_recorded = True
     entry = {
         "job_id": job.job_id,
+        "owner": owner_id(job.owner_key),
         "service": job.service,
         "title_id": job.title_id,
         "title": job.title,
@@ -227,10 +236,13 @@ def record_job_history(job: DownloadJob) -> None:
         log.warning(f"Could not write job history: {e}")
 
 
-def read_job_history(limit: int = 100, service: Optional[str] = None) -> List[Dict[str, Any]]:
+def read_job_history(
+    limit: int = 100, service: Optional[str] = None, owner: Optional[str] = None
+) -> List[Dict[str, Any]]:
     """Read persisted job history, newest first.
 
-    This function ignores corrupt lines. A missing file gives no entries.
+    With ``owner`` (an :func:`owner_id`), only that owner's entries and ownerless legacy
+    entries come back. This function ignores corrupt lines. A missing file gives no entries.
     """
     path = history_path()
     if not path.exists():
@@ -253,12 +265,14 @@ def read_job_history(limit: int = 100, service: Optional[str] = None) -> List[Di
             continue
         if service and str(entry.get("service") or "").upper() != service.upper():
             continue
+        if owner is not None and entry.get("owner") not in (None, owner):
+            continue
         entries.append(entry)
     entries.reverse()
     return entries[:limit] if limit and limit > 0 else entries
 
 
-def delete_job_history(job_id: str, allowed: Optional[set] = None) -> bool:
+def delete_job_history(job_id: str, allowed: Optional[set] = None, owner: Optional[str] = None) -> bool:
     """Remove a history entry by job_id (rewriting the file). Returns True if it removed one.
 
     When you give `allowed`, this function treats an entry outside the caller's service
@@ -284,7 +298,8 @@ def delete_job_history(job_id: str, allowed: Optional[set] = None) -> bool:
             kept.append(stripped)  # preserve corrupt lines untouched
             continue
         match = isinstance(entry, dict) and entry.get("job_id") == job_id
-        if match and (allowed is None or str(entry.get("service") or "").upper() in allowed):
+        owned = owner is None or entry.get("owner") in (None, owner)
+        if match and owned and (allowed is None or str(entry.get("service") or "").upper() in allowed):
             deleted = True
             continue
         kept.append(stripped)
@@ -803,9 +818,16 @@ class DownloadQueueManager:
         log.info(f"Removed job {sanitize_log(job_id)}")
         return True
 
-    def clear_finished_jobs(self) -> int:
-        """Remove all terminal (completed/failed/cancelled) jobs, returning the count removed."""
-        finished = [job_id for job_id, job in self._jobs.items() if job.status in TERMINAL_STATUSES]
+    def clear_finished_jobs(self, owner_key: Optional[str] = None) -> int:
+        """Remove terminal (completed/failed/cancelled) jobs, returning the count removed.
+
+        With ``owner_key`` only that key's jobs and ownerless legacy jobs go.
+        """
+        finished = [
+            job_id
+            for job_id, job in self._jobs.items()
+            if job.status in TERMINAL_STATUSES and (owner_key is None or job.owner_key in (None, owner_key))
+        ]
         for job_id in finished:
             del self._jobs[job_id]
         if finished:

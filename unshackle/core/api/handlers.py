@@ -34,7 +34,7 @@ from unshackle.core.titles import Episode, Movie, Song, Title_T
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.utilities import declared_kwargs
 from unshackle.core.utils.collections import ci_get
-from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_text
+from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_path, redact_text
 
 log = logging.getLogger("api")
 
@@ -250,6 +250,32 @@ def instantiate_service(
     return parent_ctx.invoke(service_module.cli, title=title, **extras)
 
 
+def server_login_material(
+    data: Dict[str, Any], normalized_service: str, account: Optional[str], profile: Optional[str]
+) -> tuple:
+    """(cookies, credential) for a list or search call.
+
+    A lent account takes the server's files for that account. Otherwise the full-mode server,
+    which the operator's own UI drives, uses its own profiles; a ``--remote-only`` server uses only
+    what the client sent, the same rule as a remote session.
+    """
+    from unshackle.commands.dl import dl
+    from unshackle.core.api.stats import stats
+    from unshackle.core.credential import Credential
+
+    if account:
+        return server_account_cookies(normalized_service, profile), dl.get_credentials(normalized_service, profile)
+    if stats.mode != "remote_only":
+        return dl.get_cookie_jar(normalized_service, profile), dl.get_credentials(normalized_service, profile)
+    credential = None
+    cred_data = data.get("credentials")
+    if isinstance(cred_data, dict) and cred_data.get("username") is not None:
+        credential = Credential(
+            username=cred_data["username"], password=cred_data.get("password"), extra=cred_data.get("extra")
+        )
+    return load_client_cookies(data.get("cookies")), credential
+
+
 def setup_list_service(
     data: Dict[str, Any],
     normalized_service: str,
@@ -262,7 +288,6 @@ def setup_list_service(
     Runs the shared preamble: load yaml → get proxy → load CDM → assemble ctx →
     instantiate → authenticate. Raises APIError on proxy failure.
     """
-    from unshackle.commands.dl import dl
 
     service_config = load_service_yaml(normalized_service)
 
@@ -274,12 +299,7 @@ def setup_list_service(
         profile = None if account == "default" else account
 
     cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"))
-    cookies = (
-        server_account_cookies(normalized_service, profile)
-        if account
-        else dl.get_cookie_jar(normalized_service, profile)
-    )
-    credential = dl.get_credentials(normalized_service, profile)
+    cookies, credential = server_login_material(data, normalized_service, account, profile)
 
     parent_ctx = build_parent_ctx(
         profile,
@@ -311,9 +331,8 @@ def run_service_search(
     plus the search itself. Every step blocks on disk or network, so the caller runs the
     whole function in one worker thread and keeps the event loop free for other clients.
     """
-    from unshackle.commands.dl import dl
 
-    profile = data.get("profile")
+    profile = client_profile(data)
     no_proxy = data.get("no_proxy", False)
 
     service_config = load_service_yaml(normalized_service)
@@ -324,12 +343,7 @@ def run_service_search(
         profile = None if account == "default" else account
 
     cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"))
-    cookies = (
-        server_account_cookies(normalized_service, profile)
-        if account
-        else dl.get_cookie_jar(normalized_service, profile)
-    )
-    credential = dl.get_credentials(normalized_service, profile)
+    cookies, credential = server_login_material(data, normalized_service, account, profile)
 
     parent_ctx = build_parent_ctx(
         profile,
@@ -408,6 +422,37 @@ def allowed_services_for_key(secret_key: Optional[str]) -> Optional[List[str]]:
 def get_allowed_services(request: Optional[web.Request] = None) -> Optional[List[str]]:
     """The effective service allowlist for a request's API key, or None when unrestricted."""
     return allowed_services_for_key(request_secret_key(request) if request else None)
+
+
+def is_admin(request: Optional[web.Request]) -> bool:
+    """Whether the calling key is the admin secret (no ``users`` entry) or has ``admin: true``."""
+    if not request:
+        return True
+    user_config = (config.serve or {}).get("users", {}).get(request_secret_key(request))
+    return user_config is None or (isinstance(user_config, dict) and user_config.get("admin") is True)
+
+
+def require_admin(request: Optional[web.Request]) -> None:
+    """FORBIDDEN unless the calling key is the admin secret or has ``admin: true`` in ``serve.users``."""
+    if is_admin(request):
+        return
+    raise APIError(APIErrorCode.FORBIDDEN, "This API key may not run server maintenance.")
+
+
+def serve_user_config(api_key: str) -> Dict[str, Any]:
+    """The ``serve.users`` entry for an API key.
+
+    An API key absent from ``serve.users`` (the admin secret, or any caller in no-key mode) keeps
+    full access, so it gets every CDM device the server loaded.
+    """
+    user_config = ((config.serve or {}).get("users") or {}).get(api_key)
+    if isinstance(user_config, dict):
+        return user_config
+    serve_cfg = config.serve or {}
+    return {
+        kind: [d.stem if hasattr(d, "stem") else str(d) for d in (serve_cfg.get(kind) or [])]
+        for kind in ("devices", "playready_devices")
+    }
 
 
 def server_cdm_allowed(request: Optional[web.Request] = None, service: Optional[str] = None) -> bool:
@@ -756,6 +801,19 @@ def validate_service(service_tag: str, request: Optional[web.Request] = None) ->
         return None
 
 
+PROFILE_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
+
+
+def client_profile(data: Dict[str, Any]) -> Optional[str]:
+    """The request's ``profile``, or an INVALID_INPUT error when it could name a path."""
+    profile = data.get("profile")
+    if profile is None or profile == "":
+        return None
+    if not isinstance(profile, str) or not PROFILE_RE.fullmatch(profile) or profile in (".", ".."):
+        raise APIError(APIErrorCode.INVALID_INPUT, "profile must be a plain name: letters, digits, '_', '-' or '.'.")
+    return profile
+
+
 def require_fields(data: Dict[str, Any], *names: str) -> None:
     """Raise INVALID_INPUT for the first missing/falsy required field."""
     for name in names:
@@ -1039,6 +1097,7 @@ def drm_preference_name(track: Any) -> Optional[str]:
 
 
 MANIFEST_DATA_KEYS = ("hls", "dash", "ism")
+MAX_SESSION_CACHE_KEYS = 64
 
 
 def serialize_track_data(track: Any) -> Optional[Dict[str, Any]]:
@@ -1235,7 +1294,7 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
     require_fields(data, "service", "title_id")
     service_tag = data.get("service")
     title_id = data.get("title_id")
-    profile = data.get("profile")
+    profile = client_profile(data)
 
     normalized_service = validate_service(service_tag, request)
     if not normalized_service:
@@ -1275,7 +1334,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
     require_fields(data, "service", "title_id")
     service_tag = data.get("service")
     title_id = data.get("title_id")
-    profile = data.get("profile")
+    profile = client_profile(data)
 
     normalized_service = validate_service(service_tag, request)
     if not normalized_service:
@@ -1487,6 +1546,23 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
     for banned in ("postscript", "post_script", "post_scripts"):
         if data.get(banned):
             return f"'{banned}' is not accepted over the API. Define post_scripts in unshackle.yaml."
+
+    # The worker reads cookies/{service}/{profile}.txt, so a profile must not be able to name a path.
+    try:
+        client_profile(data)
+    except APIError as e:
+        return e.message
+
+    # The serve user would create and write any directory a client names; keep it under downloads.
+    if data.get("output_dir"):
+        root = config.directories.downloads.resolve()
+        try:
+            target = (root / str(data["output_dir"])).resolve()
+        except (OSError, ValueError):
+            return "output_dir is not a usable path."
+        if not target.is_relative_to(root):
+            return "output_dir must be a path under the server's downloads directory."
+        data["output_dir"] = str(target)
 
     if "vcodec" in data and data["vcodec"]:
         err = check_codec(data["vcodec"], VALID_VCODECS, "vcodec")
@@ -1917,6 +1993,11 @@ async def dashboard_logs_handler(request: web.Request) -> web.Response:
     except ValueError:
         since = 0
     records = ring.since(since, request.query.get("level"), request.query.get("logger"))
+    # The ring buffer stores raw log lines; a captured traceback carries host paths. Mask them
+    # on the way out, the same treatment the job-detail API gives its stored traceback.
+    for rec in records:
+        if isinstance(rec, dict) and isinstance(rec.get("message"), str):
+            rec["message"] = redact_path(rec["message"])
     return web.json_response({"seq": ring.seq, "records": records})
 
 
@@ -2329,7 +2410,7 @@ async def clear_finished_download_jobs_handler(request: Optional[web.Request] = 
 
     try:
         manager = get_download_manager()
-        removed = manager.clear_finished_jobs()
+        removed = manager.clear_finished_jobs(owner_key=caller_key(request))
         return web.json_response({"removed": removed})
 
     except APIError:
@@ -2445,7 +2526,9 @@ async def prioritize_download_job_handler(job_id: str, request: Optional[web.Req
         )
 
 
-CONFIG_SECRET_KEY_RE = re.compile(r"secret|password|token|api_key|credential", re.IGNORECASE)
+CONFIG_SECRET_KEY_RE = re.compile(
+    r"secret|passw|pwd|token|api[_-]?key|credential|auth|cookie|bearer|private", re.IGNORECASE
+)
 
 
 def redact_config(value: Any) -> Any:
@@ -2517,13 +2600,15 @@ async def server_config_handler(request: Optional[web.Request] = None) -> web.Re
                 }
                 or None,
             },
-            "directories": {
+            "services": service_tags,
+        }
+        # Server-local absolute paths are useless to a remote client and name the host layout.
+        if is_admin(request):
+            payload["directories"] = {
                 "downloads": str(config.directories.downloads),
                 "temp": str(config.directories.temp),
                 "cache": str(config.directories.cache),
-            },
-            "services": service_tags,
-        }
+            }
         return web.json_response({"config": payload})
 
     except APIError:
@@ -2536,7 +2621,7 @@ async def server_config_handler(request: Optional[web.Request] = None) -> web.Re
 
 async def download_history_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
     """Answer the persisted download history request."""
-    from unshackle.core.api.download_manager import read_job_history
+    from unshackle.core.api.download_manager import owner_id, read_job_history
 
     try:
         limit = 100
@@ -2553,11 +2638,11 @@ async def download_history_handler(data: Dict[str, Any], request: Optional[web.R
 
         allowed = get_allowed_services(request)
         if allowed is None:
-            history = read_job_history(limit=limit, service=data.get("service"))
+            history = read_job_history(limit=limit, service=data.get("service"), owner=owner_id(caller_key(request)))
         else:
             # Read unbounded, drop entries outside the caller's allowlist, then apply limit.
             allowed_upper = {a.upper() for a in allowed}
-            entries = read_job_history(limit=0, service=data.get("service"))
+            entries = read_job_history(limit=0, service=data.get("service"), owner=owner_id(caller_key(request)))
             history = [e for e in entries if str(e.get("service") or "").upper() in allowed_upper][:limit]
         return web.json_response({"history": history, "count": len(history)})
 
@@ -2571,12 +2656,12 @@ async def download_history_handler(data: Dict[str, Any], request: Optional[web.R
 
 async def delete_history_handler(job_id: str, request: Optional[web.Request] = None) -> web.Response:
     """Delete one persisted history entry by job_id."""
-    from unshackle.core.api.download_manager import delete_job_history
+    from unshackle.core.api.download_manager import delete_job_history, owner_id
 
     try:
         allowed = get_allowed_services(request)
         allowed_upper = {a.upper() for a in allowed} if allowed is not None else None
-        if not delete_job_history(job_id, allowed=allowed_upper):
+        if not delete_job_history(job_id, allowed=allowed_upper, owner=owner_id(caller_key(request))):
             raise APIError(APIErrorCode.NOT_FOUND, "History entry not found", details={"job_id": job_id})
         return web.Response(status=204)
 
@@ -2605,6 +2690,7 @@ async def clear_cache_handler(request: Optional[web.Request] = None) -> web.Resp
     """Answer the clear cache directory request."""
     from unshackle.commands.env import clear_directory
 
+    require_admin(request)
     try:
         require_no_active_downloads("clear cache")
         _, freed_bytes = await asyncio.to_thread(clear_directory, config.directories.cache)
@@ -2622,6 +2708,7 @@ async def clear_temp_handler(request: Optional[web.Request] = None) -> web.Respo
     """Answer the clear temp directory request."""
     from unshackle.commands.env import clear_directory
 
+    require_admin(request)
     try:
         require_no_active_downloads("clear temp")
         _, freed_bytes = await asyncio.to_thread(clear_directory, config.directories.temp)
@@ -2641,6 +2728,7 @@ async def refresh_services_handler(request: Optional[web.Request] = None) -> web
     from unshackle.core.api.events import publish_refresh_events
     from unshackle.core.services import refresh_and_reload
 
+    require_admin(request)
     try:
         busy = get_download_manager().busy_services()
         repos = await asyncio.to_thread(refresh_and_reload, busy)
@@ -2826,7 +2914,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
 
     service_tag = data.get("service")
     title_id = data.get("title_id")
-    profile = data.get("profile")
+    profile = client_profile(data)
 
     if not service_tag:
         raise APIError(APIErrorCode.INVALID_INPUT, "Missing required parameter: service")
@@ -2888,6 +2976,8 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
 
         cache_data = data.get("cache", {})
         if cache_data and session_cache_tag:
+            if not isinstance(cache_data, dict) or len(cache_data) > MAX_SESSION_CACHE_KEYS:
+                raise APIError(APIErrorCode.INVALID_INPUT, f"cache must hold at most {MAX_SESSION_CACHE_KEYS} entries")
             import base64
 
             cache_dir = app_config.directories.cache / session_cache_tag
@@ -2897,6 +2987,8 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
                 if not safe_name:
                     log.warning(f"Rejecting unsafe session cache key: {sanitize_log(key)}")
                     continue
+                if not isinstance(content, str):
+                    raise APIError(APIErrorCode.INVALID_INPUT, "cache values must be base64 strings")
                 decompressed = safe_inflate(base64.b64decode(content)).decode("utf-8")
                 (cache_dir / safe_name).with_suffix(".json").write_text(decompressed, encoding="utf-8")
 
@@ -2913,6 +3005,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
             server_account=(profile or "default") if server_account else None,
         )
         session.cache_tag = session_cache_tag
+        session.client_auth = not server_account and (cookies is not None or credential is not None)
         # Echoed to every dashboard viewer, so cap what an arbitrary client can push into it.
         if isinstance(data.get("client"), dict) and len(json.dumps(data["client"], default=str)) <= 4096:
             session.client = data["client"]
@@ -2928,7 +3021,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
             except (Exception, SystemExit) as e:
                 log.exception("Auth failed for session %s", session_id)
                 session.auth_status = AuthStatus.FAILED
-                session.auth_error = str(e)
+                session.auth_error = redact_all(str(e))
                 bridge.status = AuthStatus.FAILED
 
         asyncio.create_task(run_auth())
@@ -2999,6 +3092,47 @@ async def session_titles_handler(session_id: str, request: Optional[web.Request]
         )
 
 
+def client_session_auth(session: Any) -> tuple[Dict[str, str], Dict[str, str]]:
+    """The service session headers and cookies a remote client may receive.
+
+    Only a client that sent its own cookies or credentials gets them back. Otherwise (a server
+    account, or an anonymous login through the server's proxy) the cookie jar stays on the
+    server and the server drops the auth-bearing headers, so the client cannot reuse a login
+    the server paid for.
+    """
+    svc_session = session.service_instance.session
+    headers = dict(svc_session.headers) if hasattr(svc_session, "headers") and svc_session.headers else {}
+    cookies: Dict[str, str] = {}
+    if hasattr(svc_session, "cookies"):
+        for cookie in svc_session.cookies:
+            if hasattr(cookie, "name") and hasattr(cookie, "value"):
+                cookies[cookie.name] = cookie.value
+    if not session.client_auth:
+        headers = {k: v for k, v in headers.items() if not CONFIG_SECRET_KEY_RE.search(str(k))}
+        cookies = {}
+    return headers, cookies
+
+
+def scrub_secret_keys(value: Any) -> Any:
+    """``value`` without any dict entry, at any depth, whose key looks like a secret."""
+    if isinstance(value, dict):
+        return {k: scrub_secret_keys(v) for k, v in value.items() if not CONFIG_SECRET_KEY_RE.search(str(k))}
+    if isinstance(value, list):
+        return [scrub_secret_keys(v) for v in value]
+    return value
+
+
+def scrub_track_data(data: Optional[Dict[str, Any]], session: Any) -> Optional[Dict[str, Any]]:
+    """Drop secret-looking keys, at any depth, from a serialised ``track.data`` when the login is the server's.
+
+    A service can stash a token in ``track.data`` for its license call; under the same rule as
+    :func:`client_session_auth` that token never reaches a client that did not log in itself.
+    """
+    if not data or session.client_auth:
+        return data
+    return scrub_secret_keys(data) or None
+
+
 async def session_tracks_handler(
     data: Dict[str, Any], session_id: str, request: Optional[web.Request] = None
 ) -> web.Response:
@@ -3056,18 +3190,12 @@ async def session_tracks_handler(
             manifests = extract_manifests(tracks)
             track_manifests = extract_track_manifests(tracks)
 
-            svc_session = session.service_instance.session
-            session_headers = dict(svc_session.headers) if hasattr(svc_session, "headers") else {}
-            session_cookies = {}
-            if hasattr(svc_session, "cookies"):
-                for cookie in svc_session.cookies:
-                    if hasattr(cookie, "name") and hasattr(cookie, "value"):
-                        session_cookies[cookie.name] = cookie.value
+            session_headers, session_cookies = client_session_auth(session)
 
         from unshackle.core.config import config as app_config
 
         api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
-        user_cfg = app_config.serve.get("users", {}).get(api_key, {})
+        user_cfg = serve_user_config(api_key)
         has_wv = bool(user_cfg.get("devices"))
         has_pr = bool(user_cfg.get("playready_devices"))
 
@@ -3096,15 +3224,18 @@ async def session_tracks_handler(
             server_cdm_type = "playready"
 
         original_ids = original_audio_ids(audio_tracks, title)
+        video = [serialize_video_track(t, include_url=True) for t in video_tracks]
+        audio = [serialize_audio_track(t, include_url=True, is_original=t.id in original_ids) for t in audio_tracks]
+        subtitles = [serialize_subtitle_track(t, include_url=True) for t in tracks.subtitles]
+        for d in video + audio + subtitles:
+            d["data"] = scrub_track_data(d.get("data"), session)
 
         return web.json_response(
             {
                 "title": stamp_service_flags(serialize_title(title), service_instance),
-                "video": [serialize_video_track(t, include_url=True) for t in video_tracks],
-                "audio": [
-                    serialize_audio_track(t, include_url=True, is_original=t.id in original_ids) for t in audio_tracks
-                ],
-                "subtitles": [serialize_subtitle_track(t, include_url=True) for t in tracks.subtitles],
+                "video": video,
+                "audio": audio,
+                "subtitles": subtitles,
                 "chapters": [
                     {"timestamp": ch.timestamp, "name": ch.name}
                     for ch in session.chapters_by_title.get(str(title_id), [])
@@ -3139,6 +3270,7 @@ async def session_segments_handler(
     needed for CDN download.
     """
     session = await get_validated_session(session_id, request)
+    require_authenticated(session)
 
     track_ids = data.get("track_ids", [])
     if not track_ids:
@@ -3164,30 +3296,14 @@ async def session_segments_handler(
                 "drm": serialize_drm(track.drm) if hasattr(track, "drm") and track.drm else None,
             }
 
-            service_session = session.service_instance.session
-            if hasattr(service_session, "headers"):
-                headers = dict(service_session.headers) if service_session.headers else {}
-                track_info["headers"] = headers
-            else:
-                track_info["headers"] = {}
-
-            if hasattr(service_session, "cookies"):
-                cookie_dict = {}
-                for cookie in service_session.cookies:
-                    if hasattr(cookie, "name") and hasattr(cookie, "value"):
-                        cookie_dict[cookie.name] = cookie.value
-                    elif isinstance(cookie, str):
-                        pass  # Skip non-standard cookie objects
-                track_info["cookies"] = cookie_dict
-            else:
-                track_info["cookies"] = {}
+            track_info["headers"], track_info["cookies"] = client_session_auth(session)
 
             # Include manifest-specific data for segment resolution. Round-trip through
             # JSON so any non-serializable value becomes its str() (default=str).
             if hasattr(track, "data") and track.data:
                 import json
 
-                track_info["data"] = json.loads(json.dumps(track.data, default=str))
+                track_info["data"] = scrub_track_data(json.loads(json.dumps(track.data, default=str)), session)
             else:
                 track_info["data"] = {}
 
@@ -3279,16 +3395,17 @@ def detect_cdm_type(cdm_name: str, app_config: Any) -> Optional[str]:
 
 def require_authenticated(session: Any) -> None:
     """Raise if the remote session has not finished authenticating."""
-    if session.auth_status == AuthStatus.FAILED:
+    status = getattr(session, "auth_status", None)
+    if status == AuthStatus.FAILED:
         raise APIError(
             APIErrorCode.AUTH_FAILED,
             f"Authentication failed: {session.auth_error or 'unknown error'}",
         )
-    if session.auth_status in (AuthStatus.AUTHENTICATING, AuthStatus.PENDING_INPUT):
+    if status in (AuthStatus.AUTHENTICATING, AuthStatus.PENDING_INPUT):
         raise APIError(
             APIErrorCode.INVALID_INPUT,
-            f"Session authentication not complete (status: {session.auth_status.value})",
-            details={"auth_status": session.auth_status.value},
+            f"Session authentication not complete (status: {status.value})",
+            details={"auth_status": status.value},
         )
 
 
@@ -3410,6 +3527,17 @@ def resolve_handler_proxy(
     no_proxy = data.get("no_proxy", False)
     proxy_providers: list = []
     allowed = server_proxy_allowed(request)
+
+    if (
+        proxy_param
+        and re.match(r"^(https?://|socks)", str(proxy_param))
+        and server_account_for(request, normalized_service)
+    ):
+        raise APIError(
+            APIErrorCode.FORBIDDEN,
+            "A server-account service does not accept a client proxy URI. Pass a country code or nothing.",
+            details={"service": normalized_service},
+        )
 
     if allowed and not no_proxy:
         proxy_providers = initialize_proxy_providers()
@@ -3723,6 +3851,43 @@ def license_with_track_fallback(drm: Any, track: Any, **kwargs: Any) -> Dict[str
     }
 
 
+def pssh_kids(pssh_b64: str, drm_type: str) -> set:
+    """The KIDs a base64 PSSH names, for either DRM system."""
+    if drm_type == "playready":
+        from pyplayready.system.pssh import PSSH as PlayReadyPSSH
+
+        from unshackle.core.drm import PlayReady
+
+        return set(PlayReady(pssh=PlayReadyPSSH(base64.b64decode(pssh_b64)), pssh_b64=pssh_b64).kids)
+    from pywidevine.pssh import PSSH as WvPSSH
+
+    from unshackle.core.drm import Widevine
+
+    return set(Widevine(pssh=WvPSSH(pssh_b64)).kids)
+
+
+def require_track_pssh(track: Any, pssh_b64: str, drm_type: str) -> None:
+    """Reject a client PSSH that names a KID the track does not carry.
+
+    The server CDM path answers from the vault before any license exchange, so an
+    unchecked PSSH would make the key vault answer with content keys for any title. The
+    track's own PSSH passes as it is, so a header without KIDs still licenses.
+    """
+    if pssh_b64 == extract_pssh_from_track(track, drm_type):
+        return
+    try:
+        client_kids = pssh_kids(pssh_b64, drm_type)
+    except Exception:
+        raise APIError(APIErrorCode.INVALID_INPUT, "The pssh parameter is not a valid PSSH box") from None
+    track_kids = {kid for drm in (getattr(track, "drm", None) or []) for kid in (getattr(drm, "kids", None) or [])}
+    if not client_kids or not track_kids or not client_kids <= track_kids:
+        raise APIError(
+            APIErrorCode.FORBIDDEN,
+            "The pssh parameter does not belong to this track.",
+            details={"track_id": str(getattr(track, "id", ""))},
+        )
+
+
 def handle_single_server_cdm(
     service: Any,
     title: Any,
@@ -3736,7 +3901,6 @@ def handle_single_server_cdm(
 
     from unshackle.core.cdm import load_cdm
     from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
-    from unshackle.core.config import config as app_config
 
     ensure_track_drm(track, getattr(service, "session", None))
 
@@ -3746,7 +3910,7 @@ def handle_single_server_cdm(
         raise APIError(APIErrorCode.INVALID_INPUT, "No PSSH available for server_cdm licensing")
 
     api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
-    user_config = app_config.serve.get("users", {}).get(api_key, {})
+    user_config = serve_user_config(api_key)
 
     if drm_type == "playready":
         from pyplayready.system.pssh import PSSH as PlayReadyPSSH
@@ -3866,6 +4030,7 @@ async def session_segment_filter_handler(
     filter and the data it reads stay on it.
     """
     session = await get_validated_session(session_id, request)
+    require_authenticated(session)
 
     track_id = data.get("track_id")
     if not track_id:
@@ -3916,6 +4081,7 @@ async def session_license_handler(
     """
 
     session = await get_validated_session(session_id, request)
+    require_authenticated(session)
 
     track_id = data.get("track_id")
     track_ids = data.get("track_ids")
@@ -3933,7 +4099,7 @@ async def session_license_handler(
         from unshackle.core.config import config as app_config
 
         api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
-        user_config = app_config.serve.get("users", {}).get(api_key, {})
+        user_config = serve_user_config(api_key)
         service = session.service_instance
         has_wv_device = bool(user_config.get("devices"))
         has_pr_device = bool(user_config.get("playready_devices"))
@@ -3999,7 +4165,7 @@ async def session_license_handler(
                 except SystemExit:
                     warn(f"Service exited while resolving keys for track {sanitize_log(str(track.id)[:12])}, skipping")
                 except (Exception, SystemExit) as e:
-                    warn(f"Failed to resolve keys for track {sanitize_log(str(track.id)[:12])}: {e}")
+                    warn(f"Failed to resolve keys for track {sanitize_log(str(track.id)[:12])}: {redact_all(str(e))}")
             return keys_by_pssh[cache_key], drm_type_by_pssh.get(cache_key), pssh_str
 
         for tid in track_ids:
@@ -4091,6 +4257,8 @@ async def session_license_handler(
 
         pssh_b64 = data.get("pssh")
         if pssh_b64:
+            ensure_track_drm(track, getattr(service, "session", None))
+            require_track_pssh(track, pssh_b64, drm_type)
             if drm_type == "playready":
                 track.pr_pssh = pssh_b64
 
@@ -4154,7 +4322,7 @@ async def session_delete_handler(session_id: str, request: Optional[web.Request]
 
     cache_tag = session.cache_tag
     cache_data: Dict[str, str] = {}
-    if cache_tag:
+    if cache_tag and session.client_auth:
         cache_dir = app_config.directories.cache / cache_tag
         if cache_dir.is_dir():
             for f in cache_dir.glob("*.json"):

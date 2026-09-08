@@ -14,7 +14,7 @@ from typing import Any
 
 from aiohttp import web
 
-from unshackle.core.utils.redact import redact_text
+from unshackle.core.utils.redact import redact_all
 
 
 class APIErrorCode(str, Enum):
@@ -152,7 +152,7 @@ def build_error_response(
         }
 
         if isinstance(error, Exception):
-            debug_info["traceback"] = traceback.format_exc()
+            debug_info["traceback"] = redact_all(traceback.format_exc())
 
         if extra_debug_info:
             debug_info.update(extra_debug_info)
@@ -187,7 +187,7 @@ def categorize_exception(
     if "proxy" in str(root).lower():
         return APIError(
             error_code=APIErrorCode.INVALID_PROXY,
-            message=f"The proxy for this session failed: {redact_text(str(root))}",
+            message=f"The proxy for this session failed: {redact_all(str(root))}",
             details={**context, "reason": "proxy_error"},
             retryable=False,
         )
@@ -195,7 +195,7 @@ def categorize_exception(
     if any(keyword in exc_str for keyword in ["auth", "login", "credential", "unauthorized", "forbidden", "token"]):
         return APIError(
             error_code=APIErrorCode.AUTH_FAILED,
-            message=f"Authentication failed: {exc}",
+            message=f"Authentication failed: {redact_all(str(exc))}",
             details={**context, "reason": "authentication_error"},
             retryable=False,
         )
@@ -214,7 +214,7 @@ def categorize_exception(
     ) or exc_type in ["ConnectionError", "TimeoutError", "URLError", "SSLError"]:
         return APIError(
             error_code=APIErrorCode.NETWORK_ERROR,
-            message=f"Network error occurred: {exc}",
+            message=f"Network error occurred: {redact_all(str(exc))}",
             details={**context, "reason": "network_connectivity"},
             retryable=True,
             http_status=503,
@@ -223,7 +223,7 @@ def categorize_exception(
     if any(keyword in exc_str for keyword in ["geofence", "region", "not available in", "territory"]):
         return APIError(
             error_code=APIErrorCode.GEOFENCE,
-            message=f"Content not available in your region: {exc}",
+            message=f"Content not available in your region: {redact_all(str(exc))}",
             details={**context, "reason": "geofence_restriction"},
             retryable=False,
         )
@@ -231,7 +231,7 @@ def categorize_exception(
     if any(keyword in exc_str for keyword in ["not found", "404", "does not exist", "invalid id"]):
         return APIError(
             error_code=APIErrorCode.NOT_FOUND,
-            message=f"Resource not found: {exc}",
+            message=f"Resource not found: {redact_all(str(exc))}",
             details={**context, "reason": "not_found"},
             retryable=False,
         )
@@ -239,7 +239,7 @@ def categorize_exception(
     if any(keyword in exc_str for keyword in ["rate limit", "too many requests", "429", "throttle"]):
         return APIError(
             error_code=APIErrorCode.RATE_LIMITED,
-            message=f"Rate limit exceeded: {exc}",
+            message=f"Rate limit exceeded: {redact_all(str(exc))}",
             details={**context, "reason": "rate_limited"},
             retryable=True,
             http_status=429,
@@ -248,7 +248,7 @@ def categorize_exception(
     if any(keyword in exc_str for keyword in ["drm", "license", "widevine", "playready", "decrypt"]):
         return APIError(
             error_code=APIErrorCode.DRM_ERROR,
-            message=f"DRM error: {exc}",
+            message=f"DRM error: {redact_all(str(exc))}",
             details={**context, "reason": "drm_failure"},
             retryable=False,
         )
@@ -256,7 +256,7 @@ def categorize_exception(
     if any(keyword in exc_str for keyword in ["service unavailable", "503", "maintenance", "temporarily unavailable"]):
         return APIError(
             error_code=APIErrorCode.SERVICE_UNAVAILABLE,
-            message=f"Service temporarily unavailable: {exc}",
+            message=f"Service temporarily unavailable: {redact_all(str(exc))}",
             details={**context, "reason": "service_unavailable"},
             retryable=True,
             http_status=503,
@@ -268,14 +268,14 @@ def categorize_exception(
     ]:
         return APIError(
             error_code=APIErrorCode.INVALID_INPUT,
-            message=f"Invalid input: {exc}",
+            message=f"Invalid input: {redact_all(str(exc))}",
             details={**context, "reason": "validation_failed"},
             retryable=False,
         )
 
     return APIError(
         error_code=APIErrorCode.INTERNAL_ERROR,
-        message=f"An unexpected error occurred: {exc}",
+        message=f"An unexpected error occurred: {redact_all(str(exc))}",
         details={**context, "exception_type": exc_type},
         retryable=False,
     )

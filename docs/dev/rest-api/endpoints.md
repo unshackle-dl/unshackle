@@ -429,7 +429,7 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | `tvdb_order` | `official`, `dvd`, `absolute`, `alternate`, `regional` | `null` | Renumber episodes to a TVDB season order. Falls back to the `tvdb_order` config option. |
 | `enrich` | boolean | `false` | Overwrite title, year and original language with the external source's. Needs one of `tmdb_id`, `imdb_id`, `tvdb_id` or `anilist_id`. Without one the job fails instead of returning `400`. |
 | `daily` | boolean | `false` | Treat the title as daily/date-based content and fill missing episode air dates from TVDB. The fill needs `enrich` and a TVDB ID. An air date the service already set is kept. |
-| `output_dir` | string | `null` | Override output directory. |
+| `output_dir` | string | `null` | Output directory, relative to the server's downloads directory. The server rejects a path that resolves outside it with `400`. |
 | `no_cache` / `reset_cache` | boolean | `false` | Title cache controls. |
 
 **Validation.** Invalid values return `400 INVALID_PARAMETERS`. `vcodec` must be one of H264/H265/H.264/H.265/AVC/HEVC/VC1/VC-1/VP8/VP9/AV1. `acodec` must be one of AAC/AC3/EC3/EAC3/DD/DD+/AC4/OPUS/FLAC/ALAC/VORBIS/OGG/DTS/DTSX/DTS-X. `range` must be one of SDR/HDR10/HDR10P/DV/HLG/HYBRID, and `HDR10+` is also valid. The bitrate, download worker, and download counts must be positive integers. You may set at most one of the `*_only` flags. You cannot combine `no_subs` with `subs_only`, or `no_audio` with `audio_only`.
@@ -700,7 +700,7 @@ Show the named credential profiles configured per service (usable as the `profil
 
 ### `GET /api/config`
 
-Return a read-only, redacted view of the effective server configuration, suitable for a settings page in a UI. The server never sends secrets: it masks every config key whose name contains `secret`, `password`, `token`, `api_key`, or `credential`, and any userinfo in proxy URLs.
+Return a read-only, redacted view of the effective server configuration, suitable for a settings page in a UI. The server never sends secrets: it masks every config key whose name looks like a secret (`secret`, `password`, `passwd`, `token`, `api_key`, `credential`, `auth`, `cookie`, `bearer`, `private`) and any userinfo in proxy URLs. The `directories` block holds the server's absolute paths and reaches only an admin key (`admin: true` or the `api_secret`); a plain key gets the response without it.
 
 === "Response `200`"
 
@@ -729,7 +729,7 @@ Return a read-only, redacted view of the effective server configuration, suitabl
 
 ### `GET /api/history`
 
-Read the persisted history of jobs that reached a terminal state, newest first. unshackle stores the history in `api_history.jsonl` in the cache directory. It skips corrupt lines, and a missing file yields an empty list.
+Read the persisted history of jobs that reached a terminal state, newest first. Each API key sees only the jobs it submitted, plus entries written before the history recorded an owner. The same rule applies to `DELETE /api/history/{job_id}` and `POST /api/download/jobs/clear-finished`. unshackle stores the history in `api_history.jsonl` in the cache directory. It skips corrupt lines, and a missing file yields an empty list.
 
 **Query parameters**
 
@@ -776,7 +776,7 @@ Remove a single persisted history entry. Returns **`204 No Content`** (empty bod
 
 ### `POST /api/maintenance/clear-cache` and `POST /api/maintenance/clear-temp`
 
-Delete and recreate the cache or temp directory. Neither takes a request body. The server blocks both with `409 CONFLICT` if any job is currently `downloading` (the `details` include the offending `active_jobs`).
+Delete and recreate the cache or temp directory. Both, and refresh-services, need `admin: true` on the API key or the `api_secret` itself; any other key gets `403 FORBIDDEN`. Neither takes a request body. The server blocks both with `409 CONFLICT` if any job is currently `downloading` (the `details` include the offending `active_jobs`).
 
 The `409` guard is about active file I/O, not an arbitrary lock. An in-flight job may still be *reading* cached title data under the cache directory, and active download workers are *writing* segment files under temp. The removal of either directory mid-download would corrupt those jobs, so the endpoints refuse while a download is in progress.
 
@@ -871,7 +871,7 @@ The `proxy` value must be a full proxy URI, unless the operator gives your API k
     }
     ```
 
-`server_account` is `true` when the server authenticated with one of its own accounts (`serve.server_accounts`). Otherwise the server uses only what the client sent, and never falls back to its own credentials.
+`server_account` is `true` when the server authenticated with one of its own accounts (`serve.server_accounts`). Otherwise the server uses only what the client sent, and never falls back to its own credentials. Only a client that sent its own cookies or credentials gets cookies, auth headers, and the remote session cache back. For any other remote session (a server account, or an anonymous login through the server's proxy) the tracks and segments responses carry no cookies and no auth headers. The server also drops secret-looking keys from track data, and the cache stays on the server. A server-account service also refuses a client proxy URI, because the server's login would pass through it.
 
 | Status | Error code | Meaning |
 | --- | --- | --- |

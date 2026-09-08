@@ -147,6 +147,8 @@ client that asks anyway gets a `FORBIDDEN` error. Because a download job always 
 an API key without `server_cdm` for that service also cannot submit or retry `/api/download`
 jobs. Keys that have no `users` entry, such as `api_secret`, keep server CDM access.
 
+`admin` is a boolean that lets the API key run the maintenance endpoints (clear-cache, clear-temp, refresh-services). It is `false` unless the entry sets it. Keys that have no `users` entry, such as `api_secret`, keep that access.
+
 A `tier` names an entry under `serve.tiers`, which holds the settings that several API keys
 share. Today a tier carries `rate_limit`, the requests per hour that API key may make; an API
 key can also set its own `rate_limit`, which wins over its tier's. An API key with neither has

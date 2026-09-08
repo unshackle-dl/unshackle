@@ -96,12 +96,12 @@ def load_service(path: Path) -> object:
         module = import_module_by_path(path)
     except Exception as e:
         hint = compiled_import_hint(e.name, path) if isinstance(e, ModuleNotFoundError) and e.name else ""
-        raise RuntimeError(f"{tag}: failed to import - {type(e).__name__}: {e}{hint} ({path})") from e
+        raise RuntimeError(f"{tag}: failed to import - {type(e).__name__}: {e}{hint} ({path.name})") from e
     try:
         return getattr(module, tag)
     except AttributeError as e:
         raise RuntimeError(
-            f"{tag}: no class named '{tag}' found in {path} - the class name must match the directory name"
+            f"{tag}: no class named '{tag}' found in {path.name} - the class name must match the directory name"
         ) from e
 
 

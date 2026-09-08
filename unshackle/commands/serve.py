@@ -1,6 +1,7 @@
 import asyncio
 import hmac
 import logging
+import re
 import subprocess
 import sys
 from contextlib import suppress
@@ -28,6 +29,15 @@ from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import context_settings
 from unshackle.core.downloaders import format_speed, parse_speed_limit, set_speed_limit
+
+
+class _MaskAccessKey(logging.Filter):
+    """Mask the ``secret_key`` query parameter the SSE routes accept before the access line is stored."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.msg, str) and "secret_key=" in record.msg:
+            record.msg = re.sub(r"secret_key=[^&\s]*", "secret_key=***", record.msg)
+        return True
 
 
 def _install_service_refresh(app: web.Application) -> None:
@@ -191,6 +201,7 @@ def serve(
         logging.getLogger("api.remote").setLevel(logging.WARNING)
     ring.setFormatter(logging.Formatter("%(message)s"))
     logging.getLogger().addHandler(ring)
+    logging.getLogger("aiohttp.access").addFilter(_MaskAccessKey())
 
     if not no_key:
         api_secret = config.serve.get("api_secret")
@@ -349,8 +360,8 @@ def serve(
             wvd_device_names = [d.stem if hasattr(d, "stem") else str(d) for d in wvd_devices]
             prd_device_names = [d.stem if hasattr(d, "stem") else str(d) for d in prd_devices]
 
-            if not serve_config.get("users") or not isinstance(serve_config["users"], dict):
-                serve_config["users"] = {}
+            users_cfg = serve_config.get("users")
+            serve_config["users"] = dict(users_cfg) if isinstance(users_cfg, dict) else {}
 
             if not no_key and api_secret not in serve_config["users"]:
                 serve_config["users"][api_secret] = {
