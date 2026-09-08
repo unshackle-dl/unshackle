@@ -14,6 +14,7 @@ from aiohttp import web
 from unshackle.core import __code_hash__, __version__
 from unshackle.core.api.events import bus
 from unshackle.core.config import config
+from unshackle.core.utils.redact import redact_secrets
 
 RATE_LIMIT_WINDOW = 3600.0
 
@@ -227,7 +228,7 @@ class RingLogHandler(logging.Handler):
             "ts": record.created,
             "level": record.levelname,
             "logger": record.name,
-            "msg": self.format(record),
+            "msg": redact_secrets(self.format(record)),
         }
         self.records.append(item)
         bus.publish("log", item)

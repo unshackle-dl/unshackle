@@ -34,7 +34,7 @@ from unshackle.core.titles import Episode, Movie, Song, Title_T
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.utilities import declared_kwargs
 from unshackle.core.utils.collections import ci_get
-from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_path, redact_text
+from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_secrets, redact_text
 
 log = logging.getLogger("api")
 
@@ -1993,11 +1993,6 @@ async def dashboard_logs_handler(request: web.Request) -> web.Response:
     except ValueError:
         since = 0
     records = ring.since(since, request.query.get("level"), request.query.get("logger"))
-    # The ring buffer stores raw log lines; a captured traceback carries host paths. Mask them
-    # on the way out, the same treatment the job-detail API gives its stored traceback.
-    for rec in records:
-        if isinstance(rec, dict) and isinstance(rec.get("message"), str):
-            rec["message"] = redact_path(rec["message"])
     return web.json_response({"seq": ring.seq, "records": records})
 
 
@@ -3021,7 +3016,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
             except (Exception, SystemExit) as e:
                 log.exception("Auth failed for session %s", session_id)
                 session.auth_status = AuthStatus.FAILED
-                session.auth_error = redact_all(str(e))
+                session.auth_error = redact_secrets(str(e))
                 bridge.status = AuthStatus.FAILED
 
         asyncio.create_task(run_auth())

@@ -16,7 +16,14 @@ from unshackle.core.utilities import (
     log_event,
     timed_operation,
 )
-from unshackle.core.utils.redact import redact_all, redact_path, redact_text, redact_url, safe_display_url
+from unshackle.core.utils.redact import (
+    redact_all,
+    redact_path,
+    redact_secrets,
+    redact_text,
+    redact_url,
+    safe_display_url,
+)
 from unshackle.core.utils.subprocess import log_tool_run
 
 pytestmark = pytest.mark.unit
@@ -263,6 +270,15 @@ def test_redact_all_composes_secrets_urls_and_paths():
     out = redact_all(f"dl https://u:p@cdn.x/seg.mp4?token=t into {root}/temp")
     assert "cdn.x" not in out
     assert "redacted.mp4" in out
+    assert "<unshackle>/temp" in out
+
+
+def test_redact_secrets_keeps_the_url_but_drops_credentials_and_paths():
+    root = str(Path(__import__("unshackle.core.utils.redact", fromlist=["x"]).__file__).resolve().parents[3])
+    out = redact_secrets(f"404 Not Found: https://u:p@cdn.x/a/b.mpd?token=t (cwd {root}/temp)")
+    assert "cdn.x/a/b.mpd" in out
+    assert "u:p@" not in out
+    assert "token=t" not in out
     assert "<unshackle>/temp" in out
 
 

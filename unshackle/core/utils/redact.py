@@ -162,3 +162,13 @@ def redact_url(text: Optional[str]) -> Optional[str]:
 def redact_all(text: Optional[str]) -> Optional[str]:
     """Full redaction for logged strings: secrets, then URLs, then local path prefixes."""
     return redact_path(redact_url(redact_text(text)))
+
+
+def redact_secrets(text: Optional[str]) -> Optional[str]:
+    """Redact text that goes back to the caller: secrets and local path prefixes only.
+
+    URLs stay readable. The caller supplied the URL that failed, or already holds it, so a
+    collapsed URL hides nothing from them. It only removes the useful part of a message like
+    ``404 Not Found: <url>``. Use ``redact_all`` for a debug log file that other people read.
+    """
+    return redact_path(redact_text(text))

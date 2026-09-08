@@ -69,6 +69,28 @@ def test_ring_since_and_level() -> None:
     assert ring.seq == 5
     assert [r["msg"] for r in ring.since(3)] == ["m3", "m4"]
     assert [r["msg"] for r in ring.since(0, "warning")] == ["m3"]
+
+
+def test_ring_masks_host_paths_and_secrets_in_records() -> None:
+    """The ring feeds both /api/logs and the SSE stream, so it must mask on the way in."""
+    from pathlib import Path
+
+    import unshackle.core.utils.redact as redact_mod
+
+    root = str(Path(redact_mod.__file__).resolve().parents[3])
+    ring = RingLogHandler(maxlen=3)
+    ring.setFormatter(logging.Formatter("%(message)s"))
+    logger = logging.getLogger("test.ring.redact")
+    logger.setLevel(logging.INFO)
+    logger.addHandler(ring)
+    logger.error(f'File "{root}/unshackle/services/HMAX/__init__.py" 404: https://api.x/y?token=abc')
+    logger.removeHandler(ring)
+
+    msg = ring.records[-1]["msg"]
+    assert root not in msg
+    assert "<unshackle>/unshackle/services/HMAX" in msg
+    assert "token=abc" not in msg
+    assert "https://api.x/y" in msg
     assert ring.since(0, logger="test") and not ring.since(0, logger="other")
 
 
