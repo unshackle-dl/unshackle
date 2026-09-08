@@ -2322,6 +2322,7 @@ client configured with <code>server_cdm: true</code> to license with its own loc
 client that asks anyway gets a <code>FORBIDDEN</code> error. Because a download job always licenses with the server's CDM,
 an API key without <code>server_cdm</code> for that service also cannot submit or retry <code>/api/download</code>
 jobs. Keys that have no <code>users</code> entry, such as <code>api_secret</code>, keep server CDM access.</p>
+<p><code>admin</code> is a boolean that lets the API key run the maintenance endpoints (clear-cache, clear-temp, refresh-services). It is <code>false</code> unless the entry sets it. Keys that have no <code>users</code> entry, such as <code>api_secret</code>, keep that access.</p>
 <p>A <code>tier</code> names an entry under <code>serve.tiers</code>, which holds the settings that several API keys
 share. Today a tier carries <code>rate_limit</code>, the requests per hour that API key may make; an API
 key can also set its own <code>rate_limit</code>, which wins over its tier's. An API key with neither has

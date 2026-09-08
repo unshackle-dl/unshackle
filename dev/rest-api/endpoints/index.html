@@ -3861,7 +3861,7 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <td><code>output_dir</code></td>
 <td>string</td>
 <td><code>null</code></td>
-<td>Override output directory.</td>
+<td>Output directory, relative to the server's downloads directory. The server rejects a path that resolves outside it with <code>400</code>.</td>
 </tr>
 <tr>
 <td><code>no_cache</code> / <code>reset_cache</code></td>
@@ -4328,7 +4328,7 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 </div>
 </div>
 <h3 id="get-apiconfig"><code>GET /api/config</code><a class="headerlink" href="#get-apiconfig" title="Permanent link">&para;</a></h3>
-<p>Return a read-only, redacted view of the effective server configuration, suitable for a settings page in a UI. The server never sends secrets: it masks every config key whose name contains <code>secret</code>, <code>password</code>, <code>token</code>, <code>api_key</code>, or <code>credential</code>, and any userinfo in proxy URLs.</p>
+<p>Return a read-only, redacted view of the effective server configuration, suitable for a settings page in a UI. The server never sends secrets: it masks every config key whose name looks like a secret (<code>secret</code>, <code>password</code>, <code>passwd</code>, <code>token</code>, <code>api_key</code>, <code>credential</code>, <code>auth</code>, <code>cookie</code>, <code>bearer</code>, <code>private</code>) and any userinfo in proxy URLs. The <code>directories</code> block holds the server's absolute paths and reaches only an admin key (<code>admin: true</code> or the <code>api_secret</code>); a plain key gets the response without it.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="14:1"><input checked="checked" id="__tabbed_14_1" name="__tabbed_14" type="radio" /><div class="tabbed-labels"><label for="__tabbed_14_1">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -4357,7 +4357,7 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 </div>
 </div>
 <h3 id="get-apihistory"><code>GET /api/history</code><a class="headerlink" href="#get-apihistory" title="Permanent link">&para;</a></h3>
-<p>Read the persisted history of jobs that reached a terminal state, newest first. unshackle stores the history in <code>api_history.jsonl</code> in the cache directory. It skips corrupt lines, and a missing file yields an empty list.</p>
+<p>Read the persisted history of jobs that reached a terminal state, newest first. Each API key sees only the jobs it submitted, plus entries written before the history recorded an owner. The same rule applies to <code>DELETE /api/history/{job_id}</code> and <code>POST /api/download/jobs/clear-finished</code>. unshackle stores the history in <code>api_history.jsonl</code> in the cache directory. It skips corrupt lines, and a missing file yields an empty list.</p>
 <p><strong>Query parameters</strong></p>
 <table>
 <thead>
@@ -4452,7 +4452,7 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 </tbody>
 </table>
 <h3 id="post-apimaintenanceclear-cache-and-post-apimaintenanceclear-temp"><code>POST /api/maintenance/clear-cache</code> and <code>POST /api/maintenance/clear-temp</code><a class="headerlink" href="#post-apimaintenanceclear-cache-and-post-apimaintenanceclear-temp" title="Permanent link">&para;</a></h3>
-<p>Delete and recreate the cache or temp directory. Neither takes a request body. The server blocks both with <code>409 CONFLICT</code> if any job is currently <code>downloading</code> (the <code>details</code> include the offending <code>active_jobs</code>).</p>
+<p>Delete and recreate the cache or temp directory. Both, and refresh-services, need <code>admin: true</code> on the API key or the <code>api_secret</code> itself; any other key gets <code>403 FORBIDDEN</code>. Neither takes a request body. The server blocks both with <code>409 CONFLICT</code> if any job is currently <code>downloading</code> (the <code>details</code> include the offending <code>active_jobs</code>).</p>
 <p>The <code>409</code> guard is about active file I/O, not an arbitrary lock. An in-flight job may still be <em>reading</em> cached title data under the cache directory, and active download workers are <em>writing</em> segment files under temp. The removal of either directory mid-download would corrupt those jobs, so the endpoints refuse while a download is in progress.</p>
 <div class="admonition warning">
 <p class="admonition-title">clear-cache also wipes download history</p>
@@ -4557,7 +4557,7 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 </div>
 </div>
 </div>
-<p><code>server_account</code> is <code>true</code> when the server authenticated with one of its own accounts (<code>serve.server_accounts</code>). Otherwise the server uses only what the client sent, and never falls back to its own credentials.</p>
+<p><code>server_account</code> is <code>true</code> when the server authenticated with one of its own accounts (<code>serve.server_accounts</code>). Otherwise the server uses only what the client sent, and never falls back to its own credentials. Only a client that sent its own cookies or credentials gets cookies, auth headers, and the remote session cache back. For any other remote session (a server account, or an anonymous login through the server's proxy) the tracks and segments responses carry no cookies and no auth headers. The server also drops secret-looking keys from track data, and the cache stays on the server. A server-account service also refuses a client proxy URI, because the server's login would pass through it.</p>
 <table>
 <thead>
 <tr>
