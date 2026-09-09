@@ -23,25 +23,31 @@ def read_payload(path: Path) -> Dict[str, Any]:
         return json.load(handle)
 
 
+_replace_lock = threading.Lock()
+
+
 def write_result(path: Path, payload: Dict[str, Any]) -> None:
     """Write the payload with an atomic replace, because the parent polls this file during the write.
 
     Each call gets its own temp name, so two threads writing this destination cannot replace away
     the temp file the other is about to move.
 
-    Windows denies the replace while the parent holds the destination open, so retry with a backoff.
+    Windows denies the replace while another thread or the parent holds the destination open. The
+    lock removes the in-process contention; the retry covers the parent process.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f"{path.name}.{uuid4().hex}.tmp")
     try:
         tmp.write_text(json.dumps(payload), encoding="utf-8")
-        for attempt in range(5):
-            try:
-                os.replace(tmp, path)
-                return
-            except PermissionError:
-                time.sleep(0.02 * (attempt + 1))
-        os.replace(tmp, path)
+        with _replace_lock:
+            for attempt in range(10):
+                try:
+                    os.replace(tmp, path)
+                    return
+                except PermissionError:
+                    if attempt == 9:
+                        raise
+                    time.sleep(0.02 * (attempt + 1))
     except OSError:
         tmp.unlink(missing_ok=True)
         raise
