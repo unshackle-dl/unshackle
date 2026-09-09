@@ -1556,8 +1556,11 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
     # The serve user would create and write any directory a client names; keep it under downloads.
     if data.get("output_dir"):
         root = config.directories.downloads.resolve()
+        raw = str(data["output_dir"])
+        if "\x00" in raw:
+            return "output_dir is not a usable path."
         try:
-            target = (root / str(data["output_dir"])).resolve()
+            target = (root / raw).resolve()
         except (OSError, ValueError):
             return "output_dir is not a usable path."
         if not target.is_relative_to(root):
