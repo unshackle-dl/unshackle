@@ -1111,7 +1111,11 @@ class DASH:
         """Whether the Adaptation Set is Descriptive."""
         return any(
             (x.get("schemeIdUri"), x.get("value"))
-            in (("urn:mpeg:dash:role:2011", "descriptive"), ("urn:tva:metadata:cs:AudioPurposeCS:2007", "1"))
+            in (
+                ("urn:mpeg:dash:role:2011", "description"),
+                ("urn:mpeg:dash:role:2011", "descriptive"),
+                ("urn:tva:metadata:cs:AudioPurposeCS:2007", "1"),
+            )
             for x in adaptation_set.findall("Accessibility")
         )
 
