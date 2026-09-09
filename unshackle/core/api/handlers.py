@@ -4001,9 +4001,10 @@ def handle_proxy_license(
             )
         )
     elif drm_type == "playready":
+        challenge_str = challenge_bytes.decode("utf-8", errors="replace")
         license_response = service.get_playready_license(
             **declared_kwargs(
-                service.get_playready_license, {"challenge": challenge_bytes, "title": title, "track": track}
+                service.get_playready_license, {"challenge": challenge_str, "title": title, "track": track}
             )
         )
     else:
