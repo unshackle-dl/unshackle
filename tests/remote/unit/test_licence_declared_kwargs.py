@@ -278,14 +278,15 @@ def _proxy(service: Any, drm_type: str) -> Any:
     )
 
 
-@pytest.mark.parametrize("drm_type", ["widevine", "playready"])
-def test_proxy_license_classic_signature(drm_type: str) -> None:
+# A PlayReady challenge is SOAP XML, and pyplayready returns it as str on the local path too.
+@pytest.mark.parametrize("drm_type, challenge", [("widevine", b"CHAL"), ("playready", "CHAL")])
+def test_proxy_license_classic_signature(drm_type: str, challenge: Any) -> None:
     service = ClassicService()
     response = _proxy(service, drm_type)
 
     assert response.status == 200
     assert set(service.calls[0]) == {"challenge", "title", "track"}
-    assert service.calls[0]["challenge"] == b"CHAL"
+    assert service.calls[0]["challenge"] == challenge
 
 
 @pytest.mark.parametrize("drm_type", ["widevine", "playready"])
