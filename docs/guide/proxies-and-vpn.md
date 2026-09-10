@@ -123,6 +123,21 @@ where you came out:
   `(USA - New York, #3 of 5): .214`.
 - Other proxy providers log the resolved proxy URL.
 
+### Exit check
+
+Before the service sends a request, unshackle looks up the proxy exit IP through the
+proxy. The service stops with `Proxy check failed` in two cases:
+
+- No IP lookup gets through the proxy. The proxy is down, or it refused the connection.
+- The proxy exit IP is the same as your own IP, so traffic does not go through the proxy.
+
+unshackle tries each geolocation API in turn, and a 429 moves on to the next one. If at
+least one API answers through the proxy but none of them gives an IP, the proxy passes
+the check without the IP comparison. unshackle does not compare the exit country with the region you asked for,
+because geolocation data can be out of date.
+
+Over the REST API, the server returns this failure to the client as `INVALID_PROXY`.
+
 ## Basic (static proxies)
 
 The `Basic` proxy provider is pure static configuration, with no accounts and no network

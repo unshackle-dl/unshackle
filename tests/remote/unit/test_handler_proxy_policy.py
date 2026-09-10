@@ -179,6 +179,25 @@ def test_setup_list_service_threads_request(monkeypatch):
     assert seen["authenticated"]
 
 
+def test_search_reports_failed_proxy_check_as_invalid_proxy(monkeypatch):
+    def failed_check(*args):
+        raise ConnectionError("Proxy check failed: no IP lookup got through the proxy.")
+
+    monkeypatch.setattr(handlers, "load_service_yaml", lambda service: {})
+    monkeypatch.setattr(handlers, "resolve_handler_proxy", lambda *args: ("http://127.0.0.1:9", []))
+    monkeypatch.setattr(handlers, "load_full_cdm", lambda *args: None)
+    monkeypatch.setattr(handlers, "build_parent_ctx", lambda *args, **kwargs: None)
+    monkeypatch.setattr(handlers.Services, "load", lambda service: None)
+    monkeypatch.setattr(handlers, "instantiate_service", failed_check)
+    monkeypatch.setattr("unshackle.commands.dl.dl.get_cookie_jar", staticmethod(lambda service, profile: None))
+    monkeypatch.setattr("unshackle.commands.dl.dl.get_credentials", staticmethod(lambda service, profile: None))
+
+    with pytest.raises(APIError) as exc_info:
+        handlers.run_service_search({}, "EXAMPLE", "query", request("plainkey"))
+    assert exc_info.value.error_code == APIErrorCode.INVALID_PROXY
+    assert exc_info.value.retryable is False
+
+
 class TestDownloadGates:
     """/api/download submissions and retries obey the same proxy policy as sessions."""
 
@@ -288,3 +307,35 @@ class TestDownloadEnforcement:
         with pytest.raises(Stop):
             dm.perform_download("job1", "EXAMPLE", "t1", dict(params))
         assert seen["proxy_providers"] == expected
+
+
+def test_session_create_builds_service_off_the_event_loop(monkeypatch):
+    import asyncio
+    import json
+    import logging
+    import threading
+
+    seen: dict = {}
+
+    class RecordingBuffer(handlers.SessionLogBuffer):
+        def __init__(self):
+            super().__init__()
+            seen["buffer"] = self
+
+    def failed_check(*args, **kwargs):
+        seen["thread"] = threading.get_ident()
+        logging.getLogger("SlowProxySvc").warning("checking proxy")
+        raise ConnectionError("Proxy check failed: no IP lookup got through the proxy.")
+
+    monkeypatch.setattr(handlers, "validate_service", lambda service, request=None: service)
+    monkeypatch.setattr(handlers, "resolve_handler_proxy", lambda *args: ("http://127.0.0.1:9", []))
+    monkeypatch.setattr(handlers, "server_account_for", lambda *args: False)
+    monkeypatch.setattr(handlers.Services, "load", lambda service: type("SlowProxySvc", (), {}))
+    monkeypatch.setattr(handlers, "SessionLogBuffer", RecordingBuffer)
+    monkeypatch.setattr(handlers, "create_service_instance", failed_check)
+
+    response = asyncio.run(handlers.session_create_handler({"service": "EXAMPLE", "title_id": "t"}))
+
+    assert seen["thread"] != threading.get_ident()
+    assert [r["message"] for r in seen["buffer"].since(0)] == ["checking proxy"]
+    assert json.loads(response.body)["error_code"] == "INVALID_PROXY"

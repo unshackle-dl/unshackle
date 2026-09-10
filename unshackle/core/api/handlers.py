@@ -18,7 +18,7 @@ from typing import Any, Dict, Iterable, List, Optional
 from aiohttp import web
 
 from unshackle.core.api.compression import safe_inflate
-from unshackle.core.api.errors import APIError, APIErrorCode, handle_api_exception
+from unshackle.core.api.errors import APIError, APIErrorCode, categorize_exception, handle_api_exception
 from unshackle.core.api.input_bridge import AuthStatus, InputBridge
 from unshackle.core.api.sanitize import safe_cache_key, sanitize_log
 from unshackle.core.api.session_log import SessionLogBuffer, SessionLogMirror, capture_service_logs
@@ -358,6 +358,8 @@ def run_service_search(
 
     try:
         service_instance = instantiate_service(parent_ctx, service_module, query)
+    except ConnectionError as exc:
+        raise categorize_exception(exc, {"service": normalized_service}) from exc
     except Exception as exc:
         raise APIError(
             APIErrorCode.SERVICE_ERROR,
@@ -2947,22 +2949,26 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
             if region is not None and not (isinstance(region, str) and re.fullmatch(r"[A-Za-z]{2}", region)):
                 raise APIError(APIErrorCode.INVALID_INPUT, "proxy_region must be a two-letter country code.")
             if region is None and data.get("no_proxy"):
-                region = server_region()
+                region = await asyncio.to_thread(server_region)
             profile = next_server_profile(normalized_service, region)
             log.info(f"Using server account '{sanitize_log(profile or 'default')}' for {normalized_service}")
 
         log_buffer = None if server_account else SessionLogBuffer()
         service_class_name = getattr(Services.load(normalized_service), "__name__", normalized_service)
-        with capture_service_logs(service_class_name, log_buffer):
-            service_instance, cookies, credential = create_service_instance(
-                normalized_service,
-                title_id,
-                data,
-                proxy_param,
-                proxy_providers,
-                profile,
-                server_account=server_account,
-            )
+
+        def build_service() -> Any:
+            with capture_service_logs(service_class_name, log_buffer):
+                return create_service_instance(
+                    normalized_service,
+                    title_id,
+                    data,
+                    proxy_param,
+                    proxy_providers,
+                    profile,
+                    server_account=server_account,
+                )
+
+        service_instance, cookies, credential = await asyncio.to_thread(build_service)
         if log_buffer:
             service_instance.log = SessionLogMirror(service_instance.log, log_buffer)
 

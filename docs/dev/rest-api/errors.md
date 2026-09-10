@@ -96,7 +96,7 @@ but the defaults hold for the overwhelming majority of responses.
 |---|---|---|
 | `INVALID_INPUT` | 400 | A required field is missing, or the request body could not be parsed. Also used as the generic "your input was malformed" code. |
 | `INVALID_SERVICE` | 400 | The named service is unknown, or is not permitted for your API key. |
-| `INVALID_PROXY` | 400 | The supplied proxy specification could not be resolved or is malformed. |
+| `INVALID_PROXY` | 400 | The supplied proxy specification could not be resolved or is malformed, or the proxy failed the [exit check](../../guide/proxies-and-vpn.md#exit-check). |
 | `INVALID_PARAMETERS` | 400 | One or more download or query parameters failed validation (bad codec, bitrate, sort field, and so on). |
 | `AUTH_FAILED` | 401 | Authentication with the streaming service failed (bad credentials or cookies). |
 | `FORBIDDEN` | 403 | The action is not allowed. Raised by server-side gates (per-key restrictions on CDM or credential overrides) and by remote session IP binding. |

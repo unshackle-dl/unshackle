@@ -265,36 +265,6 @@ class TitleCacher:
         self.log.debug(f"Cached {provider_name} data for {title_id}")
 
 
-def get_region_from_proxy(proxy_url: Optional[str]) -> Optional[str]:
-    """
-    Extract region identifier from proxy URL.
-
-    Args:
-        proxy_url: The proxy URL string
-
-    Returns:
-        Region identifier or None
-    """
-    if not proxy_url:
-        return None
-
-    import re
-
-    nord_match = re.search(r"([a-z]{2})\d+\.nordvpn", proxy_url.lower())
-    if nord_match:
-        return nord_match.group(1)
-
-    cc_match = re.search(r"([a-z]{2})[-_]", proxy_url.lower())
-    if cc_match:
-        return cc_match.group(1)
-
-    subdomain_match = re.search(r"://([a-z]{2})\.", proxy_url.lower())
-    if subdomain_match:
-        return subdomain_match.group(1)
-
-    return None
-
-
 def get_account_hash(credential) -> Optional[str]:
     """
     Make a hash for account identification.

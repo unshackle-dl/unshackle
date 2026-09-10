@@ -34,12 +34,12 @@ from unshackle.core.session import (
     RETRY_METHODS,
     STATUS_FORCELIST,
 )
-from unshackle.core.title_cacher import TitleCacher, get_account_hash, get_region_from_proxy
+from unshackle.core.title_cacher import TitleCacher, get_account_hash
 from unshackle.core.titles import Title_T, Titles_T, remap_titles
 from unshackle.core.tracks import Chapters, Tracks
 from unshackle.core.tracks.video import Video
 from unshackle.core.utilities import declared_kwargs
-from unshackle.core.utils.ip_info import get_ip_info
+from unshackle.core.utils.ip_info import get_ip_info, verify_proxy_exit
 from unshackle.core.utils.redact import mask_proxy
 
 # Default (connect, read) timeout for the requests path, mirroring RnetSession's
@@ -280,13 +280,9 @@ class Service(metaclass=ABCMeta):
                 # requests authenticate from the credentials embedded in the proxy URL.
                 # A manual header here was malformed (no "Basic " scheme) and broke
                 # plaintext-http forward-proxy requests with HTTP 407.
-                # Always verify proxy IP - proxies can change exit nodes
-                try:
-                    proxy_ip_info = get_ip_info(self.session)
-                    self.current_region = proxy_ip_info.get("country", "").lower() if proxy_ip_info else None
-                except Exception as e:
-                    self.log.warning(f"Failed to verify proxy IP: {e}")
-                    self.current_region = get_region_from_proxy(proxy)
+                # Verify the proxy IP every time, because a proxy can change its exit node. A dead
+                # proxy fails here, not after every service request has used up its retries.
+                self.current_region = verify_proxy_exit(self.session).get("country")
             else:
                 # No proxy, use cached IP info for title caching (non-critical)
                 try:
