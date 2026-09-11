@@ -24,6 +24,7 @@ def get_firefox_root() -> Path:
     elif system == "Linux":
         paths = [
             home / ".mozilla" / "firefox",
+            Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config") / "mozilla" / "firefox",
             home / "snap" / "firefox" / "common" / ".mozilla" / "firefox",
             home / ".var" / "app" / "org.mozilla.firefox" / ".mozilla" / "firefox",
         ]
