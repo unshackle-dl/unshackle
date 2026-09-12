@@ -2595,6 +2595,17 @@ CDM.</p>
 <li>Enable with <code>server_cdm: true</code> in the server entry.</li>
 <li>The server tells the client which DRM type it used
   (<code>widevine</code> or <code>playready</code>).</li>
+<li>A content key the server took from its own vault is unproven. The response
+  lists its KID in <code>vault_keys</code>, the client decrypts and checks that the output
+  decodes, and a wrong pair goes back to <code>POST /api/session/{id}/keys/bad</code>. The
+  server flags the pair in every local vault it holds, records the name of the
+  vault that served it, and the next licence for that KID skips the pair and
+  reaches the CDM. A server with no local SQLite vault cannot store the flag. The
+  server accepts a report only for a pair it served to that remote session. The
+  client never learns the server vault names.</li>
+<li>A content key in the client's own vaults goes first, even when the server
+  already answered. The client proves it, and a server key waits as the next
+  candidate.</li>
 </ul>
 </div>
 </div>
@@ -2721,6 +2732,11 @@ from a browser origin, not when you want only the local HTTP API.</p>
 <td><code>POST</code></td>
 <td><code>/api/session/{id}/license</code></td>
 <td>DRM licensing (proxy or server CDM)</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/session/{id}/keys/bad</code></td>
+<td>Report a server-vault content key that did not decrypt</td>
 </tr>
 <tr>
 <td><code>GET</code></td>

@@ -2094,6 +2094,15 @@ name) and a <code>name</code>, plus backend-specific keys.</p>
   stores it.</li>
 </ul>
 </div>
+<div class="admonition note">
+<p class="admonition-title">Bad content keys</p>
+<p>A content key from a vault is proven by a short FFmpeg decode of the decrypted output.
+A content key that fails the decode is written to the <code>bad_keys</code> table of every <code>SQLite</code>
+vault with the name of the vault that supplied it, and every vault lookup skips a flagged
+pair from then on. Only the <code>SQLite</code> backend stores flags. A <code>serve</code> instance with
+<code>server_cdm</code> flags a pair the same way when a remote client reports it, so a server whose
+<code>key_vaults</code> hold no <code>SQLite</code> entry cannot remember a bad content key.</p>
+</div>
 <h2 id="vault_timeout"><code>vault_timeout</code><a class="headerlink" href="#vault_timeout" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Type:</strong> <code>float</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>10.0</code></li>

@@ -3963,7 +3963,7 @@ configured proxy providers), or a <code>provider:region</code> form.</p>
 <p>By default, unshackle checks your <strong>key vaults</strong> first and only asks a <strong>CDM</strong> to license
 a content key when the vault misses. You can force one side or the other:</p>
 <ul>
-<li><code>--cdm-only</code>: only use the CDM (skip vaults).</li>
+<li><code>--cdm-only</code>: only use the CDM (skip vaults). Over a <code>server_cdm</code> remote session the flag does not reach the server, whose vault shortcut still runs; it only skips the client's decode check on a server key.</li>
 <li><code>--cdm &lt;name&gt;</code>: use the named CDM device for this run, ignoring the <code>cdm</code> config mapping (including its quality and Widevine/PlayReady sub-entries).</li>
 <li><code>--vaults-only</code>: only use key vaults and never license through the CDM. A missing
   content key fails.</li>

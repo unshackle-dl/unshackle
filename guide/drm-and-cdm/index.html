@@ -3024,7 +3024,7 @@ control this trade-off on the <code>dl</code> command:</p>
 </tr>
 <tr>
 <td><code>--cdm-only</code></td>
-<td>Ignore vaults for sourcing keys and always perform a fresh license request.</td>
+<td>Ignore vaults for sourcing keys and always perform a fresh license request. Over a <code>server_cdm</code> remote session the server still reads its own vaults; the flag only skips the client's decode check on the key it gets back.</td>
 </tr>
 <tr>
 <td><code>--cdm &lt;name&gt;</code></td>
