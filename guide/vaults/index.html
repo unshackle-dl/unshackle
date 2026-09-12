@@ -863,6 +863,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="How lookups and caching work">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#wrong-keys-from-a-poisoned-vault" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wrong keys from a poisoned vault
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2159,6 +2176,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="How lookups and caching work">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#wrong-keys-from-a-poisoned-vault" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wrong keys from a poisoned vault
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2366,6 +2400,17 @@
 <li>A vault marked <code>no_push: true</code> receives lookups, but unshackle never writes to it. This is useful for read-only or shared upstream vaults you do not own.</li>
 </ul>
 <p>unshackle pushes keys from every source, not only a local CDM. A run against a remote server that licenses with its own CDM (<code>--remote</code>) writes the keys the server returns, and <code>unshackle import</code> writes the keys it reads from an export file.</p>
+<h3 id="wrong-keys-from-a-poisoned-vault">Wrong keys from a poisoned vault<a class="headerlink" href="#wrong-keys-from-a-poisoned-vault" title="Permanent link">&para;</a></h3>
+<p>A public vault can return the right KID with a wrong content key. The decrypters accept a wrong content key and write noise. unshackle therefore trusts a content key from a vault only after FFmpeg decodes the first seconds of the decrypted track with strict error detection. Content keys from a licence skip this check. A file this FFmpeg build cannot judge counts as a pass, never as a wrong content key: a codec it has no decoder for, or a header it cannot read. Without FFmpeg there is no check at all.</p>
+<p>When the decode fails, unshackle:</p>
+<ol>
+<li>Flags the KID:KEY in the <code>bad_keys</code> table of every local SQLite vault, with the service and the name of the vault it came from. The pair also goes out of the service table, except in a vault marked <code>no_push</code>, where only the flag is written.</li>
+<li>Restores the ciphertext from a hard link it made before decryption, then asks for the content key again. Every vault lookup skips a flagged pair, so the request reaches the remaining vaults and then the CDM. A remote answer that arrived after the winning one is reused instead of queried again.</li>
+<li>Removes the flag when the CDM returns the same content key, because then the decode check was wrong, not the content key. A content key from another vault is checked in its turn, and flagged as well if it also fails.</li>
+</ol>
+<p>The download stops with an error instead of writing noise when no ciphertext is left to retry with, or when every vault and the CDM are used up. Without a local SQLite vault nothing remembers a flag, so the same vault serves the same pair again and the download stops there.</p>
+<p>Per-segment decryption gives up the retry. With <code>decrypt_segments</code> on, and always with MonaLisa, the plaintext replaces each segment as it arrives, so no ciphertext is left. A failed decode then flags the pair and stops the download. The next run skips the flagged pair.</p>
+<p>unshackle copies a content key from one vault to the others only after this check passes, so a wrong content key does not spread. Without FFmpeg, a content key from a vault is not copied at all. To see or clear the flags, open the SQLite file and read or delete rows in <code>bad_keys</code>.</p>
 <div class="admonition tip">
 <p class="admonition-title">A good two-vault setup</p>
 <p>A common arrangement is a fast local <strong>SQLite</strong> vault plus a shared remote vault (<strong>MySQL</strong>, <strong>HTTP</strong>, or <strong>API</strong>). The local vault answers instantly and works offline; the remote vault lets you share keys across machines or with a group.</p>
@@ -2434,6 +2479,7 @@
 </tbody>
 </table>
 <p>Each service gets its own table (named after the service tag), created on demand with <code>kid</code> and <code>key_</code> columns. Connections use WAL journaling with a 30-second busy timeout, so multiple threads can safely use the same database file.</p>
+<p>One more table, <code>bad_keys</code>, is created on demand and holds every KID:KEY that failed the decode check described in <a href="#wrong-keys-from-a-poisoned-vault">Wrong keys from a poisoned vault</a>, with the service, the vault it came from, and the time it was flagged. It is not a service table, and every command that walks the service tables skips it.</p>
 <div class="admonition warning">
 <p class="admonition-title">Moving the .db file silently forks your vault</p>
 <p>Because the file is created on demand, if you relocate an existing <code>.db</code> without updating <code>path</code> to match, unshackle will create a fresh empty database at the old location. That leaves you with two divergent vaults and no error to warn you. Always update the config path whenever you move the file.</p>
@@ -2766,11 +2812,12 @@
 </tbody>
 </table>
 <p><code>--service</code> and <code>--local-only</code> are mutually exclusive.</p>
+<p>A pair the destination vault has flagged in <code>bad_keys</code> is left behind, so a copy does not undo a flag. <code>bad_keys</code> is never treated as a service, so its rows are never copied into a service table.</p>
 <h3 id="kv-sync-mirror-vaults-both-ways"><code>kv sync</code>: mirror vaults both ways<a class="headerlink" href="#kv-sync-mirror-vaults-both-ways" title="Permanent link">&para;</a></h3>
 <p>Make each of two or more vaults hold every content key the others have. This is effectively a two-way <code>copy</code> between each pair, so afterwards all listed vaults hold the same set of keys.</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>kv<span class="w"> </span>sync<span class="w"> </span><span class="nb">local</span><span class="w"> </span>shared
 </span></code></pre></div>
-<p>It accepts the same <code>--service</code> and <code>--local-only</code> options as <code>copy</code>, and requires at least two vaults.</p>
+<p>It accepts the same <code>--service</code> and <code>--local-only</code> options as <code>copy</code>, and requires at least two vaults. It runs <code>copy</code> between each pair, so it skips flagged pairs and the <code>bad_keys</code> table in the same way.</p>
 <h3 id="kv-prepare-pre-create-service-tables"><code>kv prepare</code>: pre-create service tables<a class="headerlink" href="#kv-prepare-pre-create-service-tables" title="Permanent link">&para;</a></h3>
 <p>Create the per-service tables on table-based vaults (<code>SQLite</code>, <code>MySQL</code>) ahead of time, for every service you have installed. Vaults that do not use tables (the network-backed <code>HTTP</code> and <code>API</code> backends) are skipped.</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>kv<span class="w"> </span>prepare<span class="w"> </span>shared

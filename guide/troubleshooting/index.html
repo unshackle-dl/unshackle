@@ -2593,6 +2593,11 @@
 <p><strong>Inspect:</strong> enable <code>debug_keys</code> and operate unshackle with <code>-d</code>. Then examine the JSON debug log's <code>drm_*</code> and <code>vault_*</code> operations to see which content keys unshackle fetched, and from where. Also make sure that shaka-packager (or <code>mp4decrypt</code>) shows a sane version in the <code>download_init</code> binary-versions entry. See <a href="../drm-and-cdm/">DRM &amp; CDM</a>.</p>
 </div>
 <div class="admonition example">
+<p class="admonition-title">A vault served a wrong content key</p>
+<p><strong>Symptom:</strong> a warning names a content key and the vault it came from, either <code>was bad, trying other vaults</code> (the decode check failed) or <code>is flagged bad, skipping</code> (an earlier run flagged it). The download stops with <code>The content key from the vault did not decrypt the track; run again</code>, <code>was bad and no other source has the key</code>, or <code>No vault or CDM produced a content key that decrypts the track</code> when no source is left to try.</p>
+<p><strong>Inspect:</strong> while it decrypts a track whose content key came from a vault, unshackle keeps the ciphertext as a <code>.enc</code> sibling of the track file in the temp directory, and removes it afterwards; a leftover one is from a killed run and is safe to delete. Read the <code>bad_keys</code> table of your local SQLite vault to see which pairs are flagged and which vault each came from. See <a href="../vaults/#wrong-keys-from-a-poisoned-vault">Wrong keys from a poisoned vault</a>.</p>
+</div>
+<div class="admonition example">
 <p class="admonition-title">A network request fails at the connection or TLS layer</p>
 <p><strong>Symptom:</strong> timeouts, connection resets, or handshake errors, and unshackle's own logs do not give the full cause.</p>
 <p><strong>Inspect:</strong> set <code>debug_requests: true</code> and operate unshackle with <code>-d</code> to show the underlying <code>urllib3</code> / <code>rnet</code> / <code>httpx</code> logs. In the JSON debug log, filter for <code>service_call</code> operations to see which request failed. If you use a proxy, also read <a href="../proxies-and-vpn/">Proxies &amp; VPN</a>.</p>
