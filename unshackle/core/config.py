@@ -11,6 +11,54 @@ from appdirs import AppDirs
 from unshackle.core.service_repo import is_repo_spec
 from unshackle.core.utils.collections import ci_get
 
+# YAML reads a bare `no` (Norwegian) or `yes` (Nyankpa) as a boolean, so `lang: no` would
+# silently drop the language. These two are the only valid language tags that YAML coerces,
+# and no option under a LANGUAGE_KEYS name holds a boolean.
+BOOL_LANGUAGE_TAGS = {False: "no", True: "yes"}
+LANGUAGE_KEYS = frozenset(
+    {
+        "lang",
+        "v_lang",
+        "a_lang",
+        "s_lang",
+        "forced_s_lang",
+        "require_audio",
+        "require_video",
+        "require_subs",
+        "language_priority",
+        "default_language",
+        "video",
+        "audio",
+        "subtitle",
+        "subs_contain",
+        "subs_contain_all",
+    }
+)
+
+OPAQUE_KEYS = frozenset({"tag_rules"})
+
+
+def restore_bool_languages(data: Any) -> Any:
+    """Put back the language tags ``no`` and ``yes``, which YAML reads as booleans."""
+    if isinstance(data, list):
+        return [restore_bool_languages(item) for item in data]
+    if not isinstance(data, dict):
+        return data
+
+    fixed = {}
+    for key, value in data.items():
+        if key in OPAQUE_KEYS:
+            fixed[key] = value
+            continue
+        if key in LANGUAGE_KEYS:
+            if isinstance(value, bool):
+                value = BOOL_LANGUAGE_TAGS[value]
+            elif isinstance(value, list):
+                value = [BOOL_LANGUAGE_TAGS[i] if isinstance(i, bool) else i for i in value]
+        fixed[key] = restore_bool_languages(value)
+
+    return fixed
+
 
 def resolve_decryption(decryption_map: dict, default: str, service: str) -> str:
     """Pick the decryption backend for a service (case-insensitive), falling back to default."""
@@ -215,6 +263,27 @@ class Config:
             "title_type",
         }
 
+        type_only = {
+            "series": {"season", "episode", "season_episode", "episode_name", "part", "absolute", "date"},
+            "songs": {
+                "track_number",
+                "artist",
+                "album_artist",
+                "album",
+                "disc",
+                "track_total",
+                "disc_total",
+                "release_type",
+                "genre",
+                "explicit",
+                "isrc",
+                "upc",
+                "label",
+            },
+        }
+        type_only["albums"] = type_only["songs"]
+        shared = valid_variables - set().union(*type_only.values())
+
         unsafe_chars = r'[<>:"/\\|?*]'
 
         all_templates = dict(self.output_template)
@@ -233,10 +302,14 @@ class Config:
 
             variables = re.findall(r"\{([^}]+)\}", template_str)
 
+            kind = template_type.split(".")[-1]
+            allowed = shared | type_only.get(kind, set())
             for var in variables:
                 var_clean = var.rstrip("?")
                 if var_clean not in valid_variables:
                     warnings.warn(f"Unknown template variable '{var}' in {template_type} template")
+                elif var_clean not in allowed:
+                    warnings.warn(f"Template variable '{var}' is not available in the {template_type} template")
 
             test_template = re.sub(r"\{[^}]+\}", "TEST", template_str)
             if template_type.startswith("folder"):
@@ -284,7 +357,7 @@ class Config:
             raise FileNotFoundError(f"Config file path ({path}) was not found")
         if not path.is_file():
             raise FileNotFoundError(f"Config file path ({path}) is not to a file.")
-        return cls(**yaml.safe_load(path.read_text(encoding="utf8")) or {})
+        return cls(**restore_bool_languages(yaml.safe_load(path.read_text(encoding="utf8")) or {}))
 
 
 # noinspection PyProtectedMember
