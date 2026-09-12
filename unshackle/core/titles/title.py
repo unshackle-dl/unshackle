@@ -213,13 +213,15 @@ class Title:
             if original_lang_tag and original_lang_tag not in audio_lang_bases:
                 context["dubbed"] = "DUBBED"
 
-        lang_tag_rules = config.language_tags.get("rules") if config.language_tags else None
+        language_tags = config.language_tags if isinstance(config.language_tags, dict) else {}
+        lang_tag_rules = language_tags.get("rules")
         if lang_tag_rules and self.tracks:
             from unshackle.core.utils.language_tags import evaluate_language_tag
 
             audio_langs = [a.language for a in self.tracks.audio]
             sub_langs = [s.language for s in self.tracks.subtitles]
-            context["lang_tag"] = evaluate_language_tag(lang_tag_rules, audio_langs, sub_langs)
+            states = {name: bool(context[name]) for name in ("dual", "multi", "dubbed")}
+            context["lang_tag"] = evaluate_language_tag(lang_tag_rules, audio_langs, sub_langs, states)
 
         if config.tag_rules:
             from unshackle.core.utils.tag_rules import evaluate_tag_rules

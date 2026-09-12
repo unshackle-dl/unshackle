@@ -26,7 +26,13 @@ from unshackle.core.tracks.chapters import Chapter, Chapters
 from unshackle.core.tracks.subtitle import Subtitle
 from unshackle.core.tracks.track import Track, has_dts_uhd_sample_entry, strip_duplicate_init_boxes
 from unshackle.core.tracks.video import Video
-from unshackle.core.utilities import is_close_match, log_event, matching_languages, sanitize_filename
+from unshackle.core.utilities import (
+    is_close_match,
+    log_event,
+    matching_languages,
+    sanitize_filename,
+    valid_language,
+)
 from unshackle.core.utils.collections import as_list, flatten
 
 MP4BOX_PROGRESS = re.compile(r"\((\d{1,3})/100\)")
@@ -727,9 +733,10 @@ class Tracks:
             cl.extend(["--title", title])
 
         default_language = config.muxing.get("default_language") or {}
-        preferred_video_lang = default_language.get("video")
-        preferred_audio_lang = default_language.get("audio")
-        preferred_subtitle_lang = default_language.get("subtitle")
+        # mux() runs after every track is downloaded, so a typo here must not discard the title
+        preferred_video_lang = valid_language(default_language.get("video"))
+        preferred_audio_lang = valid_language(default_language.get("audio"))
+        preferred_subtitle_lang = valid_language(default_language.get("subtitle"))
 
         preferred_video_idx: Optional[int] = None
         if preferred_video_lang:

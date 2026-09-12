@@ -258,7 +258,11 @@ class Episode(Title):
                 name += f" {self.folder_season()}"
                 return sanitize_filename(name, " ")
 
-        formatter = TemplateFormatter(config.output_template["series"])
+        template = config.output_template.get("series")
+        if not template:
+            return sanitize_filename(str(self), " ")
+
+        formatter = TemplateFormatter(template)
         context = self.build_template_context(media_info, show_service)
         return formatter.format(context)
 

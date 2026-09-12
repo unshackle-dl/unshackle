@@ -52,6 +52,13 @@ Common config keys. This is a useful subset, and every `dl` flag works:
 | `proxy` | str | *(unset)* | Default proxy URI or 2-letter country. |
 | `no_folder` | bool | `false` | Do not create a per-title folder. |
 
+!!! note "`no` and `yes` are language tags"
+    YAML reads a bare `no` as `false` and a bare `yes` as `true`. unshackle puts both back to
+    the tags `no` (Norwegian) and `yes` (Nyankpa) in every config key that takes a language: `lang`,
+    `v_lang`, `a_lang`, `s_lang`, `forced_s_lang`, `require_audio`, `require_video`,
+    `require_subs`, [`language_priority`](#subtitle), [`muxing.default_language`](#muxing) and
+    the [`language_tags`](#language_tags) rules. Quotes (`lang: "no"`) work as well.
+
 ```yaml title="Global download defaults"
 dl:
   lang: [en]
@@ -253,9 +260,22 @@ Language-tag remapping and the rule engine behind the `{lang_tag}` filename vari
 
 | Condition | Meaning |
 |-----------|---------|
-| `audio` | Matches against the audio track languages. |
+| `audio` | At least one audio language matches. |
 | `subs_contain` | At least one subtitle language matches. |
-| `subs_contain_all` | Every listed language must be present (scalar or list). |
+| `subs_contain_all` | Every listed language must be present. |
+| `dual` / `multi` / `dubbed` | `true` matches when that filename variable is set, `false` when it is not. |
+
+Each language condition takes one language tag or a list of them. A list matches when **any**
+entry matches, except `subs_contain_all`, which needs them all. An entry that is not a valid
+language tag (for example `japanese`) never matches. `dual`, `multi` and `dubbed` take a bare
+`true` or `false`, not a quoted string. unshackle skips a rule with a condition name it does
+not know, or with any other value in a boolean condition. It logs a warning in each of these
+cases and tries the next rule.
+
+`dual`, `multi` and `dubbed` carry the same meaning as the
+[filename variables of those names](#dual_multi_mode). Pair one with a language to name a
+release yourself, in place of the fixed `DUAL`, `MULTi` and `DUBBED` text. A rule that names
+`dubbed: true` and a language tags a localized dub without tagging a native release the same way.
 
 ```yaml
 language_tags:
@@ -263,7 +283,17 @@ language_tags:
     - audio: [ja]
       subs_contain: [en]
       tag: "SUBBED"
+    - audio: th
+      dubbed: true
+      tag: "THAIDUB"
+    - audio: th
+      dual: true
+      tag: "THAIDUAL"
 ```
+
+!!! note "Put `{lang_tag}` where you want the name"
+    These rules fill `{lang_tag}`. To use your own name in place of the fixed text, keep
+    `{lang_tag?}` in the template and leave out `{dual?}`, `{multi?}` and `{dubbed?}`.
 
 ## `dual_multi_mode`
 

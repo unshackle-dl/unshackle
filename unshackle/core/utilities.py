@@ -153,6 +153,18 @@ def is_close_match(language: Union[str, Language], languages: Sequence[Union[str
     return closest_match(language, list(map(str, languages)))[1] <= LANGUAGE_MAX_DISTANCE
 
 
+def valid_language(language: Any) -> Optional[str]:
+    """Return the language tag as text, or None when it is not a valid tag."""
+    if not language:
+        return None
+    try:
+        Language.get(str(language))
+    except LanguageTagError:
+        logging.getLogger("utilities").warning("%r is not a valid language tag, ignoring it", language)
+        return None
+    return str(language)
+
+
 def is_exact_match(language: Union[str, Language], languages: Sequence[Union[str, Language, None]]) -> bool:
     """Examine whether a language exactly matches any of the given languages."""
     languages = [x for x in languages if x]
