@@ -2320,6 +2320,14 @@ default. In other words, config only fills in options you did not set on the com
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title"><code>no</code> and <code>yes</code> are language tags</p>
+<p>YAML reads a bare <code>no</code> as <code>false</code> and a bare <code>yes</code> as <code>true</code>. unshackle puts both back to
+the tags <code>no</code> (Norwegian) and <code>yes</code> (Nyankpa) in every config key that takes a language: <code>lang</code>,
+<code>v_lang</code>, <code>a_lang</code>, <code>s_lang</code>, <code>forced_s_lang</code>, <code>require_audio</code>, <code>require_video</code>,
+<code>require_subs</code>, <a href="#subtitle"><code>language_priority</code></a>, <a href="#muxing"><code>muxing.default_language</code></a> and
+the <a href="#language_tags"><code>language_tags</code></a> rules. Quotes (<code>lang: "no"</code>) work as well.</p>
+</div>
 <div class="language-yaml highlight"><span class="filename">Global download defaults</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">dl</span><span class="p">:</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">lang</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">]</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">quality</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">1080</span><span class="p p-Indicator">]</span>
@@ -2630,7 +2638,7 @@ bitrate alone, with those same Atmos/descriptive rules still applied.</p>
 <tbody>
 <tr>
 <td><code>audio</code></td>
-<td>Matches against the audio track languages.</td>
+<td>At least one audio language matches.</td>
 </tr>
 <tr>
 <td><code>subs_contain</code></td>
@@ -2638,16 +2646,41 @@ bitrate alone, with those same Atmos/descriptive rules still applied.</p>
 </tr>
 <tr>
 <td><code>subs_contain_all</code></td>
-<td>Every listed language must be present (scalar or list).</td>
+<td>Every listed language must be present.</td>
+</tr>
+<tr>
+<td><code>dual</code> / <code>multi</code> / <code>dubbed</code></td>
+<td><code>true</code> matches when that filename variable is set, <code>false</code> when it is not.</td>
 </tr>
 </tbody>
 </table>
+<p>Each language condition takes one language tag or a list of them. A list matches when <strong>any</strong>
+entry matches, except <code>subs_contain_all</code>, which needs them all. An entry that is not a valid
+language tag (for example <code>japanese</code>) never matches. <code>dual</code>, <code>multi</code> and <code>dubbed</code> take a bare
+<code>true</code> or <code>false</code>, not a quoted string. unshackle skips a rule with a condition name it does
+not know, or with any other value in a boolean condition. It logs a warning in each of these
+cases and tries the next rule.</p>
+<p><code>dual</code>, <code>multi</code> and <code>dubbed</code> carry the same meaning as the
+<a href="#dual_multi_mode">filename variables of those names</a>. Pair one with a language to name a
+release yourself, in place of the fixed <code>DUAL</code>, <code>MULTi</code> and <code>DUBBED</code> text. A rule that names
+<code>dubbed: true</code> and a language tags a localized dub without tagging a native release the same way.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">language_tags</span><span class="p">:</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nt">rules</span><span class="p">:</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">audio</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">ja</span><span class="p p-Indicator">]</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">      </span><span class="nt">subs_contain</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">en</span><span class="p p-Indicator">]</span>
 </span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">      </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">"SUBBED"</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">audio</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">th</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">      </span><span class="nt">dubbed</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">      </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">"THAIDUB"</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">audio</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">th</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="w">      </span><span class="nt">dual</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="w">      </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">"THAIDUAL"</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Put <code>{lang_tag}</code> where you want the name</p>
+<p>These rules fill <code>{lang_tag}</code>. To use your own name in place of the fixed text, keep
+<code>{lang_tag?}</code> in the template and leave out <code>{dual?}</code>, <code>{multi?}</code> and <code>{dubbed?}</code>.</p>
+</div>
 <h2 id="dual_multi_mode"><code>dual_multi_mode</code><a class="headerlink" href="#dual_multi_mode" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Type:</strong> <code>str</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>strict</code></li>
