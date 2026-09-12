@@ -101,12 +101,15 @@ def add_keys_with_progress(vault: Vault, service: str, kid_keys: dict[str, str],
 
 def copy_service_data(to_vault: Vault, from_vault: Vault, service: str, log: logging.Logger) -> int:
     """Copy data for a single service between vaults."""
+    if service.lower() == "bad_keys":
+        return 0
     try:
         content_keys = process_service_keys(from_vault, service, log)
     except Exception as e:
         log.warning(f"{service}: Could not read from {from_vault} ({e}), skipped")
         return 0
 
+    content_keys = {kid: key for kid, key in content_keys.items() if not to_vault.is_bad_key(kid, key)}
     total_count = len(content_keys)
 
     if total_count == 0:

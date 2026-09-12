@@ -53,5 +53,15 @@ class Vault(metaclass=ABCMeta):
         get_key/get_keys/add_key/add_keys reaches the namespace it came from.
         """
 
+    def is_bad_key(self, kid: Union[UUID, str], key: str) -> bool:
+        """Return True if this Vault has flagged the KID:KEY as wrong."""
+        return False
+
+    def flag_bad_key(self, service: str, kid: Union[UUID, str], key: str, source: str) -> None:
+        """Remember a KID:KEY that failed decryption and where it came from."""
+
+    def unflag_bad_key(self, kid: Union[UUID, str], key: str) -> None:
+        """Forget a flagged KID:KEY, for example when a CDM licence confirmed it."""
+
 
 __all__ = ("Vault",)

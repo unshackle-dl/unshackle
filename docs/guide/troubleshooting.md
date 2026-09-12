@@ -248,6 +248,11 @@ Each command reports how many files it removed and how much space it freed, then
 
     **Inspect:** enable `debug_keys` and operate unshackle with `-d`. Then examine the JSON debug log's `drm_*` and `vault_*` operations to see which content keys unshackle fetched, and from where. Also make sure that shaka-packager (or `mp4decrypt`) shows a sane version in the `download_init` binary-versions entry. See [DRM & CDM](drm-and-cdm.md).
 
+!!! example "A vault served a wrong content key"
+    **Symptom:** a warning names a content key and the vault it came from, either `was bad, trying other vaults` (the decode check failed) or `is flagged bad, skipping` (an earlier run flagged it). The download stops with `The content key from the vault did not decrypt the track; run again`, `was bad and no other source has the key`, or `No vault or CDM produced a content key that decrypts the track` when no source is left to try.
+
+    **Inspect:** while it decrypts a track whose content key came from a vault, unshackle keeps the ciphertext as a `.enc` sibling of the track file in the temp directory, and removes it afterwards; a leftover one is from a killed run and is safe to delete. Read the `bad_keys` table of your local SQLite vault to see which pairs are flagged and which vault each came from. See [Wrong keys from a poisoned vault](vaults.md#wrong-keys-from-a-poisoned-vault).
+
 !!! example "A network request fails at the connection or TLS layer"
     **Symptom:** timeouts, connection resets, or handshake errors, and unshackle's own logs do not give the full cause.
 

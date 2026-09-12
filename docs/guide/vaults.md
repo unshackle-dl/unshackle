@@ -32,6 +32,22 @@ When unshackle recovers new keys from a license, it pushes them to **all** confi
 
 unshackle pushes keys from every source, not only a local CDM. A run against a remote server that licenses with its own CDM (`--remote`) writes the keys the server returns, and `unshackle import` writes the keys it reads from an export file.
 
+### Wrong keys from a poisoned vault
+
+A public vault can return the right KID with a wrong content key. The decrypters accept a wrong content key and write noise. unshackle therefore trusts a content key from a vault only after FFmpeg decodes the first seconds of the decrypted track with strict error detection. Content keys from a licence skip this check. A file this FFmpeg build cannot judge counts as a pass, never as a wrong content key: a codec it has no decoder for, or a header it cannot read. Without FFmpeg there is no check at all.
+
+When the decode fails, unshackle:
+
+1. Flags the KID:KEY in the `bad_keys` table of every local SQLite vault, with the service and the name of the vault it came from. The pair also goes out of the service table, except in a vault marked `no_push`, where only the flag is written.
+2. Restores the ciphertext from a hard link it made before decryption, then asks for the content key again. Every vault lookup skips a flagged pair, so the request reaches the remaining vaults and then the CDM. A remote answer that arrived after the winning one is reused instead of queried again.
+3. Removes the flag when the CDM returns the same content key, because then the decode check was wrong, not the content key. A content key from another vault is checked in its turn, and flagged as well if it also fails.
+
+The download stops with an error instead of writing noise when no ciphertext is left to retry with, or when every vault and the CDM are used up. Without a local SQLite vault nothing remembers a flag, so the same vault serves the same pair again and the download stops there.
+
+Per-segment decryption gives up the retry. With `decrypt_segments` on, and always with MonaLisa, the plaintext replaces each segment as it arrives, so no ciphertext is left. A failed decode then flags the pair and stops the download. The next run skips the flagged pair.
+
+unshackle copies a content key from one vault to the others only after this check passes, so a wrong content key does not spread. Without FFmpeg, a content key from a vault is not copied at all. To see or clear the flags, open the SQLite file and read or delete rows in `bad_keys`.
+
 !!! tip "A good two-vault setup"
     A common arrangement is a fast local **SQLite** vault plus a shared remote vault (**MySQL**, **HTTP**, or **API**). The local vault answers instantly and works offline; the remote vault lets you share keys across machines or with a group.
 
@@ -90,6 +106,8 @@ key_vaults:
 | `no_push` | no | If `true`, keys are read but never written. Defaults to `false`. |
 
 Each service gets its own table (named after the service tag), created on demand with `kid` and `key_` columns. Connections use WAL journaling with a 30-second busy timeout, so multiple threads can safely use the same database file.
+
+One more table, `bad_keys`, is created on demand and holds every KID:KEY that failed the decode check described in [Wrong keys from a poisoned vault](#wrong-keys-from-a-poisoned-vault), with the service, the vault it came from, and the time it was flagged. It is not a service table, and every command that walks the service tables skips it.
 
 !!! warning "Moving the .db file silently forks your vault"
     Because the file is created on demand, if you relocate an existing `.db` without updating `path` to match, unshackle will create a fresh empty database at the old location. That leaves you with two divergent vaults and no error to warn you. Always update the config path whenever you move the file.
@@ -299,6 +317,8 @@ $ unshackle kv copy local shared community
 
 `--service` and `--local-only` are mutually exclusive.
 
+A pair the destination vault has flagged in `bad_keys` is left behind, so a copy does not undo a flag. `bad_keys` is never treated as a service, so its rows are never copied into a service table.
+
 ### `kv sync`: mirror vaults both ways
 
 Make each of two or more vaults hold every content key the others have. This is effectively a two-way `copy` between each pair, so afterwards all listed vaults hold the same set of keys.
@@ -307,7 +327,7 @@ Make each of two or more vaults hold every content key the others have. This is 
 $ unshackle kv sync local shared
 ```
 
-It accepts the same `--service` and `--local-only` options as `copy`, and requires at least two vaults.
+It accepts the same `--service` and `--local-only` options as `copy`, and requires at least two vaults. It runs `copy` between each pair, so it skips flagged pairs and the `bad_keys` table in the same way.
 
 ### `kv prepare`: pre-create service tables
 

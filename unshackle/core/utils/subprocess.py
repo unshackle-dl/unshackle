@@ -40,6 +40,42 @@ def log_tool_run(
     )
 
 
+def ffmpeg_decodes(path: Path, seconds: int = 3) -> bool:
+    """Return True when FFmpeg decodes the first seconds of the file without an error.
+
+    A wrong content key leaves the container intact and the samples as noise, which the
+    decoders reject. ``-xerror`` stops at the first error so the check stays short.
+    A file this FFmpeg build cannot judge counts as a pass, never as a wrong key.
+    """
+    if not binaries.FFMPEG:
+        raise EnvironmentError('FFmpeg executable "ffmpeg" not found but is required.')
+    args: list[str] = [
+        str(binaries.FFMPEG),
+        "-nostdin",
+        "-v",
+        "error",
+        "-err_detect",
+        "explode",
+        "-xerror",
+        "-i",
+        str(path),
+        "-t",
+        str(seconds),
+        "-f",
+        "null",
+        "-",
+    ]
+    ff = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if ff.returncode == 0:
+        return True
+    err = ff.stderr.lower()
+    if any(
+        m in err for m in ("not found for", "no decoder found", "sub-sample encryption info", "error reading header")
+    ):
+        return True
+    return False
+
+
 def ffprobe(uri: Union[bytes, Path]) -> dict:
     """Use FFprobe on the provided data to get its track information (``-show_streams``)."""
     if not binaries.FFProbe:

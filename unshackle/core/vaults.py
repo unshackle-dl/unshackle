@@ -1,7 +1,8 @@
 import inspect
 import logging
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from functools import partial
 from typing import Any, Iterator, Optional, Union
 from uuid import UUID
 
@@ -24,6 +25,9 @@ class Vaults:
     def __init__(self, service: Optional[str] = None):
         self.service = service or ""
         self.vaults = []
+        self.sources: dict[Union[UUID, str], tuple[str, Vault]] = {}
+        self.flagged: set[tuple[Union[UUID, str], str]] = set()
+        self.candidates: dict[Union[UUID, str], list[tuple[str, Vault]]] = {}
 
     def __iter__(self) -> Iterator[Vault]:
         return iter(self.vaults)
@@ -60,30 +64,56 @@ class Vaults:
         """Get Key from the first Vault it can by KID (Key ID) and Service.
 
         Local vaults go first, one at a time: a hit there costs nothing and skips the network.
-        The remaining vaults run at the same time, and the first one with the content key wins.
+        A remote answer kept from an earlier call comes next, so a retry after a flagged pair
+        reuses it instead of querying again. The remaining vaults then run at the same time,
+        and the first one with the content key wins.
         """
         local = [v for v in self.vaults if v.local]
         remote = [v for v in self.vaults if not v.local]
         for vault in local:
             key = self.query_vault(vault, kid)
             if key:
+                self.sources[kid] = (key, vault)
+                return key, vault
+        for key, vault in self.candidates.get(kid, []):
+            if not self.is_flagged(kid, key):
+                self.sources[kid] = (key, vault)
                 return key, vault
         if not remote:
             return None, None
         pool = ThreadPoolExecutor(len(remote))
         try:
             futures = {pool.submit(self.query_vault, vault, kid): vault for vault in remote}
+            for future, vault in futures.items():
+                future.add_done_callback(partial(self.remember_candidate, kid, vault))
             for future in as_completed(futures):
                 key = future.result()
                 if key:
+                    self.sources[kid] = (key, futures[future])
                     return key, futures[future]
             return None, None
         finally:
-            # a slow vault must not hold up a content key another vault already returned
+            # a slow vault must not hold up a content key another vault already returned; the
+            # ones already running still finish and land in candidates through the callback
             pool.shutdown(wait=False, cancel_futures=True)
 
+    def remember_candidate(self, kid: Union[UUID, str], vault: Vault, future: Future) -> None:
+        """Keep a remote answer for a later retry. Cancelled or failed queries leave nothing."""
+        if future.cancelled() or future.exception():
+            return
+        key = future.result()
+        if key and (key, vault) not in self.candidates.setdefault(kid, []):
+            self.candidates[kid].append((key, vault))
+
+    def is_flagged(self, kid: Union[UUID, str], key: str) -> bool:
+        """True when a local vault has flagged the KID:KEY as wrong."""
+        return any(v.is_bad_key(kid, key) for v in self.vaults if v.local)
+
     def query_vault(self, vault: Vault, kid: Union[UUID, str]) -> Optional[str]:
-        """Ask one vault for a content key. A failure logs a warning and returns None."""
+        """Ask one vault for a content key. A failure logs a warning and returns None.
+
+        A flagged pair counts as no content key, so no vault can serve one again.
+        """
         dl = get_debug_logger()
         start = time.monotonic()
         try:
@@ -103,6 +133,9 @@ class Vaults:
                 )
             return None
         found = bool(key and key.count("0") != len(key))
+        if found and key and self.is_flagged(kid, key):
+            log.warning(f"{key} from {vault.name} is flagged bad, skipping")
+            found = False
         if dl:
             dl.log_vault_query(
                 vault.name,
@@ -113,6 +146,21 @@ class Vaults:
                 duration_ms=round((time.monotonic() - start) * 1000, 1),
             )
         return key if found else None
+
+    def flag_bad_key(self, kid: Union[UUID, str], key: str) -> None:
+        """Flag a KID:KEY that failed decryption in every local Vault, naming the Vault it came from."""
+        self.flagged.add((kid, key))
+        source = self.sources.pop(kid, None)
+        for vault in self.vaults:
+            if vault.local:
+                vault.flag_bad_key(self.service, kid, key, source[1].name if source else "unknown")
+
+    def unflag_bad_key(self, kid: Union[UUID, str], key: str) -> None:
+        """Remove a flag from every local Vault."""
+        self.flagged.discard((kid, key))
+        for vault in self.vaults:
+            if vault.local:
+                vault.unflag_bad_key(kid, key)
 
     def add_key(self, kid: Union[UUID, str], key: str, excluding: Optional[Vault] = None) -> int:
         """Add a KID:KEY to all Vaults, optionally with an exclusion.

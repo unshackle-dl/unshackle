@@ -32,6 +32,7 @@ from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.drm import DRM_T, ClearKey, MonaLisa, PlayReady, Widevine
 from unshackle.core.drm.segment_decrypt import SegmentDecrypter, can_use
+from unshackle.core.drm.verify import decrypt_track
 from unshackle.core.events import events
 from unshackle.core.session import RnetResponse, RnetSession
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video, resume
@@ -965,8 +966,7 @@ class HLS:
                             decrypted_init = segment_decrypter.finish()
                         map_data = (map_data[0], decrypted_init)
                     merge(to=merged_path, via=files, delete=True, include_map_data=True)
-                    if not segment_decrypter:
-                        drm.decrypt(merged_path)
+                    decrypt_track(drm, merged_path, license_widevine, decrypt=not segment_decrypter)
                     assert_fragments_decrypted(merged_path)
                     merged_path.rename(decrypted_path)
                 else:

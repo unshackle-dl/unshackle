@@ -24,6 +24,7 @@ from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, DownloadCancelled
 from unshackle.core.downloaders import requests
 from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
+from unshackle.core.drm.verify import decrypt_track
 from unshackle.core.events import events
 from unshackle.core.session import RnetSession
 from unshackle.core.tracks import resume
@@ -717,7 +718,7 @@ class Track:
 
                         if drm:
                             progress(downloaded="Decrypting", completed=0, total=None)
-                            drm.decrypt(save_path)
+                            decrypt_track(drm, save_path, prepare_drm, track_kid)
                             assert_fragments_decrypted(save_path)
                             self.drm = None
                             events.emit(events.Types.TRACK_DECRYPTED, track=self, drm=drm, segment=None)

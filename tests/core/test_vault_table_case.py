@@ -29,7 +29,9 @@ KEY = "a" * 32
 def tables(path: Path) -> list[str]:
     conn = sqlite3.connect(path)
     try:
-        return sorted(r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'"))
+        return sorted(
+            r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name != 'bad_keys'")
+        )
     finally:
         conn.close()
 

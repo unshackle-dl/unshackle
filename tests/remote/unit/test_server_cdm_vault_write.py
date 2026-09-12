@@ -122,11 +122,11 @@ def test_batch_resolved_keys_are_cached_before_download():
     assert vaults.added == {NEW: "k_new"}
 
 
-def test_vault_hits_replicate_to_the_other_vaults():
-    """The local path pushes a vault hit to every other vault; the server path must too."""
+def test_vault_hits_wait_for_the_decrypt_before_replicating():
+    """A vault hit reaches the other vaults only after decrypt_verified proves it, never from prepare_drm."""
     vaults = FakeVaults({CACHED: "k_cached"}, vault_used="vault-a")
     run_prepare(vaults, [CACHED], {}, track_kid=CACHED)
-    assert vaults.replicated == [(CACHED, "k_cached", "vault-a")]
+    assert vaults.replicated == []
     assert vaults.added == {}
 
 

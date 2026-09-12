@@ -20,6 +20,7 @@ from requests import Session
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
+from unshackle.core.drm.verify import decrypt_track
 from unshackle.core.events import events
 from unshackle.core.manifests.ism_init import (
     build_init_segment,
@@ -574,7 +575,7 @@ class ISM:
 
         if session_drm:
             progress(downloaded="Decrypting", completed=0, total=None)
-            session_drm.decrypt(save_path)
+            decrypt_track(session_drm, save_path, license_widevine)
             assert_fragments_decrypted(save_path)
             track.drm = None
             events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=session_drm, segment=None)
