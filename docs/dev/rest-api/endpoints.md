@@ -849,6 +849,7 @@ POST /api/session/{id}/tracks   → tracks + chapters (with URLs) for one title
 POST /api/session/{id}/segments → resolve segment URLs / DRM / headers per track
 POST /api/session/{id}/segment_filter → HLS segments the service drops (ads, bumpers)
 POST /api/session/{id}/license  → proxy or server-CDM DRM licensing
+POST /api/session/{id}/keys/bad → report a server-vault content key that did not decrypt
 DELETE /api/session/{id}        → tear down, harvest updated cache
 ```
 
@@ -1058,13 +1059,13 @@ Get the content keys for the DRM. The `mode` field selects one of two modes.
 === "Single: Response `200`"
 
     ```json
-    { "keys": { "<kid_hex>": "<key_hex>" } }
+    { "keys": { "<kid_hex>": "<key_hex>" }, "vault_keys": ["<kid_hex>"] }
     ```
 
 === "Batch: Response `200`"
 
     ```json
-    { "keys": { "v-1": { "<kid_hex>": "<key_hex>" } }, "drm_type": "widevine" }
+    { "keys": { "v-1": { "<kid_hex>": "<key_hex>" } }, "vault_keys": ["<kid_hex>"], "drm_type": "widevine" }
     ```
 
 | Field | Description |
@@ -1074,6 +1075,7 @@ Get the content keys for the DRM. The `mode` field selects one of two modes.
 | `pssh` | Base64 PSSH (server-CDM mode). |
 | `drm_type` | `widevine` (default) or `playready`. |
 | `mode` | `proxy` (default) or `server_cdm`. |
+| `vault_keys` (response) | KIDs whose content key came from a server vault, not the CDM. The client proves such a content key with a decode before it trusts it; the field is absent when every content key came from the CDM. |
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
@@ -1083,6 +1085,20 @@ Get the content keys for the DRM. The `mode` field selects one of two modes.
 | `404` | `TRACK_NOT_FOUND` | Unknown track ID. |
 | `404` | `NO_CONTENT` | Server CDM produced no keys. |
 | `502` | `SERVICE_ERROR` | The service aborted during licensing. |
+
+### `POST /api/session/{session_id}/keys/bad`
+
+Report a content key from `vault_keys` that did not decrypt the track. The server flags the pair in its local vaults, under the name of the vault that served it, and the next licence for that KID reaches the CDM. The client never learns the server vault names.
+
+```json
+{ "kid": "<kid_hex>", "key": "<key_hex>" }
+```
+
+| Status | Error code | Meaning |
+| --- | --- | --- |
+| `200` | - | The pair is flagged. |
+| `400` | `INVALID_INPUT` | This remote session was not served that pair. |
+| `404` | `SESSION_NOT_FOUND` | Unknown remote session. |
 
 ### `GET /api/session/{session_id}`
 

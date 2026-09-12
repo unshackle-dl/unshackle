@@ -2921,6 +2921,8 @@ class dl:
 
             if hasattr(service, "resolve_server_keys"):
                 service.resolve_server_keys(title)
+                if not cdm_only:
+                    self.prefer_vault_keys(title)
                 self.cache_resolved_keys(title)
 
             dl_start_time = time.time()
@@ -3997,11 +3999,21 @@ class dl:
             if decrypt:
                 drm.decrypt(path)
             return
-        known_bad = [kid for kid, key in keys.items() if (kid, key) in self.vaults.flagged]
+
+        def flagged_kids() -> list[UUID]:
+            """The KIDs on this track whose content key another track already proved wrong."""
+            return [kid for kid, key in keys.items() if (kid, key) in self.vaults.flagged]
+
+        def drop(kid: UUID) -> str:
+            key = keys.pop(kid)
+            if self.LICENSE_KEY_CACHE.get(kid) == key:
+                self.LICENSE_KEY_CACHE.pop(kid)
+            return key
+
+        known_bad = flagged_kids()
         if known_bad and licence:
             for kid in known_bad:
-                keys.pop(kid)
-                self.LICENSE_KEY_CACHE.pop(kid, None)
+                drop(kid)
             licence(drm, track_kid=track_kid)
 
         def vault_kids() -> dict[UUID, Vault]:
@@ -4016,23 +4028,40 @@ class dl:
                 os.link(path, backup)
             except OSError as e:
                 self.log.debug(f"Cannot keep the ciphertext for a decrypt retry: {e!r}")
+
+        def passes_left(done: int) -> bool:
+            """One pass per source that can still answer: every loaded vault, the server's vaults as
+            one source that walks them itself over --remote, and one for the CDM."""
+            remote = 1 if getattr(getattr(self, "_remote_service", None), "_server_cdm", False) else 0
+            return done < len(self.vaults) + remote + 1
+
         try:
-            for _ in range(len(self.vaults) + 1):
+            done = 0
+            while passes_left(done):
+                done += 1
                 if decrypt:
                     drm.decrypt(path)
                 kids = vault_kids()
-                if not kids or not binaries.FFMPEG or not path.exists():
-                    return
-                if ffmpeg_decodes(path):
-                    self.flush_vault_writes(
-                        [partial(self.vaults.add_key, kid, keys[kid], excluding=vault) for kid, vault in kids.items()]
-                    )
-                    return
-                bad = {kid: keys.pop(kid) for kid in kids}
+                stale = flagged_kids()
+                if not stale:
+                    if not kids or not binaries.FFMPEG or not path.exists():
+                        return
+                    if ffmpeg_decodes(path):
+                        self.flush_vault_writes(
+                            [
+                                partial(self.vaults.add_key, kid, keys[kid], excluding=vault)
+                                for kid, vault in kids.items()
+                            ]
+                        )
+                        return
+                bad = {kid: drop(kid) for kid in {*kids, *stale}}
                 for kid, key in bad.items():
+                    if kid not in kids:
+                        continue
                     self.log.warning(f"{key} from {kids[kid].name} was bad, trying other vaults")
                     self.vaults.flag_bad_key(kid, key)
-                    self.LICENSE_KEY_CACHE.pop(kid, None)
+                    if report := getattr(kids[kid], "report_bad", None):
+                        report(kid, key)
                 if not backup.exists() or not licence:
                     raise ValueError("The content key from the vault did not decrypt the track; run again")
                 path.unlink()
@@ -4044,7 +4073,7 @@ class dl:
                     source = self.vaults.sources.get(kid)
                     if source is None:
                         self.vaults.unflag_bad_key(kid, key)
-                    elif source[1] is kids[kid]:
+                    elif kid in kids and source[1] is kids[kid]:
                         raise ValueError(f"{key} from {kids[kid].name} was bad and no other source has the key")
             raise ValueError("No vault or CDM produced a content key that decrypts the track")
         finally:
@@ -4070,18 +4099,49 @@ class dl:
         self.vault_cache_tally = None
         self.log.info(f"Cached {keys} Key{'' if keys == 1 else 's'} to {successful_caches}/{len(self.vaults)} Vaults")
 
+    def prefer_vault_keys(self, title: Title_T) -> None:
+        """Let the client vaults answer before a content key the server batch licence returned.
+
+        The client only learns the KIDs from the batch response, so the server has already
+        answered. A vault key still goes first, so ``decrypt_verified`` proves it and flags a
+        poisoned row; the server key waits as the next candidate. A server CDM key is trusted
+        like a local CDM key: it goes to the run cache and the vaults, and a retry after a
+        flagged vault key takes it before any vault. A server vault key is unproven, so it
+        waits in ``Vaults.candidates`` and gets the same check when its turn comes.
+        """
+        server_vault_keys = getattr(self._remote_service, "server_vault_keys", {})
+        for track in title.tracks:
+            for drm in getattr(track, "drm", None) or []:
+                for kid, server_key in list(getattr(drm, "content_keys", {}).items()):
+                    vault_key, vault = self.vaults.get_key(kid)
+                    if not vault_key or vault_key == server_key:
+                        continue
+                    drm.content_keys[kid] = vault_key
+                    if server_vault_keys.get(kid) == server_key:
+                        source = self._remote_service.server_vault
+                        self.vaults.candidates.setdefault(kid, []).append((server_key, source))
+                    elif kid not in self.LICENSE_KEY_CACHE:
+                        self.LICENSE_KEY_CACHE[kid] = server_key
+                        self.flush_vault_writes([partial(self.cache_keys_to_vaults, {kid: server_key})])
+                    self.log.debug(
+                        f"{vault.name} holds a different key for {kid.hex} than the server, testing it first"
+                    )
+
     def cache_resolved_keys(self, title: Title_T) -> None:
         """Cache the keys a batch licence or an import put on the tracks.
 
         Both fill track.drm before any prepare_drm call, so this is the only point where those
         keys can still reach the local vaults.
         """
+        server_vault_keys = getattr(getattr(self, "_remote_service", None), "server_vault_keys", {})
         keys = {
             kid: key
             for track in title.tracks
             for drm in (getattr(track, "drm", None) or [])
             for kid, key in getattr(drm, "content_keys", {}).items()
             if kid not in self.LICENSE_KEY_CACHE
+            and server_vault_keys.get(kid) != key
+            and self.vaults.sources.get(kid, (None,))[0] != key
         }
         if keys:
             self.LICENSE_KEY_CACHE.update(keys)
@@ -4181,7 +4241,15 @@ class dl:
                     except Exception as e:
                         self.log.debug(f"Server CDM licence with an empty challenge failed: {e!r}")
 
-                new_keys = {kid: key for kid, key in drm.content_keys.items() if kid not in known_keys}
+                server_vault_keys = {} if cdm_only else getattr(svc_for_cdm, "server_vault_keys", {})
+                for kid, key in drm.content_keys.items():
+                    if server_vault_keys.get(kid) == key:
+                        self.vaults.sources[kid] = (key, svc_for_cdm.server_vault)
+                new_keys = {
+                    kid: key
+                    for kid, key in drm.content_keys.items()
+                    if kid not in known_keys and server_vault_keys.get(kid) != key
+                }
                 if new_keys:
                     self.LICENSE_KEY_CACHE.update(new_keys)
                     pending_vault_writes.append(partial(self.cache_keys_to_vaults, new_keys))

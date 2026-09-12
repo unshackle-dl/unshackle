@@ -497,7 +497,7 @@ control this trade-off on the `dl` command:
 | Flag | Effect |
 |------|--------|
 | `--vaults-only` | Never send a license request; use only cached/vault keys. Fails if a content key is missing. |
-| `--cdm-only` | Ignore vaults for sourcing keys and always perform a fresh license request. |
+| `--cdm-only` | Ignore vaults for sourcing keys and always perform a fresh license request. Over a `server_cdm` remote session the server still reads its own vaults; the flag only skips the client's decode check on the key it gets back. |
 | `--cdm <name>` | Use the named CDM device for this run instead of the one the `cdm` config maps for the service. |
 
 See [key vaults](vaults.md) for how to configure vault backends.

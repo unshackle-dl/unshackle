@@ -46,13 +46,14 @@ async def _run_batch(monkeypatch, tracks, cdm_type, calls):
     session = SimpleNamespace(
         service_tag="EXAMPLE",
         service_instance=SimpleNamespace(),
+        served_keys={},
         tracks=SimpleNamespace(get=tracks.get),
     )
 
     async def fake_get_session(session_id, request):
         return session
 
-    def fake_single(service, title, track, pssh_str, drm_type, request):
+    def fake_single(service, title, track, pssh_str, drm_type, request, sources=None):
         calls.append((pssh_str, drm_type))
         return {"00" * 16: "key"}
 

@@ -267,6 +267,8 @@ def serve(
             regions = server_account_regions(tag) or {}
             covered = list(regions.get("regions") or []) + (["global"] if regions.get("global") else [])
             log.info(f"Server accounts for {tag}: {', '.join(covered)}")
+        if config.key_vaults and not any(v.get("type") == "SQLite" for v in config.key_vaults):
+            log.warning("No SQLite key vault configured: a content key a remote client proves wrong cannot be flagged")
         users = config.serve.get("users", {})
         if isinstance(users, dict):
             # yaml keys can parse as int; hmac.compare_digest and allowlist lookups need str

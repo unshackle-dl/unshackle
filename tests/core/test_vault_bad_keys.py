@@ -296,3 +296,38 @@ def test_flag_on_a_read_only_vault_keeps_its_rows(tmp_path: Path) -> None:
     assert ro.is_bad_key(KID, BAD)
     assert ro.get_key(KID, "SVC") is None  # the lookup still skips the flagged pair
     assert list(ro.get_keys("SVC")) == [(KID.hex, BAD)]  # but the row itself is untouched
+
+
+def test_a_sibling_verdict_during_the_decrypt_still_triggers_the_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two tracks share a KID and decrypt at the same time; the first verdict pops the shared
+    source, so the second track must read the flag instead of returning unchecked."""
+    local = SQLite("local", tmp_path / "local.db")
+    vaults = Vaults("SVC")
+    vaults.vaults = [local]
+    vaults.sources[KID] = (BAD, local)
+    cmd = make_cmd(monkeypatch, vaults)
+    dl.LICENSE_KEY_CACHE[KID] = GOOD  # the sibling's retry already licensed the good key
+
+    path = tmp_path / "audio.mp4"
+    path.write_bytes(b"cipher")
+
+    class SiblingFlagsMeanwhile(FakeDRM):
+        def decrypt(self, path: Path) -> None:
+            super().decrypt(path)
+            if self.content_keys[KID] == BAD:
+                vaults.flag_bad_key(KID, BAD)
+
+    drm = SiblingFlagsMeanwhile({KID: BAD})
+    licences: list = []
+
+    def licence(drm: FakeDRM, track_kid: UUID) -> None:
+        licences.append(dl.LICENSE_KEY_CACHE.get(KID))
+        drm.content_keys[KID] = dl.LICENSE_KEY_CACHE[KID]
+
+    cmd.decrypt_verified(drm, path, licence, KID)
+
+    assert path.read_bytes() == b"plain:" + GOOD.encode()
+    assert drm.decrypted_with == [{KID: BAD}, {KID: GOOD}]
+    assert licences == [GOOD]  # the good key in the run cache survives the flag of the bad one

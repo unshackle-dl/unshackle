@@ -2279,6 +2279,16 @@ def run_health_checks(checks: Optional[List[Dict[str, Any]]] = None) -> List[Dic
 
         checks.append(health_check(f"vault:{name}", f"vault {name}", vault_probe, config_secrets(vault_config)))
 
+    def bad_keys_probe() -> tuple[str, str]:
+        if not config.key_vaults:
+            return "ok", "no vaults configured"
+        local = [v.get("name") or v["type"] for v in config.key_vaults if v.get("type") == "SQLite"]
+        if local:
+            return "ok", f"flags stored in {', '.join(local)}"
+        return "warn", "no SQLite vault, so a content key a client proves wrong cannot be flagged"
+
+    checks.append(health_check("bad_keys", "bad content key flags", bad_keys_probe))
+
     def proxy_probe() -> tuple[str, str]:
         providers = initialize_proxy_providers(raise_errors=True, quiet=True)
         if not providers:
@@ -3780,10 +3790,11 @@ def load_server_vaults(service_name: str) -> Any:
     return vaults
 
 
-def check_vaults(kids: list, service_name: str) -> Optional[Dict[str, str]]:
+def check_vaults(kids: list, service_name: str) -> Optional[tuple[Dict[str, str], Dict[str, str]]]:
     """Examine the server vaults for existing content keys that match all KIDs.
 
-    Returns a `KID:KEY` dict if ALL KIDs are found, None otherwise.
+    Returns `(KID:KEY, KID:vault name)` if ALL KIDs are found, None otherwise. The vault
+    name travels to the client, which is the only side that can prove the content key decrypts.
     """
     from uuid import UUID
 
@@ -3792,16 +3803,18 @@ def check_vaults(kids: list, service_name: str) -> Optional[Dict[str, str]]:
         if not vaults.vaults:
             return None
         keys: Dict[str, str] = {}
+        sources: Dict[str, str] = {}
         for kid in kids:
             kid_uuid = kid if isinstance(kid, UUID) else UUID(hex=str(kid))
             content_key, vault_used = vaults.get_key(kid_uuid)
             if content_key:
                 keys[kid_uuid.hex] = content_key
+                sources[kid_uuid.hex] = vault_used.name if vault_used else "unknown"
             else:
                 return None
         if keys:
             log.info(f"Vault hit: {len(keys)} key(s) from server vaults, skipping CDM")
-            return keys
+            return keys, sources
     # vault lookup is a best-effort shortcut before the CDM; any failure falls through to licensing
     except Exception as e:
         log.debug(f"Server vault lookup failed: {e!r}")
@@ -3899,8 +3912,13 @@ def handle_single_server_cdm(
     pssh_b64: Optional[str],
     drm_type: str,
     request: Optional[web.Request],
+    sources: Optional[Dict[str, str]] = None,
 ) -> Dict[str, str]:
-    """Do the single-track server_cdm licensing with the DRM class get_content_keys() flow."""
+    """Do the single-track server_cdm licensing with the DRM class get_content_keys() flow.
+
+    ``sources`` is filled with the vault name for every returned content key a server vault
+    supplied. A content key the CDM licensed gets no entry.
+    """
     import base64
 
     from unshackle.core.cdm import load_cdm
@@ -3955,8 +3973,11 @@ def handle_single_server_cdm(
         # harvest server-side keys from the vault fallback below.
         device_name = resolve_device_name(user_config, drm_type, service.__class__.__name__)
 
-        vault_keys = check_vaults(wv_drm.kids, service.__class__.__name__)
-        if vault_keys:
+        vault_hit = check_vaults(wv_drm.kids, service.__class__.__name__)
+        if vault_hit:
+            vault_keys, vault_sources = vault_hit
+            if sources is not None:
+                sources.update(vault_sources)
             return vault_keys
 
         cdm = load_cdm(device_name, service_name=service.__class__.__name__)
@@ -4113,8 +4134,10 @@ async def session_license_handler(
         config_cdm_type = detect_cdm_type_for_service(service_tag, app_config)
 
         all_keys: Dict[str, Dict[str, str]] = {}
+        vault_keys: list[str] = []
         drm_types: Dict[str, str] = {}
         keys_by_pssh: Dict[tuple, Dict[str, str]] = {}
+        sources_by_pssh: Dict[tuple, Dict[str, str]] = {}
         drm_type_by_pssh: Dict[tuple, str] = {}
         actual_drm_type: Optional[str] = None
 
@@ -4162,8 +4185,11 @@ async def session_license_handler(
             cache_key = (pssh_str, pssh_set(track))
             if cache_key not in keys_by_pssh:
                 keys_by_pssh[cache_key] = {}
+                sources_by_pssh[cache_key] = {}
                 try:
-                    keys = handle_single_server_cdm(service, title, track, pssh_str, candidate, request)
+                    keys = handle_single_server_cdm(
+                        service, title, track, pssh_str, candidate, request, sources_by_pssh[cache_key]
+                    )
                     if keys:
                         keys_by_pssh[cache_key] = keys
                         drm_type_by_pssh[cache_key] = candidate
@@ -4227,18 +4253,24 @@ async def session_license_handler(
                         f"{sanitize_log(tid[:12])}, tried the init segment PSSH"
                     )
                 if track_kid.hex in init_keys:
-                    keys, track_drm_type = init_keys, init_drm_type
+                    keys, track_drm_type, pssh_str = init_keys, init_drm_type, init_pssh
                 else:
                     track.drm = manifest_drm
                     warn(f"No content key for KID {track_kid.hex} of track {sanitize_log(tid[:12])}")
 
             if keys:
                 all_keys[tid] = keys
+                sources = sources_by_pssh.get((pssh_str, pssh_set(track)), {}) if pssh_str is not None else {}
+                note_served_keys(session, keys, sources)
+                if sources:
+                    vault_keys.extend(sources)
             if keys and track_drm_type:
                 drm_types[tid] = track_drm_type
                 actual_drm_type = track_drm_type
 
         response: Dict[str, Any] = {"keys": all_keys}
+        if vault_keys:
+            response["vault_keys"] = vault_keys
         if actual_drm_type:
             response["drm_type"] = actual_drm_type
         if drm_types:
@@ -4268,9 +4300,11 @@ async def session_license_handler(
                 track.pr_pssh = pssh_b64
 
         if mode == "server_cdm":
-            keys = handle_single_server_cdm(service, title, track, pssh_b64, drm_type, request)
+            key_sources: Dict[str, str] = {}
+            keys = handle_single_server_cdm(service, title, track, pssh_b64, drm_type, request, key_sources)
             log.info(f"Server CDM resolved {len(keys)} key(s) for track {sanitize_log(track_id[:12])}")
-            return web.json_response({"keys": keys})
+            note_served_keys(session, keys, key_sources)
+            return web.json_response({"keys": keys, "vault_keys": list(key_sources)})
 
         return handle_proxy_license(service, title, track, challenge_b64, drm_type)
 
@@ -4291,6 +4325,48 @@ async def session_license_handler(
             },
             debug_mode=debug_mode,
         )
+
+
+def note_served_keys(session: Any, keys: Dict[str, str], sources: Dict[str, str]) -> None:
+    """Remember every KID:KEY the remote session handed out and which server vault supplied it.
+
+    The vault name stays on the server: a bad-key report names only the pair, and the
+    server looks the source up here to flag its own row.
+    """
+    for kid, key in keys.items():
+        session.served_keys[kid] = (key, sources.get(kid, "cdm"))
+
+
+async def session_bad_key_handler(
+    data: Dict[str, Any], session_id: str, request: Optional[web.Request] = None
+) -> web.Response:
+    """Flag a server-vault content key the client proved wrong, so the next licence reaches the CDM.
+
+    The server never sees a segment, so the client is the only side that can test a content key.
+    Only a pair this remote session served can be flagged, which keeps a client from
+    poisoning the bad-key table for content keys it never received.
+    """
+    from uuid import UUID
+
+    session = await get_validated_session(session_id, request)
+    require_authenticated(session)
+
+    kid = str(data.get("kid") or "").replace("-", "").lower()
+    key = str(data.get("key") or "").lower()
+    served_key, source = session.served_keys.get(kid, ("", ""))
+    if not key or served_key.lower() != key:
+        log.warning(f"Session {sanitize_log(session_id[:12])} reported a bad content key it was never served: {kid}")
+        raise APIError(APIErrorCode.INVALID_INPUT, "This session was not served that KID:KEY pair")
+
+    vaults = load_server_vaults(session.service_instance.__class__.__name__)
+    for vault in vaults.vaults:
+        if vault.local:
+            vault.flag_bad_key(vaults.service, UUID(hex=kid), served_key, source)
+    session.served_keys.pop(kid, None)
+    log.warning(
+        f"Client proved {kid}:{served_key} from vault {sanitize_log(source)} wrong, flagged in the server vaults"
+    )
+    return web.json_response({"flagged": True})
 
 
 async def session_info_handler(session_id: str, request: Optional[web.Request] = None) -> web.Response:

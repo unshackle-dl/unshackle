@@ -36,6 +36,9 @@ class SessionEntry:
     title_map: Dict[str, Any] = field(default_factory=dict)
     current_title_id: Optional[str] = None  # title the client last asked tracks for
     tracks: Dict[str, Track] = field(default_factory=dict)
+    served_keys: Dict[str, tuple[str, str]] = field(
+        default_factory=dict
+    )  # KID -> (KEY, serving vault name or "cdm") from server_cdm
     tracks_by_title: Dict[str, Dict[str, Track]] = field(default_factory=dict)
     chapters_by_title: Dict[str, List[Any]] = field(default_factory=dict)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)

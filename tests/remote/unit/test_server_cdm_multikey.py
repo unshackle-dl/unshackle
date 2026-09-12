@@ -98,13 +98,15 @@ def test_widevine_still_uses_vault_shortcut(monkeypatch):
     monkeypatch.setattr(drm_mod, "Widevine", _FakeWidevine)
     monkeypatch.setattr(handlers, "ensure_track_drm", lambda track, session=None, init_data=None: None)
     monkeypatch.setattr(handlers, "resolve_device_name", lambda *a, **k: "dev")
-    monkeypatch.setattr(handlers, "check_vaults", lambda kids, name: {kid.hex: "vaultkey"})
+    monkeypatch.setattr(handlers, "check_vaults", lambda kids, name: ({kid.hex: "vaultkey"}, {kid.hex: "sqlite"}))
     monkeypatch.setattr(handlers.config, "serve", {"users": {}}, raising=False)
 
+    sources: dict = {}
     keys = handlers.handle_single_server_cdm(
-        SimpleNamespace(), SimpleNamespace(), SimpleNamespace(), PSSH_B64, "widevine", None
+        SimpleNamespace(), SimpleNamespace(), SimpleNamespace(), PSSH_B64, "widevine", None, sources
     )
     assert keys == {kid.hex: "vaultkey"}
+    assert sources == {kid.hex: "sqlite"}  # the server keeps the name; the client only learns it is vault output
 
 
 async def test_batch_shares_full_bundle_per_pssh(monkeypatch):
@@ -118,6 +120,7 @@ async def test_batch_shares_full_bundle_per_pssh(monkeypatch):
     session = SimpleNamespace(
         service_tag="EXAMPLE",
         service_instance=SimpleNamespace(),
+        served_keys={},
         tracks=SimpleNamespace(get=tracks.get),
     )
 
@@ -128,7 +131,7 @@ async def test_batch_shares_full_bundle_per_pssh(monkeypatch):
     bundle_a = {REAL.hex: "k_real", PSSH_KID.hex: "k_pssh", OTHER.hex: "k_other"}
     bundle_b = {"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "k_b"}
 
-    def fake_single(service, title, track, pssh_str, drm_type, request):
+    def fake_single(service, title, track, pssh_str, drm_type, request, sources=None):
         calls.append(pssh_str)
         return dict(bundle_a) if pssh_str == pssh_a else dict(bundle_b)
 

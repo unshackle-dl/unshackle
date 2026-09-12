@@ -102,6 +102,7 @@ def _session(tracks: dict, buf=None):
     session = SimpleNamespace(
         service_tag="EX",
         service_instance=SimpleNamespace(),
+        served_keys={},
         tracks=SimpleNamespace(get=tracks.get),
         log_buffer=buf,
     )

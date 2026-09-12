@@ -47,6 +47,7 @@ from unshackle.core.api.handlers import (
     server_account_regions,
     server_accounts_allowed,
     server_config_handler,
+    session_bad_key_handler,
     session_create_handler,
     session_delete_handler,
     session_info_handler,
@@ -1819,7 +1820,11 @@ async def session_license(request: web.Request) -> web.Response:
                 description: DRM type (default widevine)
     responses:
       '200':
-        description: License response
+        description: >-
+          License response. In server_cdm mode `keys` maps KID to content key and `vault_keys`,
+          an array of KID hex strings that may be absent and may repeat a KID shared by several
+          tracks, lists the content keys a server vault supplied, which the client has to prove
+          before it trusts them.
       '404':
         description: Remote session or track not found
     """
@@ -1838,6 +1843,58 @@ async def session_license(request: web.Request) -> web.Response:
         return handle_api_exception(
             e, context={"operation": "session_license"}, debug_mode=request.app.get("debug_api", False)
         )
+
+
+@api_handler
+async def session_bad_key(request: web.Request) -> web.Response:
+    """
+    Flag a server-vault content key the client proved wrong.
+    ---
+    summary: Report a bad content key
+    description: >-
+      The client decrypted with a content key the server took from its vault and the output did
+      not decode. The server flags the pair in its local vaults, so the next licence for that KID
+      reaches the CDM when a local vault stores the flag. The server accepts only a pair it served
+      to this remote session.
+    parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - kid
+              - key
+            properties:
+              kid:
+                type: string
+                description: KID as hex
+              key:
+                type: string
+                description: Content key as hex
+    responses:
+      '200':
+        description: The pair is flagged
+      '400':
+        description: The remote session was not served that pair
+      '404':
+        description: Remote session not found
+    """
+    session_id = request.match_info["session_id"]
+    try:
+        data = await request.json()
+    except Exception as e:
+        return build_error_response(
+            APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}),
+            request.app.get("debug_api", False),
+        )
+    return await session_bad_key_handler(data, session_id, request)
 
 
 @api_handler
@@ -2548,6 +2605,7 @@ ROUTES: list[tuple[str, str, Handler, bool]] = [
     ("POST", "/api/session/{session_id}/segments", session_segments, True),
     ("POST", "/api/session/{session_id}/segment_filter", session_segment_filter, True),
     ("POST", "/api/session/{session_id}/license", session_license, True),
+    ("POST", "/api/session/{session_id}/keys/bad", session_bad_key, True),
     ("GET", "/api/session/{session_id}/logs", session_logs, True),
     ("GET", "/api/session/{session_id}/prompt", session_prompt_get, True),
     ("POST", "/api/session/{session_id}/prompt", session_prompt_submit, True),

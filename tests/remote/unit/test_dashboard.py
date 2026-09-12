@@ -351,6 +351,19 @@ async def test_health_vault_probe_tolerates_api_vault_rejecting_the_probe(aiohtt
     assert checks["vault:t"]["status"] == "ok", checks["vault:t"]
 
 
+def test_health_warns_without_a_sqlite_vault_to_store_flags(monkeypatch) -> None:
+    from unshackle.core.api.handlers import run_health_checks
+
+    monkeypatch.setattr(config, "proxy_providers", {})
+    monkeypatch.setattr(
+        config, "key_vaults", [{"type": "API", "name": "shared", "uri": "http://127.0.0.1:9", "token": "t"}]
+    )
+    assert {c["id"]: c for c in run_health_checks()}["bad_keys"]["status"] == "warn"
+
+    monkeypatch.setattr(config, "key_vaults", [])
+    assert {c["id"]: c for c in run_health_checks()}["bad_keys"]["status"] == "ok"
+
+
 def test_health_proxy_probe_reports_a_provider_that_fails_to_build(monkeypatch) -> None:
     from unshackle.core.api.handlers import run_health_checks
 

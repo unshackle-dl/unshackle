@@ -79,6 +79,7 @@ async def test_single_track_path_keeps_siblings(env, monkeypatch):
     session = SimpleNamespace(
         service_tag="EX",
         service_instance=SimpleNamespace(),
+        served_keys={},
         tracks=SimpleNamespace(get={"vid": track}.get),
         log_buffer=None,
     )
@@ -112,6 +113,7 @@ async def test_batch_cache_does_not_starve_second_track(env, monkeypatch):
     session = SimpleNamespace(
         service_tag="EX",
         service_instance=SimpleNamespace(),
+        served_keys={},
         tracks=SimpleNamespace(get=tracks.get),
         log_buffer=None,
     )
@@ -142,6 +144,7 @@ async def test_no_pssh_tells_the_client_why(env, monkeypatch):
     session = SimpleNamespace(
         service_tag="EX",
         service_instance=SimpleNamespace(),
+        served_keys={},
         tracks=SimpleNamespace(get={"vid": track}.get),
         log_buffer=buf,
     )

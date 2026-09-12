@@ -210,8 +210,10 @@ missing or a vault's credentials expired. This finds that before a job does.
 `status` is `ok`, `degraded` (an optional dependency is missing) or `failing` (a required one
 is). Player binaries are not checked: a headless server never has one and it plays nothing.
 Each check is `ok`, `warn` or `fail`. Check ids are the binary names, `cdm`,
-`vault:<name>` (the vault's configured `name`, so two vaults of the same type stay apart), and
-`proxies`.
+`vault:<name>` (the vault's configured `name`, so two vaults of the same type stay apart),
+`bad_keys` and `proxies`. `bad_keys` warns when the vaults hold no `SQLite` entry, because only
+that backend stores the flag for a content key a remote client proved wrong; without it the
+server serves the same bad pair again.
 
 The server caches the result for 30 seconds and keeps every probe shallow: a vault answers one
 lookup that should miss, and no probe allocates anything. A failing probe's `detail` has the

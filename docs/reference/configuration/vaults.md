@@ -39,6 +39,14 @@ key_vaults:
     - unshackle treats an all-zero content key (32 zeros) as "no key" everywhere and never
       stores it.
 
+!!! note "Bad content keys"
+    A content key from a vault is proven by a short FFmpeg decode of the decrypted output.
+    A content key that fails the decode is written to the `bad_keys` table of every `SQLite`
+    vault with the name of the vault that supplied it, and every vault lookup skips a flagged
+    pair from then on. Only the `SQLite` backend stores flags. A `serve` instance with
+    `server_cdm` flags a pair the same way when a remote client reports it, so a server whose
+    `key_vaults` hold no `SQLite` entry cannot remember a bad content key.
+
 ## `vault_timeout`
 
 - **Type:** `float` &nbsp;·&nbsp; **Default:** `10.0`

@@ -28,6 +28,7 @@ class FakeVaults:
         self.added: dict = {}
         self.pushes: list = []
         self.replicated: list = []
+        self.sources: dict = {}
 
     def __len__(self):
         return 1
@@ -130,6 +131,37 @@ def test_vault_hits_wait_for_the_decrypt_before_replicating():
     assert vaults.added == {}
 
 
+def test_server_vault_keys_are_held_back_until_verified():
+    """A key the server took from its vault is sourced like a local vault hit and not pushed yet."""
+    from unshackle.core.remote_service import ServerVault
+
+    vaults = FakeVaults()
+    cmd = make_cmd(vaults)
+    remote = cmd._remote_service
+    remote.server_vault_keys = {CACHED: "k_cached"}
+    stub = ServerVault(remote)
+    remote.server_vault = stub
+
+    drm = FakeWidevine([CACHED, NEW])
+
+    def licence(**kwargs):
+        drm.content_keys.update({CACHED: "k_cached", NEW: "k_new"})
+
+    prepare(cmd, drm, licence, NEW)
+    cmd.wait_vault_writes()
+
+    assert vaults.added == {NEW: "k_new"}
+    assert vaults.sources == {CACHED: ("k_cached", stub)}
+
+    # the batch path caches at its own call site and must hold the same key back
+    drm2 = FakeWidevine([CACHED])
+    drm2.content_keys = {CACHED: "k_cached"}
+    dl.LICENSE_KEY_CACHE.clear()
+    cmd.cache_resolved_keys(SimpleNamespace(tracks=[SimpleNamespace(drm=[drm2])]))
+    cmd.wait_vault_writes()
+    assert vaults.added == {NEW: "k_new"}
+
+
 def test_tracks_sharing_one_drm_licence_and_push_once():
     """Two tracks on the same DRM run at the same time; the second must find the first one's keys."""
     vaults = FakeVaults()
@@ -171,3 +203,21 @@ def test_cdm_only_still_reuses_keys_from_the_run_cache():
 
     assert len(calls) == 1
     assert vaults.pushes == [{NEW: "k_new"}]
+
+
+def test_cdm_only_trusts_server_vault_keys():
+    """--cdm-only skips the vault checks, so a server vault key is not sourced for a decode check."""
+    from unshackle.core.remote_service import ServerVault
+
+    vaults = FakeVaults()
+    cmd = make_cmd(vaults)
+    remote = cmd._remote_service
+    remote.server_vault_keys = {CACHED: "k_cached"}
+    remote.server_vault = ServerVault(remote)
+
+    drm = FakeWidevine([CACHED])
+    prepare(cmd, drm, lambda **kw: drm.content_keys.update({CACHED: "k_cached"}), CACHED, cdm_only=True)
+    cmd.wait_vault_writes()
+
+    assert vaults.sources == {}
+    assert dl.LICENSE_KEY_CACHE == {CACHED: "k_cached"}
