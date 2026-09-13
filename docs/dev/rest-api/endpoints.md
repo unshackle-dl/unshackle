@@ -62,7 +62,7 @@ If the update check fails (for example, no network), `update_available` and `lat
 
 ### `GET /api/services`
 
-Show the streaming services available on this server, filtered by your allowlist. Each entry gives the service's tag, matching rules, capability flags, and its CLI parameters (useful when you make a UI that accepts service-specific options). `load_errors` lists the services the server skipped because they failed to import, at startup or after a service repository refresh; the server also writes each one to its log. An entry marked `pending_update` has newer code staged: it keeps its current code until its running or queued jobs finish.
+Show the streaming services available on this server, filtered by your allowlist. Each entry gives the service's tag, matching rules, capability flags, and its CLI parameters (useful when you make a UI that accepts service-specific options). `load_errors` lists the services the server skipped because they failed to import, at startup or after a service repository refresh; the server also writes each one to its log. An entry marked `pending_update` has newer code staged: it keeps its current code until its running or queued jobs and its live remote sessions finish.
 
 === "Request"
 

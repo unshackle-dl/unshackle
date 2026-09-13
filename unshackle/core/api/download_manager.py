@@ -753,7 +753,7 @@ class DownloadQueueManager:
 
         async def run() -> None:
             try:
-                applied = await asyncio.to_thread(services.apply_pending, self.busy_services())
+                applied = await asyncio.to_thread(services.apply_pending, busy_services())
                 if applied:
                     log.info(f"Services reloaded after job completion: {', '.join(applied)}")
                     publish_service_event("applied", applied)
@@ -1198,3 +1198,14 @@ def get_download_manager() -> DownloadQueueManager:
         download_manager = DownloadQueueManager(max_concurrent, retention_hours)
 
     return download_manager
+
+
+def busy_services() -> set[str]:
+    """Tags a hot reload must not swap: those with an unfinished job and those a live remote session uses."""
+    from unshackle.core.api.session_store import get_session_store
+    from unshackle.core.api.stats import stats
+
+    busy = {entry.service_tag for entry in get_session_store().list()}
+    if stats.mode != "remote_only":
+        busy |= get_download_manager().busy_services()
+    return busy

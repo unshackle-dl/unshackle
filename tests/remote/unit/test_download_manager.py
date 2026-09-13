@@ -111,6 +111,19 @@ def test_get_download_manager_returns_singleton() -> None:
     assert a is b
 
 
+async def test_busy_services_counts_a_live_remote_session() -> None:
+    from unshackle.core.api.download_manager import busy_services
+    from unshackle.core.api.session_store import get_session_store
+
+    store = get_session_store()
+    session = await store.create("EXAMPLE", object(), session_id="busy-session")
+    try:
+        assert "EXAMPLE" in busy_services()
+    finally:
+        await store.delete(session.session_id)
+    assert "EXAMPLE" not in busy_services()
+
+
 def test_job_status_values() -> None:
     assert {s.value for s in JobStatus} == {
         "queued",

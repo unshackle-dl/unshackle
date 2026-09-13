@@ -2734,14 +2734,13 @@ async def clear_temp_handler(request: Optional[web.Request] = None) -> web.Respo
 
 async def refresh_services_handler(request: Optional[web.Request] = None) -> web.Response:
     """Refresh the service repos configured in directories.services and reload the changed services."""
-    from unshackle.core.api.download_manager import get_download_manager
+    from unshackle.core.api.download_manager import busy_services
     from unshackle.core.api.events import publish_refresh_events
     from unshackle.core.services import refresh_and_reload
 
     require_admin(request)
     try:
-        busy = get_download_manager().busy_services()
-        repos = await asyncio.to_thread(refresh_and_reload, busy)
+        repos = await asyncio.to_thread(refresh_and_reload, busy_services())
         publish_refresh_events(repos)
         return web.json_response({"refreshed": all(r["updated"] for r in repos), "repos": repos})
 

@@ -52,22 +52,21 @@ def _install_service_refresh(app: web.Application) -> None:
         return
 
     async def loop() -> None:
-        from unshackle.core.api.download_manager import get_download_manager
+        from unshackle.core.api.download_manager import busy_services
 
-        manager = get_download_manager()
         while True:
             await asyncio.sleep(interval)
             try:
-                applied = await asyncio.to_thread(services.apply_pending, manager.busy_services())
+                applied = await asyncio.to_thread(services.apply_pending, busy_services())
                 if applied:
                     log.info(f"Services reloaded: {', '.join(applied)}")
                     publish_service_event("applied", applied)
-                repos = await asyncio.to_thread(services.refresh_and_reload, manager.busy_services())
+                repos = await asyncio.to_thread(services.refresh_and_reload, busy_services())
                 for r in repos:
                     if r["changes"]:
                         log.info(f"Services refreshed {r['spec']}: {', '.join(r['changes'])}")
                     if r["deferred"]:
-                        log.info(f"Services staged until their jobs finish: {', '.join(r['deferred'])}")
+                        log.info(f"Services staged until their jobs and sessions finish: {', '.join(r['deferred'])}")
                     for err in r["load_errors"]:
                         log.error(f"Service reload failed: {err}")
                 publish_refresh_events(repos)

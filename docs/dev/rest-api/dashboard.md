@@ -190,7 +190,7 @@ here instead of disappearing, and `/status` still counts it in the service total
 `state` values here for the number that loaded.
 
 A `staged` service has an update on disk that a busy service blocks from the import: the repo
-pull already happened, so `commit` (what runs now) and `staged_commit` (what waits) differ. It swaps in when the last job for that tag finishes. Both commits are `null`
+pull already happened, so `commit` (what runs now) and `staged_commit` (what waits) differ. It swaps in when the last job and the last remote session for that tag finish. Both commits are `null`
 for a service from a plain local directory rather than a git repo.
 
 Watch the `service` event rather than polling for the swap.
