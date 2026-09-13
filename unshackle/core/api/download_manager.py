@@ -37,9 +37,10 @@ def redact_parameters(parameters: Dict[str, Any]) -> Dict[str, Any]:
     for key in SENSITIVE_PARAM_KEYS:
         if redacted.get(key):
             redacted[key] = REDACTED
-    proxy = redacted.get("proxy")
-    if isinstance(proxy, str) and "@" in proxy:
-        redacted["proxy"] = URL_USERINFO_RE.sub(f"{REDACTED}@", proxy)
+    for key in ("proxy", "proxy_download"):
+        proxy = redacted.get(key)
+        if isinstance(proxy, str) and "@" in proxy:
+            redacted[key] = URL_USERINFO_RE.sub(f"{REDACTED}@", proxy)
     return redacted
 
 
@@ -455,6 +456,7 @@ def perform_download(
         "proxy": params.get("proxy"),
         "no_proxy": params.get("no_proxy", False),
         "no_proxy_download": params.get("no_proxy_download", False),
+        "proxy_download": params.get("proxy_download"),
         "profile": params.get("profile"),
         "cdm_name": params.get("cdm"),
         "repack": params.get("repack", False),
@@ -608,6 +610,7 @@ def perform_download(
                 cdm_only=params.get("cdm_only"),
                 no_proxy=params.get("no_proxy", False),
                 no_proxy_download=params.get("no_proxy_download", False),
+                proxy_download=params.get("proxy_download"),
                 no_folder=params.get("no_folder", False),
                 no_source=params.get("no_source", False),
                 no_mux=params.get("no_mux", False),

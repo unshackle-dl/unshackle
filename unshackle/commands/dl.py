@@ -53,7 +53,7 @@ from unshackle.core.events import events
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.providers.tvdb import SEASON_TYPES, parse_int
 from unshackle.core.proxies import Basic, ExpressVPN, Gluetun, Hola, NordVPN, ProtonVPN, SurfsharkVPN, WindscribeVPN
-from unshackle.core.proxies.resolve import is_loopback
+from unshackle.core.proxies.resolve import is_loopback, resolve_proxy
 from unshackle.core.service import Service, grow_session_pool
 from unshackle.core.services import Services
 from unshackle.core.temp import with_task_temp
@@ -860,6 +860,12 @@ class dl:
         default=False,
         help="Bypass proxy for all downloads. Manifest, license, and auth still use proxy.",
     )
+    @click.option(
+        "--proxy-download",
+        type=str,
+        default=None,
+        help="Proxy for the downloads only, in the same form as --proxy. Manifest, license, and auth use --proxy.",
+    )
     @click.option("--no-folder", is_flag=True, default=False, help="Disable folder creation for TV Shows.")
     @click.option(
         "--no-source", is_flag=True, default=False, help="Disable the source tag from the output file name and path."
@@ -1525,6 +1531,7 @@ class dl:
         cdm_only: Optional[bool],
         no_proxy: bool,
         no_proxy_download: bool,
+        proxy_download: Optional[str],
         no_folder: bool,
         no_source: bool,
         no_mux: bool,
@@ -1627,6 +1634,16 @@ class dl:
         set_speed_limit(speed_limit_bps)
         if speed_limit_bps:
             self.log.info(f"Speed limit: {format_speed(speed_limit_bps)}")
+
+        if no_proxy or no_proxy_download:
+            proxy_download = None
+        elif proxy_download and re.match(r"^(?:[a-z]+:){0,2}[a-z]{2}(?:[-:][a-z0-9]+)*(?:\d+)?$", proxy_download, re.I):
+            # same shapes --proxy resolves against providers (two prefixes for gluetun:nordvpn:ca); else an explicit URI
+            try:
+                proxy_download = resolve_proxy(proxy_download.lower(), self.proxy_providers)
+            except ValueError as e:
+                self.log.error(f"--proxy-download: {e}")
+                sys.exit(1)
 
         if export:
             config.directories.exports.mkdir(parents=True, exist_ok=True)
@@ -2281,6 +2298,8 @@ class dl:
 
             if no_proxy_download and any(service.session.proxies.values()):
                 console.log("Bypassing proxy for downloads as --no-proxy-download was used...")
+            elif proxy_download:
+                console.log(f"Using a separate proxy for downloads: {mask_proxy(proxy_download)}")
 
             for kind, required, available in (
                 (
@@ -2934,6 +2953,7 @@ class dl:
                         track.download(
                             session=track.session or service.session,
                             no_proxy_download=no_proxy_download,
+                            proxy_download=proxy_download,
                             prepare_drm=prepare_drm_for(track),
                             cdm=self.cdm,
                             max_workers=workers,
@@ -2970,6 +2990,7 @@ class dl:
                         attachment.download(
                             attachment.session or service.session,
                             no_proxy_download=no_proxy_download,
+                            proxy_download=proxy_download,
                         )
 
                     if (

@@ -247,6 +247,7 @@ class Subtitle(Track):
         *,
         cdm: Optional[object] = None,
         no_proxy_download: bool = False,
+        proxy_download: Optional[str] = None,
         adaptive_workers: bool = False,
         download_processes: int = 1,
     ):
@@ -257,6 +258,7 @@ class Subtitle(Track):
             progress,
             cdm=cdm,
             no_proxy_download=no_proxy_download,
+            proxy_download=proxy_download,
             adaptive_workers=adaptive_workers,
             download_processes=download_processes,
         )

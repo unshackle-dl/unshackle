@@ -39,9 +39,13 @@ DRM_PREFERENCE_TYPES: dict[str, Union[type[Widevine], type[PlayReady]]] = {
 }
 
 
-def direct_session(session: Union[Session, "RnetSession"]) -> Session:
-    """requests.Session with copied headers/cookies and no proxy."""
+def direct_session(session: Union[Session, "RnetSession"], proxy: Optional[str] = None) -> Session:
+    """requests.Session with copied headers/cookies and no proxy, or only ``proxy`` when given."""
     new = Session()
+    if proxy:
+        # requests lets HTTP(S)_PROXY override session proxies, so the env must be ignored for a chosen proxy
+        new.trust_env = False
+        new.proxies = {"http": proxy, "https": proxy}
     headers = getattr(session, "headers", None)
     if headers is not None:
         try:
@@ -55,6 +59,17 @@ def direct_session(session: Union[Session, "RnetSession"]) -> Session:
             new.cookies.update(jar if jar is not None else cookies)
         except Exception:
             pass
+        # RnetCookieAdapter.jar holds only cookies that arrived as a CookieJar; the ones set by name or
+        # received from a server live in its domain map, so copy those across too
+        by_domain = getattr(cookies, "get_dict_by_domain", None)
+        if by_domain is not None:
+            try:
+                for domain, named in by_domain().items():
+                    for name, value in named.items():
+                        if name not in new.cookies:
+                            new.cookies.set(name, value, **({"domain": domain} if domain else {}))
+            except Exception:
+                pass
     new.mount(
         "https://",
         HTTPAdapter(
@@ -563,6 +578,7 @@ class Track:
         *,
         cdm: Optional[object] = None,
         no_proxy_download: bool = False,
+        proxy_download: Optional[str] = None,
         adaptive_workers: bool = False,
         download_processes: int = 1,
     ):
@@ -585,9 +601,13 @@ class Track:
         proxy = next(iter(session.proxies.values()), None)
 
         dl_session = session
-        if no_proxy_download and proxy:
-            dl_session = direct_session(session)
-            proxy = None
+        if no_proxy_download:
+            if proxy:
+                dl_session = direct_session(session)
+                proxy = None
+        elif proxy_download:
+            dl_session = direct_session(session, proxy_download)
+            proxy = proxy_download
 
         track_type = self.__class__.__name__
         save_path = config.directories.temp / f"{track_type}_{self.id}.mp4"

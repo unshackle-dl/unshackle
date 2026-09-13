@@ -22,13 +22,14 @@ a query to a real proxy URL: [basic static proxies](#basic-static-proxies),
 
 ## The `--proxy` flag
 
-Three options on the `dl` command control proxying at download time:
+Four options on the `dl` command control proxying at download time:
 
 | Option | Effect |
 |---|---|
 | `--proxy` | The proxy to use. Either an explicit URI, or a query that unshackle resolves against your configured providers. |
 | `--no-proxy` | Force **all** proxy use off. No providers are initialised and no proxy query is resolved. |
 | `--no-proxy-download` | Use the proxy for the manifest, licence, and authentication, but bypass it for the **downloads** themselves. |
+| `--proxy-download` | Use `--proxy` for the manifest, licence, and authentication, and a different proxy for the **downloads**. Takes the same forms as `--proxy`. |
 
 ```shell title="Explicit proxy URI"
 unshackle dl --proxy http://user:pass@1.2.3.4:8080 EXAMPLE 81234567
@@ -63,6 +64,21 @@ unshackle dl --proxy gb --no-proxy-download EXAMPLE 10a1234
     region as the manifest. On those services, bypassing the proxy for downloads will
     cause segment fetches to fail or return the wrong region. If downloads break with
     `--no-proxy-download`, remove it.
+
+### `--proxy-download`
+
+`--proxy-download` is the middle ground: the manifest, licence, and authentication go through
+`--proxy`, and the downloads go through a second proxy. Use it when one proxy passes the
+geo-check and another one is faster for bulk traffic. The value takes the same forms as
+`--proxy`, so a country code or `provider:region` resolves against the same providers.
+
+```shell title="Manifest and licence over NordVPN, downloads over Windscribe"
+unshackle dl --proxy nordvpn:us --proxy-download windscribevpn:us EXAMPLE 10a1234
+```
+
+`--no-proxy` and `--no-proxy-download` both override `--proxy-download`. The same
+region warning applies: if the service ties segment delivery to the manifest region, keep
+both proxies in that region.
 
 ## How proxy resolution works
 

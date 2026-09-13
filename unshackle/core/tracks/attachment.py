@@ -102,6 +102,7 @@ class Attachment:
         session: Optional[AnySession] = None,
         *,
         no_proxy_download: bool = False,
+        proxy_download: Optional[str] = None,
     ) -> None:
         """Download a URL-backed attachment to the temp directory."""
         if self.path is not None or not self.url or DOWNLOAD_LICENCE_ONLY.is_set():
@@ -110,8 +111,11 @@ class Attachment:
         from unshackle.core.tracks.track import direct_session
 
         session = session or self.session or requests.Session()
-        if no_proxy_download and any(session.proxies.values()):
-            session = direct_session(session)
+        if no_proxy_download:
+            if any(session.proxies.values()):
+                session = direct_session(session)
+        elif proxy_download:
+            session = direct_session(session, proxy_download)
 
         download_path = config.directories.temp / (self.file_name or "attachment")
         try:

@@ -729,12 +729,15 @@ unshackle dl --proxy nordvpn:ca EXAMPLE 81234567
 unshackle dl --proxy 'http://user:pass@host:8080' EXAMPLE 81234567
 ```
 
-Two related flags:
+Three related flags:
 
 - `--no-proxy`: force-disable all proxy use for this run.
 - `--no-proxy-download`: bypass the proxy for **all downloads**. The manifest,
   license, and authentication requests still go through the proxy. This is useful when you
   need the proxy only to satisfy geo-checks, not to move the bulk of the data.
+- `--proxy-download`: use a different proxy for **all downloads**. The manifest,
+  license, and authentication requests still go through `--proxy`. Takes the same forms
+  as `--proxy`.
 
 ## Performance and caching
 
@@ -954,7 +957,7 @@ authoritative list.
 | `--output` | `-o` | Output directory for this run. |
 | `--split-audio` / `--merge-video` / `--no-mux` | | Muxing behaviour. |
 | `--postscript` / `--no-postscript` | | Run a command after each output file, or run none. |
-| `--proxy` / `--no-proxy` / `--no-proxy-download` | | Proxy control. |
+| `--proxy` / `--no-proxy` / `--no-proxy-download` / `--proxy-download` | | Proxy control. |
 | `--workers` / `--downloads` / `--slow` | | Concurrency and pacing. |
 | `--list` / `--list-titles` / `--skip-dl` | | Dry runs. |
 | `--cdm-only` / `--vaults-only` | | Content key source control. |

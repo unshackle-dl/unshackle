@@ -82,6 +82,7 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "proxy": None,
     "no_proxy": False,
     "no_proxy_download": False,
+    "proxy_download": None,
     "no_folder": False,
     "no_source": False,
     "no_mux": False,
@@ -1696,8 +1697,18 @@ def enforce_download_gates(params: Dict[str, Any], request: Optional[web.Request
             "Download jobs license with the server CDM, which is not enabled for this key on this service.",
         )
 
+    if params.get("proxy_download") is not None and not isinstance(params["proxy_download"], str):
+        raise APIError(APIErrorCode.INVALID_INPUT, "proxy_download must be a string.")
+
     if not server_proxy_allowed(request):
         resolve_handler_proxy(params, params.get("service") or "", request)
+        if params.get("proxy_download"):
+            # the download proxy is gated like the main one: a full URI or nothing, never a server provider
+            resolve_handler_proxy(
+                {**params, "proxy": params["proxy_download"], "client_region": None},
+                params.get("service") or "",
+                request,
+            )
 
     requested_cdm = params.get("cdm")
     if requested_cdm:
