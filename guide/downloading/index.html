@@ -3905,12 +3905,15 @@ configured proxy providers), or a <code>provider:region</code> form.</p>
 </span><span id="__span-39-2"><a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>nordvpn:ca<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span><span id="__span-39-3"><a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span><span class="s1">'http://user:pass@host:8080'</span><span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
-<p>Two related flags:</p>
+<p>Three related flags:</p>
 <ul>
 <li><code>--no-proxy</code>: force-disable all proxy use for this run.</li>
 <li><code>--no-proxy-download</code>: bypass the proxy for <strong>all downloads</strong>. The manifest,
   license, and authentication requests still go through the proxy. This is useful when you
   need the proxy only to satisfy geo-checks, not to move the bulk of the data.</li>
+<li><code>--proxy-download</code>: use a different proxy for <strong>all downloads</strong>. The manifest,
+  license, and authentication requests still go through <code>--proxy</code>. Takes the same forms
+  as <code>--proxy</code>.</li>
 </ul>
 <h2 id="performance-and-caching">Performance and caching<a class="headerlink" href="#performance-and-caching" title="Permanent link">&para;</a></h2>
 <table>
@@ -4322,7 +4325,7 @@ authoritative list.</p>
 <td>Run a command after each output file, or run none.</td>
 </tr>
 <tr>
-<td><code>--proxy</code> / <code>--no-proxy</code> / <code>--no-proxy-download</code></td>
+<td><code>--proxy</code> / <code>--no-proxy</code> / <code>--no-proxy-download</code> / <code>--proxy-download</code></td>
 <td></td>
 <td>Proxy control.</td>
 </tr>

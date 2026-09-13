@@ -3796,10 +3796,10 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <td>Force CDM-only (<code>true</code>) or vault-only (<code>false</code>) key retrieval.</td>
 </tr>
 <tr>
-<td><code>proxy</code> / <code>no_proxy</code> / <code>no_proxy_download</code></td>
-<td>string / bool / bool</td>
-<td><code>null</code> / <code>false</code> / <code>false</code></td>
-<td>Proxy controls. <code>proxy</code> must be a full proxy URI unless the API key has <code>server_proxy</code>.</td>
+<td><code>proxy</code> / <code>no_proxy</code> / <code>no_proxy_download</code> / <code>proxy_download</code></td>
+<td>string / bool / bool / string</td>
+<td><code>null</code> / <code>false</code> / <code>false</code> / <code>null</code></td>
+<td>Proxy controls. <code>proxy</code> and <code>proxy_download</code> must be full proxy URIs unless the API key has <code>server_proxy</code>.</td>
 </tr>
 <tr>
 <td><code>no_folder</code> / <code>no_source</code> / <code>no_mux</code></td>
