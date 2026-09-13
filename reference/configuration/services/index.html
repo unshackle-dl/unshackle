@@ -2270,7 +2270,7 @@ is the <a href="../../../dev/rest-api/">REST API</a> section. These are the conf
 <td><code>services_refresh_interval</code></td>
 <td>int (s)</td>
 <td><code>0</code></td>
-<td>How often the server pulls the git-backed service repositories in <code>directories.services</code> and hot-reloads the services that changed. <code>0</code> turns it off. A service with a running or queued job swaps to the new code as soon as its last job finishes.</td>
+<td>How often the server pulls the git-backed service repositories in <code>directories.services</code> and hot-reloads the services that changed. <code>0</code> turns it off. A service with a running or queued job, or a live remote session, swaps to the new code as soon as its last job and session finish.</td>
 </tr>
 <tr>
 <td><code>global_speed_limit</code></td>

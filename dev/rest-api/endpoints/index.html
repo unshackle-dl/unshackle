@@ -3015,7 +3015,7 @@
 </tbody>
 </table>
 <h3 id="get-apiservices"><code>GET /api/services</code><a class="headerlink" href="#get-apiservices" title="Permanent link">&para;</a></h3>
-<p>Show the streaming services available on this server, filtered by your allowlist. Each entry gives the service's tag, matching rules, capability flags, and its CLI parameters (useful when you make a UI that accepts service-specific options). <code>load_errors</code> lists the services the server skipped because they failed to import, at startup or after a service repository refresh; the server also writes each one to its log. An entry marked <code>pending_update</code> has newer code staged: it keeps its current code until its running or queued jobs finish.</p>
+<p>Show the streaming services available on this server, filtered by your allowlist. Each entry gives the service's tag, matching rules, capability flags, and its CLI parameters (useful when you make a UI that accepts service-specific options). <code>load_errors</code> lists the services the server skipped because they failed to import, at startup or after a service repository refresh; the server also writes each one to its log. An entry marked <code>pending_update</code> has newer code staged: it keeps its current code until its running or queued jobs and its live remote sessions finish.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Request</label><label for="__tabbed_2_2">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
