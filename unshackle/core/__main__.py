@@ -70,7 +70,7 @@ def main(version: bool, debug: bool) -> None:
                     style="ascii.art",
                 ),
                 f"v [repr.number]{__version__}[/]{f' ({__code_hash__})' if __code_hash__ else ''}"
-                f" - © 2025-{datetime.now().year} - github.com/unshackle-dl/unshackle",
+                f" - © 2025-{datetime.now().year} github.com/unshackle-dl/unshackle",
             ),
             (1, 11, 1, 10),
             expand=True,
