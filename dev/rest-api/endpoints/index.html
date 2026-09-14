@@ -4978,7 +4978,7 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 </tbody>
 </table>
 <h3 id="post-apisessionsession_idkeysbad"><code>POST /api/session/{session_id}/keys/bad</code><a class="headerlink" href="#post-apisessionsession_idkeysbad" title="Permanent link">&para;</a></h3>
-<p>Report a content key from <code>vault_keys</code> that did not decrypt the track. The server flags the pair in its local vaults, under the name of the vault that served it, and the next licence for that KID reaches the CDM. The client never learns the server vault names.</p>
+<p>Report a content key from <code>vault_keys</code> that did not decrypt the track. The server flags the pair in its local vaults and reports it to the vault that served it, and the next licence for that KID reaches the CDM. The client never learns the server vault names.</p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"kid"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;kid_hex&gt;"</span><span class="p">,</span><span class="w"> </span><span class="nt">"key"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;key_hex&gt;"</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <table>
