@@ -4369,9 +4369,17 @@ async def session_bad_key_handler(
         raise APIError(APIErrorCode.INVALID_INPUT, "This session was not served that KID:KEY pair")
 
     vaults = load_server_vaults(session.service_instance.__class__.__name__)
-    for vault in vaults.vaults:
-        if vault.local:
-            vault.flag_bad_key(vaults.service, UUID(hex=kid), served_key, source)
+
+    def flag() -> None:
+        for vault in vaults.vaults:
+            if not vault.local and vault.name != source:
+                continue
+            try:
+                vault.flag_bad_key(vaults.service, UUID(hex=kid), served_key, source)
+            except Exception as e:
+                log.debug(f"Could not flag {kid} as bad in vault {sanitize_log(vault.name)}: {e!r}")
+
+    await asyncio.to_thread(flag)
     session.served_keys.pop(kid, None)
     log.warning(
         f"Client proved {kid}:{served_key} from vault {sanitize_log(source)} wrong, flagged in the server vaults"

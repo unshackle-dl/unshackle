@@ -132,3 +132,17 @@ async def test_batch_reports_vault_keys_from_the_init_segment_pssh(monkeypatch):
     assert payload["keys"] == {"vid": {CDM_KID.hex: "v"}}
     assert payload["vault_keys"] == [CDM_KID.hex]
     assert session.served_keys == {CDM_KID.hex: ("v", "sqlite")}
+
+
+async def test_server_tells_a_remote_vault_only_when_it_served_the_pair(monkeypatch, session):
+    entry, local = session
+    bystander, source = _Vault(), _Vault()
+    bystander.local = source.local = False
+    bystander.name, source.name = "other", "sqlite"
+    monkeypatch.setattr(
+        handlers, "load_server_vaults", lambda name: SimpleNamespace(vaults=[local, bystander, source], service="SVC")
+    )
+    await handlers.session_bad_key_handler({"kid": KID.hex, "key": "v"}, "sess")
+    assert local.flagged == [("SVC", KID, "v", "sqlite")]
+    assert source.flagged == [("SVC", KID, "v", "sqlite")]
+    assert bystander.flagged == []

@@ -239,9 +239,9 @@ There are two ways DRM keys get resolved, chosen by the client's `server_cdm` fl
     - A content key the server took from its own vault is unproven. The response
       lists its KID in `vault_keys`, the client decrypts and checks that the output
       decodes, and a wrong pair goes back to `POST /api/session/{id}/keys/bad`. The
-      server flags the pair in every local vault it holds, records the name of the
-      vault that served it, and the next licence for that KID skips the pair and
-      reaches the CDM. A server with no local SQLite vault cannot store the flag. The
+      server flags the pair in every local vault it holds, reports it to the vault
+      that served it, and the next licence for that KID skips the pair and reaches
+      the CDM. A server with no local SQLite vault cannot store the flag. The
       server accepts a report only for a pair it served to that remote session. The
       client never learns the server vault names.
     - A content key in the client's own vaults goes first, even when the server

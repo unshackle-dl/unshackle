@@ -1088,7 +1088,7 @@ Get the content keys for the DRM. The `mode` field selects one of two modes.
 
 ### `POST /api/session/{session_id}/keys/bad`
 
-Report a content key from `vault_keys` that did not decrypt the track. The server flags the pair in its local vaults, under the name of the vault that served it, and the next licence for that KID reaches the CDM. The client never learns the server vault names.
+Report a content key from `vault_keys` that did not decrypt the track. The server flags the pair in its local vaults and reports it to the vault that served it, and the next licence for that KID reaches the CDM. The client never learns the server vault names.
 
 ```json
 { "kid": "<kid_hex>", "key": "<key_hex>" }

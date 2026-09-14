@@ -4006,11 +4006,11 @@ class dl:
         A poisoned vault returns the right KID with a wrong content key, and the decrypters
         accept it without complaint. A content key from a vault is therefore trusted, and only
         then copied to the other vaults, once FFmpeg can decode the result. Without FFmpeg
-        neither happens. On failure the pair is flagged in the local vaults with
-        its source, the ciphertext is restored, and the licence runs again. Every vault skips a
+        neither happens. On failure the pair is flagged in the local vaults and reported
+        to the vault that served it, the ciphertext is restored, and the licence runs again. Every vault skips a
         flagged pair, so each pass burns at most one vault; when the vaults run out the CDM
         answers, and a CDM key is not checked. A CDM that returns the flagged key clears the
-        flag, because then the decode check was wrong.
+        flag and stores the content key again, because then the decode check was wrong.
 
         With ``decrypt=False`` the downloader already decrypted the segments in place, so a
         failure can only flag and raise; the next run skips the flagged pair.
@@ -4094,6 +4094,7 @@ class dl:
                     source = self.vaults.sources.get(kid)
                     if source is None:
                         self.vaults.unflag_bad_key(kid, key)
+                        self.flush_vault_writes([partial(self.vaults.add_key, kid, key)])
                     elif kid in kids and source[1] is kids[kid]:
                         raise ValueError(f"{key} from {kids[kid].name} was bad and no other source has the key")
             raise ValueError("No vault or CDM produced a content key that decrypts the track")

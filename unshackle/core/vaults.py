@@ -148,19 +148,31 @@ class Vaults:
         return key if found else None
 
     def flag_bad_key(self, kid: Union[UUID, str], key: str) -> None:
-        """Flag a KID:KEY that failed decryption in every local Vault, naming the Vault it came from."""
+        """Flag a KID:KEY that failed decryption, naming the Vault it came from.
+
+        Every local vault records it. A remote vault is told only when it served the pair,
+        so it stops serving it too, and a vault that never held it is not bothered. A vault
+        that cannot take the flag is skipped with a debug line: the local flag already
+        protects this run, and a vault without the route is not a fault.
+        """
         self.flagged.add((kid, key))
         source = self.sources.pop(kid, None)
         for vault in self.vaults:
-            if vault.local:
+            if not vault.local and (source is None or vault is not source[1]):
+                continue
+            try:
                 vault.flag_bad_key(self.service, kid, key, source[1].name if source else "unknown")
+            except Exception as e:
+                log.debug(f"Could not flag {key} as bad in Vault '{vault.name}': {e!r}")
 
     def unflag_bad_key(self, kid: Union[UUID, str], key: str) -> None:
-        """Remove a flag from every local Vault."""
+        """Remove a flag from every Vault."""
         self.flagged.discard((kid, key))
         for vault in self.vaults:
-            if vault.local:
+            try:
                 vault.unflag_bad_key(kid, key)
+            except Exception as e:
+                log.debug(f"Could not unflag {key} in Vault '{vault.name}': {e!r}")
 
     def add_key(self, kid: Union[UUID, str], key: str, excluding: Optional[Vault] = None) -> int:
         """Add a KID:KEY to all Vaults, optionally with an exclusion.

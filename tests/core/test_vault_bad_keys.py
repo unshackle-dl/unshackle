@@ -1,3 +1,4 @@
+import logging
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -8,6 +9,7 @@ import pytest
 from unshackle.commands import dl as dl_module
 from unshackle.commands.dl import dl
 from unshackle.core.vaults import Vaults
+from unshackle.vaults.API import API
 from unshackle.vaults.SQLite import SQLite
 
 KID = UUID("11111111-2222-3333-4444-555555555555")
@@ -331,3 +333,47 @@ def test_a_sibling_verdict_during_the_decrypt_still_triggers_the_retry(
     assert path.read_bytes() == b"plain:" + GOOD.encode()
     assert drm.decrypted_with == [{KID: BAD}, {KID: GOOD}]
     assert licences == [GOOD]  # the good key in the run cache survives the flag of the bad one
+
+
+def test_api_vault_reports_the_pair_upstream(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    api = API("vault", "https://vault.example/", "tok")
+    calls: list[tuple[str, str, object]] = []
+    ok = SimpleNamespace(status_code=200, raise_for_status=lambda: None, json=lambda: {"code": 0})
+    monkeypatch.setattr(api.session, "post", lambda url, **kw: calls.append(("POST", url, kw.get("json"))) or ok)
+    monkeypatch.setattr(api.session, "delete", lambda url, **kw: calls.append(("DELETE", url, None)) or ok)
+
+    vaults = Vaults("SVC")
+    vaults.vaults = [api]
+    vaults.sources[KID] = (BAD, api)
+    vaults.flag_bad_key(KID, BAD)
+    vaults.unflag_bad_key(KID, BAD)
+
+    assert calls == [
+        ("POST", f"https://vault.example/bad-keys/{KID.hex}", {"content_key": BAD, "service": "SVC"}),
+        ("DELETE", f"https://vault.example/bad-keys/{KID.hex}/{BAD}", None),
+    ]
+
+    calls.clear()
+    vaults.sources[KID] = (BAD, SimpleNamespace(name="other"))
+    vaults.flag_bad_key(KID, BAD)
+    assert calls == []
+    vaults.sources[KID] = (BAD, api)
+
+    monkeypatch.setattr(api.session, "post", lambda url, **kw: (_ for _ in ()).throw(ConnectionError("down")))
+    caplog.clear()
+    with caplog.at_level(logging.DEBUG, logger="unshackle.core.vaults"):
+        vaults.flag_bad_key(KID, BAD)
+    assert [r.levelname for r in caplog.records] == ["DEBUG"]
+
+    gone = SimpleNamespace(status_code=404, raise_for_status=lambda: (_ for _ in ()).throw(RuntimeError("404")))
+    monkeypatch.setattr(api.session, "post", lambda url, **kw: gone)
+    caplog.clear()
+    vaults.flag_bad_key(KID, BAD)
+    assert not caplog.records
+
+    denied = SimpleNamespace(status_code=200, raise_for_status=lambda: None, json=lambda: {"code": 1, "message": "no"})
+    monkeypatch.setattr(api.session, "post", lambda url, **kw: denied)
+    monkeypatch.setattr(api.session, "delete", lambda url, **kw: denied)
+    vaults.flag_bad_key(KID, BAD)
+    vaults.unflag_bad_key(KID, BAD)
+    assert not caplog.records

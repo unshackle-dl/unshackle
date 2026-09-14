@@ -1856,9 +1856,9 @@ async def session_bad_key(request: web.Request) -> web.Response:
     summary: Report a bad content key
     description: >-
       The client decrypted with a content key the server took from its vault and the output did
-      not decode. The server flags the pair in its local vaults, so the next licence for that KID
-      reaches the CDM when a local vault stores the flag. The server accepts only a pair it served
-      to this remote session.
+      not decode. The server flags the pair in its local vaults and reports it to the vault that
+      served it, so the next licence for that KID reaches the CDM. The server accepts only a pair
+      it served to this remote session.
     parameters:
       - name: session_id
         in: path
