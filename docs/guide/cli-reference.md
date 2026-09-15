@@ -141,7 +141,7 @@ Keep only certain track types, or skip certain track types.
 | Flag | Description |
 |---|---|
 | `--split-audio` | Write a separate output file per audio codec instead of merging. Defaults to config `muxing.merge_audio`. |
-| `--merge-video` | Mux all selected video tracks into one file. Defaults to config `muxing.merge_video`. |
+| `--merge-video` | Mux video tracks that share a height, range, and codec into one file, so only language varies inside a file. Defaults to config `muxing.merge_video`. |
 | `-o`, `--output` | Override the output directory for this run. |
 | `--no-folder` | Disable folder creation for TV shows. |
 | `--no-source` | Remove the source tag from the filename/path. |
