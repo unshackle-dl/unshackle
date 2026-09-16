@@ -2689,6 +2689,11 @@ Two kinds of members matter: <strong>class variables</strong> that give the deta
 <td>ISO region codes the service requires; empty means no geofence. unshackle treats the first entry as the "main region" for automatic proxy selection.</td>
 </tr>
 <tr>
+<td><code>GEOBLOCK</code></td>
+<td><code>tuple[str, ...]</code></td>
+<td>ISO region codes where the service refuses to work; every other region is allowed. Use it for a service that works worldwide except in its home market.</td>
+</tr>
+<tr>
 <td><code>VAULT_TAG</code></td>
 <td><code>Optional[str]</code></td>
 <td>Overrides the key-vault namespace; defaults to the service's own tag.</td>
@@ -2787,7 +2792,10 @@ up the objects your methods rely on:</p>
 <p>The constructor also resolves proxies: it reads <code>--proxy</code> and the <code>proxy_query</code> and
 <code>proxy_provider</code> context params that <code>dl</code> derives from it, consults the per-service
 <code>proxy_map</code>, and, if <code>GEOFENCE</code> is set and you did not give an explicit proxy, does a live
-IP check and auto-fetches a proxy to <code>GEOFENCE[0]</code> when it detects a geoblock.
+IP check and auto-fetches a proxy to <code>GEOFENCE[0]</code> when it detects a geoblock. A
+<code>GEOBLOCK</code> hit with no <code>GEOFENCE</code> stops the run with a "not available in your region"
+error, because there is no main region to fetch a proxy for; pass <code>--proxy</code> yourself.
+A proxy whose exit is in a <code>GEOBLOCK</code> region stops the run the same way.
 See <a href="../../guide/proxies-and-vpn/">Proxies and VPN</a>.</p>
 <div class="admonition note">
 <p class="admonition-title"><code>TrackRequest</code></p>
