@@ -760,6 +760,7 @@ class RemoteService:
 
     ALIASES: tuple[str, ...] = ()
     GEOFENCE: tuple[str, ...] = ()
+    GEOBLOCK: tuple[str, ...] = ()
     NO_SUBTITLES: bool = False
     ANIME: bool = False
     DAILY: bool = False

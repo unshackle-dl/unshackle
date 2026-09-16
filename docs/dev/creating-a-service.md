@@ -97,6 +97,7 @@ Declared at class level to configure framework behaviour:
 |---|---|---|
 | `ALIASES` | `tuple[str, ...]` | Extra tags that resolve to this service (e.g. `("EX", "DOMAIN")`). Case does not matter. Default `()`. |
 | `GEOFENCE` | `tuple[str, ...]` | IP region codes the service requires. Empty = no geofence. unshackle treats the **first** entry as the main region for auto-proxy. |
+| `GEOBLOCK` | `tuple[str, ...]` | IP region codes where the service refuses to work. Every other region is allowed. Default `()`. |
 | `VAULT_TAG` | `Optional[str]` | Overrides the key-vault namespace so sibling services can share one vault. Default `None` (use the service's own tag). |
 | `AUTH_METHODS` | `Optional[tuple[str, ...]]` | Auth methods accepted (`"cookies"` / `"credentials"`). When `None`, the REST `/services` endpoint infers them from `authenticate()`. |
 | `NO_SUBTITLES` | `bool` | Set `True` on a service with no subtitle tracks to skip subtitle handling entirely. |
@@ -113,11 +114,19 @@ Declared at class level to configure framework behaviour:
 explicit `--proxy`, the base class does a live IP check and, if your region is
 blocked, fetches a proxy to `GEOFENCE[0]` from your configured proxy providers.
 
+`GEOBLOCK` is the negative form: the service works everywhere except the listed
+regions. With no `GEOFENCE` to name a main region, a `GEOBLOCK` hit stops the run
+with a "not available in your region" error; pass `--proxy` yourself.
+
 ```python
 class EXAMPLE(Service):
     ALIASES = ("EX", "DOMAIN")
     GEOFENCE = ("US", "UK")
     VAULT_TAG = "DIFFERENT_NAME"
+
+
+class WORLDWIDE(Service):
+    GEOBLOCK = ("GB",)
 ```
 
 ### What `Service.__init__` wires up

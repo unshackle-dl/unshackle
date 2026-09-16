@@ -141,6 +141,7 @@ curl "$BASE/api/services" \
       "tag": "EXAMPLE",
       "aliases": ["EX"],
       "geofence": [],
+      "geoblock": [],
       "title_regex": null,
       "url": "https://example.com",
       "help": "EXAMPLE service documentation...",

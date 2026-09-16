@@ -70,6 +70,8 @@ class EXAMPLE(Service):
     ALIASES = ("EX", "DOMAIN")
     # GEOFENCE: regions required; the framework warns/blocks if proxy region mismatches.
     GEOFENCE = ("US", "UK")
+    # GEOBLOCK: the negative form; regions where the service refuses to work, all others allowed.
+    # GEOBLOCK = ("GB",)
     # TITLE_RE: named groups (?P<...>) parsed in get_titles(). Accepts URL or bare id.
     TITLE_RE = r"^(?:https?://(?:www\.)?domain\.com/details/)?(?P<title_id>[^/?#]+)"
     # NO_SUBTITLES: service-level idiom telling the pipeline subs are handled in-band.

@@ -63,6 +63,7 @@ Declared at the top of your service class, these are static descriptors:
 |---|---|---|
 | `ALIASES` | `tuple[str, ...]` | Alternate tags the service answers to, in any case (resolved by `Services.get_tag`). |
 | `GEOFENCE` | `tuple[str, ...]` | ISO region codes the service requires; empty means no geofence. unshackle treats the first entry as the "main region" for automatic proxy selection. |
+| `GEOBLOCK` | `tuple[str, ...]` | ISO region codes where the service refuses to work; every other region is allowed. Use it for a service that works worldwide except in its home market. |
 | `VAULT_TAG` | `Optional[str]` | Overrides the key-vault namespace; defaults to the service's own tag. |
 | `AUTH_METHODS` | `Optional[tuple[str, ...]]` | Accepted auth methods (`"cookies"` / `"credentials"`). When `None`, the REST `/services` endpoint infers them from `authenticate()`. |
 | `ANIME` | `bool` | The catalogue is anime, so metadata lookups prefer AniList. A title's own `anime` flag overrides it. |
@@ -117,7 +118,10 @@ up the objects your methods rely on:
 The constructor also resolves proxies: it reads `--proxy` and the `proxy_query` and
 `proxy_provider` context params that `dl` derives from it, consults the per-service
 `proxy_map`, and, if `GEOFENCE` is set and you did not give an explicit proxy, does a live
-IP check and auto-fetches a proxy to `GEOFENCE[0]` when it detects a geoblock.
+IP check and auto-fetches a proxy to `GEOFENCE[0]` when it detects a geoblock. A
+`GEOBLOCK` hit with no `GEOFENCE` stops the run with a "not available in your region"
+error, because there is no main region to fetch a proxy for; pass `--proxy` yourself.
+A proxy whose exit is in a `GEOBLOCK` region stops the run the same way.
 See [Proxies and VPN](../guide/proxies-and-vpn.md).
 
 !!! note "`TrackRequest`"

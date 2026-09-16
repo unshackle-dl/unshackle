@@ -182,7 +182,7 @@ GET /api/dashboard/services
 [{"tag": "EXAMPLE", "state": "staged", "error": null,
   "commit": "9cc230c98f13b83f6c6fe831595b9702d3ba2786", "staged_commit": "5f0aa17...",
   "staged_since": 1756908900.0, "sessions": 1, "jobs": 1,
-  "aliases": ["EXMPL"], "geofence": ["US"]}]
+  "aliases": ["EXMPL"], "geofence": ["US"], "geoblock": []}]
 ```
 
 `state` is `loaded`, `staged` or `failed`. A service that failed to import keeps its error

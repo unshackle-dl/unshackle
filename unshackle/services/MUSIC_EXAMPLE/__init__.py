@@ -74,6 +74,8 @@ class MUSIC_EXAMPLE(Service):
     ALIASES = ("MUSICEX", "MUSICDOMAIN")
     # GEOFENCE: regions required; the framework warns/blocks if proxy region mismatches.
     GEOFENCE = ("US", "UK")
+    # GEOBLOCK: the negative form; regions where the service refuses to work, all others allowed.
+    # GEOBLOCK = ("GB",)
     # TITLE_RE: named groups (?P<...>) parsed in get_titles(). Accepts URL or bare id.
     # A music catalogue is addressed by several kinds of thing, so `kind`
     # is part of the identifier and decides which endpoint get_titles() asks.

@@ -79,6 +79,7 @@ Show the streaming services available on this server, filtered by your allowlist
           "tag": "EXAMPLE",
           "aliases": ["EX"],
           "geofence": ["US"],
+          "geoblock": [],
           "title_regex": "^https?://example\\.com/.+",
           "url": "https://example.com",
           "help": "EXAMPLE\nAuthorization: Cookies\nSecurity: FHD@L3",
@@ -112,6 +113,7 @@ Field notes:
 | `tag` | Canonical service tag; use this as the `service` value on other endpoints. |
 | `aliases` | Alternate tags the service also answers to. |
 | `geofence` | Region codes the service is geofenced to (may be empty). |
+| `geoblock` | Region codes where the service refuses to work (may be empty). |
 | `title_regex` | URL/ID pattern the service matches, as a string or list of strings (or `null`). |
 | `url` | Service URL, taken from the service's CLI short help. |
 | `help` | The service module's docstring. |

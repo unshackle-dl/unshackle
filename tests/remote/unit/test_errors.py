@@ -109,6 +109,13 @@ def test_build_error_response_debug_mode_includes_traceback() -> None:
         (Exception("Connection refused"), APIErrorCode.NETWORK_ERROR),
         (TimeoutError("read timeout"), APIErrorCode.NETWORK_ERROR),
         (Exception("Not available in your region"), APIErrorCode.GEOFENCE),
+        (Exception("Service is geoblocked in GB"), APIErrorCode.GEOFENCE),
+        (
+            Exception(
+                "Service is not available in your region (GB). Pass --proxy with a proxy outside the blocked regions."
+            ),
+            APIErrorCode.GEOFENCE,
+        ),
         (Exception("Title not found"), APIErrorCode.NOT_FOUND),
         (Exception("HTTP 429 too many requests"), APIErrorCode.RATE_LIMITED),
         (Exception("DRM license fetch failed"), APIErrorCode.DRM_ERROR),

@@ -201,6 +201,10 @@ async def services(request: web.Request) -> web.Response:
                         type: array
                         items:
                           type: string
+                      geoblock:
+                        type: array
+                        items:
+                          type: string
                       title_regex:
                         oneOf:
                           - type: string
@@ -253,6 +257,7 @@ async def services(request: web.Request) -> web.Response:
                 "tag": tag,
                 "aliases": [],
                 "geofence": [],
+                "geoblock": [],
                 "title_regex": None,
                 "url": None,
                 "help": None,
@@ -270,6 +275,7 @@ async def services(request: web.Request) -> web.Response:
 
                 if hasattr(service_module, "GEOFENCE"):
                     service_data["geofence"] = list(service_module.GEOFENCE)
+                service_data["geoblock"] = list(getattr(service_module, "GEOBLOCK", ()) or ())
 
                 if hasattr(service_module, "TITLE_RE"):
                     title_re = service_module.TITLE_RE
@@ -2485,6 +2491,10 @@ async def dashboard_services(request: web.Request) -> web.Response:
                     items:
                       type: string
                   geofence:
+                    type: array
+                    items:
+                      type: string
+                  geoblock:
                     type: array
                     items:
                       type: string

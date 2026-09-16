@@ -184,6 +184,14 @@ def categorize_exception(
     exc_str = f"{exc} {root}".lower()
     exc_type = type(root).__name__
 
+    if any(keyword in exc_str for keyword in ["geofence", "geoblock", "region", "not available in", "territory"]):
+        return APIError(
+            error_code=APIErrorCode.GEOFENCE,
+            message=f"Content not available in your region: {redact_secrets(str(exc))}",
+            details={**context, "reason": "geofence_restriction"},
+            retryable=False,
+        )
+
     if "proxy" in str(root).lower():
         return APIError(
             error_code=APIErrorCode.INVALID_PROXY,
@@ -218,14 +226,6 @@ def categorize_exception(
             details={**context, "reason": "network_connectivity"},
             retryable=True,
             http_status=503,
-        )
-
-    if any(keyword in exc_str for keyword in ["geofence", "region", "not available in", "territory"]):
-        return APIError(
-            error_code=APIErrorCode.GEOFENCE,
-            message=f"Content not available in your region: {redact_secrets(str(exc))}",
-            details={**context, "reason": "geofence_restriction"},
-            retryable=False,
         )
 
     if any(keyword in exc_str for keyword in ["not found", "404", "does not exist", "invalid id"]):

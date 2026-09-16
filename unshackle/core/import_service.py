@@ -106,6 +106,7 @@ class ImportService:
 
     ALIASES: tuple[str, ...] = ()
     GEOFENCE: tuple[str, ...] = ()
+    GEOBLOCK: tuple[str, ...] = ()
     NO_SUBTITLES: bool = False
 
     def __init__(self, ctx: click.Context, service_tag: str, title: str, import_file: Optional[str]) -> None:

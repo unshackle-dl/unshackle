@@ -48,6 +48,16 @@ def test_region_mismatch_raises(monkeypatch):
     assert exc_info.value.details == {"service": "EXAMPLE"}
 
 
+def test_geoblocked_client_region_raises(monkeypatch):
+    patch_server_region(monkeypatch, "CA")
+    service_class = handlers.Services.load("EXAMPLE")
+    monkeypatch.setattr(service_class, "GEOBLOCK", ("GB",), raising=False)
+    with pytest.raises(APIError) as exc_info:
+        handlers.resolve_handler_proxy({"client_region": "gb"}, "EXAMPLE", request("plainkey"))
+    assert exc_info.value.error_code == APIErrorCode.GEOFENCE
+    assert exc_info.value.details == {"service": "EXAMPLE"}
+
+
 def test_region_match_no_proxy(monkeypatch):
     patch_server_region(monkeypatch, "CA")
     assert handlers.resolve_handler_proxy({"client_region": "ca"}, "EXAMPLE", request("plainkey")) == (None, [])

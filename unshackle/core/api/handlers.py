@@ -207,7 +207,7 @@ def build_parent_ctx(
 
     parent = click.Context(dummy)
     parent.obj = ContextData(config=service_config, cdm=cdm, proxy_providers=proxy_providers, profile=profile)
-    params = {"proxy": proxy_param, "no_proxy": no_proxy}
+    params = {"proxy": proxy_param, "no_proxy": no_proxy, "served": True}
     if extra_params:
         params.update(extra_params)
     parent.params = params
@@ -357,9 +357,11 @@ def run_service_search(
     )
     service_module = Services.load(normalized_service)
 
+    from click import ClickException
+
     try:
         service_instance = instantiate_service(parent_ctx, service_module, query)
-    except ConnectionError as exc:
+    except (ConnectionError, ClickException) as exc:
         raise categorize_exception(exc, {"service": normalized_service}) from exc
     except Exception as exc:
         raise APIError(
@@ -2126,6 +2128,7 @@ async def dashboard_services_handler(request: web.Request) -> web.Response:
             "jobs": jobs.get(tag, 0),
             "aliases": list(services_module.ALIASES.get(tag, ())),
             "geofence": [],
+            "geoblock": [],
         }
         if staged:
             # Only staged tags need a git call; the working tree already holds the new commit.
@@ -2136,6 +2139,7 @@ async def dashboard_services_handler(request: web.Request) -> web.Response:
         module = services_module.MODULES.get(tag)
         if module is not None:
             row["geofence"] = list(getattr(module, "GEOFENCE", ()) or ())
+            row["geoblock"] = list(getattr(module, "GEOBLOCK", ()) or ())
         rows.append(row)
     return web.json_response(rows)
 
@@ -3600,6 +3604,15 @@ def resolve_handler_proxy(
         except Exception as e:
             log.debug(f"Server region lookup failed: {e!r}")
             server_region = None
+
+        geoblock = getattr(Services.load(normalized_service), "GEOBLOCK", ()) or ()
+        if client_region.lower() in {x.lower() for x in geoblock}:
+            raise APIError(
+                APIErrorCode.GEOFENCE,
+                f"Service is not available in your region ({client_region.upper()}). "
+                "Pass --proxy with a proxy outside the blocked regions.",
+                details={"service": normalized_service},
+            )
 
         in_client_region = bool(server_region) and server_region == client_region.lower()
         if not allowed:

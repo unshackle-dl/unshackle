@@ -152,7 +152,7 @@ The classification is keyword-based, checked in order:
 |---|---|---|
 | `auth`, `login`, `credential`, `unauthorized`, `forbidden`, `token` | `AUTH_FAILED` (401) | no |
 | `connection`, `timeout`, `network`, `unreachable`, `socket`, `dns`, `resolve` (or `ConnectionError`, `TimeoutError`, `URLError`, `SSLError`) | `NETWORK_ERROR` (503) | yes |
-| `geofence`, `region`, `not available in`, `territory` | `GEOFENCE` (403) | no |
+| `geofence`, `geoblock`, `region`, `not available in`, `territory` | `GEOFENCE` (403) | no |
 | `not found`, `404`, `does not exist`, `invalid id` | `NOT_FOUND` (404) | no |
 | `rate limit`, `too many requests`, `429`, `throttle` | `RATE_LIMITED` (429) | yes |
 | `drm`, `license`, `widevine`, `playready`, `decrypt` | `DRM_ERROR` (502) | no |
