@@ -2246,7 +2246,7 @@ is the <a href="../../../dev/rest-api/">REST API</a> section. These are the conf
 <td><code>session_ttl</code></td>
 <td>int (s)</td>
 <td><code>300</code></td>
-<td>Lifetime of an interactive auth session.</td>
+<td>Seconds a remote session can stay idle before it expires. A remote client sends keep-alive requests to its remote session during a download, so the remote session does not expire during a long download.</td>
 </tr>
 <tr>
 <td><code>max_sessions</code></td>

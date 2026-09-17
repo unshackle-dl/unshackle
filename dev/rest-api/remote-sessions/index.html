@@ -2554,10 +2554,16 @@ and return the content keys directly. See
 <a href="#server-side-vs-proxied-cdm">Server-side vs. proxied CDM</a> below.</p>
 </div>
 <div class="tabbed-block">
-<p>The client downloads, decrypts, and muxes locally. On completion it deletes
-the remote session. If the server has updated cache files (for example a refreshed
-token), the delete returns them and the client saves them locally, so the <strong>next</strong>
-remote session can skip interactive auth.</p>
+<p>The client downloads, decrypts, and muxes locally. While it works, it sends a
+keep-alive request to the remote session at an interval of one third of
+<code>session_ttl</code>, so a long download does not let the remote session expire. On
+completion, and also when <code>dl</code> exits early (<code>--list</code>, Ctrl+C, an error), it
+deletes the remote session. If the login belongs to the client, the <code>DELETE</code>
+request returns the updated cache files (for example a refreshed token) and the
+client saves them locally, so the <strong>next</strong> remote session can skip interactive
+authentication. The login belongs to the client when the client sent
+cookies, credentials, or cache files, or answered a login prompt (a device code
+or an OTP) that led to a successful login. A server-account login never does.</p>
 </div>
 </div>
 </div>
@@ -2877,9 +2883,10 @@ returns <code>{ "status": "accepted" }</code>. A post with no pending prompt is 
 <div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>_sessions/&lt;pbkdf2_hmac(sha256, X-Secret-Key, "unshackle-session-ns", 100000)[:12]&gt;/&lt;session_id&gt;/&lt;service&gt;
 </span></code></pre></div>
 <p>The handler writes forwarded <code>cache</code> files into that directory before authentication.
-On <code>DELETE</code>, the handler harvests updated cache files (compressing each with zlib
-and base64-encoding, <strong>excluding</strong> <code>titles_*</code> files) and returns them under a
-<code>cache</code> field, so the client can keep refreshed tokens:</p>
+On <code>DELETE</code>, when the login belongs to the client (<code>client_auth</code>), the handler
+harvests updated cache files (compressing each with zlib and base64-encoding,
+<strong>excluding</strong> <code>titles_*</code> files) and returns them under a <code>cache</code> field, so the
+client can keep refreshed tokens:</p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"ok"</span><span class="p">,</span><span class="w"> </span><span class="nt">"cache"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"tokens"</span><span class="p">:</span><span class="w"> </span><span class="s2">"...base64(zlib(bytes))..."</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <h3 id="remote-session-info-response">Remote session info response<a class="headerlink" href="#remote-session-info-response" title="Permanent link">&para;</a></h3>
