@@ -153,6 +153,13 @@ def load_full_cdm(service: str, profile: Optional[str], cdm_type: Optional[str] 
     if not cdm_name or not isinstance(cdm_name, str):
         return resolve_server_cdm(service, profile, cdm_type)
 
+    if cdm_type:
+        wanted = {"wv": "widevine", "widevine": "widevine", "pr": "playready", "playready": "playready"}.get(
+            cdm_type.lower()
+        )
+        if wanted and detect_cdm_type(cdm_name, app_config) not in (None, wanted):
+            return cdm_type_stub(wanted)
+
     try:
         return load_cdm(cdm_name, service_name=service)
     except Exception as exc:  # noqa: BLE001 - fall back to stub on load failure
@@ -4052,25 +4059,34 @@ def handle_proxy_license(
         raise APIError(APIErrorCode.INVALID_INPUT, "Missing required parameter: challenge")
     challenge_bytes = base64.b64decode(challenge_b64)
 
-    if drm_type == "widevine":
-        license_response = service.get_widevine_license(
-            **declared_kwargs(
-                service.get_widevine_license, {"challenge": challenge_bytes, "title": title, "track": track}
-            )
-        )
-    elif drm_type == "playready":
-        challenge_str = challenge_bytes.decode("utf-8", errors="replace")
-        license_response = service.get_playready_license(
-            **declared_kwargs(
-                service.get_playready_license, {"challenge": challenge_str, "title": title, "track": track}
-            )
-        )
-    else:
+    if drm_type not in ("widevine", "playready"):
         raise APIError(
             APIErrorCode.INVALID_PARAMETERS,
             f"Unsupported DRM type: {drm_type}",
             details={"drm_type": drm_type, "supported": ["widevine", "playready"]},
         )
+
+    # A service raises when the upstream licence server rejects the challenge.
+    # Surface it as a structured licence error, not an uncaught 500 the edge turns into a 502.
+    try:
+        if drm_type == "widevine":
+            license_response = service.get_widevine_license(
+                **declared_kwargs(
+                    service.get_widevine_license, {"challenge": challenge_bytes, "title": title, "track": track}
+                )
+            )
+        else:
+            challenge_str = challenge_bytes.decode("utf-8", errors="replace")
+            license_response = service.get_playready_license(
+                **declared_kwargs(
+                    service.get_playready_license, {"challenge": challenge_str, "title": title, "track": track}
+                )
+            )
+    except APIError:
+        raise
+    except (Exception, SystemExit) as exc:
+        log.exception(f"{sanitize_log(drm_type)} licence request failed for the proxied challenge")
+        raise APIError(APIErrorCode.SERVICE_ERROR, f"Licence request failed: {exc}") from None
 
     if isinstance(license_response, str):
         license_response = license_response.encode("utf-8")
