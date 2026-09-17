@@ -673,9 +673,7 @@ class Track:
                                 try:
                                     self.drm = [Widevine.from_track(self, session)]
                                 except Widevine.Exceptions.PSSHNotFound:
-                                    log.warning(
-                                        "No PlayReady or Widevine PSSH was found for this track, is it DRM free?"
-                                    )
+                                    log.debug("No PlayReady or Widevine PSSH was found for this track, is it DRM free?")
                         else:
                             try:
                                 self.drm = [Widevine.from_track(self, session)]
@@ -683,9 +681,7 @@ class Track:
                                 try:
                                     self.drm = [PlayReady.from_track(self, session)]
                                 except PlayReady.Exceptions.PSSHNotFound:
-                                    log.warning(
-                                        "No Widevine or PlayReady PSSH was found for this track, is it DRM free?"
-                                    )
+                                    log.debug("No Widevine or PlayReady PSSH was found for this track, is it DRM free?")
 
                     if self.drm:
                         track_kid = self.get_key_id(session=session)
