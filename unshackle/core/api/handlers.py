@@ -3033,7 +3033,9 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
             server_account=(profile or "default") if server_account else None,
         )
         session.cache_tag = session_cache_tag
-        session.client_auth = not server_account and (cookies is not None or credential is not None)
+        session.client_auth = not server_account and (
+            cookies is not None or credential is not None or bool(cache_data and session_cache_tag)
+        )
         # Echoed to every dashboard viewer, so cap what an arbitrary client can push into it.
         if isinstance(data.get("client"), dict) and len(json.dumps(data["client"], default=str)) <= 4096:
             session.client = data["client"]
@@ -3044,6 +3046,8 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
         async def run_auth() -> None:
             try:
                 await asyncio.to_thread(service_instance.authenticate, cookies, credential)
+                if bridge.answered and not server_account:
+                    session.client_auth = True
                 session.auth_status = AuthStatus.AUTHENTICATED
                 bridge.status = AuthStatus.AUTHENTICATED
             except (Exception, SystemExit) as e:
@@ -3051,6 +3055,9 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
                 session.auth_status = AuthStatus.FAILED
                 session.auth_error = redact_secrets(str(e))
                 bridge.status = AuthStatus.FAILED
+            finally:
+                if store.peek(session_id) is not session:
+                    SessionStore.cleanup_cache_dir(session_cache_tag)
 
         asyncio.create_task(run_auth())
 
@@ -3478,7 +3485,8 @@ async def session_prompt_post_handler(
     if bridge is None or bridge.status != AuthStatus.PENDING_INPUT:
         raise APIError(APIErrorCode.INVALID_INPUT, "No prompt pending for this session")
 
-    bridge.submit_response(str(response_text))
+    if not bridge.submit_response(str(response_text)):
+        raise APIError(APIErrorCode.INVALID_INPUT, "No prompt pending for this session")
     return web.json_response({"status": "accepted"})
 
 

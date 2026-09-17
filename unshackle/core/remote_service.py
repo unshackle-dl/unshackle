@@ -7,6 +7,7 @@ Everything else (track selection, download, decrypt, mux) runs locally.
 
 from __future__ import annotations
 
+import atexit
 import base64
 import hashlib
 import logging
@@ -18,7 +19,7 @@ from datetime import date as date_
 from enum import Enum
 from http.cookiejar import CookieJar
 from pathlib import Path
-from threading import Lock
+from threading import Event, Lock, Thread
 from typing import Any, Callable, Dict, Iterator, Optional, Union
 from uuid import UUID
 
@@ -797,6 +798,7 @@ class RemoteService:
         self._segment_filters: Dict[str, tuple[set[str], set[str]]] = {}
         self._log_seq = 0
         self._log_drain_lock = Lock()
+        self._keepalive_stop = Event()
 
         self._session = requests.Session()
         self._session.headers.update(config.headers)
@@ -959,11 +961,33 @@ class RemoteService:
 
         result = self.client.post("/api/session/create", create_data)
         self._session_id = result["session_id"]
+        atexit.register(self.close)
 
         status = result.get("status", "authenticated")
         if status == "authenticating":
             self.poll_auth_completion()
         self.drain_server_logs()
+        self.start_keepalive()
+
+    def start_keepalive(self) -> None:
+        """Send keep-alive requests so that a long download or mux operation does not outlive the server's idle TTL.
+
+        ``GET /api/session/{session_id}`` refreshes the idle timer and reports the TTL, so the thread sends
+        a request at an interval of one third of it. The thread stops when ``close()`` runs. A client that
+        dies stops sending requests, so the server still expires an abandoned remote session.
+        """
+        info = self.client.get_optional(f"/api/session/{self._session_id}")
+        interval = max(float(info.get("expires_in") or 300) / 3, 5.0)
+        url = f"{self.client.server_url}/api/session/{self._session_id}"
+
+        def ping() -> None:
+            while not self._keepalive_stop.wait(interval):
+                try:
+                    self.client.session.get(url, timeout=30)
+                except requests.RequestException:
+                    pass
+
+        Thread(target=ping, name=f"{self.service_tag}-keepalive", daemon=True).start()
 
     def drain_server_logs(self) -> None:
         """Fetch the service's server-side log records for this remote session and re-emit them locally.
@@ -1362,13 +1386,16 @@ class RemoteService:
         pass
 
     def close(self) -> None:
-        if self._session_id:
+        self._keepalive_stop.set()
+        session_id, self._session_id = self._session_id, None
+        if session_id:
             try:
-                result = self.client.delete(f"/api/session/{self._session_id}")
+                result = self.client.delete(f"/api/session/{session_id}")
                 self.save_returned_cache(result.get("cache", {}))
+            except SystemExit:
+                pass
             except Exception as e:
                 self.log.warning(f"Failed to clean up remote session: {e}")
-            self._session_id = None
 
     def save_returned_cache(self, cache_data: Dict[str, str]) -> None:
         """Save cache files returned by the server to the local cache directory.

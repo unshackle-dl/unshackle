@@ -41,6 +41,7 @@ class InputBridge:
     _response: Optional[str] = field(default=None, init=False, repr=False)
     _status: AuthStatus = field(default=AuthStatus.AUTHENTICATING, init=False)
     _cancelled: bool = field(default=False, init=False, repr=False)
+    _answered: bool = field(default=False, init=False, repr=False)
     _response_ready: threading.Event = field(default_factory=threading.Event, init=False, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
 
@@ -100,6 +101,7 @@ class InputBridge:
             if self._status != AuthStatus.PENDING_INPUT:
                 return False
             self._response = response
+            self._answered = True
         self._response_ready.set()
         return True
 
@@ -109,6 +111,12 @@ class InputBridge:
             self._cancelled = True
             self._status = AuthStatus.FAILED
         self._response_ready.set()
+
+    @property
+    def answered(self) -> bool:
+        """``True`` once the bridge has accepted a response from the client."""
+        with self._lock:
+            return self._answered
 
     @property
     def status(self) -> AuthStatus:

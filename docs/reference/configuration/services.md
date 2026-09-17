@@ -121,7 +121,7 @@ is the [REST API](../../dev/rest-api/index.md) section. These are the config key
 | `services` | list | *(unset)* | Global service allowlist. Omit to allow all. |
 | `remote_only` | bool | `false` | Expose only the remote service session endpoints (health, services, search, session) and disable the rest of the REST API. |
 | `dashboard` | dict | *(unset)* | Developer dashboard: `key` is the API key for the read-only `/api/dashboard/` endpoints (status, remote sessions, remote session logs, jobs, keys, services, health, logs, SSE events). Unset leaves those routes unregistered. See [dashboard endpoints](../../dev/rest-api/dashboard.md). |
-| `session_ttl` | int (s) | `300` | Lifetime of an interactive auth session. |
+| `session_ttl` | int (s) | `300` | Seconds a remote session can stay idle before it expires. A remote client sends keep-alive requests to its remote session during a download, so the remote session does not expire during a long download. |
 | `max_sessions` | int or null | `100` | Maximum concurrent remote sessions; at the cap the server evicts the oldest. Set it to `null` or `0` for no limit, which is also what `/api/dashboard/status` then reports, so a dashboard can tell "no cap" from a cap that happens to sit at the default. |
 | `history_limit` | int | `100` | How many finished jobs to retain in history. |
 | `compression_level` | int | `1` | gzip level for responses. |

@@ -168,3 +168,129 @@ def test_safe_inflate_rejects_non_str_via_isinstance():
     for bad in (1, {"a": 1}, ["x"], None):
         with pytest.raises(APIError):
             guard(bad)
+
+
+def _run_session(monkeypatch, tmp_path, data, answer, server_account=False, fail=False):
+    """Run session_create_handler with a service that prompts during login; return the settled remote session."""
+    import asyncio
+    import base64
+    import json
+    import zlib
+
+    from unshackle.core.api import handlers
+    from unshackle.core.api.input_bridge import AuthStatus
+    from unshackle.core.api.session_store import get_session_store
+    from unshackle.core.config import config
+
+    class PromptingService:
+        _input_bridge = None
+        log = None
+        cache = None
+
+        def authenticate(self, cookies, credential):
+            if answer is not None:
+                self._input_bridge.request_input("Enter code")
+            if fail:
+                raise ValueError("bad code")
+
+    monkeypatch.setattr(config.directories, "cache", tmp_path)
+    monkeypatch.setattr(handlers, "validate_service", lambda service, request=None: service)
+    monkeypatch.setattr(handlers, "resolve_handler_proxy", lambda *args: (None, []))
+    monkeypatch.setattr(handlers, "server_account_for", lambda *args: server_account)
+    monkeypatch.setattr(handlers, "next_server_profile", lambda *args: None)
+    monkeypatch.setattr(handlers.Services, "load", lambda service: PromptingService)
+    monkeypatch.setattr(handlers, "create_service_instance", lambda *a, **k: (PromptingService(), None, None))
+    if data.get("cache") == "tokens":
+        data["cache"] = {"tokens_default": base64.b64encode(zlib.compress(b"{}")).decode("ascii")}
+
+    async def run():
+        resp = await handlers.session_create_handler({"service": "EXAMPLE", "title_id": "t", **data})
+        session = get_session_store().peek(json.loads(resp.body)["session_id"])
+        for _ in range(200):
+            if answer is not None and session.input_bridge.status == AuthStatus.PENDING_INPUT:
+                await handlers.session_prompt_post_handler({"response": answer}, session.session_id)
+            if session.auth_status in (AuthStatus.AUTHENTICATED, AuthStatus.FAILED):
+                break
+            await asyncio.sleep(0.01)
+        await get_session_store().delete(session.session_id)
+        return session
+
+    return asyncio.run(run())
+
+
+@pytest.mark.parametrize(
+    "data, answer, server_account, fail, expected",
+    [
+        ({}, None, False, False, False),  # anonymous login through the server: stays the server's
+        ({}, "CODE", False, False, True),  # device code the client approved
+        ({}, "CODE", False, True, False),  # answered, but the login failed
+        ({}, "CODE", True, False, False),  # server account OTP answered by the client
+        ({"cache": "tokens"}, None, False, False, True),  # client uploaded its own earlier login
+    ],
+)
+def test_client_auth_follows_login_provenance(monkeypatch, tmp_path, data, answer, server_account, fail, expected):
+    session = _run_session(monkeypatch, tmp_path, dict(data), answer, server_account, fail)
+    assert session.client_auth is expected
+
+
+def test_prompt_post_rejects_response_the_bridge_refused(monkeypatch):
+    import asyncio
+
+    from unshackle.core.api import handlers
+    from unshackle.core.api.input_bridge import AuthStatus
+
+    bridge = SimpleNamespace(status=AuthStatus.PENDING_INPUT, submit_response=lambda text: False)
+
+    async def fake_get_session(session_id, request):
+        return SimpleNamespace(input_bridge=bridge)
+
+    monkeypatch.setattr(handlers, "get_validated_session", fake_get_session)
+    with pytest.raises(APIError):
+        asyncio.run(handlers.session_prompt_post_handler({"response": ""}, "sess"))
+
+
+def test_login_that_outlives_its_session_leaves_no_cache(monkeypatch, tmp_path):
+    """A login loop that finishes after DELETE must not leave its tokens on the server's disk."""
+    import asyncio
+    import json
+    import threading
+
+    from unshackle.core.api import handlers
+    from unshackle.core.api.session_store import get_session_store
+    from unshackle.core.config import config
+
+    paired = threading.Event()
+    finished = threading.Event()
+
+    class SlowPairingService:
+        _input_bridge = None
+        log = None
+        cache = None
+
+        def authenticate(self, cookies, credential):
+            paired.wait(5)
+            self.cache.get("tokens").set("token")
+            finished.set()
+
+    monkeypatch.setattr(config.directories, "cache", tmp_path)
+    monkeypatch.setattr(handlers, "validate_service", lambda service, request=None: service)
+    monkeypatch.setattr(handlers, "resolve_handler_proxy", lambda *args: (None, []))
+    monkeypatch.setattr(handlers, "server_account_for", lambda *args: False)
+    monkeypatch.setattr(handlers.Services, "load", lambda service: SlowPairingService)
+    monkeypatch.setattr(handlers, "create_service_instance", lambda *a, **k: (SlowPairingService(), None, None))
+
+    async def run():
+        resp = await handlers.session_create_handler({"service": "EXAMPLE", "title_id": "t"})
+        session = get_session_store().peek(json.loads(resp.body)["session_id"])
+        await get_session_store().delete(session.session_id)
+        paired.set()
+        for _ in range(200):
+            if finished.is_set() and session.auth_status.value == "authenticated":
+                break
+            await asyncio.sleep(0.01)
+        await asyncio.sleep(0.05)
+        return session
+
+    session = asyncio.run(run())
+    assert session.auth_status.value == "authenticated"
+    assert not (tmp_path / session.cache_tag).exists()

@@ -46,7 +46,9 @@ class SessionEntry:
     owner_key: Optional[str] = None  # X-Secret-Key that owns this session
     cache_tag: Optional[str] = None
     server_account: Optional[str] = None  # profile name when the server lent its own account
-    client_auth: bool = False  # the client sent its own cookies or credentials
+    client_auth: bool = (
+        False  # the client sent its own cookies, credentials, or cache files, or answered a login prompt
+    )
     input_bridge: Optional[InputBridge] = None
     log_buffer: Optional[Any] = None  # SessionLogBuffer mirroring the service's self.log
     auth_status: AuthStatus = AuthStatus.AUTHENTICATED
@@ -169,6 +171,7 @@ class SessionStore:
                 elapsed = (datetime.now(timezone.utc) - entry.last_accessed).total_seconds()
                 if elapsed > self.ttl:
                     log.info(f"Session {sanitize_log(session_id)} expired (elapsed={elapsed:.0f}s, ttl={self.ttl}s)")
+                    self.cleanup_cache_dir(entry.cache_tag)
                     _publish("delete", self._sessions.pop(session_id), "expired")
                     return None
 

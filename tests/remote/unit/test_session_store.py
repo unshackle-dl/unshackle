@@ -130,3 +130,15 @@ async def test_max_sessions_evicts_oldest(store: SessionStore, monkeypatch: pyte
     assert await store.get("a") is None  # evicted
     assert (await store.get("b")) is b
     assert (await store.get("c")) is c
+
+
+async def test_get_expiry_removes_cache_dir(store: SessionStore, monkeypatch: pytest.MonkeyPatch) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    removed: list = []
+    monkeypatch.setattr(SessionStore, "cleanup_cache_dir", staticmethod(removed.append))
+    entry = await store.create("EXAMPLE", _FakeService())
+    entry.cache_tag = "_sessions/k/s/EXAMPLE"
+    entry.last_accessed = datetime.now(timezone.utc) - timedelta(seconds=store.ttl + 100)
+    assert await store.get(entry.session_id) is None
+    assert removed == ["_sessions/k/s/EXAMPLE"]

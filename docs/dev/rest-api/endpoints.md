@@ -839,7 +839,7 @@ Report the install status of the external binaries unshackle depends on (the sam
 !!! note "Developer feature"
     The `/api/session/*` endpoints power unshackle's **remote download** mode. A thin local client authenticates once against a remote server, then fetches titles, tracks, and segments, and proxies DRM licensing back through it. The server mounts these endpoints in `--remote-only` mode, and they are what the built-in `RemoteService` client drives. Most end users never call them directly.
 
-The server holds remote sessions in memory. They expire after `serve.session_ttl` (default 300s), except while awaiting interactive authentication input, which uses a 600s window. A remote session binds to the IP that made it, so the server rejects a request from a different IP with `403 FORBIDDEN`.
+The server holds remote sessions in memory. They expire after `serve.session_ttl` (default 300s) without a request, except while awaiting interactive authentication input, which uses a 600s window. A remote session binds to the IP that made it, so the server rejects a request from a different IP with `403 FORBIDDEN`.
 
 ### Remote session lifecycle overview
 
@@ -874,7 +874,7 @@ The `proxy` value must be a full proxy URI, unless the operator gives your API k
     }
     ```
 
-`server_account` is `true` when the server authenticated with one of its own accounts (`serve.server_accounts`). Otherwise the server uses only what the client sent, and never falls back to its own credentials. Only a client that sent its own cookies or credentials gets cookies, auth headers, and the remote session cache back. For any other remote session (a server account, or an anonymous login through the server's proxy) the tracks and segments responses carry no cookies and no auth headers. The server also drops secret-looking keys from track data, and the cache stays on the server. A server-account service also refuses a client proxy URI, because the server's login would pass through it.
+`server_account` is `true` when the server authenticated with one of its own accounts (`serve.server_accounts`). Otherwise the server uses only what the client sent, and never falls back to its own credentials. Only a client that sent its own cookies, credentials, or cache files gets cookies, auth headers, and the remote session cache back. A client that answered a login prompt (a device code or an OTP) gets them too. This applies only when the login then succeeds and the remote session does not use a server account. For any other remote session (a server account, or an anonymous login through the server's proxy) the tracks and segments responses carry no cookies and no auth headers. The server also drops secret-looking keys from track data, and the cache stays on the server. A server-account service also refuses a client proxy URI, because the server's login would pass through it.
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
@@ -1134,7 +1134,7 @@ Tear down a remote session. The server cancels its input bridge, harvests any up
     }
     ```
 
-The `cache` field is present only if the remote session produced cache files. `404 SESSION_NOT_FOUND` if the remote session does not exist.
+The `cache` field is present only if the remote session produced cache files and the login belongs to the client. `404 SESSION_NOT_FOUND` if the remote session does not exist.
 
 ---
 
