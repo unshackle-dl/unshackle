@@ -3611,7 +3611,7 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 </span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="s1">    "service": "EXAMPLE",</span>
 </span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="s1">    "title_id": "12345",</span>
 </span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="s1">    "quality": [2160],</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="s1">    "vcodec": "H265",</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="s1">    "vcodec": "HEVC",</span>
 </span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="s1">    "range": ["HDR10"],</span>
 </span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="s1">    "wanted": ["S01E01"]</span>
 </span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="s1">  }'</span>
@@ -3898,7 +3898,7 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 </tr>
 </tbody>
 </table>
-<p><strong>Validation.</strong> Invalid values return <code>400 INVALID_PARAMETERS</code>. <code>vcodec</code> must be one of H264/H265/H.264/H.265/AVC/HEVC/VC1/VC-1/VP8/VP9/AV1. <code>acodec</code> must be one of AAC/AC3/EC3/EAC3/DD/DD+/AC4/OPUS/FLAC/ALAC/VORBIS/OGG/DTS/DTSX/DTS-X. <code>range</code> must be one of SDR/HDR10/HDR10P/DV/HLG/HYBRID, and <code>HDR10+</code> is also valid. The bitrate, download worker, and download counts must be positive integers. You may set at most one of the <code>*_only</code> flags. You cannot combine <code>no_subs</code> with <code>subs_only</code>, or <code>no_audio</code> with <code>audio_only</code>.</p>
+<p><strong>Validation.</strong> Invalid values return <code>400 INVALID_PARAMETERS</code>. <code>vcodec</code>, <code>acodec</code> and <code>sub_format</code> take the same spellings as the CLI options of the same name (<code>unshackle dl --help</code> prints each list). The API and the CLI read one list, so they cannot disagree. <code>range</code> must be one of SDR/HDR10/HDR10P/DV/HLG/HYBRID, and <code>HDR10+</code> is also valid. The bitrate, download worker, and download counts must be positive integers. You may set at most one of the <code>*_only</code> flags. You cannot combine <code>no_subs</code> with <code>subs_only</code>, or <code>no_audio</code> with <code>audio_only</code>.</p>
 <p><strong>Service options.</strong> A service's own CLI options travel in the same body. Send them in a nested
 <code>service_params</code> object, or as flat top-level keys. <code>service_params</code> wins over a flat key of the
 same name. An option you leave out takes the default declared on the service's <code>cli</code> command, so
