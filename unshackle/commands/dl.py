@@ -93,10 +93,10 @@ from unshackle.core.utils.click_types import (
     QUALITY_LIST,
     SEASON_RANGE,
     SLOW_DELAY_RANGE,
+    SUBTITLE_CODEC,
+    VIDEO_CODEC_LIST,
     ContextData,
     MultipleChoice,
-    MultipleVideoCodecChoice,
-    SubtitleCodecChoice,
 )
 from unshackle.core.utils.collections import ci_get, merge_dict
 from unshackle.core.utils.post_scripts import NO_POST_SCRIPTS, build_context, dispatch, season_context
@@ -534,7 +534,7 @@ class dl:
     @click.option(
         "-v",
         "--vcodec",
-        type=MultipleVideoCodecChoice(Video.Codec),
+        type=VIDEO_CODEC_LIST,
         default=[],
         help="Video Codec(s) to download, defaults to any codec.",
     )
@@ -775,7 +775,7 @@ class dl:
     )
     @click.option(
         "--sub-format",
-        type=SubtitleCodecChoice(Subtitle.Codec),
+        type=SUBTITLE_CODEC,
         default=None,
         help="Set Output Subtitle Format, only converting if necessary. Use 'original' to keep source format.",
     )

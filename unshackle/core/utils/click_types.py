@@ -7,6 +7,8 @@ from click.shell_completion import CompletionItem
 from pywidevine.cdm import Cdm as WidevineCdm
 
 from unshackle.core.tracks.audio import Audio
+from unshackle.core.tracks.subtitle import Subtitle
+from unshackle.core.tracks.video import Video
 
 
 class VideoCodecChoice(click.Choice):
@@ -18,27 +20,31 @@ class VideoCodecChoice(click.Choice):
     - Enum values: H.264, H.265, VC-1, VP8, VP9, AV1
     """
 
-    def __init__(self, codec_enum):
+    def __init__(self, codec_enum: type[Video.Codec]) -> None:
         self.codec_enum = codec_enum
-        choices = []
+        self._name_to_codec: dict[str, Video.Codec] = {}
         for codec in codec_enum:
-            choices.append(codec.name.lower())  # e.g., "avc", "hevc"
-            choices.append(codec.value)  # e.g., "H.264", "H.265"
-        super().__init__(choices, case_sensitive=False)
+            for choice in (codec.name.lower(), codec.value.lower()):
+                self._name_to_codec[choice] = codec
 
-    def convert(self, value: Any, param: Optional[click.Parameter] = None, ctx: Optional[click.Context] = None):
+        aliases = {"h264": "AVC", "h265": "HEVC"}
+        for alias, target in aliases.items():
+            if target in codec_enum.__members__:
+                self._name_to_codec[alias] = codec_enum[target]
+
+        super().__init__(list(self._name_to_codec), case_sensitive=False)
+
+    def convert(self, value: Any, param: Optional[click.Parameter] = None, ctx: Optional[click.Context] = None) -> Any:
         if not value:
             return None
+        if isinstance(value, self.codec_enum):
+            return value
 
         converted_value = super().convert(value, param, ctx)
-
-        for codec in self.codec_enum:
-            if converted_value.lower() == codec.name.lower():
-                return codec
-            if converted_value == codec.value:
-                return codec
-
-        self.fail(f"'{value}' is not a valid video codec", param, ctx)
+        codec = self._name_to_codec.get(str(converted_value).lower())
+        if codec is None:
+            self.fail(f"'{value}' is not a valid video codec", param, ctx)
+        return codec
 
 
 class MultipleVideoCodecChoice(VideoCodecChoice):
@@ -64,7 +70,10 @@ class MultipleVideoCodecChoice(VideoCodecChoice):
 
         chosen_values: list[Any] = []
         for v in values:
-            chosen_values.append(super().convert(v.strip(), param, ctx))
+            token = v.strip() if isinstance(v, str) else str(v).strip()
+            if not token:
+                continue
+            chosen_values.append(super().convert(token, param, ctx))
         return chosen_values
 
 
@@ -351,12 +360,12 @@ class AudioCodecList(click.ParamType):
 
     name = "audio_codec_list"
 
-    def __init__(self, codec_enum):
+    def __init__(self, codec_enum: type[Audio.Codec]) -> None:
         self.codec_enum = codec_enum
         self._name_to_codec: dict[str, Audio.Codec] = {}
         for codec in codec_enum:
-            self._name_to_codec[codec.name.lower()] = codec
-            self._name_to_codec[codec.value.lower()] = codec
+            for choice in (codec.name.lower(), codec.value.lower()):
+                self._name_to_codec[choice] = codec
 
         aliases = {
             "eac3": "EC3",
@@ -366,6 +375,14 @@ class AudioCodecList(click.ParamType):
         for alias, target in aliases.items():
             if target in codec_enum.__members__:
                 self._name_to_codec[alias] = codec_enum[target]
+
+    @property
+    def choices(self) -> list[str]:
+        """Every spelling convert() accepts, in declaration order. Mirrors click.Choice.choices."""
+        return list(self._name_to_codec)
+
+    def get_metavar(self, *args: Any, **kwargs: Any) -> str:
+        return f"[{'|'.join(self.choices)}]"
 
     def convert(self, value: Any, param: Optional[click.Parameter] = None, ctx: Optional[click.Context] = None) -> list:
         if not value:
@@ -387,9 +404,20 @@ class AudioCodecList(click.ParamType):
             if key in self._name_to_codec:
                 codecs.append(self._name_to_codec[key])
             else:
-                valid = sorted(set(self._name_to_codec.keys()))
-                self.fail(f"'{val}' is not valid. Choices: {', '.join(valid)}", param, ctx)
+                self.fail(f"'{val}' is not valid. Choices: {', '.join(sorted(self.choices))}", param, ctx)
         return list(dict.fromkeys(codecs))  # Remove duplicates, preserve order
+
+    def shell_complete(self, ctx: click.Context, param: click.Parameter, incomplete: str) -> list[CompletionItem]:
+        """
+        Complete the codec after the last comma.
+
+        Parameters:
+            ctx: Invocation context for this command.
+            param: The parameter that requests completion.
+            incomplete: The value to complete. Can be empty.
+        """
+        prefix, sep, last = incomplete.rpartition(",")
+        return [CompletionItem(f"{prefix}{sep}{choice}") for choice in self.choices if choice.startswith(last.lower())]
 
 
 class MultipleChoice(click.Choice):
@@ -425,15 +453,21 @@ class MultipleChoice(click.Choice):
 
     def shell_complete(self, ctx: click.Context, param: click.Parameter, incomplete: str) -> list[CompletionItem]:
         """
-        Complete choices that start with the incomplete value.
+        Complete the choice after the last comma.
 
         Parameters:
             ctx: Invocation context for this command.
             param: The parameter that requests completion.
             incomplete: The value to complete. Can be empty.
         """
-        incomplete = incomplete.rsplit(",")[-1]
-        return super(self).shell_complete(ctx, param, incomplete)
+        prefix, sep, last = incomplete.rpartition(",")
+        if not self.case_sensitive:
+            last = last.casefold()
+        return [
+            CompletionItem(f"{prefix}{sep}{choice}")
+            for choice in (self.normalize_choice(c, ctx) for c in self.choices)
+            if choice.startswith(last)
+        ]
 
 
 class SlowDelayRange(click.ParamType):
@@ -466,4 +500,6 @@ SEASON_RANGE = SeasonRange()
 LANGUAGE_RANGE = LanguageRange()
 QUALITY_LIST = QualityList()
 AUDIO_CODEC_LIST = AudioCodecList(Audio.Codec)
+VIDEO_CODEC_LIST = MultipleVideoCodecChoice(Video.Codec)
+SUBTITLE_CODEC = SubtitleCodecChoice(Subtitle.Codec)
 SLOW_DELAY_RANGE = SlowDelayRange()

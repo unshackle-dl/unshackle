@@ -7,10 +7,15 @@ import click
 import pytest
 
 from unshackle.core.tracks.subtitle import Subtitle
+from unshackle.core.tracks.video import Video
 from unshackle.core.utils.click_types import (
+    AUDIO_CODEC_LIST,
     LANGUAGE_RANGE,
     QUALITY_LIST,
     SLOW_DELAY_RANGE,
+    SUBTITLE_CODEC,
+    VIDEO_CODEC_LIST,
+    MultipleChoice,
     SeasonRange,
     SubtitleCodecChoice,
 )
@@ -186,3 +191,56 @@ def test_comma_separated_dates_convert():
 def test_bad_date_tokens_fail(token):
     with pytest.raises(click.UsageError):
         parse(token)
+
+
+def test_audio_metavar_lists_every_accepted_spelling():
+    """--help must not advertise fewer codecs than convert() takes, aliases included."""
+    metavar = AUDIO_CODEC_LIST.get_metavar()
+    assert metavar.startswith("[") and metavar.endswith("]")
+    listed = metavar[1:-1].split("|")
+    assert listed == AUDIO_CODEC_LIST.choices
+    for spelling in ("ddp", "eac3", "vorbis", "ac-4", "vorb"):
+        assert spelling in listed
+        assert AUDIO_CODEC_LIST.convert(spelling)
+
+
+@pytest.mark.parametrize("param_type", [AUDIO_CODEC_LIST, VIDEO_CODEC_LIST, SUBTITLE_CODEC])
+def test_no_duplicate_choices(param_type):
+    """A codec whose name and value are the same word (VP9, AV1) is listed once."""
+    lowered = [choice.lower() for choice in param_type.choices]
+    assert len(lowered) == len(set(lowered))
+
+
+def test_api_codec_lists_come_from_the_param_types():
+    from unshackle.core.api.handlers import VALID_ACODECS, VALID_SUB_FORMATS, VALID_VCODECS
+
+    assert VALID_ACODECS == [c.upper() for c in AUDIO_CODEC_LIST.choices]
+    assert VALID_VCODECS == [c.upper() for c in VIDEO_CODEC_LIST.choices]
+    assert VALID_SUB_FORMATS == [c.upper() for c in SUBTITLE_CODEC.choices]
+
+
+@pytest.mark.parametrize("value", ["avc,,hevc", ["avc", "", "hevc"], " avc , hevc "])
+def test_empty_video_codec_tokens_are_skipped(value):
+    """A None in the list reaches track filtering and crashes it, so blanks must drop out."""
+    assert VIDEO_CODEC_LIST.convert(value) == [Video.Codec.AVC, Video.Codec.HEVC]
+
+
+@pytest.mark.parametrize("spelling", ["H264", "h265", "H.265", "hevc"])
+def test_video_codec_aliases_resolve(spelling):
+    """The API advertised H264/H265 while dropping them; both paths now resolve the same."""
+    assert VIDEO_CODEC_LIST.convert(spelling)[0] in (Video.Codec.AVC, Video.Codec.HEVC)
+
+
+def test_audio_codec_list_shell_complete():
+    """--acodec offered no completion at all; it now completes the segment after the last comma."""
+    assert [c.value for c in AUDIO_CODEC_LIST.shell_complete(None, None, "fl")] == ["flac"]
+    assert [c.value for c in AUDIO_CODEC_LIST.shell_complete(None, None, "AAC,e")] == ["AAC,ec3", "AAC,eac3"]
+    assert AUDIO_CODEC_LIST.shell_complete(None, None, "zzz") == []
+
+
+def test_multiple_choice_shell_complete():
+    """super(self) raised TypeError, so every --range completion crashed instead of completing."""
+    range_choice = MultipleChoice(Video.Range, case_sensitive=False)
+    assert [c.value for c in range_choice.shell_complete(None, None, "hd")] == ["hdr10", "hdr10p"]
+    assert [c.value for c in range_choice.shell_complete(None, None, "sdr,hd")] == ["sdr,hdr10", "sdr,hdr10p"]
+    assert range_choice.shell_complete(None, None, "zzz") == []

@@ -120,6 +120,8 @@ either enum **names** or their **values**, comma-separated.
 | `VP9` | `VP9` |
 | `AV1` | `AV1` |
 
+`H264` and `H265` are aliases of `AVC` and `HEVC`.
+
 ```shell title="Either spelling works"
 unshackle dl -v HEVC   EXAMPLE 81234567
 unshackle dl -v H.265  EXAMPLE 81234567

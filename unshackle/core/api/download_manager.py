@@ -18,6 +18,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from unshackle.core.api.events import bus, publish_service_event
 from unshackle.core.api.sanitize import sanitize_log
+from unshackle.core.utils.click_types import VIDEO_CODEC_LIST
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_path, redact_text
 
 log = logging.getLogger("download_manager")
@@ -387,10 +388,7 @@ def perform_download(
 
     vcodec_raw = params.get("vcodec")
     if vcodec_raw:
-        if isinstance(vcodec_raw, str):
-            vcodec_raw = [vcodec_raw]
-        if isinstance(vcodec_raw, list) and vcodec_raw and not isinstance(vcodec_raw[0], Video.Codec):
-            params["vcodec"] = to_enum(vcodec_raw, Video.Codec)
+        params["vcodec"] = VIDEO_CODEC_LIST.convert(vcodec_raw)
     else:
         params["vcodec"] = []
 

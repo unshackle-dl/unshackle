@@ -370,7 +370,7 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
         "service": "EXAMPLE",
         "title_id": "12345",
         "quality": [2160],
-        "vcodec": "H265",
+        "vcodec": "HEVC",
         "range": ["HDR10"],
         "wanted": ["S01E01"]
       }'
@@ -434,7 +434,7 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | `output_dir` | string | `null` | Output directory, relative to the server's downloads directory. The server rejects a path that resolves outside it with `400`. |
 | `no_cache` / `reset_cache` | boolean | `false` | Title cache controls. |
 
-**Validation.** Invalid values return `400 INVALID_PARAMETERS`. `vcodec` must be one of H264/H265/H.264/H.265/AVC/HEVC/VC1/VC-1/VP8/VP9/AV1. `acodec` must be one of AAC/AC3/EC3/EAC3/DD/DD+/AC4/OPUS/FLAC/ALAC/VORBIS/OGG/DTS/DTSX/DTS-X. `range` must be one of SDR/HDR10/HDR10P/DV/HLG/HYBRID, and `HDR10+` is also valid. The bitrate, download worker, and download counts must be positive integers. You may set at most one of the `*_only` flags. You cannot combine `no_subs` with `subs_only`, or `no_audio` with `audio_only`.
+**Validation.** Invalid values return `400 INVALID_PARAMETERS`. `vcodec`, `acodec` and `sub_format` take the same spellings as the CLI options of the same name (`unshackle dl --help` prints each list). The API and the CLI read one list, so they cannot disagree. `range` must be one of SDR/HDR10/HDR10P/DV/HLG/HYBRID, and `HDR10+` is also valid. The bitrate, download worker, and download counts must be positive integers. You may set at most one of the `*_only` flags. You cannot combine `no_subs` with `subs_only`, or `no_audio` with `audio_only`.
 
 **Service options.** A service's own CLI options travel in the same body. Send them in a nested
 `service_params` object, or as flat top-level keys. `service_params` wins over a flat key of the

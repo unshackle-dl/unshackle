@@ -194,7 +194,7 @@ curl -X POST "$BASE/api/download" \
         "service": "EXAMPLE",
         "title_id": "12345",
         "quality": [1080],
-        "vcodec": "H265",
+        "vcodec": "HEVC",
         "range": ["SDR"],
         "wanted": ["S01E01", "S01E02"]
       }'

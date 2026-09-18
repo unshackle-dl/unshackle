@@ -314,3 +314,17 @@ async def test_search_unknown_service_raises_invalid_service() -> None:
     with pytest.raises(APIError) as exc:
         await search_handler({"service": "NOPE_THIS_IS_NOT_REAL_", "query": "x"}, None)
     assert exc.value.error_code == APIErrorCode.INVALID_SERVICE
+
+
+def test_resolve_vcodec_rejects_junk_as_invalid_input() -> None:
+    """Session routes skip validate_download_parameters, so a bad codec must be a 400, not a 500."""
+    from unshackle.core.api.errors import APIErrorCode
+    from unshackle.core.api.handlers import resolve_vcodec
+    from unshackle.core.tracks import Video
+
+    assert resolve_vcodec(["H265"]) == [Video.Codec.HEVC]
+    assert resolve_vcodec(None) is None
+    for junk in ("XVID", 5, [5]):
+        with pytest.raises(APIError) as exc:
+            resolve_vcodec(junk)
+        assert exc.value.error_code == APIErrorCode.INVALID_INPUT

@@ -15,6 +15,7 @@ from http.cookiejar import CookieJar, MozillaCookieJar
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
+import click
 from aiohttp import web
 
 from unshackle.core.api.compression import safe_inflate
@@ -33,6 +34,7 @@ from unshackle.core.services import Services
 from unshackle.core.titles import Episode, Movie, Song, Title_T
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.utilities import declared_kwargs
+from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, SUBTITLE_CODEC, VIDEO_CODEC_LIST
 from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_secrets, redact_text
 
@@ -1513,24 +1515,23 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
         )
 
 
-VALID_VCODECS = ["H264", "H265", "H.264", "H.265", "AVC", "HEVC", "VC1", "VC-1", "VP8", "VP9", "AV1"]
-VALID_ACODECS = [
-    "AAC",
-    "AC3",
-    "EC3",
-    "EAC3",
-    "DD",
-    "DD+",
-    "AC4",
-    "OPUS",
-    "FLAC",
-    "ALAC",
-    "VORBIS",
-    "OGG",
-    "DTS",
-    "DTSX",
-    "DTS-X",
-]
+VALID_VCODECS = [choice.upper() for choice in VIDEO_CODEC_LIST.choices]
+VALID_ACODECS = [choice.upper() for choice in AUDIO_CODEC_LIST.choices]
+VALID_SUB_FORMATS = [choice.upper() for choice in SUBTITLE_CODEC.choices]
+
+
+def resolve_vcodec(value: Any) -> Optional[list]:
+    """Map a client's vcodec field to codec enums.
+
+    Session routes do not run validate_download_parameters, so this must answer junk with a 400
+    instead of letting click's UsageError surface as a 500.
+    """
+    if not value:
+        return None
+    try:
+        return VIDEO_CODEC_LIST.convert(value) or None
+    except click.UsageError as e:
+        raise APIError(APIErrorCode.INVALID_INPUT, f"Invalid vcodec: {e.format_message()}")
 
 
 def check_codec(value: Any, allowed: List[str], name: str) -> Optional[str]:
@@ -1590,9 +1591,8 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
             return err
 
     if "sub_format" in data and data["sub_format"]:
-        valid_sub_formats = ["SRT", "VTT", "ASS", "SSA", "TTML", "STPP", "WVTT", "SMI", "SUB", "MPL2", "TMP"]
-        if data["sub_format"].upper() not in valid_sub_formats:
-            return f"Invalid sub_format: {data['sub_format']}. Must be one of: {', '.join(valid_sub_formats)}"
+        if str(data["sub_format"]).upper() not in VALID_SUB_FORMATS:
+            return f"Invalid sub_format: {data['sub_format']}. Must be one of: {', '.join(VALID_SUB_FORMATS)}"
 
     if "vbitrate" in data and data["vbitrate"] is not None:
         if not isinstance(data["vbitrate"], int) or data["vbitrate"] <= 0:
@@ -2884,16 +2884,7 @@ def create_service_instance(
                 pass
         range_values = range_values or None
 
-    vcodec_names = data.get("vcodec")
-    vcodec_values: Optional[list] = None
-    if vcodec_names:
-        vcodec_values = []
-        for name in vcodec_names:
-            try:
-                vcodec_values.append(Video.Codec[name])
-            except KeyError:
-                pass
-        vcodec_values = vcodec_values or None
+    vcodec_values = resolve_vcodec(data.get("vcodec"))
 
     extra_params = {
         "range_": range_values,
