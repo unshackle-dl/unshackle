@@ -4048,12 +4048,13 @@ class dl:
 
         backup = path.with_name(path.name + ".enc")
         backup.unlink(missing_ok=True)  # a killed run leaves one behind; its bytes may not match
-        if vault_kids() and decrypt and binaries.FFMPEG:
+        checking = bool(vault_kids() and decrypt and binaries.FFMPEG)
+        if checking:
             try:
                 os.link(path, backup)
             except OSError as e:
                 self.log.debug(f"Cannot keep the ciphertext for a decrypt retry: {e!r}")
-        kid_map = verify.kid_windows(path) if vault_kids() and decrypt and binaries.FFMPEG else None
+        kid_map = verify.kid_windows(path) if checking else None
         windows = kid_map.windows if kid_map else {}
         video = kid_map.video if kid_map else None
 
@@ -4064,11 +4065,13 @@ class dl:
             """The vault KIDs whose content key did not decode.
 
             A KID in the KID map fails when one of its windows fails. The KIDs that are not in the
-            map share the verdict of one start and end check of the whole file.
+            map share the verdict of one start and end check of the whole file, taken only when
+            every mapped KID passed: a wrong mapped key fails that check too and would flag them
+            for noise that is not theirs. The retry judges them again with the replaced key.
             """
             failed = {kid for kid in kids if kid in windows and not all(window_decodes(*w) for w in windows[kid])}
             absent = {kid for kid in kids if kid not in windows}
-            if absent and not ffmpeg_decodes(path, video=video):
+            if absent and not failed and not ffmpeg_decodes(path, video=video):
                 failed |= absent
             self.log.debug(
                 f"Key check on {path.name}: {len(kids) - len(absent)} KID(s) by fragment window, "
@@ -4198,6 +4201,11 @@ class dl:
             self.flush_vault_writes([partial(self.cache_keys_to_vaults, keys)])
 
     def cache_keys_to_vaults(self, content_keys: dict[UUID, str]) -> None:
+        """Store licence keys in every vault. A licence key clears a flag on its pair first: the
+        flag came from a decode check that was wrong, and a local vault refuses a flagged pair."""
+        for kid, key in content_keys.items():
+            if self.vaults.is_flagged(kid, key):
+                self.vaults.unflag_bad_key(kid, key)
         successful_caches = self.vaults.add_keys(content_keys)
         keys, caches = self.vault_cache_tally or (0, successful_caches)
         self.vault_cache_tally = (keys + len(content_keys), min(caches, successful_caches))

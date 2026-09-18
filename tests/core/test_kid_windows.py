@@ -90,17 +90,37 @@ def test_each_kid_maps_to_its_own_fragments(tmp_path: Path) -> None:
     assert kid_windows(path) == KidMap({A: [(0.0, 2.0)], B: [(2.0, 6.0), (4.0, 6.0)], C: [(6.0, 8.0)]}, True)
 
 
-def test_windows_run_through_a_kid_but_stop_at_another_or_after_ten_seconds() -> None:
+def test_windows_run_through_a_kid_but_stop_at_another_or_after_the_longest() -> None:
     long_run = [(t * 2.0, t * 2.0 + 2) for t in range(20)]
-    assert pick_windows(long_run) == [(0.0, 10.0), (20.0, 30.0), (30.0, 40.0)]
+    assert pick_windows(long_run, longest=10.0) == [(0.0, 10.0), (20.0, 30.0), (30.0, 40.0)]
+    assert pick_windows(long_run) == [(0.0, 4.0), (20.0, 24.0), (36.0, 40.0)]
     # a gap is another KID or a clear stretch: no window crosses it, and the last one ends the last run
-    assert pick_windows([(0, 2), (2, 4), (10, 12), (12, 14), (14, 16)]) == [(0, 4), (10, 16)]
+    assert pick_windows([(0, 2), (2, 4), (10, 12), (12, 14), (14, 16)], longest=10.0) == [(0, 4), (10, 16)]
+    assert pick_windows([(0, 2), (2, 4), (10, 12), (12, 14), (14, 16)]) == [(0, 4), (10, 14.0), (12, 16)]
+
+
+def test_fragments_longer_than_the_longest_and_empty_spans() -> None:
+    assert pick_windows([(0.0, 60.0)]) == [(0.0, 4.0)]
+    assert pick_windows([(0, 15), (15, 30), (30, 45), (45, 60)]) == [(0, 4), (30, 34), (45, 49)]
+    assert pick_windows([(0.0, 5.0), (5.0, 5.0)]) == [(0.0, 4.0)]
+    assert pick_windows([(5.0, 5.0)]) == []
+
+
+def test_nested_box_bomb_and_oversized_sbgp(tmp_path: Path) -> None:
+    body = b""
+    for _ in range(5000):
+        body = box(b"trak", body)
+    (tmp_path / "bomb.mp4").write_bytes(box(b"moov", body))
+    assert kid_windows(tmp_path / "bomb.mp4") is None
+    huge = full(b"sbgp", b"seig" + struct.pack(">I", 0x00FFFFFF) + bytes(16))
+    (tmp_path / "sbgp.mp4").write_bytes(movie(encv(A)) + moof(1, 0, huge))
+    assert kid_windows(tmp_path / "sbgp.mp4") is None
 
 
 def test_first_middle_and_last_fragment(tmp_path: Path) -> None:
     path = tmp_path / "enc.mp4"
     path.write_bytes(movie(encv(A)) + b"".join(moof(1, t * 1000) for t in range(5)))
-    assert kid_windows(path) == KidMap({A: [(0.0, 7.0), (2.0, 7.0)]}, True)
+    assert kid_windows(path) == KidMap({A: [(0.0, 4.0), (2.0, 6.0), (3.0, 7.0)]}, True)
 
 
 def test_last_fragment_ends_after_its_sample_durations(tmp_path: Path) -> None:
@@ -145,7 +165,7 @@ def test_samples_past_the_sbgp_runs_take_the_sample_entry_kid(tmp_path: Path) ->
 def test_piff_tenc_and_tfxd(tmp_path: Path) -> None:
     path = tmp_path / "enc.ismv"
     path.write_bytes(movie(encv(A, piff=True)) + moof(1, 0, tfxd=True) + moof(1, 2000, tfxd=True))
-    assert kid_windows(path) == KidMap({A: [(0.0, 5.0), (2.0, 5.0)]}, True)
+    assert kid_windows(path) == KidMap({A: [(0.0, 4.0), (2.0, 5.0)]}, True)
 
 
 def test_oversized_box(tmp_path: Path) -> None:

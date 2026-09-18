@@ -316,6 +316,19 @@ def test_flag_moves_the_row_and_blocks_it_coming_back(tmp_path: Path) -> None:
     assert local.add_key("SVC", KID, GOOD)  # the KID itself is not blocked, only the pair
 
 
+def test_a_licence_key_clears_a_flag_from_an_earlier_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A false flag must not outlive the run: the next licence returns the pair and it is stored again."""
+    local = SQLite("local", tmp_path / "local.db")
+    local.flag_bad_key("SVC", KID, GOOD, "poisoned")
+    vaults = Vaults("SVC")
+    vaults.vaults = [local]
+    cmd = make_cmd(monkeypatch, vaults)
+    cmd.vault_cache_tally = None
+    cmd.cache_keys_to_vaults({KID: GOOD})
+    assert not local.is_bad_key(KID, GOOD)
+    assert local.get_key(KID, "SVC") == GOOD
+
+
 def test_bulk_add_refuses_a_flagged_pair_in_any_case_or_kid_form(tmp_path: Path) -> None:
     local = SQLite("local", tmp_path / "local.db")
     local.flag_bad_key("SVC", KID, BAD, "poisoned")
@@ -402,6 +415,45 @@ def test_a_kid_absent_from_the_map_is_judged_by_the_fallback(tmp_path: Path, mon
     assert not local.is_bad_key(lead, GOOD)
     assert (4.0, 2.0, True) in calls  # the window is capped at the fragment's end
     assert (None, 3, True) in calls  # the fallback knows the track is video
+
+
+def test_a_wrong_mapped_key_does_not_flag_a_kid_the_file_does_not_carry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The audio KID is in the licence and the vault but not in this video file: the whole-file
+    check fails on the wrong video key's noise, and that verdict must not reach the audio KID."""
+    audio = UUID(int=7)
+    local = SQLite("local", tmp_path / "local.db")
+    poisoned = Remote("poisoned", tmp_path / "poisoned.db")
+    poisoned.add_key("SVC", audio, GOOD)
+    poisoned.add_key("SVC", KID, BAD)
+    other = Remote("other", tmp_path / "other.db")
+    other.add_key("SVC", KID, GOOD)
+    vaults = Vaults("SVC")
+    vaults.vaults = [local, poisoned]
+    cmd = make_cmd(monkeypatch, vaults)
+    drm = FakeDRM({audio: vaults.get_key(audio)[0], KID: vaults.get_key(KID)[0]})
+    monkeypatch.setattr(
+        dl_module.verify, "kid_windows", lambda path: dl_module.verify.KidMap({KID: [(4.0, 6.0)]}, True)
+    )
+    monkeypatch.setattr(
+        dl_module,
+        "ffmpeg_decodes",
+        lambda path, start=None, seconds=3, video=None: drm.decrypted_with[-1][KID] == GOOD,
+    )
+    path = tmp_path / "video.mp4"
+    path.write_bytes(b"cipher")
+
+    def licence(drm: FakeDRM, track_kid: UUID) -> None:
+        vaults.vaults.append(other)
+        drm.content_keys[KID] = vaults.get_key(KID)[0]
+
+    cmd.decrypt_verified(drm, path, licence, KID)
+    cmd.wait_vault_writes()
+    assert drm.content_keys == {audio: GOOD, KID: GOOD}
+    assert local.is_bad_key(KID, BAD)
+    assert not local.is_bad_key(audio, GOOD)
+    assert local.get_key(audio, "SVC") == GOOD  # judged on the retry and copied
 
 
 def test_only_checked_kids_are_copied_to_other_vaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

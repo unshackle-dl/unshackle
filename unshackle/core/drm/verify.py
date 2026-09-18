@@ -103,6 +103,8 @@ def sbgp_runs(data: bytes, body: int) -> Optional[list[tuple[int, int]]]:
         return None
     pos = body + (12 if version == 1 else 8)
     count = struct.unpack_from(">I", data, pos)[0]
+    if count * 8 > len(data) - pos - 4:
+        raise ValueError("sbgp entry count is larger than the box")
     runs = struct.unpack_from(f">{count * 2}I", data, pos + 4)
     return list(zip(runs[::2], runs[1::2]))
 
@@ -202,7 +204,7 @@ def kid_windows(path: Path) -> Optional[KidMap]:
                                     moov_groups[track] = groups
                 elif kind == b"moof" and box:
                     fragments.extend(read_fragment(box, entries, defaults, moov_groups, clock))
-    except (OSError, struct.error, IndexError, ValueError, MemoryError, OverflowError):
+    except (OSError, struct.error, IndexError, ValueError, MemoryError, OverflowError, RecursionError):
         return None
 
     tracks: dict[int, list[Fragment]] = {}
@@ -232,15 +234,19 @@ def kid_windows(path: Path) -> Optional[KidMap]:
     return KidMap({kid: pick_windows(fragment_spans) for kid, fragment_spans in spans.items()}, video)
 
 
-def pick_windows(spans: list[tuple[float, float]], longest: float = 10.0) -> list[tuple[float, float]]:
+def pick_windows(spans: list[tuple[float, float]], longest: float = 4.0) -> list[tuple[float, float]]:
     """Pick up to three windows from one KID's fragment (start, end) spans: at its first, middle and last fragment.
 
     A window starts at a fragment and runs on through the next fragments of the same KID, up
     to ``longest`` seconds, but never into a fragment of another KID or a clear one. A short
     window can decode noise without an error: the decoder often needs several frames to find it.
+    A wrong key fails on the first inter frame in every measured case, so ``longest`` buys
+    decoder frames, not certainty; every second of it is decoded in full for a right key.
     The last window ends where the KID's last run of fragments ends.
     """
-    spans = sorted(spans)
+    spans = sorted(span for span in spans if span[1] > span[0])  # a duplicated tfdt gives an empty span
+    if not spans:
+        return []
     runs: list[list[float]] = []  # [start, end] of each run of back-to-back fragments
     for start, end in spans:
         if runs and abs(start - runs[-1][1]) <= 1e-3:
@@ -252,7 +258,7 @@ def pick_windows(spans: list[tuple[float, float]], longest: float = 10.0) -> lis
         return next(end for run_start, end in runs if run_start <= start < end)
 
     last_from = max(runs[-1][0], runs[-1][1] - longest)
-    last = next(i for i, (start, _) in enumerate(spans) if start >= last_from - 1e-3)
+    last = max(i for i, (start, _) in enumerate(spans) if start <= last_from + 1e-3)
     return [(spans[i][0], min(run_end(spans[i][0]), spans[i][0] + longest)) for i in sorted({0, len(spans) // 2, last})]
 
 

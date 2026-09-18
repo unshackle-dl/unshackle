@@ -113,9 +113,7 @@ class SQLite(Vault):
         self.create_bad_keys_table()
         bad = set(self.conn_factory.get().execute("SELECT lower(`kid`), lower(`key_`) FROM `bad_keys`").fetchall())
         kid_keys = {
-            kid: key_
-            for kid, key_ in kid_keys.items()
-            if ((kid.hex if isinstance(kid, UUID) else kid.replace("-", "").lower()), key_.lower()) not in bad
+            kid: key_ for kid, key_ in kid_keys.items() if (kid.replace("-", "").lower(), key_.lower()) not in bad
         }
 
         if not kid_keys:

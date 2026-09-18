@@ -66,7 +66,7 @@ def ffmpeg_decodes(path: Path, start: Optional[float] = None, seconds: float = 3
 
     With ``start``, the check decodes ``seconds`` from that time. An FFmpeg copy cuts the
     window first, so no sample after the window gets to the decoder. Without ``start``, the
-    check decodes the first seconds and the last 10 seconds, because a title can open with
+    check decodes the first seconds and the last 4 seconds, because a title can open with
     a clear or separately keyed lead.
 
     Every frame is decoded, because an HEVC keyframe decrypted with a wrong key can decode
@@ -97,8 +97,9 @@ def ffmpeg_decodes(path: Path, start: Optional[float] = None, seconds: float = 3
                     timeout=FFMPEG_CHECK_TIMEOUT,
                 )
             else:
+                # -ignore_editlist: the windows come from tfdt, and an elst would shift FFmpeg's clock off them
                 cut = subprocess.Popen(
-                    [ffmpeg, "-nostdin", "-v", "error", *window, "-i", str(path)]
+                    [ffmpeg, "-nostdin", "-v", "error", "-ignore_editlist", "1", *window, "-i", str(path)]
                     + ["-map", "0:v?", "-map", "0:a?", "-c", "copy", "-f", "nut", "pipe:1"],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.DEVNULL,
@@ -131,7 +132,7 @@ def ffmpeg_decodes(path: Path, start: Optional[float] = None, seconds: float = 3
 
     if start is not None:
         return decode(["-ss", f"{start:.6f}", "-t", f"{max(seconds - 0.5, seconds / 2):.6f}"], keyframes=False)
-    return decode(["-t", str(seconds)], keyframes=False) and decode(["-sseof", "-10", "-t", "10"], keyframes=False)
+    return decode(["-t", str(seconds)], keyframes=False) and decode(["-sseof", "-4", "-t", "4"], keyframes=False)
 
 
 def ffprobe(uri: Union[bytes, Path]) -> dict:
