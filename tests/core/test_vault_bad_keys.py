@@ -77,7 +77,11 @@ class FakeDRM:
 
 def make_cmd(monkeypatch: pytest.MonkeyPatch, vaults: Vaults) -> dl:
     monkeypatch.setattr(dl_module.binaries, "FFMPEG", "ffmpeg")
-    monkeypatch.setattr(dl_module, "ffmpeg_decodes", lambda path: path.read_bytes() == b"plain:" + GOOD.encode())
+    monkeypatch.setattr(
+        dl_module,
+        "ffmpeg_decodes",
+        lambda path, start=None, seconds=3, video=None: path.read_bytes() == b"plain:" + GOOD.encode(),
+    )
     cmd = dl.__new__(dl)
     cmd.log = SimpleNamespace(warning=print, info=print, debug=print)
     cmd.vaults = vaults
@@ -248,7 +252,7 @@ def test_cdm_returning_the_flagged_key_clears_the_flag(tmp_path: Path, monkeypat
     vaults = Vaults("SVC")
     vaults.vaults = [local, poisoned]
     cmd = make_cmd(monkeypatch, vaults)
-    monkeypatch.setattr(dl_module, "ffmpeg_decodes", lambda path: False)
+    monkeypatch.setattr(dl_module, "ffmpeg_decodes", lambda path, start=None, seconds=3, video=None: False)
     path = tmp_path / "video.mp4"
     path.write_bytes(b"cipher")
     drm = FakeDRM({KID: vaults.get_key(KID)[0]})
@@ -298,6 +302,158 @@ def test_flag_on_a_read_only_vault_keeps_its_rows(tmp_path: Path) -> None:
     assert ro.is_bad_key(KID, BAD)
     assert ro.get_key(KID, "SVC") is None  # the lookup still skips the flagged pair
     assert list(ro.get_keys("SVC")) == [(KID.hex, BAD)]  # but the row itself is untouched
+
+
+def test_flag_moves_the_row_and_blocks_it_coming_back(tmp_path: Path) -> None:
+    local = SQLite("local", tmp_path / "local.db")
+    local.add_key("SVC", KID, BAD)
+    local.flag_bad_key("SVC", KID, BAD, "poisoned")
+    assert local.is_bad_key(KID, BAD)
+    assert list(local.get_keys("SVC")) == []
+    assert local.add_key("SVC", KID, BAD) is False
+    assert local.add_keys("SVC", {KID: BAD}) == 0
+    assert list(local.get_keys("SVC")) == []
+    assert local.add_key("SVC", KID, GOOD)  # the KID itself is not blocked, only the pair
+
+
+def test_bulk_add_refuses_a_flagged_pair_in_any_case_or_kid_form(tmp_path: Path) -> None:
+    local = SQLite("local", tmp_path / "local.db")
+    local.flag_bad_key("SVC", KID, BAD, "poisoned")
+    for kid, key in ((KID.hex.upper(), BAD), (str(KID), BAD.upper()), (KID, BAD)):
+        assert local.add_keys("SVC", {kid: key}) == 0
+    assert list(local.get_keys("SVC")) == []
+
+
+def test_only_the_kid_whose_window_fails_is_flagged(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A lead under one KID and the rest under another: the lead's key is right and stays."""
+    lead = UUID(int=7)
+    local = SQLite("local", tmp_path / "local.db")
+    poisoned = Remote("poisoned", tmp_path / "poisoned.db")
+    poisoned.add_key("SVC", lead, BAD)  # the same wrong key under both KIDs, as the NF title had
+    poisoned.add_key("SVC", KID, BAD)
+    other = Remote("other", tmp_path / "other.db")
+    other.add_key("SVC", KID, GOOD)
+    vaults = Vaults("SVC")
+    vaults.vaults = [local, poisoned]
+    cmd = make_cmd(monkeypatch, vaults)
+    drm = FakeDRM({lead: vaults.get_key(lead)[0], KID: vaults.get_key(KID)[0]})
+    right = {lead: BAD, KID: GOOD}
+    monkeypatch.setattr(
+        dl_module.verify,
+        "kid_windows",
+        lambda path: dl_module.verify.KidMap({lead: [(0.0, 2.0)], KID: [(120.0, 122.0)]}, True),
+    )
+    monkeypatch.setattr(
+        dl_module,
+        "ffmpeg_decodes",
+        lambda path, start=None, seconds=3, video=None: (
+            drm.decrypted_with[-1][lead if start == 0.0 else KID] == right[lead if start == 0.0 else KID]
+        ),
+    )
+    path = tmp_path / "video.mp4"
+    path.write_bytes(b"cipher")
+
+    def licence(drm: FakeDRM, track_kid: UUID) -> None:
+        vaults.vaults.append(other)
+        drm.content_keys[KID] = vaults.get_key(KID)[0]
+
+    cmd.decrypt_verified(drm, path, licence, KID)
+    cmd.wait_vault_writes()
+    assert drm.content_keys == right
+    assert local.is_bad_key(KID, BAD)
+    assert not local.is_bad_key(lead, BAD)
+
+
+def test_a_kid_absent_from_the_map_is_judged_by_the_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A KID the map does not know (a zero-KID tenc, a licence KID the file does not carry)
+    shares the whole-file verdict, and a wrong key there is flagged."""
+    lead = UUID(int=7)
+    local = SQLite("local", tmp_path / "local.db")
+    poisoned = Remote("poisoned", tmp_path / "poisoned.db")
+    poisoned.add_key("SVC", lead, GOOD)
+    poisoned.add_key("SVC", KID, BAD)
+    other = Remote("other", tmp_path / "other.db")
+    other.add_key("SVC", KID, GOOD)
+    vaults = Vaults("SVC")
+    vaults.vaults = [local, poisoned]
+    cmd = make_cmd(monkeypatch, vaults)
+    drm = FakeDRM({lead: vaults.get_key(lead)[0], KID: vaults.get_key(KID)[0]})
+    calls: list[tuple] = []
+
+    def decodes(path: Path, start: object = None, seconds: float = 3, video: object = None) -> bool:
+        calls.append((start, seconds, video))
+        return drm.decrypted_with[-1][lead if start is not None else KID] == GOOD
+
+    monkeypatch.setattr(
+        dl_module.verify, "kid_windows", lambda path: dl_module.verify.KidMap({lead: [(4.0, 6.0)]}, True)
+    )
+    monkeypatch.setattr(dl_module, "ffmpeg_decodes", decodes)
+    path = tmp_path / "video.mp4"
+    path.write_bytes(b"cipher")
+
+    def licence(drm: FakeDRM, track_kid: UUID) -> None:
+        vaults.vaults.append(other)
+        drm.content_keys[KID] = vaults.get_key(KID)[0]
+
+    cmd.decrypt_verified(drm, path, licence, KID)
+    cmd.wait_vault_writes()
+    assert drm.content_keys == {lead: GOOD, KID: GOOD}
+    assert local.is_bad_key(KID, BAD)
+    assert not local.is_bad_key(lead, GOOD)
+    assert (4.0, 2.0, True) in calls  # the window is capped at the fragment's end
+    assert (None, 3, True) in calls  # the fallback knows the track is video
+
+
+def test_only_checked_kids_are_copied_to_other_vaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Both the mapped KID and the absent one are proven before they reach another vault."""
+    lead = UUID(int=7)
+    local = SQLite("local", tmp_path / "local.db")
+    remote = Remote("remote", tmp_path / "remote.db")
+    remote.add_key("SVC", lead, GOOD)
+    remote.add_key("SVC", KID, GOOD)
+    vaults = Vaults("SVC")
+    vaults.vaults = [local, remote]
+    cmd = make_cmd(monkeypatch, vaults)
+    drm = FakeDRM({lead: vaults.get_key(lead)[0], KID: vaults.get_key(KID)[0]})
+    starts: list = []
+
+    def decodes(path: Path, start: object = None, seconds: float = 3, video: object = None) -> bool:
+        starts.append(start)
+        return True
+
+    monkeypatch.setattr(
+        dl_module.verify, "kid_windows", lambda path: dl_module.verify.KidMap({lead: [(4.0, 6.0)]}, True)
+    )
+    monkeypatch.setattr(dl_module, "ffmpeg_decodes", decodes)
+    path = tmp_path / "video.mp4"
+    path.write_bytes(b"cipher")
+
+    cmd.decrypt_verified(drm, path, None, KID)
+    cmd.wait_vault_writes()
+    assert starts.count(None) == 1  # the absent KID went through the fallback before its copy
+    assert local.get_key(lead, "SVC") == GOOD
+    assert local.get_key(KID, "SVC") == GOOD
+
+
+def test_flagged_pair_warns_once_per_vault(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    local = SQLite("local", tmp_path / "local.db")
+    poisoned = Remote("poisoned", tmp_path / "poisoned.db")
+    poisoned.add_key("SVC", KID, BAD)
+    local.flag_bad_key("SVC", KID, BAD, "poisoned")
+    vaults = Vaults("SVC")
+    vaults.vaults = [local, poisoned]
+    with caplog.at_level(logging.WARNING, logger="unshackle.core.vaults"):
+        for _ in range(3):
+            assert vaults.query_vault(poisoned, KID) is None
+    assert sum("flagged bad, skipping" in r.getMessage() for r in caplog.records) == 1
+
+
+def test_add_key_refuses_a_flagged_pair_with_a_dashed_kid(tmp_path: Path) -> None:
+    local = SQLite("local", tmp_path / "local.db")
+    local.flag_bad_key("SVC", KID, BAD, "poisoned")
+    assert local.add_key("SVC", str(KID), BAD) is False
+    assert local.add_key("SVC", str(KID).upper(), BAD.upper()) is False
+    assert list(local.get_keys("SVC")) == []
 
 
 def test_a_sibling_verdict_during_the_decrypt_still_triggers_the_retry(

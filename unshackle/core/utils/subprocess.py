@@ -40,40 +40,98 @@ def log_tool_run(
     )
 
 
-def ffmpeg_decodes(path: Path, seconds: int = 3) -> bool:
-    """Return True when FFmpeg decodes the first seconds of the file without an error.
+FFMPEG_INCONCLUSIVE = (
+    "not found for",
+    "no decoder found",
+    "sub-sample encryption info",
+    "error reading header",
+    "not a decoding option",
+)
+
+FFMPEG_MISSING_REFERENCE = (
+    "mmco",
+    "missing reference",
+    "co located pocs unavailable",
+    "reference picture missing",
+    "could not find ref with poc",
+)
+FFMPEG_CHECK_TIMEOUT = 120
+
+
+def ffmpeg_decodes(path: Path, start: Optional[float] = None, seconds: float = 3, video: Optional[bool] = None) -> bool:
+    """Return True when FFmpeg decodes a window of the file without an error.
 
     A wrong content key leaves the container intact and the samples as noise, which the
     decoders reject. ``-xerror`` stops at the first error so the check stays short.
-    A file this FFmpeg build cannot judge counts as a pass, never as a wrong key.
+
+    With ``start``, the check decodes ``seconds`` from that time. An FFmpeg copy cuts the
+    window first, so no sample after the window gets to the decoder. Without ``start``, the
+    check decodes the first seconds and the last 10 seconds, because a title can open with
+    a clear or separately keyed lead.
+
+    Every frame is decoded, because an HEVC keyframe decrypted with a wrong key can decode
+    without an error. When a window starts inside a GOP and the only error is a missing
+    reference frame, the check decodes the keyframes of that window again and uses that
+    verdict. ``video=False`` skips that second pass.
+
+    A file this FFmpeg build cannot judge counts as a pass, never as a wrong key, and so
+    does a check that does not finish in time.
     """
     if not binaries.FFMPEG:
         raise EnvironmentError('FFmpeg executable "ffmpeg" not found but is required.')
-    args: list[str] = [
-        str(binaries.FFMPEG),
-        "-nostdin",
-        "-v",
-        "error",
-        "-err_detect",
-        "explode",
-        "-xerror",
-        "-i",
-        str(path),
-        "-t",
-        str(seconds),
-        "-f",
-        "null",
-        "-",
-    ]
-    ff = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", errors="replace")
-    if ff.returncode == 0:
-        return True
-    err = ff.stderr.lower()
-    if any(
-        m in err for m in ("not found for", "no decoder found", "sub-sample encryption info", "error reading header")
-    ):
-        return True
-    return False
+    ffmpeg = str(binaries.FFMPEG)
+
+    def decode(window: list[str], keyframes: bool) -> bool:
+        check = [ffmpeg, "-nostdin", "-v", "error", "-err_detect", "explode", "-xerror"]
+        if keyframes:
+            check += ["-skip_frame:v", "nokey"]
+        cut = None
+        try:
+            if start is None:
+                ff = subprocess.run(
+                    [*check, *window, "-i", str(path), "-f", "null", "-"],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=FFMPEG_CHECK_TIMEOUT,
+                )
+            else:
+                cut = subprocess.Popen(
+                    [ffmpeg, "-nostdin", "-v", "error", *window, "-i", str(path)]
+                    + ["-map", "0:v?", "-map", "0:a?", "-c", "copy", "-f", "nut", "pipe:1"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                )
+                ff = subprocess.run(
+                    [*check, "-i", "pipe:", "-f", "null", "-"],
+                    stdin=cut.stdout,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=FFMPEG_CHECK_TIMEOUT,
+                )
+        except subprocess.TimeoutExpired:
+            return True
+        finally:
+            if cut:
+                if cut.stdout:
+                    cut.stdout.close()
+                cut.kill()
+                cut.wait()
+        err = ff.stderr.lower()
+        if cut and cut.returncode not in (0, -9) and "error opening input" in err:
+            return True  # the cut failed, so no sample got to the decoder
+        if ff.returncode == 0 or any(m in err for m in FFMPEG_INCONCLUSIVE):
+            return True
+        if not keyframes and video is not False and any(m in err for m in FFMPEG_MISSING_REFERENCE):
+            return decode(window, keyframes=True)
+        return False
+
+    if start is not None:
+        return decode(["-ss", f"{start:.6f}", "-t", f"{max(seconds - 0.5, seconds / 2):.6f}"], keyframes=False)
+    return decode(["-t", str(seconds)], keyframes=False) and decode(["-sseof", "-10", "-t", "10"], keyframes=False)
 
 
 def ffprobe(uri: Union[bytes, Path]) -> dict:

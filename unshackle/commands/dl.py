@@ -4006,7 +4006,11 @@ class dl:
         A poisoned vault returns the right KID with a wrong content key, and the decrypters
         accept it without complaint. A content key from a vault is therefore trusted, and only
         then copied to the other vaults, once FFmpeg can decode the result. Without FFmpeg
-        neither happens. On failure the pair is flagged in the local vaults and reported
+        neither happens. For a fragmented MP4, ``verify.kid_windows`` reads from the ciphertext
+        which fragments each KID encrypts, and FFmpeg decodes windows inside each KID's
+        fragments, so only a KID that fails is flagged. A KID that is not in the map, and every KID
+        of any other file, gets a start and end check of the whole file, and a failure there flags
+        each of those KIDs. On failure the pair is flagged in the local vaults and reported
         to the vault that served it, the ciphertext is restored, and the licence runs again. Every vault skips a
         flagged pair, so each pass burns at most one vault; when the vaults run out the CDM
         answers, and a CDM key is not checked. A CDM that returns the flagged key clears the
@@ -4049,6 +4053,28 @@ class dl:
                 os.link(path, backup)
             except OSError as e:
                 self.log.debug(f"Cannot keep the ciphertext for a decrypt retry: {e!r}")
+        kid_map = verify.kid_windows(path) if vault_kids() and decrypt and binaries.FFMPEG else None
+        windows = kid_map.windows if kid_map else {}
+        video = kid_map.video if kid_map else None
+
+        def window_decodes(start: float, end: float) -> bool:
+            return ffmpeg_decodes(path, start=start, seconds=end - start if end > start else 0.5, video=video)
+
+        def failed_kids(kids: dict[UUID, Vault]) -> set[UUID]:
+            """The vault KIDs whose content key did not decode.
+
+            A KID in the KID map fails when one of its windows fails. The KIDs that are not in the
+            map share the verdict of one start and end check of the whole file.
+            """
+            failed = {kid for kid in kids if kid in windows and not all(window_decodes(*w) for w in windows[kid])}
+            absent = {kid for kid in kids if kid not in windows}
+            if absent and not ffmpeg_decodes(path, video=video):
+                failed |= absent
+            self.log.debug(
+                f"Key check on {path.name}: {len(kids) - len(absent)} KID(s) by fragment window, "
+                f"{len(absent)} by whole-file check, failed {sorted(k.hex for k in failed)}"
+            )
+            return failed
 
         def passes_left(done: int) -> bool:
             """One pass per source that can still answer: every loaded vault, the server's vaults as
@@ -4064,10 +4090,12 @@ class dl:
                     drm.decrypt(path)
                 kids = vault_kids()
                 stale = flagged_kids()
+                failed: set[UUID] = set()
                 if not stale:
                     if not kids or not binaries.FFMPEG or not path.exists():
                         return
-                    if ffmpeg_decodes(path):
+                    failed = failed_kids(kids)
+                    if not failed:
                         self.flush_vault_writes(
                             [
                                 partial(self.vaults.add_key, kid, keys[kid], excluding=vault)
@@ -4075,7 +4103,7 @@ class dl:
                             ]
                         )
                         return
-                bad = {kid: drop(kid) for kid in {*kids, *stale}}
+                bad = {kid: drop(kid) for kid in {*failed, *stale}}
                 for kid, key in bad.items():
                     if kid not in kids:
                         continue

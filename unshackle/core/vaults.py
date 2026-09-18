@@ -28,6 +28,7 @@ class Vaults:
         self.sources: dict[Union[UUID, str], tuple[str, Vault]] = {}
         self.flagged: set[tuple[Union[UUID, str], str]] = set()
         self.candidates: dict[Union[UUID, str], list[tuple[str, Vault]]] = {}
+        self.warned: set[tuple[str, Union[UUID, str], str]] = set()
 
     def __iter__(self) -> Iterator[Vault]:
         return iter(self.vaults)
@@ -134,8 +135,10 @@ class Vaults:
             return None
         found = bool(key and key.count("0") != len(key))
         if found and key and self.is_flagged(kid, key):
-            log.warning(f"{key} from {vault.name} is flagged bad, skipping")
             found = False
+            if (vault.name, kid, key) not in self.warned:
+                self.warned.add((vault.name, kid, key))
+                log.warning(f"{key} from {vault.name} is flagged bad, skipping")
         if dl:
             dl.log_vault_query(
                 vault.name,

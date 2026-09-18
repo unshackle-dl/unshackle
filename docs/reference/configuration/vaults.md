@@ -40,10 +40,12 @@ key_vaults:
       stores it.
 
 !!! note "Bad content keys"
-    A content key from a vault is proven by a short FFmpeg decode of the decrypted output.
-    A content key that fails the decode is written to the `bad_keys` table of every `SQLite`
-    vault with the name of the vault that supplied it, and every vault lookup skips a flagged
-    pair from then on. Only the `SQLite` backend stores flags. A `serve` instance with
+    A content key from a vault is proven by short FFmpeg decodes of the decrypted output,
+    with windows inside the fragments of each KID in a fragmented MP4. A content key that
+    fails the decode is written to the `bad_keys` table of every `SQLite` vault with the name
+    of the vault that supplied it, and every vault lookup skips a flagged pair from then on. A `SQLite` vault also refuses to
+    store a flagged pair again. Only the `SQLite` backend stores flags; an `API` vault that
+    supplied the pair gets a report. A `serve` instance with
     `server_cdm` flags a pair the same way when a remote client reports it, so a server whose
     `key_vaults` hold no `SQLite` entry cannot remember a bad content key.
 
