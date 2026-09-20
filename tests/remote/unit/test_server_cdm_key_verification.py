@@ -146,3 +146,25 @@ async def test_server_tells_a_remote_vault_only_when_it_served_the_pair(monkeypa
     assert local.flagged == [("SVC", KID, "v", "sqlite")]
     assert source.flagged == [("SVC", KID, "v", "sqlite")]
     assert bystander.flagged == []
+
+
+def test_resolve_server_keys_does_not_warn_for_clear_tracks(monkeypatch):
+    """A requested track the server lists in clear_tracks carries no DRM, so its
+    missing keys are expected and draw no warning."""
+    svc = remote_service()
+    warnings: list = []
+    svc.log = SimpleNamespace(warning=lambda msg, *a, **k: warnings.append(msg), debug=lambda *a, **k: None)
+    svc._server_cdm = True
+    svc.drain_server_logs = lambda: None
+    svc.client = SimpleNamespace(post=lambda ep, data: {"keys": {}, "clear_tracks": ["a-1"]})
+
+    video_track = SimpleNamespace(id="v-1", drm=None)
+    audio_track = SimpleNamespace(id="a-1", drm=None)
+
+    class Tracks(list):
+        videos = [video_track]
+        audio = [audio_track]
+
+    svc.resolve_server_keys(SimpleNamespace(tracks=Tracks([video_track, audio_track])))
+
+    assert warnings == ["Server CDM returned no content keys for track v-1"]

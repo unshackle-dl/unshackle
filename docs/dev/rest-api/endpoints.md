@@ -1077,6 +1077,7 @@ Get the content keys for the DRM. The `mode` field selects one of two modes.
 | `pssh` | Base64 PSSH (server-CDM mode). |
 | `drm_type` | `widevine` (default) or `playready`. |
 | `mode` | `proxy` (default) or `server_cdm`. |
+| `clear_tracks` (response) | Requested track ids that carry no DRM, so they have no keys. Absent when every requested track is encrypted. |
 | `vault_keys` (response) | KIDs whose content key came from a server vault, not the CDM. The client proves such a content key with a decode before it trusts it; the field is absent when every content key came from the CDM. |
 
 | Status | Error code | Meaning |

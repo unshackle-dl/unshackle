@@ -4177,6 +4177,7 @@ async def session_license_handler(
 
         all_keys: Dict[str, Dict[str, str]] = {}
         vault_keys: list[str] = []
+        clear_tracks: list[str] = []
         drm_types: Dict[str, str] = {}
         keys_by_pssh: Dict[tuple, Dict[str, str]] = {}
         sources_by_pssh: Dict[tuple, Dict[str, str]] = {}
@@ -4250,7 +4251,8 @@ async def session_license_handler(
             init_data = fetch_init_segment(track, svc_session)
             ensure_track_drm(track, svc_session, init_data)
             if not track.drm:
-                warn(f"Track {sanitize_log(tid[:12])} carries no DRM, so it has no keys to resolve")
+                log.info(f"Track {sanitize_log(tid[:12])} carries no DRM, so it has no keys to resolve")
+                clear_tracks.append(tid)
                 continue
 
             title = find_title_for_track(tid, session)
@@ -4311,6 +4313,8 @@ async def session_license_handler(
                 actual_drm_type = track_drm_type
 
         response: Dict[str, Any] = {"keys": all_keys}
+        if clear_tracks:
+            response["clear_tracks"] = clear_tracks
         if vault_keys:
             response["vault_keys"] = vault_keys
         if actual_drm_type:

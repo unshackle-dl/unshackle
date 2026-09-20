@@ -1833,7 +1833,8 @@ async def session_license(request: web.Request) -> web.Response:
           License response. In server_cdm mode `keys` maps KID to content key and `vault_keys`,
           an array of KID hex strings that may be absent and may repeat a KID shared by several
           tracks, lists the content keys a server vault supplied, which the client has to prove
-          before it trusts them.
+          before it trusts them. `clear_tracks`, absent when empty, lists the requested track ids
+          that carry no DRM and so have no keys.
       '404':
         description: Remote session or track not found
     """

@@ -1178,6 +1178,7 @@ class RemoteService:
                 )
             self.drain_server_logs()
             keys_by_track = resp.get("keys", {})
+            clear_tracks = set(resp.get("clear_tracks", []))
             vault_kids = set(resp.get("vault_keys", []))
             for track_keys in keys_by_track.values():
                 self.note_vault_keys(track_keys, vault_kids)
@@ -1189,7 +1190,7 @@ class RemoteService:
             for track in title.tracks:
                 track_keys = keys_by_track.get(str(track.id), {})
                 if not track_keys:
-                    if str(track.id) in track_ids:
+                    if str(track.id) in track_ids and str(track.id) not in clear_tracks:
                         self.log.warning(f"Server CDM returned no content keys for track {track.id}")
                     continue
 
