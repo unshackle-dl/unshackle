@@ -4936,6 +4936,10 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 <td><code>proxy</code> (default) or <code>server_cdm</code>.</td>
 </tr>
 <tr>
+<td><code>clear_tracks</code> (response)</td>
+<td>Requested track ids that carry no DRM, so they have no keys. Absent when every requested track is encrypted.</td>
+</tr>
+<tr>
 <td><code>vault_keys</code> (response)</td>
 <td>KIDs whose content key came from a server vault, not the CDM. The client proves such a content key with a decode before it trusts it; the field is absent when every content key came from the CDM.</td>
 </tr>
