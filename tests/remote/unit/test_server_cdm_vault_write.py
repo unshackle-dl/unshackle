@@ -36,6 +36,9 @@ class FakeVaults:
     def get_key(self, kid):
         return self.held.get(kid), self.vault_used
 
+    def is_flagged(self, kid, key):
+        return False
+
     def add_keys(self, kid_keys):
         self.added.update(kid_keys)
         self.pushes.append(dict(kid_keys))
@@ -54,7 +57,7 @@ class FakeWidevine:
 
 def make_cmd(vaults):
     cmd = dl.__new__(dl)
-    cmd.log = SimpleNamespace(warning=print, info=print, debug=print)
+    cmd.log = SimpleNamespace(warning=print, info=print, debug=print, error=print)
     cmd.service = "TEST"
     cmd.vaults = vaults
     cmd.vault_cache_tally = None
@@ -107,7 +110,7 @@ def test_batch_resolved_keys_are_cached_before_download():
     """The batch licence fills track.drm before prepare_drm, so dl caches it at the call site."""
     vaults = FakeVaults()
     cmd = dl.__new__(dl)
-    cmd.log = SimpleNamespace(warning=print, info=print, debug=print)
+    cmd.log = SimpleNamespace(warning=print, info=print, debug=print, error=print)
     cmd.service = "TEST"
     cmd.vaults = vaults
     cmd.vault_cache_tally = None
