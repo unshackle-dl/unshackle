@@ -2855,6 +2855,7 @@ def create_service_instance(
     proxy_providers: list,
     profile: Optional[str],
     server_account: bool = False,
+    server_cdm: bool = False,
 ) -> Any:
     """Make a service instance and resolve its credentials and cookies.
 
@@ -2868,7 +2869,7 @@ def create_service_instance(
     from unshackle.core.tracks import Video
 
     service_config = load_service_yaml(normalized_service)
-    cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"))
+    cdm = load_full_cdm(normalized_service, profile, None if server_cdm else data.get("cdm_type"))
 
     # Reconstruct enum track-selection params from client data so service code that reads
     # ctx.parent.params (Service.__init__ proxy/range/vcodec/best_available block) sees enums.
@@ -2987,6 +2988,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
                     proxy_providers,
                     profile,
                     server_account=server_account,
+                    server_cdm=server_cdm_allowed(request, normalized_service),
                 )
 
         service_instance, cookies, credential = await asyncio.to_thread(build_service)

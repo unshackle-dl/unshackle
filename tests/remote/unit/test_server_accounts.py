@@ -119,3 +119,17 @@ def test_validate_rejects_bad_region_values(accounts):
     handlers.config.serve["server_accounts"]["EX"]["ca_main"] = "canada"
     with pytest.raises(ValueError):
         handlers.validate_server_accounts()
+
+
+def test_server_cdm_ignores_client_cdm_type(monkeypatch):
+    """A server_cdm tier licenses with the server's own device, so the client's CDM type must
+    not swap it for a stub of the other DRM system."""
+    seen = []
+    monkeypatch.setattr(handlers, "load_service_yaml", lambda s: {})
+    monkeypatch.setattr(handlers, "load_full_cdm", lambda s, p, t=None: seen.append(t))
+    monkeypatch.setattr(handlers.Services, "load", staticmethod(lambda s: object()))
+    monkeypatch.setattr(handlers, "instantiate_service", lambda *a: "svc")
+    data = {"cdm_type": "playready"}
+    handlers.create_service_instance("OTHER", "t", data, None, [], None, server_cdm=True)
+    handlers.create_service_instance("OTHER", "t", data, None, [], None)
+    assert seen == [None, "playready"]

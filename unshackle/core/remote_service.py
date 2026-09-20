@@ -938,7 +938,7 @@ class RemoteService:
             create_data.update(self._service_params)
             create_data["service_params"] = self._service_params
 
-        cdm = self.ctx.obj.cdm if self.ctx.obj else None
+        cdm = self.ctx.obj.cdm if self.ctx.obj and not self._server_cdm else None
         if cdm is not None:
             from unshackle.core.cdm.detect import is_playready_cdm
 
