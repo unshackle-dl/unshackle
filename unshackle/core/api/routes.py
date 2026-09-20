@@ -794,7 +794,7 @@ async def download(request: web.Request) -> web.Response:
                 description: Skip downloading, only retrieve decryption keys (default - false)
               export:
                 type: boolean
-                description: Export manifest, track URLs, keys, and subtitles to JSON in the exports directory (default - false)
+                description: Export manifest, DRM init data, keys, and track info to a JSON file in the exports directory (default - false)
               cdm_only:
                 type: boolean
                 description: Only use CDM for content key retrieval (true) or only vaults (false) (default - None)

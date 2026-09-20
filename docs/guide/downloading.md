@@ -771,13 +771,25 @@ a content key when the vault misses. You can force one side or the other:
 unshackle dl --skip-dl EXAMPLE 81234567
 ```
 
-`--export` writes a JSON file, into the configured exports directory, containing track
-info and the acquired content keys for each title. This is the format consumed by
-`unshackle import` to reconstruct a download later.
+`--export` writes a `mediaexport` JSON file into the configured exports directory. It holds
+the manifest, the DRM init data, the content keys and the title metadata for each title.
+`unshackle import` reads it to reconstruct a download later. The importer also reads the
+older unshackle `version: 2` files and unidl's own export files.
 
 ```shell title="Export track info and keys"
 unshackle dl --skip-dl --export EXAMPLE 81234567
 ```
+
+The export holds a content key for each track your flags selected and no others. To make a
+file another person can use, select generously: for example `-a AAC,EC3` and every language
+you want them to have. An import can only pick tracks whose key is in the file.
+
+!!! warning "The export file is a secret"
+    It holds the content keys and usually a signed manifest URL. Hand it over on purpose,
+    not by accident.
+
+The [mediaexport](https://github.com/unshackle-dl/mediaexport) package specifies the
+`mediaexport` format and is the reader and writer unshackle uses.
 
 !!! note "Region is recorded only with a proxy"
     When you use `--proxy`, the export records the region so an import can reproduce the

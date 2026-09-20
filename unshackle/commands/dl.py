@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import html
-import json
 import logging
 import math
 import os
@@ -27,6 +26,7 @@ from typing import Any, Callable, Collection, Optional, Sequence, TypedDict, Uni
 from uuid import UUID
 
 import click
+import mediaexport
 import yaml
 from click.core import ParameterSource
 from langcodes import Language, tag_is_valid
@@ -40,7 +40,7 @@ from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
 
-from unshackle.core import binaries, providers
+from unshackle.core import __version__, binaries, providers
 from unshackle.core.cdm import DecryptLabsRemoteCDM
 from unshackle.core.cdm.detect import cdm_type_stub, is_playready_cdm, is_widevine_cdm
 from unshackle.core.config import config, resolve_cdm_name, resolve_decryption
@@ -3914,63 +3914,118 @@ class dl:
         return meta
 
     def write_export(self, export: Path, title: Title_T, track: AnyTrack, drm: Any = None) -> None:
-        """Write a shareable v2 export usable by ``unshackle import``.
+        """Write a shareable mediaexport file usable by ``unshackle import`` and unidl.
 
-        Carries no HTTP session, cookies, or dl-flags. The export records the region (country
-        code) only when the export used ``--proxy``, as an import geofence. Each track records
-        only the licensed DRM system. Content keys live once under the track's ``keys``. ``drm`` may be None
-        (DRM-free track) or a DRM system without ``to_dict``/``content_keys`` (e.g. ClearKey) -
-        the export still records the track, manifest, chapter and attachment info.
+        Carries no HTTP session or cookies. The export records the region (country code)
+        only when the export used ``--proxy``, as an import geofence. DRM init data and
+        content keys live once per title. ``drm`` may be None (DRM-free track) or a DRM
+        system without ``to_dict``/``content_keys`` (e.g. ClearKey) - the export still
+        records the track, manifest, chapter and attachment info. unshackle's full track
+        dicts and title meta go under ``x-unshackle`` for its own importer.
         """
         with self.EXPORT_LOCK:
-            doc: dict[str, Any] = {}
-            if export.is_file():
-                doc = json.loads(export.read_text(encoding="utf8")) or {}
+            doc = mediaexport.read(export) if export.is_file() else mediaexport.Document(service_tag=self.service)
+            doc.generator.setdefault("app", "unshackle")
+            doc.generator.setdefault("version", __version__)
+            if not doc.region and getattr(self, "proxy_requested", False):
+                doc.region = getattr(getattr(self, "export_service", None), "current_region", None) or ""
 
-            doc.setdefault("version", 2)
-            doc.setdefault("service", self.service)
-            if "region" not in doc and getattr(self, "proxy_requested", False):
-                region = getattr(getattr(self, "export_service", None), "current_region", None)
-                if region:
-                    doc["region"] = region
+            entry = doc.get(str(title.id))
+            if entry is None:
+                entry = self.export_entry(title)
+                doc.add(entry)
 
-            titles = doc.setdefault("titles", {})
-            tinfo = titles.setdefault(str(title.id), {})
-            tinfo.setdefault("meta", self.title_to_meta(title))
+            tracks_map = entry.ext("unshackle").setdefault("tracks", {})
+            tracks_map.setdefault(str(track.id), track.to_dict())
+            for row in entry.tracks:
+                if row.get("id") == str(track.id):
+                    row["selected"] = True
 
-            if title.tracks.manifest_url:
-                tinfo.setdefault("manifest_url", title.tracks.manifest_url)
-
-            all_tracks = [*title.tracks.videos, *title.tracks.audio, *title.tracks.subtitles]
-            if "manifest_type" not in tinfo:
-                tinfo["manifest_type"] = next(
-                    (t.descriptor.name for t in all_tracks if t.descriptor != Video.Descriptor.URL), None
-                )
-
-            tracks_map = tinfo.setdefault("tracks", {})
-            if not tracks_map:
-                for t in all_tracks:
-                    tracks_map[str(t.id)] = t.to_dict()
-
-            track_data = tracks_map.setdefault(str(track.id), track.to_dict())
             if drm is not None:
                 if hasattr(drm, "to_dict"):
-                    track_data["drm"] = [drm.to_dict()]
+                    d = drm.to_dict()
+                    own = entry.ext("unshackle").setdefault("drm", [])
+                    if d not in own:
+                        own.append(d)
+                    system = str(d.get("system", "")).lower().replace("cenc", "")
+                    pssh = str(d.get("pssh_b64") or "")
+                    if system and all(x.pssh != pssh or x.system != system for x in entry.drm):
+                        entry.drm.append(mediaexport.Drm(system, pssh))
                 content_keys = getattr(drm, "content_keys", None) or {}
-                if content_keys:
-                    keys = track_data.setdefault("keys", {})
-                    for kid, key in content_keys.items():
-                        keys[kid.hex] = key
+                for kid, key in content_keys.items():
+                    entry.keys[kid.hex] = key
 
-            if "chapters" not in tinfo:
-                tinfo["chapters"] = [
-                    {"timestamp": chapter.timestamp, "name": chapter.name} for chapter in (title.tracks.chapters or [])
-                ]
+            mediaexport.write(export, doc)
 
-            if "attachments" not in tinfo:
-                tinfo["attachments"] = [a.to_dict() for a in (title.tracks.attachments or []) if a.url]
+    def export_entry(self, title: Title_T) -> mediaexport.Entry:
+        """A mediaexport entry for ``title``: manifests, chapters, a small track list, no keys yet."""
+        meta = self.title_to_meta(title)
+        all_tracks = [*title.tracks.videos, *title.tracks.audio, *title.tracks.subtitles]
+        primary_url = title.tracks.manifest_url or next(
+            (str(t.url) for t in all_tracks if t.descriptor != Video.Descriptor.URL), ""
+        )
+        manifest_type = next(
+            (t.descriptor.name.lower() for t in all_tracks if t.descriptor != Video.Descriptor.URL), ""
+        )
+        session = getattr(getattr(self, "export_service", None), "session", None)
+        headers = {
+            k: v
+            for k, v in (getattr(session, "headers", None) or {}).items()
+            if k.lower() not in ("cookie", "authorization")
+        }
+        manifests = [mediaexport.Manifest(primary_url, manifest_type, headers, role="primary")] if primary_url else []
+        seen = {primary_url.split("?")[0]}
+        for t in all_tracks:
+            url = str(t.url)
+            if t.descriptor in (Video.Descriptor.DASH, Video.Descriptor.ISM) and url.split("?")[0] not in seen:
+                seen.add(url.split("?")[0])
+                manifests.append(mediaexport.Manifest(url, t.descriptor.name.lower(), role="extra"))
 
-            export.write_text(json.dumps(doc, indent=4, ensure_ascii=False), encoding="utf8")
+        rows = []
+        for t in all_tracks:
+            row: dict[str, Any] = {
+                "id": str(t.id),
+                "type": t.__class__.__name__.lower(),
+                "codec": codec.name.lower() if (codec := getattr(t, "codec", None)) else "",
+                "language": str(t.language) if t.language else "",
+                "bitrate": int(bitrate) if (bitrate := getattr(t, "bitrate", None)) else None,
+            }
+            if isinstance(t, Video):
+                row.update(width=t.width, height=t.height, range=t.range.name.lower() if t.range else "")
+            elif isinstance(t, Audio):
+                row.update(channels=str(t.channels) if t.channels else "", atmos=bool(t.joc), descriptive=t.descriptive)
+            elif isinstance(t, Subtitle):
+                row.update(sdh=t.sdh, forced=t.forced, cc=t.cc)
+            if t.descriptor == Video.Descriptor.URL:
+                row["url"] = str(t.url)
+            rows.append({k: v for k, v in row.items() if v not in (None, "")})
+
+        return mediaexport.Entry(
+            id=str(title.id),
+            kind=meta.get("type", "movie"),
+            title=meta.get("name") or "",
+            series=meta.get("series_title") or "",
+            season=meta.get("season"),
+            episode=meta.get("number"),
+            year=meta.get("year"),
+            language=meta.get("language") or "",
+            artist=meta.get("artist") or "",
+            album=meta.get("album") or "",
+            track_number=meta.get("track"),
+            manifests=manifests,
+            chapters=[
+                {"start_ms": mediaexport.ts_ms(c.timestamp), "title": c.name or ""}
+                for c in (title.tracks.chapters or [])
+            ],
+            tracks=rows,
+            extensions={
+                "x-unshackle": {
+                    "meta": meta,
+                    "tracks": {},
+                    "attachments": [a.to_dict() for a in (title.tracks.attachments or []) if a.url],
+                }
+            },
+        )
 
     def decrypt_verified(
         self,

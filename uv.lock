@@ -1075,6 +1075,11 @@ wheels = [
 ]
 
 [[package]]
+name = "mediaexport"
+version = "0.1.0"
+source = { git = "https://github.com/unshackle-dl/mediaexport?branch=main#07893237199fc865bd5c63b6848235e4f6ef81c8" }
+
+[[package]]
 name = "more-itertools"
 version = "10.8.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2155,6 +2160,7 @@ dependencies = [
     { name = "langcodes" },
     { name = "language-data" },
     { name = "lxml" },
+    { name = "mediaexport" },
     { name = "mutagen" },
     { name = "protobuf" },
     { name = "pycaption" },
@@ -2223,6 +2229,7 @@ requires-dist = [
     { name = "langcodes", specifier = ">=3.4.0,<4" },
     { name = "language-data", specifier = ">=1.4.0" },
     { name = "lxml", specifier = ">=5.2.1,<7" },
+    { name = "mediaexport", git = "https://github.com/unshackle-dl/mediaexport?branch=main" },
     { name = "mutagen", specifier = ">=1.47.0,<2" },
     { name = "protobuf", specifier = ">=4.25.3,<7" },
     { name = "pycaption", specifier = ">=2.2.6,<2.2.27" },

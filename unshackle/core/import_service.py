@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 from http.cookiejar import CookieJar
 from pathlib import Path
@@ -8,6 +7,7 @@ from typing import Any, Optional, Union
 from uuid import UUID
 
 import click
+import mediaexport
 import requests
 from langcodes import tag_is_valid
 
@@ -124,33 +124,72 @@ class ImportService:
         if not export_path.is_file():
             raise click.ClickException(f"Export file not found: {export_path}")
 
-        self.data: dict[str, Any] = json.loads(export_path.read_text(encoding="utf8"))
-        version = self.data.get("version")
-        if version != 2:
-            raise click.ClickException(
-                f"Unsupported export version {version!r}. Re-create the export with a current build."
-            )
+        try:
+            self.doc = mediaexport.read(export_path)
+        except mediaexport.ExportError as e:
+            raise click.ClickException(f"Cannot import {export_path.name}: {e}")
 
-        self.titles_data: dict[str, Any] = self.data.get("titles", {})
-        self.region: Optional[str] = self.data.get("region")
+        self.titles_data: dict[str, Any] = {e.id: self.legacy_entry(e) for e in self.doc.titles}
+        self.region: Optional[str] = self.doc.region or None
         self.titles: Optional[Titles_T] = None
         self.tracks_by_title: dict[str, Tracks] = {}
 
         self._server_cdm = True
         self._server_cdm_type = "widevine"
 
-        self.session = self.build_session(ctx, self.region)
+        first = self.doc.titles[0].primary if self.doc.titles else None
+        headers = first.headers if first else {}
+        self.session = self.build_session(ctx, self.region, headers)
 
     @staticmethod
-    def build_session(ctx: click.Context, region: Optional[str] = None) -> requests.Session:
+    def legacy_entry(entry: mediaexport.Entry) -> dict[str, Any]:
+        """The per-title dict the rest of this class reads, from a mediaexport entry.
+
+        unshackle's own exports carry the full title meta and track dicts under
+        ``x-unshackle``; a file from another tool has only the shared fields, so the meta is
+        rebuilt from those and the track map stays empty (the manifest is parsed instead).
+        """
+        x = entry.extensions.get("x-unshackle") or {}
+        meta = x.get("meta") or {
+            "type": entry.kind,
+            "id": entry.id,
+            "name": entry.title,
+            "series_title": entry.series,
+            "season": entry.season,
+            "number": entry.episode,
+            "year": entry.year,
+            "language": entry.language or None,
+            "artist": entry.artist,
+            "album": entry.album,
+            "track": entry.track_number,
+        }
+        primary = entry.primary
+        manifest_type = x.get("manifest_type") or (
+            (primary.type or mediaexport.guess_type(primary.url)).upper() if primary else ""
+        )
+        return {
+            "meta": meta,
+            "manifest_url": primary.url if primary else None,
+            "manifest_type": manifest_type or None,
+            "tracks": x.get("tracks") or {},
+            "chapters": entry.chapters,
+            "attachments": x.get("attachments") or [],
+        }
+
+    @staticmethod
+    def build_session(
+        ctx: click.Context, region: Optional[str] = None, headers: Optional[dict[str, str]] = None
+    ) -> requests.Session:
         """HTTP session for re-fetching the manifest.
 
-        Honours the importer's ``--proxy``. Without one, it falls back to the export region
-        as a geofence. An explicit proxy that unshackle cannot find raises an error. A region
-        fallback gives a warning.
+        Exported request headers go over the config defaults, since a CDN can gate the
+        manifest on the User-Agent the exporter used. Honours the importer's ``--proxy``.
+        Without one, it falls back to the export region as a geofence. An explicit proxy
+        that unshackle cannot find raises an error. A region fallback gives a warning.
         """
         session = requests.Session()
         session.headers.update(config.headers)
+        session.headers.update(headers or {})
 
         params = ctx.parent.params if ctx.parent else {}
         if params.get("no_proxy"):
@@ -224,7 +263,8 @@ class ImportService:
         tracks.manifest_url = manifest_url
 
         parser = PARSERS.get(manifest_type or "")
-        if manifest_url and parser is not None and manifest_type in ("DASH", "ISM"):
+        # An export from another tool has no track dicts, so HLS is parsed from the manifest too
+        if manifest_url and parser is not None and (manifest_type in ("DASH", "ISM") or not tracks_map):
             try:
                 manifest = parser.from_url(url=manifest_url, session=self.session)
             except Exception as e:
@@ -272,7 +312,7 @@ class ImportService:
             except Exception as e:
                 self.log.warning(f"Skipping exported track {track_dict.get('id')!r}: {e}")
                 continue
-            drm = self.rebuild_drm(track_dict)
+            drm = self.rebuild_drm(track_dict, title_id)
             if drm:
                 track.drm = drm
             tracks.add(track, warn_only=True)
@@ -307,18 +347,37 @@ class ImportService:
 
     def key_pool(self, title_id: Optional[str] = None) -> dict[UUID, str]:
         """Exported KID:KEY pairs as {UUID: key_hex}, for one title or across every title."""
-        pool: dict[UUID, str] = {}
-        entries = [self.titles_data.get(title_id, {})] if title_id else self.titles_data.values()
-        for entry in entries:
-            for track_dict in (entry.get("tracks") or {}).values():
-                for kid_hex, key in (track_dict.get("keys") or {}).items():
-                    pool[UUID(hex=kid_hex)] = key
-        return pool
+        entry = self.doc.get(title_id) if title_id else None
+        keys = entry.keys if entry else self.doc.key_pool()
+        return {UUID(hex=kid): key for kid, key in keys.items()}
 
-    def rebuild_drm(self, track_dict: dict[str, Any]) -> Optional[list[Any]]:
-        """Rebuild a DRM object (from stored PSSH, falling back to a stub) with the exported keys."""
-        keys = track_dict.get("keys") or {}
-        drm_dicts = track_dict.get("drm") or []
+    def title_drm_dicts(self, title_id: str) -> list[dict[str, Any]]:
+        """The title's DRM entries in ``drm_from_dict`` form.
+
+        unshackle's own export keeps the exact ``to_dict`` output under ``x-unshackle``, so a
+        ClearKeyCENC licence URL or a PlayReady PSSH comes back byte for byte.
+        """
+        entry = self.doc.get(title_id)
+        if entry is None:
+            return []
+        own = (entry.extensions.get("x-unshackle") or {}).get("drm")
+        if own:
+            return list(own)
+        out = []
+        for d in entry.drm:
+            system = {"widevine": "Widevine", "playready": "PlayReady", "clearkey": "ClearKeyCENC"}.get(d.system)
+            if system:
+                out.append({"system": system, "pssh_b64": d.pssh, "kids": list(entry.keys)})
+        return out
+
+    def rebuild_drm(self, track_dict: dict[str, Any], title_id: str) -> Optional[list[Any]]:
+        """Rebuild a DRM object (from stored PSSH, falling back to a stub) with the exported keys.
+
+        Keys and DRM are title-level in the shared format; a legacy v2 track dict that still
+        carries its own is honoured first.
+        """
+        keys = track_dict.get("keys") or {kid.hex: key for kid, key in self.key_pool(title_id).items()}
+        drm_dicts = track_dict.get("drm") or self.title_drm_dicts(title_id)
         if not drm_dicts and not keys:
             return None
 
@@ -395,17 +454,20 @@ class ImportService:
 
     def exported_drm_system(self) -> str:
         """The DRM system the exporter licensed (e.g. 'playready'), defaulting to widevine."""
-        for entry in self.titles_data.values():
-            for track_dict in (entry.get("tracks") or {}).values():
-                for drm_dict in track_dict.get("drm") or []:
-                    if drm_dict.get("system"):
-                        return drm_dict["system"].lower()
+        for entry in self.doc.titles:
+            for d in entry.drm:
+                if d.system:
+                    return d.system
         return "widevine"
 
     def get_chapters(self, title: Title_T) -> Chapters:
-        entry = self.titles_data.get(str(title.id), {})
+        entry = self.doc.get(str(title.id))
         return Chapters(
-            [Chapter(ch["timestamp"], ch.get("name")) for ch in (entry.get("chapters") or []) if ch.get("timestamp")]
+            [
+                Chapter(int(ch["start_ms"]), ch.get("title") or None)
+                for ch in (entry.chapters if entry else [])
+                if ch.get("start_ms") is not None
+            ]
         )
 
     def get_widevine_service_certificate(self, **_: Any) -> Optional[str]:
