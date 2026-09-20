@@ -124,11 +124,13 @@ hood the client walks a remote session through its lifecycle.
       the client region itself
     - Track-selection hints (`range_`, `vcodec`, `quality`, `best_available`) so
       the server fetches the right manifests
-    - Your local per-service **cache files** (e.g. refreshed tokens), but only the
-      files for the active profile. The client withholds a file whose name embeds
-      a hash of another credential, or the name of another profile. One profile's
-      tokens therefore never reach the server while you use a different profile.
-      At worst, a withheld file makes the server authenticate again
+    - Your local per-service **cache files** (e.g. refreshed tokens), including
+      files in subdirectories of the service cache directory, but only the files
+      for the active profile. The client withholds a file whose path, in any
+      directory or file name, embeds a hash of another credential or the name of
+      another profile. One profile's tokens
+      therefore never reach the server while you use a different profile. At
+      worst, a withheld file makes the server authenticate again
 
     The server uses its own accounts only when the operator lists the service in
     `serve.server_accounts` and gives your API key `server_accounts` in `serve.users`.
@@ -430,13 +432,27 @@ _sessions/<pbkdf2_hmac(sha256, X-Secret-Key, "unshackle-session-ns", 100000)[:12
 
 The handler writes forwarded `cache` files into that directory before authentication.
 On `DELETE`, when the login belongs to the client (`client_auth`), the handler
-harvests updated cache files (compressing each with zlib and base64-encoding,
-**excluding** `titles_*` files) and returns them under a `cache` field, so the
-client can keep refreshed tokens:
+harvests updated cache files from the whole directory tree (compressing each
+with zlib and base64-encoding, **excluding** `titles_*` files) and returns them
+under a `cache` field, so the client can keep refreshed tokens. Each cache key
+is the file path relative to that directory, with `/` separators and no `.json`
+suffix, which is the `Cacher` cache key the service reads it with:
 
 ```json
-{ "status": "ok", "cache": { "tokens": "...base64(zlib(bytes))..." } }
+{
+  "status": "ok",
+  "cache": {
+    "tokens": "...base64(zlib(bytes))...",
+    "session_web/<sha1>": "...base64(zlib(bytes))..."
+  }
+}
 ```
+
+Both sides reject a cache key with a drive letter, a root, a `..` segment, an empty
+segment, or more than 8 segments before it becomes a path, so a peer cannot write
+outside the cache directory. Both sides also refuse a `cache` map with more than
+64 entries. The server skips a cache key it cannot write, such as one that names an
+existing file as a directory, and logs a warning.
 
 ### Remote session info response
 

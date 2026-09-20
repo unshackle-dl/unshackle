@@ -318,6 +318,149 @@ def test_load_cache_files_wiring(tmp_path, monkeypatch) -> None:
     assert set(sent) == {"tokens_default", "session_guid"}
 
 
+def test_load_cache_files_forwards_nested_keys(tmp_path, monkeypatch) -> None:
+    """A service that keeps its cache in subfolders (NF: session_web/<sha1>.json) must have
+    those files forwarded under the Cacher key, and the credential filter must still apply
+    to the basename of a nested file."""
+    import base64
+    import json
+    import logging
+    import zlib
+    from types import SimpleNamespace
+
+    from unshackle.core.config import config
+    from unshackle.core.credential import Credential
+    from unshackle.core.remote_service import RemoteService
+
+    tag = "TESTSVC"
+    cache_dir = tmp_path / tag
+    active = Credential("a@example.com", "pw")
+    other = Credential("other@example.com", "pw2")
+    for rel in (
+        "tokens",
+        f"session_web/{active.sha1}",
+        f"session_web/{other.sha1}",
+        "session_androidtv/default",
+        "MSL/web/keys",
+        "MSL/web/keys.v2",
+        f"{other.sha1}/state",
+        "titles_abc",
+        "sub/titles_abc",
+    ):
+        path = cache_dir / f"{rel}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"k": rel}))
+
+    monkeypatch.setattr(config.directories, "cache", tmp_path)
+    monkeypatch.setattr(config, "credentials", {tag: {"default": f"{active.username}:{active.password}"}})
+    stub = SimpleNamespace(service_tag=tag, log=logging.getLogger("test"))
+
+    sent = RemoteService.load_cache_files(stub, None)
+    assert set(sent) == {
+        "tokens",
+        f"session_web/{active.sha1}",
+        "session_androidtv/default",
+        "MSL/web/keys",
+        "MSL/web/keys.v2",
+    }
+    payload = json.loads(zlib.decompress(base64.b64decode(sent[f"session_web/{active.sha1}"])))
+    assert payload == {"k": f"session_web/{active.sha1}"}
+
+
+def test_save_returned_cache_writes_nested_keys_and_rejects_escapes(tmp_path, monkeypatch) -> None:
+    import base64
+    import logging
+    import zlib
+    from types import SimpleNamespace
+
+    from unshackle.core.config import config
+    from unshackle.core.remote_service import RemoteService
+
+    tag = "TESTSVC"
+    monkeypatch.setattr(config.directories, "cache", tmp_path)
+    stub = SimpleNamespace(service_tag=tag, log=logging.getLogger("test"))
+
+    def blob(text: str) -> str:
+        return base64.b64encode(zlib.compress(text.encode())).decode("ascii")
+
+    RemoteService.save_returned_cache(
+        stub,
+        {
+            "tokens": blob("flat"),
+            "session_web/abc": blob("nested"),
+            "session_web\\def": blob("windows"),
+            "MSL/keys.v2": blob("dotted"),
+            "../escape": blob("bad"),
+            "/abs": blob("bad"),
+            "C:/x": blob("bad"),
+        },
+    )
+
+    assert (tmp_path / tag / "tokens.json").read_text() == "flat"
+    assert (tmp_path / tag / "session_web" / "abc.json").read_text() == "nested"
+    assert (tmp_path / tag / "session_web" / "def.json").read_text() == "windows"
+    assert (tmp_path / tag / "MSL" / "keys.v2.json").read_text() == "dotted"
+    assert not (tmp_path / "escape.json").exists()
+    written = sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*.json"))
+    assert written == [
+        f"{tag}/MSL/keys.v2.json",
+        f"{tag}/session_web/abc.json",
+        f"{tag}/session_web/def.json",
+        f"{tag}/tokens.json",
+    ]
+
+
+def test_save_returned_cache_ignores_oversized_payload(tmp_path, monkeypatch) -> None:
+    import logging
+    from types import SimpleNamespace
+
+    from unshackle.core.api.sanitize import MAX_SESSION_CACHE_KEYS
+    from unshackle.core.config import config
+    from unshackle.core.remote_service import RemoteService
+
+    monkeypatch.setattr(config.directories, "cache", tmp_path)
+    stub = SimpleNamespace(service_tag="TESTSVC", log=logging.getLogger("test"))
+    RemoteService.save_returned_cache(stub, {f"k{i}": "x" for i in range(MAX_SESSION_CACHE_KEYS + 1)})
+    assert not list(tmp_path.rglob("*.json"))
+
+
+@pytest.mark.asyncio
+async def test_session_delete_returns_nested_cache_keys(tmp_path, monkeypatch) -> None:
+    """The server harvests a session's whole cache tree and keys each file by its path
+    relative to the session cache dir, so it round-trips to the same Cacher key."""
+    import base64
+    import json
+    import zlib
+    from types import SimpleNamespace
+
+    from unshackle.core.api import handlers, session_store
+
+    cache_tag = "_sessions/abc/sid/TESTSVC"
+    cache_dir = tmp_path / cache_tag
+    for rel in ("tokens", "session_web/abc", "titles_x", "MSL/web/keys", "MSL/keys.v2"):
+        path = cache_dir / f"{rel}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(rel)
+    monkeypatch.setattr(handlers.config.directories, "cache", tmp_path)
+
+    session = SimpleNamespace(cache_tag=cache_tag, client_auth=True, input_bridge=None)
+
+    async def fake_validated(session_id, request):
+        return session
+
+    class FakeStore:
+        async def delete(self, session_id):
+            return True
+
+    monkeypatch.setattr(handlers, "get_validated_session", fake_validated)
+    monkeypatch.setattr(session_store, "get_session_store", lambda: FakeStore())
+
+    response = await handlers.session_delete_handler("sid", None)
+    body = json.loads(response.body)
+    assert set(body["cache"]) == {"tokens", "session_web/abc", "MSL/web/keys", "MSL/keys.v2"}
+    assert zlib.decompress(base64.b64decode(body["cache"]["session_web/abc"])) == b"session_web/abc"
+
+
 def test_resolve_manifest_data_matches_across_per_range_manifests() -> None:
     """One ISM manifest per range. The HDR10 track must take the quality level from its
     own manifest, not the same-sized one in the SDR manifest, in any manifest order."""
@@ -355,3 +498,41 @@ def test_resolve_manifest_data_matches_across_per_range_manifests() -> None:
     resolve_manifest_data(tracks, manifests)
 
     assert remote_hdr.data["ism"]["quality_level"].get("CodecPrivateData") == VIDEO_HEVC_PQ_CPD
+
+
+def test_session_create_writes_nested_cache_and_skips_colliding_keys(tmp_path, monkeypatch) -> None:
+    """The server writes a nested key under the session cache dir with the ``.json``
+    suffix appended, not substituted, and a key that collides with an existing file
+    (``x`` then ``x.json/y``) is skipped instead of failing the whole create."""
+    import asyncio
+    import base64
+    import logging
+    import zlib
+    from types import SimpleNamespace
+
+    from unshackle.core.api import handlers
+
+    class Stop(Exception):
+        pass
+
+    def blob(text: str) -> str:
+        return base64.b64encode(zlib.compress(text.encode())).decode("ascii")
+
+    monkeypatch.setattr(handlers.config.directories, "cache", tmp_path)
+    monkeypatch.setattr(handlers, "validate_service", lambda service, request=None: service)
+    monkeypatch.setattr(handlers, "resolve_handler_proxy", lambda *args: (None, []))
+    monkeypatch.setattr(handlers, "server_account_for", lambda *args: False)
+    monkeypatch.setattr(handlers.Services, "load", lambda service: type("Svc", (), {}))
+    monkeypatch.setattr(
+        handlers,
+        "create_service_instance",
+        lambda *args, **kwargs: (SimpleNamespace(log=logging.getLogger("Svc")), None, None),
+    )
+    monkeypatch.setattr(handlers, "InputBridge", lambda: (_ for _ in ()).throw(Stop()))
+
+    cache = {"x": blob("flat"), "x.json/y": blob("collides"), "MSL/keys.v2": blob("dotted")}
+    response = asyncio.run(handlers.session_create_handler({"service": "TESTSVC", "title_id": "t", "cache": cache}))
+    assert response.status == 500  # the Stop stand-in fired after the cache write
+
+    written = {p.name: p.read_text() for p in tmp_path.rglob("*.json") if p.is_file()}
+    assert written == {"x.json": "flat", "keys.v2.json": "dotted"}

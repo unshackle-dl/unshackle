@@ -857,7 +857,7 @@ DELETE /api/session/{id}        → tear down, harvest updated cache
 
 ### `POST /api/session/create`
 
-Make a remote session for a service and title. Authentication runs asynchronously in the background. This call returns immediately with `status: "authenticating"`, and you then poll the prompt endpoint. The body accepts `service` and `title_id` (both required). It also accepts a broad set of optional keys, because the body allows `additionalProperties`. These are `credentials` (`{username, password, extra?}`), `cookies` (base64 of zlib-compressed Netscape cookie file), `proxy`, `no_proxy`, `profile`, `cache` (map of forwarded cache files), `client_region`, `proxy_region`, `cdm_type`, `range_`, `vcodec`, `quality`, `best_available`, `client`, and any service CLI options. `proxy_region` is the country code the client resolved `proxy` from; the server matches it against its own accounts. `client` is a freeform object the dashboard shows as sent (the CLI puts `version`, `code_hash`, `platform` and a redacted `argv` in it); the server ignores it above 4096 bytes of JSON.
+Make a remote session for a service and title. Authentication runs asynchronously in the background. This call returns immediately with `status: "authenticating"`, and you then poll the prompt endpoint. The body accepts `service` and `title_id` (both required). It also accepts a broad set of optional keys, because the body allows `additionalProperties`. These are `credentials` (`{username, password, extra?}`), `cookies` (base64 of zlib-compressed Netscape cookie file), `proxy`, `no_proxy`, `profile`, `cache` (map of forwarded cache files, keyed by the file path relative to the service cache directory with `/` separators and no `.json` suffix, so a nested key such as `session_web/<sha1>` lands in a subdirectory), `client_region`, `proxy_region`, `cdm_type`, `range_`, `vcodec`, `quality`, `best_available`, `client`, and any service CLI options. `proxy_region` is the country code the client resolved `proxy` from; the server matches it against its own accounts. `client` is a freeform object the dashboard shows as sent (the CLI puts `version`, `code_hash`, `platform` and a redacted `argv` in it); the server ignores it above 4096 bytes of JSON.
 
 Service CLI options also travel in a nested `service_params` object, which wins over a flat key with the same name. `profile` at the top level always means the credentials profile, never a service's own `--profile` option.
 
@@ -1130,11 +1130,11 @@ Tear down a remote session. The server cancels its input bridge, harvests any up
     ```json
     {
       "status": "ok",
-      "cache": { "tokens.json": "<base64 zlib bytes>" }
+      "cache": { "tokens": "<base64 zlib bytes>", "session_web/<sha1>": "<base64 zlib bytes>" }
     }
     ```
 
-The `cache` field is present only if the remote session produced cache files and the login belongs to the client. `404 SESSION_NOT_FOUND` if the remote session does not exist.
+The `cache` field is present only if the remote session produced cache files and the login belongs to the client. Each cache key is the file path relative to the session cache directory, with `/` separators and no `.json` suffix, so a file in a subdirectory keeps its place on the client. The server rejects a cache key with a drive letter, a root, a `..` segment, or an empty segment, and so does the client. `404 SESSION_NOT_FOUND` if the remote session does not exist.
 
 ---
 

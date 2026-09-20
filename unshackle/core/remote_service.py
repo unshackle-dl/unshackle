@@ -1408,7 +1408,11 @@ class RemoteService:
             return
 
         from unshackle.core.api.compression import safe_inflate
-        from unshackle.core.api.sanitize import safe_cache_key
+        from unshackle.core.api.sanitize import MAX_SESSION_CACHE_KEYS, safe_cache_key
+
+        if len(cache_data) > MAX_SESSION_CACHE_KEYS:
+            self.log.warning(f"Ignoring {len(cache_data)} cache files from server: more than {MAX_SESSION_CACHE_KEYS}")
+            return
 
         cache_dir = config.directories.cache / self.service_tag
         cache_dir.mkdir(parents=True, exist_ok=True)
@@ -1420,7 +1424,10 @@ class RemoteService:
                 continue
             try:
                 decompressed = safe_inflate(base64.b64decode(content))
-                (cache_dir / safe_name).with_suffix(".json").write_bytes(decompressed)
+                # Not with_suffix: that would turn the key "keys.v2" into "keys.json".
+                target = cache_dir / f"{safe_name}.json"
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(decompressed)
             except Exception as e:
                 self.log.warning(f"Failed to save returned cache file '{safe_name}': {e}")
 
@@ -1432,10 +1439,17 @@ class RemoteService:
         The client cannot rely on the server to filter, so it sends only the files
         it can tie to the active credential or profile, plus service-global state.
         At worst, a withheld file makes the server authenticate again.
+
+        Each cache key is the file path relative to the service cache directory,
+        with posix separators and no ``.json`` suffix, so it equals the ``Cacher``
+        cache key the service reads it with (``session_web/<sha1>``). The relevance check
+        runs on every path segment, because a service may embed the credential
+        digest or profile name in a directory name as well as in the basename.
         """
         import zlib
 
         from unshackle.commands.dl import dl
+        from unshackle.core.api.sanitize import safe_cache_key
 
         cache_dir = config.directories.cache / self.service_tag
         if not cache_dir.is_dir():
@@ -1450,13 +1464,14 @@ class RemoteService:
         foreign = set(profiles) - {active} if isinstance(profiles, dict) else set()
 
         files: Dict[str, str] = {}
-        for f in cache_dir.glob("*.json"):
-            if f.stem.startswith("titles_"):
+        for f in sorted(cache_dir.rglob("*.json")):
+            key = f.relative_to(cache_dir).as_posix()[: -len(".json")]
+            if f.stem.startswith("titles_") or not safe_cache_key(key):
                 continue
-            if not cache_stem_is_relevant(f.stem, allowed, active, foreign):
-                self.log.debug(f"Withholding cache file from the remote server: {f.stem}")
+            if not all(cache_stem_is_relevant(part, allowed, active, foreign) for part in key.split("/")):
+                self.log.debug(f"Withholding cache file from the remote server: {key}")
                 continue
-            files[f.stem] = base64.b64encode(zlib.compress(f.read_bytes())).decode("ascii")
+            files[key] = base64.b64encode(zlib.compress(f.read_bytes())).decode("ascii")
         return files
 
 
