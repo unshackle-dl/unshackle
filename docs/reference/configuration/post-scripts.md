@@ -111,6 +111,8 @@ values.
 | `{title_id}` | The service's ID for the title |
 | `{service}` | Service tag |
 | `{year}` `{season}` `{episode}` `{episode_name}` | Season and episode are plain numbers (`1`, `5`) |
+| `{part}` | Part number of a split episode as a plain number (`1` for `Part.1`). Empty when the episode has no part |
+| `{season_episode}` `{absolute}` `{date}` | As in the filename template: `{season_episode}` keeps the part suffix (`S01E05.Part.1`) while `{episode}` drops it |
 | `{quality}` `{resolution}` `{hdr}` `{hfr}` `{vcodec}` `{acodec}` `{edition}` `{tag}` `{lang_tag}` | As in the filename template, for this file |
 | `{tmdb}` `{imdb}` `{tvdb}` | The tagging IDs in use, otherwise empty. See [Tagging IDs](#tagging-ids) |
 | `{error}` | Failure message. Empty on success |
@@ -126,14 +128,14 @@ Every variable from your `output_template` is available here as well, including
 
     - No metadata provider found an ID. `{tmdb}` is empty when no metadata provider found the title,
       the matching API key is missing, or the title is a movie you gave no ID for.
-    - The title has no such field. Movies have no `{season}` or `{episode}`, and music has
-      neither.
+    - The title has no such field. Movies have no `{season}`, `{episode}` or `{part}`, and
+      music has none of them.
     - **The naming context renders it empty on purpose.** `{hdr}` is empty for an SDR
       file, because SDR is the absence of an HDR tag in a filename rather than a tag that
       reads `SDR`. `{edition}`, `{atmos}`, `{multi}`, `{dual}` and `{hfr}` behave the same
       way. If your script needs the word `SDR`, derive it from an empty `{hdr}` yourself.
     - The post-script is a `failure` one. A failed download has no output file to read metadata
-      from, so everything that comes from the naming context is empty. See
+      from, so everything that comes from the output file is empty. See
       [Events](#events).
 
     There is no `{variable?}` conditional here, unlike `output_template`. The token is
@@ -147,7 +149,7 @@ Every variable from your `output_template` is available here as well, including
 ### Music variables
 
 A music download builds its variables from the music naming context, so a post-script gets the
-release fields instead of the season and episode ones. `{season}`, `{episode}` and
+release fields instead of the season and episode ones. `{season}`, `{episode}`, `{part}` and
 `{episode_name}` are always empty for music.
 
 | Variable | Value |
@@ -257,9 +259,10 @@ A music `failure` post-script therefore describes the track that failed, not the
 
 A `failure` post-script has no output file to read metadata from, so it carries only what the
 title object already knew: `{title}`, `{title_raw}`, `{title_id}`, `{year}`, `{season}`,
-`{episode}`, `{episode_name}`, `{service}`, the tagging IDs and `{error}`. Everything that
-comes from the naming context, such as `{quality}`, `{hdr}`, `{artist}` and `{album}`, is
-empty.
+`{episode}`, `{part}`, `{season_episode}`, `{absolute}`, `{date}`, `{episode_name}`, the music
+release fields such as `{artist}` and `{album}`, `{service}`, the tagging IDs and `{error}`.
+Everything that comes from the output file, such as `{quality}`, `{hdr}`, `{vcodec}` and
+`{acodec}`, is empty.
 
 A resumed `--continue-downloads` download that finishes runs `success` as usual. unshackle
 sees your script's exit code only when that entry sets `wait: true`, and even then it only

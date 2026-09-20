@@ -20,6 +20,7 @@ import re
 import shlex
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Iterator, Optional, Sequence
 
 from unshackle.core.config import config
@@ -37,6 +38,9 @@ MODES = ("file", "season", "run")
 SIDECAR_SEPARATOR = "\n"
 NO_POST_SCRIPTS: tuple[str, ...] = ("",)
 """``dl --no-postscript``: an override list that replaces the config and holds no command to run."""
+
+_NO_MEDIA = SimpleNamespace(video_tracks=[], audio_tracks=[])
+"""Stands in for MediaInfo on the failure path: the title's template builder needs the two track lists."""
 
 _warned_entries: set[str] = set()
 
@@ -107,12 +111,13 @@ def build_context(
     """
     context: dict[str, str] = {}
 
-    if media_info is not None:
-        try:
-            for key, value in title.build_template_context(media_info, show_service=True).items():
-                context[key] = "" if value is None else str(value)
-        except Exception as e:  # noqa: BLE001 - a naming quirk must never stop the download
-            log.debug("Could not build post-script metadata context: %s", e)
+    if media_info is None:
+        media_info = _NO_MEDIA
+    try:
+        for key, value in title.build_template_context(media_info, show_service=True).items():
+            context[key] = "" if value is None else str(value)
+    except Exception as e:  # noqa: BLE001 - a naming quirk must never stop the download
+        log.debug("Could not build post-script metadata context: %s", e)
 
     context["vcodec"] = context.get("video", "")
     context["acodec"] = context.get("audio", "")
@@ -121,6 +126,8 @@ def build_context(
     number = getattr(title, "number", None)
     context["season"] = "" if season is None else str(season)
     context["episode"] = "" if number is None else str(number)
+    part = getattr(title, "part", None)
+    context["part"] = "" if part is None else str(part)
     context["episode_name"] = str(getattr(title, "name", "") or "") if season is not None else ""
     context["title_raw"] = str(getattr(title, "title", None) or getattr(title, "name", "") or "")
     context.setdefault("title", context["title_raw"].replace("$", "S"))
@@ -146,7 +153,18 @@ def build_context(
 def season_context(context: dict[str, str], folder: Path) -> dict[str, str]:
     """Blank the file-level variables so a season/album post-script describes the folder."""
     out = dict(context)
-    for key in ("filepath", "filename", "ext", "sidecars", "episode", "episode_name"):
+    for key in (
+        "filepath",
+        "filename",
+        "ext",
+        "sidecars",
+        "episode",
+        "part",
+        "episode_name",
+        "season_episode",
+        "absolute",
+        "date",
+    ):
         out[key] = ""
     if out.get("album"):  # music: the album stands in for the season
         for key in ("track_number", "disc", "isrc"):

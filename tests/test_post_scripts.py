@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -213,13 +215,13 @@ def _dispatch_seconds(monkeypatch, entry: dict) -> float:
 
 def test_wait_true_waits_for_the_script_and_logs_the_exit_code(monkeypatch, caplog):
     caplog.set_level("DEBUG", logger="post-script")
-    slow = 'python -c "import time,sys; time.sleep(0.3); sys.exit(3)"'
+    slow = f'"{sys.executable}" -c "import time,sys; time.sleep(0.3); sys.exit(3)"'
     assert _dispatch_seconds(monkeypatch, {"command": slow, "wait": True}) >= 0.3
     assert "Post-script exited 3" in caplog.text
 
 
 def test_wait_defaults_to_fire_and_forget(monkeypatch):
-    slow = 'python -c "import time; time.sleep(0.3)"'
+    slow = f'"{sys.executable}" -c "import time; time.sleep(0.3)"'
     assert _dispatch_seconds(monkeypatch, {"command": slow}) < 0.3
 
 
@@ -232,3 +234,54 @@ def test_no_postscript_override_silences_every_event_and_mode(monkeypatch):
         for mode in MODES:
             dispatch(event, mode, {"filepath": "/x/y.mkv"}, NO_POST_SCRIPTS)
     assert spawned == []
+
+
+def _episode(part):
+    from unshackle.core.titles.episode import Episode
+
+    class Svc:
+        pass
+
+    return Episode(id_="episode-id", service=Svc, title="T", season=1, number=5, part=part, name="Ep")
+
+
+def test_part_is_a_plain_number_on_success_and_failure():
+    """{part} agrees on both paths, and the failure path carries every title-owned variable."""
+    title = _episode(1)
+    success = build_context(title, SimpleNamespace(video_tracks=[], audio_tracks=[]), service="SVC")
+    failure = build_context(title, None, service="SVC", error="Boom")
+    for context in (success, failure):
+        assert context["part"] == "1"
+        assert context["episode"] == "5"
+        assert context["season_episode"] == "S01E05.Part.1"
+    assert failure["quality"] == ""
+    assert build_context(_episode(None), None, service="SVC")["part"] == ""
+
+
+def test_season_context_blanks_every_episode_identity_field():
+    context = build_context(_episode(1), None, service="SVC")
+    season = ps.season_context(context, Path("/out"))
+    assert season["season"] == "1"
+    for key in ("episode", "part", "season_episode", "absolute", "date", "episode_name"):
+        assert season[key] == ""
+
+
+def test_every_documented_variable_is_one_build_context_produces():
+    """The variable tables in docs/reference/configuration/post-scripts.md must not drift from the code."""
+    from unshackle.core.titles.song import Song
+
+    doc = Path(__file__).resolve().parents[1] / "docs" / "reference" / "configuration" / "post-scripts.md"
+    documented = {
+        name
+        for line in doc.read_text(encoding="utf-8").splitlines()
+        if line.startswith("| `{")
+        for name in re.findall(r"`\{(\w+)\}`", line.split("|")[1])
+    }
+    assert documented, "no variable table rows found"
+
+    class Svc:
+        pass
+
+    song = Song(id_="song-id", service=Svc, name="Tr", artist="Ar", album="Al", track=1)
+    produced = set(build_context(_episode(1), None, service="SVC")) | set(build_context(song, None, service="SVC"))
+    assert documented <= produced, sorted(documented - produced)
