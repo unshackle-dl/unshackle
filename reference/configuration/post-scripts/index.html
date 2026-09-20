@@ -2506,6 +2506,14 @@ values.</p>
 <td>Season and episode are plain numbers (<code>1</code>, <code>5</code>)</td>
 </tr>
 <tr>
+<td><code>{part}</code></td>
+<td>Part number of a split episode as a plain number (<code>1</code> for <code>Part.1</code>). Empty when the episode has no part</td>
+</tr>
+<tr>
+<td><code>{season_episode}</code> <code>{absolute}</code> <code>{date}</code></td>
+<td>As in the filename template: <code>{season_episode}</code> keeps the part suffix (<code>S01E05.Part.1</code>) while <code>{episode}</code> drops it</td>
+</tr>
+<tr>
 <td><code>{quality}</code> <code>{resolution}</code> <code>{hdr}</code> <code>{hfr}</code> <code>{vcodec}</code> <code>{acodec}</code> <code>{edition}</code> <code>{tag}</code> <code>{lang_tag}</code></td>
 <td>As in the filename template, for this file</td>
 </tr>
@@ -2529,14 +2537,14 @@ string as absent. Write your script to accept an empty value for every variable.
 <ul>
 <li>No metadata provider found an ID. <code>{tmdb}</code> is empty when no metadata provider found the title,
   the matching API key is missing, or the title is a movie you gave no ID for.</li>
-<li>The title has no such field. Movies have no <code>{season}</code> or <code>{episode}</code>, and music has
-  neither.</li>
+<li>The title has no such field. Movies have no <code>{season}</code>, <code>{episode}</code> or <code>{part}</code>, and
+  music has none of them.</li>
 <li><strong>The naming context renders it empty on purpose.</strong> <code>{hdr}</code> is empty for an SDR
   file, because SDR is the absence of an HDR tag in a filename rather than a tag that
   reads <code>SDR</code>. <code>{edition}</code>, <code>{atmos}</code>, <code>{multi}</code>, <code>{dual}</code> and <code>{hfr}</code> behave the same
   way. If your script needs the word <code>SDR</code>, derive it from an empty <code>{hdr}</code> yourself.</li>
 <li>The post-script is a <code>failure</code> one. A failed download has no output file to read metadata
-  from, so everything that comes from the naming context is empty. See
+  from, so everything that comes from the output file is empty. See
   <a href="#events">Events</a>.</li>
 </ul>
 <p>There is no <code>{variable?}</code> conditional here, unlike <code>output_template</code>. The token is
@@ -2548,7 +2556,7 @@ padding and the separator belong to the filename template rather than to the dat
 </div>
 <h3 id="music-variables">Music variables<a class="headerlink" href="#music-variables" title="Permanent link">&para;</a></h3>
 <p>A music download builds its variables from the music naming context, so a post-script gets the
-release fields instead of the season and episode ones. <code>{season}</code>, <code>{episode}</code> and
+release fields instead of the season and episode ones. <code>{season}</code>, <code>{episode}</code>, <code>{part}</code> and
 <code>{episode_name}</code> are always empty for music.</p>
 <table>
 <thead>
@@ -2709,9 +2717,10 @@ default on a failure entry.</p>
 </div>
 <p>A <code>failure</code> post-script has no output file to read metadata from, so it carries only what the
 title object already knew: <code>{title}</code>, <code>{title_raw}</code>, <code>{title_id}</code>, <code>{year}</code>, <code>{season}</code>,
-<code>{episode}</code>, <code>{episode_name}</code>, <code>{service}</code>, the tagging IDs and <code>{error}</code>. Everything that
-comes from the naming context, such as <code>{quality}</code>, <code>{hdr}</code>, <code>{artist}</code> and <code>{album}</code>, is
-empty.</p>
+<code>{episode}</code>, <code>{part}</code>, <code>{season_episode}</code>, <code>{absolute}</code>, <code>{date}</code>, <code>{episode_name}</code>, the music
+release fields such as <code>{artist}</code> and <code>{album}</code>, <code>{service}</code>, the tagging IDs and <code>{error}</code>.
+Everything that comes from the output file, such as <code>{quality}</code>, <code>{hdr}</code>, <code>{vcodec}</code> and
+<code>{acodec}</code>, is empty.</p>
 <p>A resumed <code>--continue-downloads</code> download that finishes runs <code>success</code> as usual. unshackle
 sees your script's exit code only when that entry sets <code>wait: true</code>, and even then it only
 writes the code to the debug log. Nothing else reports a failing script. Your script owns
