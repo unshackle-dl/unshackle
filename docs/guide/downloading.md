@@ -782,7 +782,8 @@ unshackle dl --skip-dl --export EXAMPLE 81234567
 
 The export holds a content key for each track your flags selected and no others. To make a
 file another person can use, select generously: for example `-a AAC,EC3` and every language
-you want them to have. An import can only pick tracks whose key is in the file.
+you want them to have. An import can only pick tracks whose key is in the file. A subtitle
+that another tool exported as a direct URL is added next to the manifest's own.
 
 !!! warning "The export file is a secret"
     It holds the content keys and usually a signed manifest URL. Hand it over on purpose,

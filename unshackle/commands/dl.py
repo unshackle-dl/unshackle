@@ -3924,7 +3924,12 @@ class dl:
         dicts and title meta go under ``x-unshackle`` for its own importer.
         """
         with self.EXPORT_LOCK:
-            doc = mediaexport.read(export) if export.is_file() else mediaexport.Document(service_tag=self.service)
+            try:
+                doc = mediaexport.read(export) if export.is_file() else mediaexport.Document(service_tag=self.service)
+            except mediaexport.ExportError as e:
+                # a download mid-licensing must not die over the file it exports to
+                self.log.warning(f"Not exporting {title.id}: {export} is not a usable export ({e})")
+                return
             doc.generator.setdefault("app", "unshackle")
             doc.generator.setdefault("version", __version__)
             if not doc.region and getattr(self, "proxy_requested", False):
@@ -3952,8 +3957,16 @@ class dl:
                     if system and all(x.pssh != pssh or x.system != system for x in entry.drm):
                         entry.drm.append(mediaexport.Drm(system, pssh))
                 content_keys = getattr(drm, "content_keys", None) or {}
+                pool = doc.key_pool()
                 for kid, key in content_keys.items():
-                    entry.keys[kid.hex] = key
+                    # a KID that already holds a different key must not be overwritten:
+                    # the reader rejects a file that disagrees with itself
+                    if pool.setdefault(kid.hex, key) != key:
+                        self.log.warning(
+                            f"KID {kid.hex} already has a different key in {export}, keeping the existing one"
+                        )
+                    else:
+                        entry.keys[kid.hex] = key
 
             mediaexport.write(export, doc)
 
@@ -3968,25 +3981,25 @@ class dl:
             (t.descriptor.name.lower() for t in all_tracks if t.descriptor != Video.Descriptor.URL), ""
         )
         session = getattr(getattr(self, "export_service", None), "session", None)
-        headers = {
-            k: v
-            for k, v in (getattr(session, "headers", None) or {}).items()
-            if k.lower() not in ("cookie", "authorization")
-        }
+        # mediaexport drops Cookie and Authorization itself, on write and on read
+        headers = dict(getattr(session, "headers", None) or {})
         manifests = [mediaexport.Manifest(primary_url, manifest_type, headers, role="primary")] if primary_url else []
-        seen = {primary_url.split("?")[0]}
+        # the whole URL identifies a manifest: two profiles on one endpoint are two manifests
+        seen = {primary_url}
         for t in all_tracks:
             url = str(t.url)
-            if t.descriptor in (Video.Descriptor.DASH, Video.Descriptor.ISM) and url.split("?")[0] not in seen:
-                seen.add(url.split("?")[0])
+            if t.descriptor in (Video.Descriptor.DASH, Video.Descriptor.ISM) and url not in seen:
+                seen.add(url)
                 manifests.append(mediaexport.Manifest(url, t.descriptor.name.lower(), role="extra"))
 
         rows = []
         for t in all_tracks:
+            codec = getattr(t, "codec", None)
             row: dict[str, Any] = {
                 "id": str(t.id),
                 "type": t.__class__.__name__.lower(),
-                "codec": codec.name.lower() if (codec := getattr(t, "codec", None)) else "",
+                # a subtitle side-load names its file format so another tool can fetch it
+                "codec": (codec.value if isinstance(t, Subtitle) else codec.name).lower() if codec else "",
                 "language": str(t.language) if t.language else "",
                 "bitrate": int(bitrate) if (bitrate := getattr(t, "bitrate", None)) else None,
             }

@@ -18,7 +18,7 @@ from unshackle.core.drm import drm_from_dict
 from unshackle.core.manifests import DASH, HLS, ISM
 from unshackle.core.remote_service import RemoteService, build_title, match_track, resolve_proxy_arg
 from unshackle.core.titles import Episode, Movies, Series, Title_T, Titles_T, remap_titles
-from unshackle.core.tracks import Audio, Chapter, Chapters, Tracks, Video
+from unshackle.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.track import Track
 
@@ -151,7 +151,7 @@ class ImportService:
         """
         x = entry.extensions.get("x-unshackle") or {}
         meta = x.get("meta") or {
-            "type": entry.kind,
+            "type": entry.kind if entry.kind in ("movie", "episode", "song") else "movie",
             "id": entry.id,
             "name": entry.title,
             "series_title": entry.series,
@@ -306,6 +306,10 @@ class ImportService:
         else:
             track_dicts = list(tracks_map.values())
 
+        # a side-load from another tool is only a tracks[] row with a url, not a track dict
+        for sub in self.sideloaded_subtitles(title_id, skip=set(tracks_map)):
+            tracks.add(sub, warn_only=True)
+
         for track_dict in track_dicts:
             try:
                 track = Track.from_dict(track_dict)
@@ -344,6 +348,39 @@ class ImportService:
 
         self.tracks_by_title[title_id] = tracks
         return tracks
+
+    def sideloaded_subtitles(self, title_id: str, skip: set[str]) -> list[Subtitle]:
+        """Subtitle tracks for the ``tracks[]`` rows with a ``url``, except the ids in ``skip``.
+
+        The row names the file format as its codec, or nothing, in which case the download
+        finds it with MediaInfo. A row with no language cannot be muxed, so it is skipped.
+        """
+        entry = self.doc.get(title_id)
+        out = []
+        for row in entry.tracks if entry else []:
+            if row.get("type") != "subtitle" or not row.get("url") or str(row.get("id")) in skip:
+                continue
+            language = row.get("language") or (entry.language if entry else "")
+            if not language:
+                self.log.warning(f"Skipping exported subtitle {row.get('id')!r}: it has no language")
+                continue
+            codec = None
+            try:
+                codec = Subtitle.Codec.from_mime(str(row.get("codec") or ""))
+            except ValueError:
+                pass
+            out.append(
+                Subtitle(
+                    id_=str(row.get("id") or ""),
+                    url=str(row["url"]),
+                    language=str(language),
+                    codec=codec,
+                    sdh=bool(row.get("sdh")),
+                    forced=bool(row.get("forced")),
+                    cc=bool(row.get("cc")),
+                )
+            )
+        return out
 
     def key_pool(self, title_id: Optional[str] = None) -> dict[UUID, str]:
         """Exported KID:KEY pairs as {UUID: key_hex}, for one title or across every title."""
