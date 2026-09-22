@@ -2494,6 +2494,9 @@ server does not have to prompt:</p>
   the client region itself</li>
 <li>Track-selection hints (<code>range_</code>, <code>vcodec</code>, <code>quality</code>, <code>best_available</code>) so
   the server fetches the right manifests</li>
+<li>Your language and audio codec selection (<code>-l</code>, <code>-vl</code>, <code>-al</code>, <code>-a</code>, <code>-fs</code>)
+  in a <code>dl_params</code> object. Some services fetch one manifest
+  for each audio language, and pick the languages from these values</li>
 <li>Your local per-service <strong>cache files</strong> (e.g. refreshed tokens), including
   files in subdirectories of the service cache directory, but only the files
   for the active profile. The client withholds a file whose path, in any
@@ -2565,7 +2568,10 @@ request returns the updated cache files (for example a refreshed token) and the
 client saves them locally, so the <strong>next</strong> remote session can skip interactive
 authentication. The login belongs to the client when the client sent
 cookies, credentials, or cache files, or answered a login prompt (a device code
-or an OTP) that led to a successful login. A server-account login never does.</p>
+or an OTP) that led to a successful login. A server-account login never does.
+The client saves only the returned files that pass the same profile check it
+applies before it sends them, so a file for another profile cannot overwrite
+that profile's local file.</p>
 </div>
 </div>
 </div>
@@ -2781,6 +2787,25 @@ from a browser origin, not when you want only the local HTTP API.</p>
 shows as sent), and the track-selection hints <code>range_</code>, <code>vcodec</code>,
 <code>quality</code>, <code>best_available</code>, plus arbitrary service CLI options
 (<code>additionalProperties: true</code>).</p>
+<p><code>dl_params</code> holds the <code>dl</code> track selection: <code>lang</code>, <code>v_lang</code> and <code>a_lang</code>
+(arrays of language strings), <code>acodec</code> (an array of audio codec names, such as
+<code>EC3</code>), and <code>forced_subs</code> (boolean). The server gives these values to the
+service in <code>ctx.parent.params</code>, never as service options, so a service option
+with the same name, such as an own <code>--lang</code>, does not get them. The server uses
+the <code>dl</code> default for each absent or malformed value: <code>lang</code> is <code>["orig"]</code>,
+<code>v_lang</code>, <code>a_lang</code> and <code>acodec</code> are <code>[]</code>, and <code>forced_subs</code> is <code>false</code>. The
+server drops an unknown codec name. An empty array is a valid value and stays
+empty.</p>
+<p>The server does not forward the <code>dl</code> mode flags: <code>video_only</code>, <code>audio_only</code>,
+<code>subs_only</code>, <code>chapters_only</code>, <code>list_</code>, <code>skip_dl</code>, <code>sub_format</code> and
+<code>no_attachments</code>. A service that reads one of them to skip work fetches more on
+the server, but the result is the same.</p>
+<p>In a client-login session (not a server account), the server gives the service
+the client's <code>profile</code> in <code>ctx.parent.params</code>, the same as a local run with that
+profile. The profile name keys the service's token cache, so the cache files
+the client sends and gets back belong to that profile. A service can also use
+the name to select per-profile entries in the server's service config, such as
+a per-profile ESN.</p>
 <p>The response returns <strong>before</strong> authentication finishes:</p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"session_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"...uuid4..."</span><span class="p">,</span><span class="w"> </span><span class="nt">"service"</span><span class="p">:</span><span class="w"> </span><span class="s2">"EXAMPLE"</span><span class="p">,</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"authenticating"</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>

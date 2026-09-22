@@ -1659,6 +1659,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="POST /api/list-titles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client-cache-on-a-remote-only-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Client cache on a remote-only server
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -2513,6 +2530,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="POST /api/list-titles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client-cache-on-a-remote-only-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Client cache on a remote-only server
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -3192,6 +3226,13 @@
 <td><code>false</code></td>
 <td>Force-disable all proxy use.</td>
 </tr>
+<tr>
+<td><code>credentials</code>, <code>cookies</code>, <code>cache</code></td>
+<td>-</td>
+<td>no</td>
+<td><code>null</code></td>
+<td>Your own login material, on a <code>--remote-only</code> server only. See <a href="#client-cache-on-a-remote-only-server">Client cache on a remote-only server</a>.</td>
+</tr>
 </tbody>
 </table>
 <div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Request</label><label for="__tabbed_3_2">Response <code>200</code></label></div>
@@ -3305,9 +3346,35 @@
 <td>no</td>
 <td>Preferred CDM type.</td>
 </tr>
+<tr>
+<td><code>credentials</code>, <code>cookies</code>, <code>cache</code></td>
+<td>-</td>
+<td>no</td>
+<td>Your own login material, on a <code>--remote-only</code> server only. See <a href="#client-cache-on-a-remote-only-server">Client cache on a remote-only server</a>.</td>
+</tr>
 </tbody>
 </table>
 <p>You can also pass service-specific CLI options as additional keys.</p>
+<h4 id="client-cache-on-a-remote-only-server">Client cache on a remote-only server<a class="headerlink" href="#client-cache-on-a-remote-only-server" title="Permanent link">&para;</a></h4>
+<p>A <code>--remote-only</code> server keeps nothing that a client sends. When the request
+does not use a server account, the server runs <code>search</code>, <code>list-titles</code> and
+<code>list-tracks</code> on a new service cache directory for that request only, and
+removes the directory when the request ends, on success and on error. A
+<code>--remote-only</code> server exposes only <code>search</code> of these three endpoints, so the
+rule applies to <code>list-titles</code> and <code>list-tracks</code> only if a later release exposes
+them in that mode.</p>
+<p><code>credentials</code> (<code>{username, password, extra?}</code>) and <code>cookies</code> (base64 of a
+zlib-compressed Netscape cookie file) are the same as on
+<a href="#post-apisessioncreate"><code>POST /api/session/create</code></a>. <code>cache</code> is a map of cache
+files in the same form: each cache key is the file path relative to the service cache
+directory, with <code>/</code> separators and no <code>.json</code> suffix, and each value is base64
+of the zlib-compressed file. The server writes these files into the request
+cache directory before the service authenticates.</p>
+<p>When you send <code>credentials</code>, <code>cookies</code> or <code>cache</code>, a successful response also
+has a <code>cache</code> field in the same form, with the updated files (for example a
+refreshed token), but no <code>titles_</code> files. Save them to send with the next
+request. A request that uses a server account, or a request to a full-mode
+server, uses the server's own cache and returns no <code>cache</code> field.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="4:2"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">Request</label><label for="__tabbed_4_2">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -3497,6 +3564,18 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <td>-</td>
 <td>no</td>
 <td>As on <code>list-titles</code>.</td>
+</tr>
+<tr>
+<td><code>credentials</code>, <code>cookies</code>, <code>cache</code></td>
+<td>-</td>
+<td>no</td>
+<td>As on <code>list-titles</code>.</td>
+</tr>
+<tr>
+<td><code>dl_params</code></td>
+<td>object</td>
+<td>no</td>
+<td>The <code>dl</code> track selection that the service reads from <code>ctx.parent.params</code>: <code>lang</code>, <code>v_lang</code>, <code>a_lang</code>, <code>acodec</code> and <code>forced_subs</code>, as on <a href="#post-apisessioncreate"><code>POST /api/session/create</code></a>. Some services select the manifests they fetch from these values.</td>
 </tr>
 </tbody>
 </table>
@@ -4569,7 +4648,8 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 </span><span id="__span-28-9"><a id="__codelineno-28-9" name="__codelineno-28-9" href="#__codelineno-28-9"></a>DELETE /api/session/{id}        → tear down, harvest updated cache
 </span></code></pre></div>
 <h3 id="post-apisessioncreate"><code>POST /api/session/create</code><a class="headerlink" href="#post-apisessioncreate" title="Permanent link">&para;</a></h3>
-<p>Make a remote session for a service and title. Authentication runs asynchronously in the background. This call returns immediately with <code>status: "authenticating"</code>, and you then poll the prompt endpoint. The body accepts <code>service</code> and <code>title_id</code> (both required). It also accepts a broad set of optional keys, because the body allows <code>additionalProperties</code>. These are <code>credentials</code> (<code>{username, password, extra?}</code>), <code>cookies</code> (base64 of zlib-compressed Netscape cookie file), <code>proxy</code>, <code>no_proxy</code>, <code>profile</code>, <code>cache</code> (map of forwarded cache files, keyed by the file path relative to the service cache directory with <code>/</code> separators and no <code>.json</code> suffix, so a nested key such as <code>session_web/&lt;sha1&gt;</code> lands in a subdirectory), <code>client_region</code>, <code>proxy_region</code>, <code>cdm_type</code>, <code>range_</code>, <code>vcodec</code>, <code>quality</code>, <code>best_available</code>, <code>client</code>, and any service CLI options. <code>proxy_region</code> is the country code the client resolved <code>proxy</code> from; the server matches it against its own accounts. <code>client</code> is a freeform object the dashboard shows as sent (the CLI puts <code>version</code>, <code>code_hash</code>, <code>platform</code> and a redacted <code>argv</code> in it); the server ignores it above 4096 bytes of JSON.</p>
+<p>Make a remote session for a service and title. Authentication runs asynchronously in the background. This call returns immediately with <code>status: "authenticating"</code>, and you then poll the prompt endpoint. The body accepts <code>service</code> and <code>title_id</code> (both required). It also accepts a broad set of optional keys, because the body allows <code>additionalProperties</code>. These are <code>credentials</code> (<code>{username, password, extra?}</code>), <code>cookies</code> (base64 of zlib-compressed Netscape cookie file), <code>proxy</code>, <code>no_proxy</code>, <code>profile</code>, <code>cache</code> (map of forwarded cache files, keyed by the file path relative to the service cache directory with <code>/</code> separators and no <code>.json</code> suffix, so a nested key such as <code>session_web/&lt;sha1&gt;</code> lands in a subdirectory), <code>client_region</code>, <code>proxy_region</code>, <code>cdm_type</code>, <code>range_</code>, <code>vcodec</code>, <code>quality</code>, <code>best_available</code>, <code>dl_params</code>, <code>client</code>, and any service CLI options. <code>proxy_region</code> is the country code the client resolved <code>proxy</code> from; the server matches it against its own accounts. <code>client</code> is a freeform object the dashboard shows as sent (the CLI puts <code>version</code>, <code>code_hash</code>, <code>platform</code> and a redacted <code>argv</code> in it); the server ignores it above 4096 bytes of JSON.</p>
+<p><code>dl_params</code> is an object with the <code>dl</code> track selection: <code>lang</code>, <code>v_lang</code> and <code>a_lang</code> (arrays of language strings), <code>acodec</code> (an array of audio codec names or <code>dl -a</code> aliases such as <code>ddp</code>) and <code>forced_subs</code> (boolean). The service reads these values from <code>ctx.parent.params</code>. The server uses the <code>dl</code> default for each absent or malformed value, and drops an unknown codec name.</p>
 <p>Service CLI options also travel in a nested <code>service_params</code> object, which wins over a flat key with the same name. <code>profile</code> at the top level always means the credentials profile, never a service's own <code>--profile</code> option.</p>
 <p>The <code>proxy</code> value must be a full proxy URI, unless the operator gives your API key <code>server_proxy</code> in the <code>serve.users</code> config. Without it, the server does not resolve country codes with its own proxy providers. It rejects the request with <code>INVALID_PROXY</code> when no <code>proxy</code> is set and the reported <code>client_region</code> differs from the server's region. A request that reports no <code>client_region</code> is not blocked. Pass <code>proxy</code> with your own proxy, or <code>no_proxy</code> to accept the server's own connection. With <code>server_proxy</code>, the server resolves a country code and picks a proxy for your <code>client_region</code> itself.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="19:1"><input checked="checked" id="__tabbed_19_1" name="__tabbed_19" type="radio" /><div class="tabbed-labels"><label for="__tabbed_19_1">Response <code>200</code></label></div>
