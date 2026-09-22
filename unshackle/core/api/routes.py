@@ -408,6 +408,21 @@ async def search(request: web.Request) -> web.Response:
               no_proxy:
                 type: boolean
                 description: Force disable all proxy use (default - false)
+              credentials:
+                type: object
+                additionalProperties: true
+                description: Your own login, on a --remote-only server only ({username, password, extra?})
+              cookies:
+                type: string
+                description: Your own cookies, on a --remote-only server only (base64 of a zlib-compressed Netscape cookie file)
+              cache:
+                type: object
+                additionalProperties:
+                  type: string
+                description: |
+                  Your own cache files, on a --remote-only server only: cache key to base64 of the
+                  zlib-compressed file. The request runs on a cache directory of its own, which the
+                  server removes when the request ends.
     responses:
       '200':
         description: Search results
@@ -439,6 +454,14 @@ async def search(request: web.Request) -> web.Response:
                 count:
                   type: integer
                   description: Number of results returned
+                cache:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: |
+                    The updated cache files, in the same form as the request field. Only on a
+                    --remote-only server, without a server account, when you sent credentials,
+                    cookies or cache.
       '400':
         description: Invalid request
     """
@@ -485,9 +508,41 @@ async def list_titles(request: web.Request) -> web.Response:
               title_id:
                 type: string
                 description: Title identifier
+              credentials:
+                type: object
+                additionalProperties: true
+                description: Your own login, on a --remote-only server only ({username, password, extra?})
+              cookies:
+                type: string
+                description: Your own cookies, on a --remote-only server only (base64 of a zlib-compressed Netscape cookie file)
+              cache:
+                type: object
+                additionalProperties:
+                  type: string
+                description: |
+                  Your own cache files, on a --remote-only server only: cache key to base64 of the
+                  zlib-compressed file. The request runs on a cache directory of its own, which the
+                  server removes when the request ends.
     responses:
       '200':
         description: List of titles
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                titles:
+                  type: array
+                  items:
+                    type: object
+                cache:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: |
+                    The updated cache files, in the same form as the request field. Only on a
+                    --remote-only server, without a server account, when you sent credentials,
+                    cookies or cache.
       '400':
         description: Invalid request (missing parameters, invalid service)
         content:
@@ -614,9 +669,43 @@ async def list_tracks(request: web.Request) -> web.Response:
               proxy:
                 type: string
                 description: Proxy configuration (optional)
+              dl_params:
+                type: object
+                description: |
+                  The dl track selection (lang, v_lang, a_lang, acodec, forced_subs), in the same
+                  form as on `/api/session/create`. The service reads it from `ctx.parent.params`.
+              credentials:
+                type: object
+                additionalProperties: true
+                description: Your own login, on a --remote-only server only ({username, password, extra?})
+              cookies:
+                type: string
+                description: Your own cookies, on a --remote-only server only (base64 of a zlib-compressed Netscape cookie file)
+              cache:
+                type: object
+                additionalProperties:
+                  type: string
+                description: |
+                  Your own cache files, on a --remote-only server only: cache key to base64 of the
+                  zlib-compressed file. The request runs on a cache directory of its own, which the
+                  server removes when the request ends.
     responses:
       '200':
         description: Track information
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              properties:
+                cache:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: |
+                    The updated cache files, in the same form as the request field. Only on a
+                    --remote-only server, without a server account, when you sent credentials,
+                    cookies or cache.
       '400':
         description: Invalid request
     """
@@ -1571,6 +1660,37 @@ async def session_create(request: web.Request) -> web.Response:
               proxy_region:
                 type: string
                 description: Two-letter country the client resolved its proxy for; picks a server account
+              dl_params:
+                type: object
+                description: |
+                  The dl track selection. The service reads it from ctx.parent.params, never as
+                  service options. An absent or malformed value gets the dl default, and the
+                  server drops an unknown codec name.
+                properties:
+                  lang:
+                    type: array
+                    items:
+                      type: string
+                    default: ["orig"]
+                  v_lang:
+                    type: array
+                    items:
+                      type: string
+                    default: []
+                  acodec:
+                    type: array
+                    items:
+                      type: string
+                    default: []
+                    description: Audio codec names, such as EC3
+                  a_lang:
+                    type: array
+                    items:
+                      type: string
+                    default: []
+                  forced_subs:
+                    type: boolean
+                    default: false
               client:
                 type: object
                 additionalProperties: true

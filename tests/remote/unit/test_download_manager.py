@@ -182,3 +182,45 @@ def test_worker_write_result_retries_denied_replace(tmp_path: Path, monkeypatch:
     download_worker.write_result(target, {"progress": 42.0})
     assert json.loads(target.read_text(encoding="utf-8")) == {"progress": 42.0}
     assert len(attempts) == 2
+
+
+class _CapturedCtx(Exception):
+    pass
+
+
+@pytest.mark.parametrize(
+    ("params", "expected"),
+    [
+        ({}, (["orig"], [], [], [], False)),
+        (
+            {"lang": ["es-419"], "v_lang": ["en"], "a_lang": ["ja"], "acodec": "AAC,EC3", "forced_subs": True},
+            (["es-419"], ["en"], ["ja"], ["AAC", "EC3"], True),
+        ),
+    ],
+)
+def test_perform_download_puts_the_lang_selection_in_the_service_ctx(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, params: dict, expected: tuple
+) -> None:
+    """Services read the language selection from ctx.parent.params, not from dl.result()."""
+    import click
+
+    import unshackle.commands.dl as dl_module
+    from unshackle.core.api import download_manager, handlers
+    from unshackle.core.services import Services
+
+    class FakeDl:
+        cli = click.Command("dl")
+
+        def __init__(self, ctx: click.Context, **kwargs: object) -> None:
+            raise _CapturedCtx(ctx)
+
+    monkeypatch.setattr(dl_module, "dl", FakeDl)
+    monkeypatch.setattr(Services, "get_path", staticmethod(lambda s: tmp_path))
+    monkeypatch.setattr(handlers, "load_full_cdm", lambda *a: None)
+
+    with pytest.raises(_CapturedCtx) as exc:
+        download_manager.perform_download("job-1", "EXAMPLE", "t1", dict(params))
+
+    ctx = exc.value.args[0]
+    p = ctx.params
+    assert (p["lang"], p["v_lang"], p["a_lang"], [c.name for c in p["acodec"]], p["forced_subs"]) == expected

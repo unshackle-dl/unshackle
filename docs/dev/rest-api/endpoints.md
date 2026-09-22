@@ -143,6 +143,7 @@ Find titles in a service by query string. The service must have a `search()` met
 | `profile` | string | no | `null` | Credential/cookie profile to use. |
 | `proxy` | string | no | `null` | Full proxy URI, or a country code when the API key has `server_proxy`. |
 | `no_proxy` | boolean | no | `false` | Force-disable all proxy use. |
+| `credentials`, `cookies`, `cache` | - | no | `null` | Your own login material, on a `--remote-only` server only. See [Client cache on a remote-only server](#client-cache-on-a-remote-only-server). |
 
 === "Request"
 
@@ -192,8 +193,33 @@ Get the list of titles behind a title ID, for example episodes or a movie, witho
 | `proxy` | string | no | Full proxy URI, or a country code when the API key has `server_proxy`. |
 | `no_proxy` | boolean | no | Force-disable proxy. |
 | `cdm_type` | string | no | Preferred CDM type. |
+| `credentials`, `cookies`, `cache` | - | no | Your own login material, on a `--remote-only` server only. See [Client cache on a remote-only server](#client-cache-on-a-remote-only-server). |
 
 You can also pass service-specific CLI options as additional keys.
+
+#### Client cache on a remote-only server
+
+A `--remote-only` server keeps nothing that a client sends. When the request
+does not use a server account, the server runs `search`, `list-titles` and
+`list-tracks` on a new service cache directory for that request only, and
+removes the directory when the request ends, on success and on error. A
+`--remote-only` server exposes only `search` of these three endpoints, so the
+rule applies to `list-titles` and `list-tracks` only if a later release exposes
+them in that mode.
+
+`credentials` (`{username, password, extra?}`) and `cookies` (base64 of a
+zlib-compressed Netscape cookie file) are the same as on
+[`POST /api/session/create`](#post-apisessioncreate). `cache` is a map of cache
+files in the same form: each cache key is the file path relative to the service cache
+directory, with `/` separators and no `.json` suffix, and each value is base64
+of the zlib-compressed file. The server writes these files into the request
+cache directory before the service authenticates.
+
+When you send `credentials`, `cookies` or `cache`, a successful response also
+has a `cache` field in the same form, with the updated files (for example a
+refreshed token), but no `titles_` files. Save them to send with the next
+request. A request that uses a server account, or a request to a full-mode
+server, uses the server's own cache and returns no `cache` field.
 
 === "Request"
 
@@ -278,6 +304,8 @@ Show the video, audio, and subtitle tracks for a title. For series, you can scop
 | `episode` | int/string | no | Episode number (combined with `season`). |
 | `part` | int/string | no | Part index of a split episode (combined with `season` and `episode`). |
 | `profile`, `proxy`, `no_proxy`, `cdm_type` | - | no | As on `list-titles`. |
+| `credentials`, `cookies`, `cache` | - | no | As on `list-titles`. |
+| `dl_params` | object | no | The `dl` track selection that the service reads from `ctx.parent.params`: `lang`, `v_lang`, `a_lang`, `acodec` and `forced_subs`, as on [`POST /api/session/create`](#post-apisessioncreate). Some services select the manifests they fetch from these values. |
 
 When you give both `season` and `episode`, the server combines them into a `"{season}x{episode}"` selector. `part` narrows that to `"{season}x{episode}.{part}"`, one part of a [split episode](../creating-a-service.md#split-episodes). Without `part` you get every part of the episode. The server reads `part` only when you give both `season` and `episode`, and `wanted` takes precedence over all three. To scope a part by range, put it in `wanted` instead (`"S01E01.2"`).
 
@@ -857,7 +885,9 @@ DELETE /api/session/{id}        → tear down, harvest updated cache
 
 ### `POST /api/session/create`
 
-Make a remote session for a service and title. Authentication runs asynchronously in the background. This call returns immediately with `status: "authenticating"`, and you then poll the prompt endpoint. The body accepts `service` and `title_id` (both required). It also accepts a broad set of optional keys, because the body allows `additionalProperties`. These are `credentials` (`{username, password, extra?}`), `cookies` (base64 of zlib-compressed Netscape cookie file), `proxy`, `no_proxy`, `profile`, `cache` (map of forwarded cache files, keyed by the file path relative to the service cache directory with `/` separators and no `.json` suffix, so a nested key such as `session_web/<sha1>` lands in a subdirectory), `client_region`, `proxy_region`, `cdm_type`, `range_`, `vcodec`, `quality`, `best_available`, `client`, and any service CLI options. `proxy_region` is the country code the client resolved `proxy` from; the server matches it against its own accounts. `client` is a freeform object the dashboard shows as sent (the CLI puts `version`, `code_hash`, `platform` and a redacted `argv` in it); the server ignores it above 4096 bytes of JSON.
+Make a remote session for a service and title. Authentication runs asynchronously in the background. This call returns immediately with `status: "authenticating"`, and you then poll the prompt endpoint. The body accepts `service` and `title_id` (both required). It also accepts a broad set of optional keys, because the body allows `additionalProperties`. These are `credentials` (`{username, password, extra?}`), `cookies` (base64 of zlib-compressed Netscape cookie file), `proxy`, `no_proxy`, `profile`, `cache` (map of forwarded cache files, keyed by the file path relative to the service cache directory with `/` separators and no `.json` suffix, so a nested key such as `session_web/<sha1>` lands in a subdirectory), `client_region`, `proxy_region`, `cdm_type`, `range_`, `vcodec`, `quality`, `best_available`, `dl_params`, `client`, and any service CLI options. `proxy_region` is the country code the client resolved `proxy` from; the server matches it against its own accounts. `client` is a freeform object the dashboard shows as sent (the CLI puts `version`, `code_hash`, `platform` and a redacted `argv` in it); the server ignores it above 4096 bytes of JSON.
+
+`dl_params` is an object with the `dl` track selection: `lang`, `v_lang` and `a_lang` (arrays of language strings), `acodec` (an array of audio codec names or `dl -a` aliases such as `ddp`) and `forced_subs` (boolean). The service reads these values from `ctx.parent.params`. The server uses the `dl` default for each absent or malformed value, and drops an unknown codec name.
 
 Service CLI options also travel in a nested `service_params` object, which wins over a flat key with the same name. `profile` at the top level always means the credentials profile, never a service's own `--profile` option.
 

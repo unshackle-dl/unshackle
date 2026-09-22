@@ -410,6 +410,27 @@ def test_save_returned_cache_writes_nested_keys_and_rejects_escapes(tmp_path, mo
     ]
 
 
+def test_save_returned_cache_drops_other_profiles_files(tmp_path, monkeypatch) -> None:
+    """A returned file for another profile must not overwrite that profile's local file."""
+    import base64
+    import logging
+    import zlib
+    from types import SimpleNamespace
+
+    from unshackle.core.config import config
+    from unshackle.core.remote_service import RemoteService
+
+    tag = "TESTSVC"
+    monkeypatch.setattr(config.directories, "cache", tmp_path)
+    monkeypatch.setattr(config, "credentials", {tag: {"default": "a@example.com:pw", "work": "b@example.com:pw"}})
+    stub = SimpleNamespace(service_tag=tag, log=logging.getLogger("test"))
+    blob = base64.b64encode(zlib.compress(b"x")).decode("ascii")
+
+    RemoteService.save_returned_cache(stub, {"tokens_work": blob, "tokens_default": blob, "tokens": blob}, "work")
+
+    assert sorted(p.name for p in (tmp_path / tag).iterdir()) == ["tokens.json", "tokens_work.json"]
+
+
 def test_save_returned_cache_ignores_oversized_payload(tmp_path, monkeypatch) -> None:
     import logging
     from types import SimpleNamespace
@@ -536,3 +557,54 @@ def test_session_create_writes_nested_cache_and_skips_colliding_keys(tmp_path, m
 
     written = {p.name: p.read_text() for p in tmp_path.rglob("*.json") if p.is_file()}
     assert written == {"x.json": "flat", "keys.v2.json": "dotted"}
+
+
+class _SentCreate(Exception):
+    pass
+
+
+def _sent_create_data(parent_params: dict, service_params: dict) -> dict:
+    import logging
+    from types import SimpleNamespace
+
+    from unshackle.core.remote_service import RemoteService
+
+    def post(path: str, data: dict) -> dict:
+        raise _SentCreate(data)
+
+    svc = object.__new__(RemoteService)
+    svc.ctx = SimpleNamespace(parent=SimpleNamespace(params={"no_proxy": True, **parent_params}), obj=None)
+    svc.service_tag = "EXAMPLE"
+    svc.title_id = "t1"
+    svc._server_accounts = {"global": True}
+    svc._server_cdm = True
+    svc._service_params = service_params
+    svc.log = logging.getLogger("test")
+    svc.client = SimpleNamespace(post=post)
+    with pytest.raises(_SentCreate) as exc:
+        svc.authenticate()
+    return exc.value.args[0]
+
+
+def test_dl_selection_travels_nested_and_a_service_option_cannot_override_it() -> None:
+    parent_params = {
+        "lang": ["orig", "es-419"],
+        "v_lang": [],
+        "a_lang": [],
+        "acodec": [Audio.Codec.EC3],
+        "forced_subs": True,
+    }
+    data = _sent_create_data(parent_params, {"lang": 3, "a_lang": "x"})
+    assert data["dl_params"] == {
+        "lang": ["orig", "es-419"],
+        "v_lang": [],
+        "a_lang": [],
+        "acodec": ["EC3"],
+        "forced_subs": True,
+    }
+    assert data["lang"] == 3
+    assert data["service_params"] == {"lang": 3, "a_lang": "x"}
+
+
+def test_no_dl_params_when_the_ctx_has_no_selection() -> None:
+    assert "dl_params" not in _sent_create_data({}, {})

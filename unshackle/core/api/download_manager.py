@@ -18,7 +18,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from unshackle.core.api.events import bus, publish_service_event
 from unshackle.core.api.sanitize import sanitize_log
-from unshackle.core.utils.click_types import VIDEO_CODEC_LIST
+from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, VIDEO_CODEC_LIST
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_path, redact_text
 
 log = logging.getLogger("download_manager")
@@ -392,6 +392,9 @@ def perform_download(
     else:
         params["vcodec"] = []
 
+    if params.get("acodec"):
+        params["acodec"] = AUDIO_CODEC_LIST.convert(params["acodec"])
+
     range_raw = params.get("range")
     if range_raw:
         if isinstance(range_raw, str):
@@ -474,6 +477,12 @@ def perform_download(
         "vcodec": params.get("vcodec", []),
         "range_": params.get("range", [Video.Range.SDR]),
         "best_available": params.get("best_available", False),
+        # services read these here, not from dl.result(), to pick the manifests they fetch
+        "acodec": params.get("acodec") or [],
+        "lang": params.get("lang", ["orig"]),
+        "v_lang": params.get("v_lang", []),
+        "a_lang": params.get("a_lang", []),
+        "forced_subs": params.get("forced_subs", False),
     }
     # Hand-built context: record parameter sources so service dl overrides
     # apply to defaults but never clobber client-sent values.
@@ -567,7 +576,7 @@ def perform_download(
                 service=service_instance,
                 quality=params.get("quality", []),
                 vcodec=params.get("vcodec", []),
-                acodec=params.get("acodec"),
+                acodec=ctx.params["acodec"],
                 vbitrate=params.get("vbitrate"),
                 abitrate=params.get("abitrate"),
                 vbitrate_range=params.get("vbitrate_range"),
@@ -578,14 +587,14 @@ def perform_download(
                 select_titles=False,
                 wanted=params.get("wanted", []),
                 latest_episode=params.get("latest_episode", False),
-                lang=params.get("lang", ["orig"]),
-                v_lang=params.get("v_lang", []),
-                a_lang=params.get("a_lang", []),
+                lang=ctx.params["lang"],
+                v_lang=ctx.params["v_lang"],
+                a_lang=ctx.params["a_lang"],
                 s_lang=params.get("s_lang", ["all"]),
                 require_audio=params.get("require_audio", []),
                 require_video=params.get("require_video", []),
                 require_subs=params.get("require_subs", []),
-                forced_subs=params.get("forced_subs", False),
+                forced_subs=ctx.params["forced_subs"],
                 forced_s_lang=params.get("forced_s_lang", []),
                 exact_lang=params.get("exact_lang", False),
                 sub_format=params.get("sub_format"),

@@ -731,6 +731,29 @@ def cache_stem_is_relevant(
     return not matched_foreign
 
 
+def cache_key_filter(service_tag: str, profile: Optional[str]) -> Callable[[str], bool]:
+    """Return a check for the cache keys that belong to the active credential or profile.
+
+    The check runs :func:`cache_stem_is_relevant` on every path segment of a cache key,
+    because a service may embed the credential digest or profile name in a directory name
+    as well as in the basename. A profile with no credentials entry uses the default one.
+    """
+    from unshackle.commands.dl import dl
+
+    credential = dl.get_credentials(service_tag, profile)
+    allowed = credential_cache_digests(credential) if credential else set()
+    active = profile or "default"
+    profiles = config.credentials.get(service_tag)
+    if isinstance(profiles, dict) and profile and profile not in profiles:
+        active = "default"
+    foreign = set(profiles) - {active} if isinstance(profiles, dict) else set()
+
+    def relevant(key: str) -> bool:
+        return all(cache_stem_is_relevant(part, allowed, active, foreign) for part in key.split("/"))
+
+    return relevant
+
+
 class ServerVault(Vault):
     """The server's vaults as one source seen from the client: it can only be reported against.
 
@@ -944,6 +967,21 @@ class RemoteService:
                 create_data["quality"] = list(quality)
             if self.ctx.parent.params.get("best_available"):
                 create_data["best_available"] = True
+            # Services pick the manifests to fetch from these. They go in their own
+            # object: flat, a service option with the same name would take them (or override them).
+            # An empty list is sent as-is, because only an absent key falls back to the dl default.
+            params = self.ctx.parent.params
+            dl_params: dict[str, Any] = {
+                key: [str(x) for x in params[key]]
+                for key in ("lang", "v_lang", "a_lang")
+                if params.get(key) is not None
+            }
+            if params.get("acodec") is not None:
+                dl_params["acodec"] = [c.name for c in params["acodec"]]
+            if "forced_subs" in params:
+                dl_params["forced_subs"] = bool(params["forced_subs"])
+            if dl_params:
+                create_data["dl_params"] = dl_params
 
         if self._service_params:
             create_data.update(self._service_params)
@@ -1400,18 +1438,21 @@ class RemoteService:
         if session_id:
             try:
                 result = self.client.delete(f"/api/session/{session_id}")
-                self.save_returned_cache(result.get("cache", {}))
+                profile = self.ctx.parent.params.get("profile") if self.ctx.parent else None
+                self.save_returned_cache(result.get("cache", {}), profile)
             except SystemExit:
                 pass
             except Exception as e:
                 self.log.warning(f"Failed to clean up remote session: {e}")
 
-    def save_returned_cache(self, cache_data: Dict[str, str]) -> None:
+    def save_returned_cache(self, cache_data: Dict[str, str], profile: Optional[str] = None) -> None:
         """Save cache files returned by the server to the local cache directory.
 
         The server returns updated cache files (e.g. refreshed tokens) on
         session close. Writing them locally means the next remote session
-        can forward them back, skipping interactive auth.
+        can forward them back, skipping interactive auth. The same filter that
+        :meth:`load_cache_files` applies drops a file that belongs to another
+        credential or profile, so it cannot overwrite that profile's local file.
         """
         if not cache_data:
             return
@@ -1425,11 +1466,16 @@ class RemoteService:
 
         cache_dir = config.directories.cache / self.service_tag
         cache_dir.mkdir(parents=True, exist_ok=True)
+        relevant = cache_key_filter(self.service_tag, profile)
 
+        saved = 0
         for key, content in cache_data.items():
             safe_name = safe_cache_key(key)
             if not safe_name:
                 self.log.warning(f"Rejecting unsafe cache filename from server: {key!r}")
+                continue
+            if not relevant(safe_name):
+                self.log.debug(f"Ignoring cache file from the remote server for another profile: {safe_name}")
                 continue
             try:
                 decompressed = safe_inflate(base64.b64decode(content))
@@ -1437,47 +1483,39 @@ class RemoteService:
                 target = cache_dir / f"{safe_name}.json"
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(decompressed)
+                saved += 1
             except Exception as e:
                 self.log.warning(f"Failed to save returned cache file '{safe_name}': {e}")
 
-        self.log.info(f"Saved {len(cache_data)} cache file(s) from server")
+        self.log.info(f"Saved {saved} cache file(s) from server")
 
     def load_cache_files(self, profile: Optional[str] = None) -> Dict[str, str]:
         """Collect the cache files to forward, and withhold other profiles' files.
 
         The client cannot rely on the server to filter, so it sends only the files
-        it can tie to the active credential or profile, plus service-global state.
-        At worst, a withheld file makes the server authenticate again.
+        it can tie to the active credential or profile (:func:`cache_key_filter`),
+        plus service-global state. At worst, a withheld file makes the server
+        authenticate again.
 
         Each cache key is the file path relative to the service cache directory,
         with posix separators and no ``.json`` suffix, so it equals the ``Cacher``
-        cache key the service reads it with (``session_web/<sha1>``). The relevance check
-        runs on every path segment, because a service may embed the credential
-        digest or profile name in a directory name as well as in the basename.
+        cache key the service reads it with (``session_web/<sha1>``).
         """
         import zlib
 
-        from unshackle.commands.dl import dl
         from unshackle.core.api.sanitize import safe_cache_key
 
         cache_dir = config.directories.cache / self.service_tag
         if not cache_dir.is_dir():
             return {}
 
-        credential = dl.get_credentials(self.service_tag, profile)
-        allowed = credential_cache_digests(credential) if credential else set()
-        active = profile or "default"
-        profiles = config.credentials.get(self.service_tag)
-        if isinstance(profiles, dict) and profile and profile not in profiles:
-            active = "default"
-        foreign = set(profiles) - {active} if isinstance(profiles, dict) else set()
-
+        relevant = cache_key_filter(self.service_tag, profile)
         files: Dict[str, str] = {}
         for f in sorted(cache_dir.rglob("*.json")):
             key = f.relative_to(cache_dir).as_posix()[: -len(".json")]
             if f.stem.startswith("titles_") or not safe_cache_key(key):
                 continue
-            if not all(cache_stem_is_relevant(part, allowed, active, foreign) for part in key.split("/")):
+            if not relevant(key):
                 self.log.debug(f"Withholding cache file from the remote server: {key}")
                 continue
             files[key] = base64.b64encode(zlib.compress(f.read_bytes())).decode("ascii")

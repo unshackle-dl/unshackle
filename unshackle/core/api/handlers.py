@@ -13,7 +13,7 @@ from contextlib import suppress
 from datetime import date as date_
 from http.cookiejar import CookieJar, MozillaCookieJar
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional, cast
 
 import click
 from aiohttp import web
@@ -124,6 +124,8 @@ LIST_HANDLER_TRANSPORT_KEYS = {
     "no_proxy",
     "query",
     "service_params",
+    "cache",
+    "dl_params",
 }
 
 
@@ -286,12 +288,119 @@ def server_login_material(
     return load_client_cookies(data.get("cookies")), credential
 
 
+def api_key_namespace(request: Optional[web.Request]) -> str:
+    """Name of the caller's cache directories, derived from its API key so no caller can guess another's."""
+    import hashlib
+
+    api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
+    return hashlib.pbkdf2_hmac("sha256", api_key.encode(), b"unshackle-session-ns", 100_000).hex()[:12]
+
+
+def write_client_cache(cache_data: Any, cache_tag: str) -> None:
+    """Write a client-sent ``cache`` map into the cache directory ``cache_tag``.
+
+    Each cache key is a file path relative to that directory, and each value is the file as
+    base64 of zlib-compressed bytes. The function skips an unsafe key or a file it cannot write,
+    and raises INVALID_INPUT for a map that is not an object, has too many entries, or holds a
+    value that is not a string.
+    """
+    if not isinstance(cache_data, dict) or len(cache_data) > MAX_SESSION_CACHE_KEYS:
+        raise APIError(APIErrorCode.INVALID_INPUT, f"cache must hold at most {MAX_SESSION_CACHE_KEYS} entries")
+    cache_dir = config.directories.cache / cache_tag
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    for key, content in cache_data.items():
+        safe_name = safe_cache_key(key)
+        if not safe_name:
+            log.warning(f"Rejecting unsafe session cache key: {sanitize_log(key)}")
+            continue
+        if not isinstance(content, str):
+            raise APIError(APIErrorCode.INVALID_INPUT, "cache values must be base64 strings")
+        decompressed = safe_inflate(base64.b64decode(content)).decode("utf-8")
+        target = cache_dir / f"{safe_name}.json"
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(decompressed, encoding="utf-8")
+        except OSError as e:
+            log.warning(f"Skipping session cache key {sanitize_log(key)}: {e}")
+
+
+def collect_cache_files(cache_tag: str) -> Dict[str, str]:
+    """Read the cache directory ``cache_tag`` back as a ``cache`` map for the client.
+
+    The map has the same form that :func:`write_client_cache` reads. It leaves out the
+    ``titles_`` files, because they hold no login state.
+    """
+    cache_data: Dict[str, str] = {}
+    cache_dir = config.directories.cache / cache_tag
+    if cache_dir.is_dir():
+        for f in sorted(cache_dir.rglob("*.json")):
+            key = f.relative_to(cache_dir).as_posix()[: -len(".json")]
+            if f.stem.startswith("titles_") or not safe_cache_key(key):
+                continue
+            try:
+                cache_data[key] = base64.b64encode(zlib.compress(f.read_bytes())).decode("ascii")
+            except OSError:
+                pass
+    return cache_data
+
+
+class RequestCache:
+    """The service cache of one list or search request on a ``--remote-only`` server.
+
+    Such a server keeps nothing that a client sends, so the request runs on a cache directory
+    of its own that the handler removes when the request ends, on success and on error. Before
+    that, a client that logged in with its own cookies, credentials or cache gets the updated
+    files back, the same as when a remote session ends.
+    """
+
+    def __init__(self) -> None:
+        self.tag: Optional[str] = None
+        self.client_auth = False
+
+    def attach(
+        self,
+        service_instance: Any,
+        data: Dict[str, Any],
+        normalized_service: str,
+        request: Optional[web.Request],
+        client_login: bool,
+    ) -> None:
+        """Give the service a new cache directory, seeded from the client's ``cache``.
+
+        Does nothing on a full-mode server, where the operator's own cache stays in use.
+        """
+        import uuid
+
+        from unshackle.core.api.stats import stats
+
+        if stats.mode != "remote_only":
+            return
+        self.tag = f"_requests/{api_key_namespace(request)}/{uuid.uuid4()}/{normalized_service}"
+        service_instance.cache = Cacher(self.tag)
+        cache_data = data.get("cache")
+        if cache_data:
+            write_client_cache(cache_data, self.tag)
+        self.client_auth = client_login or bool(cache_data)
+
+    def json_response(self, payload: Dict[str, Any]) -> web.Response:
+        """Answer with ``payload``, plus the updated ``cache`` for a client that logged in itself."""
+        if self.tag and self.client_auth:
+            cache_data = collect_cache_files(self.tag)
+            if cache_data:
+                payload["cache"] = cache_data
+        return web.json_response(payload)
+
+    def cleanup(self) -> None:
+        SessionStore.cleanup_cache_dir(self.tag)
+
+
 def setup_list_service(
     data: Dict[str, Any],
     normalized_service: str,
     profile: Optional[str],
     title_id: str,
     request: Optional[web.Request] = None,
+    request_cache: Optional[RequestCache] = None,
 ) -> Any:
     """Assemble and authenticate a service instance for list_titles / list_tracks.
 
@@ -318,13 +427,16 @@ def setup_list_service(
         no_proxy,
         proxy_providers,
         service_config,
-        extra_params={"cookies_supplied": cookies is not None},
+        extra_params={"cookies_supplied": cookies is not None, **forwarded_dl_params(data)},
     )
     service_module = Services.load(normalized_service)
     service_instance = instantiate_service(parent_ctx, service_module, title_id, data, LIST_HANDLER_TRANSPORT_KEYS)
 
     if account:
         service_instance.cache = Cacher(f"_accounts/{normalized_service}/{account}")
+    elif request_cache is not None:
+        client_login = cookies is not None or credential is not None
+        request_cache.attach(service_instance, data, normalized_service, request, client_login)
     service_instance.authenticate(cookies, credential)
     return service_instance
 
@@ -334,6 +446,7 @@ def run_service_search(
     normalized_service: str,
     query: str,
     request: Optional[web.Request] = None,
+    request_cache: Optional[RequestCache] = None,
 ) -> List[Dict[str, Any]]:
     """Assemble and authenticate a service instance, then run its search.
 
@@ -381,6 +494,9 @@ def run_service_search(
 
     if account:
         service_instance.cache = Cacher(f"_accounts/{normalized_service}/{account}")
+    elif request_cache is not None:
+        client_login = cookies is not None or credential is not None
+        request_cache.attach(service_instance, data, normalized_service, request, client_login)
     service_instance.authenticate(cookies, credential)
 
     results: List[Dict[str, Any]] = []
@@ -1297,9 +1413,12 @@ async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = 
             details={"service": service_tag},
         )
 
-    results = await asyncio.to_thread(run_service_search, data, normalized_service, query, request)
-
-    return web.json_response({"results": results, "count": len(results)})
+    request_cache = RequestCache()
+    try:
+        results = await asyncio.to_thread(run_service_search, data, normalized_service, query, request, request_cache)
+        return request_cache.json_response({"results": results, "count": len(results)})
+    finally:
+        request_cache.cleanup()
 
 
 async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
@@ -1317,9 +1436,10 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
             details={"service": service_tag},
         )
 
+    request_cache = RequestCache()
     try:
         service_instance = await asyncio.to_thread(
-            setup_list_service, data, normalized_service, profile, title_id, request
+            setup_list_service, data, normalized_service, profile, title_id, request, request_cache
         )
         titles = await asyncio.to_thread(service_instance.get_titles)
 
@@ -1328,7 +1448,7 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
         else:
             title_list = [stamp_service_flags(serialize_title(titles), service_instance)]
 
-        return web.json_response({"titles": title_list})
+        return request_cache.json_response({"titles": title_list})
 
     except APIError:
         raise
@@ -1340,6 +1460,8 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
             context={"operation": "list_titles", "service": normalized_service, "title_id": title_id},
             debug_mode=debug_mode,
         )
+    finally:
+        request_cache.cleanup()
 
 
 async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
@@ -1357,9 +1479,10 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
             details={"service": service_tag},
         )
 
+    request_cache = RequestCache()
     try:
         service_instance = await asyncio.to_thread(
-            setup_list_service, data, normalized_service, profile, title_id, request
+            setup_list_service, data, normalized_service, profile, title_id, request, request_cache
         )
         titles = await asyncio.to_thread(service_instance.get_titles)
 
@@ -1469,7 +1592,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                         response = {"episodes": episodes_data}
                         if failed_episodes:
                             response["unavailable_episodes"] = failed_episodes
-                        return web.json_response(response)
+                        return request_cache.json_response(response)
                     else:
                         raise APIError(
                             APIErrorCode.NO_CONTENT,
@@ -1500,7 +1623,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
             "subtitles": [serialize_subtitle_track(t) for t in tracks.subtitles],
         }
 
-        return web.json_response(response)
+        return request_cache.json_response(response)
 
     except APIError:
         raise
@@ -1512,6 +1635,8 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
             context={"operation": "list_tracks", "service": normalized_service, "title_id": title_id},
             debug_mode=debug_mode,
         )
+    finally:
+        request_cache.cleanup()
 
 
 VALID_VCODECS = [choice.upper() for choice in VIDEO_CODEC_LIST.choices]
@@ -2844,7 +2969,45 @@ SESSION_TRANSPORT_KEYS = {
     "vcodec",
     "quality",
     "best_available",
+    "dl_params",
 }
+
+
+def forwarded_dl_params(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Read the dl track selection that a remote-dl client sends under ``dl_params``.
+
+    Services read these values from ``ctx.parent.params`` to pick the manifests they
+    fetch. They travel in their own object so that they never collide with a service option that
+    has the same name. An absent or malformed value gets the dl default, so an old client that
+    sends no ``dl_params`` gets the same result as a ``dl`` run with no selection flags.
+    ``acodec`` holds codec names or aliases, which become ``Audio.Codec`` members the same way
+    ``dl -a`` converts them; an unknown name is dropped.
+    """
+    raw = data.get("dl_params")
+    if not isinstance(raw, dict):
+        raw = {}
+
+    def str_list(key: str) -> Optional[List[str]]:
+        value = raw.get(key)
+        if isinstance(value, list) and all(isinstance(v, str) for v in value):
+            return list(value)
+        if value is not None:
+            log.warning(f"Ignoring dl_params.{key}: it must be an array of strings")
+        return None
+
+    params: Dict[str, Any] = {}
+    for key in ("lang", "v_lang", "a_lang"):
+        langs = str_list(key)
+        params[key] = langs if langs is not None else list(cast(List[str], DEFAULT_DOWNLOAD_PARAMS[key]))
+    # the dl CLI default is [], and some services test membership in it
+    params["acodec"] = []
+    for name in str_list("acodec") or []:
+        try:
+            params["acodec"].extend(AUDIO_CODEC_LIST.convert(name))
+        except click.BadParameter:
+            log.warning(f"Ignoring unknown dl_params.acodec value: {sanitize_log(name)}")
+    params["forced_subs"] = raw.get("forced_subs") is True
+    return params
 
 
 def create_service_instance(
@@ -2891,6 +3054,7 @@ def create_service_instance(
         "vcodec": vcodec_values,
         "quality": data.get("quality"),
         "best_available": data.get("best_available", False),
+        **forwarded_dl_params(data),
     }
 
     if server_account:
@@ -2908,6 +3072,9 @@ def create_service_instance(
         cookies = load_client_cookies(data.get("cookies"))
 
     extra_params["cookies_supplied"] = cookies is not None
+    # Services key their token caches on this. Only sessions get it: they run on a cache
+    # directory of their own, where the list and search handlers share the server's cache.
+    extra_params["profile"] = profile
 
     parent_ctx = build_parent_ctx(
         profile,
@@ -2954,15 +3121,11 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
     try:
         proxy_param, proxy_providers = await asyncio.to_thread(resolve_handler_proxy, data, normalized_service, request)
 
-        import hashlib
         import uuid as uuid_mod
-
-        from unshackle.core.config import config as app_config
 
         session_id = str(uuid_mod.uuid4())
         api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
-        api_key_hash = hashlib.pbkdf2_hmac("sha256", api_key.encode(), b"unshackle-session-ns", 100_000).hex()[:12]
-        session_cache_dir = f"_sessions/{api_key_hash}/{session_id}/{normalized_service}"
+        session_cache_dir = f"_sessions/{api_key_namespace(request)}/{session_id}/{normalized_service}"
         session_cache_tag: Optional[str] = session_cache_dir
 
         server_account = server_account_for(request, normalized_service)
@@ -3003,26 +3166,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
 
         cache_data = data.get("cache", {})
         if cache_data and session_cache_tag:
-            if not isinstance(cache_data, dict) or len(cache_data) > MAX_SESSION_CACHE_KEYS:
-                raise APIError(APIErrorCode.INVALID_INPUT, f"cache must hold at most {MAX_SESSION_CACHE_KEYS} entries")
-            import base64
-
-            cache_dir = app_config.directories.cache / session_cache_tag
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            for key, content in cache_data.items():
-                safe_name = safe_cache_key(key)
-                if not safe_name:
-                    log.warning(f"Rejecting unsafe session cache key: {sanitize_log(key)}")
-                    continue
-                if not isinstance(content, str):
-                    raise APIError(APIErrorCode.INVALID_INPUT, "cache values must be base64 strings")
-                decompressed = safe_inflate(base64.b64decode(content)).decode("utf-8")
-                target = cache_dir / f"{safe_name}.json"
-                try:
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    target.write_text(decompressed, encoding="utf-8")
-                except OSError as e:
-                    log.warning(f"Skipping session cache key {sanitize_log(key)}: {e}")
+            write_client_cache(cache_data, session_cache_tag)
 
         bridge = InputBridge()
         service_instance._input_bridge = bridge
@@ -4510,11 +4654,7 @@ async def session_info_handler(session_id: str, request: Optional[web.Request] =
 
 async def session_delete_handler(session_id: str, request: Optional[web.Request] = None) -> web.Response:
     """Delete a remote session, return updated cache files, and clean up server-side data."""
-    import base64
-    import zlib
-
     from unshackle.core.api.session_store import get_session_store
-    from unshackle.core.config import config as app_config
 
     session = await get_validated_session(session_id, request)
     store = get_session_store()
@@ -4523,18 +4663,7 @@ async def session_delete_handler(session_id: str, request: Optional[web.Request]
         session.input_bridge.cancel()
 
     cache_tag = session.cache_tag
-    cache_data: Dict[str, str] = {}
-    if cache_tag and session.client_auth:
-        cache_dir = app_config.directories.cache / cache_tag
-        if cache_dir.is_dir():
-            for f in sorted(cache_dir.rglob("*.json")):
-                key = f.relative_to(cache_dir).as_posix()[: -len(".json")]
-                if f.stem.startswith("titles_") or not safe_cache_key(key):
-                    continue
-                try:
-                    cache_data[key] = base64.b64encode(zlib.compress(f.read_bytes())).decode("ascii")
-                except OSError:
-                    pass
+    cache_data = collect_cache_files(cache_tag) if cache_tag and session.client_auth else {}
 
     await store.delete(session_id)
 

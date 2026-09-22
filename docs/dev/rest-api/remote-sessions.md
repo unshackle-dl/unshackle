@@ -124,6 +124,9 @@ hood the client walks a remote session through its lifecycle.
       the client region itself
     - Track-selection hints (`range_`, `vcodec`, `quality`, `best_available`) so
       the server fetches the right manifests
+    - Your language and audio codec selection (`-l`, `-vl`, `-al`, `-a`, `-fs`)
+      in a `dl_params` object. Some services fetch one manifest
+      for each audio language, and pick the languages from these values
     - Your local per-service **cache files** (e.g. refreshed tokens), including
       files in subdirectories of the service cache directory, but only the files
       for the active profile. The client withholds a file whose path, in any
@@ -207,6 +210,9 @@ hood the client walks a remote session through its lifecycle.
     authentication. The login belongs to the client when the client sent
     cookies, credentials, or cache files, or answered a login prompt (a device code
     or an OTP) that led to a successful login. A server-account login never does.
+    The client saves only the returned files that pass the same profile check it
+    applies before it sends them, so a file for another profile cannot overwrite
+    that profile's local file.
 
 !!! tip "Renaming remote titles locally"
     You can rename titles for a remote service you do not have installed locally by
@@ -348,6 +354,28 @@ The server mounts all these routes, even in `--remote-only` mode. Paths use the
 shows as sent), and the track-selection hints `range_`, `vcodec`,
 `quality`, `best_available`, plus arbitrary service CLI options
 (`additionalProperties: true`).
+
+`dl_params` holds the `dl` track selection: `lang`, `v_lang` and `a_lang`
+(arrays of language strings), `acodec` (an array of audio codec names, such as
+`EC3`), and `forced_subs` (boolean). The server gives these values to the
+service in `ctx.parent.params`, never as service options, so a service option
+with the same name, such as an own `--lang`, does not get them. The server uses
+the `dl` default for each absent or malformed value: `lang` is `["orig"]`,
+`v_lang`, `a_lang` and `acodec` are `[]`, and `forced_subs` is `false`. The
+server drops an unknown codec name. An empty array is a valid value and stays
+empty.
+
+The server does not forward the `dl` mode flags: `video_only`, `audio_only`,
+`subs_only`, `chapters_only`, `list_`, `skip_dl`, `sub_format` and
+`no_attachments`. A service that reads one of them to skip work fetches more on
+the server, but the result is the same.
+
+In a client-login session (not a server account), the server gives the service
+the client's `profile` in `ctx.parent.params`, the same as a local run with that
+profile. The profile name keys the service's token cache, so the cache files
+the client sends and gets back belong to that profile. A service can also use
+the name to select per-profile entries in the server's service config, such as
+a per-profile ESN.
 
 The response returns **before** authentication finishes:
 
