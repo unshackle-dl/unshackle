@@ -710,7 +710,8 @@ class Service(metaclass=ABCMeta):
         Parameters:
             track: The decrypted Track object.
             drm: The DRM object it decrypted with.
-            segment: The decrypted HLS segment information.
+            segment: The decrypted HLS segment information. None for DASH and ISM tracks and
+                for an HLS track that merged during the download (merge_segments).
         """
 
     def on_track_repacked(self, track: AnyTrack) -> None:

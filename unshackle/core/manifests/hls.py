@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import time
+from contextlib import ExitStack, closing
 from pathlib import Path
 from typing import Any, Optional, Union
 from urllib.parse import urljoin, urlparse
@@ -34,6 +35,7 @@ from unshackle.core.drm import DRM_T, ClearKey, MonaLisa, PlayReady, Widevine
 from unshackle.core.drm.segment_decrypt import SegmentDecrypter, can_use
 from unshackle.core.drm.verify import decrypt_track
 from unshackle.core.events import events
+from unshackle.core.manifests.dash import RollingMerge
 from unshackle.core.session import RnetResponse, RnetSession
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video, resume
 from unshackle.core.tracks.track import DRM_PREFERENCE_TYPES, assert_fragments_decrypted
@@ -752,10 +754,15 @@ class HLS:
         # segment so the IV uses the absolute media sequence number, not the download index.
         wanted_segments = [seg for seg in master.segments if seg not in unwanted_segments]
 
+        single_init = HLS.single_init_no_rotation(wanted_segments, initial_drm_key, cdm, track.drm_preference)
         use_segment_decrypt = (
-            isinstance(session_drm, (Widevine, PlayReady))
-            and can_use(session_drm, config.decryption)
-            and HLS.single_init_no_rotation(wanted_segments, initial_drm_key, cdm, track.drm_preference)
+            isinstance(session_drm, (Widevine, PlayReady)) and can_use(session_drm, config.decryption) and single_init
+        )
+        use_rolling_merge = (
+            config.merge_segments
+            and single_init
+            and not isinstance(track, Subtitle)
+            and (session_drm is None or isinstance(session_drm, (Widevine, PlayReady)))
         )
 
         total_segments = len(master.segments) - len(unwanted_segments)
@@ -795,6 +802,7 @@ class HLS:
         # earlier run would either be decrypted twice or never at all
         resumable_drm = (
             not use_segment_decrypt
+            and not use_rolling_merge
             and (session_drm is None or isinstance(session_drm, (Widevine, PlayReady)))
             and not any(key and key.method == "AES-128" for key in (master.keys or []))
         )
@@ -839,27 +847,39 @@ class HLS:
 
         map_data: Optional[tuple[m3u8.model.InitializationSection, bytes]] = None
         segment_decrypter: Optional[SegmentDecrypter] = None
-        if use_segment_decrypt:
+        if use_segment_decrypt or use_rolling_merge:
             init_section = wanted_segments[0].init_section
             init_content, _ = HLS.fetch_init_section(session, init_section, 0)
             map_data = (init_section, init_content)
+        if use_segment_decrypt:
             segment_decrypter = SegmentDecrypter(session_drm, init_content, save_dir.parent, max_workers)
 
+        merger: Optional[RollingMerge] = None
         try:
-            for status_update in downloader(**downloader_args):
-                file_downloaded = status_update.get("file_downloaded")
-                if file_downloaded:
-                    if segment_decrypter:
-                        segment_decrypter.submit(file_downloaded)
-                    events.emit(events.Types.SEGMENT_DOWNLOADED, track=track, segment=file_downloaded)
-                else:
-                    downloaded = status_update.get("downloaded")
-                    if downloaded and downloaded.endswith("/s"):
-                        status_update["downloaded"] = f"HLS {downloaded}"
-                    progress(**status_update)
-        except Exception:
+            with ExitStack() as stack:
+                if use_rolling_merge:
+                    output = stack.enter_context(open(save_path, "wb"))
+                    output.write(segment_decrypter.init_bytes() if segment_decrypter else init_content)
+                    merger = RollingMerge(output)
+
+                stream = stack.enter_context(closing(downloader(**downloader_args)))
+                for status_update in stream:
+                    file_downloaded = status_update.get("file_downloaded")
+                    if file_downloaded:
+                        future = segment_decrypter.submit(file_downloaded) if segment_decrypter else None
+                        events.emit(events.Types.SEGMENT_DOWNLOADED, track=track, segment=file_downloaded)
+                        if merger:
+                            merger.add(int(file_downloaded.stem), file_downloaded, future)
+                    else:
+                        downloaded = status_update.get("downloaded")
+                        if downloaded and downloaded.endswith("/s"):
+                            status_update["downloaded"] = f"HLS {downloaded}"
+                        progress(**status_update)
+        except BaseException:
             if segment_decrypter:
                 segment_decrypter.close()
+            if merger:
+                save_path.unlink(missing_ok=True)
             raise
 
         for control_file in segment_save_dir.glob("*.!dev"):
@@ -867,6 +887,52 @@ class HLS:
 
         # merge mutates segment files in place from here on; withdraw the reuse proof
         resume.clear_sidecar(save_dir)
+
+        if merger:
+            if segment_decrypter:
+                segment_decrypter.finish()
+            if merger.merged != total_segments:
+                error_msg = f"Rolling merge appended {merger.merged} of {total_segments} segments: {save_dir}"
+                log_event(
+                    "manifest_hls_rolling_merge_incomplete",
+                    level="ERROR",
+                    message=error_msg,
+                    context={
+                        "track_id": getattr(track, "id", None),
+                        "track_type": track.__class__.__name__,
+                        "save_dir": str(save_dir),
+                        "merged": merger.merged,
+                        "total_segments": total_segments,
+                        "downloader": "requests",
+                    },
+                )
+                save_path.unlink(missing_ok=True)
+                raise FileNotFoundError(error_msg)
+            if save_dir.name.endswith("_segments"):
+                shutil.rmtree(save_dir, ignore_errors=True)
+            log_event(
+                "manifest_hls_download_complete",
+                level="DEBUG",
+                message="HLS download complete, segments appended during the download",
+                context={
+                    "track_id": getattr(track, "id", None),
+                    "track_type": track.__class__.__name__,
+                    "save_dir": str(save_dir),
+                    "segments_found": merger.merged,
+                    "rolling_merge": True,
+                    "downloader": "requests",
+                },
+            )
+            if session_drm:
+                progress(downloaded="Decrypting", completed=0, total=None)
+                decrypt_track(session_drm, save_path, license_widevine, decrypt=not segment_decrypter)
+                assert_fragments_decrypted(save_path)
+                track.drm = None
+                events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=session_drm, segment=None)
+            progress(downloaded="Downloaded", completed=100, total=100)
+            track.path = save_path
+            events.emit(events.Types.TRACK_DOWNLOADED, track=track)
+            return
 
         progress(total=total_segments, completed=0, downloaded="Merging")
 

@@ -62,31 +62,33 @@ class RollingMerge:
     A cursor holds the next expected index; every `add` records one ready segment and then drains
     every contiguous ready segment from the cursor onward. A segment that carries a future (per-segment
     decryption) waits for that future before the append, so the output never holds raw bytes.
+
+    `append(dst, segment_file)` writes one segment; the default is a plain byte copy. A parser
+    whose merge needs a per-segment transform, or a head that only exists once segment 0 has
+    landed (ISM), passes its own.
     """
 
-    def __init__(self, dst: BinaryIO, save_dir: Path, width: int) -> None:
+    def __init__(self, dst: BinaryIO, append: Optional[Callable[[BinaryIO, Path], None]] = None) -> None:
         self.dst = dst
-        self.save_dir = save_dir
-        self.width = width
+        self.append = append or (lambda dst, path: append_segment(dst, path, is_text_subtitle=False))
         self.cursor = 0
-        self.ready: dict[int, Optional[Future]] = {}
+        self.ready: dict[int, tuple[Path, Optional[Future]]] = {}
 
-    def add(self, index: int, future: Optional[Future] = None) -> None:
+    def add(self, index: int, segment_file: Path, future: Optional[Future] = None) -> None:
         # ponytail: runs on the downloader's own loop, so a decrypt wait or a catch-up burst
         # delays new submissions; move the drain to a writer thread if throughput measurably drops
-        self.ready[index] = future
+        self.ready[index] = (segment_file, future)
         while self.cursor in self.ready:
-            pending = self.ready.pop(self.cursor)
+            path, pending = self.ready.pop(self.cursor)
             if pending is not None:
                 pending.result()
-            segment_file = self.save_dir / f"{self.cursor:0{self.width}d}.mp4"
-            append_segment(self.dst, segment_file, is_text_subtitle=False)
+            self.append(self.dst, path)
             self.cursor += 1
             # the bytes are already in the output; a handle another process still holds on
             # the just-replaced file (Windows) must not fail the track, the segment dir sweep
             # after the download removes any leftover
             try:
-                segment_file.unlink()
+                path.unlink()
             except OSError:
                 pass
 
@@ -609,7 +611,7 @@ class DASH:
                     head = decrypter.init_bytes() if decrypter else init_data
                     if head:
                         output.write(head)
-                    merger = RollingMerge(output, save_dir, len(str(len(segments))))
+                    merger = RollingMerge(output)
 
                 # an exception raised in this body (a decrypt failure re-raised by the merge)
                 # must close the generator now, so its finally aborts the workers
@@ -621,7 +623,7 @@ class DASH:
                         # listeners get the segment while it still exists; the merge unlinks it
                         events.emit(events.Types.SEGMENT_DOWNLOADED, track=track, segment=file_downloaded)
                         if merger:
-                            merger.add(int(file_downloaded.stem), future)
+                            merger.add(int(file_downloaded.stem), file_downloaded, future)
                     else:
                         downloaded = status_update.get("downloaded")
                         if downloaded and downloaded.endswith("/s"):
@@ -630,7 +632,7 @@ class DASH:
 
             if decrypter:
                 init_data = decrypter.finish()
-        except Exception:
+        except BaseException:
             if decrypter:
                 decrypter.close()
             if merger:

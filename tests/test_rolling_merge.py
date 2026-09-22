@@ -34,14 +34,14 @@ def test_out_of_order_segments_match_whole_merge(tmp_path: Path) -> None:
     width = write_segments(save_dir, payloads)
     dst = io.BytesIO()
     dst.write(init)
-    merger = RollingMerge(dst, save_dir, width)
+    merger = RollingMerge(dst)
 
     order = list(range(len(payloads)))
     rng.shuffle(order)
     for index in order:
         future: Future = Future()
         future.set_result(None)
-        merger.add(index, future if index % 2 else None)
+        merger.add(index, save_dir / f"{index:0{width}d}.mp4", future if index % 2 else None)
         # the cursor never rests on a segment that is ready: every contiguous run is drained
         assert merger.merged not in merger.ready
 

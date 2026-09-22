@@ -619,9 +619,7 @@ class Track:
         else:
             save_dir = save_path.parent
 
-        keep_segments = (
-            config.continue_downloads and not config.merge_segments and self.descriptor != self.Descriptor.URL
-        )
+        keep_segments = config.continue_downloads and self.descriptor != self.Descriptor.URL
 
         def cleanup() -> None:
             save_path.unlink(missing_ok=True)

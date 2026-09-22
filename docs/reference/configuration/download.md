@@ -135,7 +135,7 @@ continue_downloads: true
 
 - **Type:** `bool` &nbsp;·&nbsp; **Default:** `false`
 
-Appends each DASH segment to the output file as soon as it and every segment before it have
+Appends each segment to the output file as soon as it and every segment before it have
 arrived, instead of joining all the segment files after the last one lands. The join runs
 during the download, so the "Merging" step after the last segment goes away. The output file
 is the same either way.
@@ -151,8 +151,10 @@ the read usually comes from the page cache. On a hard disk, the append to one fi
 workers write many segment files can still make the head seek. If a download gets slower with
 the option on, turn it off.
 
-This applies to DASH video and audio tracks only. Subtitle tracks, HLS tracks and ISM
-tracks keep the merge after the download.
+This applies to video and audio tracks from DASH, ISM, and HLS. An HLS track qualifies
+only when every segment shares one init segment and one `EXT-X-KEY`, with no
+`EXT-X-DISCONTINUITY`, and the DRM is Widevine, PlayReady, or none. AES-128 tracks, tracks
+with content key rotation or discontinuities, and subtitle tracks keep the merge after the download.
 
 !!! note "No resume"
 
