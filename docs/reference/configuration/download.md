@@ -120,12 +120,48 @@ ranges must all match the previous download, or the download silently restarts c
       downloader has its own in-flight partial-file handling for those).
     - HLS resumes Widevine/PlayReady and unencrypted titles only. An AES-128 title always
       restarts. An HLS failure during the post-download merge step also restarts.
+    - A track downloaded with [`merge_segments`](#merge_segments) or
+      [`decrypt_segments`](drm.md#decrypt_segments) never resumes. Both options consume
+      or rewrite the segment files during the download.
 
 For a one-off resume without changing config, pass `dl --continue-downloads` on the
 command line (the flag can only enable resume, never disable it).
 
 ```yaml title="Resume failed downloads"
 continue_downloads: true
+```
+
+## `merge_segments`
+
+- **Type:** `bool` &nbsp;·&nbsp; **Default:** `false`
+
+Appends each DASH segment to the output file as soon as it and every segment before it have
+arrived, instead of joining all the segment files after the last one lands. The join runs
+during the download, so the "Merging" step after the last segment goes away. The output file
+is the same either way.
+
+Segments arrive out of order because the workers run in parallel. unshackle keeps a cursor on
+the next segment it needs and appends every segment that is ready in order, then deletes the
+segment file. With [`decrypt_segments`](drm.md#decrypt_segments) also on, each segment is
+appended after its decryption completes, never before.
+
+This option is off by default because it disables resume, and because its cost during the
+download is not measured. The append reads each segment straight after a worker wrote it, so
+the read usually comes from the page cache. On a hard disk, the append to one file while the
+workers write many segment files can still make the head seek. If a download gets slower with
+the option on, turn it off.
+
+This applies to DASH video and audio tracks only. Subtitle tracks, HLS tracks and ISM
+tracks keep the merge after the download.
+
+!!! note "No resume"
+
+    A track that merges segment by segment always downloads from the start.
+    [`continue_downloads`](#continue_downloads) cannot reuse its segments, because unshackle
+    deletes each segment after it appends it.
+
+```yaml
+merge_segments: true
 ```
 
 ## `subtitle`

@@ -158,6 +158,7 @@ class Config:
             self.decryption_map = {}
             self.decryption = decryption_cfg or "shaka"
         self.decrypt_segments: bool = bool(kwargs.get("decrypt_segments", False))
+        self.merge_segments: bool = bool(kwargs.get("merge_segments", False))
 
         self.theme: str = kwargs.get("theme") or "default"
         self.set_terminal_bg: bool = kwargs.get("set_terminal_bg", False)

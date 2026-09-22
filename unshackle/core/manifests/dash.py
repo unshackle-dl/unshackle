@@ -7,9 +7,12 @@ import math
 import re
 import shutil
 import sys
+from concurrent.futures import Future
+from contextlib import ExitStack, closing
 from copy import deepcopy
 from functools import lru_cache, partial
-from typing import Any, Callable, Optional, Union
+from pathlib import Path
+from typing import Any, BinaryIO, Callable, Optional, Union
 from urllib.parse import urljoin, urlparse
 from uuid import UUID
 from zlib import crc32
@@ -35,6 +38,61 @@ from unshackle.core.tracks.track import DRM_PREFERENCE_TYPES, assert_fragments_d
 from unshackle.core.utilities import is_close_match, log_event, try_ensure_utf8
 from unshackle.core.utils.redact import safe_display_url
 from unshackle.core.utils.xml import load_xml
+
+
+def append_segment(dst: BinaryIO, segment_file: Path, is_text_subtitle: bool) -> None:
+    """Append one segment file to the output, with the text subtitle fixups when they apply."""
+    if is_text_subtitle:
+        segment_data = try_ensure_utf8(segment_file.read_bytes())
+        segment_data = (
+            segment_data.decode("utf8")
+            .replace("&lrm;", html.unescape("&lrm;"))
+            .replace("&rlm;", html.unescape("&rlm;"))
+            .encode("utf8")
+        )
+        dst.write(segment_data)
+    else:
+        with open(segment_file, "rb") as src:
+            shutil.copyfileobj(src, dst, 1024 * 1024)
+
+
+class RollingMerge:
+    """Appends segments to the output in index order as they arrive, out of order, and unlinks them.
+
+    A cursor holds the next expected index; every `add` records one ready segment and then drains
+    every contiguous ready segment from the cursor onward. A segment that carries a future (per-segment
+    decryption) waits for that future before the append, so the output never holds raw bytes.
+    """
+
+    def __init__(self, dst: BinaryIO, save_dir: Path, width: int) -> None:
+        self.dst = dst
+        self.save_dir = save_dir
+        self.width = width
+        self.cursor = 0
+        self.ready: dict[int, Optional[Future]] = {}
+
+    def add(self, index: int, future: Optional[Future] = None) -> None:
+        # ponytail: runs on the downloader's own loop, so a decrypt wait or a catch-up burst
+        # delays new submissions; move the drain to a writer thread if throughput measurably drops
+        self.ready[index] = future
+        while self.cursor in self.ready:
+            pending = self.ready.pop(self.cursor)
+            if pending is not None:
+                pending.result()
+            segment_file = self.save_dir / f"{self.cursor:0{self.width}d}.mp4"
+            append_segment(self.dst, segment_file, is_text_subtitle=False)
+            self.cursor += 1
+            # the bytes are already in the output; a handle another process still holds on
+            # the just-replaced file (Windows) must not fail the track, the segment dir sweep
+            # after the download removes any leftover
+            try:
+                segment_file.unlink()
+            except OSError:
+                pass
+
+    @property
+    def merged(self) -> int:
+        return self.cursor
 
 
 class DASH:
@@ -473,11 +531,14 @@ class DASH:
         )
 
         use_segment_decrypt = not collapse_single_url and bool(init_data) and can_use(drm, config.decryption)
+        # subtitle segments are tiny, the post-download merge costs nothing there
+        use_rolling_merge = not collapse_single_url and config.merge_segments and not isinstance(track, Subtitle)
 
         if not collapse_single_url:
             # per-segment decryption rewrites each segment in place, so a segment kept from an
-            # earlier run would either be decrypted twice or never at all
-            can_resume = config.continue_downloads and not use_segment_decrypt
+            # earlier run would either be decrypted twice or never at all; a rolling merge
+            # unlinks each segment as it is appended, so there is nothing left to reuse
+            can_resume = config.continue_downloads and not use_segment_decrypt and not use_rolling_merge
             # reuse a prior run's segments only when the fingerprint proves the segmentation unchanged
             digest = resume.fingerprint(track.url, segments)
             if not (can_resume and resume.reusable(save_dir, digest)):
@@ -532,33 +593,72 @@ class DASH:
             },
         )
 
+        is_text_subtitle = (
+            not drm and isinstance(track, Subtitle) and track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML)
+        )
+
         decrypter: Optional[SegmentDecrypter] = None
         if use_segment_decrypt and init_data:
             decrypter = SegmentDecrypter(drm, init_data, save_dir.parent, max_workers)
 
+        merger: Optional[RollingMerge] = None
         try:
-            for status_update in downloader(**downloader_args):
-                file_downloaded = status_update.get("file_downloaded")
-                if file_downloaded:
-                    if decrypter:
-                        decrypter.submit(file_downloaded)
-                    events.emit(events.Types.SEGMENT_DOWNLOADED, track=track, segment=file_downloaded)
-                else:
-                    downloaded = status_update.get("downloaded")
-                    if downloaded and downloaded.endswith("/s"):
-                        status_update["downloaded"] = f"DASH {downloaded}"
-                    progress(**status_update)
+            with ExitStack() as stack:
+                if use_rolling_merge:
+                    output = stack.enter_context(open(save_path, "wb"))
+                    head = decrypter.init_bytes() if decrypter else init_data
+                    if head:
+                        output.write(head)
+                    merger = RollingMerge(output, save_dir, len(str(len(segments))))
+
+                # an exception raised in this body (a decrypt failure re-raised by the merge)
+                # must close the generator now, so its finally aborts the workers
+                stream = stack.enter_context(closing(downloader(**downloader_args)))
+                for status_update in stream:
+                    file_downloaded = status_update.get("file_downloaded")
+                    if file_downloaded:
+                        future = decrypter.submit(file_downloaded) if decrypter else None
+                        # listeners get the segment while it still exists; the merge unlinks it
+                        events.emit(events.Types.SEGMENT_DOWNLOADED, track=track, segment=file_downloaded)
+                        if merger:
+                            merger.add(int(file_downloaded.stem), future)
+                    else:
+                        downloaded = status_update.get("downloaded")
+                        if downloaded and downloaded.endswith("/s"):
+                            status_update["downloaded"] = f"DASH {downloaded}"
+                        progress(**status_update)
 
             if decrypter:
                 init_data = decrypter.finish()
         except Exception:
             if decrypter:
                 decrypter.close()
+            if merger:
+                save_path.unlink(missing_ok=True)
             raise
 
         if collapse_single_url:
             with open(save_path, "r+b") as collapsed:
                 collapsed.truncate(int(segments[-1][1].split("-")[1]) + 1)
+        elif merger:
+            for control_file in save_dir.glob("*.!dev"):
+                control_file.unlink(missing_ok=True)
+            if merger.merged != len(segments):
+                error_msg = f"Rolling merge appended {merger.merged} of {len(segments)} segments: {save_dir}"
+                log_event(
+                    "manifest_dash_rolling_merge_incomplete",
+                    level="ERROR",
+                    message=error_msg,
+                    context={
+                        "track_id": getattr(track, "id", None),
+                        "track_type": track.__class__.__name__,
+                        "save_dir": str(save_dir),
+                        "merged": merger.merged,
+                        "total_segments": len(segments),
+                        "downloader": "requests",
+                    },
+                )
+                raise FileNotFoundError(error_msg)
         else:
             if not save_dir.exists():
                 error_msg = f"Output directory does not exist: {save_dir}"
@@ -613,29 +713,13 @@ class DASH:
                 )
                 raise FileNotFoundError(error_msg)
 
-            is_text_subtitle = (
-                not drm
-                and isinstance(track, Subtitle)
-                and track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML)
-            )
             with open(save_path, "wb") as f:
                 if init_data:
                     f.write(init_data)
                 if len(segments_to_merge) > 1:
                     progress(downloaded="Merging", completed=0, total=len(segments_to_merge))
                 for segment_file in segments_to_merge:
-                    if is_text_subtitle:
-                        segment_data = try_ensure_utf8(segment_file.read_bytes())
-                        segment_data = (
-                            segment_data.decode("utf8")
-                            .replace("&lrm;", html.unescape("&lrm;"))
-                            .replace("&rlm;", html.unescape("&rlm;"))
-                            .encode("utf8")
-                        )
-                        f.write(segment_data)
-                    else:
-                        with open(segment_file, "rb") as src:
-                            shutil.copyfileobj(src, f, 1024 * 1024)
+                    append_segment(f, segment_file, is_text_subtitle)
                     segment_file.unlink()
                     progress(advance=1)
 

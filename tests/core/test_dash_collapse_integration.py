@@ -24,6 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
+from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DownloadCancelled
 from unshackle.core.manifests import DASH
 from unshackle.core.tracks.track import DownloadContext
@@ -233,5 +234,35 @@ def test_cancelled_sibling_does_not_report_missing_segments(server, tmp_path):
 
     # the workers returned early, so there is nothing to merge; a FileNotFoundError about the
     # missing segments here would mask the sibling failure that set the flag
+    assert track.path is None
+    assert not ctx.save_path.exists()
+
+
+def test_rolling_merge_appends_in_order_and_leaves_no_segments(server, tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "merge_segments", True)
+    server.routes["/init.bin"] = INIT2
+    server.routes["/part0.bin"] = PART0
+    server.routes["/part1.bin"] = PART1
+    track = make_track(mixed_mpd(server), server)
+    ctx = make_ctx(tmp_path, "rolling.mp4")
+
+    DASH.download_track(track, ctx)
+
+    assert ctx.save_path.read_bytes() == INIT2 + PART0 + PART1
+    assert not ctx.save_dir.exists() or not list(ctx.save_dir.glob("*"))
+
+
+def test_rolling_merge_cancel_leaves_no_partial_output(server, tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "merge_segments", True)
+    server.routes["/init.bin"] = INIT2
+    server.routes["/part0.bin"] = PART0
+    server.routes["/part1.bin"] = PART1
+    track = make_track(mixed_mpd(server), server)
+    ctx = make_ctx(tmp_path, "rolling-cancelled.mp4")
+
+    DOWNLOAD_CANCELLED.set()
+    with pytest.raises(DownloadCancelled):
+        DASH.download_track(track, ctx)
+
     assert track.path is None
     assert not ctx.save_path.exists()

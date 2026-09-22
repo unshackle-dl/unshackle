@@ -53,10 +53,13 @@ class SegmentDecrypter:
 
         self.pool = ThreadPoolExecutor(max_workers=min(workers or os.cpu_count() or 4, MAX_WORKERS))
         self.futures: list[Future] = []
+        self._init_bytes: Optional[bytes] = None
 
-    def submit(self, segment: Path) -> None:
-        """Queue one downloaded segment for decryption."""
-        self.futures.append(self.pool.submit(self.decrypt_segment, segment))
+    def submit(self, segment: Path) -> Future:
+        """Queue one downloaded segment for decryption and return its future."""
+        future = self.pool.submit(self.decrypt_segment, segment)
+        self.futures.append(future)
+        return future
 
     def decrypt_segment(self, segment: Path) -> None:
         output = segment.with_suffix(segment.suffix + ".dec")
@@ -66,14 +69,24 @@ class SegmentDecrypter:
         finally:
             output.unlink(missing_ok=True)
 
+    def init_bytes(self) -> bytes:
+        """Decrypt the init segment on first call and return its bytes.
+
+        Independent of the media segments, so a rolling merge can write it at the head of the
+        output before any segment lands.
+        """
+        if self._init_bytes is None:
+            decrypted_init = self.work_dir / "init_decrypted.mp4"
+            self.run([str(self.init_path), str(decrypted_init)])
+            self._init_bytes = decrypted_init.read_bytes()
+        return self._init_bytes
+
     def finish(self) -> bytes:
         """Wait for every queued segment, then return the decrypted init segment bytes."""
         try:
             for future in self.futures:
                 future.result()
-            decrypted_init = self.work_dir / "init_decrypted.mp4"
-            self.run([str(self.init_path), str(decrypted_init)])
-            return decrypted_init.read_bytes()
+            return self.init_bytes()
         finally:
             self.close()
 
