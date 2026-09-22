@@ -272,13 +272,24 @@ def failed_tags(errors: Iterable[str]) -> set[str]:
     return {err.split(":", 1)[0] for err in errors if ":" in err}
 
 
+def staged_max_age() -> float:
+    """Seconds a staged tag may wait for its jobs and sessions before it swaps in anyway; 0 waits forever."""
+    return float((config.serve or {}).get("services_staged_max_age", 0) or 0)
+
+
 def apply_pending(busy: set[str] | None = None) -> list[str]:
     """Reload every staged tag whose service is no longer busy; returns the tags now running.
 
-    A tag whose re-import failed is not one of them: the old module keeps serving, so calling
-    it applied would tell the dashboard that code is live when it is not.
+    A tag staged for longer than ``serve.services_staged_max_age`` reloads even while busy:
+    its live sessions keep the old class objects they already hold, and a popular tag would
+    otherwise never see a quiet moment. A tag whose re-import failed is not counted as
+    running: the old module keeps serving, so calling it applied would tell the dashboard
+    that code is live when it is not.
     """
-    ready = sorted(PENDING - (busy or set()))
+    max_age = staged_max_age()
+    now = time.time()
+    overdue = {tag for tag, since in PENDING_SINCE.items() if max_age and now - since >= max_age}
+    ready = sorted((PENDING - (busy or set())) | (PENDING & overdue))
     if not ready:
         return []
     errors = reload_services(ready)

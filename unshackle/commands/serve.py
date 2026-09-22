@@ -52,7 +52,7 @@ def _install_service_refresh(app: web.Application) -> None:
         return
 
     async def loop() -> None:
-        from unshackle.core.api.download_manager import busy_services
+        from unshackle.core.api.download_manager import busy_services, schedule_pending_reload
 
         while True:
             await asyncio.sleep(interval)
@@ -70,6 +70,9 @@ def _install_service_refresh(app: web.Application) -> None:
                     for err in r["load_errors"]:
                         log.error(f"Service reload failed: {err}")
                 publish_refresh_events(repos)
+                # The busy set was read before the pull. A tag whose last session ended during the pull
+                # is staged although idle, and its session-end trigger ran before it was staged.
+                schedule_pending_reload()
             except Exception:
                 log.exception("Service refresh failed")
 

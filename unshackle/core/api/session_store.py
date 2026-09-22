@@ -95,6 +95,13 @@ class SessionEntry:
         }
 
 
+def _schedule_pending_reload(service_tag: str) -> None:
+    """Apply staged service reloads now that a remote session ended; the task runs after the store lock releases."""
+    from unshackle.core.api.download_manager import schedule_pending_reload
+
+    schedule_pending_reload(service_tag)
+
+
 def _publish(action: str, entry: SessionEntry, reason: Optional[str] = None) -> None:
     data = {"action": action, **entry.summary()}
     if reason:
@@ -145,6 +152,7 @@ class SessionStore:
                     evicted.input_bridge.cancel()
                 self.cleanup_cache_dir(evicted.cache_tag)
                 _publish("delete", evicted, "evicted")
+                _schedule_pending_reload(evicted.service_tag)
 
             session_id = session_id or str(uuid.uuid4())
             entry = SessionEntry(
@@ -173,6 +181,7 @@ class SessionStore:
                     log.info(f"Session {sanitize_log(session_id)} expired (elapsed={elapsed:.0f}s, ttl={self.ttl}s)")
                     self.cleanup_cache_dir(entry.cache_tag)
                     _publish("delete", self._sessions.pop(session_id), "expired")
+                    _schedule_pending_reload(entry.service_tag)
                     return None
 
             entry.touch()
@@ -196,6 +205,7 @@ class SessionStore:
                 self.cleanup_cache_dir(entry.cache_tag)
                 _publish("delete", entry, "closed")
                 log.info(f"Deleted session {sanitize_log(session_id)}")
+                _schedule_pending_reload(entry.service_tag)
                 return True
             return False
 
@@ -211,12 +221,16 @@ class SessionStore:
                         expired.append(sid)
                 elif elapsed > self.ttl:
                     expired.append(sid)
+            ended_tags: set[str] = set()
             for sid in expired:
                 entry = self._sessions.pop(sid)
                 if entry.input_bridge:
                     entry.input_bridge.cancel()
                 self.cleanup_cache_dir(entry.cache_tag)
                 _publish("delete", entry, "expired")
+                ended_tags.add(entry.service_tag)
+            for tag in ended_tags:
+                _schedule_pending_reload(tag)
             if expired:
                 log.info(f"Cleaned up {len(expired)} expired sessions")
             return len(expired)

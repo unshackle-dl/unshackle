@@ -105,3 +105,19 @@ def test_apply_pending_never_reports_a_failed_reimport_as_applied(
     services.PENDING.add("FOO")
     assert services.apply_pending(busy=set()) == ["FOO"]
     assert services.LOADED_COMMITS["FOO"] == "new-head"
+
+
+def test_overdue_staged_service_applies_while_busy(service_dir: Path, monkeypatch: pytest.MonkeyPatch):
+    write_service(service_dir, 2)
+    monkeypatch.setattr(services, "repo_specs", lambda: ["example/repo"])
+    monkeypatch.setattr(services, "refresh_repo", lambda spec: (service_dir, ["~FOO"]))
+    monkeypatch.setattr(services, "staged_max_age", lambda: 60.0)
+
+    services.refresh_and_reload(busy={"FOO"})
+    assert services.apply_pending(busy={"FOO"}) == []
+    assert services.MODULES["FOO"].VERSION == 1
+
+    services.PENDING_SINCE["FOO"] -= 61
+    assert services.apply_pending(busy={"FOO"}) == ["FOO"]
+    assert services.MODULES["FOO"].VERSION == 2
+    assert services.PENDING == set() and "FOO" not in services.PENDING_SINCE

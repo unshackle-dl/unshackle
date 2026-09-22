@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 
 import pytest
 
@@ -142,3 +143,123 @@ async def test_get_expiry_removes_cache_dir(store: SessionStore, monkeypatch: py
     entry.last_accessed = datetime.now(timezone.utc) - timedelta(seconds=store.ttl + 100)
     assert await store.get(entry.session_id) is None
     assert removed == ["_sessions/k/s/EXAMPLE"]
+
+
+async def test_session_end_applies_staged_service_reload(store: SessionStore, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A staged reload swaps in as soon as the last session on that tag ends, not on the next refresh tick."""
+    from unshackle.core import services
+    from unshackle.core.api import download_manager
+
+    applied: list[set[str]] = []
+
+    def fake_apply(busy: set[str]) -> list[str]:
+        applied.append(busy)
+        return sorted(services.PENDING - busy)
+
+    monkeypatch.setattr(services, "PENDING", {"EXAMPLE"})
+    monkeypatch.setattr(services, "apply_pending", fake_apply)
+    monkeypatch.setattr(download_manager, "publish_service_event", lambda *a, **k: None)
+
+    entry = await store.create("EXAMPLE", _FakeService())
+    assert await store.delete(entry.session_id)
+    await asyncio.sleep(0.05)
+    assert applied == [set()]
+
+
+def _stage_reload(monkeypatch: pytest.MonkeyPatch, pending: set[str], delay: float = 0.0) -> list[set[str]]:
+    """Stage ``pending`` for reload and record every apply_pending call; returns the call log."""
+    from unshackle.core import services
+    from unshackle.core.api import download_manager
+
+    applied: list[set[str]] = []
+
+    def fake_apply(busy: set[str]) -> list[str]:
+        if delay:
+            time.sleep(delay)
+        applied.append(busy)
+        return sorted(services.PENDING - busy)
+
+    monkeypatch.setattr(services, "PENDING", pending)
+    monkeypatch.setattr(services, "apply_pending", fake_apply)
+    monkeypatch.setattr(download_manager, "publish_service_event", lambda *a, **k: None)
+    monkeypatch.setattr(download_manager, "_reload_task", None)
+    return applied
+
+
+async def test_session_end_on_unstaged_tag_skips_reload(store: SessionStore, monkeypatch: pytest.MonkeyPatch) -> None:
+    applied = _stage_reload(monkeypatch, {"OTHER"})
+
+    entry = await store.create("EXAMPLE", _FakeService())
+    assert await store.delete(entry.session_id)
+    await asyncio.sleep(0.05)
+    assert applied == []
+
+
+async def test_concurrent_session_ends_reload_once(store: SessionStore, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Session ends that overlap an in-flight reload share it instead of each re-importing the tag."""
+    applied = _stage_reload(monkeypatch, {"EXAMPLE"}, delay=0.05)
+
+    ids = [(await store.create("EXAMPLE", _FakeService())).session_id for _ in range(10)]
+    await asyncio.gather(*(store.delete(sid) for sid in ids))
+    await asyncio.sleep(0.3)
+    assert len(applied) == 1
+
+
+async def test_eviction_applies_staged_service_reload(store: SessionStore, monkeypatch: pytest.MonkeyPatch) -> None:
+    applied = _stage_reload(monkeypatch, {"EXAMPLE"})
+    monkeypatch.setattr(type(store), "max_sessions", property(lambda _: 1))
+
+    await store.create("EXAMPLE", _FakeService(), session_id="a")
+    await store.create("OTHER", _FakeService(), session_id="b")
+    await asyncio.sleep(0.05)
+    assert len(applied) == 1
+
+
+async def test_inline_expiry_applies_staged_service_reload(
+    store: SessionStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    applied = _stage_reload(monkeypatch, {"EXAMPLE"})
+
+    entry = await store.create("EXAMPLE", _FakeService())
+    entry.last_accessed = datetime.now(timezone.utc) - timedelta(seconds=store.ttl + 100)
+    assert await store.get(entry.session_id) is None
+    await asyncio.sleep(0.05)
+    assert applied == [set()]
+
+
+async def test_cleanup_expired_applies_staged_service_reload_once(
+    store: SessionStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A cleanup sweep that drops several sessions on one tag schedules one reload for that tag."""
+    from datetime import datetime, timedelta, timezone
+
+    applied = _stage_reload(monkeypatch, {"EXAMPLE"})
+    stale = datetime.now(timezone.utc) - timedelta(seconds=store.ttl + 100)
+    for sid in ("a", "b"):
+        (await store.create("EXAMPLE", _FakeService(), session_id=sid)).last_accessed = stale
+
+    assert await store.cleanup_expired() == 2
+    await asyncio.sleep(0.05)
+    assert applied == [set()]
+
+
+async def test_live_session_on_same_tag_keeps_it_busy(store: SessionStore, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ending one of two sessions on a staged tag reports the tag busy; ending the last one frees it."""
+    from unshackle.core.api import download_manager
+    from unshackle.core.api import session_store as session_store_module
+
+    applied = _stage_reload(monkeypatch, {"EXAMPLE"})
+    monkeypatch.setattr(session_store_module, "session_store", store)
+    monkeypatch.setattr(download_manager, "download_manager", None)
+
+    first = await store.create("EXAMPLE", _FakeService())
+    second = await store.create("EXAMPLE", _FakeService())
+    assert await store.delete(first.session_id)
+    await asyncio.sleep(0.05)
+    assert applied == [{"EXAMPLE"}]
+
+    assert await store.delete(second.session_id)
+    await asyncio.sleep(0.05)
+    assert applied == [{"EXAMPLE"}, set()]
