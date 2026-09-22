@@ -1061,7 +1061,7 @@ Get the content keys for the DRM. The `mode` field selects one of two modes.
 === "Single: Response `200`"
 
     ```json
-    { "keys": { "<kid_hex>": "<key_hex>" }, "vault_keys": ["<kid_hex>"] }
+    { "keys": { "<kid_hex>": "<key_hex>" }, "vault_keys": ["<kid_hex>"], "drm_type": "widevine" }
     ```
 
 === "Batch: Response `200`"
@@ -1075,7 +1075,7 @@ Get the content keys for the DRM. The `mode` field selects one of two modes.
 | `track_id` / `track_ids` | Single track, or a batch of tracks. |
 | `challenge` | Base64 CDM challenge (proxy mode). |
 | `pssh` | Base64 PSSH (server-CDM mode). |
-| `drm_type` | `widevine` (default) or `playready`. |
+| `drm_type` | `widevine` (default) or `playready`. In server-CDM mode the server's `cdm` mapping for the service decides the DRM system and the response `drm_type` names the system that licensed. The client's value decides only when the server has no mapping for the service. |
 | `mode` | `proxy` (default) or `server_cdm`. |
 | `clear_tracks` (response) | Requested track ids that carry no DRM, so they have no keys. Absent when every requested track is encrypted. |
 | `vault_keys` (response) | KIDs whose content key came from a server vault, not the CDM. The client proves such a content key with a decode before it trusts it; the field is absent when every content key came from the CDM. |

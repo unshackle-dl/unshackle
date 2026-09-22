@@ -213,6 +213,17 @@ def deserialize_subtitle(data: Dict[str, Any]) -> Subtitle:
     )
 
 
+def track_pssh(track: Any, drm_type: str) -> Optional[str]:
+    """The base64 PSSH of the track's header for one DRM system; None when the track has none of it."""
+    for drm_obj in track.drm or []:
+        drm_class = drm_obj.__class__.__name__
+        if drm_type == "playready" and drm_class == "PlayReady":
+            return drm_obj.data["pssh_b64"]
+        if drm_type == "widevine" and drm_class == "Widevine":
+            return drm_obj.pssh.dumps()
+    return None
+
+
 def reconstruct_drm(drm_list: Optional[list]) -> list:
     """Reconstruct DRM objects from serialized API data."""
     if not drm_list:
@@ -1318,20 +1329,14 @@ class RemoteService:
         if isinstance(challenge, str):
             challenge = challenge.encode("utf-8")
 
-        pssh_b64 = None
-        if track.drm:
-            for drm_obj in track.drm:
-                drm_class = drm_obj.__class__.__name__
-                if drm_type == "playready" and drm_class == "PlayReady":
-                    pssh_b64 = drm_obj.data["pssh_b64"]
-                    break
-                elif drm_type == "widevine" and drm_class == "Widevine":
-                    pssh_b64 = drm_obj.pssh.dumps()
-                    break
-
         if self._server_cdm:
             from uuid import UUID
 
+            server_type = self._server_cdm_type
+            other_type = "playready" if server_type == "widevine" else "widevine"
+            drm_type, pssh_b64 = server_type, track_pssh(track, server_type)
+            if not pssh_b64:
+                drm_type, pssh_b64 = other_type, track_pssh(track, other_type)
             if pssh_b64:
                 try:
                     resp = self.client.post(
@@ -1343,6 +1348,7 @@ class RemoteService:
                             "pssh": pssh_b64,
                         },
                     )
+                    self._server_cdm_type = resp.get("drm_type", server_type)
                     keys = resp.get("keys", {})
                     self.note_vault_keys(keys, set(resp.get("vault_keys", [])))
                     if keys and track.drm:
@@ -1354,8 +1360,10 @@ class RemoteService:
                 except Exception as e:
                     self.log.warning("server_cdm license failed: %s", e)
             else:
-                self.log.warning(f"Track {track.id} has no {drm_type} PSSH to send to the server CDM")
+                self.log.warning(f"Track {track.id} has no PSSH to send to the server CDM")
             return challenge
+
+        pssh_b64 = track_pssh(track, drm_type)
 
         payload = {
             "track_id": str(track.id),

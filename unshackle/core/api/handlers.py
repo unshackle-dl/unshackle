@@ -13,7 +13,7 @@ from contextlib import suppress
 from datetime import date as date_
 from http.cookiejar import CookieJar, MozillaCookieJar
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional
 
 import click
 from aiohttp import web
@@ -3394,18 +3394,38 @@ def resolve_server_cdm(service: str, profile: Optional[str], cdm_type: Optional[
     return None
 
 
-def detect_cdm_type_for_service(service: str, app_config: Any) -> Optional[str]:
-    """Detect the CDM type configured for a service in config.cdm."""
-    cdm_name = ci_get(app_config.cdm, service)
-    if not cdm_name:
-        return None
+def configured_cdm_name(service: str, drm_type: str, app_config: Any) -> Optional[str]:
+    """The device name config.cdm maps a service to for one DRM system; None when the tier decides.
+
+    A dict names a device per system (``widevine`` / ``playready`` keys) or a ``default``.
+    Any other dict shape, such as the quality tiers ``dl`` reads, falls through to the
+    global ``cdm.default``: the server has no track context to pick a tier with.
+    """
+    cdm_name = ci_get(app_config.cdm, service) if service else None
     if isinstance(cdm_name, dict):
         lower_keys = {k.lower(): v for k, v in cdm_name.items()}
-        if {"widevine", "playready"} & lower_keys.keys():
-            return "playready" if "playready" in lower_keys else "widevine"
-        cdm_name = cdm_name.get("default") or next(iter(cdm_name.values()), None)
+        drm_key = drm_type if drm_type in ("widevine", "playready") else None
+        cdm_name = lower_keys.get(drm_key) or lower_keys.get("default") or ci_get(app_config.cdm, "default")
     if cdm_name and isinstance(cdm_name, str):
-        return detect_cdm_type(cdm_name, app_config)
+        return cdm_name
+    return None
+
+
+def detect_cdm_type_for_service(service: str, app_config: Any) -> Optional[str]:
+    """The DRM system config.cdm settles for a service; None when the mapping leaves it open.
+
+    A mapping that names one system gets that system. A device name gets the type of the
+    device ``resolve_device_name`` returns for it, so the routes plan with the device they
+    load. A mapping that names a device for both systems settles nothing.
+    """
+    cdm_name = ci_get(app_config.cdm, service)
+    if isinstance(cdm_name, dict):
+        named = [system for system in ("widevine", "playready") if system in {k.lower() for k in cdm_name}]
+        if named:
+            return named[0] if len(named) == 1 else None
+    device_name = configured_cdm_name(service, "widevine", app_config)
+    if device_name:
+        return detect_cdm_type(device_name, app_config)
     return None
 
 
@@ -3788,12 +3808,8 @@ def resolve_device_name(user_config: dict, drm_type: str, service_tag: str = "")
     """
     from unshackle.core.config import config as app_config
 
-    cdm_name = ci_get(app_config.cdm, service_tag) if service_tag else None
-    if isinstance(cdm_name, dict):
-        drm_key = {"widevine": "widevine", "playready": "playready"}.get(drm_type)
-        lower_keys = {k.lower(): v for k, v in cdm_name.items()}
-        cdm_name = lower_keys.get(drm_key) or lower_keys.get("default") or ci_get(app_config.cdm, "default")
-    if cdm_name and isinstance(cdm_name, str):
+    cdm_name = configured_cdm_name(service_tag, drm_type, app_config)
+    if cdm_name:
         return cdm_name
 
     if drm_type == "playready":
@@ -3805,6 +3821,65 @@ def resolve_device_name(user_config: dict, drm_type: str, service_tag: str = "")
         if not device_name:
             raise APIError(APIErrorCode.INVALID_INPUT, "No Widevine device configured for this API key")
     return device_name
+
+
+def server_drm_candidates(
+    service_tag: str,
+    user_config: dict,
+    client_drm_type: str,
+    track: Any,
+    warn: Callable[[str], None] = log.warning,
+) -> List[str]:
+    """The DRM systems the server can license a track with, in the order to try them.
+
+    The server's config.cdm mapping goes first; with no mapping, the client's choice goes
+    first. A system stays only when the device the server would load for it is of that
+    system, so the route never plans a licence that fails on the wrong device type. The
+    track's own drm_preference moves its system to the front when the server has it.
+    """
+    from unshackle.core.config import config as app_config
+
+    server_type = detect_cdm_type_for_service(service_tag, app_config)
+    first = server_type or (client_drm_type if client_drm_type in ("widevine", "playready") else "widevine")
+    candidates: List[str] = []
+    for drm_type in (first, *(system for system in ("widevine", "playready") if system != first)):
+        try:
+            device_name = resolve_device_name(user_config, drm_type, service_tag)
+        except APIError:
+            continue
+        if detect_cdm_type(device_name, app_config) in (None, drm_type):
+            candidates.append(drm_type)
+
+    preferred = drm_preference_name(track)
+    if preferred:
+        if preferred in candidates:
+            candidates.remove(preferred)
+            candidates.insert(0, preferred)
+        else:
+            warn(
+                f"Track {sanitize_log(str(track.id)[:12])} wants {preferred} DRM "
+                "but the server has no device for it, using the configured DRM instead"
+            )
+    return candidates
+
+
+def pick_server_pssh(track: Any, candidates: List[str]) -> Optional[tuple[str, str]]:
+    """`(drm_type, pssh)` for the first candidate the track carries a header for; None when it has none.
+
+    A track with only a PlayReady header still licenses under the Widevine device: the
+    Widevine DRM class converts the PlayReady PSSH on construction.
+    """
+    for candidate in candidates:
+        pssh_str = extract_pssh_from_track(track, candidate)
+        if not pssh_str and candidate == "widevine":
+            pssh_str = extract_pssh_from_track(track, "playready")
+            if pssh_str:
+                log.info(
+                    f"Track {sanitize_log(str(track.id)[:12])} has only a PlayReady PSSH, licensing it with the Widevine device"
+                )
+        if pssh_str:
+            return candidate, pssh_str
+    return None
 
 
 def load_server_vaults(service_name: str) -> Any:
@@ -4166,16 +4241,10 @@ async def session_license_handler(
         )
 
     if mode == "server_cdm" and track_ids:
-        from unshackle.core.config import config as app_config
-
         api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
         user_config = serve_user_config(api_key)
         service = session.service_instance
-        has_wv_device = bool(user_config.get("devices"))
-        has_pr_device = bool(user_config.get("playready_devices"))
-
         service_tag = session.service_tag
-        config_cdm_type = detect_cdm_type_for_service(service_tag, app_config)
 
         all_keys: Dict[str, Dict[str, str]] = {}
         vault_keys: list[str] = []
@@ -4213,19 +4282,11 @@ async def session_license_handler(
             track: Any, title: Any, candidates: list
         ) -> tuple[Dict[str, str], Optional[str], Optional[str]]:
             """`(keys, drm_type, pssh)` for the track's current DRM, licensing once per unique PSSH."""
-            for candidate in candidates:
-                pssh_str = extract_pssh_from_track(track, candidate)
-                if not pssh_str and candidate == "widevine":
-                    pssh_str = extract_pssh_from_track(track, "playready")
-                    if pssh_str:
-                        log.info(
-                            f"Track {sanitize_log(str(track.id)[:12])} has only a PlayReady PSSH, licensing it with the Widevine device"
-                        )
-                if pssh_str:
-                    break
-            else:
+            picked = pick_server_pssh(track, candidates)
+            if not picked:
                 warn(f"No PSSH on track {sanitize_log(str(track.id)[:12])} for {', '.join(candidates) or 'any CDM'}")
                 return {}, None, None
+            candidate, pssh_str = picked
 
             cache_key = (pssh_str, pssh_set(track))
             if cache_key not in keys_by_pssh:
@@ -4258,28 +4319,7 @@ async def session_license_handler(
                 continue
 
             title = find_title_for_track(tid, session)
-
-            if config_cdm_type == "playready":
-                candidates = ["playready", "widevine"]
-            elif config_cdm_type == "widevine":
-                candidates = ["widevine", "playready"]
-            else:
-                candidates = [
-                    name
-                    for name, has_device in (("widevine", has_wv_device), ("playready", has_pr_device))
-                    if has_device
-                ]
-
-            preferred = drm_preference_name(track)
-            if preferred:
-                if preferred in candidates:
-                    candidates.remove(preferred)
-                    candidates.insert(0, preferred)
-                else:
-                    warn(
-                        f"Track {sanitize_log(tid[:12])} wants {preferred} DRM "
-                        "but the server has no device for it, using the configured DRM instead"
-                    )
+            candidates = server_drm_candidates(service_tag, user_config, drm_type, track, warn)
 
             keys, track_drm_type, pssh_str = license_track(track, title, candidates)
 
@@ -4341,18 +4381,43 @@ async def session_license_handler(
         service = session.service_instance
 
         pssh_b64 = data.get("pssh")
-        if pssh_b64:
+        if pssh_b64 or mode == "server_cdm":
             ensure_track_drm(track, getattr(service, "session", None))
+
+        if mode == "server_cdm":
+            # The server's config.cdm mapping decides the DRM system, as in the batch path.
+            # The client only knows its own local device, which the server never uses here.
+            api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
+            candidates = server_drm_candidates(session.service_tag, serve_user_config(api_key), drm_type, track)
+            picked = pick_server_pssh(track, candidates)
+            if not picked:
+                raise APIError(
+                    APIErrorCode.INVALID_INPUT,
+                    f"No PSSH on track {sanitize_log(track_id[:12])} for {', '.join(candidates) or 'any CDM'}",
+                )
+            server_drm_type, server_pssh = picked
+            if pssh_b64 and server_drm_type != drm_type:
+                log.info(
+                    f"Client asked for {sanitize_log(drm_type)} on track {sanitize_log(track_id[:12])}, "
+                    f"licensing with the server's {server_drm_type} CDM"
+                )
+                pssh_b64 = None
+            if pssh_b64:
+                require_track_pssh(track, pssh_b64, drm_type)
+                if drm_type == "playready":
+                    track.pr_pssh = pssh_b64
+            key_sources: Dict[str, str] = {}
+            keys = handle_single_server_cdm(
+                service, title, track, pssh_b64 or server_pssh, server_drm_type, request, key_sources
+            )
+            log.info(f"Server CDM resolved {len(keys)} key(s) for track {sanitize_log(track_id[:12])}")
+            note_served_keys(session, keys, key_sources)
+            return web.json_response({"keys": keys, "vault_keys": list(key_sources), "drm_type": server_drm_type})
+
+        if pssh_b64:
             require_track_pssh(track, pssh_b64, drm_type)
             if drm_type == "playready":
                 track.pr_pssh = pssh_b64
-
-        if mode == "server_cdm":
-            key_sources: Dict[str, str] = {}
-            keys = handle_single_server_cdm(service, title, track, pssh_b64, drm_type, request, key_sources)
-            log.info(f"Server CDM resolved {len(keys)} key(s) for track {sanitize_log(track_id[:12])}")
-            note_served_keys(session, keys, key_sources)
-            return web.json_response({"keys": keys, "vault_keys": list(key_sources)})
 
         return handle_proxy_license(service, title, track, challenge_b64, drm_type)
 

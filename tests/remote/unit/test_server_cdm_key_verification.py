@@ -117,6 +117,7 @@ async def test_batch_reports_vault_keys_from_the_init_segment_pssh(monkeypatch):
     monkeypatch.setattr(handlers, "ensure_track_drm", lambda track, session=None, init_data=None: None)
     monkeypatch.setattr(handlers, "find_title_for_track", lambda tid, session: SimpleNamespace())
     monkeypatch.setattr(handlers, "detect_cdm_type_for_service", lambda tag, cfg: "widevine")
+    monkeypatch.setattr(handlers, "resolve_device_name", lambda *a, **k: "dev")
     monkeypatch.setattr(handlers, "fetch_init_segment", lambda track, sess: b"init")
     monkeypatch.setattr(
         handlers, "drm_from_init_segment", lambda track, session=None, init_data=None: [_WV("init", [CDM_KID])]

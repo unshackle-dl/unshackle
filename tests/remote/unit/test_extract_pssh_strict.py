@@ -62,6 +62,7 @@ async def _run_batch(monkeypatch, tracks, cdm_type, calls):
     monkeypatch.setattr(handlers, "ensure_track_drm", lambda track, session=None, init_data=None: None)
     monkeypatch.setattr(handlers, "find_title_for_track", lambda tid, session: SimpleNamespace())
     monkeypatch.setattr(handlers, "detect_cdm_type_for_service", lambda tag, cfg: cdm_type)
+    monkeypatch.setattr(handlers, "resolve_device_name", lambda *a, **k: "dev")
     monkeypatch.setattr(handlers, "handle_single_server_cdm", fake_single)
     monkeypatch.setattr(handlers.config, "serve", {"users": {}}, raising=False)
     resp = await handlers.session_license_handler(

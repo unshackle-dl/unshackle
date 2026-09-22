@@ -2910,13 +2910,14 @@ class dl:
                     service_session=service.session,
                 )
 
-            if getattr(self._remote_service, "_server_cdm", False) and self.cdm is None:
-                cdm_type = getattr(self._remote_service, "_server_cdm_type", "widevine")
-                self.cdm = cdm_type_stub(cdm_type)
-                self.log.info(f"Using server CDM ({cdm_type.title()}); no local CDM required")
+            server_cdm_type = None
+            if getattr(self._remote_service, "_server_cdm", False):
+                server_cdm_type = getattr(self._remote_service, "_server_cdm_type", "widevine")
+                self.cdm = cdm_type_stub(server_cdm_type)
+                self.log.info(f"Using server CDM ({server_cdm_type.title()}); no local CDM required")
 
             video_tracks = title.tracks.videos
-            if video_tracks:
+            if video_tracks and not server_cdm_type:
                 highest_quality = max((track.height for track in video_tracks if track.height), default=0)
                 if highest_quality > 0:
                     if is_widevine_cdm(self.cdm):
