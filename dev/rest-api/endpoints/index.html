@@ -4898,7 +4898,7 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 <div class="tabbed-set tabbed-alternate" data-tabs="28:2"><input checked="checked" id="__tabbed_28_1" name="__tabbed_28" type="radio" /><input id="__tabbed_28_2" name="__tabbed_28" type="radio" /><div class="tabbed-labels"><label for="__tabbed_28_1">Single: Response <code>200</code></label><label for="__tabbed_28_2">Batch: Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-json highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"keys"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"&lt;kid_hex&gt;"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;key_hex&gt;"</span><span class="w"> </span><span class="p">},</span><span class="w"> </span><span class="nt">"vault_keys"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"&lt;kid_hex&gt;"</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"keys"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"&lt;kid_hex&gt;"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;key_hex&gt;"</span><span class="w"> </span><span class="p">},</span><span class="w"> </span><span class="nt">"vault_keys"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"&lt;kid_hex&gt;"</span><span class="p">],</span><span class="w"> </span><span class="nt">"drm_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"widevine"</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -4929,7 +4929,7 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 </tr>
 <tr>
 <td><code>drm_type</code></td>
-<td><code>widevine</code> (default) or <code>playready</code>.</td>
+<td><code>widevine</code> (default) or <code>playready</code>. In server-CDM mode the server's <code>cdm</code> mapping for the service decides the DRM system and the response <code>drm_type</code> names the system that licensed. The client's value decides only when the server has no mapping for the service.</td>
 </tr>
 <tr>
 <td><code>mode</code></td>
