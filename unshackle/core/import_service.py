@@ -454,7 +454,7 @@ class ImportService:
             except (TypeError, ValueError, NotImplementedError) as e:
                 self.log.warning(f"Skipping exported track {row.get('id')!r}: {e}")
                 continue
-            track.drm = self.rebuild_drm({"id": track_id}, title_id)
+            track.drm = self.rebuild_drm({"id": track_id, "type": type(track).__name__}, title_id)
             out.append(track)
         return out
 
@@ -489,6 +489,11 @@ class ImportService:
         row = next((r for r in (entry.tracks if entry else []) if str(r.get("id", "")) == track_id), None)
         return set(row["kids"]) if row and row.get("kids") else None
 
+    def lists_track_kids(self, title_id: str) -> bool:
+        """Return True when the export lists the KIDs of at least one track of the title."""
+        entry = self.doc.get(title_id)
+        return any(row.get("kids") for row in (entry.tracks if entry else []))
+
     def exported_keys(self, title_id: str, track_id: str) -> dict[UUID, str]:
         """Return the exported content keys for the KIDs the row of the track lists, else all of the title."""
         entry = self.doc.get(title_id)
@@ -503,10 +508,18 @@ class ImportService:
         list, a title with more than one DRM entry does not say which entry is this track's,
         so the track gets a stub that names every exported KID instead of a guess. A rebuilt
         PSSH holds only the keys for the KIDs it names.
+
+        A track that declares no content key, DRM or KID of its own is clear if it is a subtitle,
+        or if the export lists the KIDs of its other tracks. Only a video or audio track in an
+        export with no KID lists takes the title keys, because that export cannot tell.
         """
         own_keys = track_dict.get("keys")
         own_drm = track_dict.get("drm")
         row_kids = None if own_keys else self.exported_kids(title_id, str(track_dict.get("id", "")))
+        if not (own_keys or own_drm or row_kids) and (
+            track_dict.get("type") not in ("Video", "Audio") or self.lists_track_kids(title_id)
+        ):
+            return None
         if own_keys:
             keys = own_keys
         else:

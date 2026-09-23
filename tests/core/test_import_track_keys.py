@@ -22,7 +22,7 @@ from unshackle.commands.dl import dl
 from unshackle.core.drm import Widevine
 from unshackle.core.drm.key_args import ZERO_KID
 from unshackle.core.import_service import ImportService
-from unshackle.core.manifests import DASH
+from unshackle.core.manifests import DASH, HLS
 from unshackle.core.titles import Movie
 from unshackle.core.tracks import Video
 
@@ -179,7 +179,7 @@ def test_a_rebuilt_drm_holds_only_the_keys_for_the_kids_its_pssh_names(tmp_path:
     single: list[dict[str, Any]] = [widevine(VIDEO_KID, VIDEO_KEY).to_dict()]
 
     with patch.object(svc, "title_drm_dicts", return_value=single):
-        rebuilt = svc.rebuild_drm({"id": "u1"}, "movie-1")
+        rebuilt = svc.rebuild_drm({"id": "u1", "type": "Video"}, "movie-1")
 
     assert rebuilt and rebuilt[0].content_keys == {VIDEO_KID: VIDEO_KEY}
 
@@ -189,9 +189,74 @@ def test_a_title_with_several_drm_entries_gives_no_track_a_guessed_own_key(tmp_p
     pool, and the zero-KID fallback stays empty instead of taking the first entry's key."""
     svc = import_service(write_export(tmp_path, kids=False))
 
-    rebuilt = svc.rebuild_drm({"id": "u1"}, "movie-1")
+    rebuilt = svc.rebuild_drm({"id": "u1", "type": "Video"}, "movie-1")
 
     assert rebuilt
     drm = rebuilt[0]
     assert drm.content_keys == POOL
     assert not [arg for arg in drm.mp4decrypt_key_args() if arg.startswith(ZERO_KID)]
+
+
+HLS_URL = "https://example.invalid/master.m3u8"
+HLS_MASTER = """#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",LANGUAGE="en",NAME="English",DEFAULT=YES,URI="audio_en.m3u8"
+#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="sub",LANGUAGE="es",NAME="Spanish",URI="sub_es.m3u8"
+#EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080,CODECS="avc1.640028,mp4a.40.2",AUDIO="aud",SUBTITLES="sub"
+1080.m3u8
+"""
+SUB_KID = UUID("0123456789abcdef0123456789abcdef")
+SUB_KEY = "0000000000000000000000000000000c"
+
+
+def hls_import(
+    tmp_path: Path, audio_drm: Widevine | None = None, subtitle_drm: Widevine | None = None, kids: bool = True
+) -> dict[str, Any]:
+    """Export an HLS ladder with a licensed video track, import it, and return each track's DRM.
+
+    HLS tracks come back from their exported dicts, and HLS.download_track decrypts every
+    track that holds a DRM.
+    """
+    title = Movie(id_="movie-1", service=StubService, name="Example Movie", year=2024, language="en")
+    for track in HLS.from_text(HLS_MASTER, HLS_URL).to_tracks(language="en"):
+        title.tracks.add(track)
+    title.tracks.manifest_url = HLS_URL
+    runner = dl.__new__(dl)
+    runner.service = "EXAMPLE"
+    runner.log = logging.getLogger("download")
+    export = tmp_path / "export.json"
+    drm = {"video": widevine(VIDEO_KID, VIDEO_KEY), "en": audio_drm, "es": subtitle_drm}
+    for track in [*title.tracks.videos, *title.tracks.audio, *title.tracks.subtitles]:
+        runner.write_export(export, title, track, drm.get(label(track)))
+    if not kids:
+        doc = json.loads(export.read_text(encoding="utf8"))
+        for row in doc["titles"][0]["tracks"]:
+            row.pop("kids", None)
+        export.write_text(json.dumps(doc), encoding="utf8")
+    svc = import_service(export)
+    movie = next(iter(svc.get_titles()))
+    movie.tracks = svc.get_tracks(movie)
+    svc.resolve_server_keys(movie)
+    return {label(t): t.drm for t in movie.tracks}
+
+
+def test_a_clear_subtitle_gets_no_drm_from_the_key_pool(tmp_path: Path) -> None:
+    """An export from before the per-track KID lists cannot tell a clear video or audio track
+    from an encrypted one, so those keep the pool. A subtitle is clear."""
+    drm = hls_import(tmp_path, audio_drm=widevine(AUDIO_KID, AUDIO_KEY), kids=False)
+
+    assert drm["es"] is None, "a clear subtitle that holds a DRM goes to a decrypter that empties it"
+    assert drm["video"] and drm["video"][0].content_keys == POOL, "a video that declares no KID keeps the pool"
+
+
+def test_a_keyed_video_leaves_a_clear_audio_track_clear(tmp_path: Path) -> None:
+    drm = hls_import(tmp_path)
+
+    assert drm["video"] and drm["video"][0].content_keys == {VIDEO_KID: VIDEO_KEY}
+    assert drm["en"] is None, "the export lists KIDs for its encrypted tracks, so an audio track with none is clear"
+    assert drm["es"] is None
+
+
+def test_a_subtitle_that_lists_its_kid_keeps_its_key(tmp_path: Path) -> None:
+    drm = hls_import(tmp_path, subtitle_drm=widevine(SUB_KID, SUB_KEY))
+
+    assert drm["es"] and drm["es"][0].content_keys == {SUB_KID: SUB_KEY}
