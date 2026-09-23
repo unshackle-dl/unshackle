@@ -222,5 +222,5 @@ def test_clearkey_license_hook_is_bindable(tmp_path: Path) -> None:
     service = make_service(tmp_path, AVC_URL, {})
     bound = partial(service.get_clearkey_license, title=None, track=None)
     assert callable(bound)
-    with pytest.raises(RuntimeError, match="keys come from the export"):
+    with pytest.raises(click.ClickException, match="export has no content key"):
         bound(challenge=b"")

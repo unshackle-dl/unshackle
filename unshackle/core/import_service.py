@@ -558,17 +558,38 @@ class ImportService:
         return None
 
     def get_widevine_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> Optional[Union[bytes, str]]:
-        raise RuntimeError("ImportService should not request a license; keys come from the export.")
+        raise self.missing_key(track)
 
     def get_playready_license(
         self, *, challenge: bytes, title: Title_T, track: AnyTrack
     ) -> Optional[Union[bytes, str]]:
-        raise RuntimeError("ImportService should not request a license; keys come from the export.")
+        raise self.missing_key(track)
 
     def get_clearkey_license(
         self, *, challenge: bytes, title: Title_T, track: AnyTrack
     ) -> Optional[Union[bytes, str, dict]]:
-        raise RuntimeError("ImportService should not request a license; keys come from the export.")
+        raise self.missing_key(track)
+
+    @staticmethod
+    def missing_key(track: AnyTrack) -> click.ClickException:
+        """Return the error for a content key that neither the export nor a vault holds.
+
+        An import uses only the content keys in the export and in the vaults, and never
+        licenses through a CDM. dl then asks for a licence, and this error stops the download.
+        """
+        kids = sorted(
+            {
+                kid.hex
+                for drm in getattr(track, "drm", None) or []
+                for kid in real_kids(drm)
+                if kid not in (getattr(drm, "content_keys", None) or {})
+            }
+        )
+        subject = f"KID {', '.join(kids)}" if kids else f"track {track}"
+        return click.ClickException(
+            f"The export has no content key for {subject}, and no vault has it. An import does not "
+            "license through a CDM: export the title again with the tracks you need selected."
+        )
 
     def on_segment_downloaded(self, track: AnyTrack, segment: Any) -> None:
         pass

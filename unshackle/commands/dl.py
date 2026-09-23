@@ -3034,17 +3034,9 @@ class dl:
                 # Reported and swallowed (no re-raise) so the CLI exits cleanly; flag it so the
                 # API worker sees the title failed rather than completing with no output.
                 self.download_failed = True
-                error_messages = [
-                    ":x: Download Failed...",
-                    f"   {type(e).__name__}: {e}",
-                ]
-                if hasattr(e, "returncode"):
-                    error_messages.append(f"   Binary call failed, Process exit code: {e.returncode}")
-                error_messages.append(
-                    "   An unexpected error occurred in one of the download workers.",
-                )
-                console.print(Padding(Group(*error_messages), (1, 5)))
-                console.print_exception()
+                console.print(Padding(Group(*self.failure_lines(e)), (1, 5)))
+                if not isinstance(e, click.ClickException):
+                    console.print_exception()
 
                 if self.debug_logger:
                     self.debug_logger.log_error(
@@ -4084,6 +4076,21 @@ class dl:
             },
         )
 
+    @staticmethod
+    def failure_lines(e: BaseException) -> list[str]:
+        """Return the lines that report a failed download.
+
+        A ClickException is a deliberate stop with a message for the user, so it gets no
+        "unexpected error" line, and the caller prints no traceback for it.
+        """
+        if isinstance(e, click.ClickException):
+            return [":x: Download Failed...", f"   {e.format_message()}"]
+        lines = [":x: Download Failed...", f"   {type(e).__name__}: {e}"]
+        if (returncode := getattr(e, "returncode", None)) is not None:
+            lines.append(f"   Binary call failed, Process exit code: {returncode}")
+        lines.append("   An unexpected error occurred in one of the download workers.")
+        return lines
+
     def decrypt_verified(
         self,
         drm: DRM_T,
@@ -4126,11 +4133,25 @@ class dl:
                 self.LICENSE_KEY_CACHE.pop(kid)
             return key
 
+        def relicense(dropped: set[UUID]) -> None:
+            """Licence again, then ask for each dropped KID that is still without a content key.
+
+            prepare_drm licenses only for a KID it is told to need, so without the second call a
+            track that still holds other content keys would decrypt without the dropped one.
+            """
+            if not licence:
+                return
+            licence(drm, track_kid=track_kid)
+            for kid in sorted(dropped):
+                # prepare_drm can replace the dict, so read it from the DRM each time
+                if kid != track_kid and kid not in getattr(drm, "content_keys", {}):
+                    licence(drm, track_kid=kid)
+
         known_bad = flagged_kids()
         if known_bad and licence:
             for kid in known_bad:
                 drop(kid)
-            licence(drm, track_kid=track_kid)
+            relicense(set(known_bad))
 
         def vault_kids() -> dict[UUID, Vault]:
             """The KIDs whose key on the track came from a vault, with that vault."""
@@ -4209,7 +4230,7 @@ class dl:
                     raise ValueError("The content key from the vault did not decrypt the track; run again")
                 path.unlink()
                 os.link(backup, path)
-                licence(drm, track_kid=track_kid)
+                relicense(set(bad))
                 for kid, key in bad.items():
                     if keys.get(kid) != key:
                         continue
@@ -4390,6 +4411,8 @@ class dl:
                             drm_system="playready" if drm.__class__.__name__ == "PlayReady" else "widevine",
                             challenge=b"",
                         )
+                    except click.ClickException:
+                        raise
                     except Exception as e:
                         self.log.debug(f"Server CDM licence with an empty challenge failed: {e!r}")
 

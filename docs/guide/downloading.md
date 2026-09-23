@@ -792,6 +792,10 @@ file another person can use, select generously: for example `-a AAC,EC3` and eve
 you want them to have. An import can only pick tracks whose key is in the file. A subtitle
 that another tool exported as a direct URL is added next to the manifest's own.
 
+An import uses only the content keys in the file and in your vaults. It never gets a licence
+from a CDM. When a track needs a content key that neither has, the import stops and names the
+KID. To fix this, export the title again with that track selected.
+
 !!! warning "The export file is a secret"
     It holds the content keys and usually a signed manifest URL. Hand it over on purpose,
     not by accident.
