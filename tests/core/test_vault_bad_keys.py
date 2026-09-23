@@ -332,6 +332,33 @@ def test_a_licence_key_clears_a_flag_from_an_earlier_run(tmp_path: Path, monkeyp
     assert local.get_key(KID, "SVC") == GOOD
 
 
+def test_a_licence_with_no_new_keys_sends_no_vault_write(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A PSSH KID the licence never answers forces a licence on every run; the vaults must not get an empty push."""
+    vault = SimpleNamespace(no_push=False, add_keys=lambda *_: pytest.fail("empty push reached a vault"))
+    vaults = Vaults("SVC")
+    vaults.vaults = [vault]  # type: ignore[list-item]
+    cmd = make_cmd(monkeypatch, vaults)
+    cmd.cache_keys_to_vaults({})
+    assert cmd.vault_cache_tally is None
+
+
+def test_the_cached_key_count_is_unique_and_skipped_without_vaults(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two tracks licensed in parallel can return the same key; --cdm-only loads no vaults at all."""
+    other = UUID(int=9)
+    vaults = Vaults("SVC")
+    vaults.vaults = [SQLite("local", tmp_path / "local.db")]
+    cmd = make_cmd(monkeypatch, vaults)
+    cmd.cache_keys_to_vaults({KID: GOOD})
+    cmd.cache_keys_to_vaults({KID: GOOD, other: GOOD})
+    assert cmd.vault_cache_tally == ({KID, other}, 1)
+
+    cmd = make_cmd(monkeypatch, Vaults("SVC"))
+    cmd.cache_keys_to_vaults({KID: GOOD})
+    assert cmd.vault_cache_tally is None
+
+
 def test_bulk_add_refuses_a_flagged_pair_in_any_case_or_kid_form(tmp_path: Path) -> None:
     local = SQLite("local", tmp_path / "local.db")
     local.flag_bad_key("SVC", KID, BAD, "poisoned")
