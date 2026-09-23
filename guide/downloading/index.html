@@ -4052,6 +4052,9 @@ their own streams, and those import fine. When a manifest labels nothing, the pa
 back to the title's original language, which comes from <code>Title.language</code> on the exporting
 service. If a service never sets it, importing that export fails with a message naming
 the service. Neither end guesses a language for you, so the fix belongs in the service.</p>
+<p>An HLS master playlist gives no language for a video track. When the export gives no
+title language, the video track takes the language of the default audio track. When
+the master playlist gives no audio language either, the import stops with a message.</p>
 </div>
 <h2 id="metadata-and-tagging">Metadata and tagging<a class="headerlink" href="#metadata-and-tagging" title="Permanent link">&para;</a></h2>
 <p>unshackle looks up metadata automatically, but you can override the identifiers used for
