@@ -52,8 +52,18 @@ from unshackle.core.drm import DRM_T, ClearKeyCENC, MonaLisa, PlayReady, Widevin
 from unshackle.core.events import events
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.providers.tvdb import SEASON_TYPES, parse_int
-from unshackle.core.proxies import Basic, ExpressVPN, Gluetun, Hola, NordVPN, ProtonVPN, SurfsharkVPN, WindscribeVPN
-from unshackle.core.proxies.resolve import is_loopback, resolve_proxy
+from unshackle.core.proxies import (
+    Basic,
+    ControlD,
+    ExpressVPN,
+    Gluetun,
+    Hola,
+    NordVPN,
+    ProtonVPN,
+    SurfsharkVPN,
+    WindscribeVPN,
+)
+from unshackle.core.proxies.resolve import REGION, is_loopback, resolve_proxy
 from unshackle.core.service import Service, grow_session_pool
 from unshackle.core.services import Services
 from unshackle.core.temp import with_task_temp
@@ -1371,9 +1381,13 @@ class dl:
                         self.proxy_providers.append(Gluetun(**config.proxy_providers["gluetun"]))
                     if binaries.HolaProxy:
                         self.proxy_providers.append(Hola())
+                    if config.proxy_providers.get("controld"):
+                        self.proxy_providers.append(ControlD(**config.proxy_providers["controld"]))
                     for proxy_provider in self.proxy_providers:
                         self.log.info(f"Loaded {proxy_provider.__class__.__name__}: {proxy_provider}")
 
+            if proxy and proxy.startswith("controld://"):
+                proxy = ctx.params["proxy"] = resolve_proxy(proxy, [])
             if proxy:
 
                 def log_proxy_used(provider: object, uri: str) -> None:
@@ -1385,11 +1399,8 @@ class dl:
                 if re.match(r"^[a-z]+:.+$", proxy, re.IGNORECASE):
                     # requesting proxy from a specific proxy provider
                     requested_provider, proxy = proxy.split(":", maxsplit=1)
-                # Match simple region codes (us, ca, uk1, us:ny) or provider:region (nordvpn:ca, protonvpn:us:ny).
-                # ':' is allowed as a city separator (e.g. nordvpn:us:seattle, protonvpn:de:berlin).
-                if re.match(r"^[a-z]{2}(?:[-:][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE) or re.match(
-                    r"^[a-z]+:[a-z]{2}(?:[-:][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE
-                ):
+                # Match region codes (us, ca, uk1, us:ny, yul) or provider:region (nordvpn:ca, protonvpn:us:ny).
+                if re.fullmatch(rf"(?:[a-z]+:)?{REGION}", proxy, re.IGNORECASE):
                     proxy = proxy.lower()
                     # Preserve the original user query (region code) for service-specific proxy_map overrides.
                     # NOTE: `proxy` may be overwritten with the resolved proxy URI later.
@@ -1637,7 +1648,10 @@ class dl:
 
         if no_proxy or no_proxy_download:
             proxy_download = None
-        elif proxy_download and re.match(r"^(?:[a-z]+:){0,2}[a-z]{2}(?:[-:][a-z0-9]+)*(?:\d+)?$", proxy_download, re.I):
+        elif proxy_download and (
+            proxy_download.startswith("controld://")
+            or re.fullmatch(rf"(?:[a-z]+:){{0,2}}{REGION}", proxy_download, re.I)
+        ):
             # same shapes --proxy resolves against providers (two prefixes for gluetun:nordvpn:ca); else an explicit URI
             try:
                 proxy_download = resolve_proxy(proxy_download.lower(), self.proxy_providers)

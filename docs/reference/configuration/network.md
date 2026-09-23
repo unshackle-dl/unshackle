@@ -67,6 +67,7 @@ for the full proxy provider guide. Recognised proxy providers and their exit por
 | Provider | Config key | Credentials | Proxy scheme/port |
 |----------|-----------|-------------|-------------------|
 | Basic (static) | `basic` | country → URI(s) | as specified |
+| Control D | `controld` | Write API token (profile/resolver pairs optional) | `http://127.0.0.1:{port}` (local forwarder) |
 | NordVPN | `nordvpn` | **service** credentials (48 chars combined) | `https://...:89` |
 | Surfshark | `surfsharkvpn` | **service** credentials (48 chars combined) | `https://...:443` |
 | Windscribe | `windscribevpn` | service credentials | `https://...:443` |
@@ -86,6 +87,19 @@ proxy_providers:
     username: <service username>
     password: <service password>
 ```
+
+### `controld`
+
+Config keys of the Control D proxy provider. See
+[Control D](../../guide/proxies-and-vpn.md#control-d) for how unshackle uses them.
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `token` | `str` | required | A Control D API token of type *Write*. |
+| `profile` | `str` | none | Optional. The ID of a profile you made for unshackle. Give it together with `resolver`. Without it, unshackle creates `unshackle-<region>` profiles itself. |
+| `resolver` | `str` | none | Optional. The resolver ID of an endpoint that uses `profile`, or its DoH URL `https://dns.controld.com/<resolver>`. |
+| `profiles` | `list` | `[]` | Optional. More pairs, each a mapping with `profile` and `resolver`. |
+| `max_profiles` | `int` | `4` | The most profiles unshackle uses: your pairs plus the `unshackle-*` endpoints on the account. It must be 1 or more. unshackle creates an `unshackle-<region>` profile and endpoint only while the total is lower. |
 
 !!! note "Provider loading differs between CLI and REST server"
     The `dl` CLI loads all providers, including `windscribevpn` and `gluetun`. The REST API /

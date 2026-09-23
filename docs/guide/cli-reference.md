@@ -195,7 +195,7 @@ order the service used, then renumbers the episodes into the order you asked for
 
 | Flag | Description |
 |---|---|
-| `--proxy` | Proxy URI, a 2-letter country code resolved from configured providers, or `provider:region` (e.g. `nordvpn:ca`, `gluetun:us`, `protonvpn:de:berlin`). |
+| `--proxy` | Proxy URI, a country or location code resolved from configured providers, or `provider:region` (e.g. `nordvpn:ca`, `gluetun:us`, `protonvpn:de:berlin`, `controld:yul`). |
 | `--no-proxy` | Force-disable all proxy use. |
 | `--no-proxy-download` | Bypass the proxy for **all downloads** (manifest, licence, and auth stay proxied). |
 | `--proxy-download` | Use a different proxy for **all downloads**, in the same forms as `--proxy` (manifest, licence, and auth stay on `--proxy`). |
@@ -235,7 +235,7 @@ Each service defines its own query syntax. unshackle prints the results as a tre
 | Option | Description |
 |---|---|
 | `-p`, `--profile` | Profile for credentials and cookies. |
-| `--proxy` | Proxy URI, 2-letter country code, or `provider:region`. |
+| `--proxy` | Proxy URI, country or location code, or `provider:region` (e.g. `controld:ca`). |
 | `--no-proxy` | Force-disable all proxy use. |
 
 !!! example

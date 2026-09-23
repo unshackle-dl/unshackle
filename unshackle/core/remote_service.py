@@ -684,6 +684,33 @@ def resolve_proxy_arg(proxy_arg: Optional[str]) -> Optional[str]:
         raise click.ClickException(str(e))
 
 
+def resolve_remote_proxy_arg(proxy_arg: str) -> Optional[str]:
+    """
+    Get the proxy URI to send to a server for a --proxy value.
+
+    Control D's proxy URI is a forwarder on this machine, so for a server it becomes the
+    profile's resolver instead (`controld://`), and a bare region query skips Control D.
+    """
+    from unshackle.core.proxies.controld import ControlD
+    from unshackle.core.proxies.resolve import initialize_proxy_providers, resolve_proxy
+
+    try:
+        providers = initialize_proxy_providers()
+        provider, _, query = proxy_arg.partition(":")
+        if provider.lower() == "controld" and query:
+            controld = next((x for x in providers if isinstance(x, ControlD)), None)
+            if not controld:
+                raise ValueError("Proxy provider 'controld' is not configured")
+            uri = controld.get_remote_proxy(query)
+            if not uri:
+                raise ValueError(f"Control D has no location for {query}")
+            log.info(f"Using a Control D proxy in {query}, resolved by the server")
+            return uri
+        return resolve_proxy(proxy_arg, [x for x in providers if not isinstance(x, ControlD)])
+    except ValueError as e:
+        raise click.ClickException(str(e))
+
+
 _CACHE_HEX_ID_RE = re.compile(r"[0-9a-f]{32,}", re.IGNORECASE)
 
 
@@ -924,7 +951,7 @@ class RemoteService:
             regions = [str(r).lower() for r in self._server_accounts.get("regions") or []]
             if regions and client_region and client_region not in regions:
                 try:
-                    create_data["proxy"] = resolve_proxy_arg(regions[0])
+                    create_data["proxy"] = resolve_remote_proxy_arg(regions[0])
                     create_data["proxy_region"] = regions[0]
                     self.log.info(f"Using a '{regions[0]}' proxy to match a server account ({', '.join(regions)})")
                 except click.ClickException:
@@ -934,7 +961,7 @@ class RemoteService:
                         "rejects the remote session"
                     )
         elif not no_proxy and proxy:
-            resolved_proxy = resolve_proxy_arg(proxy)
+            resolved_proxy = resolve_remote_proxy_arg(proxy)
             if resolved_proxy:
                 create_data["proxy"] = resolved_proxy
                 query = (self.ctx.parent.params.get("proxy_query") if self.ctx.parent else None) or proxy

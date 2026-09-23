@@ -722,12 +722,14 @@ unshackle dl --tag MYGRP --repack EXAMPLE 81234567
 
 ## Proxies
 
-`--proxy` accepts a full proxy URI, a 2-letter country code (resolved through your
-configured proxy providers), or a `provider:region` form.
+`--proxy` accepts a full proxy URI, a country or location code (resolved through your
+configured proxy providers), or a `provider:region` form. See
+[Proxies & VPN](proxies-and-vpn.md#how-proxy-resolution-works) for the exact grammar.
 
 ```shell title="Proxy forms"
 unshackle dl --proxy us EXAMPLE 81234567
 unshackle dl --proxy nordvpn:ca EXAMPLE 81234567
+unshackle dl --proxy controld:yul EXAMPLE 81234567
 unshackle dl --proxy 'http://user:pass@host:8080' EXAMPLE 81234567
 ```
 

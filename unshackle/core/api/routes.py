@@ -404,7 +404,7 @@ async def search(request: web.Request) -> web.Response:
                 description: Profile to use for credentials and cookies (default - None)
               proxy:
                 type: string
-                description: Full proxy URI, or a country code when the API key has server_proxy (default - None)
+                description: Full proxy URI, a Control D resolver as controld://<resolver>@dns.controld.com, or a country code when the API key has server_proxy (default - None)
               no_proxy:
                 type: boolean
                 description: Force disable all proxy use (default - false)
@@ -668,7 +668,7 @@ async def list_tracks(request: web.Request) -> web.Response:
                 description: Specific episode/season, or song ("1-5", "2x3" for disc 2 track 3) (optional)
               proxy:
                 type: string
-                description: Proxy configuration (optional)
+                description: Full proxy URI, a Control D resolver as controld://<resolver>@dns.controld.com, or a country code when the API key has server_proxy (default - None)
               dl_params:
                 type: object
                 description: |
@@ -898,7 +898,7 @@ async def download(request: web.Request) -> web.Response:
                 description: CDM device name on the server to license with, overriding the cdm config mapping. Requires serve.cdm_overrides to allow it (default - None)
               proxy:
                 type: string
-                description: Full proxy URI, or a country code when the API key has server_proxy (default - None)
+                description: Full proxy URI, a Control D resolver as controld://<resolver>@dns.controld.com, or a country code when the API key has server_proxy (default - None)
               no_proxy:
                 type: boolean
                 description: Force disable all proxy use (default - false)

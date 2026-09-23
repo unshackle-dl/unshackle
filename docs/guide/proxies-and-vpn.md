@@ -9,7 +9,7 @@ unshackle pick a working server for you.
 
 The `--proxy` flag controls proxying, and the proxy providers unshackle supports change
 a query to a real proxy URL: [basic static proxies](#basic-static-proxies),
-[Gluetun](#gluetun) (documented in the most detail, since it is the most flexible),
+[Control D](#control-d), [Gluetun](#gluetun) (documented in the most detail, since it is the most flexible),
 [ExpressVPN](#expressvpn), [NordVPN](#nordvpn), [Proton VPN](#proton-vpn),
 [Hola](#hola), [Surfshark](#surfshark), and [Windscribe](#windscribe).
 
@@ -106,10 +106,15 @@ flowchart TD
    asks each loaded proxy provider **in order** and uses the first proxy any of them
    returns.
 
-unshackle compares the query against a region grammar: a two-letter country code,
-optionally followed by a server number and/or a `:city` or `-city` part. It then
+unshackle compares the query against a region grammar: a country or location code of two
+to four letters, with an optional `_code` part (`res_yyz`), then an optional server
+number and/or a `:city` or `-city` part. A `host:port` value never matches. It then
 lowercases the query and hands it to the proxy provider. Its section below gives the
 exact forms each proxy provider accepts.
+
+A Control D resolver, `controld://<resolver>@dns.controld.com`, is a fourth form. A
+`--remote` client sends it to a server in place of a proxy URI, and the server starts a
+forwarder for it. See [Control D](#control-d).
 
 ### Provider load order
 
@@ -117,11 +122,19 @@ When you do a download without `--no-proxy`, unshackle instantiates every config
 proxy provider once, in this fixed order. It uses that same order for bare-query
 resolution:
 
-**Basic → ExpressVPN → NordVPN → Proton VPN → Surfshark → Windscribe → Gluetun → Hola**
+**Basic → ExpressVPN → NordVPN → Proton VPN → Surfshark → Windscribe → Gluetun → Hola → Control D**
 
 So if you have both Basic and NordVPN configured and use `--proxy us`, a `us` entry in
 your Basic config wins, because unshackle tries Basic first. To skip ahead to a specific
 proxy provider, prefix the query (`--proxy nordvpn:us`).
+
+!!! note "A bare region reaches Control D last"
+    unshackle asks Control D for a bare region such as `--proxy us` only when no other
+    loaded proxy provider has a proxy for it. Hola loads automatically when the
+    `hola-proxy` binary is on your `PATH`, and it comes before Control D. When Control D answers, it changes your Control D
+    account: it points a profile at that country, and it can create an `unshackle-us`
+    profile and endpoint. The geofence auto-proxy uses the same order. To use Control D
+    directly, prefix the query (`--proxy controld:us`).
 
 !!! note "Auto-loading providers"
     Most providers only load when you configure them under `proxy_providers:`. Three are
@@ -189,6 +202,167 @@ proxy_providers:
 ```shell
 unshackle dl --proxy de2 EXAMPLE 81234567
 ```
+
+## Control D
+
+[Control D](https://controld.com) is a DNS service, not a proxy. It answers the hostnames
+it redirects with the IP of a transparent proxy in the region you chose, and that proxy
+relays onwards by SNI. There is no proxy URI to hand to Requests, so this proxy provider runs a
+small **forwarder on loopback**: it resolves each connection through your Control D
+resolver and relays the bytes. Everything downstream (the service session, the downloads,
+`--proxy-download`) sees an ordinary HTTP proxy.
+
+unshackle picks the region itself, by pointing a profile's **default rule** at it. A profile
+holds one region at a time, so unshackle gives each region in use a profile of its own,
+each with its own endpoint and its own forwarder port. `--proxy controld:yyz
+--proxy-download controld:yul` therefore uses two profiles, when two are free: Toronto for
+the service and Montreal for the downloads. When no second profile is free, the second
+region moves the first profile (see [step 5](#how-unshackle-chooses-a-profile)).
+
+Keep both locations in one country. Some CDNs also check the country of the download IP,
+and refuse a `--proxy-download` exit in another country with a 403. This applies to every
+proxy provider.
+
+`unshackle search --proxy controld:ca` works the same way as `dl`.
+
+### What you need
+
+- **A plan with traffic redirection.** On the personal plans that is *Full Control*;
+  *Some Control* has no redirection, and every redirect fails. The 14-day trial includes
+  it. See [Control D's plans](https://controld.com/plans) for current prices.
+- **An API token of type *Write*.** A *Read* token cannot change a profile's default rule.
+  Create it in the dashboard under *API*. If you set *Allowed IPs* on the token, include
+  the address of each machine that runs unshackle with it.
+
+```yaml title="unshackle.yaml"
+proxy_providers:
+  controld:
+    token: api.xxxxxxxxxxxx     # a Write API token, from the Control D dashboard
+```
+
+```shell
+unshackle dl --proxy controld:ca EXAMPLE 81234567
+```
+
+The token is the only required key. You do not need to create a profile or an endpoint,
+or to give a `profile` and `resolver`: unshackle creates an `unshackle-<region>` profile
+and endpoint on your account the first time it needs one, and uses it again on the next
+run. Give `profile` and `resolver` only to use a profile that you made yourself (see
+[How unshackle chooses a profile](#how-unshackle-chooses-a-profile)).
+
+The returned proxy is HTTP on loopback,
+`http://127.0.0.1:{port}`. The locations themselves are read from Control D at startup
+(107 of them across 68 countries, at the time of writing), so there is nothing to list:
+
+| Query | Meaning |
+|---|---|
+| `ca` | One of Control D's Canadian locations, at random. |
+| `yul` | That exact location, by its code. |
+| `res_yyz` | A residential location, by its code. A country pick never uses a residential location, so name it this way. |
+
+The [configuration reference](../reference/configuration/network.md#controld) lists
+every `controld` config key.
+
+### How unshackle chooses a profile
+
+Each region query gets a profile and an endpoint named after it: `--proxy controld:ca` uses
+`unshackle-ca`. For each region, unshackle uses the first match in this list:
+
+1. A profile that this process already pointed at that region.
+2. The endpoint named `unshackle-<region>` on your account, made by an earlier run.
+3. A profile from your config that this process does not use yet. These are optional:
+
+    ```yaml title="unshackle.yaml"
+    proxy_providers:
+      controld:
+        token: api.xxxxxxxxxxxx
+        profile: abcd123        # a profile kept for unshackle, and nothing else
+        resolver: efgh456       # the resolver ID of an endpoint using that profile
+        profiles:               # more pairs, in the same shape
+          - profile: ijkl789
+            resolver: mnop012
+        max_profiles: 4         # the most profiles unshackle uses, yours included (default 4)
+    ```
+
+    The resolver ID is the last part of the endpoint's DoH URL,
+    `https://dns.controld.com/<resolver>`. You can also give the full URL.
+
+4. A new profile and endpoint named `unshackle-<region>`, while your config pairs plus the
+   `unshackle-*` endpoints on the account are fewer than `max_profiles`. unshackle keeps
+   them for the next run. `max_profiles` limits only this step: unshackle uses every pair
+   in your config, even more than `max_profiles`.
+5. When no profile is free, a profile moves to the new region, with everything that still
+   uses it. unshackle first moves a profile that this process has not pointed at a region,
+   which another process can still use. Next, it moves the profile that this process
+   pointed at a region first. An `unshackle-*` profile that moves, and its endpoint, get the
+   new region's name. unshackle logs `Every Control D profile is in use; moving profile … to …`,
+   and connections already open keep the old exit until they close.
+
+Because the names live on the account, every unshackle process agrees on them: two runs,
+or two jobs on a `serve` instance, that ask for `ca` both use `unshackle-ca`. Two processes
+can still move a profile under each other when they run out of profiles (step 5).
+
+unshackle changes only the profiles in your config and the profiles of `unshackle-*`
+endpoints. It skips an `unshackle-*` endpoint whose profile an endpoint without that name
+also uses, so unshackle never redirects a profile that serves your own devices. Leave the `unshackle-*`
+profiles empty: no services, no custom rules. unshackle sets their default rule to
+`REDIRECT`, and the *Services* and *Custom Rules* tabs stay at zero by design. To remove
+them, delete the endpoints and profiles in the dashboard. unshackle creates new ones when
+it next needs them.
+
+!!! warning "Business accounts pay per endpoint"
+    Personal plans allow an unlimited number of profiles and endpoints. Business plans bill
+    each endpoint every month, so each `unshackle-<country>` endpoint adds to the bill. On a business
+    account, configure your own pairs, as many as the countries you use at the same time,
+    and set `max_profiles` to that number. unshackle then never creates a profile.
+
+!!! note "Everything goes through the proxy, including the segments"
+    With the default rule redirecting, the whole download leaves through Control D's
+    transparent proxy. Control D serves it on a best-effort basis. Pair it with `--no-proxy-download` to
+    keep the geo-check on the manifest and the licence while pulling the files over your
+    own connection.
+
+!!! note "The switch is not instant"
+    unshackle drops its own DNS cache when it changes region, but Control D's edge may
+    still serve the previous answer for the remainder of the record's TTL.
+
+!!! note "Same machine, same IP, over IPv4"
+    Control D authorises its proxies by source IP: the address that queried DNS is the one
+    allowed to use the proxy. The forwarder resolves and connects from the same host, so
+    this holds. Control D also answers a redirected name only to a query over IPv4, so the
+    forwarder asks over IPv4 even on a host with IPv6, and ignores `HTTPS_PROXY` for these
+    queries.
+
+    The forwarder refuses a connection to an IP address with a `502`, because an IP address
+    skips Control D's DNS and connects from your own address. A request that names a host
+    by IP address fails with this proxy provider.
+
+!!! note "With `--remote`, the server resolves"
+    unshackle does not send your API token to a server. For `--proxy controld:ca` with
+    `--remote`, unshackle points `unshackle-ca` at Canada with your token, then sends the
+    server only that endpoint's resolver ID, as `controld://<resolver>@dns.controld.com`.
+    The server runs its own forwarder with it, from its own address, and needs no Control D
+    configuration. The resolver ID lets anyone who has it use that endpoint's proxy, so treat
+    it as a secret: unshackle masks it in logs and in stored job parameters.
+
+    The server must run a version of unshackle that knows `controld://`. An older server
+    rejects it with `INVALID_PROXY`: `Proxy provider 'controld' not found` when your API key
+    has `server_proxy`, else a message that asks for a full proxy URI. A bare region, such
+    as `--proxy ca`, skips Control D with `--remote`, because the proxy it gives is on your
+    machine. A service whose accounts the server manages does not accept a proxy from the
+    client, and that includes a Control D resolver.
+
+### Troubleshooting Control D
+
+| Symptom | Cause and fix |
+|---|---|
+| `Proxy check failed`, because the exit IP is your own IP. | The profile does not redirect. Make sure that the plan includes traffic redirection (*Full Control*, not *Some Control*). After a region change, wait for the TTL of the previous answer to end. |
+| A `502 Bad Gateway` for one host. With `-d`, the log shows `Control D returned no A record for …`. | Control D gave no IPv4 address for that host. |
+| A `502 Bad Gateway` for one host only. With `-d`, the log shows `Refused …, an address that Control D cannot redirect`. | The request names the host by IP address. The forwarder refuses it. See the note on IPv4 above. |
+| An HTTP `401` or `403` from `api.controld.com`. | The token is a *Read* token, or its *Allowed IPs* do not include this machine. Use a *Write* token. |
+| `Control D needs both a profile and a resolver` or `Control D needs max_profiles of 1 or more` at startup. | The `controld` config is not valid. Give `profile` and `resolver` together, and a `max_profiles` of 1 or more. Every run fails until you correct it, also a run that does not use Control D. |
+| `Could not read Control D's locations`. | unshackle could not get the location list. It tries again at the next Control D query. |
+| A `403` for the segments only, with `--proxy-download` in another country. | The CDN checks the country of the download IP. Keep `--proxy-download` in the same country as `--proxy`. |
 
 ## Gluetun
 
@@ -651,16 +825,22 @@ The returned proxy is HTTPS on **port 443**.
     unshackle has **two** proxy-resolution code paths that are intentionally not
     identical:
 
-    - `unshackle/commands/dl.py` inlines its own logic and loads **all eight** providers,
+    - `unshackle/commands/dl.py` inlines its own logic and loads **all nine** providers,
       including Windscribe and Gluetun.
     - `unshackle/core/proxies/resolve.py::initialize_proxy_providers()` is the shared
       resolver used by the REST API handlers and the remote-service client. It **omits**
       Windscribe and Gluetun.
 
-    Both paths accept the same query grammar (a direct URI, a `provider:query`, or a bare
-    country query tried against providers in order), but the set of available providers
-    differs. Keep this in mind when you add a proxy provider: an entry in `dl.py` does not
-    make it available over the API, and the opposite is also true.
+    Both paths accept the same query grammar (a direct URI, a `provider:query`, a bare
+    country query tried against providers in order, or a `controld://` resolver), but the
+    set of available providers differs. Keep this in mind when you add a proxy provider:
+    an entry in `dl.py` does not make it available over the API, and the opposite is also
+    true.
+
+    The remote-service client resolves `--proxy` with its own
+    `resolve_remote_proxy_arg()`. It changes a `controld:` query to a `controld://`
+    resolver for the server with `get_remote_proxy()`, and it removes Control D from a bare
+    query, because a loopback forwarder is of no use to a server on another machine.
 
 !!! note "Implementing a new provider (developers)"
     Every proxy provider subclasses `unshackle.core.proxies.proxy.Proxy` and has three

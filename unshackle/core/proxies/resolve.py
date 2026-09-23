@@ -15,6 +15,8 @@ from unshackle.core.utils.redact import mask_proxy
 
 log = logging.getLogger("proxies")
 
+REGION = r"[a-z]{2,4}(?:_[a-z0-9]{2,4})?(?:-[a-z0-9]+|:[a-z][a-z0-9]*)*\d*"
+
 
 def initialize_proxy_providers(raise_errors: bool = False, quiet: bool = False) -> List[Any]:
     """Initialise and return available proxy providers from config.
@@ -28,6 +30,7 @@ def initialize_proxy_providers(raise_errors: bool = False, quiet: bool = False) 
         from unshackle.core import binaries
         from unshackle.core.config import config as main_config
         from unshackle.core.proxies.basic import Basic
+        from unshackle.core.proxies.controld import ControlD
         from unshackle.core.proxies.expressvpn import ExpressVPN
         from unshackle.core.proxies.hola import Hola
         from unshackle.core.proxies.nordvpn import NordVPN
@@ -51,6 +54,9 @@ def initialize_proxy_providers(raise_errors: bool = False, quiet: bool = False) 
             proxy_providers.append(SurfsharkVPN(**proxy_config["surfsharkvpn"]))
         if hasattr(binaries, "HolaProxy") and binaries.HolaProxy:
             proxy_providers.append(Hola())
+        # last: a bare region reaches it only when nothing else answers, since it changes the account
+        if proxy_config.get("controld"):
+            proxy_providers.append(ControlD(**proxy_config["controld"]))
 
         if not quiet:
             for provider in proxy_providers:
@@ -74,9 +80,15 @@ def resolve_proxy(proxy: str, proxy_providers: List[Any]) -> Optional[str]:
       - Direct URI: "https://...", "socks5://..."
       - Country code: "us", "uk"
       - Provider:country: "nordvpn:us"
+      - A Control D resolver sent by a client: "controld://<resolver>@dns.controld.com"
     """
     if not proxy:
         return None
+
+    if proxy.startswith("controld://"):
+        from unshackle.core.proxies.controld import local_proxy
+
+        return local_proxy(proxy)
 
     if re.match(r"^(https?://|socks)", proxy):
         return proxy

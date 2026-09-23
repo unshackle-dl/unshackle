@@ -16,7 +16,19 @@ from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import context_settings
-from unshackle.core.proxies import Basic, ExpressVPN, Gluetun, Hola, NordVPN, ProtonVPN, SurfsharkVPN, WindscribeVPN
+from unshackle.core.proxies import (
+    Basic,
+    ControlD,
+    ExpressVPN,
+    Gluetun,
+    Hola,
+    NordVPN,
+    ProtonVPN,
+    SurfsharkVPN,
+    WindscribeVPN,
+)
+from unshackle.core.proxies.proxy import Proxy
+from unshackle.core.proxies.resolve import REGION
 from unshackle.core.service import Service
 from unshackle.core.services import Services
 from unshackle.core.utils.click_types import ContextData
@@ -61,7 +73,7 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
             service_config = {}
         merge_dict(config.services.get(service), service_config)
 
-    proxy_providers = []
+    proxy_providers: list[Proxy] = []
     if no_proxy:
         ctx.params["proxy"] = None
     else:
@@ -84,6 +96,8 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
                 proxy_providers.append(Gluetun(**config.proxy_providers["gluetun"]))
             if binaries.HolaProxy:
                 proxy_providers.append(Hola())
+            if config.proxy_providers.get("controld"):
+                proxy_providers.append(ControlD(**config.proxy_providers["controld"]))
             for proxy_provider in proxy_providers:
                 log.info(f"Loaded {proxy_provider.__class__.__name__}: {proxy_provider}")
 
@@ -91,9 +105,7 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
             requested_provider = None
             if re.match(r"^[a-z]+:.+$", proxy, re.IGNORECASE):
                 requested_provider, proxy = proxy.split(":", maxsplit=1)
-            if re.match(r"^[a-z]{2}(?:[-][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE) or re.match(
-                r"^[a-z]+:[a-z]{2}(?:[-][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE
-            ):
+            if re.fullmatch(rf"(?:[a-z]+:)?{REGION}", proxy, re.IGNORECASE):
                 proxy = proxy.lower()
                 with console.status(f"Getting a Proxy to {proxy}...", spinner="dots"):
                     if requested_provider:

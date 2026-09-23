@@ -121,7 +121,12 @@ hood the client walks a remote session through its lifecycle.
       it sits in a different region from the reported one, asking the client to
       pass `--proxy` with its own proxy, or `--no-proxy` to accept the server's
       own connection. With `server_proxy` the server picks a proxy that matches
-      the client region itself
+      the client region itself. For `--proxy controld:ca` the client points its
+      Control D profile at the region and sends only the resolver, as
+      `controld://<resolver>@dns.controld.com`. The server counts it as a full proxy
+      URI and runs its own forwarder for it. A bare region skips Control D, because its
+      proxy is a forwarder on the client. See
+      [Control D](../../guide/proxies-and-vpn.md#control-d)
     - Track-selection hints (`range_`, `vcodec`, `quality`, `best_available`) so
       the server fetches the right manifests
     - Your language and audio codec selection (`-l`, `-vl`, `-al`, `-a`, `-fs`)
@@ -145,7 +150,8 @@ hood the client walks a remote session through its lifecycle.
     `GET /api/services` advertises the regions those accounts cover. When your own
     region is not one of them and you set no `--proxy`, the client resolves a proxy for
     the first advertised region itself, so both sides sit in a region the account
-    works in.
+    works in. This is a bare region query, so it skips Control D. A server-account
+    service does not accept a `controld://` resolver from the client.
 
     The server responds immediately with a session ID and a status. Authentication
     runs in the background on the server.

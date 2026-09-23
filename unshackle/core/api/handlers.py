@@ -3734,7 +3734,7 @@ def resolve_handler_proxy(
 
     if (
         proxy_param
-        and re.match(r"^(https?://|socks)", str(proxy_param))
+        and re.match(r"^(https?://|socks|controld://)", str(proxy_param))
         and server_account_for(request, normalized_service)
     ):
         raise APIError(

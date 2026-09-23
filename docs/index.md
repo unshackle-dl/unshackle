@@ -41,7 +41,7 @@ at a title and it will:
 | Audio | AAC, AC-3, E-AC-3, AC-4, Opus, Vorbis, DTS, DTS-X, ALAC, FLAC; Dolby Atmos handling; per-channel-layout selection |
 | Subtitles | SRT, WebVTT, ASS/SSA, TTML and more, with optional SDH stripping and format conversion |
 | Key vaults | SQLite, MySQL, and HTTP/API vaults to store and share content keys |
-| Proxies | Basic proxies plus NordVPN, ProtonVPN, Surfshark, Windscribe, ExpressVPN, Gluetun, and Hola providers |
+| Proxies | Basic proxies plus Control D, NordVPN, ProtonVPN, Surfshark, Windscribe, ExpressVPN, Gluetun, and Hola providers |
 | Services | A plugin API for the service modules you write. unshackle includes none |
 | Automation | A REST API with a job queue, live progress, history, and remote-download sessions |
 
