@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import click
 import pytest
 from click.testing import CliRunner
 
@@ -86,8 +87,10 @@ def test_import_rejects_a_file_that_is_not_an_export(tmp_path: Path, forwarded: 
     export = tmp_path / "export.json"
     export.write_text(json.dumps({"hello": "world"}), encoding="utf-8")
 
-    result = CliRunner().invoke(import_cli, [str(export)])
+    # rich-click wraps the error panel to the terminal width, so a long tmp path can split the phrase in the output
+    result = CliRunner().invoke(import_cli, [str(export)], standalone_mode=False)
 
     assert result.exit_code != 0
-    assert "is not a usable export file" in result.output
+    assert isinstance(result.exception, click.ClickException)
+    assert "is not a usable export file" in result.exception.message
     assert forwarded == []
