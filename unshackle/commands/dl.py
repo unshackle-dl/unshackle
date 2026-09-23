@@ -3983,12 +3983,12 @@ class dl:
                 for kid, key in content_keys.items():
                     # a KID that already holds a different key must not be overwritten:
                     # the reader rejects a file that disagrees with itself
-                    if pool.setdefault(kid.hex, key) != key:
+                    if pool.setdefault(kid.hex, key.lower()) != key.lower():
                         self.log.warning(
                             f"KID {kid.hex} already has a different key in {export}, keeping the existing one"
                         )
                     else:
-                        entry.keys[kid.hex] = key
+                        entry.add_key(kid.hex, key)
 
             mediaexport.write(export, doc)
 

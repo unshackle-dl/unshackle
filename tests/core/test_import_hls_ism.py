@@ -123,7 +123,7 @@ def test_encrypted_ism_rung_gets_the_exported_keys(tmp_path: Path, monkeypatch: 
 
     export = export_tracks(tmp_path, parsed, ISM_URL)
     doc = json.loads(export.read_text(encoding="utf8"))
-    doc["titles"][0]["keys"] = {"0" * 32: "ab" * 16}
+    doc["titles"][0]["keys"] = {"1" * 32: "ab" * 16}
     doc["titles"][0]["drm"] = [{"system": "playready"}]
     export.write_text(json.dumps(doc), encoding="utf8")
 

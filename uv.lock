@@ -1077,7 +1077,7 @@ wheels = [
 [[package]]
 name = "mediaexport"
 version = "0.1.0"
-source = { git = "https://github.com/unshackle-dl/mediaexport?branch=main#07893237199fc865bd5c63b6848235e4f6ef81c8" }
+source = { git = "https://github.com/unshackle-dl/mediaexport?branch=main#144edd7bcaa943ad0a5116c998734d9f24c41aae" }
 
 [[package]]
 name = "more-itertools"
