@@ -2935,7 +2935,12 @@ class dl:
             if getattr(self._remote_service, "_server_cdm", False):
                 server_cdm_type = getattr(self._remote_service, "_server_cdm_type", "widevine")
                 self.cdm = cdm_type_stub(server_cdm_type)
-                self.log.info(f"Using server CDM ({server_cdm_type.title()}); no local CDM required")
+                from unshackle.core.import_service import ImportService
+
+                if isinstance(self._remote_service, ImportService):
+                    self.log.info("Using keys from the export; no CDM required")
+                else:
+                    self.log.info(f"Using server CDM ({server_cdm_type.title()}); no local CDM required")
 
             video_tracks = title.tracks.videos
             if video_tracks and not server_cdm_type:

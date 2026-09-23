@@ -173,7 +173,7 @@ class ImportService:
         self.tracks_by_title: dict[str, Tracks] = {}
 
         self._server_cdm = True
-        self._server_cdm_type = "widevine"
+        self._server_cdm_type = "playready" if self.exported_drm_system() == "playready" else "widevine"
 
         first = self.doc.titles[0]
         # a title with no manifest keeps its request headers on its file rows

@@ -293,6 +293,17 @@ def test_import_with_no_usable_title_says_so(tmp_path: Path) -> None:
         ImportService(import_ctx(), "EXAMPLE", "movie-1", str(export))
 
 
+@pytest.mark.parametrize(("system", "expected"), [("playready", "playready"), ("widevine", "widevine")])
+def test_import_takes_its_drm_type_from_the_export(tmp_path: Path, system: str, expected: str) -> None:
+    """The type stub routes the DRM objects, so it follows the exported system, not a widevine default."""
+    export = crit_export(tmp_path / "export.json")
+    doc = read_export(export)
+    doc["titles"][0]["drm"] = [{"system": system, "pssh": "AAAA"}]
+    export.write_text(json.dumps(doc), encoding="utf8")
+
+    assert ImportService(import_ctx(), "EXAMPLE", "movie-1", str(export))._server_cdm_type == expected
+
+
 class KeyDRM:
     """A licensed DRM system that holds only ``content_keys``."""
 
