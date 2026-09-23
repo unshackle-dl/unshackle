@@ -800,7 +800,8 @@ The file name tells what the file holds, in the form
 - The scope is `S01` only when the file holds every episode the service lists for that season.
   Otherwise it names each run of episodes. Whole seasons in a row become `S01-S03`. After three
   parts, `+N` counts the parts left out. A movie has no scope.
-- The quality parts come from the tracks in the file. Each value shows once.
+- The quality parts come from the video and audio tracks selected for the titles in the file.
+  Each value shows once.
 - unshackle renames the file after each write, so the name always matches what the file holds.
   When a run stops early, the file is complete for the titles it holds.
 - When another file already has the name, unshackle adds `-2`, `-3`, and so on. It never

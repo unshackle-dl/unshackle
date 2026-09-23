@@ -214,7 +214,7 @@ def test_export_messages(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> No
         instance.log_export_summary()
 
     lines = [r.getMessage() for r in caplog.records]
-    assert "Exporting to Example Movie 2024_1080p_h264_sdr_dash-EXAMPLE.json" in lines
+    assert "Exporting to Example Movie 2024_1080p_h264_sdr_dash_aac2.0-EXAMPLE.json" in lines
     assert "Exported 'Example Movie' (2024): 1 video, 2 audio, 0 subtitles, 1 key" in lines
     final = tmp_path / "Example Movie 2024_1080p_h264_sdr_dash_aac2.0-EXAMPLE.json"
     assert f"Saved the export to {final}: 1 title, 1 key" in lines

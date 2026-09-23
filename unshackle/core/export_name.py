@@ -199,8 +199,14 @@ class ExportNamer:
         self.path: Optional[Path] = None
 
     def add(self, title: Title_T, track: AnyTrack) -> None:
+        """Record ``track`` and the video and audio tracks selected for ``title``.
+
+        The first write of a title is often a subtitle, and a name from that track alone would
+        leave out the quality of the title.
+        """
         self.titles.setdefault(str(title.id), title)
-        self.tracks.setdefault(f"{title.id}/{track.id}", track)
+        for t in [track, *title.tracks.videos, *title.tracks.audio]:
+            self.tracks.setdefault(f"{title.id}/{t.id}", t)
 
     def name(self) -> str:
         return export_name(list(self.titles.values()), self.tracks.values(), self.service_tag, self.seasons)
