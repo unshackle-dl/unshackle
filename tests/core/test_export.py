@@ -257,6 +257,42 @@ def test_unidl_export_imports_without_track_dicts(tmp_path: Path) -> None:
     assert svc.titles_data["ep-2"]["manifest_type"] == "DASH"
 
 
+def crit_export(path: Path, *crit_ids: str) -> Path:
+    """A mediaexport file with one usable title per id, except ``crit_ids``, which need ``segments``."""
+    titles = [
+        {
+            "id": tid,
+            "kind": "movie",
+            "title": tid,
+            "manifests": [{"url": f"https://example.test/{tid}.mpd", "type": "dash"}],
+            **({"crit": ["segments"]} if tid in crit_ids else {}),
+        }
+        for tid in ("movie-1", "movie-2")
+    ]
+    doc = {"kind": "mediaexport", "version": 1, "service": {"tag": "EXAMPLE"}, "titles": titles}
+    path.write_text(json.dumps(doc), encoding="utf8")
+    return path
+
+
+def test_import_skips_a_title_it_cannot_use(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """A title another tool marked as needing a capability unshackle lacks is named and skipped."""
+    export = crit_export(tmp_path / "export.json", "movie-2")
+
+    with caplog.at_level(logging.WARNING, logger="EXAMPLE"):
+        svc = ImportService(import_ctx(), "EXAMPLE", "movie-1", str(export))
+
+    assert list(svc.titles_data) == ["movie-1"]
+    assert "Skipping exported title 'movie-2'" in caplog.text
+
+
+def test_import_with_no_usable_title_says_so(tmp_path: Path) -> None:
+    """A file whose every title is refused stops with a reason, not an empty download."""
+    export = crit_export(tmp_path / "export.json", "movie-1", "movie-2")
+
+    with pytest.raises(click.ClickException, match="no title unshackle can use"):
+        ImportService(import_ctx(), "EXAMPLE", "movie-1", str(export))
+
+
 class KeyDRM:
     """A licensed DRM system that holds only ``content_keys``."""
 

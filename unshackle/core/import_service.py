@@ -129,6 +129,10 @@ class ImportService:
             self.doc = mediaexport.read(export_path)
         except mediaexport.ExportError as e:
             raise click.ClickException(f"Cannot import {export_path.name}: {e}")
+        for refused in self.doc.refused:
+            self.log.warning(f"Skipping exported title {refused.raw.get('id')!r}: {refused.reason}")
+        if not self.doc.titles:
+            raise click.ClickException(f"Cannot import {export_path.name}: it has no title unshackle can use")
 
         self.titles_data: dict[str, Any] = {e.id: self.legacy_entry(e) for e in self.doc.titles}
         self.region: Optional[str] = self.doc.region or None
