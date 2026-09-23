@@ -176,7 +176,7 @@ def export_name(
 def move_export(current: Path, name: str) -> Path:
     """Move the run's export file to ``name`` in its folder, and return the new path.
 
-    Another file at that name is never overwritten: the name gets ``-2``, ``-3``, and so on.
+    It never writes over another file at that name: the name gets ``-2``, ``-3``, and so on.
     """
     target = current.with_name(f"{name}.json")
     n = 2

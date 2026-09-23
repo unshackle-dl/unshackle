@@ -788,6 +788,27 @@ older unshackle `version: 2` files and unidl's own export files.
 unshackle dl --skip-dl --export EXAMPLE 81234567
 ```
 
+The file name tells what the file holds, in the form
+`{title} {scope}_{resolutions}_{codecs}_{ranges}_{manifests}_{audio}-{SERVICE}.json`:
+
+| Export | File name |
+|---|---|
+| A movie | `Example Movie 2024_1080p_h264_sdr_hls_aac2.0-EXAMPLE.json` |
+| A whole season | `Example Show S01_2160p_h265_sdr_hdr10_dash_dd5.1-EXAMPLE.json` |
+| Episodes 5 to 9 and 12 | `Example Show S01E05-E09_S01E12_1080p_h264_sdr_dash_aac2.0-EXAMPLE.json` |
+
+- The scope is `S01` only when the file holds every episode the service lists for that season.
+  Otherwise it names each run of episodes. Whole seasons in a row become `S01-S03`. After three
+  parts, `+N` counts the parts left out. A movie has no scope.
+- The quality parts come from the tracks in the file. Each value shows once.
+- unshackle renames the file after each write, so the name always matches what the file holds.
+  When a run stops early, the file is complete for the titles it holds.
+- When another file already has the name, unshackle adds `-2`, `-3`, and so on. It never
+  writes over another export.
+
+The run logs the file name at the first write, the track and content key counts for each title, and
+at the end the path and the total counts.
+
 The export holds a content key for each track your flags selected and no others. To make a
 file another person can use, select generously: for example `-a AAC,EC3` and every language
 you want them to have. An import can only pick tracks whose key is in the file. A track
