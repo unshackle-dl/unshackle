@@ -50,6 +50,7 @@ from unshackle.core.credential import Credential
 from unshackle.core.downloaders import default_max_workers, format_speed, parse_speed_limit, set_speed_limit
 from unshackle.core.drm import DRM_T, ClearKeyCENC, MonaLisa, PlayReady, Widevine, own_kids, verify
 from unshackle.core.events import events
+from unshackle.core.export_name import ExportNamer, move_export, plural, season_episodes, title_label
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.providers.tvdb import SEASON_TYPES, parse_int
 from unshackle.core.proxies import (
@@ -1661,8 +1662,10 @@ class dl:
 
         if export:
             config.directories.exports.mkdir(parents=True, exist_ok=True)
+            # a working name until the first write, which renames it after what it holds
             export_path = config.directories.exports / f"export_{self.service}_{int(time.time())}.json"
             self.export_service = service
+            self.export_namer = ExportNamer(self.service)
         else:
             export_path = None
 
@@ -1874,6 +1877,10 @@ class dl:
 
         if list_titles:
             return
+
+        if export_path and isinstance(titles, Series):
+            # before --select-titles and -w drop titles, so a whole season can be told from part of one
+            self.export_namer.seasons = season_episodes(titles)
 
         if select_titles and isinstance(titles, Movies) and len(titles) > 1:
             console.print(Padding(Rule("[rule.text]Select Titles"), (1, 2)))
@@ -3029,6 +3036,8 @@ class dl:
                     context={"title": str(title)},
                 )
                 self.wait_vault_writes()
+                if export_path:
+                    self.log_export_summary()
                 return
             except Exception as e:  # noqa
                 # Reported and swallowed (no re-raise) so the CLI exits cleanly; flag it so the
@@ -3063,9 +3072,13 @@ class dl:
                     postscript,
                 )
                 self.wait_vault_writes()
+                if export_path:
+                    self.log_export_summary()
                 return
 
             self.wait_vault_writes()
+            if export_path:
+                self.log_export_title(title)
 
             if skip_dl:
                 console.log("Skipped downloads as --skip-dl was used...")
@@ -3711,6 +3724,8 @@ class dl:
                 dispatch("success", "run", run_context, postscript)
 
         self.wait_vault_writes()
+        if export_path:
+            self.log_export_summary()
         dl_time = time_elapsed_since(start_time)
 
         console.print(Padding(f"Processed all titles in [progress.elapsed]{dl_time}", (0, 5, 1, 5)))
@@ -3951,7 +3966,10 @@ class dl:
         records the track, manifest, chapter and attachment info. unshackle's full track
         dicts and title meta go under ``x-unshackle`` for its own importer.
         """
+        namer: Optional[ExportNamer] = getattr(self, "export_namer", None)
         with self.EXPORT_LOCK:
+            if namer and namer.path:
+                export = namer.path
             try:
                 doc = mediaexport.read(export) if export.is_file() else mediaexport.Document(service_tag=self.service)
             except mediaexport.ExportError as e:
@@ -4009,6 +4027,62 @@ class dl:
                 mediaexport.write(export, doc)
             except (mediaexport.ExportError, OSError) as e:
                 self.log.warning(f"Could not write export {export}: {e}")
+                return
+            if namer:
+                self.rename_export(namer, export, title, track)
+
+    def rename_export(self, namer: ExportNamer, export: Path, title: Title_T, track: AnyTrack) -> None:
+        """Give the run's export a name that tells what it holds, after each write to it.
+
+        The file on disk is complete after each write, so a run that stops early still leaves
+        a usable file with a name that matches what it holds.
+        """
+        first = namer.path is None
+        namer.add(title, track)
+        try:
+            namer.path = move_export(export, namer.name())
+        except OSError as e:
+            self.log.warning(f"Could not rename export {export}: {e}")
+            namer.path = export
+        if first:
+            self.log.info(f"Exporting to {namer.path.name}")
+        elif namer.path != export:
+            self.log.debug(f"Renamed the export to {namer.path.name}")
+
+    def log_export_title(self, title: Title_T) -> None:
+        """Log what the export holds for one title: its track counts and its keys."""
+        namer: Optional[ExportNamer] = getattr(self, "export_namer", None)
+        entry = None
+        if namer and namer.path:
+            try:
+                entry = mediaexport.read(namer.path).get(str(title.id))
+            except (mediaexport.ExportError, OSError) as e:
+                self.log.warning(f"Could not read export {namer.path}: {e}")
+                return
+        if entry is None:
+            self.log.warning(f"Exported nothing for {title_label(title)}")
+            return
+        selected = [r.get("type") for r in entry.tracks if r.get("selected")]
+        self.log.info(
+            f"Exported {title_label(title)}: {selected.count('video')} video, {selected.count('audio')} audio, "
+            f"{plural(selected.count('subtitle'), 'subtitle')}, {plural(len(entry.keys), 'key')}"
+        )
+
+    def log_export_summary(self) -> None:
+        """Log where the run's export is and what it holds, and that it must stay private."""
+        namer: Optional[ExportNamer] = getattr(self, "export_namer", None)
+        if not namer or not namer.path:
+            self.log.warning("Nothing was exported")
+            return
+        try:
+            doc = mediaexport.read(namer.path)
+        except (mediaexport.ExportError, OSError) as e:
+            self.log.warning(f"Could not read export {namer.path}: {e}")
+            return
+        keys = len(doc.key_pool())
+        self.log.info(f"Saved the export to {namer.path}: {plural(len(doc.titles), 'title')}, {plural(keys, 'key')}")
+        if keys:
+            self.log.warning("The export holds content keys. Keep it private.")
 
     def export_entry(self, title: Title_T) -> mediaexport.Entry:
         """A mediaexport entry for ``title``: manifests, chapters, a small track list, no keys yet."""

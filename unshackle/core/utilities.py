@@ -118,7 +118,7 @@ def import_module_by_path(path: Path) -> ModuleType:
     return module
 
 
-def sanitize_filename(filename: str, spacer: str = ".") -> str:
+def sanitize_filename(filename: str, spacer: str = ".", unicode: Optional[bool] = None) -> str:
     """
     Sanitise a string to be filename safe.
 
@@ -127,9 +127,10 @@ def sanitize_filename(filename: str, spacer: str = ".") -> str:
 
     Set `unicode_filenames: true` in config to preserve the characters of the
     original language (for example Korean, Japanese, or Chinese) instead of
-    transliterating them to ASCII equivalents.
+    transliterating them to ASCII equivalents. Pass ``unicode`` to decide that
+    for one call instead of the config value.
     """
-    if not config.unicode_filenames:
+    if not (config.unicode_filenames if unicode is None else unicode):
         filename = unidecode(filename)
         filename = re.sub(r"\[\(+", "[", filename)
         filename = re.sub(r"\)+\]", "]", filename)
