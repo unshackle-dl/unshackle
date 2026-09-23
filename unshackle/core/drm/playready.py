@@ -24,6 +24,7 @@ from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import AnyTrack
+from unshackle.core.drm import key_args as drm_key_args
 from unshackle.core.utilities import get_boxes, log_event
 from unshackle.core.utils.subprocess import ffprobe
 
@@ -55,6 +56,7 @@ class PlayReady:
                 if extra_kid not in kids:
                     kids.append(extra_kid)
 
+        self._kid: Optional[UUID] = None
         if kid:
             if isinstance(kid, str):
                 kid = UUID(hex=kid)
@@ -62,6 +64,7 @@ class PlayReady:
                 kid = UUID(bytes=kid)
             if not isinstance(kid, UUID):
                 raise ValueError(f"Expected kid to be a {UUID}, str, or bytes, not {kid!r}")
+            self._kid = kid
             if kid not in kids:
                 kids.append(kid)
 
@@ -563,23 +566,19 @@ class PlayReady:
             output_size=path.stat().st_size if path.exists() else 0,
         )
 
-    def mp4decrypt_key_args(self) -> list[str]:
-        """Build the mp4decrypt --key arguments for every content key."""
-        key_args = []
-        for kid, key in self.content_keys.items():
-            kid_hex = kid.hex if hasattr(kid, "hex") else str(kid).replace("-", "")
-            key_hex = key if isinstance(key, str) else key.hex()
-            key_args.extend(["--key", f"{kid_hex}:{key_hex}"])
+    def own_kids(self) -> list[UUID]:
+        """Return the KIDs that identify this track's own content key.
 
-        # Fallback for tracks whose tenc default_KID is all-zero and whose real
-        # KID is signalled out-of-band: emit a zero-KID entry per content key.
-        zero_kid = "00" * 16
-        existing_kids = {kid.hex if hasattr(kid, "hex") else str(kid).replace("-", "") for kid in self.content_keys}
-        if zero_kid not in existing_kids:
-            for key in self.content_keys.values():
-                key_hex = key if isinstance(key, str) else key.hex()
-                key_args.extend(["--key", f"{zero_kid}:{key_hex}"])
-        return key_args
+        The KID given to the constructor (from the manifest or the init segment) names the
+        track exactly. A PSSH can name the KIDs of other renditions too.
+        """
+        if self._kid and self._kid in self.content_keys:
+            return [self._kid]
+        return self.kids
+
+    def mp4decrypt_key_args(self) -> list[str]:
+        """Build the mp4decrypt --key arguments for every content key and the zero-KID fallback."""
+        return drm_key_args.mp4decrypt_key_args(self.content_keys, self.own_kids())
 
     def decrypt_with_mp4decrypt(self, path: Path) -> None:
         """Decrypt using mp4decrypt"""
@@ -633,18 +632,7 @@ class PlayReady:
                 f"input={path},stream=0,output={output_path},output_format=MP4",
                 "--enable_raw_key_decryption",
                 "--keys",
-                ",".join(
-                    [
-                        *[
-                            f"label={i}:key_id={kid.hex}:key={key.lower()}"
-                            for i, (kid, key) in enumerate(self.content_keys.items())
-                        ],
-                        *[
-                            f"label={i}:key_id={'00' * 16}:key={key.lower()}"
-                            for i, (kid, key) in enumerate(self.content_keys.items(), len(self.content_keys))
-                        ],
-                    ]
-                ),
+                drm_key_args.shaka_keys(self.content_keys, self.own_kids()),
                 "--temp_dir",
                 config.directories.temp,
             ]

@@ -34,7 +34,11 @@ def drm_from_dict(data: dict[str, Any]) -> Union[Widevine, PlayReady, ClearKeyCE
     elif system == "Widevine":
         from pywidevine.pssh import PSSH as WidevinePSSH
 
-        drm = Widevine(pssh=WidevinePSSH(pssh_b64), kid=kids[0] if kids else None)
+        wv_pssh = WidevinePSSH(pssh_b64)
+        # kids repeats the PSSH KIDs, so kids[0] is not the track's own KID; only a PSSH
+        # without KIDs needs it
+
+        drm = Widevine(pssh=wv_pssh, kid=kids[0] if kids and not wv_pssh.key_ids else None)
     else:
         raise ValueError(f"Unsupported DRM system for reconstruction: {system!r}")
 
