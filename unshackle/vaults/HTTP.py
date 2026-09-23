@@ -281,6 +281,7 @@ class HTTP(Vault):
 
         inserted_count = 0
         title = getattr(self, "current_title", None)
+        failures: list[Exception] = []
 
         if self.api_mode == "json":
             if self.batch_insert:
@@ -311,8 +312,10 @@ class HTTP(Vault):
                         continue
                     if response.get("inserted", False):
                         inserted_count += 1
-                except Exception:
-                    continue
+                except Exception as e:
+                    failures.append(e)
+            if failures and len(failures) == len(processed_kid_keys):
+                raise failures[-1]
         else:
             for kid, key in processed_kid_keys.items():
                 response = self.session.get(

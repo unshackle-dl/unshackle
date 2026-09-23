@@ -4075,17 +4075,30 @@ def check_vaults(kids: list, service_name: str) -> Optional[tuple[Dict[str, str]
     return None
 
 
+CACHED_PAIRS: set[tuple[str, str, str]] = set()
+
+
 def cache_to_vaults(keys: Dict[str, str], service_name: str) -> None:
-    """Cache newly obtained keys to server vaults."""
+    """Cache newly obtained keys to server vaults.
+
+    A PlayReady licence always runs, and a Widevine licence runs when one PSSH KID has no content
+    key in a vault, so the same content keys come back on every request for a title. This process
+    does not send a pair again after every vault accepted it.
+    """
     from uuid import UUID
 
     try:
+        new = {kid: key for kid, key in keys.items() if (service_name, kid, key) not in CACHED_PAIRS}
+        if not new:
+            return
         vaults = load_server_vaults(service_name)
         if not vaults.vaults:
             return
 
-        key_map = {UUID(hex=kid): key for kid, key in keys.items()}
+        key_map = {UUID(hex=kid): key for kid, key in new.items()}
         cached = vaults.add_keys(key_map)
+        if cached == len([vault for vault in vaults.vaults if not vault.no_push]):
+            CACHED_PAIRS.update((service_name, kid, key) for kid, key in new.items())
         if cached:
             log.info(f"Cached {len(key_map)} key(s) to {cached}/{len(vaults)} server vault(s)")
     except (Exception, SystemExit) as e:
