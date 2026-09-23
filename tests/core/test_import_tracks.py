@@ -136,3 +136,44 @@ def test_fetch_failure_still_reports_a_possible_expiry(tmp_path: Path, failure: 
         with pytest.raises(click.ClickException) as error:
             service.get_tracks(title)
     assert "may have expired" in error.value.message
+
+
+def test_a_subtitle_side_load_from_another_tool_is_added(tmp_path: Path) -> None:
+    """A foreign export has no track dicts, so a ``tracks[]`` row with a url is the side-load."""
+    export = {
+        "kind": "mediaexport",
+        "version": 1,
+        "service": {"tag": "EXAMPLE"},
+        "titles": [
+            {
+                "id": "movie-1",
+                "kind": "clip",
+                "title": "Example Movie",
+                "language": "ja",
+                "manifests": [{"url": "https://example.invalid/m.mpd", "type": "dash"}],
+                "tracks": [
+                    {"type": "video", "id": "v1", "codec": "avc"},
+                    {
+                        "type": "subtitle",
+                        "id": "sub-en",
+                        "url": "https://example.invalid/en.srt",
+                        "codec": "srt",
+                        "language": "en",
+                        "sdh": True,
+                    },
+                    {"type": "subtitle", "id": "sub-x", "url": "https://example.invalid/x.srt"},
+                ],
+            }
+        ],
+    }
+    path = tmp_path / "export.json"
+    path.write_text(json.dumps(export), encoding="utf8")
+    service = ImportService(click.Context(click.Command("dl")), "EXAMPLE", "movie-1", str(path))
+    tracks = get_tracks(service, MPD_WITH_LANG)
+    assert [(t.descriptor.name, str(t.language)) for t in tracks.subtitles] == [
+        ("DASH", "ja"),
+        ("URL", "en"),
+        ("URL", "ja"),
+    ]
+    assert [t.id for t in tracks.subtitles[1:]] == ["sub-en", "sub-x"]
+    assert tracks.subtitles[1].sdh and tracks.subtitles[1].codec is not None

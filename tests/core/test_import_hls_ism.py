@@ -121,11 +121,10 @@ def test_encrypted_ism_rung_gets_the_exported_keys(tmp_path: Path, monkeypatch: 
     monkeypatch.setattr(ISM, "from_url", lambda url, session=None, **kw: ISM.from_text(ISM_ENCRYPTED, url))
     parsed = ISM.from_text(ISM_ENCRYPTED, ISM_URL).to_tracks(language="en")
 
-    # export the licensed rung only, as a finished download would
-    licensed = max(parsed.videos, key=lambda t: t.bitrate or 0)
     export = export_tracks(tmp_path, parsed, ISM_URL)
     doc = json.loads(export.read_text(encoding="utf8"))
-    doc["titles"]["movie-1"]["tracks"][licensed.id]["keys"] = {"0" * 32: "ab" * 16}
+    doc["titles"][0]["keys"] = {"0" * 32: "ab" * 16}
+    doc["titles"][0]["drm"] = [{"system": "playready"}]
     export.write_text(json.dumps(doc), encoding="utf8")
 
     svc, tracks = import_tracks(export)

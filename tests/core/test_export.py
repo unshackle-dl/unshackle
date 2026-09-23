@@ -1,4 +1,4 @@
-"""Tests for ``dl.write_export``, the ``--export`` JSON sidecar.
+"""Tests for ``dl.write_export``, the ``--export`` mediaexport sidecar.
 
 Regression: DRM-free tracks never pass through ``prepare_drm``, so ``write_export``
 must accept ``drm=None`` (and DRM systems without ``to_dict``/``content_keys`` such
@@ -83,6 +83,10 @@ def read_export(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf8"))
 
 
+def entry(path: Path) -> dict:
+    return read_export(path)["titles"][0]
+
+
 def test_drm_free_track_exports(tmp_path: Path) -> None:
     """The reported bug: DRM-free downloads produced no usable export."""
     export = tmp_path / "export.json"
@@ -92,13 +96,14 @@ def test_drm_free_track_exports(tmp_path: Path) -> None:
     make_dl().write_export(export, title, video)
 
     doc = read_export(export)
-    assert doc["version"] == 2
-    assert doc["service"] == "EXAMPLE"
-    tinfo = doc["titles"]["movie-1"]
-    assert tinfo["meta"]["name"] == "Example Movie"
-    assert set(tinfo["tracks"]) == {"v1", "a1", "s1"}
-    assert "keys" not in tinfo["tracks"]["v1"]
-    assert "drm" not in tinfo["tracks"]["v1"]
+    assert doc["kind"] == "mediaexport" and doc["version"] == 1
+    assert doc["service"]["tag"] == "EXAMPLE"
+    tinfo = doc["titles"][0]
+    assert tinfo["title"] == "Example Movie" and tinfo["kind"] == "movie"
+    assert {row["id"] for row in tinfo["tracks"]} == {"v1", "a1", "s1"}
+    assert tinfo["x-unshackle"]["meta"]["name"] == "Example Movie"
+    assert set(tinfo["x-unshackle"]["tracks"]) == {"v1"}
+    assert "keys" not in tinfo and "drm" not in tinfo
 
 
 def test_clearkey_drm_exports_track_without_keys(tmp_path: Path) -> None:
@@ -109,10 +114,9 @@ def test_clearkey_drm_exports_track_without_keys(tmp_path: Path) -> None:
 
     make_dl().write_export(export, title, video, ClearKey(key="bb" * 16))
 
-    doc = read_export(export)
-    track = doc["titles"]["movie-1"]["tracks"]["v1"]
-    assert "keys" not in track
-    assert "drm" not in track
+    tinfo = entry(export)
+    assert "keys" not in tinfo and "drm" not in tinfo
+    assert "v1" in tinfo["x-unshackle"]["tracks"]
 
 
 def test_post_download_write_keeps_licensed_keys(tmp_path: Path) -> None:
@@ -125,9 +129,10 @@ def test_post_download_write_keeps_licensed_keys(tmp_path: Path) -> None:
     runner.write_export(export, title, video, StubDRM())  # prepare_drm
     runner.write_export(export, title, video)  # post-download hook
 
-    track = read_export(export)["titles"]["movie-1"]["tracks"]["v1"]
-    assert track["drm"] == [{"system": "Widevine", "pssh_b64": "AAAA"}]
-    assert track["keys"] == {KID.hex: "aa" * 16}
+    tinfo = entry(export)
+    assert tinfo["drm"] == [{"system": "widevine", "pssh": "AAAA"}]
+    assert tinfo["keys"] == {KID.hex: "aa" * 16}
+    assert tinfo["x-unshackle"]["drm"] == [{"system": "Widevine", "pssh_b64": "AAAA"}]
 
 
 def test_drm_free_export_roundtrips_through_import_service(tmp_path: Path) -> None:
@@ -174,11 +179,13 @@ def test_clearkey_cenc_exports_drm_and_keys(tmp_path: Path) -> None:
 
     make_dl().write_export(export, title, video, drm)
 
-    track = read_export(export)["titles"]["movie-1"]["tracks"]["v1"]
-    assert track["drm"] == [{"system": "ClearKeyCENC", "kids": [KID.hex], "laurl": "https://license.example.test/ck"}]
-    assert track["keys"] == {KID.hex: "cc" * 16}
+    tinfo = entry(export)
+    assert tinfo["drm"] == [{"system": "clearkey"}]
+    assert tinfo["keys"] == {KID.hex: "cc" * 16}
+    own = tinfo["x-unshackle"]["drm"]
+    assert own == [{"system": "ClearKeyCENC", "kids": [KID.hex], "laurl": "https://license.example.test/ck"}]
 
-    rebuilt = drm_from_dict({**track["drm"][0], "content_keys": track["keys"]})
+    rebuilt = drm_from_dict({**own[0], "content_keys": tinfo["keys"]})
     assert isinstance(rebuilt, ClearKeyCENC)
     assert rebuilt.content_keys == {KID: "cc" * 16}
 
@@ -193,6 +200,49 @@ def test_keyless_content_keys_writes_no_keys_entry(tmp_path: Path) -> None:
 
     make_dl().write_export(export, title, video, drm)
 
-    track = read_export(export)["titles"]["movie-1"]["tracks"]["v1"]
-    assert track["drm"] == [{"system": "Widevine", "pssh_b64": "AAAA"}]
-    assert "keys" not in track
+    tinfo = entry(export)
+    assert tinfo["drm"] == [{"system": "widevine", "pssh": "AAAA"}]
+    assert "keys" not in tinfo
+
+
+def test_unidl_export_imports_without_track_dicts(tmp_path: Path) -> None:
+    """A file from another tool has no x-unshackle block: titles, keys and chapters still rebuild."""
+    export = tmp_path / "unidl.json"
+    export.write_text(
+        json.dumps(
+            {
+                "kind": "unidl-export",
+                "version": 1,
+                "service": "example",
+                "titles": [
+                    {
+                        "save_name": "Show.S01E02",
+                        "title": {
+                            "id": "ep-2",
+                            "kind": "episode",
+                            "name": "Show",
+                            "episode_name": "Two",
+                            "season": 1,
+                            "episode": 2,
+                            "year": "2024",
+                        },
+                        "keys": [f"{KID.hex}:{'dd' * 16}"],
+                        "manifest_url": "https://example.test/m.mpd",
+                        "headers": {"User-Agent": "unidl-ua"},
+                        "drm": {"system": "widevine", "pssh": "AAAA"},
+                        "chapters": [{"start_ms": 5000, "title": "Recap"}],
+                    }
+                ],
+            }
+        ),
+        encoding="utf8",
+    )
+    svc = ImportService(SimpleNamespace(parent=None, params={}), "EXAMPLE", "ep-2", str(export))
+
+    ep = next(iter(svc.get_titles()))
+    assert (ep.title, ep.season, ep.number) == ("Show", 1, 2)
+    assert svc.session.headers["User-Agent"] == "unidl-ua"
+    assert svc.key_pool() == {KID: "dd" * 16}
+    assert svc.exported_drm_system() == "widevine"
+    assert [c.name for c in svc.get_chapters(ep)] == [None, "Recap"]
+    assert svc.titles_data["ep-2"]["manifest_type"] == "DASH"
