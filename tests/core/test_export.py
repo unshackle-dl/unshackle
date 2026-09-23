@@ -310,3 +310,20 @@ def test_uppercase_content_key_is_stored_lowercase(tmp_path: Path, caplog: pytes
     titles = read_export(export)["titles"]
     assert titles[0]["keys"] == {KID.hex: "aa" * 16}
     assert "different key" not in caplog.text
+
+
+@pytest.mark.parametrize("key", ["zz" * 16, "aa" * 8, "aa" * 32])
+def test_malformed_content_key_skips_the_key_not_the_download(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, key: str
+) -> None:
+    """A key that is not 16 bytes of hex, as a new DRM system's tool might return, must not stop licensing."""
+    export = tmp_path / "export.json"
+    title = make_title()
+    title.tracks.manifest_url = "https://example.test/m.mpd"
+    runner = make_dl()
+
+    with caplog.at_level(logging.WARNING, logger="download"):
+        runner.write_export(export, title, title.tracks.videos[0], KeyDRM(key))
+
+    assert "keys" not in entry(export)
+    assert f"Not exporting the key for KID {KID.hex}" in caplog.text

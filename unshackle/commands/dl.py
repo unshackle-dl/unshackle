@@ -4001,10 +4001,18 @@ class dl:
                         self.log.warning(
                             f"KID {kid.hex} already has a different key in {export}, keeping the existing one"
                         )
-                    else:
+                        continue
+                    try:
                         entry.add_key(kid.hex, key)
+                    except mediaexport.ExportError as e:
+                        # a key the format cannot hold (not 16 bytes of hex) costs the export that key,
+                        # never the download
+                        self.log.warning(f"Not exporting the key for KID {kid.hex}: {e}")
 
-            mediaexport.write(export, doc)
+            try:
+                mediaexport.write(export, doc)
+            except (mediaexport.ExportError, OSError) as e:
+                self.log.warning(f"Could not write export {export}: {e}")
 
     def export_entry(self, title: Title_T) -> mediaexport.Entry:
         """A mediaexport entry for ``title``: manifests, chapters, a small track list, no keys yet."""
