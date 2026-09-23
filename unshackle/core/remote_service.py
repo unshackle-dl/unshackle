@@ -1345,7 +1345,8 @@ class RemoteService:
             kid_uuids = [UUID(hex=k) for k in kid_hexes]
             WIDEVINE_SYSTEM_ID = UUID("edef8ba9-79d6-4ace-a3c8-27dcd51d21ed")
             dummy_pssh = WvPSSH.new(system_id=WIDEVINE_SYSTEM_ID, key_ids=kid_uuids)
-            return Widevine(pssh=dummy_pssh, kid=kid_hexes[0])
+            # no kid: the stub names several KIDs, and the first is not the track's own
+            return Widevine(pssh=dummy_pssh)
 
     def get_chapters(self, title: Title_T) -> Chapters:
         title_id = str(title.id)

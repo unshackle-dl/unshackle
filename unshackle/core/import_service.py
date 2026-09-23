@@ -14,7 +14,7 @@ from langcodes import tag_is_valid
 from unshackle.core.config import config
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
-from unshackle.core.drm import drm_from_dict
+from unshackle.core.drm import Widevine, drm_from_dict
 from unshackle.core.manifests import DASH, HLS, ISM
 from unshackle.core.remote_service import RemoteService, build_title, match_track, resolve_proxy_arg
 from unshackle.core.titles import Episode, Movies, Series, Title_T, Titles_T, remap_titles
@@ -93,6 +93,11 @@ def resolve_import_manifest_data(
             matched = match_track(track, local_tracks)
             if matched and matched.data.get(data_key):
                 track.data.update(matched.data)
+
+
+def real_kids(drm: Any) -> list[UUID]:
+    """Return the KIDs a DRM object names, without the all-zero and test-pattern placeholders."""
+    return [kid for kid in getattr(drm, "kids", None) or [] if kid.int and kid not in Widevine.PLACEHOLDER_KIDS]
 
 
 class ImportService:
@@ -416,19 +421,26 @@ class ImportService:
         """Rebuild a DRM object (from stored PSSH, falling back to a stub) with the exported keys.
 
         Keys and DRM are title-level in the shared format; a legacy v2 track dict that still
-        carries its own is honoured first.
+        carries its own is honoured first. A title with more than one DRM entry does not say
+        which entry is this track's, so the track gets a stub that names every exported KID
+        instead of a guess. A rebuilt PSSH holds only the keys for the KIDs it names.
         """
-        keys = track_dict.get("keys") or {kid.hex: key for kid, key in self.key_pool(title_id).items()}
+        own_keys = track_dict.get("keys")
+        keys = own_keys or {kid.hex: key for kid, key in self.key_pool(title_id).items()}
         drm_dicts = track_dict.get("drm") or self.title_drm_dicts(title_id)
         if not drm_dicts and not keys:
             return None
 
         drm_obj = None
-        if drm_dicts:
+        if drm_dicts and (track_dict.get("drm") or len(drm_dicts) == 1):
             try:
                 drm_obj = drm_from_dict(drm_dicts[0])
             except Exception as e:
                 self.log.debug(f"Falling back to DRM stub (PSSH rebuild failed: {e})")
+            if drm_obj is not None and not own_keys:
+                declared = {kid.hex for kid in real_kids(drm_obj)}
+                if declared:
+                    keys = {kid_hex: key for kid_hex, key in keys.items() if kid_hex in declared}
 
         if drm_obj is None and keys:
             drm_type = (drm_dicts[0].get("system", "Widevine").lower()) if drm_dicts else "widevine"
@@ -445,54 +457,84 @@ class ImportService:
         """Inject exported keys into the selected encrypted tracks by KID (no network).
 
         dl.py calls this method after selection. It touches only encrypted video and audio
-        tracks. Encrypted DASH tracks (no DRM at parse time) get a stub holding the keys,
-        which DASH.download_track preserves. decrypt() applies the content key whose KID
-        matches the media.
+        tracks. A track gets only the content keys for the KIDs it declares, and the whole
+        title pool only when it declares no KID. Encrypted DASH tracks (no DRM at parse time)
+        get a stub holding the content keys, which DASH.download_track preserves. The
+        decrypters then match each content key to the media by KID, and give the all-zero KID
+        only the content key of the track.
         """
         pool = self.key_pool(str(title.id)) or self.key_pool()
         if not pool:
             return
 
         system = self.exported_drm_system()
-        kid_hexes = [kid.hex for kid in pool]
 
         for track in title.tracks:
-            if not isinstance(track, (Video, Audio)) or not self.track_is_encrypted(track, self.session):
+            if not isinstance(track, (Video, Audio)):
                 continue
-            drm_obj = track.drm[0] if track.drm else RemoteService.create_drm_stub(system, kid_hexes)
-            for kid, key in pool.items():
+            declared = self.track_kids(track, self.session)
+            if declared is None:
+                continue
+            keys = {kid: key for kid, key in pool.items() if kid in declared} if declared else pool
+            if track.drm:
+                drm_obj = track.drm[0]
+            else:
+                drm_obj = RemoteService.create_drm_stub(system, [kid.hex for kid in (declared or pool)])
+            for kid, key in keys.items():
                 drm_obj.content_keys[kid] = key
             track.drm = [drm_obj]
             self._server_cdm_type = drm_obj.__class__.__name__.lower()
 
-    @staticmethod
-    def track_is_encrypted(track: Any, session: Optional[requests.Session] = None) -> bool:
-        """True if the track carries DRM, its manifest declares protection, or its init segment does.
+    @classmethod
+    def track_is_encrypted(cls, track: Any, session: Optional[requests.Session] = None) -> bool:
+        """True if the track carries DRM, its manifest declares protection, or its init segment does."""
+        return cls.track_kids(track, session) is not None
 
-        This method examines ISM as well as DASH, because ISM.download_track reads only
-        ``track.drm``. A rung that misses content key injection here downloads encrypted and
-        muxes without error. A DASH manifest with no ContentProtection can still describe an
-        encrypted track, with the PSSH only in the init segment, so that case probes the init
-        segment with `session`.
+    @staticmethod
+    def track_kids(track: Any, session: Optional[requests.Session] = None) -> Optional[set[UUID]]:
+        """Return the KIDs an encrypted track declares, or None when the track is not encrypted.
+
+        An empty set means that the track is encrypted but declares no KID. The KIDs come from
+        the track's DRM, then from the DASH ContentProtection default_KID, then from the DRM in
+        the init segment. This method examines ISM as well as DASH, because ISM.download_track
+        reads only ``track.drm``. A rung that misses content key injection here downloads
+        encrypted and muxes without error. A DASH manifest with no ContentProtection can still
+        describe an encrypted track, with the PSSH only in the init segment, so that case
+        probes the init segment with `session`.
         """
         if track.drm:
-            return True
+            return {kid for drm in track.drm for kid in real_kids(drm)}
         data = getattr(track, "data", None) or {}
         dash = data.get("dash")
         if dash:
-            for element in (dash.get("representation"), dash.get("adaptation_set")):
-                if element is not None and element.findall("ContentProtection"):
-                    return True
+            protections = [
+                cp
+                for element in (dash.get("representation"), dash.get("adaptation_set"))
+                if element is not None
+                for cp in element.findall("ContentProtection")
+            ]
+            if protections:
+                kids: set[UUID] = set()
+                for cp in protections:
+                    value = cp.get("{urn:mpeg:cenc:2013}default_KID") or cp.get("default_KID")
+                    try:
+                        kid = UUID(value) if value else None
+                    except ValueError:
+                        kid = None
+                    if kid and kid.int:
+                        kids.add(kid)
+                return kids
             from unshackle.core.api.handlers import drm_from_init_segment
 
-            if drm_from_init_segment(track, session):
-                return True
+            init_drm = drm_from_init_segment(track, session)
+            if init_drm:
+                return {kid for drm in init_drm for kid in real_kids(drm)}
         ism = data.get("ism")
         if ism:
             manifest = ism.get("manifest")
             if manifest is not None and manifest.findall(".//ProtectionHeader"):
-                return True
-        return False
+                return set()
+        return None
 
     def exported_drm_system(self) -> str:
         """The DRM system the exporter licensed (e.g. 'playready'), defaulting to widevine."""
