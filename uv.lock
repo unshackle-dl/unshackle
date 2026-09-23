@@ -1077,7 +1077,7 @@ wheels = [
 [[package]]
 name = "mediaexport"
 version = "0.1.0"
-source = { git = "https://github.com/unshackle-dl/mediaexport?branch=main#144edd7bcaa943ad0a5116c998734d9f24c41aae" }
+source = { git = "https://github.com/unshackle-dl/mediaexport?rev=main#144edd7bcaa943ad0a5116c998734d9f24c41aae" }
 
 [[package]]
 name = "more-itertools"
@@ -2229,7 +2229,7 @@ requires-dist = [
     { name = "langcodes", specifier = ">=3.4.0,<4" },
     { name = "language-data", specifier = ">=1.4.0" },
     { name = "lxml", specifier = ">=5.2.1,<7" },
-    { name = "mediaexport", git = "https://github.com/unshackle-dl/mediaexport?branch=main" },
+    { name = "mediaexport", git = "https://github.com/unshackle-dl/mediaexport?rev=main" },
     { name = "mutagen", specifier = ">=1.47.0,<2" },
     { name = "protobuf", specifier = ">=4.25.3,<7" },
     { name = "pycaption", specifier = ">=2.2.6,<2.2.27" },

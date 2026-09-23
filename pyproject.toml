@@ -70,7 +70,7 @@ dependencies = [
     "mutagen>=1.47.0,<2",
     "defusedxml>=0.7.1",
     "rich-click>=1.9.8",
-    "mediaexport",
+    "mediaexport @ git+https://github.com/unshackle-dl/mediaexport@main",
 ]
 
 [project.urls]
@@ -173,4 +173,3 @@ skips = [
 
 [tool.uv.sources]
 unshackle = { workspace = true }
-mediaexport = { git = "https://github.com/unshackle-dl/mediaexport", branch = "main" }
