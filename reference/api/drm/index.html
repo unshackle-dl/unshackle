@@ -2423,6 +2423,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.drm.PlayReady.own_kids" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;own_kids
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.drm.PlayReady.mp4decrypt_key_args" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2622,6 +2633,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.drm.Widevine.own_kids" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;own_kids
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.drm.Widevine.mp4decrypt_key_args" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2664,6 +2686,28 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;drm_from_dict
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unshackle.core.drm.real_kids" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;real_kids
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unshackle.core.drm.own_kids" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;own_kids
       
     </span>
   </a>
@@ -3217,6 +3261,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.drm.PlayReady.own_kids" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;own_kids
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.drm.PlayReady.mp4decrypt_key_args" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3416,6 +3471,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.drm.Widevine.own_kids" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;own_kids
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.drm.Widevine.mp4decrypt_key_args" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3458,6 +3524,28 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;drm_from_dict
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unshackle.core.drm.real_kids" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;real_kids
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unshackle.core.drm.own_kids" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;own_kids
       
     </span>
   </a>
@@ -5156,6 +5244,28 @@ Raises:
 <div class="doc doc-object doc-function">
 
 
+<h3 id="unshackle.core.drm.PlayReady.own_kids" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">own_kids</span>
+
+
+<a href="#unshackle.core.drm.PlayReady.own_kids" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">own_kids</span><span class="p">()</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return the KIDs that identify this track's own content key.</p>
+<p>The KID given to the constructor (from the manifest or the init segment) names the
+track exactly. A PSSH can name the KIDs of other renditions too.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h3 id="unshackle.core.drm.PlayReady.mp4decrypt_key_args" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">mp4decrypt_key_args</span>
 
@@ -5166,7 +5276,7 @@ Raises:
 
     <div class="doc doc-contents ">
 
-        <p>Build the mp4decrypt --key arguments for every content key.</p>
+        <p>Build the mp4decrypt --key arguments for every content key and the zero-KID fallback.</p>
 
 
     </div>
@@ -5696,6 +5806,28 @@ Raises:
 <div class="doc doc-object doc-function">
 
 
+<h3 id="unshackle.core.drm.Widevine.own_kids" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">own_kids</span>
+
+
+<a href="#unshackle.core.drm.Widevine.own_kids" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">own_kids</span><span class="p">()</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return the KIDs that identify this track's own content key.</p>
+<p>The KID given to the constructor (from the manifest or the init segment) names the
+track exactly. A PSSH can name the KIDs of other renditions too.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h3 id="unshackle.core.drm.Widevine.mp4decrypt_key_args" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">mp4decrypt_key_args</span>
 
@@ -5706,7 +5838,7 @@ Raises:
 
     <div class="doc doc-contents ">
 
-        <p>Build the mp4decrypt --key arguments for every content key.</p>
+        <p>Build the mp4decrypt --key arguments for every content key and the zero-KID fallback.</p>
 
 
     </div>
@@ -5779,6 +5911,46 @@ Raises:
 <p>Rebuilds the PSSH from the stored base64 (KIDs for ClearKey, which has no PSSH)
 and re-injects any saved content keys so the resulting object can decrypt without
 contacting a license server.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="unshackle.core.drm.real_kids" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">real_kids</span>
+
+
+<a href="#unshackle.core.drm.real_kids" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">real_kids</span><span class="p">(</span><span class="n">drm</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return the KIDs a DRM object names, without the all-zero and test-pattern placeholders.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="unshackle.core.drm.own_kids" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">own_kids</span>
+
+
+<a href="#unshackle.core.drm.own_kids" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">own_kids</span><span class="p">(</span><span class="n">drm</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return the real KIDs that identify the track's own content key, as the DRM object knows them.</p>
 
 
     </div>

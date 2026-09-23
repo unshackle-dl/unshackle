@@ -3338,7 +3338,7 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 </tr>
 <tr>
 <td><code>--export</code></td>
-<td>Export track info and keys to a JSON file in the exports directory.</td>
+<td>Export track info and keys to a <code>mediaexport</code> JSON file in the exports directory.</td>
 </tr>
 </tbody>
 </table>
@@ -3490,7 +3490,7 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>unshackle<span class="w"> </span>import<span class="w"> </span>export.json<span class="w"> </span>-r<span class="w"> </span>HDR10<span class="w"> </span>--proxy<span class="w"> </span>US
 </span></code></pre></div>
 </div>
-<p>The export file must be a valid v2 export from a current version of unshackle, made with <code>dl --export</code>, and must contain a <code>service</code> tag.</p>
+<p>The export file can be a <code>mediaexport</code> file from <code>dl --export</code>, an export from an older version of unshackle, or an export from unidl. The file must name the service it came from.</p>
 <hr />
 <h2 id="cfg"><code>cfg</code><a class="headerlink" href="#cfg" title="Permanent link">&para;</a></h2>
 <p>Read, set, delete, or show configuration values in <code>unshackle.yaml</code> without hand-editing YAML.</p>

@@ -3977,15 +3977,62 @@ a content key when the vault misses. You can force one side or the other:</p>
 <div class="language-shell highlight"><span class="filename">Fetch keys only, no download</span><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p><code>--export</code> writes a <code>mediaexport</code> JSON file into the configured exports directory. It holds
-the manifest, the DRM init data, the content keys and the title metadata for each title.
-<code>unshackle import</code> reads it to reconstruct a download later. The importer also reads the
+the manifest, the DRM init data, the content keys, the KIDs of each track and the title
+metadata for each title. <code>unshackle import</code> reads it to reconstruct a download later, and gives
+each track only the content keys for its KIDs. The importer also reads the
 older unshackle <code>version: 2</code> files and unidl's own export files.</p>
 <div class="language-shell highlight"><span class="filename">Export track info and keys</span><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>--export<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
+<p>The file name tells what the file holds, in the form
+<code>{title}.{scope}.{resolutions}.{codecs}.{ranges}.{manifests}.{audio}-{SERVICE}.json</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Export</th>
+<th>File name</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A movie</td>
+<td><code>Example.Movie.2024.1080p.h264.sdr.hls.aac2.0-EXAMPLE.json</code></td>
+</tr>
+<tr>
+<td>A whole season</td>
+<td><code>Example.Show.S01.2160p.h265.sdr.hdr10.dash.dd5.1-EXAMPLE.json</code></td>
+</tr>
+<tr>
+<td>Episodes 5 to 9 and 12</td>
+<td><code>Example.Show.S01E05-E09.S01E12.1080p.h264.sdr.dash.aac2.0-EXAMPLE.json</code></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>A dot separates each part and each word of the title. The name has no spaces or
+  underscores. It does not follow your <code>output_template</code>: a template with spaces does not
+  change the export name.</li>
+<li>The scope is <code>S01</code> only when the file holds every episode the service lists for that season.
+  Otherwise it names each run of episodes. Whole seasons in a row become <code>S01-S03</code>. After three
+  parts, <code>+N</code> counts the parts left out. A movie has no scope.</li>
+<li>The quality parts come from the video and audio tracks selected for the titles in the file.
+  Each value shows once.</li>
+<li>unshackle renames the file after each write, so the name always matches what the file holds.
+  When a run stops early, the file is complete for the titles it holds.</li>
+<li>When another file already has the name, unshackle adds <code>-2</code>, <code>-3</code>, and so on. It never
+  writes over another export.</li>
+</ul>
+<p>The run logs the file name at the first write, the track and content key counts for each title, and
+at the end the path and the total counts.</p>
 <p>The export holds a content key for each track your flags selected and no others. To make a
 file another person can use, select generously: for example <code>-a AAC,EC3</code> and every language
-you want them to have. An import can only pick tracks whose key is in the file. A subtitle
-that another tool exported as a direct URL is added next to the manifest's own.</p>
+you want them to have. An import can only pick tracks whose key is in the file. A track
+that another tool exported as a direct file URL is added next to the manifest's own tracks.
+An export with no manifest, for example a unidl export of whole media files, gets all of its
+tracks from those URLs. If such an export does not give the title a language, <code>orig</code> has no
+value: select the languages with <code>-l</code> and <code>-vl</code>.</p>
+<p>An import uses only the content keys in the file and in your vaults. It never gets a licence
+from a CDM. When a track needs a content key that neither has, the import stops and names the
+KID. To fix this, export the title again with that track selected.</p>
 <div class="admonition warning">
 <p class="admonition-title">The export file is a secret</p>
 <p>It holds the content keys and usually a signed manifest URL. Hand it over on purpose,
