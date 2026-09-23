@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import logging
+from enum import Enum
 from http.cookiejar import CookieJar
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Callable, Optional, TypeVar, Union
 from uuid import UUID
 
 import click
@@ -23,6 +24,7 @@ from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.track import Track
 
 log = logging.getLogger("import")
+E = TypeVar("E", bound=Enum)
 
 PARSERS = {"DASH": DASH, "HLS": HLS, "ISM": ISM}
 MANIFEST_DATA_KEYS = {"DASH": "dash", "ISM": "ism"}
@@ -95,6 +97,37 @@ def resolve_import_manifest_data(
                 track.data.update(matched.data)
 
 
+def parse_codec(codec: type[E], parse: Callable[[str], E], value: Any) -> Optional[E]:
+    """The codec a row names by enum name (``hevc``) or as ``parse`` reads it, else None."""
+    if not value:
+        return None
+    if str(value).upper() in codec.__members__:
+        return codec[str(value).upper()]
+    try:
+        return parse(str(value))
+    except ValueError:
+        return None
+
+
+def video_range(value: Any) -> Optional[Video.Range]:
+    """The range a row names, by enum name (``hdr10p``) or value (``HDR10+``), else None for SDR."""
+    name = str(value or "").upper()
+    if name in Video.Range.__members__:
+        return Video.Range[name]
+    try:
+        return Video.Range(name)
+    except ValueError:
+        return None
+
+
+def int_or_none(value: Any) -> Optional[int]:
+    """The integer a row field holds, else None."""
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
 class ImportService:
     """Reconstructs a download from an export JSON.
 
@@ -142,8 +175,13 @@ class ImportService:
         self._server_cdm = True
         self._server_cdm_type = "widevine"
 
-        first = self.doc.titles[0].primary if self.doc.titles else None
-        headers = first.headers if first else {}
+        first = self.doc.titles[0]
+        # a title with no manifest keeps its request headers on its file rows
+        headers = (
+            first.primary.headers
+            if first.primary
+            else next((r["headers"] for r in first.tracks if r.get("url") and r.get("headers")), {})
+        )
         self.session = self.build_session(ctx, self.region, headers)
 
     @staticmethod
@@ -254,6 +292,7 @@ class ImportService:
         set in favour of the exported one.
         HLS/URL: rebuild from the stored per-track dicts, since the variant is re-fetched from
         track.url at download time and a master playlist can hand out a new token on every fetch.
+        An export from another tool with no manifest gets all its tracks from its file rows.
         """
         title_id = str(title.id)
         if title_id in self.tracks_by_title:
@@ -312,8 +351,8 @@ class ImportService:
             track_dicts = list(tracks_map.values())
 
         # a side-load from another tool is only a tracks[] row with a url, not a track dict
-        for sub in self.sideloaded_subtitles(title_id, skip=set(tracks_map)):
-            tracks.add(sub, warn_only=True)
+        for sideloaded in self.sideloaded_tracks(title_id, skip=set(tracks_map)):
+            tracks.add(sideloaded, warn_only=True)
 
         for track_dict in track_dicts:
             try:
@@ -354,37 +393,69 @@ class ImportService:
         self.tracks_by_title[title_id] = tracks
         return tracks
 
-    def sideloaded_subtitles(self, title_id: str, skip: set[str]) -> list[Subtitle]:
-        """Subtitle tracks for the ``tracks[]`` rows with a ``url``, except the ids in ``skip``.
+    def sideloaded_tracks(self, title_id: str, skip: set[str]) -> list[AnyTrack]:
+        """Tracks for the ``tracks[]`` rows with a ``url``, except the ids in ``skip``.
 
-        The row names the file format as its codec, or nothing, in which case the download
-        finds it with MediaInfo. A row with no language cannot be muxed, so it is skipped.
+        Each row is one complete file. A row names its codec by name or as an RFC 6381 codecs
+        string, or not at all. Then the download finds the codec with MediaInfo. A subtitle row
+        with no language cannot be muxed, so it is skipped. A video or audio row with no
+        language takes the title language, else ``und``. A video or audio track gets the keys
+        for the KIDs of its row.
         """
         entry = self.doc.get(title_id)
-        out = []
+        out: list[AnyTrack] = []
         for row in entry.tracks if entry else []:
-            if row.get("type") != "subtitle" or not row.get("url") or str(row.get("id")) in skip:
+            kind = row.get("type")
+            if kind not in ("video", "audio", "subtitle") or not row.get("url") or str(row.get("id")) in skip:
                 continue
-            language = row.get("language") or (entry.language if entry else "")
-            if not language:
-                self.log.warning(f"Skipping exported subtitle {row.get('id')!r}: it has no language")
-                continue
-            codec = None
-            try:
-                codec = Subtitle.Codec.from_mime(str(row.get("codec") or ""))
-            except ValueError:
-                pass
-            out.append(
-                Subtitle(
-                    id_=str(row.get("id") or ""),
-                    url=str(row["url"]),
-                    language=str(language),
-                    codec=codec,
-                    sdh=bool(row.get("sdh")),
-                    forced=bool(row.get("forced")),
-                    cc=bool(row.get("cc")),
+            language = str(row.get("language") or (entry.language if entry else "") or "")
+            track_id, url = str(row.get("id") or ""), str(row["url"])
+            if kind == "subtitle":
+                if not language:
+                    self.log.warning(f"Skipping exported subtitle {row.get('id')!r}: it has no language")
+                    continue
+                out.append(
+                    Subtitle(
+                        id_=track_id,
+                        url=url,
+                        language=language,
+                        codec=parse_codec(Subtitle.Codec, Subtitle.Codec.from_mime, row.get("codec")),
+                        sdh=bool(row.get("sdh")),
+                        forced=bool(row.get("forced")),
+                        cc=bool(row.get("cc")),
+                    )
                 )
-            )
+                continue
+            track: Union[Video, Audio]
+            try:
+                if kind == "video":
+                    track = Video(
+                        id_=track_id,
+                        url=url,
+                        language=language or "und",
+                        codec=parse_codec(Video.Codec, Video.Codec.from_codecs, row.get("codec")),
+                        range_=video_range(row.get("range")),
+                        bitrate=int_or_none(row.get("bitrate")),
+                        width=int_or_none(row.get("width")),
+                        height=int_or_none(row.get("height")),
+                        fps=row.get("fps") or None,
+                    )
+                else:
+                    track = Audio(
+                        id_=track_id,
+                        url=url,
+                        language=language or "und",
+                        codec=parse_codec(Audio.Codec, Audio.Codec.from_codecs, row.get("codec")),
+                        bitrate=int_or_none(row.get("bitrate")),
+                        channels=row.get("channels") or None,
+                        descriptive=bool(row.get("descriptive")),
+                        extra={"atmos": True} if row.get("atmos") else None,
+                    )
+            except (TypeError, ValueError, NotImplementedError) as e:
+                self.log.warning(f"Skipping exported track {row.get('id')!r}: {e}")
+                continue
+            track.drm = self.rebuild_drm({"id": track_id}, title_id)
+            out.append(track)
         return out
 
     def key_pool(self, title_id: Optional[str] = None) -> dict[UUID, str]:

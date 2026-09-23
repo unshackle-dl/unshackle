@@ -790,8 +790,11 @@ unshackle dl --skip-dl --export EXAMPLE 81234567
 
 The export holds a content key for each track your flags selected and no others. To make a
 file another person can use, select generously: for example `-a AAC,EC3` and every language
-you want them to have. An import can only pick tracks whose key is in the file. A subtitle
-that another tool exported as a direct URL is added next to the manifest's own.
+you want them to have. An import can only pick tracks whose key is in the file. A track
+that another tool exported as a direct file URL is added next to the manifest's own tracks.
+An export with no manifest, for example a unidl export of whole media files, gets all of its
+tracks from those URLs. If such an export does not give the title a language, `orig` has no
+value: select the languages with `-l` and `-vl`.
 
 An import uses only the content keys in the file and in your vaults. It never gets a licence
 from a CDM. When a track needs a content key that neither has, the import stops and names the

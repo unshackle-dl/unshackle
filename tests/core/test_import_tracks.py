@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 from typing import Any, Optional
 from unittest.mock import patch
+from uuid import UUID
 
 import click
 import pytest
@@ -20,6 +21,7 @@ import requests
 
 from unshackle.core.import_service import ImportService
 from unshackle.core.manifests import DASH
+from unshackle.core.tracks import Audio, Subtitle, Video
 
 MPD_TEMPLATE = """<?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="PT10M">
@@ -177,3 +179,91 @@ def test_a_subtitle_side_load_from_another_tool_is_added(tmp_path: Path) -> None
     ]
     assert [t.id for t in tracks.subtitles[1:]] == ["sub-en", "sub-x"]
     assert tracks.subtitles[1].sdh and tracks.subtitles[1].codec is not None
+
+
+VIDEO_KID, AUDIO_KID = "0a" * 16, "0b" * 16
+
+
+def file_export(tmp_path: Path, rows: list[dict[str, Any]]) -> ImportService:
+    """An export with no manifest: its ``tracks[]`` rows with a url are all of its media."""
+    export = {
+        "kind": "mediaexport",
+        "version": 1,
+        "service": {"tag": "EXAMPLE"},
+        "titles": [
+            {
+                "id": "movie-1",
+                "kind": "movie",
+                "title": "Example Movie",
+                "language": "fr",
+                "drm": [{"system": "playready", "wrm_header": "<WRMHEADER/>"}],
+                "keys": {VIDEO_KID: "a1" * 16, AUDIO_KID: "b2" * 16},
+                "tracks": rows,
+            }
+        ],
+    }
+    path = tmp_path / "export.json"
+    path.write_text(json.dumps(export), encoding="utf8")
+    return ImportService(click.Context(click.Command("dl")), "EXAMPLE", "movie-1", str(path))
+
+
+FILE_ROWS: list[dict[str, Any]] = [
+    {
+        "id": "v",
+        "type": "video",
+        "url": "https://example.invalid/v.mp4",
+        "codec": "dvh1.05.07",
+        "bitrate": 15000000,
+        "width": 3840,
+        "height": 2160,
+        "fps": 25.0,
+        "range": "dv",
+        "headers": {"User-Agent": "exporter-ua"},
+        "kids": [VIDEO_KID],
+    },
+    {
+        "id": "a",
+        "type": "audio",
+        "url": "https://example.invalid/a.mp4",
+        "codec": "ec-3",
+        "language": "en",
+        "bitrate": 578523,
+        "channels": "6",
+        "atmos": True,
+        "kids": [AUDIO_KID],
+    },
+    {"id": "s", "type": "subtitle", "url": "https://example.invalid/s.mp4", "codec": "stpp", "language": "fr"},
+]
+
+
+def test_a_title_with_no_manifest_gets_a_track_for_each_file_row(tmp_path: Path) -> None:
+    service = file_export(tmp_path, FILE_ROWS)
+    tracks = service.get_tracks(next(iter(service.get_titles())))
+    video, audio, subtitle = tracks.videos[0], tracks.audio[0], tracks.subtitles[0]
+    assert [t.descriptor.name for t in (video, audio, subtitle)] == ["URL", "URL", "URL"]
+    assert (video.codec, video.range, video.width, video.height, video.bitrate, str(video.language)) == (
+        Video.Codec.HEVC,
+        Video.Range.DV,
+        3840,
+        2160,
+        15000000,
+        "fr",
+    )
+    assert (audio.codec, audio.atmos, str(audio.language), audio.bitrate) == (Audio.Codec.EC3, True, "en", 578523)
+    assert subtitle.codec == Subtitle.Codec.fTTML
+    assert service.session.headers["User-Agent"] == "exporter-ua"
+
+
+def test_each_file_track_gets_only_the_keys_for_its_kids(tmp_path: Path) -> None:
+    service = file_export(tmp_path, FILE_ROWS)
+    tracks = service.get_tracks(next(iter(service.get_titles())))
+    assert tracks.videos[0].drm[0].content_keys == {UUID(hex=VIDEO_KID): "a1" * 16}
+    assert tracks.audio[0].drm[0].content_keys == {UUID(hex=AUDIO_KID): "b2" * 16}
+    assert not tracks.subtitles[0].drm
+
+
+def test_a_file_row_can_name_its_codec_and_range_by_name(tmp_path: Path) -> None:
+    row = {"id": "v", "type": "video", "url": "https://example.invalid/v.mp4", "codec": "hevc", "range": "hdr10p"}
+    service = file_export(tmp_path, [row])
+    video = service.get_tracks(next(iter(service.get_titles()))).videos[0]
+    assert (video.codec, video.range) == (Video.Codec.HEVC, Video.Range.HDR10P)
