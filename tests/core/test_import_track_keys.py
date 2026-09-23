@@ -7,6 +7,7 @@ the fallback for a track that declares no KID.
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 from types import SimpleNamespace
@@ -75,8 +76,11 @@ def widevine(kid: UUID, key: str) -> Widevine:
     return drm
 
 
-def write_export(tmp_path: Path) -> Path:
-    """Export the ladder as a finished download would: one licensed DRM per track."""
+def write_export(tmp_path: Path, kids: bool = True) -> Path:
+    """Export the ladder as a finished download would: one licensed DRM per track.
+
+    ``kids=False`` removes the per-track KID lists, as in a file from before they existed.
+    """
     title = Movie(id_="movie-1", service=StubService, name="Example Movie", year=2024, language="en")
     for track in DASH.from_text(MPD, MPD_URL).to_tracks(language="en"):
         title.tracks.add(track)
@@ -88,7 +92,18 @@ def write_export(tmp_path: Path) -> Path:
     drm = {"video": widevine(VIDEO_KID, VIDEO_KEY), "en": widevine(AUDIO_KID, AUDIO_KEY)}
     for track in [*title.tracks.videos, *title.tracks.audio]:
         runner.write_export(export, title, track, drm.get(label(track)))
+    if not kids:
+        doc = json.loads(export.read_text(encoding="utf8"))
+        for row in doc["titles"][0]["tracks"]:
+            row.pop("kids", None)
+        export.write_text(json.dumps(doc), encoding="utf8")
     return export
+
+
+def rows(export: Path) -> dict[str, dict[str, Any]]:
+    """The export's track rows, by the same labels as the tracks."""
+    doc = json.loads(export.read_text(encoding="utf8"))
+    return {"video" if r["type"] == "video" else r["language"]: r for r in doc["titles"][0]["tracks"]}
 
 
 def label(track: Any) -> str:
@@ -109,21 +124,58 @@ def keys_by_track(svc: ImportService) -> dict[str, dict[UUID, str]]:
     return {label(t): dict(t.drm[0].content_keys) for t in [*movie.tracks.videos, *movie.tracks.audio]}
 
 
+def test_the_export_lists_each_tracks_kids(tmp_path: Path) -> None:
+    exported = rows(write_export(tmp_path))
+
+    assert exported["video"]["kids"] == [VIDEO_KID.hex]
+    assert exported["en"]["kids"] == [AUDIO_KID.hex]
+    assert "kids" not in exported["de"], "a track exported without DRM names no KID"
+
+
+def test_listed_kids_give_each_track_its_keys_without_a_probe(tmp_path: Path) -> None:
+    svc = import_service(write_export(tmp_path))
+    probed: list[str] = []
+    track_kids = svc.track_kids
+
+    def spy(track: Any, session: Any = None) -> Any:
+        probed.append(label(track))
+        return track_kids(track, session)
+
+    with patch.object(svc, "track_kids", side_effect=spy):
+        keys = keys_by_track(svc)
+
+    assert keys["video"] == {VIDEO_KID: VIDEO_KEY}
+    assert keys["en"] == {AUDIO_KID: AUDIO_KEY}
+    assert probed == ["de"]
+
+
+def test_a_listed_kid_picks_the_drm_entry_of_a_direct_url_track(tmp_path: Path) -> None:
+    export = write_export(tmp_path)
+    svc = import_service(export)
+
+    rebuilt = svc.rebuild_drm({"id": rows(export)["en"]["id"]}, "movie-1")
+
+    assert rebuilt and isinstance(rebuilt[0], Widevine)
+    assert rebuilt[0].kids == [AUDIO_KID]
+    assert rebuilt[0].content_keys == {AUDIO_KID: AUDIO_KEY}
+
+
 def test_each_track_gets_only_the_keys_for_its_own_kids(tmp_path: Path) -> None:
-    keys = keys_by_track(import_service(write_export(tmp_path)))
+    """An export from before the per-track KID lists falls back to the KIDs the manifest declares."""
+    keys = keys_by_track(import_service(write_export(tmp_path, kids=False)))
 
     assert keys["video"] == {VIDEO_KID: VIDEO_KEY}
     assert keys["en"] == {AUDIO_KID: AUDIO_KEY}
 
 
 def test_a_track_that_declares_no_kid_gets_the_whole_pool(tmp_path: Path) -> None:
-    keys = keys_by_track(import_service(write_export(tmp_path)))
+    keys = keys_by_track(import_service(write_export(tmp_path, kids=False)))
 
     assert keys["de"] == POOL
 
 
 def test_a_rebuilt_drm_holds_only_the_keys_for_the_kids_its_pssh_names(tmp_path: Path) -> None:
-    svc = import_service(write_export(tmp_path))
+    svc = import_service(write_export(tmp_path, kids=False))
     single: list[dict[str, Any]] = [widevine(VIDEO_KID, VIDEO_KEY).to_dict()]
 
     with patch.object(svc, "title_drm_dicts", return_value=single):
@@ -135,7 +187,7 @@ def test_a_rebuilt_drm_holds_only_the_keys_for_the_kids_its_pssh_names(tmp_path:
 def test_a_title_with_several_drm_entries_gives_no_track_a_guessed_own_key(tmp_path: Path) -> None:
     """Which entry belongs to a direct-URL track is unknown, so the track gets a stub over the
     pool, and the zero-KID fallback stays empty instead of taking the first entry's key."""
-    svc = import_service(write_export(tmp_path))
+    svc = import_service(write_export(tmp_path, kids=False))
 
     rebuilt = svc.rebuild_drm({"id": "u1"}, "movie-1")
 

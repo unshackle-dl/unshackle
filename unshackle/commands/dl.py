@@ -48,7 +48,7 @@ from unshackle.core.console import GradientPulseBarColumn, SyncLive, console, li
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack, context_settings
 from unshackle.core.credential import Credential
 from unshackle.core.downloaders import default_max_workers, format_speed, parse_speed_limit, set_speed_limit
-from unshackle.core.drm import DRM_T, ClearKeyCENC, MonaLisa, PlayReady, Widevine, verify
+from unshackle.core.drm import DRM_T, ClearKeyCENC, MonaLisa, PlayReady, Widevine, own_kids, verify
 from unshackle.core.events import events
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.providers.tvdb import SEASON_TYPES, parse_int
@@ -3970,9 +3970,13 @@ class dl:
 
             tracks_map = entry.ext("unshackle").setdefault("tracks", {})
             tracks_map.setdefault(str(track.id), track.to_dict())
+            # the row names the track's KIDs, so an import gives the track only their keys
+            track_kids = [kid.hex for kid in own_kids(drm)] if drm is not None else []
             for row in entry.tracks:
                 if row.get("id") == str(track.id):
                     row["selected"] = True
+                    if track_kids:
+                        row["kids"] = list(dict.fromkeys([*(row.get("kids") or []), *track_kids]))
 
             if drm is not None:
                 if hasattr(drm, "to_dict"):

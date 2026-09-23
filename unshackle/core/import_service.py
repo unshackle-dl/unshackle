@@ -14,7 +14,7 @@ from langcodes import tag_is_valid
 from unshackle.core.config import config
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
-from unshackle.core.drm import Widevine, drm_from_dict
+from unshackle.core.drm import drm_from_dict, real_kids
 from unshackle.core.manifests import DASH, HLS, ISM
 from unshackle.core.remote_service import RemoteService, build_title, match_track, resolve_proxy_arg
 from unshackle.core.titles import Episode, Movies, Series, Title_T, Titles_T, remap_titles
@@ -93,11 +93,6 @@ def resolve_import_manifest_data(
             matched = match_track(track, local_tracks)
             if matched and matched.data.get(data_key):
                 track.data.update(matched.data)
-
-
-def real_kids(drm: Any) -> list[UUID]:
-    """Return the KIDs a DRM object names, without the all-zero and test-pattern placeholders."""
-    return [kid for kid in getattr(drm, "kids", None) or [] if kid.int and kid not in Widevine.PLACEHOLDER_KIDS]
 
 
 class ImportService:
@@ -417,34 +412,55 @@ class ImportService:
                 out.append({"system": system, "pssh_b64": d.pssh, "kids": list(entry.keys)})
         return out
 
+    def exported_kids(self, title_id: str, track_id: str) -> Optional[set[str]]:
+        """Return the KIDs (hex) the export's row for the track lists, or None when it lists none."""
+        entry = self.doc.get(title_id)
+        row = next((r for r in (entry.tracks if entry else []) if str(r.get("id", "")) == track_id), None)
+        return set(row["kids"]) if row and row.get("kids") else None
+
+    def exported_keys(self, title_id: str, track_id: str) -> dict[UUID, str]:
+        """Return the exported content keys for the KIDs the row of the track lists, else all of the title."""
+        entry = self.doc.get(title_id)
+        return {UUID(hex=kid): key for kid, key in (entry.keys_for(track_id) if entry else {}).items()}
+
     def rebuild_drm(self, track_dict: dict[str, Any], title_id: str) -> Optional[list[Any]]:
         """Rebuild a DRM object (from stored PSSH, falling back to a stub) with the exported keys.
 
         Keys and DRM are title-level in the shared format; a legacy v2 track dict that still
-        carries its own is honoured first. A title with more than one DRM entry does not say
-        which entry is this track's, so the track gets a stub that names every exported KID
-        instead of a guess. A rebuilt PSSH holds only the keys for the KIDs it names.
+        carries its own is honoured first. The track's row in the export can list its KIDs;
+        then the track gets only their keys, and the DRM entry that names them. Without that
+        list, a title with more than one DRM entry does not say which entry is this track's,
+        so the track gets a stub that names every exported KID instead of a guess. A rebuilt
+        PSSH holds only the keys for the KIDs it names.
         """
         own_keys = track_dict.get("keys")
-        keys = own_keys or {kid.hex: key for kid, key in self.key_pool(title_id).items()}
-        drm_dicts = track_dict.get("drm") or self.title_drm_dicts(title_id)
-        if not drm_dicts and not keys:
+        own_drm = track_dict.get("drm")
+        row_kids = None if own_keys else self.exported_kids(title_id, str(track_dict.get("id", "")))
+        if own_keys:
+            keys = own_keys
+        else:
+            keys = {kid.hex: key for kid, key in self.exported_keys(title_id, str(track_dict.get("id", ""))).items()}
+        drm_dicts = own_drm or self.title_drm_dicts(title_id)
+        if row_kids and not own_drm:
+            drm_dicts = [d for d in drm_dicts if row_kids & {str(kid).lower() for kid in d.get("kids") or []}]
+        if not drm_dicts and not keys and not row_kids:
             return None
 
         drm_obj = None
-        if drm_dicts and (track_dict.get("drm") or len(drm_dicts) == 1):
+        if drm_dicts and (own_drm or len(drm_dicts) == 1):
             try:
                 drm_obj = drm_from_dict(drm_dicts[0])
             except Exception as e:
                 self.log.debug(f"Falling back to DRM stub (PSSH rebuild failed: {e})")
-            if drm_obj is not None and not own_keys:
+            if drm_obj is not None and not own_keys and not row_kids:
                 declared = {kid.hex for kid in real_kids(drm_obj)}
                 if declared:
                     keys = {kid_hex: key for kid_hex, key in keys.items() if kid_hex in declared}
 
-        if drm_obj is None and keys:
+        stub_kids = list(keys) or sorted(row_kids or [])
+        if drm_obj is None and stub_kids:
             drm_type = (drm_dicts[0].get("system", "Widevine").lower()) if drm_dicts else "widevine"
-            drm_obj = RemoteService.create_drm_stub(drm_type, list(keys.keys()))
+            drm_obj = RemoteService.create_drm_stub(drm_type, stub_kids)
 
         if drm_obj is None:
             return None
@@ -457,8 +473,10 @@ class ImportService:
         """Inject exported keys into the selected encrypted tracks by KID (no network).
 
         dl.py calls this method after selection. It touches only encrypted video and audio
-        tracks. A track gets only the content keys for the KIDs it declares, and the whole
-        title pool only when it declares no KID. Encrypted DASH tracks (no DRM at parse time)
+        tracks. A track gets only the content keys for the KIDs it declares: first the KIDs
+        its row in the export lists, which needs no probe, then the KIDs of its DRM, manifest
+        or init segment. It gets the whole title pool only when it declares no KID. Encrypted
+        DASH tracks (no DRM at parse time)
         get a stub holding the content keys, which DASH.download_track preserves. The
         decrypters then match each content key to the media by KID, and give the all-zero KID
         only the content key of the track.
@@ -468,14 +486,20 @@ class ImportService:
             return
 
         system = self.exported_drm_system()
+        title_id = str(title.id)
 
         for track in title.tracks:
             if not isinstance(track, (Video, Audio)):
                 continue
-            declared = self.track_kids(track, self.session)
-            if declared is None:
-                continue
-            keys = {kid: key for kid, key in pool.items() if kid in declared} if declared else pool
+            row_kids = self.exported_kids(title_id, str(track.id))
+            if row_kids:
+                declared: Optional[set[UUID]] = {UUID(hex=kid) for kid in row_kids}
+                keys = self.exported_keys(title_id, str(track.id))
+            else:
+                declared = self.track_kids(track, self.session)
+                if declared is None:
+                    continue
+                keys = {kid: key for kid, key in pool.items() if kid in declared} if declared else pool
             if track.drm:
                 drm_obj = track.drm[0]
             else:

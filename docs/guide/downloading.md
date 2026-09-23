@@ -779,8 +779,9 @@ unshackle dl --skip-dl EXAMPLE 81234567
 ```
 
 `--export` writes a `mediaexport` JSON file into the configured exports directory. It holds
-the manifest, the DRM init data, the content keys and the title metadata for each title.
-`unshackle import` reads it to reconstruct a download later. The importer also reads the
+the manifest, the DRM init data, the content keys, the KIDs of each track and the title
+metadata for each title. `unshackle import` reads it to reconstruct a download later, and gives
+each track only the content keys for its KIDs. The importer also reads the
 older unshackle `version: 2` files and unidl's own export files.
 
 ```shell title="Export track info and keys"

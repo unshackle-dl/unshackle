@@ -48,4 +48,26 @@ def drm_from_dict(data: dict[str, Any]) -> Union[Widevine, PlayReady, ClearKeyCE
     return drm
 
 
-__all__ = ("ClearKey", "ClearKeyCENC", "Widevine", "PlayReady", "MonaLisa", "DRM_T", "drm_from_dict")
+def real_kids(drm: Any) -> list[UUID]:
+    """Return the KIDs a DRM object names, without the all-zero and test-pattern placeholders."""
+    return [kid for kid in getattr(drm, "kids", None) or [] if kid.int and kid not in Widevine.PLACEHOLDER_KIDS]
+
+
+def own_kids(drm: Any) -> list[UUID]:
+    """Return the real KIDs that identify the track's own content key, as the DRM object knows them."""
+    own = getattr(drm, "own_kids", None)
+    kids = own() if callable(own) else getattr(drm, "kids", None) or []
+    return [kid for kid in kids if kid.int and kid not in Widevine.PLACEHOLDER_KIDS]
+
+
+__all__ = (
+    "ClearKey",
+    "ClearKeyCENC",
+    "Widevine",
+    "PlayReady",
+    "MonaLisa",
+    "DRM_T",
+    "drm_from_dict",
+    "real_kids",
+    "own_kids",
+)
