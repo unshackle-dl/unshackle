@@ -9,9 +9,14 @@ as ClearKey) and still record the track/manifest/chapter/attachment info that
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 from uuid import UUID
+
+import click
+import pytest
 
 from unshackle.commands.dl import dl
 from unshackle.core.drm import drm_from_dict
@@ -39,9 +44,10 @@ class StubDRM:
 
 
 def make_dl() -> dl:
-    # __new__ skips the CLI-driven __init__; write_export only needs `service`.
+    # __new__ skips the CLI-driven __init__; write_export only needs `service` and `log`.
     instance = dl.__new__(dl)
     instance.service = "EXAMPLE"
+    instance.log = logging.getLogger("download")
     return instance
 
 
@@ -77,6 +83,11 @@ def make_title() -> Movie:
         )
     )
     return title
+
+
+def import_ctx() -> click.Context:
+    # ImportService only touches ctx.parent.params (proxy flags) when building its session.
+    return cast(click.Context, SimpleNamespace(parent=None, params={}))
 
 
 def read_export(path: Path) -> dict:
@@ -145,9 +156,7 @@ def test_drm_free_export_roundtrips_through_import_service(tmp_path: Path) -> No
     for track in [*title.tracks.videos, *title.tracks.audio, *title.tracks.subtitles]:
         runner.write_export(export, title, track)
 
-    # ImportService only touches ctx.parent.params (proxy flags) when building its session.
-    ctx = SimpleNamespace(parent=None, params={})
-    svc = ImportService(ctx, "EXAMPLE", "movie-1", str(export))
+    svc = ImportService(import_ctx(), "EXAMPLE", "movie-1", str(export))
 
     titles = list(svc.get_titles())
     assert len(titles) == 1
@@ -237,7 +246,7 @@ def test_unidl_export_imports_without_track_dicts(tmp_path: Path) -> None:
         ),
         encoding="utf8",
     )
-    svc = ImportService(SimpleNamespace(parent=None, params={}), "EXAMPLE", "ep-2", str(export))
+    svc = ImportService(import_ctx(), "EXAMPLE", "ep-2", str(export))
 
     ep = next(iter(svc.get_titles()))
     assert (ep.title, ep.season, ep.number) == ("Show", 1, 2)
@@ -246,3 +255,58 @@ def test_unidl_export_imports_without_track_dicts(tmp_path: Path) -> None:
     assert svc.exported_drm_system() == "widevine"
     assert [c.name for c in svc.get_chapters(ep)] == [None, "Recap"]
     assert svc.titles_data["ep-2"]["manifest_type"] == "DASH"
+
+
+class KeyDRM:
+    """A licensed DRM system that holds only ``content_keys``."""
+
+    def __init__(self, key: str) -> None:
+        self.content_keys = {KID: key}
+
+
+def test_export_drops_session_headers(tmp_path: Path) -> None:
+    """The file travels between people: the session cookie and bearer token must not go with it."""
+    export = tmp_path / "export.json"
+    title = make_title()
+    title.tracks.manifest_url = "https://example.test/m.mpd"
+    runner = make_dl()
+    headers = {"User-Agent": "example-ua", "Cookie": "session=secret", "Authorization": "Bearer secret"}
+    runner.export_service = cast(Any, SimpleNamespace(session=SimpleNamespace(headers=headers)))
+
+    runner.write_export(export, title, title.tracks.videos[0])
+
+    assert entry(export)["manifests"][0]["headers"] == {"User-Agent": "example-ua"}
+    assert "secret" not in export.read_text(encoding="utf8")
+
+
+def test_second_key_for_one_kid_keeps_the_first(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """Two titles that license one KID to different keys: the file keeps the first key and stays readable."""
+    export = tmp_path / "export.json"
+    first, second = make_title(), make_title()
+    second.id = "movie-2"
+    runner = make_dl()
+
+    runner.write_export(export, first, first.tracks.videos[0], KeyDRM("aa" * 16))
+    with caplog.at_level(logging.WARNING, logger="download"):
+        runner.write_export(export, second, second.tracks.videos[0], KeyDRM("bb" * 16))
+
+    titles = read_export(export)["titles"]
+    assert titles[0]["keys"] == {KID.hex: "aa" * 16}
+    assert "keys" not in titles[1]
+    assert f"KID {KID.hex} already has a different key" in caplog.text
+
+
+def test_uppercase_content_key_is_stored_lowercase(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """A licence server that sends uppercase hex still gives one key, not a conflict with itself."""
+    export = tmp_path / "export.json"
+    first, second = make_title(), make_title()
+    second.id = "movie-2"
+    runner = make_dl()
+
+    runner.write_export(export, first, first.tracks.videos[0], KeyDRM("AA" * 16))
+    with caplog.at_level(logging.WARNING, logger="download"):
+        runner.write_export(export, second, second.tracks.videos[0], KeyDRM("AA" * 16))
+
+    titles = read_export(export)["titles"]
+    assert titles[0]["keys"] == {KID.hex: "aa" * 16}
+    assert "different key" not in caplog.text
