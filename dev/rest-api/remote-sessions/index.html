@@ -2491,7 +2491,12 @@ server does not have to prompt:</p>
   it sits in a different region from the reported one, asking the client to
   pass <code>--proxy</code> with its own proxy, or <code>--no-proxy</code> to accept the server's
   own connection. With <code>server_proxy</code> the server picks a proxy that matches
-  the client region itself</li>
+  the client region itself. For <code>--proxy controld:ca</code> the client points its
+  Control D profile at the region and sends only the resolver, as
+  <code>controld://&lt;resolver&gt;@dns.controld.com</code>. The server counts it as a full proxy
+  URI and runs its own forwarder for it. A bare region skips Control D, because its
+  proxy is a forwarder on the client. See
+  <a href="../../../guide/proxies-and-vpn/#control-d">Control D</a></li>
 <li>Track-selection hints (<code>range_</code>, <code>vcodec</code>, <code>quality</code>, <code>best_available</code>) so
   the server fetches the right manifests</li>
 <li>Your language and audio codec selection (<code>-l</code>, <code>-vl</code>, <code>-al</code>, <code>-a</code>, <code>-fs</code>)
@@ -2514,7 +2519,8 @@ rotates through them. <code>--proxy ca</code> picks a <code>ca</code> account.</
 <p><code>GET /api/services</code> advertises the regions those accounts cover. When your own
 region is not one of them and you set no <code>--proxy</code>, the client resolves a proxy for
 the first advertised region itself, so both sides sit in a region the account
-works in.</p>
+works in. This is a bare region query, so it skips Control D. A server-account
+service does not accept a <code>controld://</code> resolver from the client.</p>
 <p>The server responds immediately with a session ID and a status. Authentication
 runs in the background on the server.</p>
 </div>

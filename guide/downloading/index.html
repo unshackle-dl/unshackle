@@ -3900,11 +3900,13 @@ post-scripts and for the full variable list, see
 <div class="language-shell highlight"><span class="filename">Custom group tag and a REPACK label</span><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--tag<span class="w"> </span>MYGRP<span class="w"> </span>--repack<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <h2 id="proxies">Proxies<a class="headerlink" href="#proxies" title="Permanent link">&para;</a></h2>
-<p><code>--proxy</code> accepts a full proxy URI, a 2-letter country code (resolved through your
-configured proxy providers), or a <code>provider:region</code> form.</p>
+<p><code>--proxy</code> accepts a full proxy URI, a country or location code (resolved through your
+configured proxy providers), or a <code>provider:region</code> form. See
+<a href="../proxies-and-vpn/#how-proxy-resolution-works">Proxies &amp; VPN</a> for the exact grammar.</p>
 <div class="language-shell highlight"><span class="filename">Proxy forms</span><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>us<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span><span id="__span-39-2"><a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>nordvpn:ca<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
-</span><span id="__span-39-3"><a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span><span class="s1">'http://user:pass@host:8080'</span><span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-39-3"><a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>controld:yul<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-39-4"><a id="__codelineno-39-4" name="__codelineno-39-4" href="#__codelineno-39-4"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span><span class="s1">'http://user:pass@host:8080'</span><span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p>Three related flags:</p>
 <ul>
@@ -3974,11 +3976,23 @@ a content key when the vault misses. You can force one side or the other:</p>
 </ul>
 <div class="language-shell highlight"><span class="filename">Fetch keys only, no download</span><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
-<p><code>--export</code> writes a JSON file, into the configured exports directory, containing track
-info and the acquired content keys for each title. This is the format consumed by
-<code>unshackle import</code> to reconstruct a download later.</p>
+<p><code>--export</code> writes a <code>mediaexport</code> JSON file into the configured exports directory. It holds
+the manifest, the DRM init data, the content keys and the title metadata for each title.
+<code>unshackle import</code> reads it to reconstruct a download later. The importer also reads the
+older unshackle <code>version: 2</code> files and unidl's own export files.</p>
 <div class="language-shell highlight"><span class="filename">Export track info and keys</span><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>--export<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
+<p>The export holds a content key for each track your flags selected and no others. To make a
+file another person can use, select generously: for example <code>-a AAC,EC3</code> and every language
+you want them to have. An import can only pick tracks whose key is in the file. A subtitle
+that another tool exported as a direct URL is added next to the manifest's own.</p>
+<div class="admonition warning">
+<p class="admonition-title">The export file is a secret</p>
+<p>It holds the content keys and usually a signed manifest URL. Hand it over on purpose,
+not by accident.</p>
+</div>
+<p>The <a href="https://github.com/unshackle-dl/mediaexport">mediaexport</a> package specifies the
+<code>mediaexport</code> format and is the reader and writer unshackle uses.</p>
 <div class="admonition note">
 <p class="admonition-title">Region is recorded only with a proxy</p>
 <p>When you use <code>--proxy</code>, the export records the region so an import can reproduce the

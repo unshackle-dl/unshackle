@@ -1220,6 +1220,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="proxy_providers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#controld" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        controld
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -2026,6 +2043,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="proxy_providers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#controld" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        controld
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -2205,6 +2239,12 @@ for the full proxy provider guide. Recognised proxy providers and their exit por
 <td>as specified</td>
 </tr>
 <tr>
+<td>Control D</td>
+<td><code>controld</code></td>
+<td>Write API token (profile/resolver pairs optional)</td>
+<td><code>http://127.0.0.1:{port}</code> (local forwarder)</td>
+</tr>
+<tr>
 <td>NordVPN</td>
 <td><code>nordvpn</code></td>
 <td><strong>service</strong> credentials (48 chars combined)</td>
@@ -2258,6 +2298,51 @@ for the full proxy provider guide. Recognised proxy providers and their exit por
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;service username&gt;</span>
 </span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;service password&gt;</span>
 </span></code></pre></div>
+<h3 id="controld"><code>controld</code><a class="headerlink" href="#controld" title="Permanent link">&para;</a></h3>
+<p>Config keys of the Control D proxy provider. See
+<a href="../../../guide/proxies-and-vpn/#control-d">Control D</a> for how unshackle uses them.</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Type</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>token</code></td>
+<td><code>str</code></td>
+<td>required</td>
+<td>A Control D API token of type <em>Write</em>.</td>
+</tr>
+<tr>
+<td><code>profile</code></td>
+<td><code>str</code></td>
+<td>none</td>
+<td>Optional. The ID of a profile you made for unshackle. Give it together with <code>resolver</code>. Without it, unshackle creates <code>unshackle-&lt;region&gt;</code> profiles itself.</td>
+</tr>
+<tr>
+<td><code>resolver</code></td>
+<td><code>str</code></td>
+<td>none</td>
+<td>Optional. The resolver ID of an endpoint that uses <code>profile</code>, or its DoH URL <code>https://dns.controld.com/&lt;resolver&gt;</code>.</td>
+</tr>
+<tr>
+<td><code>profiles</code></td>
+<td><code>list</code></td>
+<td><code>[]</code></td>
+<td>Optional. More pairs, each a mapping with <code>profile</code> and <code>resolver</code>.</td>
+</tr>
+<tr>
+<td><code>max_profiles</code></td>
+<td><code>int</code></td>
+<td><code>4</code></td>
+<td>The most profiles unshackle uses: your pairs plus the <code>unshackle-*</code> endpoints on the account. It must be 1 or more. unshackle creates an <code>unshackle-&lt;region&gt;</code> profile and endpoint only while the total is lower.</td>
+</tr>
+</tbody>
+</table>
 <div class="admonition note">
 <p class="admonition-title">Provider loading differs between CLI and REST server</p>
 <p>The <code>dl</code> CLI loads all providers, including <code>windscribevpn</code> and <code>gluetun</code>. The REST API /

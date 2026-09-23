@@ -3217,7 +3217,7 @@
 <td>string</td>
 <td>no</td>
 <td><code>null</code></td>
-<td>Full proxy URI, or a country code when the API key has <code>server_proxy</code>.</td>
+<td>Full proxy URI, a Control D resolver as <code>controld://&lt;resolver&gt;@dns.controld.com</code>, or a country code when the API key has <code>server_proxy</code>.</td>
 </tr>
 <tr>
 <td><code>no_proxy</code></td>
@@ -3332,7 +3332,7 @@
 <td><code>proxy</code></td>
 <td>string</td>
 <td>no</td>
-<td>Full proxy URI, or a country code when the API key has <code>server_proxy</code>.</td>
+<td>Full proxy URI, a Control D resolver as <code>controld://&lt;resolver&gt;@dns.controld.com</code>, or a country code when the API key has <code>server_proxy</code>.</td>
 </tr>
 <tr>
 <td><code>no_proxy</code></td>
@@ -3883,7 +3883,7 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <td><code>proxy</code> / <code>no_proxy</code> / <code>no_proxy_download</code> / <code>proxy_download</code></td>
 <td>string / bool / bool / string</td>
 <td><code>null</code> / <code>false</code> / <code>false</code> / <code>null</code></td>
-<td>Proxy controls. <code>proxy</code> and <code>proxy_download</code> must be full proxy URIs unless the API key has <code>server_proxy</code>.</td>
+<td>Proxy controls. <code>proxy</code> and <code>proxy_download</code> must be full proxy URIs unless the API key has <code>server_proxy</code>. A Control D resolver, <code>controld://&lt;resolver&gt;@dns.controld.com</code>, counts as a full proxy URI: the server runs a forwarder for it.</td>
 </tr>
 <tr>
 <td><code>no_folder</code> / <code>no_source</code> / <code>no_mux</code></td>
@@ -4651,7 +4651,7 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 <p>Make a remote session for a service and title. Authentication runs asynchronously in the background. This call returns immediately with <code>status: "authenticating"</code>, and you then poll the prompt endpoint. The body accepts <code>service</code> and <code>title_id</code> (both required). It also accepts a broad set of optional keys, because the body allows <code>additionalProperties</code>. These are <code>credentials</code> (<code>{username, password, extra?}</code>), <code>cookies</code> (base64 of zlib-compressed Netscape cookie file), <code>proxy</code>, <code>no_proxy</code>, <code>profile</code>, <code>cache</code> (map of forwarded cache files, keyed by the file path relative to the service cache directory with <code>/</code> separators and no <code>.json</code> suffix, so a nested key such as <code>session_web/&lt;sha1&gt;</code> lands in a subdirectory), <code>client_region</code>, <code>proxy_region</code>, <code>cdm_type</code>, <code>range_</code>, <code>vcodec</code>, <code>quality</code>, <code>best_available</code>, <code>dl_params</code>, <code>client</code>, and any service CLI options. <code>proxy_region</code> is the country code the client resolved <code>proxy</code> from; the server matches it against its own accounts. <code>client</code> is a freeform object the dashboard shows as sent (the CLI puts <code>version</code>, <code>code_hash</code>, <code>platform</code> and a redacted <code>argv</code> in it); the server ignores it above 4096 bytes of JSON.</p>
 <p><code>dl_params</code> is an object with the <code>dl</code> track selection: <code>lang</code>, <code>v_lang</code> and <code>a_lang</code> (arrays of language strings), <code>acodec</code> (an array of audio codec names or <code>dl -a</code> aliases such as <code>ddp</code>) and <code>forced_subs</code> (boolean). The service reads these values from <code>ctx.parent.params</code>. The server uses the <code>dl</code> default for each absent or malformed value, and drops an unknown codec name.</p>
 <p>Service CLI options also travel in a nested <code>service_params</code> object, which wins over a flat key with the same name. <code>profile</code> at the top level always means the credentials profile, never a service's own <code>--profile</code> option.</p>
-<p>The <code>proxy</code> value must be a full proxy URI, unless the operator gives your API key <code>server_proxy</code> in the <code>serve.users</code> config. Without it, the server does not resolve country codes with its own proxy providers. It rejects the request with <code>INVALID_PROXY</code> when no <code>proxy</code> is set and the reported <code>client_region</code> differs from the server's region. A request that reports no <code>client_region</code> is not blocked. Pass <code>proxy</code> with your own proxy, or <code>no_proxy</code> to accept the server's own connection. With <code>server_proxy</code>, the server resolves a country code and picks a proxy for your <code>client_region</code> itself.</p>
+<p>The <code>proxy</code> value must be a full proxy URI, unless the operator gives your API key <code>server_proxy</code> in the <code>serve.users</code> config. Without <code>server_proxy</code>, the server does not resolve country codes with its own proxy providers. It rejects the request with <code>INVALID_PROXY</code> when no <code>proxy</code> is set and the reported <code>client_region</code> differs from the server's region. A request that reports no <code>client_region</code> is not blocked. Pass <code>proxy</code> with your own proxy, or <code>no_proxy</code> to accept the server's own connection. With <code>server_proxy</code>, the server resolves a country code and picks a proxy for your <code>client_region</code> itself. A Control D resolver, <code>controld://&lt;resolver&gt;@dns.controld.com</code>, counts as a full proxy URI: the server runs a forwarder for it and needs no Control D configuration of its own.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="19:1"><input checked="checked" id="__tabbed_19_1" name="__tabbed_19" type="radio" /><div class="tabbed-labels"><label for="__tabbed_19_1">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
