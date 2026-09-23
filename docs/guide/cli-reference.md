@@ -189,7 +189,7 @@ order the service used, then renumbers the episodes into the order you asked for
 | `--cdm-only` / `--vaults-only` | Use only the CDM, or only Key Vaults, for key acquisition. |
 | `--cdm <name>` | Use the named CDM device from the `cdm` config mapping for this run, ignoring the service/default mapping. |
 | `--skip-dl` | Skip the download but still retrieve keys. |
-| `--export` | Export track info and keys to a JSON file in the exports directory. |
+| `--export` | Export track info and keys to a `mediaexport` JSON file in the exports directory. |
 
 ### Network & proxy
 
@@ -263,7 +263,7 @@ unshackle forwards any `dl` options after the file verbatim, so you can override
     unshackle import export.json -r HDR10 --proxy US
     ```
 
-The export file must be a valid v2 export from a current version of unshackle, made with `dl --export`, and must contain a `service` tag.
+The export file can be a `mediaexport` file from `dl --export`, an export from an older version of unshackle, or an export from unidl. The file must name the service it came from.
 
 ---
 

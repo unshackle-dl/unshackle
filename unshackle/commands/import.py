@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import Any
 
 import click
+import mediaexport
 
 from unshackle.commands.dl import dl
 from unshackle.core.constants import context_settings
@@ -33,19 +32,13 @@ class ImportCommand:
             raise click.ClickException(f"Export file not found: {export_file}")
 
         try:
-            data: dict[str, Any] = json.loads(export_file.read_text(encoding="utf8"))
-        except json.JSONDecodeError as e:
-            raise click.ClickException(f"Export file is not valid JSON: {e}")
+            doc = mediaexport.read(export_file)
+        except mediaexport.ExportError as e:
+            raise click.ClickException(f"{export_file} is not a usable export file: {e}")
 
-        if data.get("version") != 2:
-            raise click.ClickException(
-                f"Unsupported export version {data.get('version')!r}. "
-                "Re-create the export with a current build of unshackle."
-            )
-
-        service_tag = data.get("service")
+        service_tag = doc.service_tag
         if not service_tag:
-            raise click.ClickException("Export file is missing the 'service' tag.")
+            raise click.ClickException("Export file does not name the service it came from.")
 
         args = [*dl_args, "--import", str(export_file), service_tag]
         dl.cli.main(args=args, prog_name="unshackle dl", standalone_mode=False)
