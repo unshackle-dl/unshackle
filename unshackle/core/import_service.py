@@ -8,6 +8,7 @@ from typing import Any, Callable, Optional, TypeVar, Union
 from uuid import UUID
 
 import click
+import m3u8
 import mediaexport
 import requests
 from langcodes import tag_is_valid
@@ -40,6 +41,43 @@ def fallback_language(language: Any) -> Optional[Any]:
     if not tag or not tag_is_valid(tag) or tag.startswith("und"):
         return None
     return language
+
+
+def hls_audio_language(manifest: HLS) -> Optional[str]:
+    """The language of the default audio rendition, else of the first audio rendition, else None.
+
+    An HLS master playlist gives no language for a video variant, so the parser needs a
+    fallback. An export from another tool can give no title language.
+    """
+    audio = [m for m in manifest.manifest.media if m.type == "AUDIO" and fallback_language(m.language)]
+    audio.sort(key=lambda m: m.default != "YES")
+    return str(audio[0].language) if audio else None
+
+
+def hls_playlist_kids(track: Any, session: Optional[requests.Session] = None) -> Optional[set[UUID]]:
+    """Return the KIDs that the Widevine and PlayReady keys of the track's media playlist name.
+
+    Return None when the playlist has no key or only AES-128 keys: the download gets an AES-128
+    key from its URI, so such a track takes no exported content key. An empty set means that
+    the track is encrypted but names no KID that unshackle can read.
+    """
+    try:
+        text = (session or requests.Session()).get(str(track.url)).text
+        keys = [k for k in m3u8.loads(text, uri=str(track.url)).keys if k is not None and k.method != "NONE"]
+    except Exception as e:
+        log.warning(f"Cannot read the media playlist of {track.id} for its KIDs: {e!r}")
+        return None
+    kids: set[UUID] = set()
+    for key in keys:
+        if key.method == "AES-128":
+            continue
+        try:
+            kids.update(real_kids(HLS.get_drm(key)))
+        except Exception as e:
+            log.debug(f"Skipping HLS key {key.keyformat or key.method} of {track.id}: {e!r}")
+    if kids or any(k.method != "AES-128" for k in keys):
+        return kids
+    return None
 
 
 def resolve_import_manifest_data(
@@ -316,8 +354,16 @@ class ImportService:
                     f"Failed to fetch the {manifest_type} manifest for '{title}'. "
                     f"The manifest URL may have expired since export. ({e})"
                 )
+            language = fallback_language(title.language)
+            if language is None and isinstance(manifest, HLS):
+                language = hls_audio_language(manifest)
+                if language is None:
+                    raise click.ClickException(
+                        f"No language for '{title}': the export gives no title language and the HLS "
+                        "manifest gives no audio language."
+                    )
             try:
-                parsed = manifest.to_tracks(language=fallback_language(title.language))
+                parsed = manifest.to_tracks(language=language)
             except ValueError as e:
                 if "Language information could not be derived" in str(e):
                     raise click.ClickException(
@@ -364,6 +410,11 @@ class ImportService:
             if drm:
                 track.drm = drm
             tracks.add(track, warn_only=True)
+
+        if manifest_url and parser is None and not [*tracks.videos, *tracks.audio, *tracks.subtitles]:
+            raise click.ClickException(
+                f"Cannot import '{title}': unshackle cannot read its manifest {str(manifest_url)[:80]!r}."
+            )
 
         resolve_import_manifest_data(
             tracks,
@@ -608,7 +659,8 @@ class ImportService:
         reads only ``track.drm``. A rung that misses content key injection here downloads
         encrypted and muxes without error. A DASH manifest with no ContentProtection can still
         describe an encrypted track, with the PSSH only in the init segment, so that case
-        probes the init segment with `session`.
+        probes the init segment with `session`. An HLS track with no DRM gets its KIDs from the
+        EXT-X-KEY tags of its media playlist, because a master playlist can name no KID.
         """
         if track.drm:
             return {kid for drm in track.drm for kid in real_kids(drm)}
@@ -642,6 +694,8 @@ class ImportService:
             manifest = ism.get("manifest")
             if manifest is not None and manifest.findall(".//ProtectionHeader"):
                 return set()
+        if track.descriptor == Track.Descriptor.HLS and track.url:
+            return hls_playlist_kids(track, session)
         return None
 
     def exported_drm_system(self) -> str:

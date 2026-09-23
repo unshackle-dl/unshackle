@@ -843,6 +843,10 @@ The [mediaexport](https://github.com/unshackle-dl/mediaexport) package specifies
     service. If a service never sets it, importing that export fails with a message naming
     the service. Neither end guesses a language for you, so the fix belongs in the service.
 
+    An HLS master playlist gives no language for a video track. When the export gives no
+    title language, the video track takes the language of the default audio track. When
+    the master playlist gives no audio language either, the import stops with a message.
+
 ## Metadata and tagging
 
 unshackle looks up metadata automatically, but you can override the identifiers used for
