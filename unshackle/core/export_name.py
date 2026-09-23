@@ -1,7 +1,8 @@
 """The file name of a ``dl --export`` file, built from the titles and tracks it holds.
 
-The name has the form ``{title} {scope}_{resolutions}_{codecs}_{ranges}_{manifests}_{audio}-{TAG}``,
-for example ``Example Show S01_2160p_h265_sdr_hdr10_dash_ddp5.1-EXAMPLE``. An empty part is left out.
+The name has the form ``{title}.{scope}.{resolutions}.{codecs}.{ranges}.{manifests}.{audio}-{TAG}``,
+for example ``Example.Show.S01.2160p.h265.sdr.hdr10.dash.ddp5.1-EXAMPLE``. An empty part is left out.
+The name always uses dots and never reads the output templates.
 """
 
 from __future__ import annotations
@@ -60,11 +61,11 @@ def title_part(titles: Sequence[Title_T]) -> str:
             text += f" +{others}"
     else:
         text = str(first)
-    return sanitize_filename(text, spacer=" ", unicode=True)[:MAX_TITLE_LENGTH].strip(" .")
+    return sanitize_filename(text, spacer=".", unicode=True)[:MAX_TITLE_LENGTH].strip(" .")
 
 
 def scope_part(titles: Sequence[Title_T], seasons: Mapping[int, Collection[int]]) -> str:
-    """``S01`` for a whole season, ``S01E05-E09`` for a run of episodes, runs joined with ``_``.
+    """``S01`` for a whole season, ``S01E05-E09`` for a run of episodes, runs joined with ``.``.
 
     A season counts as whole only when every episode the service listed for it is in ``titles``.
     Whole seasons in a row collapse to ``S01-S03``. After ``MAX_SCOPE_PARTS`` parts, ``+N``
@@ -102,7 +103,7 @@ def scope_part(titles: Sequence[Title_T], seasons: Mapping[int, Collection[int]]
 
     if len(parts) > MAX_SCOPE_PARTS:
         parts = [*parts[:MAX_SCOPE_PARTS], f"+{len(parts) - MAX_SCOPE_PARTS}"]
-    return "_".join(parts)
+    return ".".join(parts)
 
 
 def resolution(track: Video) -> Optional[int]:
@@ -169,8 +170,7 @@ def export_name(
     """
     head = title_part(titles) if titles else ""
     scope = scope_part(titles, seasons or {}) if titles and isinstance(titles[0], Episode) else ""
-    head = f"{head} {scope}".strip()
-    return "_".join(p for p in (head, *quality_parts(tracks)) if p) + f"-{service_tag}"
+    return ".".join(p for p in (head, scope, *quality_parts(tracks)) if p) + f"-{service_tag}"
 
 
 def move_export(current: Path, name: str) -> Path:

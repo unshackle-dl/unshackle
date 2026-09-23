@@ -789,14 +789,17 @@ unshackle dl --skip-dl --export EXAMPLE 81234567
 ```
 
 The file name tells what the file holds, in the form
-`{title} {scope}_{resolutions}_{codecs}_{ranges}_{manifests}_{audio}-{SERVICE}.json`:
+`{title}.{scope}.{resolutions}.{codecs}.{ranges}.{manifests}.{audio}-{SERVICE}.json`:
 
 | Export | File name |
 |---|---|
-| A movie | `Example Movie 2024_1080p_h264_sdr_hls_aac2.0-EXAMPLE.json` |
-| A whole season | `Example Show S01_2160p_h265_sdr_hdr10_dash_dd5.1-EXAMPLE.json` |
-| Episodes 5 to 9 and 12 | `Example Show S01E05-E09_S01E12_1080p_h264_sdr_dash_aac2.0-EXAMPLE.json` |
+| A movie | `Example.Movie.2024.1080p.h264.sdr.hls.aac2.0-EXAMPLE.json` |
+| A whole season | `Example.Show.S01.2160p.h265.sdr.hdr10.dash.dd5.1-EXAMPLE.json` |
+| Episodes 5 to 9 and 12 | `Example.Show.S01E05-E09.S01E12.1080p.h264.sdr.dash.aac2.0-EXAMPLE.json` |
 
+- A dot separates each part and each word of the title. The name has no spaces or
+  underscores. It does not follow your `output_template`: a template with spaces does not
+  change the export name.
 - The scope is `S01` only when the file holds every episode the service lists for that season.
   Otherwise it names each run of episodes. Whole seasons in a row become `S01-S03`. After three
   parts, `+N` counts the parts left out. A movie has no scope.
